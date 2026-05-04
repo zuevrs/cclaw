@@ -1,5 +1,62 @@
 # Changelog
 
+## 6.11.0 — TDD Honest Velocity (Rollback + Auto-derive + Slice-documenter + Sharded Files)
+
+Four-phase release that rolls back the v6.10.0 sidecar (Phase T1+T2) as architecturally wrong and replaces it with a delegation-events driven flow. The TDD linter now reads `.cclaw/state/delegation-events.jsonl` slice phase rows as the source of truth for Watched-RED Proof and Vertical Slice Cycle, auto-renders both blocks into `06-tdd.md`, supports a parallel `slice-documenter` agent for per-slice prose, and accepts sharded `tdd-slices/S-<id>.md` files alongside the thinned main artifact.
+
+### Phase R — v6.10.0 sidecar rollback
+
+- **Removed `cclaw-cli internal tdd-slice-record`** — the sub-command, its parser, and the entire `src/tdd-slices.ts` module (`TddSliceLedgerEntry`, `appendSliceEntry`, `readTddSliceLedger`, `foldTddSliceLedger`, lock paths) are gone. The dispatcher in `src/internal/advance-stage.ts` no longer references the sidecar.
+- **Linter sidecar branch removed** — `lintTddStage` no longer reads `06-tdd-slices.jsonl` or emits the `tdd_slice_ledger_missing` advisory.
+- **Sidecar tests removed** — `tests/unit/tdd-slice-record.test.ts`, `tests/unit/tdd-linter-sidecar.test.ts`, and `tests/e2e/tdd-sidecar.test.ts` are deleted. They are replaced by Phase D / Phase C / Phase S coverage below.
+- **Runtime cleanup of `06-tdd-slices.jsonl`** — `src/install.ts` adds `06-tdd-slices.jsonl` to a new `DEPRECATED_ARTIFACT_FILES` list so `cclaw-cli sync` removes the file from existing installs (mirrors how `tdd-cycle-log.jsonl` was retired in v6.9.0).
+
+#### Phase R — Migration notes
+
+- **The v6.10.0 sidecar (`06-tdd-slices.jsonl`) is deprecated and removed by `cclaw-cli sync`.** No production users exist (it was opt-in for a single release). Running the next `sync` cleans the file; the slice phase data lives in `delegation-events.jsonl` from now on.
+- **`cclaw-cli internal tdd-slice-record` is removed.** Replace any per-slice `--status` calls with controller dispatches: `test-author --slice S-N --phase red`, `slice-implementer --slice S-N --phase green`, then `--phase refactor` or `--phase refactor-deferred --refactor-rationale "<why>"`. The harness-generated `delegation-record` hook accepts the new flags (`--slice`, `--phase`, `--refactor-rationale`) and writes the slice phase event for you.
+
+### Phase D — Auto-derive document sections
+
+- **`DelegationEntry` gains optional `sliceId` and `phase` fields (D1)** — `src/delegation.ts` extends the entry with `sliceId?: string` and `phase?: "red" | "green" | "refactor" | "refactor-deferred" | "doc"`. `isDelegationEntry` validates both when present. The inline copy inside `src/content/hooks.ts::delegationRecordScript` is updated in lockstep.
+- **`delegation-record` hook accepts `--slice`/`--phase`/`--refactor-rationale` (D2)** — generated script validates `--phase` against the enum, requires `--slice` to be a non-empty string, and hard-errors when `--phase=refactor-deferred` is passed without rationale via either `--refactor-rationale` or `--evidence-ref`. Rationale text gets merged into `evidenceRefs[]` so downstream linter logic finds it without a new field.
+- **Skill / controller / subagent text refresh (D3)** — `src/content/stages/tdd.ts` checklist + interactionProtocol now describe the slice-tagged dispatch flow; `sliceImplementerEnhancedBody()` and `testAuthorEnhancedBody()` in `src/content/subagents.ts` instruct agents not to hand-edit the auto-rendered tables; `src/content/skills.ts::watchedFailProofBlock()` and the TDD entry in `BEHAVIOR_ANCHORS` (`src/content/examples.ts`) are updated to match.
+- **Linter auto-derive in `lintTddStage` (D4)** — `src/artifact-linter/tdd.ts` reads `delegation-events.jsonl`, groups events by `sliceId`, and validates phase invariants (`phase=red` evidenceRefs/completedTs, monotonic `phase=green` after `phase=red`, REFACTOR present via `phase=refactor` or `phase=refactor-deferred` with rationale). When at least one slice carries phase events, the linter auto-renders `## Vertical Slice Cycle` between `<!-- auto-start: tdd-slice-summary -->` markers in `06-tdd.md`. Re-render is idempotent. With no slice phase events, the linter falls back to the legacy markdown table parsers.
+- **RED/GREEN evidence validators auto-pass on phase events (D5)** — `validateTddRedEvidence` and `validateTddGreenEvidence` accept a `phaseEventsSatisfied` flag. `resolveTddEvidencePointerContext` in `src/artifact-linter.ts` reads delegation events and sets the flag when the active run has a `phase=red` (or `phase=green`) row with non-empty `evidenceRefs`. The existing `Evidence: <path>` and `Evidence: spanId:<id>` pointer mode (v6.10.0 T3) stays as a secondary fallback.
+- **Trimmed `06-tdd.md` template (D6)** — the per-slice `## Watched-RED Proof` and `## Vertical Slice Cycle` tables are removed; auto-render markers (`<!-- auto-start: tdd-slice-summary -->` and `<!-- auto-start: slices-index -->`) are inserted in their place. `## Test Discovery` is now an overall narrative placeholder; per-slice details live in sharded slice files (Phase S). `## RED Evidence` and `## GREEN Evidence` headings remain as legacy-fallback slots: phase events auto-satisfy them, but legacy artifacts with hand-edited tables continue to validate through the original markdown path.
+
+#### Phase D — Migration notes
+
+- **`DelegationEntry.sliceId` and `DelegationEntry.phase` are optional and additive.** Existing ledgers and tools continue to round-trip without change.
+- **`06-tdd.md` template lost the per-slice Watched-RED Proof + Vertical Slice Cycle blocks.** Existing artifacts that still have those tables filled in continue to validate via the legacy markdown fallback. Once the controller starts dispatching with `--slice/--phase`, the auto-rendered block becomes the source of truth.
+- **The linter now treats `delegation-events.jsonl` as the primary source of truth for TDD slice phases.** `Evidence: <path|spanId:...>` markdown pointers and the legacy markdown tables remain valid fallbacks when no phase events are recorded.
+
+### Phase C — `slice-documenter` parallel subagent
+
+- **New `slice-documenter` agent in `src/content/core-agents.ts` (C1+C4)** — focused single-slice agent. Allowed paths: only `<artifacts-dir>/tdd-slices/S-<id>.md`. Return contract: `{ summaryMd: string, learnings: string[] }`. Definition is materialized to `agents/slice-documenter.md` by `cclaw-cli sync` like every other entry in `CCLAW_AGENTS`.
+- **Parallel-with-implementer wiring (C2+C3)** — TDD stage skill (`src/content/stages/tdd.ts`) and shared TDD skill text (`src/content/skills.ts`) instruct the controller to dispatch `slice-documenter --slice S-N --phase doc` IN PARALLEL with `slice-implementer --phase green`. Because the documenter only touches `tdd-slices/S-<id>.md` and the implementer touches production code, the file-overlap scheduler auto-allows the parallel dispatch. `lintTddStage` adds the `tdd_slice_documenter_missing_for_deep` finding: `required: true` only when `discoveryMode=deep`, advisory otherwise.
+
+#### Phase C — Migration notes
+
+- **`slice-documenter` is opt-in.** Standard / lean / guided runs treat the missing `phase=doc` event as advisory; only `discoveryMode=deep` requires per-slice prose. Existing flat `06-tdd.md` flow remains valid for the other modes.
+
+### Phase S — Sharded slice files
+
+- **`tdd-slices/S-<id>.md` convention (S1+S2+S3)** — `src/content/templates.ts` adds a `tddSliceFileTemplate(sliceId)` helper with the canonical structure: `# Slice S-N`, `## Plan unit`, `## Acceptance criteria`, `## Why this slice`, `## What was tested`, `## What was implemented`, `## REFACTOR notes`, `## Learnings`. The main `06-tdd.md` template stays thin and exposes a `<!-- auto-start: slices-index -->` block that the linter populates with links to present slice files.
+- **Linter multi-file support (S4)** — `lintTddStage` globs `<artifacts-dir>/tdd-slices/S-*.md`, validates required headings (`# Slice`, `## Plan unit`, `## REFACTOR notes`, `## Learnings`) per file, and emits `tdd_slice_file:<id>` findings (`required: true` only for slices that have a `phase=doc` event; advisory otherwise). The `## Slices Index` block is auto-rendered idempotently between markers and skipped entirely when no slice files exist.
+- **`tdd-render` CLI (S5) — skipped.** The linter already auto-renders the slice summary directly into `06-tdd.md` on every lint pass, so the optional `cclaw-cli internal tdd-render` derived-view CLI was unnecessary for the live source of truth and was deferred. If a `06-tdd-rendered.md` artifact becomes useful later it can be added without touching the v6.11.0 contract.
+
+#### Phase S — Migration notes
+
+- **`tdd-slices/` is optional.** Existing flat `06-tdd.md` flow keeps working; the directory is only required when `slice-documenter` runs (mandatory on `discoveryMode=deep`, advisory otherwise). When the directory is absent or empty, the main `## Slices Index` auto-block stays untouched.
+
+### Tests
+
+- **New unit suite `tests/unit/tdd-events-derive.test.ts`** — covers events-only path (no markdown tables), idempotent auto-render, phase-order monotonicity, refactor-deferred rationale, legacy markdown fallback, RED/GREEN auto-pass on phase events, slice-documenter coverage on `discoveryMode=deep`, and `DelegationEntry.sliceId/phase` round-trip.
+- **New e2e suite `tests/e2e/tdd-auto-derive.test.ts`** — drives the inline `delegation-record.mjs` script for three slices via `--slice/--phase`, asserts the linter renders `## Vertical Slice Cycle` populated with all three slices and accepts the artifact without filling markdown tables.
+- **New e2e suite `tests/e2e/slice-documenter-parallel.test.ts`** — runs the full `scheduled → launched → acknowledged → completed` lifecycle for parallel `slice-implementer` (production code) and `slice-documenter` (`tdd-slices/S-1.md`) on the same slice. Confirms the file-overlap scheduler auto-promotes `allowParallel` without `--allow-parallel`, both lifecycles end up in `delegation-events.jsonl` and `delegation-log.json`, the linter passes on `discoveryMode=deep`, and `--phase=refactor-deferred` without rationale or evidence-ref blocks the dispatch.
+- **New e2e suite `tests/e2e/sharded-slice-files.test.ts`** — three `tdd-slices/S-1.md`, `S-2.md`, `S-3.md` files lint clean and auto-render the `## Slices Index` block (idempotent on re-render). A second test confirms the linter blocks when a slice file referenced by a `phase=doc` event omits the required `## Plan unit`, `## REFACTOR notes`, or `## Learnings` headings (`tdd_slice_file:S-1` blocking finding).
+
 ## 6.10.0 — TDD Velocity (Sidecar + Parallel Scheduler + Wave Split)
 
 Two-phase release that thins TDD documentation overhead and unlocks deliberate parallel slice execution. Phase T moves per-slice RED/GREEN/REFACTOR truth from the markdown tables in `06-tdd.md` into a structured append-only sidecar, recorded by a new internal CLI. The linter becomes sidecar-aware: when the sidecar is populated the markdown tables are auto-derived views; when it is empty the legacy markdown rules continue to fire. Phase P introduces a file-overlap scheduler and a fan-out cap so multiple `slice-implementer` subagents can run safely in parallel, plus a new `plan-split-waves` CLI to break large plans into manageable wave files.

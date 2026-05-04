@@ -981,10 +981,14 @@ ${renderBehaviorAnchorTemplateLine("tdd")}
 - Open questions:
 - Drift from upstream (or \`None\`):
 
+<!-- auto-start: slices-index -->
+## Slices Index
+
+_Auto-rendered from \`tdd-slices/S-*.md\` once slice-documenter or controller writes per-slice files. Do not edit by hand._
+<!-- auto-end: slices-index -->
+
 ## Test Discovery
-| Slice | Existing tests / helpers / fixtures | Exact command(s) | Pattern to extend |
-|---|---|---|---|
-| S-1 |  |  |  |
+> Overall narrative for how this stage discovered the existing test surface. Per-slice details live in \`tdd-slices/S-<id>.md\`.
 
 ## System-Wide Impact Check
 | Slice | Callbacks/state/interfaces/contracts affected | Coverage decision |
@@ -992,20 +996,17 @@ ${renderBehaviorAnchorTemplateLine("tdd")}
 | S-1 |  | covered/out-of-scope because  |
 
 ## RED Evidence
-| Slice | Test name | Command | Failure output summary |
-|---|---|---|---|
-| S-1 |  |  |  |
+> From v6.11.0 the per-slice RED rows are auto-satisfied by \`phase=red\` events in \`delegation-events.jsonl\` (controller dispatches \`test-author --slice S-<id> --phase red\`). Legacy hand-filled tables continue to validate as a fallback. Use \`Evidence: <path>\` or \`Evidence: spanId:<id>\` pointers if you prefer a manual reference.
 
 ## Acceptance & Failure Map
 | Slice | Source ID | AC ID | Expected behavior | RED-link |
 |---|---|---|---|---|
 | S-1 | SRC-1 | AC-1 |  |  |
 
-> Each slice maps to the active track's source item (plan slice on standard/medium, or the \`Quick Reproduction Contract\` bug slice / spec acceptance item on quick) and to a spec criterion. The RED-link column is satisfied by either a \`spanId:<id>\` from the delegation ledger, an \`<artifacts-dir>/<file>\` evidence pointer, or a \`redOutputRef\` recorded via \`cclaw-cli internal tdd-slice-record\` in the sidecar ledger.
+> Each slice maps to the active track's source item (plan slice on standard/medium, or the \`Quick Reproduction Contract\` bug slice / spec acceptance item on quick) and to a spec criterion. The RED-link column is satisfied by either a \`spanId:<id>\` from the delegation ledger or an \`<artifacts-dir>/<file>\` evidence pointer. From v6.11.0 the column is auto-derivable: a \`phase=red\` event in \`delegation-events.jsonl\` with non-empty evidenceRefs auto-satisfies the row.
 
 ## GREEN Evidence
-- Full suite command:
-- Full suite result:
+> From v6.11.0 GREEN rows are auto-satisfied by \`phase=green\` events in \`delegation-events.jsonl\` (controller dispatches \`slice-implementer --slice S-<id> --phase green\`). Legacy hand-filled tables continue to validate as a fallback. Use \`Evidence: <path>\` or \`Evidence: spanId:<id>\` pointers if you prefer a manual reference.
 
 ## REFACTOR Notes
 - What changed:
@@ -1022,19 +1023,11 @@ ${renderBehaviorAnchorTemplateLine("tdd")}
 - Acknowledged: yes — code that landed before its test will be deleted and rewritten from the test.
 - Exceptions invoked (or \`- None.\`):
 
-## Watched-RED Proof
-> Required for every new test in this stage. Each row proves the test was *observed* failing before any production code was written.
-
-| Slice | Test name | Observed at (ISO ts) | Failure reason snippet | Source command/log |
-|---|---|---|---|---|
-| S-1 |  |  |  |  |
-
+<!-- auto-start: tdd-slice-summary -->
 ## Vertical Slice Cycle
-> Per slice: RED -> GREEN -> REFACTOR within the same cycle (refactor not deferred). The linter checks structural presence of all three phases.
 
-| Slice | RED ts | GREEN ts | REFACTOR ts (or \`deferred because <reason>\`) |
-|---|---|---|---|
-| S-1 |  |  |  |
+_Auto-rendered from \`delegation-events.jsonl\` once \`test-author\` and \`slice-implementer\` are dispatched with \`--slice <id> --phase red|green|refactor|refactor-deferred\`. Do not edit by hand._
+<!-- auto-end: tdd-slice-summary -->
 
 ## Assertion Correctness Notes
 > For each new test assertion, name a *plausible subtle bug* that would still pass it (mental mutation test). If you cannot, the assertion is too coarse — strengthen it.
@@ -1631,6 +1624,32 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 - Preamble budget: keep role/status announcements brief and avoid repeating
   them unless the stage or role changes.
 `;
+
+/**
+ * v6.11.0 (S2) — per-slice prose file written by `slice-documenter`
+ * (or the controller) to `<artifacts-dir>/tdd-slices/S-<id>.md`. The
+ * main `06-tdd.md` is auto-indexed via `## Slices Index`.
+ */
+export function tddSliceFileTemplate(sliceId: string): string {
+  return `# Slice ${sliceId}
+
+## Plan unit
+T-...
+
+## Acceptance criteria
+AC-...
+
+## Why this slice
+
+## What was tested
+
+## What was implemented
+
+## REFACTOR notes
+
+## Learnings
+`;
+}
 
 export function buildRulesJson(): Record<string, unknown> {
   return {

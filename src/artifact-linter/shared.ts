@@ -1692,11 +1692,14 @@ export interface TddEvidencePointerOptions {
    */
   pointerSatisfied?: boolean;
   /**
-   * True when `06-tdd-slices.jsonl` contains a slice with the matching
-   * output ref (`redOutputRef`/`greenOutputRef`); the markdown evidence
-   * block is auto-satisfied because the sidecar is the source of truth.
+   * v6.11.0 (D5) — true when `delegation-events.jsonl` carries at least
+   * one slice-tagged event for the current run with the matching phase
+   * (`phase=red` for RED, `phase=green` for GREEN) and a non-empty
+   * `evidenceRefs` array. Phase events are the new source of truth in
+   * v6.11.0, so the markdown evidence block is auto-satisfied without
+   * requiring hand-pasted stdout content.
    */
-  sidecarAutoSatisfy?: boolean;
+  phaseEventsSatisfied?: boolean;
 }
 
 /**
@@ -1727,10 +1730,10 @@ export function validateTddRedEvidence(
   sectionBody: string,
   opts: TddEvidencePointerOptions = {}
 ): { ok: boolean; details: string } {
-  if (opts.sidecarAutoSatisfy) {
+  if (opts.phaseEventsSatisfied) {
     return {
       ok: true,
-      details: "RED Evidence auto-satisfied: 06-tdd-slices.jsonl carries a redOutputRef for the matching slice."
+      details: "RED Evidence auto-satisfied: delegation-events.jsonl carries a phase=red row with non-empty evidenceRefs for the active run."
     };
   }
   if (opts.pointerSatisfied) {
@@ -1768,10 +1771,10 @@ export function validateTddGreenEvidence(
   sectionBody: string,
   opts: TddEvidencePointerOptions = {}
 ): { ok: boolean; details: string } {
-  if (opts.sidecarAutoSatisfy) {
+  if (opts.phaseEventsSatisfied) {
     return {
       ok: true,
-      details: "GREEN Evidence auto-satisfied: 06-tdd-slices.jsonl carries a greenOutputRef for the matching slice."
+      details: "GREEN Evidence auto-satisfied: delegation-events.jsonl carries a phase=green row with non-empty evidenceRefs for the active run."
     };
   }
   if (opts.pointerSatisfied) {

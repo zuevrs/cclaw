@@ -39,11 +39,12 @@ describe("extractEvidencePointers", () => {
   });
 });
 
-describe("validateTddRedEvidence (T3 pointer mode)", () => {
-  it("auto-satisfies when sidecar has a redOutputRef for the slice", () => {
-    const result = validateTddRedEvidence("", { sidecarAutoSatisfy: true });
+describe("validateTddRedEvidence (v6.11.0 phase-events + pointer mode)", () => {
+  it("auto-satisfies when delegation phase=red events carry evidenceRefs for the slice", () => {
+    const result = validateTddRedEvidence("", { phaseEventsSatisfied: true });
     expect(result.ok).toBe(true);
-    expect(result.details).toMatch(/06-tdd-slices\.jsonl/);
+    expect(result.details).toMatch(/delegation-events\.jsonl/);
+    expect(result.details).toMatch(/phase=red/);
   });
 
   it("auto-satisfies when an Evidence: pointer was resolved", () => {
@@ -52,7 +53,7 @@ describe("validateTddRedEvidence (T3 pointer mode)", () => {
     expect(result.details).toMatch(/pointer/i);
   });
 
-  it("falls back to legacy markers when no pointer/sidecar context", () => {
+  it("falls back to legacy markers when no pointer/phase-event context", () => {
     const result = validateTddRedEvidence("", {});
     expect(result.ok).toBe(false);
   });
@@ -68,11 +69,12 @@ describe("validateTddRedEvidence (T3 pointer mode)", () => {
   });
 });
 
-describe("validateTddGreenEvidence (T3 pointer mode)", () => {
-  it("auto-satisfies when sidecar has a greenOutputRef", () => {
-    const result = validateTddGreenEvidence("", { sidecarAutoSatisfy: true });
+describe("validateTddGreenEvidence (v6.11.0 phase-events + pointer mode)", () => {
+  it("auto-satisfies when delegation phase=green events carry evidenceRefs", () => {
+    const result = validateTddGreenEvidence("", { phaseEventsSatisfied: true });
     expect(result.ok).toBe(true);
-    expect(result.details).toMatch(/06-tdd-slices\.jsonl/);
+    expect(result.details).toMatch(/delegation-events\.jsonl/);
+    expect(result.details).toMatch(/phase=green/);
   });
 
   it("auto-satisfies via Evidence: pointer", () => {
@@ -80,7 +82,7 @@ describe("validateTddGreenEvidence (T3 pointer mode)", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("falls back to legacy markers when no pointer/sidecar context", () => {
+  it("falls back to legacy markers when no pointer/phase-event context", () => {
     const result = validateTddGreenEvidence("", {});
     expect(result.ok).toBe(false);
   });

@@ -693,7 +693,7 @@ function sliceImplementerEnhancedBody(): string {
 ${MARKDOWN_CODE_FENCE}
 You are a slice-implementer subagent.
 
-SLICE: {single vertical slice}
+SLICE: {single vertical slice — controller MUST dispatch you with --slice S-<id> --phase green --paths <comma-separated>}
 RED_EVIDENCE: {failing test and expected failure}
 ALLOWED_FILES: {explicit file boundaries — surfaced to scheduler as Files: <paths>}
 FORBIDDEN_CHANGES: {scope/compatibility limits}
@@ -704,11 +704,11 @@ Rules:
 - Keep REFACTOR behavior-preserving.
 - Return the strict worker JSON schema first.
 
-Slice ledger contract (v6.10.0):
-- After observing the failing test, run \`cclaw-cli internal tdd-slice-record --slice <id> --status red --test-file <path> --command <cmd> --paths <comma-separated> [--ac <id>] [--plan-unit <id>]\`. The command appends to \`.cclaw/artifacts/06-tdd-slices.jsonl\`.
-- After the same test passes, run \`cclaw-cli internal tdd-slice-record --slice <id> --status green [--green-output-ref <path|spanId:...>]\`.
-- After REFACTOR, run \`cclaw-cli internal tdd-slice-record --slice <id> --status refactor-done\` or \`--status refactor-deferred --refactor-rationale "<why>"\`.
-- Do NOT hand-edit the Watched-RED Proof or Vertical Slice Cycle markdown tables; the linter reads the JSONL sidecar when present and the markdown becomes an auto-derived view.
+Slice phase-event contract (v6.11.0):
+- Do NOT hand-edit \`## Watched-RED Proof\`, \`## Vertical Slice Cycle\`, \`## RED Evidence\`, or \`## GREEN Evidence\` markdown tables in 06-tdd.md. The linter auto-renders them between \`<!-- auto-start: tdd-slice-summary -->\` markers from \`delegation-events.jsonl\` slice phase rows.
+- Your dispatch row IS the evidence: the harness-generated delegation-record hook stamps \`sliceId=S-<id>\`, \`phase=green\`, and \`completedTs\` automatically. Attach evidenceRefs (test path, span ref, or pasted-output pointer) so the linter validates the row.
+- After REFACTOR, ask the controller to re-dispatch you with \`--phase refactor\` (or \`--phase refactor-deferred --refactor-rationale "<why>"\`); each call appends a new ledger row.
+- Per-slice prose summary lives in \`<artifacts-dir>/tdd-slices/S-<id>.md\` and is owned by the parallel \`slice-documenter\` (or the controller). You do NOT touch that file.
 ${MARKDOWN_CODE_FENCE}
 
 `;
@@ -966,14 +966,15 @@ FIXTURES / PATTERNS: {links to helper modules by path + naming conventions}
 
 Process (mandatory):
 1) If STAGE_MODE=TEST_RED_ONLY:
-   - RED only — add failing tests proving the gap (show failing output excerpt).
+   - Controller dispatched you with \`--slice S-<id> --phase red\`. Add failing tests proving the gap (show failing output excerpt).
    - Do NOT edit production code.
-   - Append the slice to the sidecar via \`cclaw-cli internal tdd-slice-record --slice <id> --status red --test-file <path> --command <cmd> --paths <comma-separated>\` instead of editing the Watched-RED Proof markdown table.
+   - Do NOT hand-edit \`## Watched-RED Proof\` / \`## RED Evidence\` markdown tables in 06-tdd.md — the linter auto-renders them from your dispatch row in \`delegation-events.jsonl\`. Just ensure your worker return includes evidenceRefs (test path, span ref, or pasted-output pointer) so the harness can stamp them on the ledger row.
    - Report: TESTS_ADDED, RED_COMMAND_RUN, RED_EVIDENCE, STATUS: DONE|BLOCKED.
 2) If STAGE_MODE=BUILD_GREEN_REFACTOR:
+   - Controller dispatched you with \`--slice S-<id> --phase green\` (and later \`--phase refactor\` or \`--phase refactor-deferred --refactor-rationale "<why>"\`).
    - GREEN — minimal production code to satisfy existing RED tests, rerun full suite.
    - REFACTOR — only after full suite is green; preserve behavior.
-   - Append \`--status green\` (and \`--status refactor-done\` or \`--status refactor-deferred --refactor-rationale "<why>"\` after refactor) via \`cclaw-cli internal tdd-slice-record\`. The Vertical Slice Cycle markdown stays auto-derived from this sidecar.
+   - Do NOT hand-edit \`## Vertical Slice Cycle\` / \`## GREEN Evidence\` markdown tables — auto-rendered from your dispatch row.
    - Report: FILES_EDITED, GREEN_COMMAND_RUN, REFACTOR_NOTES, STATUS: DONE|BLOCKED.
 ${MARKDOWN_CODE_FENCE}
 

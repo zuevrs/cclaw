@@ -63,9 +63,9 @@ export const BEHAVIOR_ANCHORS: ReadonlyArray<BehaviorAnchor> = [
   {
     stage: "tdd",
     section: "Watched-RED Proof",
-    bad: "Hand-edit `S-1 | 2026-04-15T10:00 | observed RED` into the markdown table; nothing lands in the JSONL sidecar, so retries silently overwrite the row.",
-    good: "Run `cclaw-cli internal tdd-slice-record --slice S-1 --status red --test-file tests/feed.spec.ts --command \"npm test\" --paths src/api/feed.ts --ac AC-3`; the linter reads the sidecar.",
-    ruleHint: "RED/GREEN/REFACTOR transitions are recorded by `cclaw-cli internal tdd-slice-record`; the markdown tables are an auto-derived view from v6.10.0 onward."
+    bad: "Hand-edit Watched-RED Proof rows directly in the TDD artifact; the next lint overwrites the auto-rendered region and the slice still lacks a provable RED in delegation events.",
+    good: "Dispatch `test-author --slice S-1 --phase red`, then `slice-implementer --slice S-1 --phase green`. The linter auto-renders the slice cycle from `delegation-events.jsonl`.",
+    ruleHint: "RED/GREEN/REFACTOR transitions are recorded as `delegation-events.jsonl` rows via slice-tagged dispatches; the markdown tables are auto-rendered between `auto-start: tdd-slice-summary` markers from v6.11.0 onward."
   },
   {
     stage: "review",
@@ -288,7 +288,7 @@ Plan is ready to execute after user confirmation.
 | Slice | Source ID | AC ID | Expected behavior | RED-link |
 | --- | --- | --- | --- | --- |
 | S-1 | SRC-1 | AC-1 | feed window honors 30d cap | spanId:tdd-feed-window-red |
-| S-2 | SRC-2 | AC-3 | degraded banner appears on disconnect | .cclaw/artifacts/06-tdd-slices.jsonl |
+| S-2 | SRC-2 | AC-3 | degraded banner appears on disconnect | spanId:tdd-banner-red (auto-derived from delegation-events.jsonl) |
 
 ## GREEN
 

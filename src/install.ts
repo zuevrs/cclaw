@@ -244,6 +244,15 @@ const DEPRECATED_STATE_FILES = [
   "tdd-cycle-log.jsonl"
 ] as const;
 
+// v6.11.0 (R5): files under `<runtime>/artifacts/` that previous releases
+// generated and v6.11.0 removed. `cclaw-cli sync` deletes each so existing
+// installs lose the obsolete sidecar without requiring manual cleanup.
+const DEPRECATED_ARTIFACT_FILES = [
+  // v6.10.0 sidecar — replaced in v6.11.0 by phase events in
+  // delegation-events.jsonl + auto-rendered tables in 06-tdd.md.
+  "06-tdd-slices.jsonl"
+] as const;
+
 const DEPRECATED_HOOK_FILES = [
   "observe.sh",
   "summarize-observations.sh",
@@ -1026,6 +1035,7 @@ async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
     ...DEPRECATED_COMMAND_FILES.map((file) => runtimePath(projectRoot, "commands", file)),
     ...DEPRECATED_SKILL_FILES.map((segments) => runtimePath(projectRoot, "skills", ...segments)),
     ...DEPRECATED_STATE_FILES.map((file) => runtimePath(projectRoot, "state", file)),
+    ...DEPRECATED_ARTIFACT_FILES.map((file) => runtimePath(projectRoot, "artifacts", file)),
     ...DEPRECATED_RUNTIME_ROOT_FILES.map((file) => runtimePath(projectRoot, file)),
     ...DEPRECATED_HOOK_FILES.map((file) => runtimePath(projectRoot, "hooks", file))
   ]) {
