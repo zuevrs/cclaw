@@ -2645,4 +2645,19 @@ export interface StageLintContext {
    * wave.
    */
   integrationOverseerMode: "conditional" | "always";
+  /**
+   * v6.14.2 — historical cutover marker (`flow-state.json::tddCutoverSliceId`).
+   * Empty string when not set. Used by the `tdd_cutover_misread_warning`
+   * advisory rule to detect controllers that mistake the historical
+   * marker for an active-slice pointer.
+   */
+  tddCutoverSliceId: string;
+  /**
+   * v6.14.2 — worktree-first boundary
+   * (`flow-state.json::tddWorktreeCutoverSliceId`). Empty string when
+   * not set. Linters that fire on closed worktree slices use this
+   * boundary (with a fallback to `tddCutoverSliceId`) to exempt
+   * pre-flip closed slices on `legacyContinuation: true` projects.
+   */
+  tddWorktreeCutoverSliceId: string;
 }

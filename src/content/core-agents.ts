@@ -117,7 +117,7 @@ function tddWorkerSelfRecordContract(agentName: string): string {
   const laneFlags = isImplementer
     ? " [--claim-token=<t>] [--lane-id=<lane>] [--lease-until=<iso>]"
     : "";
-  return `## TDD Worker Self-Record Contract (v6.14.1)
+  return `## TDD Worker Self-Record Contract (v6.14.2)
 
 You are a TDD worker dispatched via \`Task\`. The parent already wrote your \`scheduled\` and \`launched\` ledger rows BEFORE invoking you. **Your responsibility is to self-record \`acknowledged\` on entry and \`completed\` on exit** by invoking \`.cclaw/hooks/delegation-record.mjs\` directly. Do NOT skip these — the controller depends on them, the linter validates them, and back-fill via \`--repair\` is reserved for recovery only.
 
@@ -149,7 +149,7 @@ node .cclaw/hooks/delegation-record.mjs \\
   --json
 \`\`\`
 
-Reuse the same \`<spanId>\` and \`<dispatchId>\` across both rows. \`--ack-ts\` and \`--completed-ts\` must be monotonic on the span (\`startTs ≤ launchedTs ≤ ackTs ≤ completedTs\`); the helper rejects out-of-order writes with \`delegation_timestamp_non_monotonic\`. If the helper rejects with \`dispatch_active_span_collision\` against a stale span, surface the conflicting \`spanId\` to the parent — do NOT silently retry with \`--allow-parallel\`.`;
+Reuse the same \`<spanId>\` and \`<dispatchId>\` across both rows. **v6.14.2 evidence-freshness contract** (slice-implementer GREEN only): the FIRST \`--evidence-ref\` MUST (1) reference the same test the matching \`phase=red\` row cited (basename/stem substring; reject \`green_evidence_red_test_mismatch\`), (2) include a recognized passing-runner line such as \`=> N passed; 0 failed\`, \`N passed in 0.42s\`, or \`ok pkg 0.12s\` (reject \`green_evidence_passing_assertion_missing\`), AND (3) be captured AFTER \`ackTs\` of this span — \`completedTs - ackTs\` must be ≥ \`flow-state.json::tddGreenMinElapsedMs\` (default 4000ms; reject \`green_evidence_too_fresh\`). Escape clause for legitimate observational GREEN: pass BOTH \`--allow-fast-green --green-mode=observational\`. \`--ack-ts\` and \`--completed-ts\` must be monotonic on the span (\`startTs ≤ launchedTs ≤ ackTs ≤ completedTs\`); the helper rejects out-of-order writes with \`delegation_timestamp_non_monotonic\`. If the helper rejects with \`dispatch_active_span_collision\` against a stale span, surface the conflicting \`spanId\` to the parent — do NOT silently retry with \`--allow-parallel\`.`;
 }
 
 function formatReturnSchema(schema: AgentReturnSchema): string {

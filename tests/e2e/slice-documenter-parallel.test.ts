@@ -81,6 +81,7 @@ async function seedTddRun(
   });
   state.currentStage = "tdd";
   state.completedStages = ["brainstorm", "scope", "design", "spec", "plan"];
+  state.tddGreenMinElapsedMs = 0;
   await writeFlowState(root, state, { allowReset: true });
 }
 
@@ -369,7 +370,9 @@ slice 1 body.
     ] as const) {
       for (const status of ["launched", "acknowledged", "completed"]) {
         const evidenceRef =
-          phase === "doc" ? ".cclaw/artifacts/tdd-slices/S-1.md" : "tests/unit/slice-1.test.ts";
+          phase === "doc"
+            ? ".cclaw/artifacts/tdd-slices/S-1.md"
+            : "tests/unit/slice-1.test.ts: vitest run tests/unit/slice-1.test.ts => 1 passed; 0 failed";
         const baseArgs = [
           "--stage=tdd",
           `--agent=${agent}`,

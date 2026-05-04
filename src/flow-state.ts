@@ -169,6 +169,29 @@ export interface FlowState {
    */
   tddCutoverSliceId?: string;
   /**
+   * v6.14.2 — boundary slice id at which worktree-first protocol began
+   * applying. `cclaw-cli sync` auto-stamps this when
+   * `legacyContinuation: true` AND `worktreeExecutionMode: "worktree-first"`
+   * AND the value is not already set.
+   *
+   * Detection rule (v6.14.2): the highest `S-N` among slices with at
+   * least one completed `slice-implementer` row in the active run that
+   * carries NONE of the worktree-first metadata fields (`claimToken`,
+   * `ownerLaneId`, `leasedUntil`). When no such slice exists, sync
+   * falls back to `tddCutoverSliceId` so legacy v6.12 cutover marks
+   * still confer the exemption.
+   *
+   * Effect: closed slices whose numeric id is `<= tddWorktreeCutoverSliceId`
+   * AND whose `slice-implementer` rows in the active run lack ALL
+   * three worktree fields are exempt from `tdd_slice_lane_metadata_missing`,
+   * `tdd_slice_claim_token_missing`, and `tdd_lease_expired_unreclaimed`.
+   *
+   * One-shot: subsequent sync runs leave the value untouched. Operators
+   * may pin it earlier/later by direct edit + `cclaw-cli internal
+   * flow-state-repair --reason=<slug>`.
+   */
+  tddWorktreeCutoverSliceId?: string;
+  /**
    * v6.13.0 — when `worktree-first` (default for newly initialized runs),
    * slice-implementer work happens in isolated git worktrees with explicit
    * claims/leases and deterministic fan-in integration.
@@ -217,6 +240,20 @@ export interface FlowState {
    * Omitted on legacy state files (treated as `"always"`).
    */
   integrationOverseerMode?: "conditional" | "always";
+  /**
+   * v6.14.2 — minimum elapsed milliseconds between `acknowledged` and
+   * `completed` for a `slice-implementer --phase green` row. The hook
+   * helper rejects fast-greens (`completedTs - ackTs < this`) with
+   * `green_evidence_too_fresh` unless the dispatch carries
+   * `--allow-fast-green --green-mode=observational`.
+   *
+   * Default 4000ms when omitted (see `effectiveTddGreenMinElapsedMs`).
+   * Operators tuning the floor for very fast suites may set it lower
+   * (e.g. `1500`) or set it to `0` to disable the check entirely while
+   * keeping the other Fix 4 contracts (RED test name match, passing
+   * assertion line) active.
+   */
+  tddGreenMinElapsedMs?: number;
 }
 
 /**
@@ -249,6 +286,23 @@ export function effectiveIntegrationOverseerMode(
   state: FlowState
 ): "conditional" | "always" {
   return state.integrationOverseerMode === "conditional" ? "conditional" : "always";
+}
+
+export const DEFAULT_TDD_GREEN_MIN_ELAPSED_MS = 4000;
+
+/**
+ * v6.14.2 — effective minimum GREEN elapsed window in milliseconds.
+ * Returns the per-project override when present and finite; otherwise
+ * the documented 4000ms default. Negative values or NaN fall through
+ * to the default so a hand-edited `flow-state.json` cannot accidentally
+ * disable the check via `-1` or `"oops"`.
+ */
+export function effectiveTddGreenMinElapsedMs(state: FlowState): number {
+  const raw = state.tddGreenMinElapsedMs;
+  if (typeof raw !== "number") return DEFAULT_TDD_GREEN_MIN_ELAPSED_MS;
+  if (!Number.isFinite(raw)) return DEFAULT_TDD_GREEN_MIN_ELAPSED_MS;
+  if (raw < 0) return DEFAULT_TDD_GREEN_MIN_ELAPSED_MS;
+  return Math.floor(raw);
 }
 
 export interface StageInteractionHint {

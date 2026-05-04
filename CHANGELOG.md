@@ -1,110 +1,83 @@
 # Changelog
 
-## 6.14.1 — Controller discipline + audit-row fix
+## 6.14.2 — Controller discipline (wave-status discovery, cutover semantics, legacy amnesty, GREEN evidence freshness, mode-field writers)
 
-Skill-text patch on top of v6.14.0. v6.14.0 shipped the runtime for stream-mode parallel TDD (per-slice RED checkpoint, `refactorOutcome` fold, conditional `integration-overseer`, soft DOC) but the controller-side skill text was not updated to actually use the new contracts — the same regression shape that v6.13 → v6.13.1 fixed for wave-dispatch routing. A real `/cc` run on `hox` W-03 (slice S-17 GREEN+DOC under per-slice/conditional/legacyContinuation) surfaced four concrete gaps: the controller dispatched workers FIRST and back-filled `scheduled`/`launched` AFTER (forcing `--allow-parallel` workarounds); worker prompts (test-author, slice-implementer, slice-documenter) had no ACK helper-call template so the controller had to retrofit every event; no `cclaw_integration_overseer_skipped` audit row was emitted when the wave closed via the conditional-skip path; and the inline-DOC opt-in for single-slice non-deep waves was documented in v6.14.0 (`slice-implementer --finalize-doc`) but the controller skill text never named when to use it. The REFACTOR-fold rule (`--refactor-outcome=inline|deferred` on `phase=green`) was working correctly and is preserved verbatim. Runtime behavior is unchanged from v6.14.0 except for one additive surface: `delegation-record.mjs` gains an `--audit-kind` audit-emit path so the controller can record the skip audit through the same hook it already uses for everything else.
+Real-world hox `/cc` runs on top of v6.14.1 surfaced four concrete failure modes that the v6.14.0/v6.14.1 stream-mode runtime + skill text could not catch on their own:
 
-### Fixed
+1. **Wave-plan blindness** — the controller correctly detected stream mode but had no deterministic primitive to find the next ready wave; it would page through 1400-line `05-plan.md` artifacts and stall when the managed `<!-- parallel-exec-managed-start -->` block scrolled off-context.
+2. **`tddCutoverSliceId` misread** — the controller treated `flow-state.json::tddCutoverSliceId` as a pointer to the active slice and re-dispatched RED/GREEN/DOC for a slice that closed under v6.12 markdown.
+3. **Worktree-first lane-metadata noise** — legacy hox-shape projects under `legacyContinuation: true` carry pre-worktree slice closures that fail `tdd_slice_lane_metadata_missing`, `tdd_slice_claim_token_missing`, and `tdd_lease_expired_unreclaimed` indefinitely; the v6.13 cutover was per-slice numeric and did not cleanly bound legacy-shape closures from new work. `tdd.cohesion_contract_missing` likewise blocked legacy hox-shape projects with no real cross-slice cohesion contract authored.
+4. **GREEN evidence "fast-greens"** — the runtime accepted any string in `evidenceRefs[0]` on `slice-implementer --phase green --status=completed`, so workers could close a slice with stale evidence (or a one-line claim) without the test re-running between `acknowledged` and `completed`.
 
-- **TDD skill text — controller dispatch ordering** (`src/content/stages/tdd.ts`). Added an explicit checklist rule restoring the v6.13.1 discipline: every controller `Task` dispatch is preceded by `delegation-record --status=scheduled` then `--status=launched` writes; workers self-record `acknowledged` and `completed`. Pattern shown verbatim with the canonical `node .cclaw/hooks/delegation-record.mjs` invocation. Re-iterated in the interactionProtocol so it surfaces from both routes.
-- **TDD skill text — wave closure conditional-skip path**. Added a checklist rule making the integration-overseer decision explicit: when every dispatched lane has `phase=green status=completed` events, call `integrationCheckRequired(events, fanInAudits)` from `src/delegation.ts`; if `required: false`, emit `cclaw_integration_overseer_skipped` via `delegation-record --audit-kind=cclaw_integration_overseer_skipped --audit-reason="<reasons>" --slice-ids="S-1,S-2"` and skip the dispatch. v6.14.0 documented the helper but never told the controller to call it on close.
-- **TDD skill text — inline DOC opt-in**. Reworded the DOC checklist to surface `slice-implementer --finalize-doc` as a permitted alternative for single-slice waves where `discoveryMode != "deep"`. Default remains parallel `slice-documenter`; multi-slice waves and any `deep` run keep parallel mandatory.
-- **Worker agent definitions — TDD self-record contract** (`src/content/core-agents.ts`). Added a `## TDD Worker Self-Record Contract (v6.14.1)` section to the rendered markdown for `test-author`, `slice-implementer`, `slice-documenter`, and `integration-overseer`. The section contains the exact `delegation-record.mjs` invocation for `--status=acknowledged` (on entry) and `--status=completed` (on exit) with `--span-id`, `--ack-ts`, `--completed-ts`, `--evidence-ref`, plus agent-specific flags (`--refactor-outcome`, lane metadata for `slice-implementer`). v6.13.1-era discipline restored.
-- **TDD skill text — stale active-span recovery workaround**. Documented the `--allow-parallel` recovery path with explicit guidance: if `delegation-record` rejects with `dispatch_active_span_collision` or `dispatch_duplicate` and the conflicting span has a `completed` event, the ledger fold is correct and the rejection is from a legitimately concurrent active span — pass `--allow-parallel` deliberately. If the active span cannot be identified, STOP and report rather than blanket-silencing the helper.
+v6.14.2 closes all four with runtime + skill text + linter changes, plus three bonus mode-field writers so legacy-continuation projects can opt in/out of stream-mode defaults without hand-editing `flow-state.json` (which now hard-blocks via the SHA256 sidecar).
 
-### Added
+### Fix 1 — Wave-plan discovery primitive
 
-- **`delegation-record.mjs --audit-kind`** (`src/content/hooks.ts::delegationRecordScript`). New audit-emit path that appends a single non-delegation audit row to `delegation-events.jsonl` without touching the lifecycle ledger. Allow-listed kinds: `cclaw_integration_overseer_skipped`. Accepts `--audit-reason="<csv>"` (recorded as `reasons[]`) and `--slice-ids="<csv>"` (recorded as `sliceIds[]`). Pairs with the existing `recordIntegrationOverseerSkipped` helper in `src/delegation.ts` so controllers in any harness invoke the same helper script.
-- **Linter rule `tdd_integration_overseer_skipped_audit_missing`** (`src/artifact-linter/tdd.ts`, advisory). Fires when fan-out is detected (2+ completed `slice-implementer` rows), no `integration-overseer` was dispatched at all (no scheduled or completed row for the active run), AND no `cclaw_integration_overseer_skipped` audit row exists. Always advisory (`required: false`) — never blocks stage-complete. Remediation included in the finding details.
-- **`countIntegrationOverseerSkippedAudits(projectRoot, runId)`** in `src/artifact-linter/tdd.ts` — narrow JSONL re-scan helper that counts only the audit kind we care about. The existing `readDelegationEvents()` filters non-delegation rows out, so we re-parse the file with a strict event-name match (no broader event vocabulary added).
+- **`src/internal/wave-status.ts` (new)** + **`runWaveStatusCommand`** — `cclaw-cli internal wave-status [--json|--human]` reads the managed `<!-- parallel-exec-managed-start -->` block plus `wave-plans/wave-NN.md`, projects the active run's terminal slice closures (`refactor`, `refactor-deferred`, `resolve-conflict`, GREEN with `refactorOutcome` fold-inline), and returns a deterministic `{ activeRunId, currentStage, tddCutoverSliceId, tddWorktreeCutoverSliceId, legacyContinuation, waves[], nextDispatch, warnings[] }` report. `nextDispatch.mode` is `wave-fanout` (≥ 2 ready members), `single-slice` (1 ready), or `none`. Surfaces `wave_plan_managed_block_missing` / `wave_plan_parse_error` / `wave_plan_merge_conflict` warnings instead of silently returning empty.
+- **TDD skill text** (`src/content/stages/tdd.ts`) — adds row 1 of the checklist: **"Wave dispatch — discovery hardened (v6.14.2): your FIRST tool call after entering TDD MUST be `cclaw-cli internal wave-status --json`"** with the explicit instruction that `05-plan.md` is opened *only* after `wave-status` names a slice that needs context. Existing v6.14.0 stream-style + v6.14.1 controller-discipline rows are preserved verbatim.
+- **`src/internal/advance-stage.ts`** — registers `wave-status` (and the four other new subcommands) as known dispatch targets and surfaces them in the usage block.
 
-### Changed
+### Fix 2 — `tddCutoverSliceId` semantics + advisory linter
 
-- **`tdd_integration_overseer_skipped_by_disjoint_paths` advisory details** (existing v6.14.0 rule) now also report whether the `cclaw_integration_overseer_skipped` audit row was recorded, so a controller running with `integrationOverseerMode: "conditional"` can see in one finding both the verdict reasons and the audit-row presence.
-- **`tdd.integration_overseer_missing` finding details** now distinguish "skipped + audit recorded" (audit-only message) from "skipped + audit missing" (existing audit-only message) so the controller's choice is reflected in the linter output verbatim.
+- **TDD skill text** (`src/content/stages/tdd.ts`) — `requiredEvidence[5]` rewritten so `flow-state.json::tddCutoverSliceId` is named explicitly as a *historical boundary* set by `cclaw-cli sync`, NOT a pointer to the active slice. Includes the imperative "to find the active slice, run `cclaw-cli internal wave-status --json` (Fix 1, v6.14.2) — never derive it from `tddCutoverSliceId`."
+- **`tdd_cutover_misread_warning` advisory** in `src/artifact-linter/tdd.ts::evaluateCutoverMisread` — fires when (a) the active run scheduled new RED/GREEN/DOC work for the slice id stored in `tddCutoverSliceId`, AND (b) that slice has already closed (terminal `refactor`/`refactor-deferred`/`resolve-conflict` row recorded for the same id, possibly under a prior run). `required: false` — never blocks `stage-complete`; clears the moment the controller pivots away.
 
-### Investigation — stale active-span: no runtime fix needed
+### Fix 3 — Legacy worktree exemption + soft cohesion-contract + stub writer
 
-The W-03 run report mentioned that a stale span (originally cited as `tdd-slice-implementer-015`) was flagged active when a new `/cc` dispatch began, forcing `--allow-parallel`. We verified the runtime fold is correct: `computeActiveSubagents` (`src/delegation.ts:821`) folds the latest row per `spanId` and excludes any span whose latest status is terminal (`completed | failed | waived | stale`). The existing `tests/unit/delegation-active-fold.test.ts` already covers the scheduled→launched→completed path; v6.14.1 adds two additional regression tests in `tests/unit/tdd-controller-discipline.test.ts` covering the user-reported shape (`tdd-slice-implementer-015` full lifecycle) and the v6.14.0 `refactorOutcome`-on-`phase=green` fold. Both pass — the active set is empty after `completed`. The user-side report likely conflated span IDs (the actual `tdd-slice-implementer-015` in the hox ledger was an S-13 `refactor-deferred` span that completed at `13:45:26.571Z`, not an S-15 GREEN at `14:43:03Z`); the documented `--allow-parallel` workaround stays in the skill text as the operator-recovery path. No code changes to the active-span fold; no schema change; deferred to v6.15+ if a new reproduction surfaces.
+- **`flow-state.json::tddWorktreeCutoverSliceId`** — new optional field defining the legacy-worktree-first amnesty boundary. Auto-stamped on `cclaw-cli sync` for `legacyContinuation: true` projects already in `worktree-first` mode but missing the boundary: scans the active-run delegation ledger for the highest slice id that *never* recorded worktree-first metadata (claim token / lane id / lease) on any of its phase rows; falls back to `tddCutoverSliceId` when no such slice is found. New `applyV6142WorktreeCutoverIfNeeded` in `src/install.ts`.
+- **Softened legacy gates** in `src/artifact-linter/tdd.ts` — `tdd_slice_lane_metadata_missing`, `tdd_slice_claim_token_missing`, and `tdd_lease_expired_unreclaimed` are now exempted (and emit `_legacy_exempt` advisories instead) for slices that (1) sit at or below the `tddWorktreeCutoverSliceId` (or `tddCutoverSliceId` fallback) AND (2) never recorded any worktree-first metadata, OR for `tdd_lease_expired_unreclaimed` specifically: the slice closed before the lease expired. Fresh worktree-first projects (no `legacyContinuation`) continue to enforce all three rules globally.
+- **`tdd.cohesion_contract_missing`** — softened to `required: false` under `legacyContinuation: true`; the rule remains mandatory for fresh projects. Suggestion text now points at the new stub writer.
+- **`cclaw-cli internal cohesion-contract --stub [--force] [--reason="<short>"]`** — new writer at `src/internal/cohesion-contract-stub.ts`. Generates minimal `cohesion-contract.md` + `cohesion-contract.json` with `status.verdict: "advisory_legacy"` and the active-run slice ids prefilled, so legacy projects can clear the advisory without hand-authoring the document. Refuses to overwrite existing files unless `--force` is passed.
 
-### Tests
+### Fix 4 — GREEN evidence freshness contract
 
-- **`tests/unit/tdd-controller-discipline.test.ts`** (new) — 20 cases:
-  - 5 cases asserting the v6.14.1 controller-discipline rules are present in the rendered TDD checklist (record-before-dispatch, integration-overseer decision flow, inline DOC opt-in, stale-span workaround, refactor-fold carve-out).
-  - 5 cases asserting the rendered worker `.cclaw/agents/<agent>.md` markdown contains the new `## TDD Worker Self-Record Contract (v6.14.1)` block for the four TDD workers and is absent from non-TDD agents.
-  - 4 cases exercising the new `--audit-kind` hook surface end-to-end via `node --check` and `child_process.execFileSync`/`spawnSync` against a generated script (validates JSON output, written audit row, and rejection of unknown kinds).
-  - 4 cases for the new `tdd_integration_overseer_skipped_audit_missing` linter rule (advisory fires on missing audit, clears on audit row recorded, clears on actual `integration-overseer` dispatch row, never required).
-  - 2 cases adding regression coverage for the stale active-span report (`tdd-slice-implementer-015` shape + `refactorOutcome` fold).
+- **Hook validation in `delegationRecordScript()`** (`src/content/hooks.ts`) — for `slice-implementer --phase=green --status=completed` events with a matching `phase=red` row in the active run, the hook enforces three new contracts on `evidenceRefs[0]`:
+    1. **`green_evidence_red_test_mismatch`** — the value must contain the basename/stem of the RED span's first evidenceRef (substring, case-insensitive).
+    2. **`green_evidence_passing_assertion_missing`** — the value must contain a recognized passing-runner line: `=> N passed; 0 failed`, `N passed; 0 failed`, `test result: ok` (cargo), `N passed in 0.42s` (pytest), or `ok pkg 0.12s` (go test).
+    3. **`green_evidence_too_fresh`** — `completedTs - ackTs` must be ≥ `flow-state.json::tddGreenMinElapsedMs` (default 4000 ms; configurable via the new field).
+- **Escape clause** — pass BOTH `--allow-fast-green --green-mode=observational` to skip all three checks for legitimate observational GREEN spans (cross-slice handoff, no-op verification). Both flags required; either alone is rejected by structural validation.
+- **`flow-state.ts`** — adds `tddGreenMinElapsedMs?: number` and `DEFAULT_TDD_GREEN_MIN_ELAPSED_MS = 4000`; `effectiveTddGreenMinElapsedMs` reader handles invalid inputs.
+- **TDD worker self-record contract** in `src/content/core-agents.ts` — `tddWorkerSelfRecordContract(...)` bumped from `(v6.14.1)` to `(v6.14.2)` with the freshness contract spelled out inline; the rendered agent markdown for `test-author`, `slice-implementer`, `slice-documenter`, and `integration-overseer` now names every reject code and the `--allow-fast-green --green-mode=observational` escape.
+- **`src/content/hooks.ts` usage banner** — documents `--allow-fast-green` and `--green-mode=observational` so `--help` users see the contract.
 
-### Migration
+### Bonus — Mode-field writer commands
 
-- No flow-state schema change. No new fields. Existing v6.14.0 ledgers continue to validate.
-- `npx cclaw-cli@6.14.1 upgrade && npx cclaw-cli@6.14.1 sync` re-materializes the TDD skill text, the worker `.cclaw/agents/<agent>.md` files, and the `delegation-record.mjs` hook with the new `--audit-kind` path. `flow-state.json` is untouched (`tddCheckpointMode`, `integrationOverseerMode`, `legacyContinuation` preserved verbatim).
-- Hox-style `legacyContinuation: true` projects keep the v6.13.x mandatory `integration-overseer` dispatch. The new advisory `tdd_integration_overseer_skipped_audit_missing` only fires under `integrationOverseerMode: "conditional"` because legacy projects always dispatch the overseer.
+Three new internal subcommands so legacy-continuation projects can opt out of stream-mode defaults without hand-editing `flow-state.json` (the SHA256 sidecar enforcement introduced in v6.14.0 makes manual edits a hard failure):
 
-## 6.14.0 — Stream-style parallel TDD with conditional integration
+- **`cclaw-cli internal set-checkpoint-mode <per-slice|global-red> [--reason="<short>"]`** (`src/internal/set-checkpoint-mode.ts`) — writes `flow-state.json::tddCheckpointMode` and refreshes the SHA256 sidecar atomically. Reason is slugified into the `writerSubsystem` audit field.
+- **`cclaw-cli internal set-integration-overseer-mode <conditional|always> [--reason="<short>"]`** (`src/internal/set-integration-overseer-mode.ts`) — writes `flow-state.json::integrationOverseerMode` and refreshes the sidecar.
+- **`sync` auto-stamp migration** (`src/install.ts::applyV614DefaultsIfNeeded`) — projects with `legacyContinuation: true` and missing `tddCheckpointMode` / `integrationOverseerMode` are now stamped to **`per-slice`** / **`conditional`** (the v6.14 stream-mode defaults). v6.14.1 stamped these to `global-red` / `always` to preserve legacy hox behavior; v6.14.2 flips that default because legacy projects upgrading past v6.14.1 are intended to land on stream mode. Use the new writer commands above to opt back into `global-red` / `always` if you specifically need v6.13.x semantics.
 
-Follow-up to v6.13.1 motivated by W-02 wave timing on `hox`: a 3-slice wave finished in 31m wall-clock but ~14m of that was barrier overhead (5m50s global RED checkpoint idle, 4m56s RED→Phase-B controller overhead, 3m20s mandatory `integration-overseer` post-everything for disjoint paths, ~0.6s real REFACTOR work because all three slices finished as `refactor-deferred`). A reference-system survey (Cursor `/multitask`, Devin, Amp, Copilot `/fleet`, OpenHands, evanflow, Zerg, obra-superpowers, Aider, plus academic prior art) recommended dropping global synchronization barriers in favor of per-lane stream ordering, folding REFACTOR into a flag, and making the integration-overseer dispatch conditional. v6.14.0 ships the recommendations as defaults for new projects; existing `legacyContinuation: true` projects (hox) keep the v6.13.x global-RED behavior with no behavior change.
+### Migration notes for hox-shape projects
 
-Confidence levels mirror the research report: items 1–3 high, item 4 medium, opt-in inline DOC low (documented in skill text but not auto-switched).
+Run `npx cclaw-cli@6.14.2 upgrade` then `npx cclaw-cli sync`. After sync, expect the following in `flow-state.json`:
 
-### Added
+- `packageVersion: "6.14.2"`
+- `tddCheckpointMode: "per-slice"` (auto-stamped if previously absent under `legacyContinuation: true`)
+- `integrationOverseerMode: "conditional"` (auto-stamped if previously absent)
+- `tddWorktreeCutoverSliceId: "<highest pre-worktree slice id>"` (auto-stamped for `worktree-first` legacy projects)
+- `legacyContinuation: true` preserved; `worktreeExecutionMode: "worktree-first"` preserved.
 
-- **`flow-state.json` configuration** (`src/flow-state.ts`):
-  - `tddCheckpointMode?: "per-slice" | "global-red"` — controls RED checkpoint enforcement.
-  - `integrationOverseerMode?: "conditional" | "always"` — controls when `integration-overseer` is dispatched after a multi-slice wave.
-  - `effectiveTddCheckpointMode(state)` and `effectiveIntegrationOverseerMode(state)` resolve effective values for legacy state files.
-- **`DelegationEntry.refactorOutcome?: { mode: "inline" | "deferred"; rationale?: string }`** (`src/delegation.ts`) — folds REFACTOR into the `phase=green` lifecycle. The linter accepts `phase=refactor`, `phase=refactor-deferred`, OR `phase=green` carrying `refactorOutcome` as REFACTOR coverage; `mode: "deferred"` requires a rationale (mirrored into `evidenceRefs[0]` for legacy linter compatibility).
-- **`DelegationEntry.riskTier?: "low" | "medium" | "high"`** — copied from the plan slice. Used by `integrationCheckRequired()` so high-risk slices always trigger overseer dispatch.
-- **`integrationCheckRequired(events, fanInAudits?)`** in `src/delegation.ts` — heuristic returning `{ required: boolean; reasons: string[] }`. Triggers (any one): two or more closed slices share import boundaries (first-2-segment directory match on `claimedPaths`); any slice has `riskTier === "high"`; any `cclaw_fanin_conflict` audit row exists. Otherwise verdict is `disjoint-paths` and dispatch may be skipped.
-- **`recordIntegrationOverseerSkipped(projectRoot, params)`** — appends a `cclaw_integration_overseer_skipped` audit row to `delegation-events.jsonl` so the run log stays honest about the decision.
-- **Linter rules** (`src/artifact-linter/tdd.ts`):
-  - `tdd_slice_red_completed_before_green` — per-slice RED-before-GREEN rule used in default `per-slice` mode (cross-lane interleaving allowed).
-  - `tdd_integration_overseer_skipped_by_disjoint_paths` — advisory finding emitted when `conditional` mode skipped the dispatch because `integrationCheckRequired()` returned `required: false`.
-- **`evaluatePerSliceRedBeforeGreen(slices)`** — exported helper backing the new rule.
-- **`delegation-record` flags** (`src/content/hooks.ts`):
-  - `--refactor-outcome=inline|deferred` — folds REFACTOR into a single `phase=green` event.
-  - `--refactor-rationale="<text>"` — paired with `--refactor-outcome=deferred` (also reused by legacy `--phase=refactor-deferred`).
-  - `--risk-tier=low|medium|high` — sets `DelegationEntry.riskTier`.
+`stage-complete tdd --json` will no longer fail with `tdd_slice_lane_metadata_missing` / `tdd_slice_claim_token_missing` / `tdd_lease_expired_unreclaimed` for slices closed before the cutover; remaining gate findings should be limited to the legitimate "TDD not yet complete — pending waves W-NN/W-MM" shape.
 
-### Changed
+To revert to v6.14.1-style mandatory integration-overseer or `global-red` checkpoint:
 
-- **Default RED checkpoint becomes per-slice.** `evaluateGlobalRedCheckpoint` is preserved (alias `evaluateRedCheckpoint`) and used only when `tddCheckpointMode === "global-red"`. Linter chooses the rule by mode; the legacy `tdd_red_checkpoint_violation` finding still fires under `global-red`.
-- **`tdd_slice_documenter_missing` softened** — `required: true` only when `discoveryMode === "deep"`, advisory (`required: false`) on `lean` and `guided`. The DOC role still exists; lean/guided controllers MAY invoke `slice-implementer --finalize-doc` inline at GREEN-completion as documented in the TDD skill text.
-- **Integration-overseer dispatch becomes conditional by default.** `integrationOverseerMode === "conditional"` makes `tdd.integration_overseer_missing` advisory unless `integrationCheckRequired()` returns `required: true`. `integrationOverseerMode === "always"` keeps v6.13.x mandatory behavior.
-- **TDD skill text** (`src/content/stages/tdd.ts`) — wave dispatch protocol rewritten as "Per-lane stream: each lane runs RED→GREEN→REFACTOR independently as soon as its `dependsOn` closes." REFACTOR documented as three forms (separate `--phase refactor`, `--phase refactor-deferred --refactor-rationale`, or inline via `--refactor-outcome` on `phase=green`). DOC documented as "parallel mandatory in `deep`, advisory in `lean`/`guided`." Conditional `integration-overseer` rule explained inline. Routing-question rule from v6.13.1 (one confirmation prompt, then no more questions) preserved.
-- **`/cc` skill text** (`src/content/start-command.ts`) — wave dispatch resume no longer waits for a global RED-completion barrier in default `per-slice` mode; per-lane stream resume continues remaining members as soon as their `dependsOn` closes. Conditional integration-overseer rule named explicitly.
-- **`coerceFlowState`** (`src/run-persistence.ts`) — preserves `tddCheckpointMode` and `integrationOverseerMode` across reads via new `coerceTddCheckpointMode` and `coerceIntegrationOverseerMode`.
-- **Pre-existing usage-string bug fix** (`src/content/hooks.ts::delegationRecordScript`) — `--repair-reason="<why>"` line in `usage()` was producing a syntactically invalid JS string in the generated `.cclaw/hooks/delegation-record.mjs`. Escapes corrected so `usage()` is callable on validation-failure paths.
+```bash
+npx cclaw-cli internal set-integration-overseer-mode always --reason="prefer mandatory dispatch"
+npx cclaw-cli internal set-checkpoint-mode global-red --reason="prefer global RED checkpoint"
+```
 
-### Migration
+To clear `tdd.cohesion_contract_missing` advisory without hand-authoring a contract:
 
-- **`legacyContinuation: true` projects** (hox-style): `cclaw-cli sync` auto-sets `tddCheckpointMode: "global-red"` and `integrationOverseerMode: "always"` if either field is unset. Wave protocol is unchanged. No re-runs required.
-- **New / standard projects**: `cclaw-cli sync` auto-sets `tddCheckpointMode: "per-slice"`, `integrationOverseerMode: "conditional"`, and `worktreeExecutionMode: "worktree-first"` if any of the three are unset. A one-line hint is printed naming the applied defaults and how to opt out:
-  ```
-  cclaw: v6.14.0 stream-style defaults applied: tddCheckpointMode=per-slice, integrationOverseerMode=conditional, worktreeExecutionMode=worktree-first. To opt out, edit .cclaw/state/flow-state.json directly or pin the legacy mode (tddCheckpointMode="global-red", integrationOverseerMode="always").
-  ```
-- **Backward compatibility**: `phase=refactor` and `phase=refactor-deferred` events remain valid; existing ledgers continue to validate. `evaluateRedCheckpoint` export remains available as an alias for `evaluateGlobalRedCheckpoint`.
+```bash
+npx cclaw-cli internal cohesion-contract --stub --reason="legacy hox-shape project"
+```
 
-### Reference matchings
+### Tests added
 
-- **Cursor `/multitask`** — independent lanes that converge on demand (no global barrier between phases).
-- **Devin** — per-task RED→GREEN ordering enforced per slice, not across slices.
-- **GitHub Copilot `/fleet`** — conditional cross-task review only when fleet members touch overlapping surfaces.
-- **W-02 measurement** — 14m of 31m wall-clock recovered by removing global RED + mandatory overseer + REFACTOR phase pass when the slices are disjoint.
-
-### Tests
-
-- **`tests/unit/delegation-integration-check.test.ts`** — 9 cases covering disjoint paths (no required), shared directory (required), `riskTier=high` (required), `cclaw_fanin_conflict` audit (required), in-flight slices ignored, top-level files single-segment match, multi-segment package directory match, and audit-row generation via `recordIntegrationOverseerSkipped`.
-- **`tests/unit/refactor-outcome.test.ts`** — 6 cases covering `--refactor-outcome=inline`, `=deferred` with rationale (mirrored to `evidenceRefs[0]`), validation failures (deferred without rationale, invalid mode), `--risk-tier=high` round-trip, and `--risk-tier=critical` rejection.
-- **`tests/unit/tdd-checkpoint-mode.test.ts`** — 6 cases covering per-slice mode allowing cross-lane interleave, per-slice mode catching same-slice GREEN-before-RED, slices with only RED or only GREEN, alias `evaluateRedCheckpoint === evaluateGlobalRedCheckpoint`, global-red catching wave violations, per-slice tolerating cross-lane patterns global-red flags.
-- **Updated**: `tests/unit/tdd-slice-documenter-mandatory.test.ts`, `tests/unit/tdd-events-derive.test.ts` (DOC rule now mode-aware), `tests/e2e/tdd-wave-checkpoint.test.ts` (opts into `tddCheckpointMode: "global-red"` to keep exercising the legacy rule).
-
-### Deferred to v6.14.1+
-
-- **Aggregated lanes** (Candidate D from research) — opt-in `--lane-strategy=aggregate-on-overlap`. Out of scope.
-- **Sunset of `legacyContinuation`** — kept; hox depends on it.
-- **Inline slice-documenter** as the default — documented as available (controllers MAY call `slice-implementer --finalize-doc`) but not auto-switched. Slice-documenter isolation has real value.
+- **`tests/unit/v6-14-2-features.test.ts` (21 tests)** — wave-status helper (basic / closed-slice projection / missing managed block / cutover warning), Fix 1 + Fix 2 skill text checks, `tdd_cutover_misread_warning` advisory, both new mode-writer commands (parser + runner + sidecar refresh + internal command surface), `cohesion-contract --stub` (parser + writer + force semantics), GREEN evidence freshness contract (mismatch / missing-runner / too-fresh / observational escape), slice-implementer agent markdown documents the freshness contract.
+- **`tests/e2e/tdd-auto-derive.test.ts` + `tests/e2e/slice-documenter-parallel.test.ts`** — updated to set `tddGreenMinElapsedMs: 0` in seeded `flow-state.json` and to provide passing-runner lines in `evidenceRefs[0]` so the freshness contract sees a realistic shape.
+- **`tests/unit/tdd-controller-discipline.test.ts`** — version-regex relaxed from `(v6\.14\.1)` to `(v6\.14\.\d+)` so the v6.14.x stream stays green across patch bumps.
 
 ## 6.13.1 — Skill-text wave dispatch + mandatory worktree-first GREEN metadata
 
