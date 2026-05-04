@@ -349,6 +349,65 @@ async function readWorktreeExecutionModeInline(root) {
   }
 }
 
+// v6.14.2 — read \`tddGreenMinElapsedMs\` from flow-state.json. Defaults to
+// 4000ms when missing or invalid. Operators set 0 to disable the freshness
+// floor while keeping RED-test-name and passing-assertion checks active.
+async function readTddGreenMinElapsedMsInline(root) {
+  try {
+    const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "flow-state.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.tddGreenMinElapsedMs === "number" && parsed.tddGreenMinElapsedMs >= 0) {
+      return Math.floor(parsed.tddGreenMinElapsedMs);
+    }
+    return 4000;
+  } catch {
+    return 4000;
+  }
+}
+
+// v6.14.2 Fix 4 — match the RED test name into the GREEN evidenceRef.
+// Returns the basename or stem (without extension) of the most-specific
+// path token in the RED row's first evidenceRef. We deliberately use a
+// substring match, not equality, so callers can include richer text
+// like "REGRESSION: cargo test --test foo => 8 passed; 0 failed".
+function extractRedTestNameInline(redEvidenceRef) {
+  if (typeof redEvidenceRef !== "string") return null;
+  const trimmed = redEvidenceRef.trim();
+  if (trimmed.length === 0) return null;
+  // Path-shaped token (foo/bar/baz_test.rs or src/foo.test.ts).
+  const pathMatch = /[A-Za-z0-9_./-]+/u.exec(trimmed);
+  if (pathMatch) {
+    const token = pathMatch[0];
+    const slashIdx = token.lastIndexOf("/");
+    const base = slashIdx >= 0 ? token.slice(slashIdx + 1) : token;
+    const dotIdx = base.indexOf(".");
+    const stem = dotIdx > 0 ? base.slice(0, dotIdx) : base;
+    if (stem.length >= 4) return stem;
+    return base;
+  }
+  return trimmed;
+}
+
+// Match canonical runner pass lines:
+//   cargo: "test result: ok. N passed; 0 failed"
+//   pytest: "===== N passed in 0.42s ====="
+//   go test: "ok   pkg   0.123s"
+//   npm/jest/vitest: "Tests:  N passed"
+// We accept a generic shape: "=> N passed; 0 failed" (the example in
+// the v6.14.2 worker contract) plus four runner-specific patterns.
+const GREEN_PASS_PATTERNS = [
+  /=>\\s*\\d+\\s+passed/iu,
+  /\\b\\d+\\s+passed[;,]\\s*0\\s+failed\\b/iu,
+  /\\btest\\s+result:\\s*ok\\b/iu,
+  /\\b\\d+\\s+passed\\s+in\\s+\\d+(?:\\.\\d+)?\\s*s\\b/iu,
+  /^ok\\s+\\S+\\s+\\d+(?:\\.\\d+)?s\\b/imu
+];
+
+function matchesPassingAssertionInline(value) {
+  if (typeof value !== "string") return false;
+  return GREEN_PASS_PATTERNS.some((re) => re.test(value));
+}
+
 async function readDelegationEvents(root) {
   try {
     const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "delegation-events.jsonl"), "utf8");
@@ -1474,6 +1533,137 @@ async function main() {
     } else if (dedupViolation.kind === "supersede-mismatch") {
       emitErrorJson("dispatch_supersede_mismatch", dedupViolation.details, json);
       return;
+    }
+  }
+
+  // v6.14.2 Fix 4 — GREEN evidence freshness contract for
+  // \`slice-implementer --phase green --status=completed\`. Three checks:
+  //   1. green_evidence_red_test_mismatch — evidenceRefs[0] must contain
+  //      the basename/stem of the RED span's first evidenceRef.
+  //   2. green_evidence_passing_assertion_missing — evidenceRefs[0]
+  //      must carry a recognized passing-assertion line ("=> N passed;
+  //      0 failed" or runner-specific equivalents).
+  //   3. green_evidence_too_fresh — completedTs minus ackTs must be
+  //      >= flow-state.json::tddGreenMinElapsedMs (default 4000ms).
+  // Escape hatch for legitimate observational GREENs (cross-slice
+  // handoff, no-op verification): pair --allow-fast-green with
+  // --green-mode=observational. Both flags are required.
+  if (
+    clean.stage === "tdd" &&
+    clean.agent === "slice-implementer" &&
+    clean.phase === "green" &&
+    clean.status === "completed"
+  ) {
+    const isObservational =
+      typeof args["green-mode"] === "string" &&
+      args["green-mode"].trim().toLowerCase() === "observational";
+    const allowFastGreen = args["allow-fast-green"] === true;
+    const greenEvidenceFirst =
+      Array.isArray(clean.evidenceRefs) && clean.evidenceRefs.length > 0
+        ? String(clean.evidenceRefs[0])
+        : "";
+
+    // Locate the matching RED row's first evidenceRef in the events log.
+    const priorEvents = await readDelegationEvents(root);
+    let redEvidenceRef = null;
+    for (let i = priorEvents.length - 1; i >= 0; i -= 1) {
+      const ev = priorEvents[i];
+      if (!ev) continue;
+      if (ev.runId !== runId) continue;
+      if (ev.stage !== "tdd") continue;
+      if (ev.sliceId !== clean.sliceId) continue;
+      if (ev.phase !== "red") continue;
+      if (Array.isArray(ev.evidenceRefs) && ev.evidenceRefs.length > 0) {
+        redEvidenceRef = String(ev.evidenceRefs[0] || "");
+        break;
+      }
+    }
+
+    // The freshness contract only fires when there's a matching RED row
+    // for this slice in the active run. Without RED context we have
+    // nothing to verify GREEN against (legacy ledger imports, RED
+    // happened outside cclaw harness, or test fixtures that bypass
+    // RED). Once a RED row is present, the contract becomes
+    // mandatory unless explicitly waived via --allow-fast-green
+    // --green-mode=observational.
+    const hasRedContext = redEvidenceRef !== null;
+    const escapeFastGreen = allowFastGreen && isObservational;
+
+    if (hasRedContext && !escapeFastGreen) {
+      // Check 1: RED test name match.
+      const stem = extractRedTestNameInline(redEvidenceRef);
+      if (stem && greenEvidenceFirst.length > 0 && !greenEvidenceFirst.toLowerCase().includes(stem.toLowerCase())) {
+        emitErrorJson(
+          "green_evidence_red_test_mismatch",
+          {
+            sliceId: clean.sliceId,
+            redEvidenceFirst: redEvidenceRef,
+            greenEvidenceFirst,
+            expectedSubstring: stem,
+            remediation:
+              "evidenceRefs[0] on the GREEN row must reference the same test the RED row cited. Re-run the matching RED test, capture its passing output, and pass it as --evidence-ref."
+          },
+          json
+        );
+        return;
+      }
+
+      // Check 2: passing-assertion line.
+      if (greenEvidenceFirst.length > 0 && !matchesPassingAssertionInline(greenEvidenceFirst)) {
+        emitErrorJson(
+          "green_evidence_passing_assertion_missing",
+          {
+            sliceId: clean.sliceId,
+            greenEvidenceFirst,
+            remediation:
+              "evidenceRefs[0] on the GREEN row must contain a passing-assertion line such as \\"=> N passed; 0 failed\\" (cargo/jest/vitest), \\"N passed in 0.42s\\" (pytest), \\"ok pkg 0.12s\\" (go test), or equivalent runner output. Re-run the test and paste a fresh runner line."
+          },
+          json
+        );
+        return;
+      }
+
+      // Check 3: fast-green floor. ackTs is required upstream; we use
+      // the persisted ackTs from prior events when not provided on this
+      // row.
+      const minMs = await readTddGreenMinElapsedMsInline(root);
+      if (minMs > 0 && clean.completedTs) {
+        let ackTs = clean.ackTs;
+        if (!ackTs) {
+          for (let i = priorEvents.length - 1; i >= 0; i -= 1) {
+            const ev = priorEvents[i];
+            if (!ev) continue;
+            if (ev.spanId !== clean.spanId) continue;
+            if (typeof ev.ackTs === "string" && ev.ackTs.length > 0) {
+              ackTs = ev.ackTs;
+              break;
+            }
+          }
+        }
+        if (ackTs) {
+          const completedMs = Date.parse(clean.completedTs);
+          const ackMs = Date.parse(ackTs);
+          if (Number.isFinite(completedMs) && Number.isFinite(ackMs)) {
+            const elapsed = completedMs - ackMs;
+            if (elapsed < minMs) {
+              emitErrorJson(
+                "green_evidence_too_fresh",
+                {
+                  sliceId: clean.sliceId,
+                  ackTs,
+                  completedTs: clean.completedTs,
+                  elapsedMs: elapsed,
+                  minMs,
+                  remediation:
+                    "GREEN completedTs - ackTs is below the freshness floor. Either run the verification test for real and re-record, or pass --allow-fast-green --green-mode=observational for legitimate no-op verification spans."
+                },
+                json
+              );
+              return;
+            }
+          }
+        }
+      }
     }
   }
 

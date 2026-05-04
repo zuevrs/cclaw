@@ -56,9 +56,21 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     worktreeExecutionMode,
     legacyContinuation,
     tddCheckpointMode,
-    integrationOverseerMode
+    integrationOverseerMode,
+    tddCutoverSliceId,
+    tddWorktreeCutoverSliceId
   } = ctx;
   void parsedFrontmatter;
+
+  // v6.14.2 — boundary slice for the "any-metadata" exemption applied
+  // to worktree-first findings. Falls back to the v6.12 cutover marker
+  // when the boundary is absent (sync hasn't run, or `cclaw-cli sync`
+  // detected no auto-detectable boundary). The exemption only kicks in
+  // for `legacyContinuation: true` projects — fresh worktree-first
+  // projects continue to enforce all three rules globally.
+  const worktreeCutoverBoundary = legacyContinuation
+    ? parseSliceNumber(tddWorktreeCutoverSliceId || tddCutoverSliceId || "")
+    : null;
 
   const artifactsDir = path.dirname(absFile);
   const planPath = path.join(artifactsDir, "05-plan.md");
@@ -275,6 +287,26 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     findings.push(cutoverFinding);
   }
 
+  // v6.14.2 Fix 2 — advisory cutover-misread detection. Fires when the
+  // active run scheduled NEW work for the slice id stored in
+  // `tddCutoverSliceId` AND that slice has already closed (terminal
+  // refactor* row recorded for the same id, possibly under a prior
+  // run). This is the "controller mistook the historical marker for an
+  // active-slice pointer" pattern observed in hox W-03/S-17. Advisory
+  // only — clears as soon as the controller pivots to a different
+  // slice, and never blocks stage-complete.
+  if (tddCutoverSliceId) {
+    const misreadFinding = evaluateCutoverMisread({
+      projectRoot,
+      tddCutoverSliceId,
+      activeRunEntries,
+      ledgerEntries: delegationLedger.entries
+    });
+    if (misreadFinding) {
+      findings.push(misreadFinding);
+    }
+  }
+
   const { events: jsonlEvents, fanInAudits } = await readDelegationEvents(projectRoot);
   const runEvents = jsonlEvents.filter((e) => e.runId === delegationLedger.runId);
 
@@ -298,7 +330,29 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       "refactor-deferred",
       "resolve-conflict"
     ]);
+
+    // v6.14.2 — under `legacyContinuation: true` AND a stamped
+    // boundary, exempt closed slices that NEVER recorded ANY of the
+    // three worktree-first metadata fields. This is the "all-or-
+    // nothing legacy" rule from v6.14.2 Fix 3: partial-metadata
+    // slices stay flagged (a real bug), but slices that pre-date
+    // the worktree-first flip get amnesty.
+    const sliceWorktreeMetaState = computeSliceWorktreeMetaState(runEvents);
+    const isExemptLegacySlice = (sliceId: string): boolean => {
+      if (!legacyContinuation) return false;
+      if (worktreeCutoverBoundary === null) return false;
+      const n = parseSliceNumber(sliceId);
+      if (n === null) return false;
+      if (n > worktreeCutoverBoundary) return false;
+      const meta = sliceWorktreeMetaState.get(sliceId);
+      if (!meta) return true; // no slice-implementer rows at all → fully legacy
+      // Exempt only when the slice carries ZERO worktree fields across
+      // all rows. Partial metadata stays flagged.
+      return !meta.anyMeta;
+    };
+
     const missingGreenMeta = new Set<string>();
+    const exemptedGreenMeta = new Set<string>();
     for (const ev of runEvents) {
       if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
       if (ev.status !== "completed" || ev.phase !== "green") continue;
@@ -307,7 +361,11 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       const lane = ev.ownerLaneId?.trim() ?? "";
       const lease = ev.leasedUntil?.trim() ?? "";
       if (tok.length === 0 || lane.length === 0 || lease.length === 0) {
-        missingGreenMeta.add(ev.sliceId);
+        if (isExemptLegacySlice(ev.sliceId)) {
+          exemptedGreenMeta.add(ev.sliceId);
+        } else {
+          missingGreenMeta.add(ev.sliceId);
+        }
       }
     }
     if (missingGreenMeta.size > 0) {
@@ -318,15 +376,28 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
         found: false,
         details: `Slices missing one or more lane fields on GREEN: ${[...missingGreenMeta].sort().join(", ")}. Remediation: include --claim-token, --lane-id, and --lease-until on every slice-implementer --phase green delegation-record write (schedule through completion); the hook fails fast with dispatch_lane_metadata_missing when they are omitted.`
       });
+    } else if (exemptedGreenMeta.size > 0) {
+      findings.push({
+        section: "tdd_slice_lane_metadata_legacy_exempt",
+        required: false,
+        rule: "v6.14.2 legacyContinuation amnesty: closed slices ≤ tddWorktreeCutoverSliceId whose slice-implementer rows lack ALL worktree-first metadata are exempt from `tdd_slice_lane_metadata_missing`.",
+        found: true,
+        details: `Legacy-exempt slices (no claimToken/ownerLaneId/leasedUntil recorded; all closed before worktree-first flip): ${[...exemptedGreenMeta].sort().join(", ")}.`
+      });
     }
     const missingClaim = new Set<string>();
+    const exemptedClaim = new Set<string>();
     for (const ev of runEvents) {
       if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
       if (ev.status !== "completed" && ev.status !== "failed") continue;
       if (!ev.phase || !terminalPhases.has(ev.phase)) continue;
       const tok = ev.claimToken?.trim() ?? "";
       if (tok.length === 0 && typeof ev.sliceId === "string") {
-        missingClaim.add(ev.sliceId);
+        if (isExemptLegacySlice(ev.sliceId)) {
+          exemptedClaim.add(ev.sliceId);
+        } else {
+          missingClaim.add(ev.sliceId);
+        }
       }
     }
     if (missingClaim.size > 0) {
@@ -336,6 +407,14 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
         rule: "Worktree-first: terminal slice-implementer rows (refactor / refactor-deferred / resolve-conflict) must echo --claim-token. Remediation: pass the same --claim-token used on the scheduled row for every completed/failed terminal phase.",
         found: false,
         details: `Slices missing claim token on non-GREEN terminal rows: ${[...missingClaim].join(", ")}.`
+      });
+    } else if (exemptedClaim.size > 0) {
+      findings.push({
+        section: "tdd_slice_claim_token_legacy_exempt",
+        required: false,
+        rule: "v6.14.2 legacyContinuation amnesty: closed pre-cutover slices without claim tokens on terminal rows are exempt from `tdd_slice_claim_token_missing`.",
+        found: true,
+        details: `Legacy-exempt slices: ${[...exemptedClaim].sort().join(", ")}.`
       });
     }
     const conflictSlices = [
@@ -369,12 +448,28 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     }
     const now = Date.now();
     const leaseStale = new Set<string>();
+    const leaseStaleExempted = new Set<string>();
+    // v6.14.2 — also exempt slices whose lease has expired but the
+    // slice was already closed (terminal row recorded) before the
+    // expiry. The reclaim audit row was just never written —
+    // bookkeeping advisory, not a blocker.
+    const closedBeforeLeaseExpiry = computeClosedBeforeLeaseExpiry(runEvents);
     for (const ev of runEvents) {
       if (typeof ev.leasedUntil !== "string") continue;
       const until = Date.parse(ev.leasedUntil);
       if (!Number.isFinite(until) || until >= now) continue;
       if (ev.leaseState === "reclaimed" || ev.leaseState === "released") continue;
-      if (typeof ev.sliceId === "string") leaseStale.add(ev.sliceId);
+      if (typeof ev.sliceId !== "string") continue;
+      const sliceId = ev.sliceId;
+      if (isExemptLegacySlice(sliceId)) {
+        leaseStaleExempted.add(sliceId);
+        continue;
+      }
+      if (closedBeforeLeaseExpiry.has(sliceId)) {
+        leaseStaleExempted.add(sliceId);
+        continue;
+      }
+      leaseStale.add(sliceId);
     }
     if (leaseStale.size > 0) {
       findings.push({
@@ -383,6 +478,14 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
         rule: "Leases past leasedUntil must be reclaimed or released. Remediation: run scheduler reclaim or emit leaseState=reclaimed audit rows after controller action.",
         found: false,
         details: `Expired leases not reclaimed for slice(s): ${[...leaseStale].join(", ")}.`
+      });
+    } else if (leaseStaleExempted.size > 0) {
+      findings.push({
+        section: "tdd_lease_expired_legacy_exempt",
+        required: false,
+        rule: "v6.14.2 amnesty: expired leases are exempt when the slice closed before the expiry timestamp (reclaim audit just never recorded) OR when the slice predates the worktree-first cutover under legacyContinuation.",
+        found: true,
+        details: `Lease-expiry-exempt slices: ${[...leaseStaleExempted].sort().join(", ")}.`
       });
     }
   }
@@ -478,14 +581,27 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       cohesionErrors.push("cohesion-contract.json is missing or invalid JSON.");
     }
 
+    // v6.14.2 — soften cohesion-contract under `legacyContinuation: true`.
+    // Pre-flip projects (hox) carry many closed implementer rows but
+    // never recorded cross-slice cohesion data because that schema
+    // didn't exist when the slices closed. Flag advisory + suggest the
+    // auto-stub helper instead of blocking the gate.
+    const cohesionRequired = legacyContinuation === true ? false : true;
+    const advisoryNote = cohesionRequired
+      ? cohesionErrors.join(" ")
+      : `${cohesionErrors.join(" ")} ` +
+        "Cohesion contract is advisory under legacyContinuation: true — emit a stub via " +
+        "`cclaw-cli internal cohesion-contract --stub` to silence this finding.";
     findings.push({
       section: "tdd.cohesion_contract_missing",
-      required: true,
-      rule: "When delegation ledger has >1 completed slice-implementer rows for active TDD run, require `.cclaw/artifacts/cohesion-contract.md` and parseable `.cclaw/artifacts/cohesion-contract.json` sidecar.",
+      required: cohesionRequired,
+      rule: cohesionRequired
+        ? "When delegation ledger has >1 completed slice-implementer rows for active TDD run, require `.cclaw/artifacts/cohesion-contract.md` and parseable `.cclaw/artifacts/cohesion-contract.json` sidecar."
+        : "v6.14.2 advisory under legacyContinuation: cohesion contract is recommended, not required. Use `cclaw-cli internal cohesion-contract --stub` to write a baseline.",
       found: cohesionContractFound,
       details: cohesionContractFound
         ? `Fan-out detected (${completedSliceImplementers.length} completed slice-implementer rows); cohesion contract markdown+JSON sidecar are present and parseable.`
-        : cohesionErrors.join(" ")
+        : advisoryNote
     });
 
     const completedOverseerRows = activeRunEntries.filter(
@@ -1376,6 +1492,149 @@ function pickEventTs(rows: DelegationEntry[]): string | undefined {
     if (typeof ts === "string" && ts.length > 0) return ts;
   }
   return undefined;
+}
+
+/**
+ * v6.14.2 — for each slice id appearing in `slice-implementer` rows of
+ * the active run, record whether ANY row carried at least one of the
+ * three worktree-first metadata fields (`claimToken`, `ownerLaneId`,
+ * `leasedUntil`). Used by `isExemptLegacySlice` to enforce the "all-or-
+ * nothing legacy" rule: only slices with NO worktree fields anywhere
+ * in their rows qualify for the legacyContinuation amnesty.
+ */
+function computeSliceWorktreeMetaState(
+  events: DelegationEntry[]
+): Map<string, { anyMeta: boolean }> {
+  const out = new Map<string, { anyMeta: boolean }>();
+  for (const ev of events) {
+    if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
+    if (typeof ev.sliceId !== "string") continue;
+    const tok = ev.claimToken?.trim() ?? "";
+    const lane = ev.ownerLaneId?.trim() ?? "";
+    const lease = ev.leasedUntil?.trim() ?? "";
+    const anyHere = tok.length > 0 || lane.length > 0 || lease.length > 0;
+    const prev = out.get(ev.sliceId) ?? { anyMeta: false };
+    out.set(ev.sliceId, { anyMeta: prev.anyMeta || anyHere });
+  }
+  return out;
+}
+
+/**
+ * v6.14.2 — slices whose terminal `refactor` / `refactor-deferred` /
+ * `resolve-conflict` row recorded a `completedTs` that PRECEDES the
+ * latest `leasedUntil` for the same slice. The lease was never
+ * reclaimed but the wave closed in time; the missing audit row is
+ * advisory bookkeeping, not a correctness failure.
+ */
+function computeClosedBeforeLeaseExpiry(events: DelegationEntry[]): Set<string> {
+  const terminalPhases = new Set([
+    "refactor",
+    "refactor-deferred",
+    "resolve-conflict"
+  ]);
+  const lastLease = new Map<string, number>();
+  const earliestTerminal = new Map<string, number>();
+  for (const ev of events) {
+    if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
+    if (typeof ev.sliceId !== "string") continue;
+    if (typeof ev.leasedUntil === "string") {
+      const until = Date.parse(ev.leasedUntil);
+      if (Number.isFinite(until)) {
+        const prev = lastLease.get(ev.sliceId);
+        if (prev === undefined || until > prev) {
+          lastLease.set(ev.sliceId, until);
+        }
+      }
+    }
+    if (
+      ev.status === "completed" &&
+      typeof ev.phase === "string" &&
+      terminalPhases.has(ev.phase) &&
+      typeof ev.completedTs === "string"
+    ) {
+      const ts = Date.parse(ev.completedTs);
+      if (Number.isFinite(ts)) {
+        const prev = earliestTerminal.get(ev.sliceId);
+        if (prev === undefined || ts < prev) {
+          earliestTerminal.set(ev.sliceId, ts);
+        }
+      }
+    }
+  }
+  const out = new Set<string>();
+  for (const [sliceId, terminalTs] of earliestTerminal.entries()) {
+    const leaseTs = lastLease.get(sliceId);
+    if (leaseTs === undefined) continue;
+    if (terminalTs < leaseTs) {
+      out.add(sliceId);
+    }
+  }
+  return out;
+}
+
+interface CutoverMisreadInput {
+  projectRoot: string;
+  tddCutoverSliceId: string;
+  activeRunEntries: DelegationEntry[];
+  ledgerEntries: DelegationEntry[];
+}
+
+/**
+ * v6.14.2 Fix 2 — advisory linter rule.
+ *
+ * Fires when:
+ *   (a) `tddCutoverSliceId` is set on the active flow state, AND
+ *   (b) the active run has a `scheduled` row whose `sliceId === tddCutoverSliceId`
+ *       AND `phase ∈ {red, green, doc}`, AND
+ *   (c) that slice already has a terminal `refactor` / `refactor-deferred` /
+ *       `resolve-conflict` event recorded for it (under any run) — i.e.
+ *       it's already closed.
+ *
+ * This is the diagnostic hox surfaced on S-17/W-03: the controller
+ * read `tddCutoverSliceId: "S-11"` and treated it as the active slice
+ * pointer, then dispatched new work for S-11 (already closed under
+ * v6.12 markdown). Advisory — never blocks stage-complete.
+ */
+function evaluateCutoverMisread(input: CutoverMisreadInput): LintFinding | null {
+  const { tddCutoverSliceId, activeRunEntries, ledgerEntries } = input;
+  const cutoverPhases = new Set(["red", "green", "doc"]);
+  const newWork = activeRunEntries.find(
+    (entry) =>
+      entry.sliceId === tddCutoverSliceId &&
+      typeof entry.phase === "string" &&
+      cutoverPhases.has(entry.phase) &&
+      // any schedule/launch/ack/completed for the cutover slice in this run
+      (entry.status === "scheduled" ||
+        entry.status === "launched" ||
+        entry.status === "acknowledged" ||
+        entry.status === "completed")
+  );
+  if (!newWork) return null;
+  const terminalPhases = new Set([
+    "refactor",
+    "refactor-deferred",
+    "resolve-conflict"
+  ]);
+  const closure = ledgerEntries.find(
+    (entry) =>
+      entry.sliceId === tddCutoverSliceId &&
+      entry.status === "completed" &&
+      typeof entry.phase === "string" &&
+      terminalPhases.has(entry.phase)
+  );
+  if (!closure) return null;
+  const closedTs = closure.completedTs ?? closure.endTs ?? closure.ts ?? "(unknown)";
+  const closedRunId = closure.runId ?? "(unknown-run)";
+  return {
+    section: "tdd_cutover_misread_warning",
+    required: false,
+    rule:
+      "v6.14.2 Fix 2 advisory: `tddCutoverSliceId` is a HISTORICAL boundary set by sync, NOT a pointer to the active slice. The controller appears to have scheduled new work on the cutover slice id while that slice already closed.",
+    found: false,
+    details:
+      `Active run scheduled new ${newWork.phase} work for slice ${tddCutoverSliceId} but that slice closed at ${closedTs} (run ${closedRunId}) — confirm this is intentional re-work, not a misread of tddCutoverSliceId. ` +
+      "Use `cclaw-cli internal wave-status --json` to find the next ready slice."
+  };
 }
 
 export function parseVerticalSliceCycle(body: string): ParsedSliceCycleResult {

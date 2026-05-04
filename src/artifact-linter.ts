@@ -210,6 +210,8 @@ export async function lintArtifact(
   let worktreeExecutionMode: "single-tree" | "worktree-first" = "single-tree";
   let tddCheckpointMode: "per-slice" | "global-red" = "per-slice";
   let integrationOverseerMode: "conditional" | "always" = "always";
+  let tddCutoverSliceId = "";
+  let tddWorktreeCutoverSliceId = "";
   try {
     const flowState = await readFlowState(projectRoot);
     const hint = flowState.interactionHints?.[stage];
@@ -223,6 +225,8 @@ export async function lintArtifact(
     worktreeExecutionMode = effectiveWorktreeExecutionMode(flowState);
     tddCheckpointMode = effectiveTddCheckpointMode(flowState);
     integrationOverseerMode = effectiveIntegrationOverseerMode(flowState);
+    tddCutoverSliceId = flowState.tddCutoverSliceId ?? "";
+    tddWorktreeCutoverSliceId = flowState.tddWorktreeCutoverSliceId ?? "";
   } catch {
     activeStageFlags = [];
     discoveryMode = "guided";
@@ -234,6 +238,8 @@ export async function lintArtifact(
     worktreeExecutionMode = "single-tree";
     tddCheckpointMode = "per-slice";
     integrationOverseerMode = "always";
+    tddCutoverSliceId = "";
+    tddWorktreeCutoverSliceId = "";
   }
   for (const extra of options.extraStageFlags ?? []) {
     if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
@@ -377,7 +383,9 @@ export async function lintArtifact(
     legacyContinuation,
     worktreeExecutionMode,
     tddCheckpointMode,
-    integrationOverseerMode
+    integrationOverseerMode,
+    tddCutoverSliceId,
+    tddWorktreeCutoverSliceId
   };
 
   switch (stage) {

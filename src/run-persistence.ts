@@ -623,11 +623,15 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
   const repoSignals = coerceRepoSignals(parsed.repoSignals);
   const completedStageMeta = sanitizeCompletedStageMeta(parsed.completedStageMeta);
   const tddCutoverSliceId = coerceTddCutoverSliceId(parsed.tddCutoverSliceId);
+  const tddWorktreeCutoverSliceId = coerceTddCutoverSliceId(
+    parsed.tddWorktreeCutoverSliceId
+  );
   const worktreeExecutionMode = coerceWorktreeExecutionMode(parsed.worktreeExecutionMode);
   const tddCheckpointMode = coerceTddCheckpointMode(parsed.tddCheckpointMode);
   const integrationOverseerMode = coerceIntegrationOverseerMode(parsed.integrationOverseerMode);
   const legacyContinuation =
     typeof parsed.legacyContinuation === "boolean" ? parsed.legacyContinuation : undefined;
+  const tddGreenMinElapsedMs = coerceTddGreenMinElapsedMs(parsed.tddGreenMinElapsedMs);
   const state: FlowState = {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
@@ -641,10 +645,12 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     ...(repoSignals ? { repoSignals } : {}),
     ...(completedStageMeta ? { completedStageMeta } : {}),
     ...(tddCutoverSliceId ? { tddCutoverSliceId } : {}),
+    ...(tddWorktreeCutoverSliceId ? { tddWorktreeCutoverSliceId } : {}),
     ...(worktreeExecutionMode !== undefined ? { worktreeExecutionMode } : {}),
     ...(tddCheckpointMode !== undefined ? { tddCheckpointMode } : {}),
     ...(integrationOverseerMode !== undefined ? { integrationOverseerMode } : {}),
     ...(legacyContinuation !== undefined ? { legacyContinuation } : {}),
+    ...(tddGreenMinElapsedMs !== undefined ? { tddGreenMinElapsedMs } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),
@@ -685,6 +691,20 @@ function coerceIntegrationOverseerMode(
 ): FlowState["integrationOverseerMode"] | undefined {
   if (value === "conditional" || value === "always") return value;
   return undefined;
+}
+
+/**
+ * v6.14.2 — coerce `tddGreenMinElapsedMs` from disk. Mirrors the
+ * defensive read in `effectiveTddGreenMinElapsedMs`: numbers ≥ 0 round
+ * down to integers; everything else (NaN, strings, negatives) returns
+ * undefined so the field is omitted from the rehydrated state and the
+ * effective getter falls back to the documented 4000ms default.
+ */
+function coerceTddGreenMinElapsedMs(value: unknown): number | undefined {
+  if (typeof value !== "number") return undefined;
+  if (!Number.isFinite(value)) return undefined;
+  if (value < 0) return undefined;
+  return Math.floor(value);
 }
 
 export class CorruptFlowStateError extends Error {

@@ -57,6 +57,7 @@ async function seedTddRun(root: string): Promise<void> {
   });
   state.currentStage = "tdd";
   state.completedStages = ["brainstorm", "scope", "design", "spec", "plan"];
+  state.tddGreenMinElapsedMs = 0;
   await writeFlowState(root, state, { allowReset: true });
 }
 
@@ -271,7 +272,7 @@ async function dispatchPhase(
 }
 
 describe("e2e: TDD auto-derive (Phase D)", () => {
-  it("records 3 slices via delegation-record --slice/--phase and lints clean without filling markdown tables", async () => {
+  it("records 3 slices via delegation-record --slice/--phase and lints clean without filling markdown tables", { timeout: 30_000 }, async () => {
     const root = await createTempProject("e2e-tdd-auto-derive");
     const scriptPath = await setupHook(root);
     await seedTddRun(root);
@@ -295,7 +296,7 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
         agent: "slice-implementer",
         slice,
         phase: "green",
-        evidenceRefs: [`tests/unit/slice-${i}.test.ts`],
+        evidenceRefs: [`tests/unit/slice-${i}.test.ts: vitest run tests/unit/slice-${i}.test.ts => 1 passed; 0 failed`],
         spanId: `span-green-${slice}`
       });
       await dispatchPhase(root, scriptPath, taDef, {

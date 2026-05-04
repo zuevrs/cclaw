@@ -233,7 +233,7 @@ describe("v6.14.1 — worker ACK helper template (rendered agent markdown)", () 
       const def = CCLAW_AGENTS.find((a) => a.name === name);
       expect(def).toBeDefined();
       const md = agentMarkdown(def!);
-      expect(md).toMatch(/## TDD Worker Self-Record Contract \(v6\.14\.1\)/u);
+      expect(md).toMatch(/## TDD Worker Self-Record Contract \(v6\.14\.\d+\)/u);
       expect(md).toMatch(/--status=acknowledged/u);
       expect(md).toMatch(/--status=completed/u);
       expect(md).toMatch(/delegation-record\.mjs/u);
@@ -246,7 +246,7 @@ describe("v6.14.1 — worker ACK helper template (rendered agent markdown)", () 
       const def = CCLAW_AGENTS.find((a) => a.name === name);
       expect(def, `agent ${name} should be defined`).toBeDefined();
       const md = agentMarkdown(def!);
-      expect(md).not.toMatch(/## TDD Worker Self-Record Contract \(v6\.14\.1\)/u);
+      expect(md).not.toMatch(/## TDD Worker Self-Record Contract \(v6\.14\.\d+\)/u);
     }
   });
 });

@@ -1187,12 +1187,25 @@ async function applyPlanLegacyContinuationIfNeeded(projectRoot: string): Promise
 
 /**
  * v6.14.0 — set stream-style defaults on `cclaw-cli sync` and print a
- * one-line hint when defaults change. Strategy:
+ * one-line hint when defaults change.
  *
- * - When `legacyContinuation: true` and `tddCheckpointMode` is unset, force
- *   `tddCheckpointMode: "global-red"` (preserves hox wave protocol).
- * - When `legacyContinuation: true` and `integrationOverseerMode` is unset,
- *   force `integrationOverseerMode: "always"` (preserves v6.13 behavior).
+ * v6.14.2 update — flip the legacyContinuation defaults from
+ * `global-red`/`always` to `per-slice`/`conditional`. Rationale: hox-shape
+ * projects ran into S-17 misroutes precisely because the default
+ * preserved the v6.12 wave barrier even after the project itself had
+ * moved to stream-mode. Existing flow-state values are NEVER overwritten
+ * — operators who want to pin `global-red`/`always` may set them
+ * explicitly via `cclaw-cli internal set-checkpoint-mode global-red` and
+ * `set-integration-overseer-mode always`.
+ *
+ * Strategy:
+ *
+ * - When `legacyContinuation: true` and `tddCheckpointMode` is unset,
+ *   default to `tddCheckpointMode: "per-slice"` (v6.14.2 — was
+ *   `global-red` in v6.14.0/v6.14.1).
+ * - When `legacyContinuation: true` and `integrationOverseerMode` is
+ *   unset, default to `integrationOverseerMode: "conditional"` (v6.14.2
+ *   — was `always` in v6.14.0/v6.14.1).
  * - When `legacyContinuation` is NOT true (new / standard projects) and
  *   neither field is set, default to `tddCheckpointMode: "per-slice"`,
  *   `integrationOverseerMode: "conditional"`. Also default
@@ -1238,12 +1251,12 @@ async function applyV614DefaultsIfNeeded(projectRoot: string): Promise<string | 
 
   if (legacyContinuation) {
     if (!tddCheckpointModeSet) {
-      updates.tddCheckpointMode = "global-red";
-      summary.push("tddCheckpointMode=global-red (legacyContinuation)");
+      updates.tddCheckpointMode = "per-slice";
+      summary.push("tddCheckpointMode=per-slice (legacyContinuation, v6.14.2 default flip)");
     }
     if (!integrationOverseerModeSet) {
-      updates.integrationOverseerMode = "always";
-      summary.push("integrationOverseerMode=always (legacyContinuation)");
+      updates.integrationOverseerMode = "conditional";
+      summary.push("integrationOverseerMode=conditional (legacyContinuation, v6.14.2 default flip)");
     }
   } else {
     if (!tddCheckpointModeSet) {
@@ -1271,7 +1284,122 @@ async function applyV614DefaultsIfNeeded(projectRoot: string): Promise<string | 
     return null;
   }
 
-  return `v6.14.0 stream-style defaults applied: ${summary.join(", ")}. To opt out, edit .cclaw/state/flow-state.json directly or pin the legacy mode (tddCheckpointMode="global-red", integrationOverseerMode="always").`;
+  return `v6.14.2 stream-style defaults applied: ${summary.join(", ")}. To opt out, run cclaw-cli internal set-checkpoint-mode global-red --reason="..." and/or cclaw-cli internal set-integration-overseer-mode always --reason="...".`;
+}
+
+/**
+ * v6.14.2 — auto-stamp `tddWorktreeCutoverSliceId` for legacyContinuation
+ * projects in worktree-first mode that haven't yet recorded a boundary.
+ *
+ * Detection ("any-metadata" rule): scan the active run's
+ * `slice-implementer` rows. The boundary is the highest `S-N` whose
+ * rows for the active run lack ALL of `claimToken`, `ownerLaneId`, and
+ * `leasedUntil`. When no such slice exists (every slice carries at
+ * least one worktree field), fall back to `tddCutoverSliceId` so the
+ * v6.12 cutover marker still confers exemption.
+ *
+ * Idempotent: when the field is already set, returns null without
+ * writing. Best-effort: read failures, missing ledger, or unparseable
+ * rows all short-circuit silently — the existing flow-state.json is
+ * never corrupted.
+ *
+ * Returns a one-line hint string (or `null` if nothing changed).
+ */
+async function applyV6142WorktreeCutoverIfNeeded(
+  projectRoot: string
+): Promise<string | null> {
+  const flowStatePath = runtimePath(projectRoot, "state", "flow-state.json");
+  let flowStateRaw: string;
+  try {
+    flowStateRaw = await fs.readFile(flowStatePath, "utf8");
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(flowStateRaw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (obj.legacyContinuation !== true) return null;
+  if (obj.worktreeExecutionMode !== "worktree-first") return null;
+  if (
+    typeof obj.tddWorktreeCutoverSliceId === "string" &&
+    obj.tddWorktreeCutoverSliceId.trim().length > 0
+  ) {
+    return null;
+  }
+
+  const ledgerPath = runtimePath(projectRoot, "state", "delegation-log.json");
+  const activeRunId = typeof obj.activeRunId === "string" ? obj.activeRunId : "";
+  let ledgerRaw: string;
+  try {
+    ledgerRaw = await fs.readFile(ledgerPath, "utf8");
+  } catch {
+    ledgerRaw = "";
+  }
+  let ledgerParsed: unknown = null;
+  if (ledgerRaw.length > 0) {
+    try {
+      ledgerParsed = JSON.parse(ledgerRaw);
+    } catch {
+      ledgerParsed = null;
+    }
+  }
+  const entries =
+    ledgerParsed &&
+    typeof ledgerParsed === "object" &&
+    !Array.isArray(ledgerParsed) &&
+    Array.isArray((ledgerParsed as Record<string, unknown>).entries)
+      ? ((ledgerParsed as Record<string, unknown>).entries as Array<Record<string, unknown>>)
+      : [];
+
+  let boundary = -1;
+  for (const entry of entries) {
+    if (entry.agent !== "slice-implementer") continue;
+    if (entry.status !== "completed") continue;
+    if (typeof entry.sliceId !== "string") continue;
+    if (activeRunId && entry.runId && entry.runId !== activeRunId) continue;
+    const tok = typeof entry.claimToken === "string" ? entry.claimToken.trim() : "";
+    const lane = typeof entry.ownerLaneId === "string" ? entry.ownerLaneId.trim() : "";
+    const lease =
+      typeof entry.leasedUntil === "string" ? entry.leasedUntil.trim() : "";
+    if (tok.length > 0 || lane.length > 0 || lease.length > 0) continue;
+    const m = /^S-(\d+)$/u.exec(entry.sliceId);
+    if (!m) continue;
+    const n = Number.parseInt(m[1]!, 10);
+    if (!Number.isFinite(n)) continue;
+    if (n > boundary) boundary = n;
+  }
+
+  let stamped: string | null = null;
+  if (boundary >= 0) {
+    stamped = `S-${boundary}`;
+  } else if (
+    typeof obj.tddCutoverSliceId === "string" &&
+    /^S-\d+$/u.test(obj.tddCutoverSliceId)
+  ) {
+    stamped = obj.tddCutoverSliceId;
+  }
+  if (!stamped) return null;
+
+  const merged = { ...obj, tddWorktreeCutoverSliceId: stamped };
+  try {
+    await writeFileSafe(flowStatePath, `${JSON.stringify(merged, null, 2)}\n`, {
+      mode: 0o600
+    });
+  } catch {
+    return null;
+  }
+  return (
+    `v6.14.2 stamped tddWorktreeCutoverSliceId=${stamped}; closed slices ≤ ${stamped} ` +
+    "are exempt from worktree-first findings under legacyContinuation. " +
+    "Edit .cclaw/state/flow-state.json to override (advisory)."
+  );
 }
 
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
@@ -1470,6 +1598,10 @@ async function materializeRuntime(
       const v614Hint = await applyV614DefaultsIfNeeded(projectRoot);
       if (v614Hint) {
         process.stdout.write(`cclaw: ${v614Hint}\n`);
+      }
+      const v6142Hint = await applyV6142WorktreeCutoverIfNeeded(projectRoot);
+      if (v6142Hint) {
+        process.stdout.write(`cclaw: ${v6142Hint}\n`);
       }
     }
     try {
