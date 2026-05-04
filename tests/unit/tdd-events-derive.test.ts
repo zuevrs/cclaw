@@ -514,7 +514,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
   });
 });
 
-describe("tdd linter — slice-documenter coverage (v6.12.0 Phase R: mandatory regardless of discoveryMode)", () => {
+describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, advisory in lean/guided)", () => {
   it("requires phase=doc on every green slice when discoveryMode=deep", async () => {
     const root = await createTempProject("tdd-doc-deep-required");
     await seedTddRun(root, { discoveryMode: "deep" });
@@ -566,7 +566,7 @@ describe("tdd linter — slice-documenter coverage (v6.12.0 Phase R: mandatory r
     expect(docFinding?.found).toBe(false);
   });
 
-  it("requires phase=doc on every green slice when discoveryMode is not deep (v6.12.0 Phase R)", async () => {
+  it("flags phase=doc as advisory (required=false) on every green slice when discoveryMode is not deep (v6.14.0)", async () => {
     const root = await createTempProject("tdd-doc-not-deep");
     await seedTddRun(root, { discoveryMode: "guided" });
     await writePreTddArtifacts(root);
@@ -613,7 +613,7 @@ describe("tdd linter — slice-documenter coverage (v6.12.0 Phase R: mandatory r
     const docFinding = result.findings.find((f) =>
       f.section === "tdd_slice_documenter_missing"
     );
-    expect(docFinding?.required).toBe(true);
+    expect(docFinding?.required).toBe(false);
     expect(docFinding?.found).toBe(false);
   });
 });

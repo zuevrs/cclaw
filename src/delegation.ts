@@ -251,6 +251,35 @@ export type DelegationEntry = {
    * v6.13.0 — integration branch merge status after deterministic fan-in.
    */
   integrationState?: "pending" | "applied" | "conflict" | "resolved" | "abandoned";
+  /**
+   * v6.14.0 — refactor outcome folded into `phase=green` events so a single
+   * row can close RED→GREEN→REFACTOR for the slice without a separate
+   * `phase=refactor` / `phase=refactor-deferred` lifecycle pass.
+   *
+   * - `mode: "inline"` — refactor pass ran inline as part of the GREEN
+   *   delegation (rationale optional but recommended for traceability).
+   * - `mode: "deferred"` — refactor was intentionally deferred; rationale
+   *   is required (carried in `rationale` and mirrored into
+   *   `evidenceRefs[0]` so legacy linters that read evidence still work).
+   *
+   * `phase=refactor` and `phase=refactor-deferred` events remain valid
+   * for backward compatibility; the linter accepts either form for
+   * REFACTOR coverage.
+   *
+   * keep in sync with the inline copy in
+   * `src/content/hooks.ts::delegationRecordScript`.
+   */
+  refactorOutcome?: {
+    mode: "inline" | "deferred";
+    rationale?: string;
+  };
+  /**
+   * v6.14.0 — risk tier hint copied from the plan slice. Used by
+   * `integrationCheckRequired()` to decide whether the
+   * integration-overseer must run. `low` and `medium` are advisory;
+   * `high` always triggers the overseer. Optional on every row.
+   */
+  riskTier?: "low" | "medium" | "high";
 };
 
 export const DELEGATION_PHASES = [
@@ -507,8 +536,21 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
       o.integrationState === "applied" ||
       o.integrationState === "conflict" ||
       o.integrationState === "resolved" ||
-      o.integrationState === "abandoned")
+      o.integrationState === "abandoned") &&
+    (o.refactorOutcome === undefined || isRefactorOutcomeShape(o.refactorOutcome)) &&
+    (o.riskTier === undefined ||
+      o.riskTier === "low" ||
+      o.riskTier === "medium" ||
+      o.riskTier === "high")
   );
+}
+
+function isRefactorOutcomeShape(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const o = value as Record<string, unknown>;
+  if (o.mode !== "inline" && o.mode !== "deferred") return false;
+  if (o.rationale !== undefined && typeof o.rationale !== "string") return false;
+  return true;
 }
 
 
@@ -631,7 +673,8 @@ const NON_DELEGATION_AUDIT_EVENTS = new Set<string>([
   "cclaw_fanin_applied",
   "cclaw_fanin_conflict",
   "cclaw_fanin_resolved",
-  "cclaw_fanin_abandoned"
+  "cclaw_fanin_abandoned",
+  "cclaw_integration_overseer_skipped"
 ]);
 
 function isAuditEventLine(parsed: unknown): boolean {
@@ -1097,6 +1140,173 @@ export function readySliceUnitsFromMergedWaves(
     });
   }
   return out;
+}
+
+/**
+ * v6.14.0 — verdict from `integrationCheckRequired()`.
+ *
+ * `required: true` means the controller MUST dispatch
+ * `integration-overseer` before stage-complete; `reasons[]` lists the
+ * triggers that fired so the controller can quote them in artifacts.
+ *
+ * `required: false` means the integration check can be safely skipped
+ * (disjoint paths, no high-risk slices, no fan-in conflicts). Callers
+ * that skip dispatch should append a `cclaw_integration_overseer_skipped`
+ * audit row to `delegation-events.jsonl` so the run log stays honest
+ * about the decision.
+ */
+export interface IntegrationCheckVerdict {
+  required: boolean;
+  reasons: string[];
+}
+
+interface IntegrationCheckInput {
+  /** Slice id (e.g. `S-1`). Required for the heuristic to be meaningful. */
+  sliceId: string;
+  /**
+   * Repo-relative paths the slice claimed (file-overlap scheduler
+   * input + slice-implementer evidence).
+   */
+  claimedPaths?: string[];
+  /** Optional `riskTier` echoed from the plan row. */
+  riskTier?: "low" | "medium" | "high";
+}
+
+/**
+ * v6.14.0 — heuristic helper deciding whether a multi-slice wave needs
+ * the `integration-overseer` dispatch.
+ *
+ * Triggers (any one):
+ *   - **two or more closed slices share import boundaries** (heuristic:
+ *     two slices declare a `claimedPaths` whose first 2 path segments
+ *     match — same package/module directory);
+ *   - any slice has `riskTier === "high"`;
+ *   - any `cclaw_fanin_conflict` audit row exists in the supplied
+ *     events list (regardless of slice).
+ *
+ * When none fire, the verdict is `{ required: false, reasons: ["disjoint-paths"] }`
+ * and the caller should record a `cclaw_integration_overseer_skipped`
+ * audit before bypassing the dispatch.
+ *
+ * Note on inputs: this function reads from the supplied delegation
+ * events list directly so callers can inject synthetic data in tests.
+ * Use `readDelegationEvents(projectRoot)` in production paths.
+ */
+export function integrationCheckRequired(events: DelegationEvent[]): IntegrationCheckVerdict;
+export function integrationCheckRequired(
+  events: DelegationEvent[],
+  fanInAudits: FanInAuditRecord[]
+): IntegrationCheckVerdict;
+export function integrationCheckRequired(
+  events: DelegationEvent[],
+  fanInAudits?: FanInAuditRecord[]
+): IntegrationCheckVerdict {
+  const reasons: string[] = [];
+  // Closed slices = ones whose phase=green or phase=refactor row is
+  // completed. We collect each unique sliceId's representative paths
+  // and risk tier so the heuristic looks at terminal state only.
+  const sliceState = new Map<string, IntegrationCheckInput>();
+  for (const evt of events) {
+    if (evt.stage !== "tdd") continue;
+    if (typeof evt.sliceId !== "string" || evt.sliceId.length === 0) continue;
+    if (evt.status !== "completed") continue;
+    if (evt.phase !== "green" && evt.phase !== "refactor" && evt.phase !== "refactor-deferred") {
+      continue;
+    }
+    const existing = sliceState.get(evt.sliceId) ?? { sliceId: evt.sliceId };
+    if (Array.isArray(evt.claimedPaths) && evt.claimedPaths.length > 0) {
+      const merged = new Set(existing.claimedPaths ?? []);
+      for (const p of evt.claimedPaths) merged.add(p);
+      existing.claimedPaths = [...merged];
+    }
+    if (evt.riskTier === "low" || evt.riskTier === "medium" || evt.riskTier === "high") {
+      // Highest-wins so the verdict is conservative.
+      const order = { low: 0, medium: 1, high: 2 } as const;
+      const prev = existing.riskTier ?? "low";
+      if (order[evt.riskTier] >= order[prev]) {
+        existing.riskTier = evt.riskTier;
+      }
+    }
+    sliceState.set(evt.sliceId, existing);
+  }
+
+  const slices = [...sliceState.values()];
+  if (slices.some((s) => s.riskTier === "high")) {
+    reasons.push("high-risk-slice");
+  }
+
+  // Shared-directory heuristic — two distinct slices with overlapping
+  // first-2-segment directory prefixes count as shared boundary.
+  const sliceDirs = new Map<string, Set<string>>();
+  for (const s of slices) {
+    const dirs = new Set<string>();
+    for (const raw of s.claimedPaths ?? []) {
+      const segments = raw.split("/").filter((seg) => seg.length > 0);
+      if (segments.length === 0) continue;
+      // For top-level files like `package.json`, fall back to the
+      // first segment so single-segment paths still count as a shared
+      // directory when two slices both claim the file.
+      const prefix = segments.slice(0, Math.max(1, Math.min(2, segments.length))).join("/");
+      dirs.add(prefix);
+    }
+    if (dirs.size > 0) sliceDirs.set(s.sliceId, dirs);
+  }
+  let sharedFound = false;
+  const ids = [...sliceDirs.keys()];
+  outer: for (let i = 0; i < ids.length; i += 1) {
+    const a = sliceDirs.get(ids[i]!)!;
+    for (let j = i + 1; j < ids.length; j += 1) {
+      const b = sliceDirs.get(ids[j]!)!;
+      for (const dir of a) {
+        if (b.has(dir)) {
+          sharedFound = true;
+          break outer;
+        }
+      }
+    }
+  }
+  if (sharedFound) reasons.push("shared-import-boundary");
+
+  // Fan-in conflict trigger — any `cclaw_fanin_conflict` in the supplied
+  // audits forces the overseer regardless of paths/risk.
+  if (Array.isArray(fanInAudits) && fanInAudits.some((a) => a.event === "cclaw_fanin_conflict")) {
+    reasons.push("fanin-conflict");
+  }
+
+  if (reasons.length > 0) {
+    return { required: true, reasons };
+  }
+  return { required: false, reasons: ["disjoint-paths"] };
+}
+
+/**
+ * v6.14.0 — append a non-delegation audit event recording that the
+ * integration-overseer dispatch was skipped because
+ * `integrationCheckRequired()` returned `required: false`. Best-effort;
+ * never throws.
+ */
+export async function recordIntegrationOverseerSkipped(
+  projectRoot: string,
+  params: {
+    runId: string;
+    reasons: string[];
+    sliceIds: string[];
+  }
+): Promise<void> {
+  const eventsPath = delegationEventsPath(projectRoot);
+  const payload = {
+    event: "cclaw_integration_overseer_skipped" as const,
+    runId: params.runId,
+    reasons: params.reasons,
+    sliceIds: params.sliceIds,
+    ts: new Date().toISOString()
+  };
+  try {
+    await fs.mkdir(path.dirname(eventsPath), { recursive: true });
+    await fs.appendFile(eventsPath, `${JSON.stringify(payload)}\n`, "utf8");
+  } catch {
+    // best-effort audit; never block stage advance.
+  }
 }
 
 /**

@@ -26,6 +26,10 @@ async function seed(root: string): Promise<void> {
   });
   state.currentStage = "tdd";
   state.completedStages = ["brainstorm", "scope", "design", "spec", "plan"];
+  // v6.14.0: this fixture exercises the legacy global-RED checkpoint rule.
+  // New default is per-slice; opt back into global-red so
+  // `tdd_red_checkpoint_violation` continues to fire.
+  state.tddCheckpointMode = "global-red";
   await fs.writeFile(
     path.join(root, ".cclaw/state/flow-state.json"),
     `${JSON.stringify(state, null, 2)}\n`,

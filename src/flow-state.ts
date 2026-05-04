@@ -183,6 +183,40 @@ export interface FlowState {
    * defaults scheduler parallelism to opt-in only for those units.
    */
   legacyContinuation?: boolean;
+  /**
+   * v6.14.0 — TDD wave checkpoint mode (stream-style parallel TDD).
+   *
+   * - `per-slice` — default for new projects. Each lane runs RED→GREEN as
+   *   soon as its `dependsOn` closes; the linter enforces RED-before-GREEN
+   *   per slice only (`tdd_slice_red_completed_before_green`). No global
+   *   barrier between Phase A REDs and Phase B GREENs.
+   * - `global-red` — legacy v6.12/v6.13 behavior. ALL Phase A REDs in a
+   *   wave must complete before ANY Phase B GREEN starts. Auto-applied
+   *   for projects with `legacyContinuation: true` so hox-style runs
+   *   continue to enforce the wave barrier.
+   *
+   * Omitted on legacy state files (treated as `"global-red"` for
+   * `legacyContinuation: true` and `"per-slice"` otherwise via
+   * `effectiveTddCheckpointMode`).
+   */
+  tddCheckpointMode?: "per-slice" | "global-red";
+  /**
+   * v6.14.0 — integration-overseer dispatch mode.
+   *
+   * - `conditional` — default for new projects. The controller calls
+   *   `integrationCheckRequired(events)` after wave closeout; the
+   *   integration-overseer is dispatched only when (a) two or more
+   *   closed slices share import boundaries (heuristic: shared
+   *   directory in `evidenceRefs`/`claimedPaths`), (b) any slice has
+   *   `riskTier === "high"`, or (c) deterministic fan-in reported a
+   *   `cclaw_fanin_conflict`. Otherwise the linter emits the audit
+   *   row `cclaw_integration_overseer_skipped` and skips dispatch.
+   * - `always` — legacy v6.13 behavior. Run integration-overseer
+   *   after every multi-slice wave regardless of trigger.
+   *
+   * Omitted on legacy state files (treated as `"always"`).
+   */
+  integrationOverseerMode?: "conditional" | "always";
 }
 
 /**
@@ -191,6 +225,30 @@ export interface FlowState {
  */
 export function effectiveWorktreeExecutionMode(state: FlowState): "single-tree" | "worktree-first" {
   return state.worktreeExecutionMode ?? "single-tree";
+}
+
+/**
+ * Effective v6.14 TDD checkpoint mode: legacy state files without the
+ * field default to `global-red` when `legacyContinuation: true` (hox)
+ * and `per-slice` otherwise. Explicit values always win.
+ */
+export function effectiveTddCheckpointMode(
+  state: FlowState
+): "per-slice" | "global-red" {
+  if (state.tddCheckpointMode === "per-slice" || state.tddCheckpointMode === "global-red") {
+    return state.tddCheckpointMode;
+  }
+  return state.legacyContinuation === true ? "global-red" : "per-slice";
+}
+
+/**
+ * Effective v6.14 integration-overseer mode: legacy state files without
+ * the field default to `always` (matches v6.13 behavior).
+ */
+export function effectiveIntegrationOverseerMode(
+  state: FlowState
+): "conditional" | "always" {
+  return state.integrationOverseerMode === "conditional" ? "conditional" : "always";
 }
 
 export interface StageInteractionHint {

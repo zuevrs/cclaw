@@ -2630,4 +2630,19 @@ export interface StageLintContext {
    * v6.13.0 — effective worktree execution mode for TDD linters.
    */
   worktreeExecutionMode: "single-tree" | "worktree-first";
+  /**
+   * v6.14.0 — effective TDD checkpoint mode. `per-slice` enforces
+   * RED-before-GREEN per slice (the default for new projects);
+   * `global-red` keeps the v6.12/v6.13 wave-batch barrier (auto-applied
+   * for `legacyContinuation: true` projects on `cclaw-cli sync`).
+   */
+  tddCheckpointMode: "per-slice" | "global-red";
+  /**
+   * v6.14.0 — effective integration-overseer dispatch mode.
+   * `conditional` runs the overseer only when
+   * `integrationCheckRequired()` returns `required: true`; `always`
+   * preserves the v6.13 behavior of running it on every multi-slice
+   * wave.
+   */
+  integrationOverseerMode: "conditional" | "always";
 }

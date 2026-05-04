@@ -624,6 +624,8 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
   const completedStageMeta = sanitizeCompletedStageMeta(parsed.completedStageMeta);
   const tddCutoverSliceId = coerceTddCutoverSliceId(parsed.tddCutoverSliceId);
   const worktreeExecutionMode = coerceWorktreeExecutionMode(parsed.worktreeExecutionMode);
+  const tddCheckpointMode = coerceTddCheckpointMode(parsed.tddCheckpointMode);
+  const integrationOverseerMode = coerceIntegrationOverseerMode(parsed.integrationOverseerMode);
   const legacyContinuation =
     typeof parsed.legacyContinuation === "boolean" ? parsed.legacyContinuation : undefined;
   const state: FlowState = {
@@ -640,6 +642,8 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     ...(completedStageMeta ? { completedStageMeta } : {}),
     ...(tddCutoverSliceId ? { tddCutoverSliceId } : {}),
     ...(worktreeExecutionMode !== undefined ? { worktreeExecutionMode } : {}),
+    ...(tddCheckpointMode !== undefined ? { tddCheckpointMode } : {}),
+    ...(integrationOverseerMode !== undefined ? { integrationOverseerMode } : {}),
     ...(legacyContinuation !== undefined ? { legacyContinuation } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
@@ -666,6 +670,20 @@ function coerceWorktreeExecutionMode(
   value: unknown
 ): FlowState["worktreeExecutionMode"] | undefined {
   if (value === "single-tree" || value === "worktree-first") return value;
+  return undefined;
+}
+
+function coerceTddCheckpointMode(
+  value: unknown
+): FlowState["tddCheckpointMode"] | undefined {
+  if (value === "per-slice" || value === "global-red") return value;
+  return undefined;
+}
+
+function coerceIntegrationOverseerMode(
+  value: unknown
+): FlowState["integrationOverseerMode"] | undefined {
+  if (value === "conditional" || value === "always") return value;
   return undefined;
 }
 
