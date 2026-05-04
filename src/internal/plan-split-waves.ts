@@ -46,6 +46,235 @@ const WAVE_MANAGED_END = "<!-- wave-split-managed-end -->";
 const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
 const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
 
+/** v6.13.1 — member line in Parallel Execution Plan or wave-NN.md */
+export interface ParsedParallelWaveMember {
+  sliceId: string;
+  unitId: string;
+}
+
+export interface ParsedParallelWave {
+  waveId: string;
+  members: ParsedParallelWaveMember[];
+}
+
+export class WavePlanDuplicateSliceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WavePlanDuplicateSliceError";
+  }
+}
+
+export class WavePlanMergeConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WavePlanMergeConflictError";
+  }
+}
+
+/**
+ * Raw body between parallel execution managed markers (no markers included).
+ */
+export function extractParallelExecutionManagedBody(planMarkdown: string): string | null {
+  const startIdx = planMarkdown.indexOf(PARALLEL_EXEC_MANAGED_START);
+  const endIdx = planMarkdown.indexOf(PARALLEL_EXEC_MANAGED_END);
+  if (startIdx < 0 || endIdx <= startIdx) return null;
+  return planMarkdown.slice(startIdx + PARALLEL_EXEC_MANAGED_START.length, endIdx).trim();
+}
+
+function tokenToSliceAndUnit(token: string): ParsedParallelWaveMember | null {
+  const t = token.trim().replace(/^[`"'[\]()]+|[`"'[\]()]+$/gu, "");
+  const u = /^U-(\d+)$/u.exec(t);
+  if (u) {
+    const n = u[1]!;
+    return { unitId: `U-${n}`, sliceId: `S-${n}` };
+  }
+  const s = /^S-(\d+)$/u.exec(t);
+  if (s) {
+    const n = s[1]!;
+    return { unitId: `U-${n}`, sliceId: `S-${n}` };
+  }
+  return null;
+}
+
+/**
+ * Members list after `Members:` in Parallel Execution Plan / wave-NN headers.
+ * Supports markdown bold `**Members:**` (colon between Members and closing `**`)
+ * and plain `Members:`.
+ */
+export function extractMembersListFromLine(trimmedLine: string): string | null {
+  const bold = /^[-*]?\s*\*\*Members:\*\*\s*(.+)$/iu.exec(trimmedLine);
+  if (bold) return bold[1]!.trim();
+  const plain = /^[-*]?\s*Members\s*:\s*(.+)$/iu.exec(trimmedLine);
+  if (plain) return plain[1]!.trim();
+  return null;
+}
+
+/**
+ * Parse `## Parallel Execution Plan` managed block for wave headings and Members lines.
+ * Malformed member tokens are skipped. Duplicate slice ids in one plan source throw.
+ */
+export function parseParallelExecutionPlanWaves(planMarkdown: string): ParsedParallelWave[] {
+  const body = extractParallelExecutionManagedBody(planMarkdown);
+  if (!body) return [];
+  const lines = body.split(/\r?\n/u);
+  const waves: ParsedParallelWave[] = [];
+  let current: ParsedParallelWave | null = null;
+  const seenSlices = new Set<string>();
+
+  const flushCurrent = (): void => {
+    if (current && current.members.length > 0) {
+      waves.push(current);
+    }
+  };
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    const waveMatch = /^###\s+Wave\s+(\d+)\s*$/iu.exec(trimmed);
+    if (waveMatch) {
+      flushCurrent();
+      const n = waveMatch[1]!;
+      current = { waveId: `W-${n.padStart(2, "0")}`, members: [] };
+      continue;
+    }
+    const membersCsv = extractMembersListFromLine(trimmed);
+    if (membersCsv !== null && current) {
+      const parts = membersCsv
+        .split(/,/u)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+      for (const part of parts) {
+        const ids = tokenToSliceAndUnit(part);
+        if (!ids) continue;
+        if (seenSlices.has(ids.sliceId)) {
+          throw new WavePlanDuplicateSliceError(
+            `duplicate slice ${ids.sliceId} in Parallel Execution Plan managed block`
+          );
+        }
+        seenSlices.add(ids.sliceId);
+        current.members.push(ids);
+      }
+    }
+  }
+  flushCurrent();
+  return waves;
+}
+
+/**
+ * Parse a single wave-NN.md: prefer a `Members:` line in the header; otherwise
+ * collect distinct S-N tokens in the first lines (legacy).
+ */
+export function parseWavePlanFileBody(body: string, waveId: string): ParsedParallelWave {
+  const members: ParsedParallelWaveMember[] = [];
+  const seen = new Set<string>();
+  const headLines = body.split(/\r?\n/u).slice(0, 120);
+  let membersCsv: string | null = null;
+  for (const raw of headLines) {
+    membersCsv = extractMembersListFromLine(raw.trim());
+    if (membersCsv !== null) break;
+  }
+  if (membersCsv !== null) {
+    for (const part of membersCsv.split(/,/u)) {
+      const ids = tokenToSliceAndUnit(part);
+      if (!ids) continue;
+      if (seen.has(ids.sliceId)) {
+        throw new WavePlanDuplicateSliceError(`duplicate slice ${ids.sliceId} in ${waveId} wave file`);
+      }
+      seen.add(ids.sliceId);
+      members.push(ids);
+    }
+  }
+  if (members.length === 0) {
+    const regex = /\b(S-\d+)\b/gu;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(body)) !== null) {
+      const ids = tokenToSliceAndUnit(match[1]!);
+      if (!ids) continue;
+      if (seen.has(ids.sliceId)) continue;
+      seen.add(ids.sliceId);
+      members.push(ids);
+    }
+  }
+  return { waveId, members };
+}
+
+export async function parseWavePlanDirectory(artifactsDir: string): Promise<ParsedParallelWave[]> {
+  const wavePlansDir = path.join(artifactsDir, "wave-plans");
+  let entries: string[] = [];
+  try {
+    entries = await fs.readdir(wavePlansDir);
+  } catch {
+    return [];
+  }
+  const out: ParsedParallelWave[] = [];
+  for (const name of [...entries].sort()) {
+    const match = /^wave-(\d+)\.md$/u.exec(name);
+    if (!match) continue;
+    const waveId = `W-${match[1]!.padStart(2, "0")}`;
+    const body = await fs.readFile(path.join(wavePlansDir, name), "utf8");
+    const wave = parseWavePlanFileBody(body, waveId);
+    if (wave.members.length > 0) {
+      out.push(wave);
+    }
+  }
+  return out;
+}
+
+/**
+ * Merge wave definitions: managed Parallel Execution Plan first, then wave-NN.md.
+ * Same slice must map to the same wave id and unit id in both sources or a
+ * `WavePlanMergeConflictError` is thrown.
+ */
+export function mergeParallelWaveDefinitions(
+  primary: ParsedParallelWave[],
+  secondary: ParsedParallelWave[]
+): ParsedParallelWave[] {
+  const byWave = new Map<string, Map<string, ParsedParallelWaveMember>>();
+  const sliceBinding = new Map<string, { waveId: string; unitId: string }>();
+
+  const addWaves = (waves: ParsedParallelWave[]): void => {
+    for (const wave of waves) {
+      let memMap = byWave.get(wave.waveId);
+      if (!memMap) {
+        memMap = new Map();
+        byWave.set(wave.waveId, memMap);
+      }
+      for (const member of wave.members) {
+        const prev = sliceBinding.get(member.sliceId);
+        if (prev) {
+          if (prev.waveId !== wave.waveId || prev.unitId !== member.unitId) {
+            throw new WavePlanMergeConflictError(
+              `slice ${member.sliceId}: conflicting wave plan sources (wave ${prev.waveId} vs ${wave.waveId}, unit ${prev.unitId} vs ${member.unitId})`
+            );
+          }
+        } else {
+          sliceBinding.set(member.sliceId, { waveId: wave.waveId, unitId: member.unitId });
+        }
+        memMap.set(member.sliceId, member);
+      }
+    }
+  };
+
+  addWaves(primary);
+  addWaves(secondary);
+
+  return [...byWave.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([wid, memMap]) => ({
+      waveId: wid,
+      members: [...memMap.values()].sort((p, q) => p.sliceId.localeCompare(q.sliceId))
+    }));
+}
+
+/**
+ * One-line operator hint after sync when a multi-member wave exists.
+ */
+export function formatNextParallelWaveSyncHint(merged: ParsedParallelWave[]): string | null {
+  const candidate = merged.find((w) => w.members.length >= 2);
+  if (!candidate) return null;
+  const ids = candidate.members.map((m) => m.sliceId).join(", ");
+  return `Parallel Execution Plan: ${candidate.waveId} has ${candidate.members.length} parallel members (${ids}).`;
+}
+
 export interface ParsedImplementationUnit {
   id: string;
   /**
@@ -87,11 +316,15 @@ export function parseImplementationUnitParallelFields(
 ): ImplementationUnitParallelFields {
   const text = unit.body;
   const pick = (label: string): string | undefined => {
-    const re = new RegExp(`^[-*]\\s*\\*{0,2}${label}\\*{0,2}\\s*:\\s*(.*)$`, "imu");
+    const esc = label.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    const bold = new RegExp(`^[-*]\\s*\\*\\*${esc}:\\*\\*\\s*(.*)$`, "imu");
+    const legacy = new RegExp(`^[-*]\\s*\\*{0,2}${esc}\\*{0,2}\\s*:\\s*(.*)$`, "imu");
     for (const rawLine of text.split(/\r?\n/u)) {
       const line = rawLine.trim();
-      const m = re.exec(line);
-      if (m) return m[1]?.trim();
+      const mb = bold.exec(line);
+      if (mb) return mb[1]?.trim();
+      const ml = legacy.exec(line);
+      if (ml) return ml[1]?.trim();
     }
     return undefined;
   };
@@ -124,8 +357,13 @@ export function parseImplementationUnitParallelFields(
 }
 
 function unitBodyHasV613ParallelBullet(body: string, label: string): boolean {
-  const re = new RegExp(`^[-*]\\s*\\*{0,2}${label}\\*{0,2}\\s*:`, "imu");
-  return body.split(/\r?\n/u).some((raw) => re.test(raw.trim()));
+  const esc = label.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const bold = new RegExp(`^[-*]\\s*\\*\\*${esc}:\\*\\*`, "imu");
+  const legacy = new RegExp(`^[-*]\\s*\\*{0,2}${esc}\\*{0,2}\\s*:`, "imu");
+  return body.split(/\r?\n/u).some((raw) => {
+    const line = raw.trim();
+    return bold.test(line) || legacy.test(line);
+  });
 }
 
 /**

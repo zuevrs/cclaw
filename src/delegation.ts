@@ -14,7 +14,16 @@ import {
 } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
 import { effectiveWorktreeExecutionMode, type FlowState } from "./flow-state.js";
-import { compareCanonicalUnitIds } from "./internal/plan-split-waves.js";
+import {
+  compareCanonicalUnitIds,
+  mergeParallelWaveDefinitions,
+  parseImplementationUnitParallelFields,
+  parseImplementationUnits,
+  parseParallelExecutionPlanWaves,
+  parseWavePlanDirectory,
+  type ParseImplementationUnitParallelOptions,
+  type ParsedParallelWave
+} from "./internal/plan-split-waves.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -1041,6 +1050,68 @@ export function selectReadySlices(
     if (selected.length >= opts.cap) break;
   }
   return selected;
+}
+
+/**
+ * v6.13.1 — build scheduler rows from merged parallel wave definitions + plan units.
+ */
+export function readySliceUnitsFromMergedWaves(
+  mergedWaves: ParsedParallelWave[],
+  planMarkdown: string,
+  options?: ParseImplementationUnitParallelOptions
+): ReadySliceUnit[] {
+  const units = parseImplementationUnits(planMarkdown);
+  const metaByUnit = new Map(
+    units.map((u) => {
+      const m = parseImplementationUnitParallelFields(u, options);
+      return [m.unitId, m] as const;
+    })
+  );
+  const sliceSet = new Set<string>();
+  for (const w of mergedWaves) {
+    for (const m of w.members) {
+      sliceSet.add(m.sliceId);
+    }
+  }
+  const out: ReadySliceUnit[] = [];
+  for (const sliceId of [...sliceSet].sort((a, b) => a.localeCompare(b))) {
+    const member = mergedWaves.flatMap((w) => w.members).find((x) => x.sliceId === sliceId);
+    if (!member) continue;
+    const meta = metaByUnit.get(member.unitId);
+    if (!meta) {
+      out.push({
+        unitId: member.unitId,
+        sliceId,
+        dependsOn: [],
+        claimedPaths: [],
+        parallelizable: true
+      });
+      continue;
+    }
+    out.push({
+      unitId: meta.unitId,
+      sliceId,
+      dependsOn: meta.dependsOn,
+      claimedPaths: meta.claimedPaths,
+      parallelizable: meta.parallelizable
+    });
+  }
+  return out;
+}
+
+/**
+ * v6.13.1 — load merged wave plan (Parallel Execution Plan block + wave-plans/) and map to `ReadySliceUnit[]`.
+ */
+export async function loadTddReadySlicePool(
+  planMarkdown: string,
+  artifactsDir: string,
+  options?: ParseImplementationUnitParallelOptions
+): Promise<ReadySliceUnit[]> {
+  const merged = mergeParallelWaveDefinitions(
+    parseParallelExecutionPlanWaves(planMarkdown),
+    await parseWavePlanDirectory(artifactsDir)
+  );
+  return readySliceUnitsFromMergedWaves(merged, planMarkdown, options);
 }
 
 function readMaxParallelOverrideFromEnv(): number | null {

@@ -5,8 +5,11 @@ import {
   PLAN_SPLIT_DEFAULT_WAVE_SIZE,
   PLAN_SPLIT_SMALL_PLAN_THRESHOLD,
   extractPathsLine,
+  mergeParallelWaveDefinitions,
   parseImplementationUnits,
+  parseParallelExecutionPlanWaves,
   parsePlanSplitWavesArgs,
+  parseWavePlanDirectory,
   runPlanSplitWaves,
   upsertWavePlansSection
 } from "../../src/internal/plan-split-waves.js";
@@ -305,5 +308,30 @@ describe("runPlanSplitWaves", () => {
 
   it("threshold sanity: PLAN_SPLIT_SMALL_PLAN_THRESHOLD is 50", () => {
     expect(PLAN_SPLIT_SMALL_PLAN_THRESHOLD).toBe(50);
+  });
+
+  it("v6.13.1 merges Parallel Execution Plan managed block with wave-plans/wave-NN.md", async () => {
+    const root = await createTempProject("plan-dual-wave-sources");
+    const ad = path.join(root, ".cclaw/artifacts");
+    await fs.mkdir(path.join(ad, "wave-plans"), { recursive: true });
+    const planMarkdown = `<!-- parallel-exec-managed-start -->
+## Parallel Execution Plan
+### Wave 01
+- **Members:** S-1
+<!-- parallel-exec-managed-end -->
+`;
+    await fs.writeFile(path.join(ad, "05-plan.md"), planMarkdown, "utf8");
+    await fs.writeFile(
+      path.join(ad, "wave-plans/wave-01.md"),
+      "# Wave 01\n\n- **Members:** S-2\n",
+      "utf8"
+    );
+    const diskPlan = await fs.readFile(path.join(ad, "05-plan.md"), "utf8");
+    const merged = mergeParallelWaveDefinitions(
+      parseParallelExecutionPlanWaves(diskPlan),
+      await parseWavePlanDirectory(ad)
+    );
+    const w1 = merged.find((w) => w.waveId === "W-01");
+    expect(w1?.members.map((m) => m.sliceId).sort()).toEqual(["S-1", "S-2"]);
   });
 });

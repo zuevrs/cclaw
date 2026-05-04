@@ -1,5 +1,39 @@
 # Changelog
 
+## 6.13.1 — Skill-text wave dispatch + mandatory worktree-first GREEN metadata
+
+Follow-up to v6.13.0: real `/cc` runs could stay on the v6.12 single-slice ritual because the controller prioritized routing questions over the managed `## Parallel Execution Plan`, treated lane flags as optional hints, and wave detection only watched `wave-plans/wave-NN.md`. This release unifies wave sources, fixes plan parsing for markdown-bold bullets (`**Members:**`, `**dependsOn:**`, etc.), rewrites TDD/flow-start skill text, adds linters for ignored waves and missing GREEN lane metadata, and surfaces a sync hint when worktree-first mode sees a multi-member parallel plan.
+
+### Phase A — Wave plan source unification
+
+- **`parseParallelExecutionPlanWaves` + `extractMembersListFromLine`** (`src/internal/plan-split-waves.ts`) — Parses the managed Parallel Execution Plan block in `05-plan.md` (between `parallel-exec-managed` markers) with correct `**Members:**` line semantics; **`mergeParallelWaveDefinitions`** keeps Parallel Execution Plan primary and `wave-plans/` secondary with slice-level conflict errors.
+- **`loadTddReadySlicePool` / `selectReadySlices`** (`src/delegation.ts`) — Consumes the merged manifest for scheduling-ready slices.
+
+### Phase B — Skill-text rewrite
+
+- **TDD skill** (`src/content/stages/tdd.ts`, `src/content/skills.ts`) — Rule 1: load Parallel Execution Plan + `wave-plans/` before routing; one AskQuestion when wave vs single-slice is a real choice; mandatory `--claim-token` / `--lane-id` / `--lease-until` on GREEN when `worktree-first`; provisional-then-finalize slice-documenter behavior spelled out.
+- **`delegation-record` hook** (`src/content/hooks.ts`) — Fast `exit 2` with `dispatch_lane_metadata_missing` when worktree-first GREEN rows omit lane metadata.
+
+### Phase C — Flow-start / `/cc` surface
+
+- **`startCommandContract` / `startCommandSkillMarkdown`** (`src/content/start-command.ts`) — TDD resume path loads the Parallel Execution Plan and `wave-plans/` before slice routing; wave dispatch resume for partially closed waves.
+
+### Phase D — Linter rules
+
+- **`tdd_wave_plan_ignored`** (`src/artifact-linter/tdd.ts`) — Fires when an open wave has 2+ scheduler-ready slices but recent delegation tail shows `slice-implementer` for only one slice; lists missed members.
+- **`tdd_slice_lane_metadata_missing`** — Fires under `worktree-first` when completed GREEN lacks `claimToken`, `ownerLaneId`, or `leasedUntil`.
+
+### Phase E — Install / sync
+
+- **`maybeLogParallelWaveDispatchHint`** (`src/install.ts`) — On sync/upgrade, prints a one-line hint when the active flow is `worktree-first` and the merged parallel plan has a multi-member wave. Existing `legacyContinuation` flows are not auto-flipped; operators use `cclaw internal set-worktree-mode` explicitly.
+
+### Phase F — Tests
+
+- **`tests/unit/parallel-exec-plan-parser.test.ts`** — Managed block parsing, duplicates, merge.
+- **`tests/unit/tdd-wave-plan-ignored-linter.test.ts`**, **`tests/unit/tdd-slice-lane-metadata-linter.test.ts`** — New rule coverage.
+- **`tests/e2e/start-command-wave-detection.test.ts`** — Start contract references wave plan + routing gate.
+- **Updates** to `tests/e2e/tdd-wave-checkpoint.test.ts`, `tests/unit/plan-split-waves.test.ts`, and **`parseImplementationUnitParallelFields`** bold-bullet fix so `**dependsOn:**` / `**claimedPaths:**` lines parse like emitted plan templates.
+
 ## 6.13.0 — Worktree-First Multi-Slice Parallel TDD
 
 Phases 0–7 ship conflict-aware planning, git-backed worktree lanes with claim/lease metadata, a DAG-ready `selectReadySlices` helper, deterministic `git apply --3way` fan-in at TDD stage-complete (never `-X ours/theirs`), `cclaw_fanin_*` audit rows, hardened TDD linters for worktree-first mode, `cclaw internal set-worktree-mode`, and `sync` migration that sets `legacyContinuation` when `05-plan.md` predates v6.13 parallel bullets. Phase 8 (sunset) is explicitly deferred to v6.14.
