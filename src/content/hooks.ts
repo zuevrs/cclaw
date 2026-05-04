@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { RUNTIME_ROOT } from "../constants.js";
 import {
   DELEGATION_DISPATCH_SURFACES,
-  DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES
+  DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES,
+  DELEGATION_PHASES
 } from "../delegation.js";
 
 interface GeneratedCliRuntime {
@@ -251,6 +252,8 @@ const TERMINAL = new Set(["completed", "failed", "waived", "stale"]);
 const VALID_DISPATCH_SURFACES = ${JSON.stringify([...DELEGATION_DISPATCH_SURFACES])};
 const VALID_DISPATCH_SURFACES_SET = new Set(VALID_DISPATCH_SURFACES);
 const SURFACE_PATH_PREFIXES = ${JSON.stringify(DELEGATION_DISPATCH_SURFACE_PATH_PREFIXES)};
+const VALID_DELEGATION_PHASES = ${JSON.stringify([...DELEGATION_PHASES])};
+const VALID_DELEGATION_PHASES_SET = new Set(VALID_DELEGATION_PHASES);
 const LEDGER_SCHEMA_VERSION = 3;
 const FLOW_STATE_GUARD_REL_PATH = RUNTIME_ROOT + "/.flow-state.guard.json";
 
@@ -384,6 +387,11 @@ function usage() {
     "TDD parallel scheduler (v6.10.0):",
     "  --paths=<a,b,c>           repo-relative paths the slice-implementer will edit; disjoint sets auto-promote to allowParallel, overlap throws DispatchOverlapError",
     "  --override-cap=<int>      raise the slice-implementer fan-out cap once for this dispatch (default cap " + String(5) + ", env CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS overrides globally)",
+    "",
+    "TDD slice phase tagging (v6.11.0):",
+    "  --slice=<id>              TDD slice identifier (e.g. S-1) used by the linter to auto-derive the Watched-RED + Vertical Slice Cycle tables.",
+    "  --phase=<phase>           one of " + VALID_DELEGATION_PHASES.join(", ") + ". Pair with --slice to record a TDD slice phase event.",
+    "  --refactor-rationale=<t>  required when --phase=refactor-deferred unless --evidence-ref carries the rationale text.",
     ""
   ].join("\\n") + "\\n");
 }
@@ -492,6 +500,32 @@ function buildRow(args, status, runId, now, options) {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+  // v6.11.0 (D1+D2): TDD slice tagging via --slice / --phase. Phase
+  // must be one of the canonical enum values; the inline validator
+  // rejects unknown phases before the row hits the ledger.
+  const sliceId =
+    typeof args.slice === "string" && args.slice.trim().length > 0
+      ? args.slice.trim()
+      : undefined;
+  const phase =
+    typeof args.phase === "string" && args.phase.trim().length > 0
+      ? args.phase.trim()
+      : undefined;
+  // v6.11.0 (D2): when --refactor-rationale is supplied it is folded
+  // into evidenceRefs[0] so the linter (which reads evidenceRefs only)
+  // can surface the rationale without touching new fields. The user
+  // may also pass --evidence-ref containing the rationale text.
+  let resolvedEvidenceRefs = normalizeEvidenceRefs(args);
+  if (
+    phase === "refactor-deferred" &&
+    typeof args["refactor-rationale"] === "string" &&
+    args["refactor-rationale"].trim().length > 0
+  ) {
+    const rationale = args["refactor-rationale"].trim();
+    if (!resolvedEvidenceRefs.includes(rationale)) {
+      resolvedEvidenceRefs = [rationale, ...resolvedEvidenceRefs];
+    }
+  }
   return {
     stage: args.stage,
     agent: args.agent,
@@ -504,7 +538,7 @@ function buildRow(args, status, runId, now, options) {
     agentDefinitionPath: args["agent-definition-path"],
     fulfillmentMode,
     waiverReason: args["waiver-reason"],
-    evidenceRefs: normalizeEvidenceRefs(args),
+    evidenceRefs: resolvedEvidenceRefs,
     runId,
     startTs,
     ts: now,
@@ -514,7 +548,9 @@ function buildRow(args, status, runId, now, options) {
     endTs: TERMINAL.has(status) ? now : undefined,
     schemaVersion: LEDGER_SCHEMA_VERSION,
     allowParallel: args["allow-parallel"] === true ? true : undefined,
-    claimedPaths: claimedPaths.length > 0 ? claimedPaths : undefined
+    claimedPaths: claimedPaths.length > 0 ? claimedPaths : undefined,
+    sliceId,
+    phase
   };
 }
 
@@ -1053,6 +1089,36 @@ async function main() {
     problems.push("invalid --dispatch-surface (allowed: " + VALID_DISPATCH_SURFACES.join(", ") + ")");
     emitProblems(problems, json, 2);
     return;
+  }
+
+  // v6.11.0 (D2) — TDD slice phase tagging validation. --phase is
+  // strictly enum-bound; --slice must be a non-empty string when
+  // provided; --phase=refactor-deferred requires either an explicit
+  // --refactor-rationale or an --evidence-ref with rationale text so
+  // the linter has something to render.
+  if (args.phase !== undefined && !VALID_DELEGATION_PHASES_SET.has(args.phase)) {
+    problems.push("invalid --phase (allowed: " + VALID_DELEGATION_PHASES.join(", ") + ")");
+    emitProblems(problems, json, 2);
+    return;
+  }
+  if (args.slice !== undefined && (typeof args.slice !== "string" || args.slice.trim().length === 0)) {
+    problems.push("--slice requires a non-empty value");
+    emitProblems(problems, json, 2);
+    return;
+  }
+  if (args.phase === "refactor-deferred") {
+    const rationaleProvided =
+      typeof args["refactor-rationale"] === "string" && args["refactor-rationale"].trim().length > 0;
+    const evidenceProvided =
+      (typeof args["evidence-ref"] === "string" && args["evidence-ref"].trim().length > 0) ||
+      (Array.isArray(args["evidence-refs"]) && args["evidence-refs"].some(
+        (ref) => typeof ref === "string" && ref.trim().length > 0
+      ));
+    if (!rationaleProvided && !evidenceProvided) {
+      problems.push("--phase=refactor-deferred requires --refactor-rationale=<text> or --evidence-ref=<text>");
+      emitProblems(problems, json, 2);
+      return;
+    }
   }
 
   if (args.status === "completed" && args["dispatch-surface"] !== "role-switch") {

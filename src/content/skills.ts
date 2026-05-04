@@ -124,7 +124,7 @@ Any "the failure is real" claim (failing test, broken build, regression catch, d
 
 \`proof: <iso-ts> | <observed snippet — first 200 chars> | source: <command or log path>\`
 
-For TDD specifically, this is the watched-RED proof and is required per new test before \`stage-complete\` accepts the stage. From v6.10.0 onward, record TDD slice transitions through the sidecar CLI \`cclaw-cli internal tdd-slice-record --slice <id> --status red|green|refactor-done|refactor-deferred ...\` rather than hand-editing the \`Watched-RED Proof\` or \`Vertical Slice Cycle\` markdown tables; the linter reads \`.cclaw/artifacts/06-tdd-slices.jsonl\` when present and treats the markdown as an auto-derived view.
+For TDD specifically, this is the watched-RED proof and is required per new test before \`stage-complete\` accepts the stage. From v6.11.0 onward, the controller dispatches \`test-author --slice S-<id> --phase red\` (and later \`slice-implementer --phase green\`, \`--phase refactor\` or \`--phase refactor-deferred --refactor-rationale "<why>"\`) and the linter auto-derives the \`Watched-RED Proof\` and \`Vertical Slice Cycle\` tables in \`06-tdd.md\` from \`.cclaw/state/delegation-events.jsonl\`. Do NOT hand-edit those tables. v6.10.0 sidecar (\`06-tdd-slices.jsonl\`) is removed; \`cclaw-cli sync\` cleans the file from existing installs.
 `;
 }
 

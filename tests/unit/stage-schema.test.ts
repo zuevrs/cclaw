@@ -392,13 +392,21 @@ describe("stage schema and subagent alignment", () => {
     expect(scope).toContain("Invariant to preserve");
     expect(design).toContain("## Reference-Grade Contracts");
     expect(design).toContain("Reusable invariant");
-    // v6.10.0 (T4): per-slice Execution Posture block was removed from
-    // the TDD template. The slice ledger sidecar 06-tdd-slices.jsonl is
-    // now the source of truth for per-slice RED/GREEN/REFACTOR
-    // progression; the overall stage strategy lives in 05-plan.md's
-    // Execution Posture.
+    // v6.11.0 (D6): per-slice Watched-RED Proof and Vertical Slice
+    // Cycle tables were removed from the TDD template body; the linter
+    // auto-renders both between `<!-- auto-start: tdd-slice-summary -->`
+    // markers from `delegation-events.jsonl` slice phase rows. Per-slice
+    // prose lives under `tdd-slices/S-<id>.md` (Phase S). The bare
+    // `## RED Evidence` and `## GREEN Evidence` headings stay in the
+    // template as legacy-fallback slots: phase events auto-satisfy
+    // them, but legacy artifacts with hand-edited tables still validate
+    // through the original markdown path.
     expect(tdd).not.toContain("Vertical-slice RED/GREEN/REFACTOR checkpoint plan");
-    expect(tdd).toContain("## Vertical Slice Cycle");
+    expect(tdd).toContain("auto-start: tdd-slice-summary");
+    expect(tdd).toContain("auto-start: slices-index");
+    expect(tdd).not.toContain("## Watched-RED Proof");
+    expect(tdd).toContain("## RED Evidence");
+    expect(tdd).toContain("## GREEN Evidence");
     expect(review).toContain("Victory Detector: pass | fail");
     expect(ship).toContain("Victory Detector: pass | fail");
   });
@@ -513,6 +521,7 @@ describe("stage schema and subagent alignment", () => {
       "reviewer",
       "scope-guardian-reviewer",
       "security-reviewer",
+      "slice-documenter",
       "slice-implementer",
       "spec-document-reviewer",
       "spec-validator",
@@ -1116,16 +1125,21 @@ describe("stage schema and subagent alignment", () => {
       "tdd_watched_red_observed",
       "tdd_slice_cycle_complete"
     ]));
+    // v6.11.0: per-slice tables (Test Discovery, RED Evidence,
+    // GREEN Evidence, Watched-RED Proof, Vertical Slice Cycle) are
+    // demoted to advisory because the linter auto-derives them from
+    // `delegation-events.jsonl` slice phase rows (see
+    // `lintTddStage` in `src/artifact-linter/tdd.ts`).
     expect(tdd.artifactValidation.find((row) => row.section === "Test Discovery"))
-      .toMatchObject({ required: true, tier: "required" });
+      .toMatchObject({ required: false, tier: "recommended" });
     expect(tdd.artifactValidation.find((row) => row.section === "System-Wide Impact Check"))
       .toMatchObject({ required: true, tier: "required" });
     expect(tdd.artifactValidation.find((row) => row.section === "Iron Law Acknowledgement"))
       .toMatchObject({ required: true, tier: "required" });
     expect(tdd.artifactValidation.find((row) => row.section === "Watched-RED Proof"))
-      .toMatchObject({ required: true, tier: "required" });
+      .toMatchObject({ required: false, tier: "recommended" });
     expect(tdd.artifactValidation.find((row) => row.section === "Vertical Slice Cycle"))
-      .toMatchObject({ required: true, tier: "required" });
+      .toMatchObject({ required: false, tier: "recommended" });
     expect(tdd.artifactValidation.find((row) => row.section === "Mock Preference Order"))
       .toMatchObject({ required: false, tier: "recommended" });
     expect(stageSkillMarkdown("tdd")).toContain("Before writing RED tests, discover relevant existing tests");

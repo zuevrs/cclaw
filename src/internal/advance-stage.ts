@@ -38,7 +38,6 @@ import {
   DispatchDuplicateError,
   DispatchOverlapError
 } from "../delegation.js";
-import { parseTddSliceRecordArgs, runTddSliceRecord } from "../tdd-slices.js";
 import { parsePlanSplitWavesArgs, runPlanSplitWaves } from "./plan-split-waves.js";
 
 interface InternalIo {
@@ -69,7 +68,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | tdd-slice-record | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves\n"
     );
     return 1;
   }
@@ -123,14 +122,11 @@ export async function runInternalCommand(
     if (subcommand === "waiver-grant") {
       return await runWaiverGrant(projectRoot, parseWaiverGrantArgs(tokens), io);
     }
-    if (subcommand === "tdd-slice-record") {
-      return await runTddSliceRecord(projectRoot, parseTddSliceRecordArgs(tokens), io);
-    }
     if (subcommand === "plan-split-waves") {
       return await runPlanSplitWaves(projectRoot, parsePlanSplitWavesArgs(tokens), io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | tdd-slice-record | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves\n`
     );
     return 1;
   } catch (err) {

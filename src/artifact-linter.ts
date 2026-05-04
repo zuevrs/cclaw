@@ -26,7 +26,6 @@ import {
   type StageLintContext,
   type TddEvidencePointerOptions
 } from "./artifact-linter/shared.js";
-import { foldTddSliceLedger, readTddSliceLedger } from "./tdd-slices.js";
 import { shouldDemoteArtifactValidationByTrack } from "./content/stage-schema.js";
 import { readDelegationLedger, recordArtifactValidationDemotedByTrack } from "./delegation.js";
 import {
@@ -226,11 +225,12 @@ export async function lintArtifact(
   }
   const liteTierForValidators = shouldDemoteArtifactValidationByTrack(track, taskClass);
 
-  // v6.10.0 (T3) — pre-resolve RED/GREEN Evidence pointers and sidecar
-  // auto-satisfy state once for the whole TDD loop, then thread the
-  // booleans through `validateSectionBody`. We do the async resolution
-  // here (path existence + delegation spanId match) so the validators
-  // themselves stay sync.
+  // v6.11.0 (D5) — pre-resolve RED/GREEN Evidence pointers AND
+  // delegation phase events so `validateSectionBody` (sync) can
+  // short-circuit. The Evidence: pointer mode (v6.10.0 T3) stays as a
+  // fallback alongside legacy markdown content; phase events with a
+  // `phase=red`/`phase=green` row plus non-empty evidenceRefs auto-pass
+  // the corresponding markdown validator.
   const tddEvidenceContext = stage === "tdd"
     ? await resolveTddEvidencePointerContext({
         projectRoot,
@@ -540,14 +540,21 @@ const ARTIFACT_VALIDATION_LITE_DEMOTE_SECTIONS = new Set<string>([
 ]);
 
 /**
- * v6.10.0 (T3) — pre-resolve `Evidence:` pointers and sidecar
- * auto-satisfy state for the TDD stage's RED/GREEN Evidence rows so
- * `validateSectionBody` (sync) can short-circuit. A pointer of the form
- * `<path>` is satisfied when the path exists on disk relative to the
- * project root; `spanId:<id>` is satisfied when any delegation ledger
- * row carries that span id. Sidecar auto-satisfy fires when
- * `06-tdd-slices.jsonl` carries at least one slice with a non-empty
- * `redOutputRef` / `greenOutputRef`.
+ * v6.11.0 (D5) — pre-resolve `Evidence:` pointers and delegation
+ * phase-event auto-satisfy state for the TDD stage's RED/GREEN
+ * Evidence rows so `validateSectionBody` (sync) can short-circuit.
+ *
+ * - `<path>` pointer is satisfied when the path exists on disk relative
+ *   to the project root.
+ * - `spanId:<id>` pointer is satisfied when any delegation ledger row
+ *   carries that span id.
+ * - Phase-event auto-satisfy fires when `delegation-events.jsonl`
+ *   carries at least one slice-tagged event for the active run with
+ *   `phase=red`/`phase=green` and non-empty `evidenceRefs`. This is the
+ *   v6.11.0 replacement for the v6.10.0 sidecar auto-satisfy hook —
+ *   slice events are now the source of truth, the RED/GREEN markdown
+ *   tables are auto-rendered from them, and the validators MUST NOT
+ *   demand pasted stdout when the events already prove RED/GREEN.
  */
 async function resolveTddEvidencePointerContext(input: {
   projectRoot: string;
@@ -560,17 +567,36 @@ async function resolveTddEvidencePointerContext(input: {
   const greenPointers = extractEvidencePointers(greenSection);
 
   let knownSpanIds = new Set<string>();
-  if (redPointers.length > 0 || greenPointers.length > 0) {
-    try {
-      const ledger = await readDelegationLedger(projectRoot);
-      knownSpanIds = new Set(
-        ledger.entries
-          .map((entry) => entry.spanId)
-          .filter((id): id is string => typeof id === "string" && id.length > 0)
-      );
-    } catch {
-      knownSpanIds = new Set();
-    }
+  let phaseEventsAutoSatisfy = { red: false, green: false };
+  try {
+    const ledger = await readDelegationLedger(projectRoot);
+    knownSpanIds = new Set(
+      ledger.entries
+        .map((entry) => entry.spanId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    );
+    const runId = ledger.runId;
+    const slicePhaseRows = ledger.entries.filter((entry) =>
+      entry.runId === runId &&
+      entry.stage === "tdd" &&
+      typeof entry.sliceId === "string" &&
+      entry.sliceId.length > 0 &&
+      typeof entry.phase === "string"
+    );
+    const redOk = slicePhaseRows.some((entry) =>
+      entry.phase === "red" &&
+      Array.isArray(entry.evidenceRefs) &&
+      entry.evidenceRefs.some((ref) => typeof ref === "string" && ref.trim().length > 0)
+    );
+    const greenOk = slicePhaseRows.some((entry) =>
+      entry.phase === "green" &&
+      Array.isArray(entry.evidenceRefs) &&
+      entry.evidenceRefs.some((ref) => typeof ref === "string" && ref.trim().length > 0)
+    );
+    phaseEventsAutoSatisfy = { red: redOk, green: greenOk };
+  } catch {
+    knownSpanIds = new Set();
+    phaseEventsAutoSatisfy = { red: false, green: false };
   }
 
   async function pointerResolves(value: string): Promise<boolean> {
@@ -591,32 +617,14 @@ async function resolveTddEvidencePointerContext(input: {
     return false;
   }
 
-  let redSidecarAutoSatisfy = false;
-  let greenSidecarAutoSatisfy = false;
-  try {
-    const sidecar = await readTddSliceLedger(projectRoot);
-    if (sidecar.entries.length > 0) {
-      const folded = foldTddSliceLedger(sidecar.entries);
-      redSidecarAutoSatisfy = folded.some(
-        (entry) => typeof entry.redOutputRef === "string" && entry.redOutputRef.length > 0
-      );
-      greenSidecarAutoSatisfy = folded.some(
-        (entry) => typeof entry.greenOutputRef === "string" && entry.greenOutputRef.length > 0
-      );
-    }
-  } catch {
-    redSidecarAutoSatisfy = false;
-    greenSidecarAutoSatisfy = false;
-  }
-
   return {
     red: {
       pointerSatisfied: await anyResolved(redPointers),
-      sidecarAutoSatisfy: redSidecarAutoSatisfy
+      phaseEventsSatisfied: phaseEventsAutoSatisfy.red
     },
     green: {
       pointerSatisfied: await anyResolved(greenPointers),
-      sidecarAutoSatisfy: greenSidecarAutoSatisfy
+      phaseEventsSatisfied: phaseEventsAutoSatisfy.green
     }
   };
 }

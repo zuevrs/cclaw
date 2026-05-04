@@ -193,7 +193,41 @@ export type DelegationEntry = {
    * `src/content/hooks.ts::delegationRecordScript`.
    */
   claimedPaths?: string[];
+  /**
+   * v6.11.0 (D1) — TDD slice identifier, e.g. `"S-1"`. Recorded by the
+   * controller when dispatching `test-author` / `slice-implementer` /
+   * `slice-documenter` so the artifact linter can auto-derive the
+   * Watched-RED Proof + Vertical Slice Cycle tables from
+   * `delegation-events.jsonl` instead of requiring agents to maintain
+   * the markdown by hand. Optional: legacy and non-TDD rows omit it.
+   *
+   * keep in sync with the inline copy in
+   * `src/content/hooks.ts::delegationRecordScript`.
+   */
+  sliceId?: string;
+  /**
+   * v6.11.0 (D1) — explicit phase tag for TDD slice events. Combined
+   * with `sliceId`, the linter validates RED -> GREEN -> REFACTOR
+   * monotonicity per slice. `refactor-deferred` requires a rationale
+   * either via `--refactor-rationale` (recorded into evidenceRefs[0])
+   * or an `evidenceRefs` entry that contains the rationale text.
+   * `doc` is reserved for the parallel `slice-documenter` subagent
+   * (Phase C). Optional: legacy and non-TDD rows omit it.
+   *
+   * keep in sync with the inline copy in
+   * `src/content/hooks.ts::delegationRecordScript`.
+   */
+  phase?: "red" | "green" | "refactor" | "refactor-deferred" | "doc";
 };
+
+export const DELEGATION_PHASES = [
+  "red",
+  "green",
+  "refactor",
+  "refactor-deferred",
+  "doc"
+] as const;
+export type DelegationPhase = (typeof DELEGATION_PHASES)[number];
 
 export const DELEGATION_LEDGER_SCHEMA_VERSION = 3 as const;
 
@@ -418,7 +452,12 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.allowParallel === undefined || typeof o.allowParallel === "boolean") &&
     (o.supersededBy === undefined || typeof o.supersededBy === "string") &&
     (o.claimedPaths === undefined ||
-      (Array.isArray(o.claimedPaths) && o.claimedPaths.every((item) => typeof item === "string")))
+      (Array.isArray(o.claimedPaths) && o.claimedPaths.every((item) => typeof item === "string"))) &&
+    (o.sliceId === undefined ||
+      (typeof o.sliceId === "string" && o.sliceId.length > 0)) &&
+    (o.phase === undefined ||
+      (typeof o.phase === "string" &&
+        (DELEGATION_PHASES as readonly string[]).includes(o.phase)))
   );
 }
 

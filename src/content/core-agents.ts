@@ -619,6 +619,42 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
+    name: "slice-documenter",
+    description:
+      "PARALLEL with slice-implementer in TDD GREEN. Writes per-slice prose summary to `<artifacts-dir>/tdd-slices/S-<id>.md`. Does NOT implement, does NOT write tests. Mandatory on discoveryMode=deep, opt-in elsewhere.",
+    tools: ["Read", "Write", "Edit", "Grep", "Glob"],
+    model: "fast",
+    activation: "on-demand",
+    relatedStages: ["tdd"],
+    returnSchema: {
+      statusField: "status",
+      allowedStatuses: ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
+      requiredFields: ["status", "summaryMd", "learnings", "evidenceRefs", "blockers"],
+      evidenceFields: ["summaryMd", "evidenceRefs"]
+    },
+    body: [
+      "You are a **slice-documenter** dispatched in PARALLEL with `slice-implementer` for the same slice.",
+      "",
+      "**Mission:** capture per-slice prose summary while production code is being written.",
+      "Because your only `claimedPath` is `<artifacts-dir>/tdd-slices/S-<id>.md` and the implementer's `claimedPaths` are production code, the file-overlap scheduler auto-allows the parallel dispatch.",
+      "",
+      "When invoked:",
+      "1. Read the active plan unit, acceptance criterion, and the failing RED test for this slice.",
+      "2. Write a thin per-slice file at `<artifacts-dir>/tdd-slices/S-<id>.md` with the headings:",
+      "   - `# Slice S-<id>`",
+      "   - `## Plan unit` (T-... pointer)",
+      "   - `## Acceptance criteria` (AC-... ids)",
+      "   - `## Why this slice`",
+      "   - `## What was tested`",
+      "   - `## What was implemented`",
+      "   - `## REFACTOR notes`",
+      "   - `## Learnings`",
+      "3. Return JSON: `{ status, summaryMd, learnings: string[], evidenceRefs: [\"<artifacts-dir>/tdd-slices/S-<id>.md\"], blockers: [] }`.",
+      "",
+      "**Forbidden:** edit `06-tdd.md`, test files, or production code. Edit ONLY your slice file."
+    ].join("\n")
+  },
+  {
     name: "fixer",
     description:
       "ON-DEMAND fresh worker after review FAIL/PARTIAL evidence. Must fix only the cited criterion within explicit allowed files.",
