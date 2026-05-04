@@ -505,8 +505,21 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     // `integrationCheckRequired()` returns required=false, the gate is
     // soft (advisory) and an audit-only finding is emitted so the
     // controller can record the deliberate skip in artifacts.
+    //
+    // v6.14.1 — also surface the audit row presence. When the controller
+    // skips `integration-overseer` dispatch (or the heuristic returns
+    // false), the run log MUST contain a
+    // `cclaw_integration_overseer_skipped` audit row for traceability.
+    // The advisory `tdd_integration_overseer_skipped_audit_missing`
+    // surfaces a missing audit row when 2+ closed slices closed without
+    // any overseer dispatch AND no audit was recorded.
     let overseerVerdict: ReturnType<typeof integrationCheckRequired> | null = null;
     let overseerRequired = true;
+    const skippedAuditRowCount = await countIntegrationOverseerSkippedAudits(
+      projectRoot,
+      delegationLedger.runId
+    );
+    const skippedAuditRowFound = skippedAuditRowCount > 0;
     if (integrationOverseerMode === "conditional") {
       const eventsForVerdict = runEvents.length > 0 ? runEvents : [];
       const auditsForVerdict = fanInAudits.filter(
@@ -515,14 +528,39 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       overseerVerdict = integrationCheckRequired(eventsForVerdict, auditsForVerdict);
       overseerRequired = overseerVerdict.required;
       if (!overseerVerdict.required) {
+        const auditRowSuffix = skippedAuditRowFound
+          ? "audit row recorded — skip is fully traceable."
+          : "audit row MISSING — controller should append `cclaw_integration_overseer_skipped` for traceability (see `tdd_integration_overseer_skipped_audit_missing`).";
         findings.push({
           section: "tdd_integration_overseer_skipped_by_disjoint_paths",
           required: false,
-          rule: "v6.14.0 conditional integration-overseer mode: the heuristic returned `required: false` (disjoint claimedPaths, no high-risk slices, no fan-in conflicts). The controller may skip dispatching `integration-overseer` and emit a `cclaw_integration_overseer_skipped` audit row instead.",
+          rule: "v6.14.0+ conditional integration-overseer mode: the heuristic returned `required: false` (disjoint claimedPaths, no high-risk slices, no fan-in conflicts). The controller may skip dispatching `integration-overseer` and emit a `cclaw_integration_overseer_skipped` audit row instead.",
           found: true,
-          details: `integrationCheckRequired() reasons: ${overseerVerdict.reasons.join(", ")}. Skip is safe — record an audit row via delegation events for traceability.`
+          details: `integrationCheckRequired() reasons: ${overseerVerdict.reasons.join(", ")}. Skip is safe — ${auditRowSuffix}`
         });
       }
+    }
+
+    // v6.14.1 — `tdd_integration_overseer_skipped_audit_missing` (advisory).
+    // Fires when fan-out is detected (2+ completed slice-implementers),
+    // no `integration-overseer` was dispatched at all (no scheduled or
+    // completed row for the active run), AND no
+    // `cclaw_integration_overseer_skipped` audit row exists. This pairs
+    // with the controller skill text rule that the wave-closure decision
+    // ("dispatch overseer or skip") MUST leave a trail.
+    const overseerDispatched = activeRunEntries.some(
+      (entry) => entry.agent === "integration-overseer"
+    );
+    if (!overseerDispatched && !skippedAuditRowFound) {
+      findings.push({
+        section: "tdd_integration_overseer_skipped_audit_missing",
+        required: false,
+        rule: "v6.14.1: when a wave with 2+ closed slices closes without any integration-overseer dispatch, the controller should call `integrationCheckRequired()` and emit a `cclaw_integration_overseer_skipped` audit row so the decision is traceable. Advisory — never blocks stage-complete.",
+        found: false,
+        details:
+          `Fan-out detected (${completedSliceImplementers.length} completed slice-implementer rows) but no integration-overseer dispatch row OR cclaw_integration_overseer_skipped audit row exists for active run. ` +
+          "Remediation: emit `node .cclaw/hooks/delegation-record.mjs --audit-kind=cclaw_integration_overseer_skipped --audit-reason=\"<reasons>\" --slice-ids=\"<S-1,S-2,...>\"` after wave closure."
+      });
     }
 
     findings.push({
@@ -530,14 +568,16 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       required: overseerRequired,
       rule: overseerRequired
         ? "When fan-out is detected, require completed `integration-overseer` evidence with PASS or PASS_WITH_GAPS."
-        : "v6.14.0 conditional integration-overseer mode: integration-overseer dispatch is advisory because `integrationCheckRequired()` returned required=false. Run it anyway if the run touches new boundaries.",
+        : "v6.14.0+ conditional integration-overseer mode: integration-overseer dispatch is advisory because `integrationCheckRequired()` returned required=false. Run it anyway if the run touches new boundaries.",
       found: integrationOverseerFound,
       details: integrationOverseerFound
         ? "integration-overseer completion recorded with PASS/PASS_WITH_GAPS evidence."
         : completedOverseerRows.length === 0
           ? overseerRequired
             ? "Fan-out detected but no completed integration-overseer delegation row exists for active run."
-            : "Fan-out detected; integration-overseer not dispatched (conditional mode skipped on disjoint paths). Audit-only."
+            : skippedAuditRowFound
+              ? "Fan-out detected; integration-overseer not dispatched (conditional mode skipped on disjoint paths) and `cclaw_integration_overseer_skipped` audit row recorded. Audit-only."
+              : "Fan-out detected; integration-overseer not dispatched (conditional mode skipped on disjoint paths). Audit-only."
           : "integration-overseer completion exists, but PASS/PASS_WITH_GAPS evidence is missing in delegation evidenceRefs and artifact text."
     });
   }
@@ -618,6 +658,47 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
 interface SliceFileInfo {
   sliceId: string;
   absPath: string;
+}
+
+/**
+ * v6.14.1 — count `cclaw_integration_overseer_skipped` audit rows in
+ * `delegation-events.jsonl` for a given runId. The audit row is not a
+ * `DelegationEvent` (no agent/status), so `readDelegationEvents`
+ * filters it out; we re-scan the raw file with a narrow JSON match.
+ *
+ * Best-effort: missing file or parse errors return 0.
+ */
+async function countIntegrationOverseerSkippedAudits(
+  projectRoot: string,
+  runId: string
+): Promise<number> {
+  const filePath = path.join(
+    projectRoot,
+    ".cclaw/state/delegation-events.jsonl"
+  );
+  let raw = "";
+  try {
+    raw = await fs.readFile(filePath, "utf8");
+  } catch {
+    return 0;
+  }
+  let count = 0;
+  for (const line of raw.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+    const obj = parsed as Record<string, unknown>;
+    if (obj.event !== "cclaw_integration_overseer_skipped") continue;
+    if (typeof obj.runId === "string" && obj.runId !== runId) continue;
+    count += 1;
+  }
+  return count;
 }
 
 async function listSliceFiles(slicesDir: string): Promise<SliceFileInfo[]> {

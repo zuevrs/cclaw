@@ -101,6 +101,57 @@ Before doing substantive work, return an ACK object that the parent can record:
 Finish with the required return schema plus the same \`spanId\` and \`dispatchId\`. The parent must not claim isolated completion unless ACK/result proof matches the ledger/event span.`;
 }
 
+/**
+ * v6.14.1 — TDD worker self-record contract. The parent records
+ * `scheduled` and `launched` rows BEFORE dispatching the Task; the
+ * worker is responsible for `acknowledged` (on entry) and `completed`
+ * (on exit). This contract restores the v6.13.1 discipline that
+ * v6.14.0 dropped — the controller-side fix in v6.14.1's TDD skill
+ * text is paired with this worker-side self-record helper template.
+ */
+function tddWorkerSelfRecordContract(agentName: string): string {
+  const isImplementer = agentName === "slice-implementer";
+  const refactorOutcomeFlag = isImplementer
+    ? " --refactor-outcome=inline|deferred [--refactor-rationale=\"<why>\"]"
+    : "";
+  const laneFlags = isImplementer
+    ? " [--claim-token=<t>] [--lane-id=<lane>] [--lease-until=<iso>]"
+    : "";
+  return `## TDD Worker Self-Record Contract (v6.14.1)
+
+You are a TDD worker dispatched via \`Task\`. The parent already wrote your \`scheduled\` and \`launched\` ledger rows BEFORE invoking you. **Your responsibility is to self-record \`acknowledged\` on entry and \`completed\` on exit** by invoking \`.cclaw/hooks/delegation-record.mjs\` directly. Do NOT skip these — the controller depends on them, the linter validates them, and back-fill via \`--repair\` is reserved for recovery only.
+
+**On entry — record acknowledgement (BEFORE doing work):**
+
+\`\`\`bash
+ACK_TS="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
+node .cclaw/hooks/delegation-record.mjs \\
+  --stage=tdd --agent=${agentName} --mode=mandatory \\
+  --status=acknowledged \\
+  --span-id=<spanId from controller dispatch> \\
+  --dispatch-id=<dispatchId from controller dispatch> \\
+  --dispatch-surface=<surface from controller dispatch> \\
+  --agent-definition-path=.cclaw/agents/${agentName}.md \\
+  --ack-ts="$ACK_TS" \\
+  --json
+\`\`\`
+
+**On exit — record completion (AFTER work + verification):**
+
+\`\`\`bash
+COMPLETED_TS="$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
+node .cclaw/hooks/delegation-record.mjs \\
+  --stage=tdd --agent=${agentName} --mode=mandatory \\
+  --status=completed \\
+  --span-id=<same spanId> \\
+  --completed-ts="$COMPLETED_TS" \\
+  --evidence-ref="<test-path-or-artifact-ref>"${refactorOutcomeFlag}${laneFlags} \\
+  --json
+\`\`\`
+
+Reuse the same \`<spanId>\` and \`<dispatchId>\` across both rows. \`--ack-ts\` and \`--completed-ts\` must be monotonic on the span (\`startTs ≤ launchedTs ≤ ackTs ≤ completedTs\`); the helper rejects out-of-order writes with \`delegation_timestamp_non_monotonic\`. If the helper rejects with \`dispatch_active_span_collision\` against a stale span, surface the conflicting \`spanId\` to the parent — do NOT silently retry with \`--allow-parallel\`.`;
+}
+
 function formatReturnSchema(schema: AgentReturnSchema): string {
   const lines = [
     `- Status field: \`${schema.statusField}\``,
@@ -684,6 +735,19 @@ export const CCLAW_AGENTS = [
  */
 export type AgentName = (typeof CCLAW_AGENTS)[number]["name"];
 
+/**
+ * v6.14.1 — agents whose rendered `.cclaw/agents/<name>.md` file gets the
+ * TDD worker self-record helper template. These agents are the ones the
+ * controller dispatches via `Task` during a TDD wave; they are
+ * responsible for `acknowledged` and `completed` ledger writes.
+ */
+const TDD_WORKER_SELF_RECORD_AGENTS: ReadonlySet<AgentName> = new Set<AgentName>([
+  "test-author",
+  "slice-implementer",
+  "slice-documenter",
+  "integration-overseer"
+]);
+
 import type { FlowStage } from "../types.js";
 import { stageDelegationSummary } from "./stage-schema.js";
 
@@ -718,6 +782,10 @@ export function agentMarkdown(agent: AgentDefinition): string {
 
   const taskDelegation = defaultTaskDelegationSection(agent.name);
 
+  const tddWorkerSelfRecordSection = (TDD_WORKER_SELF_RECORD_AGENTS as ReadonlySet<string>).has(agent.name)
+    ? `\n${tddWorkerSelfRecordContract(agent.name)}\n`
+    : "";
+
   return `${frontmatter}
 
 # ${agent.name}
@@ -730,7 +798,7 @@ ${agent.body}
 - Related stages: ${relatedStages}
 
 ${workerAckContract()}
-
+${tddWorkerSelfRecordSection}
 ## Required Return Schema
 
 STRICT_RETURN_SCHEMA: return a structured object matching this contract before any narrative when delegated. Include \`spanId\`, \`dispatchId\` or \`workerRunId\`, \`dispatchSurface\`, \`agentDefinitionPath\`, and lifecycle timestamps when provided by the parent.
