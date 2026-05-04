@@ -34,6 +34,7 @@ export type StageSubagentName =
   | "scope-guardian-reviewer"
   | "feasibility-reviewer"
   | "slice-implementer"
+  | "slice-documenter"
   | "release-reviewer"
   | "planner"
   | "product-discovery"

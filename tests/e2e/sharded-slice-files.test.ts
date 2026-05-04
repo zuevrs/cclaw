@@ -253,7 +253,12 @@ describe("e2e: sharded slice files (Phase S)", () => {
     const blockers = result.findings
       .filter((f) => f.required && !f.found)
       .filter((f) => !f.section.startsWith("tdd.cohesion_contract"))
-      .filter((f) => !f.section.startsWith("tdd.integration_overseer"));
+      .filter((f) => !f.section.startsWith("tdd.integration_overseer"))
+      // v6.12.0 Phase R — slice-documenter is mandatory regardless of
+      // discoveryMode; this Phase S sharded-files test focuses on the
+      // index auto-render and per-file heading validation, not the new
+      // mandatory documenter dispatch.
+      .filter((f) => f.section !== "tdd_slice_documenter_missing");
     expect(blockers.map((f) => f.section)).toEqual([]);
 
     const tddArtifact = await fs.readFile(

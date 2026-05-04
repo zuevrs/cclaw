@@ -330,7 +330,11 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
     const blockers = result.findings
       .filter((f) => f.required && !f.found)
       .filter((f) => !f.section.startsWith("tdd.cohesion_contract"))
-      .filter((f) => !f.section.startsWith("tdd.integration_overseer"));
+      .filter((f) => !f.section.startsWith("tdd.integration_overseer"))
+      // v6.12.0 Phase R — slice-documenter mandatory across all discoveryModes;
+      // this Phase D e2e covers RED/GREEN/REFACTOR auto-derive, not Phase C
+      // documenter coverage, which has its own dedicated suite.
+      .filter((f) => f.section !== "tdd_slice_documenter_missing");
     expect(blockers.map((f) => f.section)).toEqual([]);
 
     const tddArtifact = await fs.readFile(

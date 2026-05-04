@@ -10,14 +10,17 @@ describe("stage skill size budgets", () => {
   // mechanics block. Budget is generous on purpose — the layered structural
   // content (HARD-GATE, premise list, alternatives format, coverage diagram,
   // confidence-calibrated finding format) grows the skill body deliberately.
-  it("keeps every stage skill under 480 lines", () => {
+  // v6.12.0 — bumped 480 → 520 to fit the new top-of-tdd-skill `## Per-Slice
+  // Ritual` and `## Wave Batch Mode` blocks. Adjust again only if a real
+  // protocol expansion (not drive-by prose) lands in a future release.
+  it("keeps every stage skill under 520 lines", () => {
     for (const stage of FLOW_STAGES) {
       const markdown = stageSkillMarkdown(stage);
       const lines = markdown.split(/\r?\n/u).length;
       expect(
         lines,
-        `stage "${stage}" exceeded 480 lines (${lines})`
-      ).toBeLessThanOrEqual(480);
+        `stage "${stage}" exceeded 520 lines (${lines})`
+      ).toBeLessThanOrEqual(520);
     }
   });
 

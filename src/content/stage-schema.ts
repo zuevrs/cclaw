@@ -221,6 +221,7 @@ function defaultReturnSchemaForAgent(
     case "feasibility-reviewer":
       return "review-return";
     case "slice-implementer":
+    case "slice-documenter":
       return "worker-return";
     case "release-reviewer":
       return "release-return";
@@ -249,7 +250,7 @@ function dispatchClassForRow(
   row: StageAutoSubagentDispatch
 ): NonNullable<StageAutoSubagentDispatch["dispatchClass"]> {
   if (row.dispatchClass) return row.dispatchClass;
-  if (row.agent === "fixer" || row.agent === "slice-implementer") return "worker";
+  if (row.agent === "fixer" || row.agent === "slice-implementer" || row.agent === "slice-documenter") return "worker";
   return row.skill?.includes("review") || row.agent === "reviewer" || row.agent === "security-reviewer" || row.agent.endsWith("-reviewer")
     ? "review-lens"
     : "stage-specialist";
@@ -861,10 +862,18 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
     },
     {
       agent: "slice-implementer",
-      mode: "proactive",
+      mode: "mandatory",
       requiredAtTier: "lightweight",
-      when: "When a bounded GREEN/REFACTOR slice has non-overlapping file ownership and a clear RED failure.",
-      purpose: "Implement the minimal passing slice inside explicit file boundaries and return strict worker evidence.",
+      when: "Always for GREEN and REFACTOR phases. Controller MUST NOT write production code itself.",
+      purpose: "Implement the minimal passing slice inside explicit file boundaries and return strict worker evidence. v6.12.0 Phase M makes this dispatch mandatory; the linter rule `tdd_slice_implementer_missing` blocks the gate when GREEN was authored by anyone other than `slice-implementer`.",
+      requiresUserGate: false
+    },
+    {
+      agent: "slice-documenter",
+      mode: "mandatory",
+      requiredAtTier: "lightweight",
+      when: "Always in PARALLEL with `slice-implementer --phase green` for the same slice.",
+      purpose: "Write per-slice prose into `<artifacts-dir>/tdd-slices/S-<id>.md` while production code is being implemented. v6.12.0 Phase R makes this mandatory regardless of `discoveryMode`; the linter rule `tdd_slice_documenter_missing` blocks the gate when a `phase=doc` event is missing.",
       requiresUserGate: false
     },
     {

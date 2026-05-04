@@ -621,10 +621,10 @@ export const CCLAW_AGENTS = [
   {
     name: "slice-documenter",
     description:
-      "PARALLEL with slice-implementer in TDD GREEN. Writes per-slice prose summary to `<artifacts-dir>/tdd-slices/S-<id>.md`. Does NOT implement, does NOT write tests. Mandatory on discoveryMode=deep, opt-in elsewhere.",
+      "MANDATORY in PARALLEL with slice-implementer for every TDD slice (regardless of discoveryMode, v6.12.0 Phase R). Writes per-slice prose summary to `<artifacts-dir>/tdd-slices/S-<id>.md`. Does NOT implement, does NOT write tests. Linter rule `tdd_slice_documenter_missing` blocks the gate when a `phase=doc` event is missing for a green slice.",
     tools: ["Read", "Write", "Edit", "Grep", "Glob"],
     model: "fast",
-    activation: "on-demand",
+    activation: "mandatory",
     relatedStages: ["tdd"],
     returnSchema: {
       statusField: "status",
@@ -825,7 +825,7 @@ ${(() => {
   const mode = activationModeSummary();
   return `- **Mandatory:** ${mode.mandatory}.
 - **Proactive:** ${mode.proactive}.
-- **On-demand:** slice-implementer, fixer. Research playbooks are in-thread procedures.`;
+- **On-demand:** fixer. Research playbooks are in-thread procedures.`;
 })()}
 
 ### Cost-aware routing

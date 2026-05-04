@@ -62,10 +62,10 @@ export const BEHAVIOR_ANCHORS: ReadonlyArray<BehaviorAnchor> = [
   },
   {
     stage: "tdd",
-    section: "Watched-RED Proof",
-    bad: "Hand-edit Watched-RED Proof rows directly in the TDD artifact; the next lint overwrites the auto-rendered region and the slice still lacks a provable RED in delegation events.",
-    good: "Dispatch `test-author --slice S-1 --phase red`, then `slice-implementer --slice S-1 --phase green`. The linter auto-renders the slice cycle from `delegation-events.jsonl`.",
-    ruleHint: "RED/GREEN/REFACTOR transitions are recorded as `delegation-events.jsonl` rows via slice-tagged dispatches; the markdown tables are auto-rendered between `auto-start: tdd-slice-summary` markers from v6.11.0 onward."
+    section: "Vertical Slice Cycle",
+    bad: "Controller writes the failing test, the GREEN fix, AND per-slice prose into `06-tdd.md` itself, then hand-edits Watched-RED / Vertical Slice Cycle tables. `phase=red`/`green`/`doc` events missing; `tdd_slice_implementer_missing` and `tdd_slice_documenter_missing` block the gate.",
+    good: "Per slice: (1) `Task(\"test-author --slice S-1 --phase red\")`. Verify the event. (2) ONE message, TWO Tasks — `slice-implementer --phase green` AND `slice-documenter --phase doc`. (3) `slice-implementer --phase refactor` (or `refactor-deferred`). Linter auto-renders Vertical Slice Cycle from events.",
+    ruleHint: "Per-Slice Ritual (v6.12.0+): RED → verify → GREEN+DOC fan-out (one message, two Tasks) → REFACTOR. Controller never writes GREEN code or per-slice prose. Mandatory regardless of `discoveryMode`."
   },
   {
     stage: "review",

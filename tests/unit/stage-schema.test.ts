@@ -103,13 +103,24 @@ describe("stage schema and subagent alignment", () => {
     expect(lightweightScope?.mandatoryAgents).toEqual([]);
 
     const tdd = lightweight.find((row) => row.stage === "tdd");
-    expect(tdd?.mandatoryAgents).toEqual(["test-author"]);
+    // v6.12.0 Phase M — slice-implementer + slice-documenter joined the
+    // mandatory list so controllers can no longer skip GREEN dispatch or
+    // per-slice prose authoring.
+    expect(tdd?.mandatoryAgents).toEqual([
+      "test-author",
+      "slice-implementer",
+      "slice-documenter"
+    ]);
   });
 
-  it("keeps tdd dispatch to one mandatory test-author evidence cycle", () => {
+  it("keeps tdd dispatch with mandatory test-author + slice-implementer + slice-documenter (v6.12.0 Phase M)", () => {
     const tddDispatch = stageAutoSubagentDispatch("tdd");
     const testAuthorRows = tddDispatch
       .filter((row) => row.agent === "test-author");
+    const sliceImplementerRows = tddDispatch
+      .filter((row) => row.agent === "slice-implementer");
+    const sliceDocumenterRows = tddDispatch
+      .filter((row) => row.agent === "slice-documenter");
     const integrationOverseerRows = tddDispatch
       .filter((row) => row.agent === "integration-overseer");
 
@@ -117,11 +128,24 @@ describe("stage schema and subagent alignment", () => {
     expect(testAuthorRows[0]?.mode).toBe("mandatory");
     expect(testAuthorRows[0]?.skill).toBe("tdd-cycle-evidence");
     expect(testAuthorRows[0]?.purpose).toContain("RED/GREEN/REFACTOR evidence");
+
+    expect(sliceImplementerRows).toHaveLength(1);
+    expect(sliceImplementerRows[0]?.mode).toBe("mandatory");
+    expect(sliceImplementerRows[0]?.when).toContain("Controller MUST NOT write production code");
+
+    expect(sliceDocumenterRows).toHaveLength(1);
+    expect(sliceDocumenterRows[0]?.mode).toBe("mandatory");
+    expect(sliceDocumenterRows[0]?.when).toContain("PARALLEL");
+
     expect(integrationOverseerRows).toHaveLength(1);
     expect(integrationOverseerRows[0]?.mode).toBe("proactive");
     expect(integrationOverseerRows[0]?.when).toContain("2+ parallel slice-implementers");
     expect(integrationOverseerRows[0]?.returnSchema).toBe("review-return");
-    expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual(["test-author"]);
+    expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual([
+      "test-author",
+      "slice-implementer",
+      "slice-documenter"
+    ]);
   });
 
   it("renders critic multi-perspective contract with prediction fields", () => {

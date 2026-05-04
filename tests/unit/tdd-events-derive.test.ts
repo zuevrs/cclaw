@@ -220,7 +220,11 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     const blockers = result.findings
       .filter((f) => f.required && !f.found)
       .filter((f) => !f.section.startsWith("tdd.cohesion_contract"))
-      .filter((f) => !f.section.startsWith("tdd.integration_overseer"));
+      .filter((f) => !f.section.startsWith("tdd.integration_overseer"))
+      // v6.12.0 Phase R/M — slice-documenter / slice-implementer mandatory rules
+      // are exercised in dedicated tests; this test focuses on phase-event
+      // round-trip and table-free rendering, not on the new mandatory roles.
+      .filter((f) => f.section !== "tdd_slice_documenter_missing");
     expect(blockers.map((f) => f.section)).toEqual([]);
   });
 
@@ -510,7 +514,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
   });
 });
 
-describe("tdd linter — slice-documenter coverage on discoveryMode=deep (Phase C)", () => {
+describe("tdd linter — slice-documenter coverage (v6.12.0 Phase R: mandatory regardless of discoveryMode)", () => {
   it("requires phase=doc on every green slice when discoveryMode=deep", async () => {
     const root = await createTempProject("tdd-doc-deep-required");
     await seedTddRun(root, { discoveryMode: "deep" });
@@ -556,13 +560,13 @@ describe("tdd linter — slice-documenter coverage on discoveryMode=deep (Phase 
 
     const result = await lintArtifact(root, "tdd");
     const docFinding = result.findings.find((f) =>
-      f.section === "tdd_slice_documenter_missing_for_deep"
+      f.section === "tdd_slice_documenter_missing"
     );
     expect(docFinding?.required).toBe(true);
     expect(docFinding?.found).toBe(false);
   });
 
-  it("treats slice-documenter coverage as advisory when discoveryMode is not deep", async () => {
+  it("requires phase=doc on every green slice when discoveryMode is not deep (v6.12.0 Phase R)", async () => {
     const root = await createTempProject("tdd-doc-not-deep");
     await seedTddRun(root, { discoveryMode: "guided" });
     await writePreTddArtifacts(root);
@@ -607,11 +611,10 @@ describe("tdd linter — slice-documenter coverage on discoveryMode=deep (Phase 
 
     const result = await lintArtifact(root, "tdd");
     const docFinding = result.findings.find((f) =>
-      f.section === "tdd_slice_documenter_missing_for_deep"
+      f.section === "tdd_slice_documenter_missing"
     );
-    if (docFinding) {
-      expect(docFinding.required).toBe(false);
-    }
+    expect(docFinding?.required).toBe(true);
+    expect(docFinding?.found).toBe(false);
   });
 });
 

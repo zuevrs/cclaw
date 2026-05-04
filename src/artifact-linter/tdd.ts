@@ -156,21 +156,75 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     }
   }
 
-  // Phase C — slice-documenter coverage. When discoveryMode=deep, every
-  // slice with a green phase event must also carry a phase=doc event with
-  // non-empty evidenceRefs pointing at `tdd-slices/S-<id>.md`.
+  // v6.12.0 Phase R — slice-documenter coverage is mandatory on every
+  // TDD run regardless of discoveryMode. `discoveryMode` is now strictly
+  // an early-stage knob (brainstorm/scope/design); TDD parallelism must
+  // be uniform across lean/guided/deep so the controller cannot quietly
+  // skip per-slice prose by picking a non-deep mode.
+  void discoveryMode;
   if (eventsActive) {
     const docResult = evaluateSliceDocumenterCoverage(slicesByEvents);
     if (docResult.missing.length > 0) {
-      const isDeep = discoveryMode === "deep";
       findings.push({
-        section: "tdd_slice_documenter_missing_for_deep",
-        required: isDeep,
-        rule: "On discoveryMode=deep, every TDD slice with a phase=green event must also carry a slice-documenter `phase=doc` event whose evidenceRefs reference `<artifacts-dir>/tdd-slices/S-<id>.md`. On other discovery modes the requirement is advisory.",
+        section: "tdd_slice_documenter_missing",
+        required: true,
+        rule: "Every TDD slice with a phase=green event must also carry a slice-documenter `phase=doc` event whose evidenceRefs reference `<artifacts-dir>/tdd-slices/S-<id>.md`. The requirement is independent of discoveryMode (v6.12.0 Phase R).",
         found: false,
-        details: `Slices missing slice-documenter coverage: ${docResult.missing.join(", ")}.`
+        details: `Slices missing slice-documenter coverage: ${docResult.missing.join(", ")}. Dispatch slice-documenter --slice <id> --phase doc in parallel with slice-implementer --phase green for each slice.`
       });
     }
+  }
+
+  // v6.12.0 Phase M — slice-implementer must own GREEN. For each slice
+  // with a phase=red row carrying non-empty evidenceRefs, require a
+  // matching phase=green event whose `agent === "slice-implementer"`.
+  // This catches "controller wrote GREEN itself" — the most common
+  // backslide we have observed in fresh runs (hox S-11).
+  if (eventsActive) {
+    const implResult = evaluateSliceImplementerCoverage(slicesByEvents);
+    if (implResult.missing.length > 0) {
+      findings.push({
+        section: "tdd_slice_implementer_missing",
+        required: true,
+        rule: "Every TDD slice that recorded a phase=red event with non-empty evidenceRefs must reach phase=green via the `slice-implementer` agent. Controller writing GREEN production code itself is forbidden (v6.12.0 Phase M).",
+        found: false,
+        details: `Slices missing slice-implementer GREEN coverage: ${implResult.missing.join(", ")}. Dispatch slice-implementer --slice <id> --phase green --paths <comma-separated production paths>.`
+      });
+    }
+  }
+
+  // v6.12.0 Phase W — RED checkpoint enforcement. The wave protocol
+  // requires ALL Phase A REDs to land before ANY Phase B GREEN starts.
+  // Enforced per-wave: explicit `wave-plans/wave-NN.md` manifest if
+  // present, otherwise implicit detection via contiguous red blocks
+  // (size >= 2). Sequential per-slice runs (red→green→refactor in a
+  // tight loop) form size-1 implicit waves and are unaffected.
+  if (eventsActive) {
+    const waveManifest = await readWaveManifest(path.dirname(absFile));
+    const checkpointResult = evaluateRedCheckpoint(slicesByEvents, waveManifest);
+    if (!checkpointResult.ok) {
+      findings.push({
+        section: "tdd_red_checkpoint_violation",
+        required: true,
+        rule: "Wave Batch Mode (v6.12.0 Phase W): every slice in a wave must complete phase=red before any slice in the same wave starts phase=green. Detected: a phase=green completedTs precedes the last phase=red completedTs of the same wave.",
+        found: false,
+        details: checkpointResult.details
+      });
+    }
+  }
+
+  // v6.12.0 Phase L — advisory backslide detection. When a cutover is
+  // recorded in flow-state, slice-id rows in the legacy per-slice
+  // sections of `06-tdd.md` that exceed the cutover boundary should
+  // migrate to `tdd-slices/S-<id>.md`. Surface as advisory so it does
+  // not block the gate but does keep the controller honest.
+  const cutoverFinding = await evaluateLegacySectionBackslide({
+    projectRoot,
+    raw,
+    sections
+  });
+  if (cutoverFinding) {
+    findings.push(cutoverFinding);
   }
 
   const assertionBody = sectionBodyByName(sections, "Assertion Correctness Notes");
@@ -604,6 +658,266 @@ export function evaluateSliceDocumenterCoverage(
     }
   }
   return { missing };
+}
+
+interface ImplementerCoverageResult {
+  missing: string[];
+}
+
+/**
+ * v6.12.0 Phase M — slice-implementer must own GREEN. For each slice
+ * that recorded a phase=red event with non-empty evidenceRefs, require a
+ * phase=green event whose `agent === "slice-implementer"`. Slices whose
+ * GREEN event came from a different agent (e.g. controller wrote GREEN
+ * itself and recorded a green row under another agent name) are flagged.
+ */
+export function evaluateSliceImplementerCoverage(
+  slices: Map<string, DelegationEntry[]>
+): ImplementerCoverageResult {
+  const missing: string[] = [];
+  for (const [sliceId, rows] of slices.entries()) {
+    const reds = rows.filter((entry) => entry.phase === "red");
+    if (reds.length === 0) continue;
+    const hasRedEvidence = reds.some((red) => {
+      const refs = Array.isArray(red.evidenceRefs) ? red.evidenceRefs : [];
+      return refs.some((ref) => typeof ref === "string" && ref.trim().length > 0);
+    });
+    if (!hasRedEvidence) continue;
+    const greens = rows.filter((entry) => entry.phase === "green");
+    const ownedByImplementer = greens.some((entry) => entry.agent === "slice-implementer");
+    if (!ownedByImplementer) {
+      missing.push(sliceId);
+    }
+  }
+  return { missing };
+}
+
+interface RedCheckpointResult {
+  ok: boolean;
+  details: string;
+}
+
+/**
+ * v6.12.0 Phase W — RED checkpoint enforcement. The wave protocol
+ * requires ALL Phase A REDs to land before ANY Phase B GREEN starts.
+ * The rule is enforced on a per-wave basis, where a wave is defined by
+ * `<artifacts-dir>/wave-plans/wave-NN.md` files (when present) listing
+ * slice ids. When no wave manifest exists, the linter falls back to a
+ * conservative implicit detection: a wave is a contiguous run of
+ * `phase=red` events with no other-phase events between them; the rule
+ * fires only when the implicit wave has 2+ members.
+ *
+ * @param waveMembers Optional explicit wave manifest. Map key is wave
+ * name (e.g. `"W-01"`); value is the set of slice ids in that wave.
+ */
+export function evaluateRedCheckpoint(
+  slices: Map<string, DelegationEntry[]>,
+  waveMembers: Map<string, Set<string>> | null = null
+): RedCheckpointResult {
+  // Collect all phase events with completedTs.
+  type PhaseEvt = { sliceId: string; phase: string; ts: string };
+  const events: PhaseEvt[] = [];
+  for (const [sliceId, rows] of slices.entries()) {
+    for (const entry of rows) {
+      const ts = entry.completedTs ?? entry.endTs ?? entry.ts;
+      if (typeof ts !== "string" || ts.length === 0) continue;
+      if (typeof entry.phase !== "string") continue;
+      events.push({ sliceId, phase: entry.phase, ts });
+    }
+  }
+  events.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+
+  // Build the canonical wave list. Explicit manifest wins; otherwise
+  // derive implicit waves from contiguous red event blocks.
+  const waves: { name: string; members: Set<string> }[] = [];
+  if (waveMembers && waveMembers.size > 0) {
+    for (const [name, members] of waveMembers.entries()) {
+      if (members.size === 0) continue;
+      waves.push({ name, members });
+    }
+  } else {
+    let current: Set<string> | null = null;
+    let waveIdx = 0;
+    for (const evt of events) {
+      if (evt.phase === "red") {
+        if (current === null) current = new Set<string>();
+        current.add(evt.sliceId);
+      } else if (current !== null) {
+        if (current.size >= 2) {
+          waveIdx += 1;
+          waves.push({ name: `implicit-${waveIdx}`, members: current });
+        }
+        current = null;
+      }
+    }
+    if (current !== null && current.size >= 2) {
+      waveIdx += 1;
+      waves.push({ name: `implicit-${waveIdx}`, members: current });
+    }
+  }
+
+  if (waves.length === 0) {
+    return {
+      ok: true,
+      details: "RED checkpoint inactive: no wave manifest detected and no implicit wave (2+ contiguous reds) found."
+    };
+  }
+
+  const violations: string[] = [];
+  for (const wave of waves) {
+    const memberReds = events.filter((e) => e.phase === "red" && wave.members.has(e.sliceId));
+    const memberGreens = events.filter((e) => e.phase === "green" && wave.members.has(e.sliceId));
+    if (memberReds.length === 0 || memberGreens.length === 0) continue;
+    const lastRedTs = memberReds.reduce((acc, e) => (e.ts > acc ? e.ts : acc), memberReds[0]!.ts);
+    for (const g of memberGreens) {
+      if (g.ts < lastRedTs) {
+        violations.push(
+          `${wave.name}: ${g.sliceId} phase=green at ${g.ts} precedes wave's last phase=red completedTs at ${lastRedTs}`
+        );
+      }
+    }
+  }
+
+  if (violations.length === 0) {
+    return {
+      ok: true,
+      details: `RED checkpoint holds across ${waves.length} wave(s): all phase=green events follow the last phase=red of their wave.`
+    };
+  }
+  return {
+    ok: false,
+    details:
+      `RED checkpoint violation: ${violations.join("; ")}. ` +
+      "Dispatch ALL Phase A test-author --phase red calls in one message, verify every phase=red event lands with non-empty evidenceRefs, and only then dispatch Phase B slice-implementer --phase green + slice-documenter --phase doc fan-out."
+  };
+}
+
+/**
+ * Read explicit wave manifest from `<artifacts-dir>/wave-plans/wave-NN.md`
+ * files. Returns a map from wave name to the set of slice ids it
+ * contains. Slice ids are extracted via `S-<digits>` regex matches in
+ * each wave file. Returns null when no wave files exist or all are
+ * empty/unparseable.
+ */
+async function readWaveManifest(
+  artifactsDir: string
+): Promise<Map<string, Set<string>> | null> {
+  const wavePlansDir = path.join(artifactsDir, "wave-plans");
+  let entries: string[] = [];
+  try {
+    entries = await fs.readdir(wavePlansDir);
+  } catch {
+    return null;
+  }
+  const waves = new Map<string, Set<string>>();
+  for (const name of entries) {
+    const match = /^wave-(\d+)\.md$/u.exec(name);
+    if (!match) continue;
+    const wavePath = path.join(wavePlansDir, name);
+    let body = "";
+    try {
+      body = await fs.readFile(wavePath, "utf8");
+    } catch {
+      continue;
+    }
+    const ids = extractSliceIdsFromBody(body);
+    if (ids.length === 0) continue;
+    waves.set(`W-${match[1]}`, new Set(ids));
+  }
+  return waves.size > 0 ? waves : null;
+}
+
+const LEGACY_PER_SLICE_SECTIONS = [
+  "Test Discovery",
+  "RED Evidence",
+  "GREEN Evidence",
+  "Watched-RED Proof",
+  "Vertical Slice Cycle",
+  "Per-Slice Review",
+  "Failure Analysis",
+  "Acceptance Mapping"
+];
+
+interface LegacyBackslideContext {
+  projectRoot: string;
+  raw: string;
+  sections: StageLintContext["sections"];
+}
+
+/**
+ * v6.12.0 Phase L — advisory finding when post-cutover slice ids appear
+ * in legacy per-slice sections of `06-tdd.md`. Reads
+ * `flow-state.json::tddCutoverSliceId` (e.g. `"S-10"`) and scans each
+ * legacy section for `S-<N>` references with N > cutover.
+ */
+async function evaluateLegacySectionBackslide(
+  ctx: LegacyBackslideContext
+): Promise<LintFinding | null> {
+  const cutover = await readTddCutoverSliceId(ctx.projectRoot);
+  if (cutover === null) return null;
+  const cutoverNum = parseSliceNumber(cutover);
+  if (cutoverNum === null) return null;
+  const offenders: { section: string; sliceId: string }[] = [];
+  for (const sectionName of LEGACY_PER_SLICE_SECTIONS) {
+    const body = sectionBodyByName(ctx.sections, sectionName);
+    if (body === null) continue;
+    const ids = extractSliceIdsFromBody(body);
+    for (const id of ids) {
+      const num = parseSliceNumber(id);
+      if (num === null) continue;
+      if (num > cutoverNum) {
+        offenders.push({ section: sectionName, sliceId: id });
+      }
+    }
+  }
+  if (offenders.length === 0) return null;
+  const summary = offenders
+    .map((row) => `${row.sliceId} appears in legacy section \`## ${row.section}\``)
+    .join("; ");
+  return {
+    section: "tdd_legacy_section_writes_after_cutover",
+    required: false,
+    rule: "After v6.12.0 cutover, per-slice prose for slices > cutoverSliceId must live in `tdd-slices/S-<id>.md`, not in legacy `06-tdd.md` sections (Test Discovery, RED Evidence, GREEN Evidence, Watched-RED Proof, Vertical Slice Cycle, Per-Slice Review, Failure Analysis, Acceptance Mapping).",
+    found: false,
+    details: `${summary}. Move post-cutover slice prose into \`tdd-slices/<id>.md\` and let slice-documenter own the writes.`
+  };
+}
+
+async function readTddCutoverSliceId(projectRoot: string): Promise<string | null> {
+  const flowStatePath = path.join(projectRoot, ".cclaw/state/flow-state.json");
+  let raw: string;
+  try {
+    raw = await fs.readFile(flowStatePath, "utf8");
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const value = (parsed as Record<string, unknown>).tddCutoverSliceId;
+  if (typeof value !== "string" || value.length === 0) return null;
+  return value;
+}
+
+function parseSliceNumber(sliceId: string): number | null {
+  const match = /^S-(\d+)\b/u.exec(sliceId);
+  if (!match) return null;
+  const num = Number.parseInt(match[1]!, 10);
+  return Number.isFinite(num) ? num : null;
+}
+
+function extractSliceIdsFromBody(body: string): string[] {
+  const ids = new Set<string>();
+  const regex = /\bS-(\d+)\b/gu;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(body)) !== null) {
+    ids.add(`S-${match[1]}`);
+  }
+  return [...ids];
 }
 
 function pickEventTs(rows: DelegationEntry[]): string | undefined {
