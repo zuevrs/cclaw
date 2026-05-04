@@ -1008,6 +1008,113 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
 }
 
+/**
+ * v6.12.0 — TDD auto-cutover sync. When sync detects a legacy `06-tdd.md`
+ * (no auto-render markers) carrying observable slice activity (e.g. `S-N`
+ * referenced ≥3 times in slice-section bodies), insert the v6.11.0 marker
+ * skeleton + a one-line cutover banner and stamp the highest legacy slice
+ * id into `flow-state.json::tddCutoverSliceId`. Idempotent: re-running sync
+ * is byte-stable once markers are present.
+ *
+ * Design notes:
+ *   - Best-effort: read failures, missing flow-state, or unparseable JSON
+ *     all short-circuit silently. We never throw inside sync for migration
+ *     bookkeeping.
+ *   - We use `writeFlowState({ allowReset: true })` so we don't trip
+ *     `validateFlowTransition` (the only field we mutate is the new
+ *     additive `tddCutoverSliceId`; transition rules don't apply).
+ *   - The banner mirrors the language in the `## Per-Slice Ritual`
+ *     skill section so a reader of `06-tdd.md` who hasn't seen v6.12.0
+ *     understands the contract change.
+ */
+async function applyTddCutoverIfNeeded(projectRoot: string): Promise<void> {
+  const tddArtifactPath = runtimePath(projectRoot, "artifacts", "06-tdd.md");
+  let existing: string;
+  try {
+    existing = await fs.readFile(tddArtifactPath, "utf8");
+  } catch {
+    return;
+  }
+  if (existing.includes("<!-- auto-start: tdd-slice-summary -->")) {
+    return;
+  }
+
+  const sliceMatches = [...existing.matchAll(/\bS-(\d+)\b/gu)];
+  if (sliceMatches.length < 3) {
+    return;
+  }
+  let maxSliceNum = 0;
+  for (const match of sliceMatches) {
+    const n = Number.parseInt(match[1]!, 10);
+    if (Number.isFinite(n) && n > maxSliceNum) {
+      maxSliceNum = n;
+    }
+  }
+  if (maxSliceNum <= 0) {
+    return;
+  }
+  const cutoverSliceId = `S-${maxSliceNum}`;
+
+  const banner = [
+    `<!-- v6.12.0 cutover: slices S-1..${cutoverSliceId} use legacy per-slice tables.`,
+    `     New slices (S-${maxSliceNum + 1}+) use phase events + tdd-slices/<id>.md.`,
+    "     Controller MUST NOT add new rows to legacy sections. -->"
+  ].join("\n");
+  const slicesIndexBlock = [
+    "<!-- auto-start: slices-index -->",
+    "## Slices Index",
+    "",
+    "_Auto-rendered from `tdd-slices/S-*.md` once slice-documenter or controller writes per-slice files. Do not edit by hand._",
+    "<!-- auto-end: slices-index -->"
+  ].join("\n");
+  const summaryBlock = [
+    "<!-- auto-start: tdd-slice-summary -->",
+    "<!-- auto-end: tdd-slice-summary -->"
+  ].join("\n");
+
+  let nextRaw: string;
+  if (existing.startsWith("---\n")) {
+    const fmEnd = existing.indexOf("\n---", 4);
+    if (fmEnd >= 0) {
+      const fmClose = fmEnd + 4;
+      const head = existing.slice(0, fmClose);
+      const tail = existing.slice(fmClose);
+      nextRaw = `${head}\n\n${banner}\n\n${slicesIndexBlock}\n\n${summaryBlock}\n${tail}`;
+    } else {
+      nextRaw = `${banner}\n\n${slicesIndexBlock}\n\n${summaryBlock}\n\n${existing}`;
+    }
+  } else {
+    nextRaw = `${banner}\n\n${slicesIndexBlock}\n\n${summaryBlock}\n\n${existing}`;
+  }
+
+  await writeFileSafe(tddArtifactPath, nextRaw);
+  const slicesDir = runtimePath(projectRoot, "artifacts", "tdd-slices");
+  await ensureDir(slicesDir);
+
+  const flowStatePath = runtimePath(projectRoot, "state", "flow-state.json");
+  let flowStateRaw: string;
+  try {
+    flowStateRaw = await fs.readFile(flowStatePath, "utf8");
+  } catch {
+    return;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(flowStateRaw);
+  } catch {
+    return;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return;
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.tddCutoverSliceId === "string" && obj.tddCutoverSliceId.length > 0) {
+    return;
+  }
+  obj.tddCutoverSliceId = cutoverSliceId;
+  await writeFileSafe(flowStatePath, `${JSON.stringify(obj, null, 2)}\n`, { mode: 0o600 });
+}
+
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyFolder of DEPRECATED_UTILITY_SKILL_FOLDERS) {
     await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
@@ -1176,6 +1283,9 @@ async function materializeRuntime(
       writeRulebook(projectRoot)
     ]);
     await writeState(projectRoot, config, forceStateReset);
+    if (operation === "sync" || operation === "upgrade") {
+      await applyTddCutoverIfNeeded(projectRoot);
+    }
     try {
       await ensureRunSystem(projectRoot, { createIfMissing: false });
     } catch (error) {

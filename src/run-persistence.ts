@@ -622,6 +622,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
   const taskClass = coerceTaskClass(parsed.taskClass);
   const repoSignals = coerceRepoSignals(parsed.repoSignals);
   const completedStageMeta = sanitizeCompletedStageMeta(parsed.completedStageMeta);
+  const tddCutoverSliceId = coerceTddCutoverSliceId(parsed.tddCutoverSliceId);
   const state: FlowState = {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
@@ -634,6 +635,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     ...(taskClass !== undefined ? { taskClass } : {}),
     ...(repoSignals ? { repoSignals } : {}),
     ...(completedStageMeta ? { completedStageMeta } : {}),
+    ...(tddCutoverSliceId ? { tddCutoverSliceId } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),
@@ -642,6 +644,17 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     closeout: sanitizeCloseoutState(parsed.closeout)
   };
   return { state };
+}
+
+/**
+ * v6.12.0 — best-effort coercion for `tddCutoverSliceId`. Returns the value
+ * only when it matches the canonical slice id shape `S-<digits>`; otherwise
+ * returns null so the field is omitted from the rehydrated state.
+ */
+function coerceTddCutoverSliceId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^S-\d+$/u.test(trimmed) ? trimmed : null;
 }
 
 export class CorruptFlowStateError extends Error {

@@ -1,5 +1,59 @@
 # Changelog
 
+## 6.12.0 — TDD Velocity Honest (Decouple from discoveryMode + Mandatory Roles + Wave Checkpoint + Auto-cutover)
+
+Follow-up to v6.11.0 that closes the back doors observed on a fresh hox flow run (slice S-11 went GREEN with no `--phase` events, no `slice-implementer` dispatch, no `slice-documenter`, and 12+ hand-edited per-slice sections in `06-tdd.md`). v6.12.0 makes that path impossible by promoting `slice-implementer` and `slice-documenter` to mandatory regardless of `discoveryMode`, adding three new linter rules (`tdd_slice_documenter_missing` decoupled from `deep`, `tdd_slice_implementer_missing`, `tdd_red_checkpoint_violation`) plus an advisory backslide rule (`tdd_legacy_section_writes_after_cutover`), rewriting the TDD skill to teach the per-slice ritual + wave batch mode imperatively, and shipping a one-shot `cclaw-cli sync` auto-cutover that pins legacy projects to a `tddCutoverSliceId` boundary so existing slices keep validating while new ones must use the new protocol.
+
+### Phase R — Decouple slice-documenter from discoveryMode
+
+- **Rule renamed `tdd_slice_documenter_missing_for_deep` → `tdd_slice_documenter_missing`** in `src/artifact-linter/tdd.ts`. The `discoveryMode === "deep"` branch is removed; the rule is now `required: true` on lean / guided / deep alike. `discoveryMode` keeps its meaning as the early-stage shaping knob (brainstorm / scope / design); TDD parallelism is uniform across all modes.
+- **`src/content/stages/tdd.ts` Required Evidence** — the conditional bullet (`On discoveryMode=deep: per slice, a phase=doc event ...`) is replaced with a flat bullet that requires the `phase=doc` event regardless of mode. Brainstorm / scope / design skill files are untouched.
+
+### Phase M — Mandatory slice-implementer + slice-documenter
+
+- **`STAGE_AUTO_SUBAGENT_DISPATCH.tdd`** in `src/content/stage-schema.ts` — `slice-implementer` is promoted from `mode: "proactive"` to `mode: "mandatory"` ("Always for GREEN and REFACTOR phases. Controller MUST NOT write production code itself."). A new `slice-documenter` row is added at `mode: "mandatory"` ("Always in PARALLEL with `slice-implementer --phase green` for the same slice."). `defaultReturnSchemaForAgent` and `dispatchClassForRow` learn the new agent so worker payloads validate.
+- **`StageSubagentName`** in `src/content/stages/schema-types.ts` gains the `"slice-documenter"` member.
+- **New linter rule `tdd_slice_implementer_missing`** (`src/artifact-linter/tdd.ts::evaluateSliceImplementerCoverage`) — for every slice with a `phase=red` event carrying non-empty `evidenceRefs`, a matching `phase=green` event whose `agent === "slice-implementer"` is required. Catches "controller wrote GREEN itself", the most common backslide observed before v6.12.0.
+
+### Phase Ritual — Per-Slice Ritual block + Checklist 14 rewrite
+
+- **New top-of-skill `## Per-Slice Ritual (v6.12.0+)` block** rendered by `tddTopOfSkillBlock` in `src/content/skills.ts`, injected immediately after the `<EXTREMELY-IMPORTANT>` Iron Law and before `## Quick Start`. Imperative voice, literal `Task(...)` commands, explicit FORBIDDEN list (controller writing GREEN, controller writing per-slice prose, hand-editing auto-render blocks). One-line delegation-record signature.
+- **Checklist step 14** in `src/content/stages/tdd.ts` is rewritten from "Record evidence — capture test discovery, system-wide impact check, RED failure, GREEN output, REFACTOR notes in the TDD artifact" to "**slice-documenter writes per-slice prose** (test discovery, system-wide impact check, RED/GREEN/REFACTOR notes, acceptance mapping, failure analysis) into `tdd-slices/S-<id>.md`. Controller does NOT touch this content." The DOC parallel-dispatch instruction is updated to mandatory in lockstep.
+- **`watchedFailProofBlock`** in `src/content/skills.ts` is rewritten to describe the three-dispatch ritual and reaffirm that `slice-implementer` and `slice-documenter` are mandatory regardless of `discoveryMode`.
+- **TDD `BEHAVIOR_ANCHORS` entry** in `src/content/examples.ts` is expanded from a Watched-RED-only example to a full slice cycle Bad/Good with mandatory parallel GREEN+DOC dispatch.
+
+### Phase W — Wave Batch Mode + RED checkpoint
+
+- **New top-of-skill `## Wave Batch Mode (v6.12.0+)` block** in `src/content/skills.ts`. Trigger: any `<artifacts-dir>/wave-plans/wave-NN.md` exists, OR 2+ slices have disjoint `claimedPaths`. Phase A — RED checkpoint (one message, all `test-author --phase red`); Phase B — GREEN+DOC fan-out (one message, paired implementer+documenter Tasks per slice); fan-in via `integration-overseer`. Cap = 5 `slice-implementer` lanes (10 subagents counting paired documenters) per `MAX_PARALLEL_SLICE_IMPLEMENTERS`.
+- **New linter rule `tdd_red_checkpoint_violation`** (`src/artifact-linter/tdd.ts::evaluateRedCheckpoint`) — for every wave (explicit `wave-plans/wave-NN.md` manifest if present, otherwise implicit-wave fallback for 2+ contiguous reds), a `phase=green` event with `completedTs` BEFORE the wave's last `phase=red` `completedTs` is a `required: true` blocker. Sequential single-slice runs (red→green→red→green) form size-1 implicit waves and never fire.
+
+### Phase L — Cutover backslide advisory
+
+- **New advisory `tdd_legacy_section_writes_after_cutover`** (`src/artifact-linter/tdd.ts::evaluateLegacySectionBackslide`) — reads `flow-state.json::tddCutoverSliceId` (e.g. `"S-10"`) and surfaces an advisory `required: false` finding when slice ids `> cutover` appear in legacy per-slice sections of `06-tdd.md` (Test Discovery / RED Evidence / GREEN Evidence / Watched-RED Proof / Vertical Slice Cycle / Per-Slice Review / Failure Analysis / Acceptance Mapping). Post-cutover prose belongs in `tdd-slices/S-<id>.md`.
+
+### Phase A — `cclaw-cli sync` auto-cutover for existing TDD flows
+
+- **`FlowState.tddCutoverSliceId?: string`** added to `src/flow-state.ts`. `src/run-persistence.ts::coerceFlowState` rehydrates the field via a new `coerceTddCutoverSliceId` validator (canonical `S-<digits>` shape only).
+- **New `applyTddCutoverIfNeeded`** in `src/install.ts` — when `cclaw-cli sync` (or `upgrade`) detects an `06-tdd.md` artifact without auto-render markers but with observable slice activity (`S-N` referenced ≥3 times), it inserts a one-line cutover banner, the v6.11.0 `<!-- auto-start: slices-index -->` and `<!-- auto-start: tdd-slice-summary -->` marker skeleton, mkdir's `tdd-slices/`, and stamps the highest legacy slice id into `flow-state.json::tddCutoverSliceId`. Idempotent: re-running sync is byte-stable once markers are present.
+
+### Migration notes
+
+- **Existing TDD flows mid-stage (hox-style)** — run `npx cclaw-cli@6.12.0 upgrade && npx cclaw-cli@6.12.0 sync`. The cutover marker pins legacy slices (≤ `tddCutoverSliceId`) so they keep validating via the legacy markdown table fallback. New slices (> `tddCutoverSliceId`) MUST use the new protocol: per-slice phase events, `slice-implementer` for GREEN/REFACTOR, `slice-documenter` for `phase=doc` writing into `tdd-slices/S-<id>.md`.
+- **Breaking** — controllers that wrote GREEN themselves are now blocked by `tdd_slice_implementer_missing` (required: true). Mitigated by the cutover marker for legacy slices on existing projects, but new projects and new slices on existing projects must dispatch `slice-implementer` for every GREEN.
+- **Breaking** — `tdd_slice_documenter_missing` is now required on lean / guided / deep. Previous v6.11.0 advisory behavior on non-deep modes is removed.
+- **`flow-state.json::tddCutoverSliceId`** is additive and optional; existing files without the field continue to load. The field is canonical only when `S-<digits>` (e.g. `"S-10"`); other shapes are dropped on coerce.
+
+### Tests
+
+- **`tests/unit/tdd-slice-documenter-mandatory.test.ts`** — `tdd_slice_documenter_missing` is required on lean / guided / deep, and clears when `slice-documenter` records `phase=doc`.
+- **`tests/unit/tdd-slice-implementer-mandatory.test.ts`** — `evaluateSliceImplementerCoverage` unit cases (controller-authored green flagged, slice-implementer-authored green accepted, empty-evidence reds ignored) plus a linter integration test that emits `tdd_slice_implementer_missing` when the controller writes GREEN itself.
+- **`tests/unit/tdd-cutover-backslide-detection.test.ts`** — `tdd_legacy_section_writes_after_cutover` advisory emits when post-cutover slice ids appear in legacy sections, stays silent without a marker, stays silent when all slice ids are ≤ cutover.
+- **`tests/unit/tdd-red-checkpoint-validation.test.ts`** — `evaluateRedCheckpoint` happy + unhappy paths for both implicit-wave and explicit-wave-manifest modes; sequential single-slice runs do not fire.
+- **`tests/e2e/tdd-wave-checkpoint.test.ts`** — three slices, explicit `wave-plans/wave-01.md` manifest declaring W-01 membership, controller jumps S-1 to GREEN before S-3's RED → linter blocks with `tdd_red_checkpoint_violation`. Clean wave (all reds, then all greens) returns no finding.
+- **`tests/e2e/sync-tdd-cutover.test.ts`** — fixture has legacy 06-tdd.md with S-1..S-10, `cclaw-cli sync` inserts banner + markers + `tdd-slices/` + `flow-state.tddCutoverSliceId="S-10"`, second sync is byte-stable, no-activity artifacts skip cleanly.
+- **`tests/e2e/tdd-mandatory-roles-end-to-end.test.ts`** — full happy path for two slices: Phase A (test-author/RED for both) → Phase B (slice-implementer/GREEN + slice-documenter/DOC, paired per slice) → REFACTOR. Linter accepts the artifact: no `tdd_slice_implementer_missing`, no `tdd_slice_documenter_missing`, no `tdd_red_checkpoint_violation`.
+- **Skill size budget** in `tests/unit/skill-size.test.ts` bumped 480 → 520 lines for the TDD-only top-of-skill ritual + wave batch mode blocks. Other stages unchanged.
+
 ## 6.11.0 — TDD Honest Velocity (Rollback + Auto-derive + Slice-documenter + Sharded Files)
 
 Four-phase release that rolls back the v6.10.0 sidecar (Phase T1+T2) as architecturally wrong and replaces it with a delegation-events driven flow. The TDD linter now reads `.cclaw/state/delegation-events.jsonl` slice phase rows as the source of truth for Watched-RED Proof and Vertical Slice Cycle, auto-renders both blocks into `06-tdd.md`, supports a parallel `slice-documenter` agent for per-slice prose, and accepts sharded `tdd-slices/S-<id>.md` files alongside the thinned main artifact.

@@ -124,7 +124,7 @@ Any "the failure is real" claim (failing test, broken build, regression catch, d
 
 \`proof: <iso-ts> | <observed snippet — first 200 chars> | source: <command or log path>\`
 
-For TDD specifically, this is the watched-RED proof and is required per new test before \`stage-complete\` accepts the stage. From v6.11.0 onward, the controller dispatches \`test-author --slice S-<id> --phase red\` (and later \`slice-implementer --phase green\`, \`--phase refactor\` or \`--phase refactor-deferred --refactor-rationale "<why>"\`) and the linter auto-derives the \`Watched-RED Proof\` and \`Vertical Slice Cycle\` tables in \`06-tdd.md\` from \`.cclaw/state/delegation-events.jsonl\`. Do NOT hand-edit those tables. v6.10.0 sidecar (\`06-tdd-slices.jsonl\`) is removed; \`cclaw-cli sync\` cleans the file from existing installs.
+For TDD specifically, this is the watched-RED proof and is required per new test before \`stage-complete\` accepts the stage. From v6.12.0 onward, every slice on every TDD run dispatches three roles in this exact order: (1) \`test-author --slice S-<id> --phase red\`, (2) ONE message with TWO concurrent Task calls — \`slice-implementer --slice S-<id> --phase green --paths <production paths>\` AND \`slice-documenter --slice S-<id> --phase doc --paths <artifacts-dir>/tdd-slices/S-<id>.md\`, (3) \`slice-implementer --phase refactor\` or \`--phase refactor-deferred --refactor-rationale "<why>"\`. The linter auto-derives the \`Watched-RED Proof\` and \`Vertical Slice Cycle\` tables in \`06-tdd.md\` from \`.cclaw/state/delegation-events.jsonl\`. Do NOT hand-edit those tables. \`slice-implementer\` and \`slice-documenter\` are mandatory regardless of \`discoveryMode\` (v6.12.0 Phase R/M); the controller MUST NOT write GREEN production code or per-slice prose itself. v6.10.0 sidecar (\`06-tdd-slices.jsonl\`) is removed; \`cclaw-cli sync\` cleans the file from existing installs.
 `;
 }
 
@@ -193,6 +193,64 @@ function whenNotToUseBlock(items: string[]): string {
   }
   return `## When Not to Use
 ${items.map((item) => `- ${item}`).join("\n")}
+
+`;
+}
+
+/**
+ * v6.12.0 Phase Ritual + Phase W — TDD-only top-of-skill sections that
+ * sit immediately after the `<EXTREMELY-IMPORTANT>` Iron Law block and
+ * before `## Quick Start`. They establish the per-slice three-dispatch
+ * ritual + wave batch mode in imperative voice with literal commands so
+ * pattern-matching on read works in our favor.
+ *
+ * Empty for non-TDD stages.
+ */
+export function tddTopOfSkillBlock(stage: FlowStage): string {
+  if (stage !== "tdd") return "";
+  return `## Per-Slice Ritual (v6.12.0+)
+
+ONE slice = THREE dispatches, in this order. Do not skip, do not collapse.
+
+1. **RED** — \`Task("test-author --slice S-<id> --phase red")\`.
+2. **Verify RED** — wait for the \`phase=red\` event in \`.cclaw/state/delegation-events.jsonl\` with non-empty \`evidenceRefs\`. No production edits.
+3. **GREEN+DOC fan-out** — ONE message, TWO concurrent Tasks:
+   \`\`\`
+   Task("slice-implementer --slice S-<id> --phase green --paths <prod paths>")
+   Task("slice-documenter  --slice S-<id> --phase doc   --paths <artifacts-dir>/tdd-slices/S-<id>.md")
+   \`\`\`
+   The file-overlap scheduler auto-allows parallel dispatch because \`claimedPaths\` are disjoint. Fire BOTH calls in the same message — never serialize independent work.
+4. **REFACTOR** — \`Task("slice-implementer --slice S-<id> --phase refactor")\` OR \`--phase refactor-deferred --refactor-rationale '<why>'\`.
+
+**FORBIDDEN:**
+- Controller writing GREEN production code. ALL GREEN goes through \`slice-implementer\` — linter rule \`tdd_slice_implementer_missing\` blocks the gate.
+- Controller writing per-slice prose into legacy \`06-tdd.md\` sections (Test Discovery / RED Evidence / GREEN Evidence / Watched-RED Proof / Vertical Slice Cycle / Per-Slice Review / Failure Analysis / Acceptance Mapping). \`slice-documenter\` owns \`tdd-slices/S-<id>.md\` — \`tdd_slice_documenter_missing\` blocks the gate.
+- Hand-editing auto-render blocks between \`auto-start: tdd-slice-summary\` / \`auto-start: slices-index\` markers — overwritten every lint.
+
+Delegation-record signature: \`node .cclaw/hooks/delegation-record.mjs --stage=tdd --agent=<agent> --mode=mandatory --status=<...> --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> --slice=S-<id> --phase=<red|green|refactor|refactor-deferred|doc> [--paths=<csv>] [--refactor-rationale=<why>] [--ack-ts=<iso>] [--evidence-ref=<ref>] --json\`.
+
+## Wave Batch Mode (v6.12.0+)
+
+Trigger: any \`<artifacts-dir>/wave-plans/wave-NN.md\` exists, OR 2+ slices have disjoint \`claimedPaths\`. Cap = 5 \`slice-implementer\` lanes (10 subagents incl. paired documenters) via \`MAX_PARALLEL_SLICE_IMPLEMENTERS\`.
+
+**Phase A — RED checkpoint** — ONE message, all test-authors:
+\`\`\`
+Task("test-author --slice S-1 --phase red")
+Task("test-author --slice S-2 --phase red")
+Task("test-author --slice S-3 --phase red")
+\`\`\`
+Wait for ALL Phase A REDs to land with non-empty \`evidenceRefs\` before Phase B. Linter \`tdd_red_checkpoint_violation\` (required: true) blocks any wave where a \`phase=green\` \`completedTs\` precedes the wave's last \`phase=red\` \`completedTs\`.
+
+**Phase B — GREEN+DOC fan-out** — ONE message, paired implementer+documenter Tasks per slice:
+\`\`\`
+Task("slice-implementer --slice S-1 --phase green --paths <S-1 prod>")
+Task("slice-documenter  --slice S-1 --phase doc   --paths <artifacts-dir>/tdd-slices/S-1.md")
+Task("slice-implementer --slice S-2 --phase green --paths <S-2 prod>")
+Task("slice-documenter  --slice S-2 --phase doc   --paths <artifacts-dir>/tdd-slices/S-2.md")
+\`\`\`
+Launch ALL Phase B pairs in ONE message. **Never serialize independent work.**
+
+**Fan-in** — when 2+ \`slice-implementer\` rows complete in a wave, dispatch \`integration-overseer\` to verify cohesion contract (shared types, touchpoints, invariants, integration tests).
 
 `;
 }
@@ -651,7 +709,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 </EXTREMELY-IMPORTANT>
 
-${quickStartBlock(stage, track)}
+${tddTopOfSkillBlock(stage)}${quickStartBlock(stage, track)}
 
 ${STAGE_LANGUAGE_POLICY_POINTER}
 ## Philosophy

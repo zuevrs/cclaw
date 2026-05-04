@@ -806,7 +806,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "tdd",
         `--evidence-json=${JSON.stringify(malformedEvidence)}`,
-        "--waive-delegation=test-author",
+        "--waive-delegation=test-author,slice-implementer,slice-documenter",
         "--waiver-reason=unit_test",
         "--quiet"
       ],

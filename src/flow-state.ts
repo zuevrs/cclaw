@@ -153,6 +153,21 @@ export interface FlowState {
    * clock for post-closure mutation hints.
    */
   completedStageMeta?: Partial<Record<FlowStage, { completedAt: string }>>;
+  /**
+   * v6.12.0 — TDD migration cutover marker. When `cclaw-cli sync` detects an
+   * existing `06-tdd.md` with legacy per-slice tables but no auto-render
+   * markers, it inserts the markers and records the highest legacy slice id
+   * here (e.g. `"S-10"`). The TDD linter uses this value to:
+   *   - exempt slices `<= cutoverSliceId` from new mandatory rules (legacy
+   *     slices keep their markdown tables);
+   *   - emit `tdd_legacy_section_writes_after_cutover` advisory when a slice
+   *     id `> cutoverSliceId` appears in legacy per-slice sections of
+   *     `06-tdd.md` (post-cutover prose belongs in `tdd-slices/S-<id>.md`).
+   *
+   * Optional + best-effort: omitted on fresh installs and on legacy files
+   * sync hasn't visited yet.
+   */
+  tddCutoverSliceId?: string;
 }
 
 export interface StageInteractionHint {
