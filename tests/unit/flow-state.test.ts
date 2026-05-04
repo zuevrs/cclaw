@@ -3,6 +3,8 @@ import {
   canTransition,
   createInitialCloseoutState,
   createInitialFlowState,
+  DEFAULT_TDD_GREEN_MIN_ELAPSED_MS,
+  effectiveTddGreenMinElapsedMs,
   FLOW_STATE_SCHEMA_VERSION,
   getAvailableTransitions,
   getTransitionGuards,
@@ -98,5 +100,48 @@ describe("flow state", () => {
     ]);
     const closeout = createInitialCloseoutState();
     expect(SHIP_SUBSTATES).toContain(closeout.shipSubstate);
+  });
+
+  describe("effectiveTddGreenMinElapsedMs (v6.14.2 Fix 4)", () => {
+    it("returns the documented default when the field is missing", () => {
+      const state = createInitialFlowState();
+      expect(effectiveTddGreenMinElapsedMs(state)).toBe(
+        DEFAULT_TDD_GREEN_MIN_ELAPSED_MS
+      );
+    });
+
+    it("returns the per-project override when set to a finite non-negative number", () => {
+      const state = createInitialFlowState();
+      state.tddGreenMinElapsedMs = 8000;
+      expect(effectiveTddGreenMinElapsedMs(state)).toBe(8000);
+      state.tddGreenMinElapsedMs = 0;
+      expect(effectiveTddGreenMinElapsedMs(state)).toBe(0);
+    });
+
+    it("falls through to the default for negative, NaN, Infinity, or non-number inputs", () => {
+      const state = createInitialFlowState();
+      state.tddGreenMinElapsedMs = -1;
+      expect(effectiveTddGreenMinElapsedMs(state)).toBe(
+        DEFAULT_TDD_GREEN_MIN_ELAPSED_MS
+      );
+      state.tddGreenMinElapsedMs = Number.NaN;
+      expect(effectiveTddGreenMinElapsedMs(state)).toBe(
+        DEFAULT_TDD_GREEN_MIN_ELAPSED_MS
+      );
+      state.tddGreenMinElapsedMs = Number.POSITIVE_INFINITY;
+      expect(effectiveTddGreenMinElapsedMs(state)).toBe(
+        DEFAULT_TDD_GREEN_MIN_ELAPSED_MS
+      );
+      state.tddGreenMinElapsedMs = "8000" as unknown as number;
+      expect(effectiveTddGreenMinElapsedMs(state)).toBe(
+        DEFAULT_TDD_GREEN_MIN_ELAPSED_MS
+      );
+    });
+
+    it("floors fractional values to the integer ms", () => {
+      const state = createInitialFlowState();
+      state.tddGreenMinElapsedMs = 4500.7;
+      expect(effectiveTddGreenMinElapsedMs(state)).toBe(4500);
+    });
   });
 });
