@@ -4,6 +4,7 @@ import { FLOW_STAGES, type FlowStage, type FlowTrack } from "../types.js";
 import { behaviorAnchorFor, stageExamples } from "./examples.js";
 import { INVESTIGATION_DISCIPLINE_BLOCK } from "./templates.js";
 import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
+import { renderTrackTerminology } from "./track-render-context.js";
 import type { StageSchema } from "./stage-schema.js";
 import { referencePatternsForStage } from "./reference-patterns.js";
 import { harnessDelegationRecipes } from "../harness-adapters.js";
@@ -222,16 +223,20 @@ ONE slice = THREE dispatches, in this order. Do not skip, do not collapse.
    The file-overlap scheduler auto-allows parallel dispatch because \`claimedPaths\` are disjoint. Fire BOTH calls in the same message — never serialize independent work.
 4. **REFACTOR** — \`Task("slice-implementer --slice S-<id> --phase refactor")\` OR \`--phase refactor-deferred --refactor-rationale '<why>'\`.
 
+**Rule 1 (v6.13.1):** Before any slice-routing question, read \`<artifacts-dir>/05-plan.md\` (managed \`## Parallel Execution Plan\`) **and** list \`<artifacts-dir>/wave-plans/wave-NN.md\`. Merge mentally: Parallel Execution Plan first, wave files second; duplicate slices with conflicting wave membership are invalid. If the merged plan shows a wave with **two or more** scheduler-ready slices, issue **exactly one** \`AskQuestion\`: \`Launch wave W-NN with N parallel lanes (S-a, S-b, ...)?\` with default option **launch wave** and alternate **single-slice instead**. Do not ask "which slice next?" when that question is redundant (single ready slice or no wave). After **launch wave** confirmation, execute RED checkpoint → parallel GREEN+DOC → per-lane REFACTOR without further routing asks. After **single-slice instead**, fall back to the legacy single-slice ritual. **Wave dispatch resume:** if part of the wave is already done, parallelize only the remaining members.
+
 **FORBIDDEN:**
 - Controller writing GREEN production code. ALL GREEN goes through \`slice-implementer\` — linter rule \`tdd_slice_implementer_missing\` blocks the gate.
 - Controller writing per-slice prose into legacy \`06-tdd.md\` sections (Test Discovery / RED Evidence / GREEN Evidence / Watched-RED Proof / Vertical Slice Cycle / Per-Slice Review / Failure Analysis / Acceptance Mapping). \`slice-documenter\` owns \`tdd-slices/S-<id>.md\` — \`tdd_slice_documenter_missing\` blocks the gate.
 - Hand-editing auto-render blocks between \`auto-start: tdd-slice-summary\` / \`auto-start: slices-index\` markers — overwritten every lint.
 
-Delegation-record signature: \`node .cclaw/hooks/delegation-record.mjs --stage=tdd --agent=<agent> --mode=mandatory --status=<...> --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> --slice=S-<id> --phase=<red|green|refactor|refactor-deferred|doc> [--paths=<csv>] [--refactor-rationale=<why>] [--ack-ts=<iso>] [--evidence-ref=<ref>] --json\`.
+Delegation-record signature (extend with lane metadata for every GREEN row in \`worktree-first\`):
 
-## Wave Batch Mode (v6.12.0+)
+\`node .cclaw/hooks/delegation-record.mjs --stage=tdd --agent=slice-implementer --mode=mandatory --status=scheduled --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> --slice=S-1 --phase=green --paths=src/a.ts --claim-token=<opaque> --lane-id=<lane> --lease-until=<iso8601> --json\`
 
-Trigger: any \`<artifacts-dir>/wave-plans/wave-NN.md\` exists, OR 2+ slices have disjoint \`claimedPaths\`. Cap = 5 \`slice-implementer\` lanes (10 subagents incl. paired documenters) via \`MAX_PARALLEL_SLICE_IMPLEMENTERS\`.
+## Wave Batch Mode (v6.13.1+)
+
+**Triggers:** managed \`## Parallel Execution Plan\` in \`05-plan.md\` **or** any \`<artifacts-dir>/wave-plans/wave-NN.md\`, OR 2+ slices with disjoint \`claimedPaths\`. Cap = 5 \`slice-implementer\` lanes (10 subagents incl. paired documenters) via \`MAX_PARALLEL_SLICE_IMPLEMENTERS\`. **Preconditions:** Load both sources before routing. Worktree-first: every GREEN delegation-record MUST include \`--claim-token\`, \`--lane-id\`, \`--lease-until\` (hook exits \`2\`, \`dispatch_lane_metadata_missing\` otherwise).
 
 **Phase A — RED checkpoint** — ONE message, all test-authors:
 \`\`\`
@@ -241,20 +246,18 @@ Task("test-author --slice S-3 --phase red")
 \`\`\`
 Wait for ALL Phase A REDs to land with non-empty \`evidenceRefs\` before Phase B. Linter \`tdd_red_checkpoint_violation\` (required: true) blocks any wave where a \`phase=green\` \`completedTs\` precedes the wave's last \`phase=red\` \`completedTs\`.
 
-**Phase B — GREEN+DOC fan-out** — ONE message, paired implementer+documenter Tasks per slice:
+**Phase B — GREEN+DOC fan-out** — ONE message; pair per slice (repeat for each lane, flags unique per lane):
+
 \`\`\`
-Task("slice-implementer --slice S-1 --phase green --paths <S-1 prod>")
+Task("slice-implementer --slice S-1 --phase green --paths <prod> --claim-token=<t> --lane-id=<lane-1> --lease-until=<iso>")
 Task("slice-documenter  --slice S-1 --phase doc   --paths <artifacts-dir>/tdd-slices/S-1.md")
-Task("slice-implementer --slice S-2 --phase green --paths <S-2 prod>")
-Task("slice-documenter  --slice S-2 --phase doc   --paths <artifacts-dir>/tdd-slices/S-2.md")
 \`\`\`
-Launch ALL Phase B pairs in ONE message. **Never serialize independent work.**
 
-**Phase C — REFACTOR per slice** — after GREEN+DOC evidence is recorded, dispatch \`slice-implementer --phase refactor\` or \`--phase refactor-deferred\` per slice (may be parallelized when lanes stay disjoint).
+Launch every slice's pair in that same message. **Never serialize independent work.**
 
-**Fan-in (v6.13.0+, worktree-first default)** — each \`slice-implementer\` GREEN row should record \`--claim-token\`, \`--lane-id\`, and \`--lease-until\` per the delegation hook. On successful TDD stage-complete, the runtime performs deterministic \`git apply --3way\` fan-in from each lane worktree onto the current integration branch (no \`-X ours/theirs\`). Conflicts emit \`cclaw_fanin_conflict\` audit rows; resolve with \`slice-implementer --phase resolve-conflict\` then re-run stage-complete. When 2+ parallel lanes finish a wave, still dispatch \`integration-overseer\` so cohesion-contract evidence exists before review.
+**Phase C — REFACTOR per slice** — after GREEN+DOC lands, dispatch refactor/refactor-deferred per slice. **Fan-in (worktree-first):** echo claim/lane/lease on completed GREEN rows; stage-complete runs deterministic \`git apply --3way\` (no \`-X ours/theirs\`). Conflicts: \`slice-implementer --phase resolve-conflict\`. With 2+ lanes, still dispatch \`integration-overseer\` before review.
 
-**slice-documenter** may mark prose \`provisional\` until GREEN is proven; finalize \`tdd-slices/S-<id>.md\` after GREEN evidence is recorded.
+**slice-documenter:** record the \`phase=doc\` row in the same message as GREEN; write a **provisional** row in \`tdd-slices/S-<id>.md\` immediately at dispatch, then **finalize** that file after the matching \`slice-implementer\` \`phase=green\` event lands (evidence-backed prose, not guesswork before GREEN exists).
 
 `;
 }
@@ -713,7 +716,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 </EXTREMELY-IMPORTANT>
 
-${tddTopOfSkillBlock(stage)}${quickStartBlock(stage, track)}
+${renderTrackTerminology(tddTopOfSkillBlock(stage), trackContext)}${quickStartBlock(stage, track)}
 
 ${STAGE_LANGUAGE_POLICY_POINTER}
 ## Philosophy

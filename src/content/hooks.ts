@@ -336,6 +336,19 @@ async function readRunId(root) {
   }
 }
 
+async function readWorktreeExecutionModeInline(root) {
+  try {
+    const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "flow-state.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.worktreeExecutionMode === "worktree-first") {
+      return "worktree-first";
+    }
+    return "single-tree";
+  } catch {
+    return "single-tree";
+  }
+}
+
 async function readDelegationEvents(root) {
   try {
     const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "delegation-events.jsonl"), "utf8");
@@ -1303,6 +1316,33 @@ async function main() {
       return;
     } else if (dedupViolation.kind === "supersede-mismatch") {
       emitErrorJson("dispatch_supersede_mismatch", dedupViolation.details, json);
+      return;
+    }
+  }
+
+  if (
+    clean.stage === "tdd" &&
+    clean.agent === "slice-implementer" &&
+    clean.phase === "green" &&
+    (await readWorktreeExecutionModeInline(root)) === "worktree-first"
+  ) {
+    const tok = typeof clean.claimToken === "string" ? clean.claimToken.trim() : "";
+    const lane = typeof clean.ownerLaneId === "string" ? clean.ownerLaneId.trim() : "";
+    const lease = typeof clean.leasedUntil === "string" ? clean.leasedUntil.trim() : "";
+    if (tok.length === 0 || lane.length === 0 || lease.length === 0) {
+      const missing = [];
+      if (tok.length === 0) missing.push("--claim-token");
+      if (lane.length === 0) missing.push("--lane-id");
+      if (lease.length === 0) missing.push("--lease-until");
+      emitErrorJson(
+        "dispatch_lane_metadata_missing",
+        {
+          missing,
+          remediation:
+            "worktree-first mode requires --claim-token, --lane-id, and --lease-until on every slice-implementer --phase green delegation-record write (from scheduled through completed)."
+        },
+        json
+      );
       return;
     }
   }

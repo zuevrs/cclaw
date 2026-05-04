@@ -1,7 +1,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { readDelegationLedger, readDelegationEvents } from "../delegation.js";
-import type { DelegationEntry } from "../delegation.js";
+import {
+  loadTddReadySlicePool,
+  readDelegationLedger,
+  readDelegationEvents,
+  selectReadySlices
+} from "../delegation.js";
+import type { DelegationEntry, DelegationEvent } from "../delegation.js";
+import {
+  mergeParallelWaveDefinitions,
+  parseParallelExecutionPlanWaves,
+  parseWavePlanDirectory
+} from "../internal/plan-split-waves.js";
 import {
   type LintFinding,
   type StageLintContext,
@@ -42,9 +52,19 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     sections,
     findings,
     parsedFrontmatter,
-    worktreeExecutionMode
+    worktreeExecutionMode,
+    legacyContinuation
   } = ctx;
   void parsedFrontmatter;
+
+  const artifactsDir = path.dirname(absFile);
+  const planPath = path.join(artifactsDir, "05-plan.md");
+  let planRaw = "";
+  try {
+    planRaw = await fs.readFile(planPath, "utf8");
+  } catch {
+    planRaw = "";
+  }
 
   evaluateInvestigationTrace(ctx, "Watched-RED Proof");
 
@@ -200,7 +220,7 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
   // (size >= 2). Sequential per-slice runs (red→green→refactor in a
   // tight loop) form size-1 implicit waves and are unaffected.
   if (eventsActive) {
-    const waveManifest = await readWaveManifest(path.dirname(absFile));
+    const waveManifest = await readMergedWaveManifestForCheckpoint(artifactsDir, planRaw);
     const checkpointResult = evaluateRedCheckpoint(slicesByEvents, waveManifest);
     if (!checkpointResult.ok) {
       findings.push({
@@ -229,13 +249,48 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
 
   const { events: jsonlEvents, fanInAudits } = await readDelegationEvents(projectRoot);
   const runEvents = jsonlEvents.filter((e) => e.runId === delegationLedger.runId);
+
+  if (eventsActive && planRaw.length > 0) {
+    const ignoredWave = await evaluateWavePlanDispatchIgnored({
+      artifactsDir,
+      planMarkdown: planRaw,
+      runEvents,
+      runId: delegationLedger.runId,
+      slices: slicesByEvents,
+      legacyContinuation
+    });
+    if (ignoredWave) {
+      findings.push(ignoredWave);
+    }
+  }
+
   if (eventsActive && worktreeExecutionMode === "worktree-first") {
     const terminalPhases = new Set([
-      "green",
       "refactor",
       "refactor-deferred",
       "resolve-conflict"
     ]);
+    const missingGreenMeta = new Set<string>();
+    for (const ev of runEvents) {
+      if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
+      if (ev.status !== "completed" || ev.phase !== "green") continue;
+      if (typeof ev.sliceId !== "string") continue;
+      const tok = ev.claimToken?.trim() ?? "";
+      const lane = ev.ownerLaneId?.trim() ?? "";
+      const lease = ev.leasedUntil?.trim() ?? "";
+      if (tok.length === 0 || lane.length === 0 || lease.length === 0) {
+        missingGreenMeta.add(ev.sliceId);
+      }
+    }
+    if (missingGreenMeta.size > 0) {
+      findings.push({
+        section: "tdd_slice_lane_metadata_missing",
+        required: true,
+        rule: "Worktree-first: every completed slice-implementer phase=green row must record claimToken, ownerLaneId (--lane-id), and leasedUntil (--lease-until).",
+        found: false,
+        details: `Slices missing one or more lane fields on GREEN: ${[...missingGreenMeta].sort().join(", ")}. Remediation: include --claim-token, --lane-id, and --lease-until on every slice-implementer --phase green delegation-record write (schedule through completion); the hook fails fast with dispatch_lane_metadata_missing when they are omitted.`
+      });
+    }
     const missingClaim = new Set<string>();
     for (const ev of runEvents) {
       if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
@@ -250,26 +305,9 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       findings.push({
         section: "tdd_slice_claim_token_missing",
         required: true,
-        rule: "Worktree-first: terminal slice-implementer rows must echo --claim-token. Remediation: pass the same --claim-token used on the scheduled row for every completed/failed terminal phase.",
+        rule: "Worktree-first: terminal slice-implementer rows (refactor / refactor-deferred / resolve-conflict) must echo --claim-token. Remediation: pass the same --claim-token used on the scheduled row for every completed/failed terminal phase.",
         found: false,
-        details: `Slices missing claim token on terminal rows: ${[...missingClaim].join(", ")}.`
-      });
-    }
-    const missingLane = new Set<string>();
-    for (const ev of runEvents) {
-      if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
-      if (ev.status !== "completed" || ev.phase !== "green") continue;
-      if (!ev.ownerLaneId?.trim() && typeof ev.sliceId === "string") {
-        missingLane.add(ev.sliceId);
-      }
-    }
-    if (missingLane.size > 0) {
-      findings.push({
-        section: "tdd_slice_worktree_metadata_missing",
-        required: true,
-        rule: "Worktree-first: completed GREEN rows must record --lane-id (ownerLaneId) for the lane worktree.",
-        found: false,
-        details: `Slices missing ownerLaneId on GREEN completion: ${[...missingLane].join(", ")}.`
+        details: `Slices missing claim token on non-GREEN terminal rows: ${[...missingClaim].join(", ")}.`
       });
     }
     const conflictSlices = [
@@ -372,7 +410,6 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
   const fanOutDetected = completedSliceImplementers.length > 1;
 
   if (fanOutDetected) {
-    const artifactsDir = path.dirname(absFile);
     const cohesionContractMarkdownPath = path.join(artifactsDir, "cohesion-contract.md");
     const cohesionContractJsonPath = path.join(artifactsDir, "cohesion-contract.json");
 
@@ -464,7 +501,6 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
   // Phase S — sharded slice files. Validate per-slice file presence
   // and required headings. `tdd-slices/` is optional; missing folder
   // simply means main-only mode (legacy fallback).
-  const artifactsDir = path.dirname(absFile);
   const slicesDir = path.join(artifactsDir, "tdd-slices");
   const sliceFiles = await listSliceFiles(slicesDir);
   for (const sliceFile of sliceFiles) {
@@ -791,15 +827,131 @@ interface RedCheckpointResult {
   details: string;
 }
 
+async function readMergedWaveManifestForCheckpoint(
+  artifactsDir: string,
+  planMarkdown: string
+): Promise<Map<string, Set<string>> | null> {
+  try {
+    const merged = mergeParallelWaveDefinitions(
+      parseParallelExecutionPlanWaves(planMarkdown),
+      await parseWavePlanDirectory(artifactsDir)
+    );
+    if (merged.length === 0) return null;
+    const map = new Map<string, Set<string>>();
+    for (const w of merged) {
+      map.set(w.waveId, new Set(w.members.map((m) => m.sliceId)));
+    }
+    return map.size > 0 ? map : null;
+  } catch {
+    return null;
+  }
+}
+
+function sliceRefactorTerminal(
+  sliceId: string,
+  slices: Map<string, DelegationEntry[]>
+): boolean {
+  const rows = slices.get(sliceId);
+  if (!rows) return false;
+  return rows.some(
+    (e) =>
+      e.agent === "slice-implementer" &&
+      (e.phase === "refactor" || e.phase === "refactor-deferred") &&
+      (e.status === "completed" || e.status === "failed")
+  );
+}
+
+/**
+ * v6.13.1 — detect single-slice dispatch when the merged wave plan
+ * requires parallel ready slice-implementer fan-out.
+ */
+export async function evaluateWavePlanDispatchIgnored(params: {
+  artifactsDir: string;
+  planMarkdown: string;
+  runEvents: DelegationEvent[];
+  runId: string;
+  slices: Map<string, DelegationEntry[]>;
+  legacyContinuation: boolean;
+}): Promise<LintFinding | null> {
+  let merged;
+  try {
+    merged = mergeParallelWaveDefinitions(
+      parseParallelExecutionPlanWaves(params.planMarkdown),
+      await parseWavePlanDirectory(params.artifactsDir)
+    );
+  } catch {
+    return null;
+  }
+  if (merged.length === 0) return null;
+
+  let pool;
+  try {
+    pool = await loadTddReadySlicePool(params.planMarkdown, params.artifactsDir, {
+      legacyParallelDefaultSerial: params.legacyContinuation
+    });
+  } catch {
+    return null;
+  }
+  if (pool.length === 0) return null;
+
+  const completedUnitIds = new Set<string>();
+  for (const u of pool) {
+    if (sliceRefactorTerminal(u.sliceId, params.slices)) {
+      completedUnitIds.add(u.unitId);
+    }
+  }
+
+  const scoped = params.runEvents.filter((e) => e.runId === params.runId);
+  const tail = scoped.slice(-20);
+  const implInTail = new Set<string>();
+  for (const e of tail) {
+    if (e.agent === "slice-implementer" && typeof e.sliceId === "string" && e.sliceId.length > 0) {
+      implInTail.add(e.sliceId);
+    }
+  }
+  if (implInTail.size !== 1) return null;
+
+  for (const wave of merged) {
+    const waveSliceSet = new Set(wave.members.map((m) => m.sliceId));
+    const wavePool = pool.filter((u) => waveSliceSet.has(u.sliceId));
+    if (wavePool.length < 2) continue;
+
+    const waveIncomplete = wave.members.some((m) => !sliceRefactorTerminal(m.sliceId, params.slices));
+    if (!waveIncomplete) continue;
+
+    const ready = selectReadySlices(wavePool, {
+      cap: Math.max(32, wavePool.length),
+      completedUnitIds,
+      activePathHolders: [],
+      legacyContinuation: params.legacyContinuation
+    });
+    if (ready.length < 2) continue;
+
+    const only = [...implInTail][0]!;
+    const missed = ready.map((r) => r.sliceId).filter((s) => s !== only);
+    if (missed.length === 0) continue;
+
+    return {
+      section: "tdd_wave_plan_ignored",
+      required: true,
+      rule: "When the Parallel Execution Plan (or wave-plans/) defines an open wave with two or more ready parallelizable slices, the controller must fan out slice-implementer work for each ready slice instead of serializing to one slice only.",
+      found: false,
+      details: `Wave ${wave.waveId}: scheduler-ready members ${ready.map((r) => r.sliceId).join(", ")}; last 20 delegation events show slice-implementer only for ${only}. Missed parallel dispatch: ${missed.join(", ")}. Remediation: load \`05-plan.md\` (Parallel Execution Plan) and \`wave-plans/\` before routing, launch the wave (AskQuestion only when waveCount>=2 and single-slice is a real alternative), then dispatch GREEN+DOC for every ready slice with mandatory worktree-first flags on GREEN.`
+    };
+  }
+  return null;
+}
+
 /**
  * v6.12.0 Phase W — RED checkpoint enforcement. The wave protocol
  * requires ALL Phase A REDs to land before ANY Phase B GREEN starts.
  * The rule is enforced on a per-wave basis, where a wave is defined by
- * `<artifacts-dir>/wave-plans/wave-NN.md` files (when present) listing
- * slice ids. When no wave manifest exists, the linter falls back to a
- * conservative implicit detection: a wave is a contiguous run of
- * `phase=red` events with no other-phase events between them; the rule
- * fires only when the implicit wave has 2+ members.
+ * the managed `## Parallel Execution Plan` block in `05-plan.md` and/or
+ * `<artifacts-dir>/wave-plans/wave-NN.md` files. When no wave manifest
+ * exists, the linter falls back to a conservative implicit detection: a
+ * wave is a contiguous run of `phase=red` events with no other-phase
+ * events between them; the rule fires only when the implicit wave has
+ * 2+ members.
  *
  * @param waveMembers Optional explicit wave manifest. Map key is wave
  * name (e.g. `"W-01"`); value is the set of slice ids in that wave.
@@ -884,41 +1036,6 @@ export function evaluateRedCheckpoint(
       `RED checkpoint violation: ${violations.join("; ")}. ` +
       "Dispatch ALL Phase A test-author --phase red calls in one message, verify every phase=red event lands with non-empty evidenceRefs, and only then dispatch Phase B slice-implementer --phase green + slice-documenter --phase doc fan-out."
   };
-}
-
-/**
- * Read explicit wave manifest from `<artifacts-dir>/wave-plans/wave-NN.md`
- * files. Returns a map from wave name to the set of slice ids it
- * contains. Slice ids are extracted via `S-<digits>` regex matches in
- * each wave file. Returns null when no wave files exist or all are
- * empty/unparseable.
- */
-async function readWaveManifest(
-  artifactsDir: string
-): Promise<Map<string, Set<string>> | null> {
-  const wavePlansDir = path.join(artifactsDir, "wave-plans");
-  let entries: string[] = [];
-  try {
-    entries = await fs.readdir(wavePlansDir);
-  } catch {
-    return null;
-  }
-  const waves = new Map<string, Set<string>>();
-  for (const name of entries) {
-    const match = /^wave-(\d+)\.md$/u.exec(name);
-    if (!match) continue;
-    const wavePath = path.join(wavePlansDir, name);
-    let body = "";
-    try {
-      body = await fs.readFile(wavePath, "utf8");
-    } catch {
-      continue;
-    }
-    const ids = extractSliceIdsFromBody(body);
-    if (ids.length === 0) continue;
-    waves.set(`W-${match[1]}`, new Set(ids));
-  }
-  return waves.size > 0 ? waves : null;
 }
 
 const LEGACY_PER_SLICE_SECTIONS = [

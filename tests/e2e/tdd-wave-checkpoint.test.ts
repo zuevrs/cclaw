@@ -90,6 +90,12 @@ const PRE_TDD: Record<string, string> = {
 
 ## Learnings
 - None this stage.
+
+<!-- parallel-exec-managed-start -->
+## Parallel Execution Plan
+### Wave 01
+- **Members:** S-1, S-2, S-3
+<!-- parallel-exec-managed-end -->
 `
 };
 
@@ -170,9 +176,9 @@ describe("e2e: tdd_red_checkpoint_violation (v6.12.0 Phase W)", () => {
     await seed(root);
     await writeArtifacts(root);
 
-    // Explicit wave manifest declaring S-1, S-2, S-3 are in wave W-01.
-    // The controller then jumps S-1 to GREEN at ts=3 BEFORE S-3's red
-    // lands at ts=5 — `tdd_red_checkpoint_violation` must fire.
+    // Explicit wave manifest: managed Parallel Execution Plan in `05-plan.md`
+    // plus matching `wave-plans/wave-01.md`. S-1 goes GREEN at ts=3 before S-3's
+    // RED lands at ts=5 — `tdd_red_checkpoint_violation` must fire.
     const wavePlansDir = path.join(root, ".cclaw/artifacts/wave-plans");
     await fs.mkdir(wavePlansDir, { recursive: true });
     await fs.writeFile(

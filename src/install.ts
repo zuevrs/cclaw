@@ -62,7 +62,7 @@ import {
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "./content/subagent-context-skills.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
-import { createInitialFlowState, type FlowState } from "./flow-state.js";
+import { createInitialFlowState, effectiveWorktreeExecutionMode, type FlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { ManagedResourceSession, setActiveManagedResourceSession } from "./managed-resources.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
@@ -84,6 +84,10 @@ import { CorruptFlowStateError, ensureRunSystem, readFlowState, writeFlowState }
 import {
   PLAN_SPLIT_DEFAULT_WAVE_SIZE,
   buildParallelExecutionPlanSection,
+  formatNextParallelWaveSyncHint,
+  mergeParallelWaveDefinitions,
+  parseParallelExecutionPlanWaves,
+  parseWavePlanDirectory,
   planArtifactLacksV613ParallelMetadata,
   upsertParallelExecutionPlanSection
 } from "./internal/plan-split-waves.js";
@@ -1326,6 +1330,28 @@ async function assertExpectedHarnessShims(
   }
 }
 
+async function maybeLogParallelWaveDispatchHint(projectRoot: string): Promise<void> {
+  const flowPath = runtimePath(projectRoot, "state", "flow-state.json");
+  if (!(await exists(flowPath))) return;
+  try {
+    const state = await readFlowState(projectRoot);
+    if (effectiveWorktreeExecutionMode(state) !== "worktree-first") return;
+    const planPath = runtimePath(projectRoot, "artifacts", "05-plan.md");
+    if (!(await exists(planPath))) return;
+    const planRaw = await fs.readFile(planPath, "utf8");
+    const merged = mergeParallelWaveDefinitions(
+      parseParallelExecutionPlanWaves(planRaw),
+      await parseWavePlanDirectory(runtimePath(projectRoot, "artifacts"))
+    );
+    const hint = formatNextParallelWaveSyncHint(merged);
+    if (hint) {
+      process.stdout.write(`cclaw: ${hint}\n`);
+    }
+  } catch {
+    // best-effort note only
+  }
+}
+
 async function materializeRuntime(
   projectRoot: string,
   config: CclawConfig,
@@ -1372,6 +1398,9 @@ async function materializeRuntime(
     await assertExpectedHarnessShims(projectRoot, harnesses);
     await writeCursorWorkflowRule(projectRoot, harnesses);
     await ensureGitignore(projectRoot);
+    if (operation === "sync" || operation === "upgrade") {
+      await maybeLogParallelWaveDispatchHint(projectRoot);
+    }
     await managedSession.commit();
     await fs.unlink(sentinelPath).catch(() => undefined);
   } catch (error) {
