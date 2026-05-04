@@ -385,7 +385,7 @@ function usage() {
     "Usage:",
     "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--supersede=<prevSpanId>] [--allow-parallel] [--paths=<comma-separated>] [--override-cap=<int>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--json]",
-    "  node .cclaw/hooks/delegation-record.mjs --repair --span-id=<id> --repair-reason=\"<why>\" [--json]",
+    "  node .cclaw/hooks/delegation-record.mjs --repair --span-id=<id> --repair-reason=\\\"<why>\\\" [--json]",
     "",
     "Allowed --dispatch-surface values:",
     "  " + VALID_DISPATCH_SURFACES.join(", "),
@@ -404,12 +404,14 @@ function usage() {
     "TDD slice phase tagging (v6.11.0):",
     "  --slice=<id>              TDD slice identifier (e.g. S-1) used by the linter to auto-derive the Watched-RED + Vertical Slice Cycle tables.",
     "  --phase=<phase>           one of " + VALID_DELEGATION_PHASES.join(", ") + ". Pair with --slice to record a TDD slice phase event.",
-    "  --refactor-rationale=<t>  required when --phase=refactor-deferred unless --evidence-ref carries the rationale text.",
+    "  --refactor-rationale=<t>  required when --phase=refactor-deferred unless --evidence-ref carries the rationale text. v6.14.0: also paired with --refactor-outcome on phase=green.",
     "  --claim-token=<opaque>    v6.13 — required for worktree-first slice-implementer schedules with --slice (echo on all terminal rows for the span).",
     "  --lane-id=<id>            v6.13 — worktree lane id (ownerLaneId metadata).",
     "  --lease-until=<iso>       v6.13 — ISO8601 lease expiry for reclaim tooling.",
     "  --depends-on=<a,b>       v6.13 — comma-separated plan unit ids for scheduler diagnostics.",
     "  --integration-state=<s>  v6.13 — one of pending|applied|conflict|resolved|abandoned.",
+    "  --refactor-outcome=<m>   v6.14.0 — one of inline|deferred. Folds REFACTOR into the phase=green event so a single row can close RED→GREEN→REFACTOR. Pair --refactor-outcome=deferred with --refactor-rationale.",
+    "  --risk-tier=<t>          v6.14.0 — one of low|medium|high. high triggers integration-overseer in conditional mode.",
     ""
   ].join("\\n") + "\\n");
 }
@@ -580,6 +582,40 @@ function buildRow(args, status, runId, now, options) {
       : undefined;
   const leaseState =
     leasedUntil && status === "scheduled" ? "claimed" : undefined;
+  // v6.14.0: refactorOutcome folds REFACTOR into a phase=green event. We
+  // also accept it on phase=refactor / phase=refactor-deferred for forward
+  // compatibility with controllers that emit it on the legacy lifecycle.
+  // When mode=deferred and a --refactor-rationale is supplied we also
+  // mirror the rationale into evidenceRefs[0] so legacy linters keep
+  // reading evidence (matches the v6.11.0 refactor-deferred behavior).
+  const refactorOutcomeMode =
+    typeof args["refactor-outcome"] === "string"
+      ? args["refactor-outcome"].trim()
+      : "";
+  let refactorOutcome;
+  if (refactorOutcomeMode === "inline" || refactorOutcomeMode === "deferred") {
+    const rationaleRaw =
+      typeof args["refactor-rationale"] === "string"
+        ? args["refactor-rationale"].trim()
+        : "";
+    refactorOutcome = {
+      mode: refactorOutcomeMode,
+      ...(rationaleRaw.length > 0 ? { rationale: rationaleRaw } : {})
+    };
+    if (
+      refactorOutcomeMode === "deferred" &&
+      rationaleRaw.length > 0 &&
+      !resolvedEvidenceRefs.includes(rationaleRaw)
+    ) {
+      resolvedEvidenceRefs = [rationaleRaw, ...resolvedEvidenceRefs];
+    }
+  }
+  const riskTierRaw =
+    typeof args["risk-tier"] === "string" ? args["risk-tier"].trim() : "";
+  const riskTier =
+    riskTierRaw === "low" || riskTierRaw === "medium" || riskTierRaw === "high"
+      ? riskTierRaw
+      : undefined;
   return {
     stage: args.stage,
     agent: args.agent,
@@ -610,7 +646,9 @@ function buildRow(args, status, runId, now, options) {
     leasedUntil,
     leaseState,
     dependsOn,
-    integrationState
+    integrationState,
+    refactorOutcome,
+    riskTier
   };
 }
 
@@ -1179,6 +1217,44 @@ async function main() {
       emitProblems(problems, json, 2);
       return;
     }
+  }
+
+  // v6.14.0 — --refactor-outcome must be one of inline|deferred. When
+  // mode=deferred a rationale is required (either --refactor-rationale or
+  // --evidence-ref carrying the rationale text). --risk-tier must be one of
+  // low|medium|high if provided.
+  if (
+    args["refactor-outcome"] !== undefined &&
+    args["refactor-outcome"] !== "inline" &&
+    args["refactor-outcome"] !== "deferred"
+  ) {
+    problems.push("invalid --refactor-outcome (allowed: inline, deferred)");
+    emitProblems(problems, json, 2);
+    return;
+  }
+  if (args["refactor-outcome"] === "deferred") {
+    const rationaleProvided =
+      typeof args["refactor-rationale"] === "string" && args["refactor-rationale"].trim().length > 0;
+    const evidenceProvided =
+      (typeof args["evidence-ref"] === "string" && args["evidence-ref"].trim().length > 0) ||
+      (Array.isArray(args["evidence-refs"]) && args["evidence-refs"].some(
+        (ref) => typeof ref === "string" && ref.trim().length > 0
+      ));
+    if (!rationaleProvided && !evidenceProvided) {
+      problems.push("--refactor-outcome=deferred requires --refactor-rationale=<text> or --evidence-ref=<text>");
+      emitProblems(problems, json, 2);
+      return;
+    }
+  }
+  if (
+    args["risk-tier"] !== undefined &&
+    args["risk-tier"] !== "low" &&
+    args["risk-tier"] !== "medium" &&
+    args["risk-tier"] !== "high"
+  ) {
+    problems.push("invalid --risk-tier (allowed: low, medium, high)");
+    emitProblems(problems, json, 2);
+    return;
   }
 
   if (args.status === "completed" && args["dispatch-surface"] !== "role-switch") {

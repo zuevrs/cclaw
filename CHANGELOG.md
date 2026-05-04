@@ -1,5 +1,69 @@
 # Changelog
 
+## 6.14.0 — Stream-style parallel TDD with conditional integration
+
+Follow-up to v6.13.1 motivated by W-02 wave timing on `hox`: a 3-slice wave finished in 31m wall-clock but ~14m of that was barrier overhead (5m50s global RED checkpoint idle, 4m56s RED→Phase-B controller overhead, 3m20s mandatory `integration-overseer` post-everything for disjoint paths, ~0.6s real REFACTOR work because all three slices finished as `refactor-deferred`). A reference-system survey (Cursor `/multitask`, Devin, Amp, Copilot `/fleet`, OpenHands, evanflow, Zerg, obra-superpowers, Aider, plus academic prior art) recommended dropping global synchronization barriers in favor of per-lane stream ordering, folding REFACTOR into a flag, and making the integration-overseer dispatch conditional. v6.14.0 ships the recommendations as defaults for new projects; existing `legacyContinuation: true` projects (hox) keep the v6.13.x global-RED behavior with no behavior change.
+
+Confidence levels mirror the research report: items 1–3 high, item 4 medium, opt-in inline DOC low (documented in skill text but not auto-switched).
+
+### Added
+
+- **`flow-state.json` configuration** (`src/flow-state.ts`):
+  - `tddCheckpointMode?: "per-slice" | "global-red"` — controls RED checkpoint enforcement.
+  - `integrationOverseerMode?: "conditional" | "always"` — controls when `integration-overseer` is dispatched after a multi-slice wave.
+  - `effectiveTddCheckpointMode(state)` and `effectiveIntegrationOverseerMode(state)` resolve effective values for legacy state files.
+- **`DelegationEntry.refactorOutcome?: { mode: "inline" | "deferred"; rationale?: string }`** (`src/delegation.ts`) — folds REFACTOR into the `phase=green` lifecycle. The linter accepts `phase=refactor`, `phase=refactor-deferred`, OR `phase=green` carrying `refactorOutcome` as REFACTOR coverage; `mode: "deferred"` requires a rationale (mirrored into `evidenceRefs[0]` for legacy linter compatibility).
+- **`DelegationEntry.riskTier?: "low" | "medium" | "high"`** — copied from the plan slice. Used by `integrationCheckRequired()` so high-risk slices always trigger overseer dispatch.
+- **`integrationCheckRequired(events, fanInAudits?)`** in `src/delegation.ts` — heuristic returning `{ required: boolean; reasons: string[] }`. Triggers (any one): two or more closed slices share import boundaries (first-2-segment directory match on `claimedPaths`); any slice has `riskTier === "high"`; any `cclaw_fanin_conflict` audit row exists. Otherwise verdict is `disjoint-paths` and dispatch may be skipped.
+- **`recordIntegrationOverseerSkipped(projectRoot, params)`** — appends a `cclaw_integration_overseer_skipped` audit row to `delegation-events.jsonl` so the run log stays honest about the decision.
+- **Linter rules** (`src/artifact-linter/tdd.ts`):
+  - `tdd_slice_red_completed_before_green` — per-slice RED-before-GREEN rule used in default `per-slice` mode (cross-lane interleaving allowed).
+  - `tdd_integration_overseer_skipped_by_disjoint_paths` — advisory finding emitted when `conditional` mode skipped the dispatch because `integrationCheckRequired()` returned `required: false`.
+- **`evaluatePerSliceRedBeforeGreen(slices)`** — exported helper backing the new rule.
+- **`delegation-record` flags** (`src/content/hooks.ts`):
+  - `--refactor-outcome=inline|deferred` — folds REFACTOR into a single `phase=green` event.
+  - `--refactor-rationale="<text>"` — paired with `--refactor-outcome=deferred` (also reused by legacy `--phase=refactor-deferred`).
+  - `--risk-tier=low|medium|high` — sets `DelegationEntry.riskTier`.
+
+### Changed
+
+- **Default RED checkpoint becomes per-slice.** `evaluateGlobalRedCheckpoint` is preserved (alias `evaluateRedCheckpoint`) and used only when `tddCheckpointMode === "global-red"`. Linter chooses the rule by mode; the legacy `tdd_red_checkpoint_violation` finding still fires under `global-red`.
+- **`tdd_slice_documenter_missing` softened** — `required: true` only when `discoveryMode === "deep"`, advisory (`required: false`) on `lean` and `guided`. The DOC role still exists; lean/guided controllers MAY invoke `slice-implementer --finalize-doc` inline at GREEN-completion as documented in the TDD skill text.
+- **Integration-overseer dispatch becomes conditional by default.** `integrationOverseerMode === "conditional"` makes `tdd.integration_overseer_missing` advisory unless `integrationCheckRequired()` returns `required: true`. `integrationOverseerMode === "always"` keeps v6.13.x mandatory behavior.
+- **TDD skill text** (`src/content/stages/tdd.ts`) — wave dispatch protocol rewritten as "Per-lane stream: each lane runs RED→GREEN→REFACTOR independently as soon as its `dependsOn` closes." REFACTOR documented as three forms (separate `--phase refactor`, `--phase refactor-deferred --refactor-rationale`, or inline via `--refactor-outcome` on `phase=green`). DOC documented as "parallel mandatory in `deep`, advisory in `lean`/`guided`." Conditional `integration-overseer` rule explained inline. Routing-question rule from v6.13.1 (one confirmation prompt, then no more questions) preserved.
+- **`/cc` skill text** (`src/content/start-command.ts`) — wave dispatch resume no longer waits for a global RED-completion barrier in default `per-slice` mode; per-lane stream resume continues remaining members as soon as their `dependsOn` closes. Conditional integration-overseer rule named explicitly.
+- **`coerceFlowState`** (`src/run-persistence.ts`) — preserves `tddCheckpointMode` and `integrationOverseerMode` across reads via new `coerceTddCheckpointMode` and `coerceIntegrationOverseerMode`.
+- **Pre-existing usage-string bug fix** (`src/content/hooks.ts::delegationRecordScript`) — `--repair-reason="<why>"` line in `usage()` was producing a syntactically invalid JS string in the generated `.cclaw/hooks/delegation-record.mjs`. Escapes corrected so `usage()` is callable on validation-failure paths.
+
+### Migration
+
+- **`legacyContinuation: true` projects** (hox-style): `cclaw-cli sync` auto-sets `tddCheckpointMode: "global-red"` and `integrationOverseerMode: "always"` if either field is unset. Wave protocol is unchanged. No re-runs required.
+- **New / standard projects**: `cclaw-cli sync` auto-sets `tddCheckpointMode: "per-slice"`, `integrationOverseerMode: "conditional"`, and `worktreeExecutionMode: "worktree-first"` if any of the three are unset. A one-line hint is printed naming the applied defaults and how to opt out:
+  ```
+  cclaw: v6.14.0 stream-style defaults applied: tddCheckpointMode=per-slice, integrationOverseerMode=conditional, worktreeExecutionMode=worktree-first. To opt out, edit .cclaw/state/flow-state.json directly or pin the legacy mode (tddCheckpointMode="global-red", integrationOverseerMode="always").
+  ```
+- **Backward compatibility**: `phase=refactor` and `phase=refactor-deferred` events remain valid; existing ledgers continue to validate. `evaluateRedCheckpoint` export remains available as an alias for `evaluateGlobalRedCheckpoint`.
+
+### Reference matchings
+
+- **Cursor `/multitask`** — independent lanes that converge on demand (no global barrier between phases).
+- **Devin** — per-task RED→GREEN ordering enforced per slice, not across slices.
+- **GitHub Copilot `/fleet`** — conditional cross-task review only when fleet members touch overlapping surfaces.
+- **W-02 measurement** — 14m of 31m wall-clock recovered by removing global RED + mandatory overseer + REFACTOR phase pass when the slices are disjoint.
+
+### Tests
+
+- **`tests/unit/delegation-integration-check.test.ts`** — 9 cases covering disjoint paths (no required), shared directory (required), `riskTier=high` (required), `cclaw_fanin_conflict` audit (required), in-flight slices ignored, top-level files single-segment match, multi-segment package directory match, and audit-row generation via `recordIntegrationOverseerSkipped`.
+- **`tests/unit/refactor-outcome.test.ts`** — 6 cases covering `--refactor-outcome=inline`, `=deferred` with rationale (mirrored to `evidenceRefs[0]`), validation failures (deferred without rationale, invalid mode), `--risk-tier=high` round-trip, and `--risk-tier=critical` rejection.
+- **`tests/unit/tdd-checkpoint-mode.test.ts`** — 6 cases covering per-slice mode allowing cross-lane interleave, per-slice mode catching same-slice GREEN-before-RED, slices with only RED or only GREEN, alias `evaluateRedCheckpoint === evaluateGlobalRedCheckpoint`, global-red catching wave violations, per-slice tolerating cross-lane patterns global-red flags.
+- **Updated**: `tests/unit/tdd-slice-documenter-mandatory.test.ts`, `tests/unit/tdd-events-derive.test.ts` (DOC rule now mode-aware), `tests/e2e/tdd-wave-checkpoint.test.ts` (opts into `tddCheckpointMode: "global-red"` to keep exercising the legacy rule).
+
+### Deferred to v6.14.1+
+
+- **Aggregated lanes** (Candidate D from research) — opt-in `--lane-strategy=aggregate-on-overlap`. Out of scope.
+- **Sunset of `legacyContinuation`** — kept; hox depends on it.
+- **Inline slice-documenter** as the default — documented as available (controllers MAY call `slice-implementer --finalize-doc`) but not auto-switched. Slice-documenter isolation has real value.
+
 ## 6.13.1 — Skill-text wave dispatch + mandatory worktree-first GREEN metadata
 
 Follow-up to v6.13.0: real `/cc` runs could stay on the v6.12 single-slice ritual because the controller prioritized routing questions over the managed `## Parallel Execution Plan`, treated lane flags as optional hints, and wave detection only watched `wave-plans/wave-NN.md`. This release unifies wave sources, fixes plan parsing for markdown-bold bullets (`**Members:**`, `**dependsOn:**`, etc.), rewrites TDD/flow-start skill text, adds linters for ignored waves and missing GREEN lane metadata, and surfaces a sync hint when worktree-first mode sees a multi-member parallel plan.

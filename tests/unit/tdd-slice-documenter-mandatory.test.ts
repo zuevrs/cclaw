@@ -196,10 +196,18 @@ async function recordRedGreenRefactor(root: string): Promise<void> {
   });
 }
 
-describe("tdd_slice_documenter_missing — required regardless of discoveryMode (v6.12.0 Phase R)", () => {
-  const modes: DiscoveryMode[] = ["lean", "guided", "deep"];
-  for (const mode of modes) {
-    it(`flags missing phase=doc as required:true on discoveryMode=${mode}`, async () => {
+describe("tdd_slice_documenter_missing — discoveryMode aware (v6.14.0)", () => {
+  // v6.14.0 softens the rule: required only on `deep`, advisory
+  // (`required: false`) on `lean` and `guided`. The DOC role is still
+  // dispatched in deep runs; lean/guided controllers may invoke
+  // slice-implementer --finalize-doc inline.
+  const expectations: Array<{ mode: DiscoveryMode; required: boolean }> = [
+    { mode: "lean", required: false },
+    { mode: "guided", required: false },
+    { mode: "deep", required: true }
+  ];
+  for (const { mode, required } of expectations) {
+    it(`flags missing phase=doc as required=${required} on discoveryMode=${mode}`, async () => {
       const root = await createTempProject(`tdd-doc-required-${mode}`);
       await seed(root, mode);
       await writeArtifacts(root);
@@ -210,7 +218,7 @@ describe("tdd_slice_documenter_missing — required regardless of discoveryMode 
         (f) => f.section === "tdd_slice_documenter_missing"
       );
       expect(finding, `expected tdd_slice_documenter_missing on discoveryMode=${mode}`).toBeDefined();
-      expect(finding?.required).toBe(true);
+      expect(finding?.required).toBe(required);
       expect(finding?.found).toBe(false);
       // The legacy rule id must not reappear.
       const legacy = result.findings.find(

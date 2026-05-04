@@ -118,7 +118,7 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 2. If flow state is missing → guide the user to run \`npx cclaw-cli init\` and stop.
 3. If flow state is only a fresh init placeholder (\`completedStages: []\`, all \`passed\` arrays empty, and no \`00-idea.md\`) → stop and ask for \`/cc <prompt>\` to start a tracked run. Do not create a brainstorm state implicitly.
 4. Otherwise check current stage gates, resume if incomplete, and advance if complete.
-5. **TDD wave dispatch (v6.13.1):** When \`currentStage\` is \`tdd\`, read \`${RUNTIME_ROOT}/artifacts/05-plan.md\` Parallel Execution Plan block and \`${RUNTIME_ROOT}/artifacts/wave-plans/\` **before** any slice-routing question. If an open wave still has multiple ready slices, resume parallel dispatch for the **remaining** members only (do not restart completed slices).
+5. **TDD wave dispatch (v6.14.0 — stream-style):** When \`currentStage\` is \`tdd\`, read \`${RUNTIME_ROOT}/artifacts/05-plan.md\` Parallel Execution Plan block and \`${RUNTIME_ROOT}/artifacts/wave-plans/\` **before** any slice-routing question. If an open wave still has multiple ready slices, resume per-lane stream dispatch for the **remaining** members only (do not restart completed slices). **No global RED checkpoint barrier** in default \`tddCheckpointMode: "per-slice"\` — each lane advances RED→GREEN→REFACTOR as soon as its \`dependsOn\` closes; the linter enforces RED-before-GREEN per slice. Projects with \`legacyContinuation: true\` or explicit \`tddCheckpointMode: "global-red"\` retain the v6.13.x global barrier.
 
 ## Headless mode (CI/automation only)
 
@@ -212,8 +212,8 @@ Progress the tracked flow only when one exists:
 2. If missing, guide the user to run \`npx cclaw-cli init\` and stop.
 3. If it is only a fresh init placeholder (\`completedStages: []\`, no passed gates, and no \`${RUNTIME_ROOT}/artifacts/00-idea.md\`), stop and ask for \`/cc <prompt>\` to start a tracked run. Do not silently create a brainstorm run.
 4. Check gates for \`currentStage\`.
-5. **TDD (v6.13.1):** When \`currentStage\` is \`tdd\`, read \`${RUNTIME_ROOT}/artifacts/05-plan.md\` (managed \`## Parallel Execution Plan\` between \`parallel-exec-managed\` markers) and scan \`${RUNTIME_ROOT}/artifacts/wave-plans/wave-NN.md\` **before** asking which slice runs next. Merge sources in controller memory: Parallel Execution Plan first, wave files second; the same slice must not disagree across sources.
-6. **Wave dispatch resume:** If a wave is partially closed (some members already past GREEN/REFACTOR), continue with the remaining members in parallel; never redo finished lanes.
+5. **TDD (v6.14.0 — stream-style):** When \`currentStage\` is \`tdd\`, read \`${RUNTIME_ROOT}/artifacts/05-plan.md\` (managed \`## Parallel Execution Plan\` between \`parallel-exec-managed\` markers) and scan \`${RUNTIME_ROOT}/artifacts/wave-plans/wave-NN.md\` **before** asking which slice runs next. Merge sources in controller memory: Parallel Execution Plan first, wave files second; the same slice must not disagree across sources.
+6. **Wave dispatch resume (per-lane stream):** If a wave is partially closed (some members already past GREEN/REFACTOR), continue with the remaining members in parallel as soon as their \`dependsOn\` closes — do **not** wait for a global RED-completion barrier in default \`tddCheckpointMode: "per-slice"\`. Never redo finished lanes. Integration-overseer fires only on cross-slice trigger (default \`integrationOverseerMode: "conditional"\`); skipped dispatches must record audit \`cclaw_integration_overseer_skipped\`.
 7. If incomplete → load current stage skill and execute.
 8. If complete → advance to next stage and execute.
 9. If flow is done → report completion.

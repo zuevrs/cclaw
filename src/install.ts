@@ -1185,6 +1185,95 @@ async function applyPlanLegacyContinuationIfNeeded(projectRoot: string): Promise
   }
 }
 
+/**
+ * v6.14.0 — set stream-style defaults on `cclaw-cli sync` and print a
+ * one-line hint when defaults change. Strategy:
+ *
+ * - When `legacyContinuation: true` and `tddCheckpointMode` is unset, force
+ *   `tddCheckpointMode: "global-red"` (preserves hox wave protocol).
+ * - When `legacyContinuation: true` and `integrationOverseerMode` is unset,
+ *   force `integrationOverseerMode: "always"` (preserves v6.13 behavior).
+ * - When `legacyContinuation` is NOT true (new / standard projects) and
+ *   neither field is set, default to `tddCheckpointMode: "per-slice"`,
+ *   `integrationOverseerMode: "conditional"`. Also default
+ *   `worktreeExecutionMode: "worktree-first"` if unset.
+ *
+ * Returns a one-line hint string (or `null` if nothing changed) so callers
+ * can print it through the standard sync hint surface.
+ */
+async function applyV614DefaultsIfNeeded(projectRoot: string): Promise<string | null> {
+  // Defensive read — match `applyTddCutoverIfNeeded`'s pattern (raw +
+  // JSON.parse) so corrupt state is left untouched for the downstream
+  // fail-fast check in `materializeRuntime` (which expects to see the
+  // CorruptFlowStateError surfaced via `ensureRunSystem`). Calling
+  // `readFlowState` directly would quarantine the corrupt file and hide
+  // the failure from the caller.
+  const flowStatePath = runtimePath(projectRoot, "state", "flow-state.json");
+  let flowStateRaw: string;
+  try {
+    flowStateRaw = await fs.readFile(flowStatePath, "utf8");
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(flowStateRaw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  const obj = parsed as Record<string, unknown>;
+  const updates: Record<string, unknown> = {};
+  const summary: string[] = [];
+
+  const tddCheckpointModeSet =
+    obj.tddCheckpointMode === "per-slice" || obj.tddCheckpointMode === "global-red";
+  const integrationOverseerModeSet =
+    obj.integrationOverseerMode === "conditional" || obj.integrationOverseerMode === "always";
+  const worktreeExecutionModeSet =
+    obj.worktreeExecutionMode === "worktree-first" || obj.worktreeExecutionMode === "single-tree";
+  const legacyContinuation = obj.legacyContinuation === true;
+
+  if (legacyContinuation) {
+    if (!tddCheckpointModeSet) {
+      updates.tddCheckpointMode = "global-red";
+      summary.push("tddCheckpointMode=global-red (legacyContinuation)");
+    }
+    if (!integrationOverseerModeSet) {
+      updates.integrationOverseerMode = "always";
+      summary.push("integrationOverseerMode=always (legacyContinuation)");
+    }
+  } else {
+    if (!tddCheckpointModeSet) {
+      updates.tddCheckpointMode = "per-slice";
+      summary.push("tddCheckpointMode=per-slice");
+    }
+    if (!integrationOverseerModeSet) {
+      updates.integrationOverseerMode = "conditional";
+      summary.push("integrationOverseerMode=conditional");
+    }
+    if (!worktreeExecutionModeSet) {
+      updates.worktreeExecutionMode = "worktree-first";
+      summary.push("worktreeExecutionMode=worktree-first");
+    }
+  }
+
+  if (summary.length === 0) {
+    return null;
+  }
+
+  const merged = { ...obj, ...updates };
+  try {
+    await writeFileSafe(flowStatePath, `${JSON.stringify(merged, null, 2)}\n`, { mode: 0o600 });
+  } catch {
+    return null;
+  }
+
+  return `v6.14.0 stream-style defaults applied: ${summary.join(", ")}. To opt out, edit .cclaw/state/flow-state.json directly or pin the legacy mode (tddCheckpointMode="global-red", integrationOverseerMode="always").`;
+}
+
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyFolder of DEPRECATED_UTILITY_SKILL_FOLDERS) {
     await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
@@ -1378,6 +1467,10 @@ async function materializeRuntime(
     if (operation === "sync" || operation === "upgrade") {
       await applyTddCutoverIfNeeded(projectRoot);
       await applyPlanLegacyContinuationIfNeeded(projectRoot);
+      const v614Hint = await applyV614DefaultsIfNeeded(projectRoot);
+      if (v614Hint) {
+        process.stdout.write(`cclaw: ${v614Hint}\n`);
+      }
     }
     try {
       await ensureRunSystem(projectRoot, { createIfMissing: false });

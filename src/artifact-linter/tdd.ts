@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
+  integrationCheckRequired,
   loadTddReadySlicePool,
   readDelegationLedger,
   readDelegationEvents,
@@ -53,7 +54,9 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     findings,
     parsedFrontmatter,
     worktreeExecutionMode,
-    legacyContinuation
+    legacyContinuation,
+    tddCheckpointMode,
+    integrationOverseerMode
   } = ctx;
   void parsedFrontmatter;
 
@@ -176,21 +179,28 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     }
   }
 
-  // v6.12.0 Phase R — slice-documenter coverage is mandatory on every
-  // TDD run regardless of discoveryMode. `discoveryMode` is now strictly
-  // an early-stage knob (brainstorm/scope/design); TDD parallelism must
-  // be uniform across lean/guided/deep so the controller cannot quietly
-  // skip per-slice prose by picking a non-deep mode.
-  void discoveryMode;
+  // v6.14.0 Phase 4 — slice-documenter coverage is mandatory only on
+  // `discoveryMode === "deep"` runs. lean/guided still emit the finding
+  // but as advisory (`required: false`) so the controller can choose to
+  // run a tighter inline-doc pass instead. The DOC role still exists;
+  // the linter just stops blocking the gate on lean/guided. Reference
+  // research report Section 4: "soften slice-documenter mandate".
   if (eventsActive) {
     const docResult = evaluateSliceDocumenterCoverage(slicesByEvents);
     if (docResult.missing.length > 0) {
+      const required = discoveryMode === "deep";
       findings.push({
         section: "tdd_slice_documenter_missing",
-        required: true,
-        rule: "Every TDD slice with a phase=green event must also carry a slice-documenter `phase=doc` event whose evidenceRefs reference `<artifacts-dir>/tdd-slices/S-<id>.md`. The requirement is independent of discoveryMode (v6.12.0 Phase R).",
+        required,
+        rule: required
+          ? "deep mode: every TDD slice with a phase=green event must also carry a slice-documenter `phase=doc` event whose evidenceRefs reference `<artifacts-dir>/tdd-slices/S-<id>.md`."
+          : "lean/guided modes (v6.14.0): the slice-documenter `phase=doc` event is advisory; controllers may use slice-implementer --finalize-doc inline instead. Required only for deep mode.",
         found: false,
-        details: `Slices missing slice-documenter coverage: ${docResult.missing.join(", ")}. Dispatch slice-documenter --slice <id> --phase doc in parallel with slice-implementer --phase green for each slice.`
+        details:
+          `Slices missing slice-documenter coverage: ${docResult.missing.join(", ")}. ` +
+          (required
+            ? "Dispatch slice-documenter --slice <id> --phase doc in parallel with slice-implementer --phase green for each slice."
+            : "Either dispatch slice-documenter --phase doc or call slice-implementer --finalize-doc inline at GREEN-completion.")
       });
     }
   }
@@ -213,23 +223,41 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     }
   }
 
-  // v6.12.0 Phase W — RED checkpoint enforcement. The wave protocol
-  // requires ALL Phase A REDs to land before ANY Phase B GREEN starts.
-  // Enforced per-wave: explicit `wave-plans/wave-NN.md` manifest if
-  // present, otherwise implicit detection via contiguous red blocks
-  // (size >= 2). Sequential per-slice runs (red→green→refactor in a
-  // tight loop) form size-1 implicit waves and are unaffected.
+  // v6.14.0 Phase 1 — RED checkpoint enforcement. The mode is selected
+  // by `flow-state.json::tddCheckpointMode`:
+  //
+  //   - `per-slice` (default for new projects): enforce RED-before-GREEN
+  //     per slice only. No global wave barrier; lanes run RED→GREEN as
+  //     soon as their dependsOn closes. Rule id:
+  //     `tdd_slice_red_completed_before_green`.
+  //   - `global-red` (auto-applied for legacyContinuation): enforce the
+  //     v6.12 wave-batch barrier — every slice in a wave must complete
+  //     phase=red before any slice in the same wave starts phase=green.
+  //     Rule id: `tdd_red_checkpoint_violation` (legacy).
   if (eventsActive) {
-    const waveManifest = await readMergedWaveManifestForCheckpoint(artifactsDir, planRaw);
-    const checkpointResult = evaluateRedCheckpoint(slicesByEvents, waveManifest);
-    if (!checkpointResult.ok) {
-      findings.push({
-        section: "tdd_red_checkpoint_violation",
-        required: true,
-        rule: "Wave Batch Mode (v6.12.0 Phase W): every slice in a wave must complete phase=red before any slice in the same wave starts phase=green. Detected: a phase=green completedTs precedes the last phase=red completedTs of the same wave.",
-        found: false,
-        details: checkpointResult.details
-      });
+    if (tddCheckpointMode === "global-red") {
+      const waveManifest = await readMergedWaveManifestForCheckpoint(artifactsDir, planRaw);
+      const checkpointResult = evaluateGlobalRedCheckpoint(slicesByEvents, waveManifest);
+      if (!checkpointResult.ok) {
+        findings.push({
+          section: "tdd_red_checkpoint_violation",
+          required: true,
+          rule: "Wave Batch Mode (legacy global-red mode, v6.12.0 Phase W): every slice in a wave must complete phase=red before any slice in the same wave starts phase=green. Detected: a phase=green completedTs precedes the last phase=red completedTs of the same wave.",
+          found: false,
+          details: checkpointResult.details
+        });
+      }
+    } else {
+      const perSliceResult = evaluatePerSliceRedBeforeGreen(slicesByEvents);
+      if (!perSliceResult.ok) {
+        findings.push({
+          section: "tdd_slice_red_completed_before_green",
+          required: true,
+          rule: "Stream-style TDD (v6.14.0): each slice's phase=green completedTs must be >= the same slice's last phase=red completedTs. No global wave barrier — lanes run independently.",
+          found: false,
+          details: perSliceResult.details
+        });
+      }
     }
   }
 
@@ -472,15 +500,44 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       completedOverseerRows.length > 0 &&
       (overseerStatusInEvidence || overseerStatusInArtifact);
 
+    // v6.14.0 Phase 3 — conditional integration-overseer dispatch. When
+    // `integrationOverseerMode === "conditional"` and
+    // `integrationCheckRequired()` returns required=false, the gate is
+    // soft (advisory) and an audit-only finding is emitted so the
+    // controller can record the deliberate skip in artifacts.
+    let overseerVerdict: ReturnType<typeof integrationCheckRequired> | null = null;
+    let overseerRequired = true;
+    if (integrationOverseerMode === "conditional") {
+      const eventsForVerdict = runEvents.length > 0 ? runEvents : [];
+      const auditsForVerdict = fanInAudits.filter(
+        (a) => a.runId === delegationLedger.runId
+      );
+      overseerVerdict = integrationCheckRequired(eventsForVerdict, auditsForVerdict);
+      overseerRequired = overseerVerdict.required;
+      if (!overseerVerdict.required) {
+        findings.push({
+          section: "tdd_integration_overseer_skipped_by_disjoint_paths",
+          required: false,
+          rule: "v6.14.0 conditional integration-overseer mode: the heuristic returned `required: false` (disjoint claimedPaths, no high-risk slices, no fan-in conflicts). The controller may skip dispatching `integration-overseer` and emit a `cclaw_integration_overseer_skipped` audit row instead.",
+          found: true,
+          details: `integrationCheckRequired() reasons: ${overseerVerdict.reasons.join(", ")}. Skip is safe — record an audit row via delegation events for traceability.`
+        });
+      }
+    }
+
     findings.push({
       section: "tdd.integration_overseer_missing",
-      required: true,
-      rule: "When fan-out is detected, require completed `integration-overseer` evidence with PASS or PASS_WITH_GAPS.",
+      required: overseerRequired,
+      rule: overseerRequired
+        ? "When fan-out is detected, require completed `integration-overseer` evidence with PASS or PASS_WITH_GAPS."
+        : "v6.14.0 conditional integration-overseer mode: integration-overseer dispatch is advisory because `integrationCheckRequired()` returned required=false. Run it anyway if the run touches new boundaries.",
       found: integrationOverseerFound,
       details: integrationOverseerFound
         ? "integration-overseer completion recorded with PASS/PASS_WITH_GAPS evidence."
         : completedOverseerRows.length === 0
-          ? "Fan-out detected but no completed integration-overseer delegation row exists for active run."
+          ? overseerRequired
+            ? "Fan-out detected but no completed integration-overseer delegation row exists for active run."
+            : "Fan-out detected; integration-overseer not dispatched (conditional mode skipped on disjoint paths). Audit-only."
           : "integration-overseer completion exists, but PASS/PASS_WITH_GAPS evidence is missing in delegation evidenceRefs and artifact text."
     });
   }
@@ -717,20 +774,52 @@ export function evaluateEventsSliceCycle(
       continue;
     }
 
-    if (refactors.length === 0) {
+    // v6.14.0 — refactorOutcome on phase=green satisfies REFACTOR coverage
+    // without a separate phase=refactor / phase=refactor-deferred row.
+    // - mode: "inline" → REFACTOR ran inline as part of GREEN.
+    // - mode: "deferred" → rationale required (carried in evidenceRefs[0]
+    //   by the hook helper so legacy linters keep working).
+    const greenWithOutcome = greens.find(
+      (entry) => entry.refactorOutcome &&
+        (entry.refactorOutcome.mode === "inline" || entry.refactorOutcome.mode === "deferred")
+    );
+
+    if (refactors.length === 0 && !greenWithOutcome) {
       errors.push(`${sliceId}: phase=refactor or phase=refactor-deferred event missing.`);
       findings.push({
         section: `tdd_slice_refactor_missing:${sliceId}`,
         required: true,
-        rule: "Each TDD slice must close with a `phase=refactor` event or a `phase=refactor-deferred` event whose evidenceRefs / refactorRationale captures why refactor was deferred.",
+        rule: "Each TDD slice must close with a `phase=refactor` event, a `phase=refactor-deferred` event whose evidenceRefs / refactorRationale captures why refactor was deferred, OR a `phase=green` event carrying `refactorOutcome` (v6.14.0).",
         found: false,
-        details: `${sliceId}: no phase=refactor or phase=refactor-deferred event.`
+        details: `${sliceId}: no phase=refactor / phase=refactor-deferred event and no refactorOutcome on phase=green.`
+      });
+      continue;
+    }
+
+    if (
+      greenWithOutcome &&
+      greenWithOutcome.refactorOutcome?.mode === "deferred" &&
+      !greenWithOutcome.refactorOutcome.rationale &&
+      !(Array.isArray(greenWithOutcome.evidenceRefs) &&
+        greenWithOutcome.evidenceRefs.some((ref) => typeof ref === "string" && ref.trim().length > 0))
+    ) {
+      errors.push(`${sliceId}: phase=green refactorOutcome=deferred missing rationale.`);
+      findings.push({
+        section: `tdd_slice_refactor_missing:${sliceId}`,
+        required: true,
+        rule: "phase=green refactorOutcome=deferred requires a rationale (via --refactor-rationale or --evidence-ref).",
+        found: false,
+        details: `${sliceId}: phase=green refactorOutcome.mode=deferred recorded without rationale.`
       });
       continue;
     }
 
     const deferred = refactors.find((entry) => entry.phase === "refactor-deferred");
-    if (deferred && refactors.every((entry) => entry.phase === "refactor-deferred")) {
+    if (
+      refactors.length > 0 &&
+      deferred &&
+      refactors.every((entry) => entry.phase === "refactor-deferred")
+    ) {
       const refs = Array.isArray(deferred.evidenceRefs) ? deferred.evidenceRefs : [];
       const hasRationale = refs.some(
         (ref) => typeof ref === "string" && ref.trim().length > 0
@@ -943,20 +1032,27 @@ export async function evaluateWavePlanDispatchIgnored(params: {
 }
 
 /**
- * v6.12.0 Phase W — RED checkpoint enforcement. The wave protocol
- * requires ALL Phase A REDs to land before ANY Phase B GREEN starts.
- * The rule is enforced on a per-wave basis, where a wave is defined by
- * the managed `## Parallel Execution Plan` block in `05-plan.md` and/or
- * `<artifacts-dir>/wave-plans/wave-NN.md` files. When no wave manifest
- * exists, the linter falls back to a conservative implicit detection: a
- * wave is a contiguous run of `phase=red` events with no other-phase
- * events between them; the rule fires only when the implicit wave has
- * 2+ members.
+ * v6.12.0 Phase W (legacy `global-red` mode) — RED checkpoint enforcement.
+ * The wave protocol requires ALL Phase A REDs to land before ANY Phase B
+ * GREEN starts. The rule is enforced on a per-wave basis, where a wave is
+ * defined by the managed `## Parallel Execution Plan` block in
+ * `05-plan.md` and/or `<artifacts-dir>/wave-plans/wave-NN.md` files. When
+ * no wave manifest exists, the linter falls back to a conservative
+ * implicit detection: a wave is a contiguous run of `phase=red` events
+ * with no other-phase events between them; the rule fires only when the
+ * implicit wave has 2+ members.
+ *
+ * v6.14.0: this function powers the `global-red` checkpoint mode. New
+ * projects default to `per-slice` mode (see
+ * `evaluatePerSliceRedBeforeGreen`); `legacyContinuation: true` projects
+ * auto-keep this behavior. Exported under both `evaluateGlobalRedCheckpoint`
+ * (canonical name) and `evaluateRedCheckpoint` (back-compat alias for
+ * existing tests/consumers).
  *
  * @param waveMembers Optional explicit wave manifest. Map key is wave
  * name (e.g. `"W-01"`); value is the set of slice ids in that wave.
  */
-export function evaluateRedCheckpoint(
+export function evaluateGlobalRedCheckpoint(
   slices: Map<string, DelegationEntry[]>,
   waveMembers: Map<string, Set<string>> | null = null
 ): RedCheckpointResult {
@@ -1035,6 +1131,68 @@ export function evaluateRedCheckpoint(
     details:
       `RED checkpoint violation: ${violations.join("; ")}. ` +
       "Dispatch ALL Phase A test-author --phase red calls in one message, verify every phase=red event lands with non-empty evidenceRefs, and only then dispatch Phase B slice-implementer --phase green + slice-documenter --phase doc fan-out."
+  };
+}
+
+/**
+ * Back-compat alias for `evaluateGlobalRedCheckpoint` (v6.12.0 Phase W
+ * behavior). Existing tests/consumers can keep importing
+ * `evaluateRedCheckpoint`. The v6.14.0 stream-style mode uses
+ * `evaluatePerSliceRedBeforeGreen` instead.
+ */
+export const evaluateRedCheckpoint = evaluateGlobalRedCheckpoint;
+
+/**
+ * v6.14.0 — per-slice RED-before-GREEN enforcement (default mode).
+ *
+ * For each slice with both phase=red and phase=green completed events,
+ * fail if any green completedTs precedes the slice's last red completedTs.
+ * No global wave barrier — different slices may freely interleave their
+ * RED/GREEN/REFACTOR phases.
+ *
+ * Note: this is intentionally weaker than `evaluateGlobalRedCheckpoint`
+ * because the W-02 measurement on hox showed ~6 minutes of barrier
+ * overhead when slices were already disjoint (file-overlap scheduler did
+ * the parallelism job). The per-slice rule retains the only invariant
+ * that mattered for correctness: no slice goes GREEN before its own
+ * RED is observed failing.
+ */
+export function evaluatePerSliceRedBeforeGreen(
+  slices: Map<string, DelegationEntry[]>
+): RedCheckpointResult {
+  const violations: string[] = [];
+  for (const [sliceId, rows] of slices.entries()) {
+    const reds = rows.filter((entry) => entry.phase === "red");
+    const greens = rows.filter((entry) => entry.phase === "green");
+    if (reds.length === 0 || greens.length === 0) continue;
+    const redTs = reds
+      .map((entry) => entry.completedTs ?? entry.endTs ?? entry.ts ?? "")
+      .filter((ts) => ts.length > 0)
+      .sort();
+    const greenTs = greens
+      .map((entry) => entry.completedTs ?? entry.endTs ?? entry.ts ?? "")
+      .filter((ts) => ts.length > 0)
+      .sort();
+    if (redTs.length === 0 || greenTs.length === 0) continue;
+    const lastRed = redTs[redTs.length - 1]!;
+    const earliestGreen = greenTs[0]!;
+    if (earliestGreen < lastRed) {
+      violations.push(
+        `${sliceId}: phase=green completedTs (${earliestGreen}) precedes the slice's last phase=red completedTs (${lastRed})`
+      );
+    }
+  }
+  if (violations.length === 0) {
+    return {
+      ok: true,
+      details: `Per-slice RED-before-GREEN holds: ${slices.size} slice(s) checked.`
+    };
+  }
+  return {
+    ok: false,
+    details:
+      `Per-slice RED-before-GREEN violation: ${violations.join("; ")}. ` +
+      "Stream-style TDD requires each slice's RED to land before its own GREEN, but cross-lane interleaving is allowed."
   };
 }
 

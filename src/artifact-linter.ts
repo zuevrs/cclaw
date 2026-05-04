@@ -1,7 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
-import { effectiveWorktreeExecutionMode, type FlowState } from "./flow-state.js";
+import {
+  effectiveIntegrationOverseerMode,
+  effectiveTddCheckpointMode,
+  effectiveWorktreeExecutionMode,
+  type FlowState
+} from "./flow-state.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
 import { readFlowState } from "./run-persistence.js";
@@ -203,6 +208,8 @@ export async function lintArtifact(
   let completedStageMetaForAudit: FlowState["completedStageMeta"];
   let legacyContinuation = false;
   let worktreeExecutionMode: "single-tree" | "worktree-first" = "single-tree";
+  let tddCheckpointMode: "per-slice" | "global-red" = "per-slice";
+  let integrationOverseerMode: "conditional" | "always" = "always";
   try {
     const flowState = await readFlowState(projectRoot);
     const hint = flowState.interactionHints?.[stage];
@@ -214,6 +221,8 @@ export async function lintArtifact(
     completedStageMetaForAudit = flowState.completedStageMeta;
     legacyContinuation = flowState.legacyContinuation === true;
     worktreeExecutionMode = effectiveWorktreeExecutionMode(flowState);
+    tddCheckpointMode = effectiveTddCheckpointMode(flowState);
+    integrationOverseerMode = effectiveIntegrationOverseerMode(flowState);
   } catch {
     activeStageFlags = [];
     discoveryMode = "guided";
@@ -223,6 +232,8 @@ export async function lintArtifact(
     completedStageMetaForAudit = undefined;
     legacyContinuation = false;
     worktreeExecutionMode = "single-tree";
+    tddCheckpointMode = "per-slice";
+    integrationOverseerMode = "always";
   }
   for (const extra of options.extraStageFlags ?? []) {
     if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
@@ -364,7 +375,9 @@ export async function lintArtifact(
     activeStageFlags,
     taskClass,
     legacyContinuation,
-    worktreeExecutionMode
+    worktreeExecutionMode,
+    tddCheckpointMode,
+    integrationOverseerMode
   };
 
   switch (stage) {
