@@ -331,24 +331,31 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       "resolve-conflict"
     ]);
 
-    // v6.14.2 — under `legacyContinuation: true` AND a stamped
-    // boundary, exempt closed slices that NEVER recorded ANY of the
-    // three worktree-first metadata fields. This is the "all-or-
-    // nothing legacy" rule from v6.14.2 Fix 3: partial-metadata
-    // slices stay flagged (a real bug), but slices that pre-date
-    // the worktree-first flip get amnesty.
-    const sliceWorktreeMetaState = computeSliceWorktreeMetaState(runEvents);
+    // v6.14.3 — under `legacyContinuation: true` AND a stamped
+    // boundary, exempt every slice closed at or before
+    // `tddWorktreeCutoverSliceId`. The cutover boundary itself is the
+    // contract: slices ≤ boundary were closed before the
+    // worktree-first metadata mandate took effect, so we trust the
+    // boundary as authoritative and do not require the slice to have
+    // recorded zero metadata across all rows.
+    //
+    // The earlier v6.14.2 "all-or-nothing" rule rejected the common
+    // hox-shape pattern where the GREEN row carries claim/lane/lease
+    // (added on the v6.14.x worktree-first flip) but a later
+    // `refactor-deferred` terminal row does not. That partial-
+    // metadata layout is the operator-visible signature of the
+    // failure mode this exemption was introduced to fix; flagging it
+    // again under a different code defeated the entire migration.
+    //
+    // Operators who want a strict gate can opt out by clearing
+    // `legacyContinuation` (or omitting `tddWorktreeCutoverSliceId`)
+    // — both fields are explicit, persisted, and operator-editable.
     const isExemptLegacySlice = (sliceId: string): boolean => {
       if (!legacyContinuation) return false;
       if (worktreeCutoverBoundary === null) return false;
       const n = parseSliceNumber(sliceId);
       if (n === null) return false;
-      if (n > worktreeCutoverBoundary) return false;
-      const meta = sliceWorktreeMetaState.get(sliceId);
-      if (!meta) return true; // no slice-implementer rows at all → fully legacy
-      // Exempt only when the slice carries ZERO worktree fields across
-      // all rows. Partial metadata stays flagged.
-      return !meta.anyMeta;
+      return n <= worktreeCutoverBoundary;
     };
 
     const missingGreenMeta = new Set<string>();
@@ -1492,31 +1499,6 @@ function pickEventTs(rows: DelegationEntry[]): string | undefined {
     if (typeof ts === "string" && ts.length > 0) return ts;
   }
   return undefined;
-}
-
-/**
- * v6.14.2 — for each slice id appearing in `slice-implementer` rows of
- * the active run, record whether ANY row carried at least one of the
- * three worktree-first metadata fields (`claimToken`, `ownerLaneId`,
- * `leasedUntil`). Used by `isExemptLegacySlice` to enforce the "all-or-
- * nothing legacy" rule: only slices with NO worktree fields anywhere
- * in their rows qualify for the legacyContinuation amnesty.
- */
-function computeSliceWorktreeMetaState(
-  events: DelegationEntry[]
-): Map<string, { anyMeta: boolean }> {
-  const out = new Map<string, { anyMeta: boolean }>();
-  for (const ev of events) {
-    if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
-    if (typeof ev.sliceId !== "string") continue;
-    const tok = ev.claimToken?.trim() ?? "";
-    const lane = ev.ownerLaneId?.trim() ?? "";
-    const lease = ev.leasedUntil?.trim() ?? "";
-    const anyHere = tok.length > 0 || lane.length > 0 || lease.length > 0;
-    const prev = out.get(ev.sliceId) ?? { anyMeta: false };
-    out.set(ev.sliceId, { anyMeta: prev.anyMeta || anyHere });
-  }
-  return out;
 }
 
 /**

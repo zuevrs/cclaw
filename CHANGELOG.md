@@ -1,5 +1,52 @@
 # Changelog
 
+## 6.14.3 — Legacy amnesty hardening + sidecar refresh on sync
+
+This is a hot-patch on top of v6.14.2 that fixes two issues surfaced by the live `npx cclaw-cli@6.14.2 upgrade && sync` migration on the hox project. Both are tightly scoped to the v6.14.2 sync/linter changes; no skill text or hook contract changes.
+
+### Fix A — `applyV614DefaultsIfNeeded` / `applyV6142WorktreeCutoverIfNeeded` / `applyTddCutoverIfNeeded` now refresh the SHA256 sidecar
+
+Under v6.14.2 these three sync-time mutators wrote `flow-state.json` via `writeFileSafe` directly, leaving `.cclaw/.flow-state.guard.json` pointing at the *pre-stamp* digest. The first guarded hook after `sync`/`upgrade` (e.g. `cclaw internal verify-current-state`, `advance-stage`, `start-flow`) then failed with:
+
+```
+flow-state guard mismatch: <runId>
+expected sha: <pre-stamp>
+actual sha:   <post-stamp>
+last writer:  flow-state-repair@…
+do not edit flow-state.json by hand. To recover, run:
+  cclaw-cli internal flow-state-repair --reason "manual_edit_recovery"
+```
+
+even though the operator never edited the file. v6.14.3 routes all three writers through `writeFlowState({ allowReset: true, writerSubsystem: ... })` so the sidecar is recomputed in the same locked operation. The `writerSubsystem` audit values are `sync-v6.12-tdd-cutover-stamp`, `sync-v6.14.2-stream-defaults`, and `sync-v6.14.2-worktree-cutover-stamp` so the repair-log audit trail names which sync step touched the file.
+
+### Fix B — Legacy worktree exemption no longer requires *zero* metadata across all rows
+
+v6.14.2 enforced an "all-or-nothing" rule in `src/artifact-linter/tdd.ts::isExemptLegacySlice`: a slice ≤ `tddWorktreeCutoverSliceId` qualified for amnesty *only* if every `slice-implementer` row for that slice recorded **zero** worktree-first metadata (no claim token, no lane id, no lease). The realistic hox-shape pattern carries the metadata on the GREEN row (added on the v6.14.x worktree-first flip) but lacks it on the later `refactor-deferred` terminal row — partial metadata, so the slice stayed flagged under three required findings (`tdd_slice_lane_metadata_missing`, `tdd_slice_claim_token_missing`, `tdd_lease_expired_unreclaimed`) even after `cclaw-cli sync` stamped the cutover boundary.
+
+v6.14.3 drops the partial-metadata qualifier entirely. The rule is now: *if `legacyContinuation: true` AND the slice number is ≤ `tddWorktreeCutoverSliceId` (or `tddCutoverSliceId` fallback), the slice is exempt — period.* Slices ABOVE the boundary continue to enforce all three required findings, so post-cutover bugs are still caught. The dead `computeSliceWorktreeMetaState` helper was removed.
+
+### Tests
+
+`tests/unit/v6-14-2-features.test.ts` gains two new cases under `v6.14.3 Fix 3 follow-up — legacy worktree exemption covers partial-metadata slices`:
+
+- *does NOT flag tdd_slice_claim_token_missing for slices ≤ tddWorktreeCutoverSliceId even when GREEN carried metadata but a later terminal row did not* — exercises the exact hox-shape S-14/S-15/S-16 pattern.
+- *still flags slices ABOVE tddWorktreeCutoverSliceId so post-cutover bugs are not hidden* — confirms S-17 keeps emitting `tdd_slice_claim_token_missing` (required: true) when its terminal row lacks a claim token.
+
+The `tdd-slice-lane-metadata-linter.test.ts` strict-enforcement tests (no `legacyContinuation`) still pass unchanged.
+
+### Migration impact for hox-shape projects already on v6.14.2
+
+Projects that have already run `npx cclaw-cli@6.14.2 upgrade && sync` and now see the guard-mismatch error need a one-time manual repair before proceeding:
+
+```bash
+npx cclaw-cli@6.14.3 upgrade
+npx cclaw-cli@6.14.3 sync
+# If the guard sidecar is still out of date from the v6.14.2 sync run:
+npx cclaw-cli@6.14.3 internal flow-state-repair --reason="v6142_upgrade_post_stamp"
+```
+
+Fresh installs and projects upgrading directly from ≤v6.14.1 to v6.14.3 do not need the repair step — sync/upgrade keep the sidecar in lockstep on first write.
+
 ## 6.14.2 — Controller discipline (wave-status discovery, cutover semantics, legacy amnesty, GREEN evidence freshness, mode-field writers)
 
 Real-world hox `/cc` runs on top of v6.14.1 surfaced four concrete failure modes that the v6.14.0/v6.14.1 stream-mode runtime + skill text could not catch on their own:

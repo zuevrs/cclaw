@@ -1121,8 +1121,23 @@ async function applyTddCutoverIfNeeded(projectRoot: string): Promise<void> {
   if (typeof obj.tddCutoverSliceId === "string" && obj.tddCutoverSliceId.length > 0) {
     return;
   }
-  obj.tddCutoverSliceId = cutoverSliceId;
-  await writeFileSafe(flowStatePath, `${JSON.stringify(obj, null, 2)}\n`, { mode: 0o600 });
+  // v6.14.3 — refresh the SHA256 sidecar by writing through
+  // `writeFlowState`. The previous direct `writeFileSafe` invocation
+  // left the sidecar stale, so the very next guarded hook on a synced
+  // legacy project rejected its own `tddCutoverSliceId` stamp.
+  try {
+    const state = await readFlowState(projectRoot);
+    await writeFlowState(
+      projectRoot,
+      { ...state, tddCutoverSliceId: cutoverSliceId },
+      {
+        allowReset: true,
+        writerSubsystem: "sync-v6.12-tdd-cutover-stamp"
+      }
+    );
+  } catch {
+    // Best-effort: corrupt/missing state is handled elsewhere on sync.
+  }
 }
 
 const V613_LEGACY_PLAN_BANNER =
@@ -1277,9 +1292,20 @@ async function applyV614DefaultsIfNeeded(projectRoot: string): Promise<string | 
     return null;
   }
 
-  const merged = { ...obj, ...updates };
+  // v6.14.3 — refresh the SHA256 sidecar in lockstep so guarded reads
+  // (verify-current-state, advance-stage, etc.) don't trip a guard
+  // mismatch immediately after `cclaw-cli sync`/`upgrade` writes the
+  // v6.14.2 stream-style defaults.
   try {
-    await writeFileSafe(flowStatePath, `${JSON.stringify(merged, null, 2)}\n`, { mode: 0o600 });
+    const state = await readFlowState(projectRoot);
+    await writeFlowState(
+      projectRoot,
+      { ...state, ...(updates as Partial<FlowState>) },
+      {
+        allowReset: true,
+        writerSubsystem: "sync-v6.14.2-stream-defaults"
+      }
+    );
   } catch {
     return null;
   }
@@ -1387,11 +1413,23 @@ async function applyV6142WorktreeCutoverIfNeeded(
   }
   if (!stamped) return null;
 
-  const merged = { ...obj, tddWorktreeCutoverSliceId: stamped };
+  // v6.14.3 — go through `writeFlowState` so the SHA256 sidecar
+  // (`.cclaw/.flow-state.guard.json`) is refreshed in lockstep with
+  // the on-disk flow-state.json. The previous v6.14.2 implementation
+  // wrote the field via `writeFileSafe` directly, which left the
+  // sidecar pointing at the pre-stamp digest; the next guarded hook
+  // (e.g. `cclaw internal verify-current-state`) then failed with
+  // `flow-state guard mismatch` and demanded a manual repair.
   try {
-    await writeFileSafe(flowStatePath, `${JSON.stringify(merged, null, 2)}\n`, {
-      mode: 0o600
-    });
+    const state = await readFlowState(projectRoot);
+    await writeFlowState(
+      projectRoot,
+      { ...state, tddWorktreeCutoverSliceId: stamped },
+      {
+        allowReset: true,
+        writerSubsystem: "sync-v6.14.2-worktree-cutover-stamp"
+      }
+    );
   } catch {
     return null;
   }
