@@ -110,8 +110,73 @@ export function extractMembersListFromLine(trimmedLine: string): string | null {
 }
 
 /**
- * Parse `## Parallel Execution Plan` managed block for wave headings and Members lines.
- * Malformed member tokens are skipped. Duplicate slice ids in one plan source throw.
+ * v6.14.4 — extract a `(sliceId, unitId)` pair from a markdown table data
+ * row whose first column is an `S-NN` token. Used by the wave parser to
+ * recognize the table-format Parallel Execution Plan that hox-shape
+ * projects emit alongside (or instead of) the legacy `**Members:**`
+ * bullet line.
+ *
+ * Rules:
+ * - The line must start with `|` (after trimming).
+ * - Column 1 (after stripping markdown noise) must match `^S-(\d+)$` —
+ *   header rows (`| sliceId | …`) and separator rows (`|---|---|…`) are
+ *   silently skipped.
+ * - Column 2, when present and non-empty, becomes the `unitId`
+ *   verbatim (after stripping whitespace + backticks/quotes/brackets).
+ *   This preserves the hox convention of recording task ids
+ *   (`T-010`, `T-008a`, …) in the `unit` column without forcing a
+ *   `U-NN` derivation.
+ * - When column 2 is absent or empty, fall back to the legacy
+ *   `S-NN → U-NN` derivation so the existing `**Members:**` parser path
+ *   stays bit-identical for non-table plans.
+ */
+export function parseTableRowMember(
+  trimmedLine: string
+): ParsedParallelWaveMember | null {
+  if (!trimmedLine.startsWith("|")) return null;
+  const inner = trimmedLine.replace(/^\|/u, "").replace(/\|\s*$/u, "");
+  if (inner.length === 0) return null;
+  const cells = inner.split("|").map((cell) => cell.trim());
+  if (cells.length === 0) return null;
+  const stripDecorations = (raw: string): string =>
+    raw.replace(/^[`"'[\]()]+|[`"'[\]()]+$/gu, "").trim();
+  const col1 = stripDecorations(cells[0]!);
+  const sliceMatch = /^S-(\d+)$/u.exec(col1);
+  if (!sliceMatch) return null;
+  const sliceNum = sliceMatch[1]!;
+  const sliceId = `S-${sliceNum}`;
+  let unitId = `U-${sliceNum}`;
+  if (cells.length >= 2) {
+    const col2 = stripDecorations(cells[1]!);
+    if (col2.length > 0) {
+      const normalized = tokenToSliceAndUnit(col2);
+      unitId = normalized ? normalized.unitId : col2;
+    }
+  }
+  return { sliceId, unitId };
+}
+
+/**
+ * Parse `## Parallel Execution Plan` managed block for wave headings and
+ * member declarations. Recognizes BOTH the legacy `**Members:**` /
+ * `Members:` line shape AND the markdown-table shape
+ * (`| sliceId | unit | dependsOn | …`) used by hox-shape projects and by
+ * any plan written by `cclaw-cli sync` after v6.13.x.
+ *
+ * Wave headings accepted (case-insensitive, trailing text allowed):
+ * - `### Wave 04`
+ * - `### Wave W-04`
+ * - `### Wave W-04 — после успешного fan-in W-03 (5 lanes …)`
+ *
+ * Within a single wave the parser dedupes by `sliceId`: if the same
+ * slice appears in both `**Members:**` and a table row, the first
+ * occurrence wins (line-order). Cross-wave duplicates still throw
+ * `WavePlanDuplicateSliceError`.
+ *
+ * Malformed member tokens are skipped. Empty waves (heading present
+ * but neither a Members line nor any matching `| S-NN |` row found
+ * before the next heading) are RETURNED with `members: []` so callers
+ * can surface the boundary; classification is up to the caller.
  */
 export function parseParallelExecutionPlanWaves(planMarkdown: string): ParsedParallelWave[] {
   const body = extractParallelExecutionManagedBody(planMarkdown);
@@ -120,24 +185,66 @@ export function parseParallelExecutionPlanWaves(planMarkdown: string): ParsedPar
   const waves: ParsedParallelWave[] = [];
   let current: ParsedParallelWave | null = null;
   const seenSlices = new Set<string>();
+  let inWaveSlicesSeen = new Set<string>();
 
   const flushCurrent = (): void => {
-    if (current && current.members.length > 0) {
+    if (current) {
       waves.push(current);
     }
   };
 
+  /**
+   * Strict add: throw on duplicates within the same wave OR across waves.
+   * Used for the `**Members:**` path so v6.13.1's duplicate-detection
+   * contract is preserved bit-identically.
+   */
+  const addMemberStrict = (member: ParsedParallelWaveMember): void => {
+    if (!current) return;
+    if (
+      inWaveSlicesSeen.has(member.sliceId) ||
+      seenSlices.has(member.sliceId)
+    ) {
+      throw new WavePlanDuplicateSliceError(
+        `duplicate slice ${member.sliceId} in Parallel Execution Plan managed block`
+      );
+    }
+    seenSlices.add(member.sliceId);
+    inWaveSlicesSeen.add(member.sliceId);
+    current.members.push(member);
+  };
+
+  /**
+   * Lenient add: silently dedupe duplicates within the same wave (so the
+   * documented "Members + table both present" case keeps the Members
+   * declaration as authoritative); still throw on cross-wave duplicates
+   * to surface real plan-authoring bugs.
+   */
+  const addMemberDedupInWave = (member: ParsedParallelWaveMember): void => {
+    if (!current) return;
+    if (inWaveSlicesSeen.has(member.sliceId)) return;
+    if (seenSlices.has(member.sliceId)) {
+      throw new WavePlanDuplicateSliceError(
+        `duplicate slice ${member.sliceId} in Parallel Execution Plan managed block`
+      );
+    }
+    seenSlices.add(member.sliceId);
+    inWaveSlicesSeen.add(member.sliceId);
+    current.members.push(member);
+  };
+
   for (const rawLine of lines) {
     const trimmed = rawLine.trim();
-    const waveMatch = /^###\s+Wave\s+(\d+)\s*$/iu.exec(trimmed);
+    const waveMatch = /^###\s+Wave\s+(?:W-)?(\d+)\b/iu.exec(trimmed);
     if (waveMatch) {
       flushCurrent();
       const n = waveMatch[1]!;
       current = { waveId: `W-${n.padStart(2, "0")}`, members: [] };
+      inWaveSlicesSeen = new Set<string>();
       continue;
     }
+    if (!current) continue;
     const membersCsv = extractMembersListFromLine(trimmed);
-    if (membersCsv !== null && current) {
+    if (membersCsv !== null) {
       const parts = membersCsv
         .split(/,/u)
         .map((p) => p.trim())
@@ -145,14 +252,13 @@ export function parseParallelExecutionPlanWaves(planMarkdown: string): ParsedPar
       for (const part of parts) {
         const ids = tokenToSliceAndUnit(part);
         if (!ids) continue;
-        if (seenSlices.has(ids.sliceId)) {
-          throw new WavePlanDuplicateSliceError(
-            `duplicate slice ${ids.sliceId} in Parallel Execution Plan managed block`
-          );
-        }
-        seenSlices.add(ids.sliceId);
-        current.members.push(ids);
+        addMemberStrict(ids);
       }
+      continue;
+    }
+    const tableMember = parseTableRowMember(trimmed);
+    if (tableMember) {
+      addMemberDedupInWave(tableMember);
     }
   }
   flushCurrent();
