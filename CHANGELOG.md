@@ -1,5 +1,67 @@
 # Changelog
 
+## 6.14.4 — Table-format wave parser + stream-mode lease closure
+
+This is a SURGICAL hot-patch on top of v6.14.3 that fixes two production bugs surfaced by the live `npx cclaw-cli@6.14.3 upgrade && sync` migration on the hox project. Both are tightly scoped: no new helpers, no new flags, no skill-text changes (the v6.14.2 wording is correct — the parser plumbing underneath was the actual blocker).
+
+### Bug 1 — `parseParallelExecutionPlanWaves` now accepts the markdown-table wave shape
+
+The v6.14.2 wave-status helper (`cclaw-cli internal wave-status --json`) and four other call sites (`delegation.ts`, `artifact-linter/tdd.ts`, `install.ts`, `wave-status.ts`) all pass the managed `<!-- parallel-exec-managed-start -->` block through `src/internal/plan-split-waves.ts::parseParallelExecutionPlanWaves`. Up to v6.14.3 that parser only recognized two patterns:
+
+1. `### Wave 04` headings (no trailing text, no `W-` prefix).
+2. `**Members:** S-1, S-2, …` (or plain `Members: S-1, S-2`) bullet lines.
+
+Hox-shape `05-plan.md` (and any plan written by `cclaw-cli sync` for projects with table-style waves) uses neither: the heading is `### Wave W-04 — после успешного fan-in W-03 (5 lanes, все disjoint)` and members are declared inside a 7-column markdown table:
+
+```
+| sliceId | unit | dependsOn | claimedPaths | parallelizable | riskTier | lane |
+|---|---|---|---|---|---|---|
+| S-18 | T-010 | [] | .gitignore | true | low | gitignore |
+| S-19 | T-011 | [] | rustfmt.toml, .cargo/config.toml | true | low | rustfmt |
+…
+```
+
+Result: `wave-status --json` against hox returned `waves: []` and the `wave_plan_managed_block_missing` warning, even though the block contained 4 fully-populated waves (W-02..W-05). This made the v6.14.2 Fix 1 helper non-functional in production. Because the same parser is used to derive lane metadata in `delegation.ts`, the `tdd_slice_lane_metadata_missing` linter and the `applyV6142WorktreeCutoverIfNeeded` migration also went silently noisy on table-format projects.
+
+v6.14.4 extends the parser:
+
+- **Heading regex relaxed** — accepts `### Wave 04`, `### Wave W-04`, and `### Wave W-04 — trailing text` (case-insensitive). The `(?:W-)?(\d+)` group strips an optional `W-` prefix; the trailing-text region uses a word-boundary anchor instead of end-of-line.
+- **`parseTableRowMember` (new helper)** — exported for testing. Takes a trimmed markdown-table row, returns `{ sliceId, unitId } | null`. Header rows (`| sliceId |`), separator rows (`|---|`), and rows whose first column is not `S-NN` are skipped silently. Column 2 (when present and non-empty) becomes the `unitId` verbatim, preserving hox's convention of recording task ids (`T-010`, `T-008a`, …) in the unit column. When column 2 is absent or empty, the legacy `S-NN → U-NN` derivation is used so non-table plans are bit-identical to v6.14.3.
+- **Mixed format dedup** — when both `**Members:**` and a table reference the same slice in the same wave, the `**Members:**` declaration wins (line-order). Cross-wave duplicates still throw `WavePlanDuplicateSliceError`.
+- **Empty waves preserved** — a heading-only wave (or a table with header rows but no `| S-NN |` data rows) is now returned with `members: []` instead of being silently dropped, so callers can surface the boundary explicitly.
+
+The fix flows through to all five call sites without any change to their API.
+
+### Bug 2 — `computeClosedBeforeLeaseExpiry` now recognizes stream-mode (per-slice) closure
+
+Under `tddCheckpointMode: "per-slice"` (the default for fresh and upgraded `legacyContinuation: true` projects since v6.14.2), GREEN-only closure with `refactorOutcome` folded inline IS the slice's terminal row — no separate `phase=refactor` / `phase=refactor-deferred` / `phase=resolve-conflict` row is emitted. The wave-status helper already understood this (see `src/internal/wave-status.ts` lines ~200, ~220), but the lease-closure-detection helper used by the `tdd_lease_expired_unreclaimed` advisory in `src/artifact-linter/tdd.ts::computeClosedBeforeLeaseExpiry` did not.
+
+Symptom: hox's S-17 has a `phase=green status=completed` event with `refactorOutcome: { mode: "deferred", rationale: "…" }` (visible in `.cclaw/state/delegation-events.jsonl`). S-17 is post-cutover (above `tddWorktreeCutoverSliceId: "S-16"`) so the legacy amnesty correctly does NOT apply. After the lease expired (1 hour after `completedTs`), `verify-current-state` started flagging `tdd_lease_expired_unreclaimed: S-17` as a required finding even though the slice was already closed by the green+refactorOutcome row.
+
+v6.14.4 mirrors the same predicate already used in `wave-status.ts`:
+
+- A `phase=green status=completed` event with `refactorOutcome.mode === "inline"` OR `"deferred"` is now treated as a terminal closure for the slice, with `completedTs` as the closure timestamp. If the closure timestamp precedes the latest `leasedUntil` for that slice, the slice goes into the `closedBeforeLeaseExpiry` set and the lease-expiry-unreclaimed advisory is exempted (it emits the `_legacy_exempt` advisory instead).
+- All previously-recognized terminal phases (`refactor`, `refactor-deferred`, `resolve-conflict`) keep their current behavior — this is purely additive.
+
+This is a closure-detection extension, NOT a new audit kind. No flag, no skill text change.
+
+### Tests added
+
+- **`tests/unit/parallel-exec-plan-parser.test.ts`** — eight new cases under `parseTableRowMember (v6.14.4)` and `parseParallelExecutionPlanWaves — markdown-table format (v6.14.4)`. The W-02..W-05 fixture is a literal copy of hox `.cclaw/artifacts/05-plan.md` lines 1363-1423 (not a synthesized abbreviation), specifically because v6.14.2 / v6.14.3 shipped the parser bug despite passing unit tests on hand-written `**Members:**` fixtures. Mixed-format / dedup / cross-wave-duplicate / empty-table / `dependsOn:[S-21]` brackets / `### Wave W-04 — trailing text` cases all use real-shape inputs.
+- **`tests/e2e/wave-status-hox-shape.test.ts`** (new) — drives `runWaveStatus` end-to-end against the literal hox managed block. Asserts (a) `report.waves.length === 4`, (b) `W-04.members === ["S-18","S-19","S-20","S-21","S-22"]`, (c) `report.warnings` does NOT contain `wave_plan_managed_block_missing`, (d) `nextDispatch.waveId === "W-02"` initially, (e) advances to `W-04` once W-02/W-03 are closed via stream-mode (green+refactorOutcome) events. This is the regression test the v6.14.2 release should have shipped with — the operator-side GO/NO-GO check is now part of the CI suite.
+- **`tests/unit/v6-14-4-stream-mode-lease-closure.test.ts`** (new) — four cases covering Bug 2: (1) `phase=green refactorOutcome.mode=inline` → no `tdd_lease_expired_unreclaimed`. (2) `phase=green refactorOutcome.mode=deferred` (literal hox S-17 shape) → no finding. (3) `phase=green` without `refactorOutcome` → still flagged (genuinely-stuck slice). (4) Legacy v6.13 separate `phase=refactor-deferred` row → still recognized (regression).
+
+### Migration impact
+
+None. Projects already on v6.14.3 should run:
+
+```bash
+npx cclaw-cli@6.14.4 upgrade
+npx cclaw-cli sync
+```
+
+There are no new flow-state fields, no sidecar resets, and no skill-text rewrites. After upgrade, `cclaw-cli internal wave-status --json` will return the correct wave list for table-format plans (was previously returning `waves: []`), and `verify-current-state` will stop flagging `tdd_lease_expired_unreclaimed` for slices closed via stream-mode green+refactorOutcome rows.
+
 ## 6.14.3 — Legacy amnesty hardening + sidecar refresh on sync
 
 This is a hot-patch on top of v6.14.2 that fixes two issues surfaced by the live `npx cclaw-cli@6.14.2 upgrade && sync` migration on the hox project. Both are tightly scoped to the v6.14.2 sync/linter changes; no skill text or hook contract changes.

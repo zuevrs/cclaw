@@ -1502,11 +1502,19 @@ function pickEventTs(rows: DelegationEntry[]): string | undefined {
 }
 
 /**
- * v6.14.2 — slices whose terminal `refactor` / `refactor-deferred` /
- * `resolve-conflict` row recorded a `completedTs` that PRECEDES the
- * latest `leasedUntil` for the same slice. The lease was never
- * reclaimed but the wave closed in time; the missing audit row is
- * advisory bookkeeping, not a correctness failure.
+ * v6.14.2 — slices whose terminal closure event recorded a `completedTs`
+ * that PRECEDES the latest `leasedUntil` for the same slice. The lease
+ * was never reclaimed but the wave closed in time; the missing audit
+ * row is advisory bookkeeping, not a correctness failure.
+ *
+ * v6.14.4 — also recognize stream-mode (per-slice checkpoint) closure:
+ * a `phase=green status=completed` row carrying `refactorOutcome`
+ * (`inline` or `deferred`) IS the slice closure. Without this, every
+ * stream-mode slice incorrectly fired `tdd_lease_expired_unreclaimed`
+ * once its lease expired, even though the slice was already closed
+ * (this mirrors the same predicate already used in
+ * `src/internal/wave-status.ts` for `closedSlices` tracking — same
+ * decision, just now applied to lease-closure detection).
  */
 function computeClosedBeforeLeaseExpiry(events: DelegationEntry[]): Set<string> {
   const terminalPhases = new Set([
@@ -1516,6 +1524,16 @@ function computeClosedBeforeLeaseExpiry(events: DelegationEntry[]): Set<string> 
   ]);
   const lastLease = new Map<string, number>();
   const earliestTerminal = new Map<string, number>();
+
+  const recordTerminal = (sliceId: string, completedTs: string): void => {
+    const ts = Date.parse(completedTs);
+    if (!Number.isFinite(ts)) return;
+    const prev = earliestTerminal.get(sliceId);
+    if (prev === undefined || ts < prev) {
+      earliestTerminal.set(sliceId, ts);
+    }
+  };
+
   for (const ev of events) {
     if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
     if (typeof ev.sliceId !== "string") continue;
@@ -1528,18 +1546,20 @@ function computeClosedBeforeLeaseExpiry(events: DelegationEntry[]): Set<string> 
         }
       }
     }
-    if (
-      ev.status === "completed" &&
-      typeof ev.phase === "string" &&
-      terminalPhases.has(ev.phase) &&
-      typeof ev.completedTs === "string"
-    ) {
-      const ts = Date.parse(ev.completedTs);
-      if (Number.isFinite(ts)) {
-        const prev = earliestTerminal.get(ev.sliceId);
-        if (prev === undefined || ts < prev) {
-          earliestTerminal.set(ev.sliceId, ts);
-        }
+    if (ev.status !== "completed" || typeof ev.completedTs !== "string") {
+      continue;
+    }
+    if (typeof ev.phase !== "string") continue;
+    if (terminalPhases.has(ev.phase)) {
+      recordTerminal(ev.sliceId, ev.completedTs);
+      continue;
+    }
+    // v6.14.4 — stream-mode closure: GREEN-only with refactorOutcome
+    // folded inline IS the slice's terminal row.
+    if (ev.phase === "green" && ev.refactorOutcome) {
+      const mode = ev.refactorOutcome.mode;
+      if (mode === "inline" || mode === "deferred") {
+        recordTerminal(ev.sliceId, ev.completedTs);
       }
     }
   }
