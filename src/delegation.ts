@@ -13,7 +13,8 @@ import {
   type MandatoryDelegationTaskClass
 } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
-import type { FlowState } from "./flow-state.js";
+import { effectiveWorktreeExecutionMode, type FlowState } from "./flow-state.js";
+import { compareCanonicalUnitIds } from "./internal/plan-split-waves.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -217,7 +218,30 @@ export type DelegationEntry = {
    * keep in sync with the inline copy in
    * `src/content/hooks.ts::delegationRecordScript`.
    */
-  phase?: "red" | "green" | "refactor" | "refactor-deferred" | "doc";
+  phase?:
+    | "red"
+    | "green"
+    | "refactor"
+    | "refactor-deferred"
+    | "doc"
+    | "resolve-conflict";
+  /**
+   * v6.13.0 — opaque token tying scheduled work to terminal lifecycle rows
+   * under worktree-first execution (mandatory on new schedules).
+   */
+  claimToken?: string;
+  /** v6.13.0 — lane / worktree id owning the slice checkout. */
+  ownerLaneId?: string;
+  /** v6.13.0 — ISO lease expiry for reclaim sweeps. */
+  leasedUntil?: string;
+  /** v6.13.0 — lease bookkeeping for audit + reclaim tooling. */
+  leaseState?: "claimed" | "expired" | "released" | "reclaimed";
+  /** v6.13.0 — plan unit dependency ids echoed for scheduler diagnostics. */
+  dependsOn?: string[];
+  /**
+   * v6.13.0 — integration branch merge status after deterministic fan-in.
+   */
+  integrationState?: "pending" | "applied" | "conflict" | "resolved" | "abandoned";
 };
 
 export const DELEGATION_PHASES = [
@@ -225,7 +249,8 @@ export const DELEGATION_PHASES = [
   "green",
   "refactor",
   "refactor-deferred",
-  "doc"
+  "doc",
+  "resolve-conflict"
 ] as const;
 export type DelegationPhase = (typeof DELEGATION_PHASES)[number];
 
@@ -457,7 +482,23 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
       (typeof o.sliceId === "string" && o.sliceId.length > 0)) &&
     (o.phase === undefined ||
       (typeof o.phase === "string" &&
-        (DELEGATION_PHASES as readonly string[]).includes(o.phase)))
+        (DELEGATION_PHASES as readonly string[]).includes(o.phase))) &&
+    (o.claimToken === undefined || typeof o.claimToken === "string") &&
+    (o.ownerLaneId === undefined || typeof o.ownerLaneId === "string") &&
+    (o.leasedUntil === undefined || typeof o.leasedUntil === "string") &&
+    (o.leaseState === undefined ||
+      o.leaseState === "claimed" ||
+      o.leaseState === "expired" ||
+      o.leaseState === "released" ||
+      o.leaseState === "reclaimed") &&
+    (o.dependsOn === undefined ||
+      (Array.isArray(o.dependsOn) && o.dependsOn.every((item) => typeof item === "string"))) &&
+    (o.integrationState === undefined ||
+      o.integrationState === "pending" ||
+      o.integrationState === "applied" ||
+      o.integrationState === "conflict" ||
+      o.integrationState === "resolved" ||
+      o.integrationState === "abandoned")
   );
 }
 
@@ -576,7 +617,12 @@ export async function readDelegationLedger(projectRoot: string): Promise<Delegat
 const NON_DELEGATION_AUDIT_EVENTS = new Set<string>([
   "mandatory_delegations_skipped_by_track",
   "artifact_validation_demoted_by_track",
-  "expansion_strategist_skipped_by_track"
+  "expansion_strategist_skipped_by_track",
+  "cclaw_slice_lease_expired",
+  "cclaw_fanin_applied",
+  "cclaw_fanin_conflict",
+  "cclaw_fanin_resolved",
+  "cclaw_fanin_abandoned"
 ]);
 
 function isAuditEventLine(parsed: unknown): boolean {
@@ -585,13 +631,74 @@ function isAuditEventLine(parsed: unknown): boolean {
   return typeof evt === "string" && NON_DELEGATION_AUDIT_EVENTS.has(evt);
 }
 
-export async function readDelegationEvents(projectRoot: string): Promise<{ events: DelegationEvent[]; corruptLines: number[] }> {
+/** Parsed `cclaw_fanin_*` audit rows from `delegation-events.jsonl`. */
+export interface FanInAuditRecord {
+  event: "cclaw_fanin_applied" | "cclaw_fanin_conflict" | "cclaw_fanin_resolved" | "cclaw_fanin_abandoned";
+  runId?: string;
+  laneId?: string;
+  sliceIds?: string[];
+  integrationBranch?: string;
+  details?: string;
+  ts: string;
+}
+
+const FAN_IN_AUDIT_EVENT_KINDS = new Set<FanInAuditRecord["event"]>([
+  "cclaw_fanin_applied",
+  "cclaw_fanin_conflict",
+  "cclaw_fanin_resolved",
+  "cclaw_fanin_abandoned"
+]);
+
+function isFanInAuditRecord(value: unknown): value is FanInAuditRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const o = value as Record<string, unknown>;
+  const evt = o.event;
+  if (typeof evt !== "string" || !FAN_IN_AUDIT_EVENT_KINDS.has(evt as FanInAuditRecord["event"])) {
+    return false;
+  }
+  return typeof o.ts === "string" && o.ts.length > 0;
+}
+
+/**
+ * Append a deterministic fan-in audit row (not a delegation lifecycle event).
+ */
+export async function recordCclawFanInAudit(
+  projectRoot: string,
+  params: {
+    kind: FanInAuditRecord["event"];
+    runId: string;
+    laneId: string;
+    sliceIds: string[];
+    integrationBranch: string;
+    details?: string;
+  }
+): Promise<void> {
+  const filePath = delegationEventsPath(projectRoot);
+  const payload: FanInAuditRecord = {
+    event: params.kind,
+    runId: params.runId,
+    laneId: params.laneId,
+    sliceIds: params.sliceIds,
+    integrationBranch: params.integrationBranch,
+    details: params.details,
+    ts: new Date().toISOString()
+  };
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.appendFile(filePath, `${JSON.stringify(payload)}\n`, { encoding: "utf8", mode: 0o600 });
+}
+
+export async function readDelegationEvents(projectRoot: string): Promise<{
+  events: DelegationEvent[];
+  corruptLines: number[];
+  fanInAudits: FanInAuditRecord[];
+}> {
   const filePath = delegationEventsPath(projectRoot);
   if (!(await exists(filePath))) {
-    return { events: [], corruptLines: [] };
+    return { events: [], corruptLines: [], fanInAudits: [] };
   }
   const events: DelegationEvent[] = [];
   const corruptLines: number[] = [];
+  const fanInAudits: FanInAuditRecord[] = [];
   const text = await fs.readFile(filePath, "utf8").catch(() => "");
   const lines = text.split(/\r?\n/gu);
   for (let index = 0; index < lines.length; index += 1) {
@@ -601,6 +708,8 @@ export async function readDelegationEvents(projectRoot: string): Promise<{ event
       const parsed: unknown = JSON.parse(line);
       if (isDelegationEvent(parsed)) {
         events.push(parsed);
+      } else if (isFanInAuditRecord(parsed)) {
+        fanInAudits.push(parsed);
       } else if (isAuditEventLine(parsed)) {
         // Wave 24 audit-only row (e.g. mandatory_delegations_skipped_by_track).
         // Not a delegation lifecycle event but valid audit content.
@@ -612,7 +721,7 @@ export async function readDelegationEvents(projectRoot: string): Promise<{ event
       corruptLines.push(index + 1);
     }
   }
-  return { events, corruptLines };
+  return { events, corruptLines, fanInAudits };
 }
 
 async function appendDelegationEvent(projectRoot: string, event: DelegationEvent): Promise<void> {
@@ -856,11 +965,83 @@ export class DispatchCapError extends Error {
 }
 
 /**
+ * v6.13.0 — claim / lease contract violation for worktree-first TDD rows.
+ */
+export class DispatchClaimInvalidError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DispatchClaimInvalidError";
+  }
+}
+
+/**
  * v6.10.0 (P2) — default cap on active `slice-implementer` spans in a
  * single TDD run. Aligned with evanflow's parallel cap. Override via
  * `CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS=<int>` (validated `>=1`).
  */
 export const MAX_PARALLEL_SLICE_IMPLEMENTERS = 5 as const;
+
+export interface ReadySliceUnit {
+  unitId: string;
+  sliceId: string;
+  dependsOn: string[];
+  claimedPaths: string[];
+  parallelizable: boolean;
+}
+
+export interface SelectReadySlicesOptions {
+  cap: number;
+  completedUnitIds: ReadonlySet<string>;
+  activePathHolders: ReadonlyArray<{ paths: string[] }>;
+  legacyContinuation: boolean;
+}
+
+/**
+ * Return up to `cap` slice units whose dependsOn are satisfied, avoiding
+ * `claimedPaths` intersections with already-selected units and active holders.
+ */
+export function selectReadySlices(
+  units: ReadySliceUnit[],
+  opts: SelectReadySlicesOptions
+): ReadySliceUnit[] {
+  const pool = opts.legacyContinuation ? units.filter((u) => u.parallelizable) : units;
+  const ordered = [...pool].sort((a, b) => compareCanonicalUnitIds(a.unitId, b.unitId));
+  const selected: ReadySliceUnit[] = [];
+  const blockedPaths = new Set<string>();
+  for (const holder of opts.activePathHolders) {
+    for (const p of holder.paths) {
+      blockedPaths.add(p);
+    }
+  }
+  for (const u of ordered) {
+    if (opts.completedUnitIds.has(u.unitId)) continue;
+    if (!u.dependsOn.every((d) => opts.completedUnitIds.has(d))) continue;
+    let clash = false;
+    for (const p of u.claimedPaths) {
+      if (blockedPaths.has(p)) {
+        clash = true;
+        break;
+      }
+    }
+    if (clash) continue;
+    for (const v of selected) {
+      for (const pu of u.claimedPaths) {
+        if (v.claimedPaths.includes(pu)) {
+          clash = true;
+          break;
+        }
+      }
+      if (clash) break;
+    }
+    if (clash) continue;
+    selected.push(u);
+    for (const p of u.claimedPaths) {
+      blockedPaths.add(p);
+    }
+    if (selected.length >= opts.cap) break;
+  }
+  return selected;
+}
 
 function readMaxParallelOverrideFromEnv(): number | null {
   const raw = process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS;
@@ -1008,8 +1189,48 @@ async function writeSubagentTracker(projectRoot: string, entries: DelegationEntr
   await writeFileSafe(subagentsStatePath(projectRoot), `${JSON.stringify({ active, updatedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
 }
 
+function latestClaimTokenForSpan(entries: DelegationEntry[], spanId: string | undefined): string | null {
+  if (!spanId) return null;
+  let latest: string | null = null;
+  for (const e of entries) {
+    if (e.spanId !== spanId) continue;
+    if (typeof e.claimToken === "string" && e.claimToken.trim().length > 0) {
+      latest = e.claimToken.trim();
+    }
+  }
+  return latest;
+}
+
+function assertSliceClaimInvariant(
+  flow: FlowState,
+  stamped: DelegationEntry,
+  prior: DelegationEntry[]
+): void {
+  if (stamped.stage !== "tdd" || stamped.agent !== "slice-implementer") return;
+  if (effectiveWorktreeExecutionMode(flow) !== "worktree-first") return;
+  if (stamped.status === "scheduled" && typeof stamped.sliceId === "string" && stamped.sliceId.length > 0) {
+    const tok = stamped.claimToken?.trim() ?? "";
+    if (tok.length === 0) {
+      throw new DispatchClaimInvalidError(
+        "dispatch_claim_invalid — worktree-first requires --claim-token when scheduling slice-implementer with --slice"
+      );
+    }
+  }
+  if (!TERMINAL_DELEGATION_STATUSES.has(stamped.status)) return;
+  if (stamped.status === "waived" || stamped.status === "stale") return;
+  const expected = latestClaimTokenForSpan(prior, stamped.spanId);
+  if (!expected) return;
+  const got = stamped.claimToken?.trim() ?? "";
+  if (got !== expected) {
+    throw new DispatchClaimInvalidError(
+      "dispatch_claim_invalid — claimToken must match the scheduled claim for this span"
+    );
+  }
+}
+
 export async function appendDelegation(projectRoot: string, entry: DelegationEntry): Promise<void> {
-  const { activeRunId } = await readFlowState(projectRoot);
+  const flowState = await readFlowState(projectRoot);
+  const { activeRunId } = flowState;
   await withDirectoryLock(delegationLockPath(projectRoot), async () => {
     const filePath = delegationLogPath(projectRoot);
     const prior = await readDelegationLedger(projectRoot);
@@ -1073,6 +1294,7 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     )) {
       return;
     }
+    assertSliceClaimInvariant(flowState, stamped, prior.entries);
     validateMonotonicTimestamps(stamped, prior.entries);
     if (stamped.status === "scheduled") {
       // v6.10.0 (P1+P2): for slice-implementer rows with declared
@@ -1114,6 +1336,43 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
     await writeFileSafe(filePath, `${JSON.stringify(ledger, null, 2)}\n`, { mode: 0o600 });
     await writeSubagentTracker(projectRoot, ledger.entries);
   });
+}
+
+/**
+ * Scan delegation events for expired `leasedUntil` timestamps and append
+ * best-effort `cclaw_slice_lease_expired` audit rows (one per span/slice key).
+ */
+export async function reclaimExpiredDelegationClaims(
+  projectRoot: string,
+  now = new Date()
+): Promise<number> {
+  const { events } = await readDelegationEvents(projectRoot);
+  const seen = new Set<string>();
+  let count = 0;
+  const ts = now.toISOString();
+  const filePath = delegationEventsPath(projectRoot);
+  const cutoff = Date.parse(ts);
+  for (const e of events) {
+    if (e.leaseState !== "claimed") continue;
+    if (typeof e.leasedUntil !== "string" || e.leasedUntil.length === 0) continue;
+    if (Date.parse(e.leasedUntil) > cutoff) continue;
+    const key = `${e.spanId ?? ""}|${e.sliceId ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await fs.appendFile(
+      filePath,
+      `${JSON.stringify({
+        event: "cclaw_slice_lease_expired",
+        spanId: e.spanId,
+        sliceId: e.sliceId,
+        leasedUntil: e.leasedUntil,
+        eventTs: ts
+      })}\n`,
+      { encoding: "utf8", mode: 0o600 }
+    );
+    count += 1;
+  }
+  return count;
 }
 
 /**

@@ -80,9 +80,15 @@ import {
   codexConfigPath,
   readCodexConfig
 } from "./codex-feature-flag.js";
-import { CorruptFlowStateError, ensureRunSystem } from "./runs.js";
-import { FLOW_STAGES } from "./types.js";
+import { CorruptFlowStateError, ensureRunSystem, readFlowState, writeFlowState } from "./runs.js";
+import {
+  PLAN_SPLIT_DEFAULT_WAVE_SIZE,
+  buildParallelExecutionPlanSection,
+  planArtifactLacksV613ParallelMetadata,
+  upsertParallelExecutionPlanSection
+} from "./internal/plan-split-waves.js";
 import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
+import { FLOW_STAGES } from "./types.js";
 
 export interface InitOptions {
   projectRoot: string;
@@ -1115,6 +1121,66 @@ async function applyTddCutoverIfNeeded(projectRoot: string): Promise<void> {
   await writeFileSafe(flowStatePath, `${JSON.stringify(obj, null, 2)}\n`, { mode: 0o600 });
 }
 
+const V613_LEGACY_PLAN_BANNER =
+  "<!-- legacy-continuation: predates v6.13 parallel metadata. New units MAY add dependsOn/claimedPaths/parallelizable; existing units treated as best-effort serial. -->";
+
+/**
+ * v6.13.0 — when `05-plan.md` lacks parallel-metadata bullets on any
+ * implementation unit, stamp `flow-state.json::legacyContinuation`, insert
+ * a banner + managed Parallel Execution Plan stub, and keep behavior idempotent.
+ */
+async function applyPlanLegacyContinuationIfNeeded(projectRoot: string): Promise<void> {
+  const planArtifactPath = runtimePath(projectRoot, "artifacts", "05-plan.md");
+  let existingPlan: string;
+  try {
+    existingPlan = await fs.readFile(planArtifactPath, "utf8");
+  } catch {
+    return;
+  }
+  if (!planArtifactLacksV613ParallelMetadata(existingPlan)) {
+    return;
+  }
+  let nextPlan = existingPlan;
+  if (!nextPlan.includes("legacy-continuation: predates v6.13")) {
+    if (nextPlan.startsWith("---\n")) {
+      const fmEnd = nextPlan.indexOf("\n---", 4);
+      if (fmEnd >= 0) {
+        const fmClose = fmEnd + 4;
+        const head = nextPlan.slice(0, fmClose);
+        const tail = nextPlan.slice(fmClose);
+        nextPlan = `${head}\n\n${V613_LEGACY_PLAN_BANNER}\n${tail}`;
+      } else {
+        nextPlan = `${V613_LEGACY_PLAN_BANNER}\n\n${nextPlan}`;
+      }
+    } else {
+      nextPlan = `${V613_LEGACY_PLAN_BANNER}\n\n${nextPlan}`;
+    }
+  }
+  const parallelStub = buildParallelExecutionPlanSection([], PLAN_SPLIT_DEFAULT_WAVE_SIZE);
+  if (!nextPlan.includes("<!-- parallel-exec-managed-start -->")) {
+    nextPlan = upsertParallelExecutionPlanSection(nextPlan, parallelStub);
+  }
+  if (nextPlan !== existingPlan) {
+    await writeFileSafe(planArtifactPath, nextPlan);
+  }
+  const flowStatePath = runtimePath(projectRoot, "state", "flow-state.json");
+  if (!(await exists(flowStatePath))) {
+    return;
+  }
+  try {
+    const state = await readFlowState(projectRoot);
+    if (state.legacyContinuation === true) {
+      return;
+    }
+    await writeFlowState(projectRoot, { ...state, legacyContinuation: true }, {
+      allowReset: true,
+      writerSubsystem: "plan-legacy-continuation-sync"
+    });
+  } catch {
+    // Best-effort: corrupt/missing state is handled elsewhere on sync.
+  }
+}
+
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
   for (const legacyFolder of DEPRECATED_UTILITY_SKILL_FOLDERS) {
     await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
@@ -1285,6 +1351,7 @@ async function materializeRuntime(
     await writeState(projectRoot, config, forceStateReset);
     if (operation === "sync" || operation === "upgrade") {
       await applyTddCutoverIfNeeded(projectRoot);
+      await applyPlanLegacyContinuationIfNeeded(projectRoot);
     }
     try {
       await ensureRunSystem(projectRoot, { createIfMissing: false });

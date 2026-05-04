@@ -35,10 +35,12 @@ import {
 import {
   DelegationTimestampError,
   DispatchCapError,
+  DispatchClaimInvalidError,
   DispatchDuplicateError,
   DispatchOverlapError
 } from "../delegation.js";
 import { parsePlanSplitWavesArgs, runPlanSplitWaves } from "./plan-split-waves.js";
+import { runSetWorktreeMode } from "./set-worktree-mode.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -57,7 +59,8 @@ const GUARD_ENFORCED_SUBCOMMANDS = new Set([
   "cancel-run",
   "rewind",
   "verify-flow-state-diff",
-  "verify-current-state"
+  "verify-current-state",
+  "set-worktree-mode"
 ]);
 
 export async function runInternalCommand(
@@ -68,7 +71,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves | set-worktree-mode\n"
     );
     return 1;
   }
@@ -125,8 +128,11 @@ export async function runInternalCommand(
     if (subcommand === "plan-split-waves") {
       return await runPlanSplitWaves(projectRoot, parsePlanSplitWavesArgs(tokens), io);
     }
+    if (subcommand === "set-worktree-mode") {
+      return await runSetWorktreeMode(projectRoot, tokens, io);
+    }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves | set-worktree-mode\n`
     );
     return 1;
   } catch (err) {
@@ -150,6 +156,10 @@ export async function runInternalCommand(
     }
     if (err instanceof DispatchCapError) {
       io.stderr.write(`error: dispatch_cap — ${err.message}\n`);
+      return 2;
+    }
+    if (err instanceof DispatchClaimInvalidError) {
+      io.stderr.write(`error: dispatch_claim_invalid — ${err.message}\n`);
       return 2;
     }
     io.stderr.write(

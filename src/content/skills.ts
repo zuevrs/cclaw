@@ -250,7 +250,11 @@ Task("slice-documenter  --slice S-2 --phase doc   --paths <artifacts-dir>/tdd-sl
 \`\`\`
 Launch ALL Phase B pairs in ONE message. **Never serialize independent work.**
 
-**Fan-in** — when 2+ \`slice-implementer\` rows complete in a wave, dispatch \`integration-overseer\` to verify cohesion contract (shared types, touchpoints, invariants, integration tests).
+**Phase C — REFACTOR per slice** — after GREEN+DOC evidence is recorded, dispatch \`slice-implementer --phase refactor\` or \`--phase refactor-deferred\` per slice (may be parallelized when lanes stay disjoint).
+
+**Fan-in (v6.13.0+, worktree-first default)** — each \`slice-implementer\` GREEN row should record \`--claim-token\`, \`--lane-id\`, and \`--lease-until\` per the delegation hook. On successful TDD stage-complete, the runtime performs deterministic \`git apply --3way\` fan-in from each lane worktree onto the current integration branch (no \`-X ours/theirs\`). Conflicts emit \`cclaw_fanin_conflict\` audit rows; resolve with \`slice-implementer --phase resolve-conflict\` then re-run stage-complete. When 2+ parallel lanes finish a wave, still dispatch \`integration-overseer\` so cohesion-contract evidence exists before review.
+
+**slice-documenter** may mark prose \`provisional\` until GREEN is proven; finalize \`tdd-slices/S-<id>.md\` after GREEN evidence is recorded.
 
 `;
 }

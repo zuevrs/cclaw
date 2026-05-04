@@ -9,7 +9,8 @@ import {
 } from "../../delegation.js";
 import {
   verifyCompletedStagesGateClosure,
-  verifyCurrentStageGateEvidence
+  verifyCurrentStageGateEvidence,
+  verifyTddWorktreeFanInClosure
 } from "../../gate-evidence.js";
 import { extractMarkdownSectionBody, learningsParseFailureHumanSummary, parseLearningsSection } from "../../artifact-linter.js";
 import {
@@ -34,6 +35,7 @@ import type { AdvanceStageArgs } from "./parsers.js";
 import { ensureProactiveDelegationTrace } from "./proactive-delegation-trace.js";
 import { consumeWaiverToken, type WaiverRecord } from "../waiver-grant.js";
 import type { Writable } from "node:stream";
+import { runTddDeterministicFanInBeforeAdvance } from "../../integration-fanin.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -821,6 +823,22 @@ export async function runAdvanceStage(
     satisfiedGuards,
     new Set(selectedTransitionGuards)
   );
+  if (args.stage === "tdd" && successor !== null && successor !== "tdd") {
+    const fanIn = await runTddDeterministicFanInBeforeAdvance(projectRoot, flowState);
+    if (!fanIn.ok) {
+      io.stderr.write(
+        `cclaw internal advance-stage: deterministic worktree fan-in failed:\n${fanIn.issues
+          .map((line) => `  - ${line}`)
+          .join("\n")}\n`
+      );
+      return 1;
+    }
+    const closure = await verifyTddWorktreeFanInClosure(projectRoot, flowState);
+    if (closure.length > 0) {
+      io.stderr.write(`cclaw internal advance-stage: ${closure.join(" | ")}\n`);
+      return 1;
+    }
+  }
   const completedStages = blockedReviewRoute
     ? flowState.completedStages.filter((finished) => finished !== args.stage)
     : flowState.completedStages.includes(args.stage)

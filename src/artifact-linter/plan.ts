@@ -17,7 +17,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   PLAN_SPLIT_SMALL_PLAN_THRESHOLD,
-  parseImplementationUnits
+  parseImplementationUnits,
+  parseImplementationUnitParallelFields
 } from "../internal/plan-split-waves.js";
 
 export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
@@ -32,7 +33,8 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride
+    isTrivialOverride,
+    legacyContinuation
   } = ctx;
 
     evaluateInvestigationTrace(ctx, "Implementation Units");
@@ -271,6 +273,73 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
         details: layeredDocumentReview.failOrPartialWithoutWaiver.length === 0
           ? "No unwaived FAIL/PARTIAL reviewer statuses detected."
           : `Unwaived FAIL/PARTIAL statuses: ${layeredDocumentReview.failOrPartialWithoutWaiver.join(", ")}.`
+      });
+    }
+
+    const planUnits = parseImplementationUnits(raw);
+    const parallelMetaApplies =
+      strictPlanGuards && planUnits.length > 0;
+    if (parallelMetaApplies) {
+      const metaRulesRequired = !legacyContinuation;
+      const missingDepends: string[] = [];
+      const missingPaths: string[] = [];
+      const missingParallelMeta: string[] = [];
+      for (const unit of planUnits) {
+        const id = unit.id;
+        if (!/\bdependsOn\s*:/iu.test(unit.body)) {
+          missingDepends.push(id);
+        }
+        if (!/\bclaimedPaths\s*:/iu.test(unit.body)) {
+          missingPaths.push(id);
+        }
+        if (!/\bparallelizable\s*:/iu.test(unit.body) || !/\briskTier\s*:/iu.test(unit.body)) {
+          missingParallelMeta.push(id);
+        }
+      }
+      findings.push({
+        section: "plan_units_missing_dependsOn",
+        required: metaRulesRequired,
+        rule: "Every implementation unit must declare `dependsOn:` (v6.13.0) — use comma-separated unit ids or `none`.",
+        found: missingDepends.length === 0,
+        details:
+          missingDepends.length === 0
+            ? "All implementation units declare dependsOn."
+            : `Missing dependsOn on: ${missingDepends.join(", ")}. Remediation: add a bullet \`- **dependsOn:** U-2, U-3\` or \`- **dependsOn:** none\`.`
+      });
+      findings.push({
+        section: "plan_units_missing_claimedPaths",
+        required: metaRulesRequired,
+        rule: "Every implementation unit must declare explicit `claimedPaths:` predictions for parallel scheduling (v6.13.0).",
+        found: missingPaths.length === 0,
+        details:
+          missingPaths.length === 0
+            ? "All implementation units declare claimedPaths."
+            : `Missing claimedPaths on: ${missingPaths.join(", ")}. Remediation: add \`- **claimedPaths:** path/a, path/b\` (repo-relative globs or files).`
+      });
+      findings.push({
+        section: "plan_units_missing_parallel_metadata",
+        required: metaRulesRequired,
+        rule: "Every implementation unit must declare `parallelizable:` and `riskTier:` (low|standard|high) (v6.13.0).",
+        found: missingParallelMeta.length === 0,
+        details:
+          missingParallelMeta.length === 0
+            ? "All implementation units carry parallelizable + riskTier."
+            : `Missing parallel metadata on: ${missingParallelMeta.join(
+              ", "
+            )}. Remediation: add \`- **parallelizable:** true|false\` and \`- **riskTier:** low|standard|high\`.`
+      });
+      const parallelizableCount = planUnits.filter(
+        (u) => parseImplementationUnitParallelFields(u).parallelizable
+      ).length;
+      const advisorySerial = parallelizableCount === 0 && planUnits.length > 1;
+      findings.push({
+        section: "plan_no_parallel_lanes_detected",
+        required: false,
+        rule: "When multiple independent units exist, consider marking at least one `parallelizable: true` with disjoint claimedPaths.",
+        found: !advisorySerial,
+        details: advisorySerial
+          ? "All units are marked parallelizable false; scheduler will serialize. If surfaces are independent, opt units into parallelism explicitly."
+          : "Parallel-ready units detected or plan is single-unit."
       });
     }
 }
