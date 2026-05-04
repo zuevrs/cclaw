@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { lintArtifact } from "../../src/artifact-linter.js";
@@ -259,7 +260,7 @@ describe("v6.14.1 — delegation-record.mjs --audit-kind hook surface", () => {
 
   it("the embedded script is syntactically valid JavaScript", async () => {
     const script = delegationRecordScript();
-    const tmp = path.join("/tmp", `cclaw-hook-syntax-${Date.now()}.mjs`);
+    const tmp = path.join(os.tmpdir(), `cclaw-hook-syntax-${Date.now()}.mjs`);
     await fs.writeFile(tmp, script, "utf8");
     const { execFileSync } = await import("node:child_process");
     expect(() => execFileSync("node", ["--check", tmp], { stdio: "pipe" })).not.toThrow();
