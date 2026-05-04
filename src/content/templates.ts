@@ -744,11 +744,11 @@ ${renderBehaviorAnchorTemplateLine("spec")}
 - Drift from upstream (or \`None\`):
 
 ## Acceptance Criteria
-| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref (D-XX) |
-|---|---|---|---|
-| AC-1 | R1 |  |  |
+| ID | Requirement Ref (R#) | Criterion (observable/measurable/falsifiable) | Design Decision Ref (D-XX) | parallelSafe (true/false) | touchSurface (paths/modules) |
+|---|---|---|---|---|---|
+| AC-1 | R1 |  |  | false |  |
 
-> Standard ACs reference at least one \`R#\` from \`02-scope.md\`. Quick-track ACs may instead put \`Quick Reproduction Contract\` / bug-slice refs in the Requirement Ref column and \`N/A\` for Design Decision Ref. ACs are stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new ones append with the next free \`AC-#\`.
+> Standard ACs reference at least one \`R#\` from \`02-scope.md\`. Quick-track ACs may instead put \`Quick Reproduction Contract\` / bug-slice refs in the Requirement Ref column and \`N/A\` for Design Decision Ref. ACs are stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new ones append with the next free \`AC-#\`. **v6.13.0:** \`parallelSafe\` states whether this AC can be proven in parallel with others; \`touchSurface\` lists repo-relative globs or modules this AC is expected to touch (scheduler + slice planning).
 
 ## Quick Reproduction Contract
 > Required for quick bug-fix specs; use \`N/A\` for non-bugfix or standard/medium tracks. TDD turns this contract into the RED reproduction test.
@@ -912,6 +912,12 @@ Execution rule: complete and verify each batch before starting the next batch.
 > Required structural form per implementation unit. Use ≥1 unit; bite-sized 2-5 minute steps inside each. The linter validates shape, not topic.
 
 ### Implementation Unit U-1
+- **id:** U-1
+- **dependsOn:** none
+- **claimedPaths:** (repo-relative, comma-separated globs or files this unit expects to own)
+- **parallelizable:** true
+- **riskTier:** standard
+- **lane:** (optional advisory lane tag for human-readable batching)
 - **Goal:**
 - **Requirements (from Spec):**
 - **Dependencies (other units):**

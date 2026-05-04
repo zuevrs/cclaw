@@ -11,8 +11,9 @@ import { ELICITATION_STAGES, evaluateQaLogFloor } from "./artifact-linter/shared
 import { resolveArtifactPath } from "./artifact-paths.js";
 import { RUNTIME_ROOT } from "./constants.js";
 import { stageSchema } from "./content/stage-schema.js";
-import { readDelegationLedger } from "./delegation.js";
+import { readDelegationLedger, readDelegationEvents, type DelegationEvent } from "./delegation.js";
 import type { FlowState, StageGateState } from "./flow-state.js";
+import { effectiveWorktreeExecutionMode } from "./flow-state.js";
 import { exists } from "./fs-utils.js";
 import {
   computeEarlyLoopStatus,
@@ -653,6 +654,59 @@ export async function verifyCurrentStageGateEvidence(
     missingTriggeredConditional,
     qaLogFloor
   };
+}
+
+function sliceHasTerminalRefactor(events: DelegationEvent[], runId: string, sliceId: string): boolean {
+  for (const e of events) {
+    if (e.runId !== runId || e.stage !== "tdd" || e.sliceId !== sliceId) continue;
+    if (e.agent !== "slice-implementer" || e.status !== "completed") continue;
+    if (e.phase === "refactor" || e.phase === "refactor-deferred") return true;
+  }
+  return false;
+}
+
+function closedSlicesWithLane(events: DelegationEvent[], runId: string): Set<string> {
+  const withLane = new Set<string>();
+  for (const e of events) {
+    if (e.runId !== runId || e.stage !== "tdd") continue;
+    if (e.agent !== "slice-implementer" || e.status !== "completed" || e.phase !== "green") continue;
+    if (!e.ownerLaneId?.trim() || !e.sliceId) continue;
+    withLane.add(e.sliceId);
+  }
+  const out = new Set<string>();
+  for (const sid of withLane) {
+    if (sliceHasTerminalRefactor(events, runId, sid)) out.add(sid);
+  }
+  return out;
+}
+
+/**
+ * Validates that every lane-backed slice which reached REFACTOR has a matching
+ * `cclaw_fanin_applied` audit row for the active run (v6.13.0 worktree-first).
+ */
+export async function verifyTddWorktreeFanInClosure(
+  projectRoot: string,
+  flowState: FlowState
+): Promise<string[]> {
+  if (effectiveWorktreeExecutionMode(flowState) !== "worktree-first") return [];
+  const runId = flowState.activeRunId;
+  const { events, fanInAudits } = await readDelegationEvents(projectRoot);
+  const needing = closedSlicesWithLane(events, runId);
+  if (needing.size === 0) return [];
+  const applied = new Set<string>();
+  for (const a of fanInAudits) {
+    if (a.runId !== runId || a.event !== "cclaw_fanin_applied") continue;
+    for (const s of a.sliceIds ?? []) applied.add(s);
+  }
+  const issues: string[] = [];
+  for (const sid of needing) {
+    if (!applied.has(sid)) {
+      issues.push(
+        `tdd worktree fan-in closure: slice ${sid} completed on a lane but cclaw_fanin_applied is missing for run ${runId}.`
+      );
+    }
+  }
+  return issues;
 }
 
 export function verifyCompletedStagesGateClosure(flowState: FlowState): CompletedStagesClosureResult {

@@ -623,6 +623,9 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
   const repoSignals = coerceRepoSignals(parsed.repoSignals);
   const completedStageMeta = sanitizeCompletedStageMeta(parsed.completedStageMeta);
   const tddCutoverSliceId = coerceTddCutoverSliceId(parsed.tddCutoverSliceId);
+  const worktreeExecutionMode = coerceWorktreeExecutionMode(parsed.worktreeExecutionMode);
+  const legacyContinuation =
+    typeof parsed.legacyContinuation === "boolean" ? parsed.legacyContinuation : undefined;
   const state: FlowState = {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
@@ -636,6 +639,8 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     ...(repoSignals ? { repoSignals } : {}),
     ...(completedStageMeta ? { completedStageMeta } : {}),
     ...(tddCutoverSliceId ? { tddCutoverSliceId } : {}),
+    ...(worktreeExecutionMode !== undefined ? { worktreeExecutionMode } : {}),
+    ...(legacyContinuation !== undefined ? { legacyContinuation } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),
@@ -655,6 +660,13 @@ function coerceTddCutoverSliceId(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return /^S-\d+$/u.test(trimmed) ? trimmed : null;
+}
+
+function coerceWorktreeExecutionMode(
+  value: unknown
+): FlowState["worktreeExecutionMode"] | undefined {
+  if (value === "single-tree" || value === "worktree-first") return value;
+  return undefined;
 }
 
 export class CorruptFlowStateError extends Error {

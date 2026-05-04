@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { readDelegationLedger } from "../delegation.js";
+import { readDelegationLedger, readDelegationEvents } from "../delegation.js";
 import type { DelegationEntry } from "../delegation.js";
 import {
   type LintFinding,
@@ -41,9 +41,9 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     absFile,
     sections,
     findings,
-    parsedFrontmatter
+    parsedFrontmatter,
+    worktreeExecutionMode
   } = ctx;
-  void projectRoot;
   void parsedFrontmatter;
 
   evaluateInvestigationTrace(ctx, "Watched-RED Proof");
@@ -225,6 +225,100 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
   });
   if (cutoverFinding) {
     findings.push(cutoverFinding);
+  }
+
+  const { events: jsonlEvents, fanInAudits } = await readDelegationEvents(projectRoot);
+  const runEvents = jsonlEvents.filter((e) => e.runId === delegationLedger.runId);
+  if (eventsActive && worktreeExecutionMode === "worktree-first") {
+    const terminalPhases = new Set([
+      "green",
+      "refactor",
+      "refactor-deferred",
+      "resolve-conflict"
+    ]);
+    const missingClaim = new Set<string>();
+    for (const ev of runEvents) {
+      if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
+      if (ev.status !== "completed" && ev.status !== "failed") continue;
+      if (!ev.phase || !terminalPhases.has(ev.phase)) continue;
+      const tok = ev.claimToken?.trim() ?? "";
+      if (tok.length === 0 && typeof ev.sliceId === "string") {
+        missingClaim.add(ev.sliceId);
+      }
+    }
+    if (missingClaim.size > 0) {
+      findings.push({
+        section: "tdd_slice_claim_token_missing",
+        required: true,
+        rule: "Worktree-first: terminal slice-implementer rows must echo --claim-token. Remediation: pass the same --claim-token used on the scheduled row for every completed/failed terminal phase.",
+        found: false,
+        details: `Slices missing claim token on terminal rows: ${[...missingClaim].join(", ")}.`
+      });
+    }
+    const missingLane = new Set<string>();
+    for (const ev of runEvents) {
+      if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
+      if (ev.status !== "completed" || ev.phase !== "green") continue;
+      if (!ev.ownerLaneId?.trim() && typeof ev.sliceId === "string") {
+        missingLane.add(ev.sliceId);
+      }
+    }
+    if (missingLane.size > 0) {
+      findings.push({
+        section: "tdd_slice_worktree_metadata_missing",
+        required: true,
+        rule: "Worktree-first: completed GREEN rows must record --lane-id (ownerLaneId) for the lane worktree.",
+        found: false,
+        details: `Slices missing ownerLaneId on GREEN completion: ${[...missingLane].join(", ")}.`
+      });
+    }
+    const conflictSlices = [
+      ...new Set(
+        [
+          ...runEvents
+            .filter((e) => e.integrationState === "conflict")
+            .map((e) => e.sliceId)
+            .filter((s): s is string => typeof s === "string"),
+          ...fanInAudits
+            .filter(
+              (a) =>
+                a.runId === delegationLedger.runId &&
+                a.event === "cclaw_fanin_conflict" &&
+                Array.isArray(a.sliceIds)
+            )
+            .flatMap((a) => a.sliceIds ?? [])
+        ].filter((s): s is string => typeof s === "string" && s.length > 0)
+      )
+    ];
+    if (conflictSlices.length > 0) {
+      findings.push({
+        section: "tdd_fanin_conflict_unresolved",
+        required: true,
+        rule: "Resolve fan-in conflicts before stage-complete: dispatch slice-implementer --phase resolve-conflict or abandon the slice explicitly.",
+        found: false,
+        details: `integrationState=conflict for slice(s): ${conflictSlices.join(
+          ", "
+        )}. Remediation: finish deterministic fan-in or mark integrationState=resolved after manual merge evidence.`
+      });
+    }
+    const now = Date.now();
+    const leaseStale = new Set<string>();
+    for (const ev of runEvents) {
+      if (typeof ev.leasedUntil !== "string") continue;
+      const until = Date.parse(ev.leasedUntil);
+      if (!Number.isFinite(until) || until >= now) continue;
+      if (ev.leaseState === "reclaimed" || ev.leaseState === "released") continue;
+      if (typeof ev.sliceId === "string") leaseStale.add(ev.sliceId);
+    }
+    if (leaseStale.size > 0) {
+      findings.push({
+        section: "tdd_lease_expired_unreclaimed",
+        required: true,
+        rule: "Leases past leasedUntil must be reclaimed or released. Remediation: run scheduler reclaim or emit leaseState=reclaimed audit rows after controller action.",
+        found: false,
+        details: `Expired leases not reclaimed for slice(s): ${[...leaseStale].join(", ")}.`
+      });
+    }
   }
 
   const assertionBody = sectionBodyByName(sections, "Assertion Correctness Notes");

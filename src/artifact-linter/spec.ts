@@ -157,4 +157,20 @@ export async function lintSpecStage(ctx: StageLintContext): Promise<void> {
           : `Unwaived FAIL/PARTIAL statuses: ${layeredDocumentReview.failOrPartialWithoutWaiver.join(", ")}.`
       });
     }
+
+    const acceptanceCriteriaBody = sectionBodyByName(sections, "Acceptance Criteria");
+    if (acceptanceCriteriaBody !== null && /\|/u.test(acceptanceCriteriaBody)) {
+      const hasParallel = /\bparallelSafe\b/iu.test(acceptanceCriteriaBody);
+      const hasTouch = /\btouchSurface\b/iu.test(acceptanceCriteriaBody);
+      findings.push({
+        section: "spec_acs_not_sliceable",
+        required: false,
+        rule: "Acceptance criteria should declare `parallelSafe` and `touchSurface` per row (v6.13.0) so plan/TDD can schedule slices safely.",
+        found: hasParallel && hasTouch,
+        details:
+          hasParallel && hasTouch
+            ? "Acceptance Criteria mentions parallelSafe and touchSurface."
+            : "Add columns or inline markers for parallelSafe (true|false) and touchSurface (short area description) for each AC."
+      });
+    }
 }

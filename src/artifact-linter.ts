@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
-import type { FlowState } from "./flow-state.js";
+import { effectiveWorktreeExecutionMode, type FlowState } from "./flow-state.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
 import { readFlowState } from "./run-persistence.js";
@@ -201,6 +201,8 @@ export async function lintArtifact(
   let activeRunId: string | null = null;
   let completedStagesForAudit: FlowStage[] = [];
   let completedStageMetaForAudit: FlowState["completedStageMeta"];
+  let legacyContinuation = false;
+  let worktreeExecutionMode: "single-tree" | "worktree-first" = "single-tree";
   try {
     const flowState = await readFlowState(projectRoot);
     const hint = flowState.interactionHints?.[stage];
@@ -210,6 +212,8 @@ export async function lintArtifact(
     activeRunId = flowState.activeRunId ?? null;
     completedStagesForAudit = flowState.completedStages;
     completedStageMetaForAudit = flowState.completedStageMeta;
+    legacyContinuation = flowState.legacyContinuation === true;
+    worktreeExecutionMode = effectiveWorktreeExecutionMode(flowState);
   } catch {
     activeStageFlags = [];
     discoveryMode = "guided";
@@ -217,6 +221,8 @@ export async function lintArtifact(
     activeRunId = null;
     completedStagesForAudit = [];
     completedStageMetaForAudit = undefined;
+    legacyContinuation = false;
+    worktreeExecutionMode = "single-tree";
   }
   for (const extra of options.extraStageFlags ?? []) {
     if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
@@ -356,7 +362,9 @@ export async function lintArtifact(
     isTrivialOverride,
     overrideSet,
     activeStageFlags,
-    taskClass
+    taskClass,
+    legacyContinuation,
+    worktreeExecutionMode
   };
 
   switch (stage) {

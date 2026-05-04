@@ -65,7 +65,7 @@ export const SPEC: StageSchemaInput = {
       "Define measurable acceptance criteria.",
       "Capture constraints, assumptions, and edge cases.",
       "Review assumptions before finalization: source/confidence, validation path, and accepted/rejected/open disposition.",
-      "Build Acceptance Mapping: AC -> design decision -> observable evidence -> verification method -> likely test level.",
+      "Annotate parallel-slice metadata on each acceptance criterion: `parallelSafe` (true|false) and `touchSurface` (repo-relative paths/modules expected to change) so downstream plan units and TDD lanes stay conflict-aware (v6.13.0).",
       "Confirm every verification method is concrete enough for plan/TDD to use later.",
       "Present acceptance criteria to the user in 3-5-item batches, pausing for explicit ACK between batches (see Interaction Protocol).",
       "Write spec artifact and request approval."
@@ -121,7 +121,7 @@ export const SPEC: StageSchemaInput = {
     },
     artifactValidation: [
       { section: "Upstream Handoff", required: false, validationRule: "Summarizes scope/design decisions, constraints, open questions, and explicit drift before acceptance criteria." },
-      { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Standard track should include Requirement Ref and Design Decision Ref columns; quick track may instead link each AC to the reproduction contract or bug slice. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`." },
+      { section: "Acceptance Criteria", required: true, validationRule: "Each criterion is observable, measurable, and falsifiable. Standard track should include Requirement Ref and Design Decision Ref columns; quick track may instead link each AC to the reproduction contract or bug slice. AC IDs (AC-1, AC-2…) are stable across revisions — dropped ACs stay with Priority `DROPPED`. v6.13.0: each AC declares `parallelSafe` (true|false) and `touchSurface` (paths/modules) for parallel slice planning." },
       { section: "Quick Reproduction Contract", required: false, validationRule: "Quick bug-fix specs own the reproduction contract: symptom, repro steps, expected RED test behavior, and acceptance criterion." },
       { section: "Edge Cases", required: true, validationRule: "At least one boundary and one error condition per criterion." },
       { section: "Constraints and Assumptions", required: false, validationRule: "Constraints are CARRIED FORWARD from scope's `## Scope Contract > Constraints` (cite with `See scope: <ref>` or copy with attribution). New spec-stage constraints (rare) get a citation to the spec-stage Q&A row that surfaced them. Assumptions are owned by `## Assumptions Before Finalization` — do NOT duplicate them here. Section may be `- See scope: 02-scope.md#constraints.` for the common case." },

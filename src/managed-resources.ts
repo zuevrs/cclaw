@@ -96,6 +96,7 @@ export function isManagedGeneratedPath(relPath: string): boolean {
   if (relPath === `${RUNTIME_ROOT}/config.yaml`) return false;
   if (relPath === `${RUNTIME_ROOT}/knowledge.jsonl`) return false;
   if (relPath.startsWith(`${RUNTIME_ROOT}/artifacts/`)) return false;
+  if (relPath.startsWith(`${RUNTIME_ROOT}/worktrees/`)) return false;
   if (relPath.startsWith(`${RUNTIME_ROOT}/archive/`)) return false;
   if (relPath === `${RUNTIME_ROOT}/state/flow-state.json`) return false;
   if (relPath === `${RUNTIME_ROOT}/state/.init-in-progress`) return false;

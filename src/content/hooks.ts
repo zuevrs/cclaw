@@ -392,6 +392,11 @@ function usage() {
     "  --slice=<id>              TDD slice identifier (e.g. S-1) used by the linter to auto-derive the Watched-RED + Vertical Slice Cycle tables.",
     "  --phase=<phase>           one of " + VALID_DELEGATION_PHASES.join(", ") + ". Pair with --slice to record a TDD slice phase event.",
     "  --refactor-rationale=<t>  required when --phase=refactor-deferred unless --evidence-ref carries the rationale text.",
+    "  --claim-token=<opaque>    v6.13 — required for worktree-first slice-implementer schedules with --slice (echo on all terminal rows for the span).",
+    "  --lane-id=<id>            v6.13 — worktree lane id (ownerLaneId metadata).",
+    "  --lease-until=<iso>       v6.13 — ISO8601 lease expiry for reclaim tooling.",
+    "  --depends-on=<a,b>       v6.13 — comma-separated plan unit ids for scheduler diagnostics.",
+    "  --integration-state=<s>  v6.13 — one of pending|applied|conflict|resolved|abandoned.",
     ""
   ].join("\\n") + "\\n");
 }
@@ -526,6 +531,42 @@ function buildRow(args, status, runId, now, options) {
       resolvedEvidenceRefs = [rationale, ...resolvedEvidenceRefs];
     }
   }
+  const integrationStateRaw =
+    typeof args["integration-state"] === "string" ? args["integration-state"].trim() : "";
+  const integrationStateAllowed = new Set([
+    "pending",
+    "applied",
+    "conflict",
+    "resolved",
+    "abandoned"
+  ]);
+  const integrationState =
+    integrationStateRaw.length > 0 && integrationStateAllowed.has(integrationStateRaw)
+      ? integrationStateRaw
+      : undefined;
+  const claimToken =
+    typeof args["claim-token"] === "string" && args["claim-token"].trim().length > 0
+      ? args["claim-token"].trim()
+      : undefined;
+  const ownerLaneId =
+    typeof args["lane-id"] === "string" && args["lane-id"].trim().length > 0
+      ? args["lane-id"].trim()
+      : undefined;
+  const leasedUntil =
+    typeof args["lease-until"] === "string" && args["lease-until"].trim().length > 0
+      ? args["lease-until"].trim()
+      : undefined;
+  const dependsOnRaw =
+    typeof args["depends-on"] === "string" ? args["depends-on"].trim() : "";
+  const dependsOn =
+    dependsOnRaw.length > 0
+      ? dependsOnRaw
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+      : undefined;
+  const leaseState =
+    leasedUntil && status === "scheduled" ? "claimed" : undefined;
   return {
     stage: args.stage,
     agent: args.agent,
@@ -550,7 +591,13 @@ function buildRow(args, status, runId, now, options) {
     allowParallel: args["allow-parallel"] === true ? true : undefined,
     claimedPaths: claimedPaths.length > 0 ? claimedPaths : undefined,
     sliceId,
-    phase
+    phase,
+    claimToken,
+    ownerLaneId,
+    leasedUntil,
+    leaseState,
+    dependsOn,
+    integrationState
   };
 }
 

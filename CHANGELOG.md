@@ -1,5 +1,54 @@
 # Changelog
 
+## 6.13.0 — Worktree-First Multi-Slice Parallel TDD
+
+Phases 0–7 ship conflict-aware planning, git-backed worktree lanes with claim/lease metadata, a DAG-ready `selectReadySlices` helper, deterministic `git apply --3way` fan-in at TDD stage-complete (never `-X ours/theirs`), `cclaw_fanin_*` audit rows, hardened TDD linters for worktree-first mode, `cclaw internal set-worktree-mode`, and `sync` migration that sets `legacyContinuation` when `05-plan.md` predates v6.13 parallel bullets. Phase 8 (sunset) is explicitly deferred to v6.14.
+
+### Phase 0 — Spec + plan stage upgrades
+
+- **`04-spec.md` template + `spec` stage** — Acceptance Criteria gain `parallelSafe` and `touchSurface` columns for slice planning. Advisory `spec_acs_not_sliceable` in `src/artifact-linter/spec.ts` when those columns are missing on standard expectations.
+- **Plan artifacts** — Implementation units require `id`, `dependsOn`, `claimedPaths`, `parallelizable`, `riskTier`, optional `lane`; `plan-split-waves` builds conflict-aware waves (topo-sort + disjoint `claimedPaths`, default cap 5) and managed `## Parallel Execution Plan` blocks. New plan linter rules: `plan_units_missing_dependsOn`, `plan_units_missing_claimedPaths`, `plan_units_missing_parallel_metadata`, advisory `plan_no_parallel_lanes_detected`, degrading to advisory under `legacyContinuation` for existing units only.
+
+### Phase 1 — Control plane (claims / leases)
+
+- **`DelegationEntry`** extended with `claimToken`, `ownerLaneId`, `leasedUntil`, `leaseState`, `dependsOn`, `integrationState`, `resolve-conflict` phase; `DispatchClaimInvalidError` for mismatched terminal claims; `reclaimExpiredDelegationClaims` writes `cclaw_slice_lease_expired` audits.
+- **`flow-state.json`** — optional `worktreeExecutionMode` (`single-tree` | `worktree-first`) and `legacyContinuation`; omitted mode stays `single-tree` via `effectiveWorktreeExecutionMode`; fresh runs from `start-flow` default `worktree-first`.
+- **Hooks** — `delegation-record` accepts `--claim-token`, `--lane-id`, `--lease-until`, `--depends-on`, `--integration-state`.
+
+### Phase 2 — Worktree lane manager
+
+- **`src/worktree-types.ts`**, **`src/worktree-manager.ts`** — `createLane`, `verifyLaneClean`, `attachLane` / `detachLane`, `cleanupLane`, `pruneStaleLanes` under `.cclaw/worktrees/` with `cclaw/lane/<sliceId>-*` branches; submodule-safe cleanup; worktrees ignored as managed-generated noise in `managed-resources`.
+
+### Phase 3 — Multi-slice scheduler
+
+- **`selectReadySlices`** in `src/delegation.ts` — pure scheduler over `ReadySliceUnit[]` with legacy `parallelizable` filtering; numeric `U-*` ordering via `compareCanonicalUnitIds`.
+- **`parseImplementationUnitParallelFields(..., { legacyParallelDefaultSerial })`** — defaults missing `parallelizable` bullets to `false` under legacy continuation.
+- **TDD skill / stage text** — Wave Batch Mode v6.13+ describes RED checkpoint, parallel fan-out, per-lane refactor, deterministic fan-in; slice-documenter may stay provisional until GREEN.
+
+### Phase 4 — Deterministic fan-in + resolver hints
+
+- **`src/integration-fanin.ts`** — `fanInLane` uses merge-base when `baseRef` omitted, restores prior branch on apply failure; `runTddDeterministicFanInBeforeAdvance` merges lanes before leaving TDD; `recordCclawFanInAudit` / `readDelegationEvents().fanInAudits`; `buildResolveConflictDispatchHint`.
+- **`advance-stage`** — after validation, before persisting state when leaving TDD, runs fan-in + `verifyTddWorktreeFanInClosure`.
+- **`verifyTddWorktreeFanInClosure`** in `src/gate-evidence.ts` — lane-backed closed slices require `cclaw_fanin_applied`.
+
+### Phase 5 — Linter / gates hardening
+
+- **TDD linter** — `tdd_slice_claim_token_missing`, `tdd_slice_worktree_metadata_missing` (worktree-first), `tdd_fanin_conflict_unresolved` (delegation `integrationState` + `cclaw_fanin_conflict` audits), `tdd_lease_expired_unreclaimed`.
+
+### Phase 6 — Rollout
+
+- **`cclaw internal set-worktree-mode --mode=single-tree|worktree-first`** — `src/internal/set-worktree-mode.ts`.
+- **Tests** — `select-ready-slices.test.ts`, `plan-v613-metadata.test.ts`, `fanin-audit.test.ts` (fan-in audits + closure).
+
+### Phase 7 — Legacy continuation (hox)
+
+- **`applyPlanLegacyContinuationIfNeeded`** in `src/install.ts` — when `05-plan.md` lacks v6.13 bullets on any unit, inserts legacy banner + empty Parallel Execution Plan stub and sets `flow-state.legacyContinuation` when state exists; plan linter degradation per Phase 0.
+
+### Follow-ups (v6.13.1 candidates)
+
+- Narrow `git clean` / conflict recovery UX if users report partial apply residue beyond `git checkout -- .`.
+- E2e exercises that run full `git worktree` fan-in in CI (optional `git` skip patterns).
+
 ## 6.12.0 — TDD Velocity Honest (Decouple from discoveryMode + Mandatory Roles + Wave Checkpoint + Auto-cutover)
 
 Follow-up to v6.11.0 that closes the back doors observed on a fresh hox flow run (slice S-11 went GREEN with no `--phase` events, no `slice-implementer` dispatch, no `slice-documenter`, and 12+ hand-edited per-slice sections in `06-tdd.md`). v6.12.0 makes that path impossible by promoting `slice-implementer` and `slice-documenter` to mandatory regardless of `discoveryMode`, adding three new linter rules (`tdd_slice_documenter_missing` decoupled from `deep`, `tdd_slice_implementer_missing`, `tdd_red_checkpoint_violation`) plus an advisory backslide rule (`tdd_legacy_section_writes_after_cutover`), rewriting the TDD skill to teach the per-slice ritual + wave batch mode imperatively, and shipping a one-shot `cclaw-cli sync` auto-cutover that pins legacy projects to a `tddCutoverSliceId` boundary so existing slices keep validating while new ones must use the new protocol.

@@ -168,6 +168,29 @@ export interface FlowState {
    * sync hasn't visited yet.
    */
   tddCutoverSliceId?: string;
+  /**
+   * v6.13.0 — when `worktree-first` (default for newly initialized runs),
+   * slice-implementer work happens in isolated git worktrees with explicit
+   * claims/leases and deterministic fan-in integration.
+   *
+   * Omitted on legacy `flow-state.json` files: treated as `single-tree` via
+   * `effectiveWorktreeExecutionMode`.
+   */
+  worktreeExecutionMode?: "single-tree" | "worktree-first";
+  /**
+   * v6.13.0 — set by `cclaw-cli sync` when the plan predates parallel-metadata
+   * fields. Relaxes some plan linters for existing implementation units and
+   * defaults scheduler parallelism to opt-in only for those units.
+   */
+  legacyContinuation?: boolean;
+}
+
+/**
+ * Effective worktree mode: legacy state files without the field keep
+ * single-tree scheduling to avoid breaking existing runs on upgrade.
+ */
+export function effectiveWorktreeExecutionMode(state: FlowState): "single-tree" | "worktree-first" {
+  return state.worktreeExecutionMode ?? "single-tree";
 }
 
 export interface StageInteractionHint {

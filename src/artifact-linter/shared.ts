@@ -2621,4 +2621,13 @@ export interface StageLintContext {
    * expansion-strategist delegation) from required → advisory.
    */
   taskClass: "software-standard" | "software-trivial" | "software-bugfix" | null;
+  /**
+   * v6.13.0 — when true, plan parallel-metadata rules downgrade to advisory
+   * for legacy continuation projects (hox-style).
+   */
+  legacyContinuation: boolean;
+  /**
+   * v6.13.0 — effective worktree execution mode for TDD linters.
+   */
+  worktreeExecutionMode: "single-tree" | "worktree-first";
 }
