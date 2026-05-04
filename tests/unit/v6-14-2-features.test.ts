@@ -274,6 +274,158 @@ describe("v6.14.2 Fix 2 — cutover semantics in skill text + advisory linter", 
   });
 });
 
+describe("v6.14.3 Fix 3 follow-up — legacy worktree exemption covers partial-metadata slices", () => {
+  it("does NOT flag tdd_slice_claim_token_missing for slices ≤ tddWorktreeCutoverSliceId even when GREEN carried metadata but a later terminal row did not (the hox-shape case)", async () => {
+    const root = await createTempProject("v6-14-3-legacy-partial-metadata");
+    await seedTddProject(root, {
+      legacyContinuation: true,
+      worktreeExecutionMode: "worktree-first",
+      tddWorktreeCutoverSliceId: "S-16"
+    });
+    const state = await readFlowState(root);
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/06-tdd.md"),
+      `# TDD Artifact\n\n## Test Discovery\n- Stub.\n\n## Iron Law Acknowledgement\n- Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.\n- Acknowledged: yes\n- Exceptions invoked (or \`- None.\`):\n  - None.\n`,
+      "utf8"
+    );
+
+    const baseTs = "2026-04-20T10:00:00Z";
+    const ledgerEntries = [
+      // S-14 GREEN row carries full worktree metadata (recorded after the
+      // v6.14.x flip but before the cutover boundary closed the slice).
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "mandatory",
+        status: "completed",
+        event: "completed",
+        eventTs: baseTs,
+        spanId: "span-s14-green",
+        phase: "green",
+        sliceId: "S-14",
+        ts: baseTs,
+        completedTs: baseTs,
+        runId: state.activeRunId,
+        claimToken: "wave-w02",
+        ownerLaneId: "release-lint",
+        leasedUntil: "2026-04-20T11:00:00Z",
+        evidenceRefs: ["green ok"]
+      },
+      // S-14 terminal `refactor-deferred` row lacks claim/lane/lease —
+      // exactly the partial-metadata pattern the v6.14.2 "all-or-nothing"
+      // rule (now removed in v6.14.3) refused to exempt.
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "mandatory",
+        status: "completed",
+        event: "completed",
+        eventTs: baseTs,
+        spanId: "span-s14-defer",
+        phase: "refactor-deferred",
+        sliceId: "S-14",
+        ts: baseTs,
+        completedTs: baseTs,
+        runId: state.activeRunId,
+        evidenceRefs: ["scope contained"]
+      }
+    ];
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      JSON.stringify(
+        { runId: state.activeRunId, schemaVersion: 3, entries: ledgerEntries },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    // Linter cross-checks the worktree-first metadata via the JSONL event
+    // stream, not the ledger. Mirror the rows so `runEvents` carries the
+    // same shape `readDelegationEvents` returns at runtime.
+    const eventsPath = path.join(root, ".cclaw/state/delegation-events.jsonl");
+    await fs.writeFile(
+      eventsPath,
+      ledgerEntries.map((e) => JSON.stringify(e)).join("\n") + "\n",
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "tdd");
+    const required = result.findings.filter(
+      (f) =>
+        f.required === true &&
+        (f.section === "tdd_slice_claim_token_missing" ||
+          f.section === "tdd_slice_lane_metadata_missing" ||
+          f.section === "tdd_lease_expired_unreclaimed")
+    );
+    expect(required).toEqual([]);
+    const exemptAdvisories = result.findings.filter((f) =>
+      f.section.endsWith("_legacy_exempt")
+    );
+    expect(exemptAdvisories.length).toBeGreaterThan(0);
+    for (const f of exemptAdvisories) {
+      expect(f.required).toBe(false);
+    }
+  });
+
+  it("still flags slices ABOVE tddWorktreeCutoverSliceId so post-cutover bugs are not hidden", async () => {
+    const root = await createTempProject("v6-14-3-post-cutover-still-flags");
+    await seedTddProject(root, {
+      legacyContinuation: true,
+      worktreeExecutionMode: "worktree-first",
+      tddWorktreeCutoverSliceId: "S-16"
+    });
+    const state = await readFlowState(root);
+    await fs.mkdir(path.join(root, ".cclaw/artifacts"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/artifacts/06-tdd.md"),
+      `# TDD Artifact\n\n## Test Discovery\n- Stub.\n\n## Iron Law Acknowledgement\n- Iron Law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.\n- Acknowledged: yes\n- Exceptions invoked (or \`- None.\`):\n  - None.\n`,
+      "utf8"
+    );
+
+    const ts = "2026-05-04T10:00:00Z";
+    const entries = [
+      {
+        stage: "tdd",
+        agent: "slice-implementer",
+        mode: "mandatory",
+        status: "completed",
+        event: "completed",
+        eventTs: ts,
+        spanId: "span-s17-defer",
+        phase: "refactor-deferred",
+        sliceId: "S-17",
+        ts,
+        completedTs: ts,
+        runId: state.activeRunId,
+        evidenceRefs: ["scope contained"]
+      }
+    ];
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      JSON.stringify(
+        { runId: state.activeRunId, schemaVersion: 3, entries },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/delegation-events.jsonl"),
+      entries.map((e) => JSON.stringify(e)).join("\n") + "\n",
+      "utf8"
+    );
+
+    const result = await lintArtifact(root, "tdd");
+    const claimMiss = result.findings.find(
+      (f) => f.section === "tdd_slice_claim_token_missing"
+    );
+    expect(claimMiss).toBeDefined();
+    expect(claimMiss?.required).toBe(true);
+    expect(claimMiss?.details ?? "").toMatch(/S-17/u);
+  });
+});
+
 describe("v6.14.2 Fix 3 — set-checkpoint-mode + set-integration-overseer-mode", () => {
   it("parseSetCheckpointModeArgs accepts the positional + --reason form", () => {
     const parsed = parseSetCheckpointModeArgs([
