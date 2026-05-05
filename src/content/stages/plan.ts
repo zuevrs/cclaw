@@ -54,6 +54,7 @@ export const PLAN: StageSchemaInput = {
       "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
       "Define validation points — mark where progress must be checked before continuing, with concrete command and expected evidence.",
       "Define execution posture — record whether execution should be sequential, dependency-batched, parallel-safe, or blocked; include risk triggers and RED/GREEN/REFACTOR checkpoint/commit expectations when the repo workflow supports them. This fulfills the `plan_execution_posture_recorded` gate.",
+      "**Author the FULL Parallel Execution Plan.** Inside the `<!-- parallel-exec-managed-start -->` block, enumerate ALL waves W-02..W-N covering EVERY T-NNN task in `## Task List` — no `we'll author waves later`, `next batch only`, or open-ended Backlog handwave is acceptable. Each task gets a slice with `sliceId | taskId | dependsOn | claimedPaths | parallelizable | riskTier | lane`. Spike rows (`S-N`) and tasks marked `deferred` in an explicit `Deferred:` column may be omitted, but every other T-NNN must be claimed. This fulfills the `plan_parallel_exec_full_coverage` gate. The TDD stage downstream is a pure consumer of these waves — if the plan does not author them, TDD cannot fan out that work.",
       "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with `node .cclaw/hooks/stage-complete.mjs plan` and tell user to run `/cc`."
     ],
     interactionProtocol: [
@@ -83,6 +84,7 @@ export const PLAN: StageSchemaInput = {
       { id: "plan_dependency_batches_defined", description: "Tasks are grouped into executable batches with gate checks and execution posture." },
       { id: "plan_acceptance_mapped", description: "Each task maps to a spec acceptance criterion." },
       { id: "plan_execution_posture_recorded", description: "Execution posture is recorded before implementation handoff." },
+      { id: "plan_parallel_exec_full_coverage", description: "Every T-NNN task in `## Task List` (other than spikes/explicitly-deferred) is assigned to at least one slice inside the `<!-- parallel-exec-managed-start -->` block; TDD cannot fan out work that the plan never authored as waves." },
       { id: "plan_wait_for_confirm", description: "Execution blocked until explicit user confirmation." }
     ],
     requiredEvidence: [

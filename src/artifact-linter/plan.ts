@@ -21,6 +21,40 @@ import {
   parseImplementationUnitParallelFields
 } from "../internal/plan-split-waves.js";
 
+const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
+const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
+const TASK_ID_PATTERN = /\bT-\d{3}[a-z]?(?:\.\d{1,3})?\b/giu;
+
+/**
+ * Extract every distinct T-NNN[a-z]?(.NNN)? id from a markdown body.
+ *
+ * Used by the `plan_parallel_exec_full_coverage` linter to compute the
+ * authored task set (from `## Task List`) vs. the wave-claimed task set
+ * (from inside `<!-- parallel-exec-managed-start -->`).
+ */
+function extractTaskIds(body: string): Set<string> {
+  const ids = new Set<string>();
+  for (const match of body.matchAll(TASK_ID_PATTERN)) {
+    ids.add(match[0]);
+  }
+  return ids;
+}
+
+/**
+ * Return the body between the parallel-exec managed comment markers, or
+ * an empty string if the block is absent. The TDD wave parser uses the
+ * same delimiters; keeping the regex local avoids cross-package import
+ * cycles in the linter.
+ */
+function extractParallelExecManagedBody(planMarkdown: string): string {
+  const startIdx = planMarkdown.indexOf(PARALLEL_EXEC_MANAGED_START);
+  const endIdx = planMarkdown.indexOf(PARALLEL_EXEC_MANAGED_END);
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    return "";
+  }
+  return planMarkdown.slice(startIdx + PARALLEL_EXEC_MANAGED_START.length, endIdx);
+}
+
 export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
   const {
     projectRoot,
@@ -339,6 +373,60 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
         details: advisorySerial
           ? "All units are marked parallelizable false; scheduler will serialize. If surfaces are independent, opt units into parallelism explicitly."
           : "Parallel-ready units detected or plan is single-unit."
+      });
+    }
+
+    // plan_parallel_exec_full_coverage: every T-NNN task listed in the
+    // plan's Task List must be assigned to a slice inside the
+    // <!-- parallel-exec-managed-start --> block. Without this, TDD
+    // cannot fan out work the plan never authored as waves; the previous
+    // failure mode was `stage-complete tdd` succeeding when only the
+    // first batch of tasks had been wave-assigned.
+    //
+    // Spike rows (`S-N`) live in the same Task List but are excluded
+    // because they are wall-clock spikes that produce evidence files
+    // and are not part of the regular slice fan-out. A task is also
+    // excluded when it appears under a `## Deferred Tasks` (or
+    // `## Backlog`) heading inside the plan with an explicit reason.
+    if (strictPlanGuards) {
+      const taskListSection = sectionBodyByName(sections, "Task List") ?? "";
+      const authoredTaskIds = extractTaskIds(taskListSection);
+
+      // Collect deferred / backlog task ids so they don't trigger the
+      // "uncovered" finding. Both heading variants are accepted.
+      const deferredBody =
+        (sectionBodyByName(sections, "Deferred Tasks") ?? "") +
+        "\n" +
+        (sectionBodyByName(sections, "Backlog") ?? "");
+      const deferredIds = extractTaskIds(deferredBody);
+
+      const parallelExecBody = extractParallelExecManagedBody(raw);
+      const claimedIds = extractTaskIds(parallelExecBody);
+
+      const uncovered: string[] = [];
+      for (const id of authoredTaskIds) {
+        if (claimedIds.has(id)) continue;
+        if (deferredIds.has(id)) continue;
+        uncovered.push(id);
+      }
+      uncovered.sort();
+
+      const blockPresent = parallelExecBody.length > 0;
+      const taskListPresent = authoredTaskIds.size > 0;
+
+      findings.push({
+        section: "plan_parallel_exec_full_coverage",
+        required: taskListPresent,
+        rule:
+          "Every T-NNN task in `## Task List` must be assigned to at least one slice inside the `<!-- parallel-exec-managed-start -->` block (or moved to an explicit `## Deferred Tasks` / `## Backlog` section). TDD cannot fan out waves the plan never authored.",
+        found: taskListPresent && blockPresent && uncovered.length === 0,
+        details: !taskListPresent
+          ? "Task List section is empty or missing T-NNN ids; full-coverage check skipped."
+          : !blockPresent
+            ? "`<!-- parallel-exec-managed-start -->` block is missing or empty. Author the Parallel Execution Plan with W-02..W-N covering every task before plan-final-approval."
+            : uncovered.length === 0
+              ? `Parallel Execution Plan covers all ${authoredTaskIds.size} authored task id(s); ${deferredIds.size} task id(s) are explicitly deferred.`
+              : `Uncovered task id(s) — author waves for: ${uncovered.slice(0, 25).join(", ")}${uncovered.length > 25 ? `, … (${uncovered.length - 25} more)` : ""}. Either add slices for them inside <!-- parallel-exec-managed-start --> or move them under \`## Deferred Tasks\` with a reason.`
       });
     }
 }
