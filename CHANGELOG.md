@@ -1,5 +1,35 @@
 # Changelog
 
+## 7.4.0 — Live wave-status streaming with fallback
+
+7.4.0 adds a live event-stream ingestion path for TDD wave orchestration while
+keeping deterministic fallback to file-based delegation events when streams are
+missing or stale.
+
+- **New streaming parser module.**
+  Added `src/streaming/event-stream.ts` with bounded JSONL buffering,
+  `phase-completed` event validation, and file readers for stream-backed
+  controller workflows.
+- **`wave-status` live mode support.**
+  `src/internal/wave-status.ts` now accepts stream modes (`auto|live|file`),
+  prefers `.cclaw/state/slice-builder-stream.jsonl` in live/auto mode, and
+  auto-falls back to `delegation-events.jsonl` when no parseable stream events
+  are present.
+- **Controller visibility warnings.**
+  Wave reports now include explicit warnings for dropped stream lines and
+  live-to-file fallback so operators can spot stream drift without silent
+  behavior changes.
+- **Slice-builder protocol updates.**
+  `sliceBuilderProtocol()` now documents the JSON-line streaming contract for
+  per-phase stdout events and the required fallback behavior when streaming is
+  unavailable.
+- **Tests.**
+  Added:
+  `tests/unit/event-stream-parser.test.ts`,
+  `tests/integration/slice-builder-stream.test.ts`,
+  and regression coverage to ensure legacy wave-status path-conflict behavior
+  remains stable.
+
 ## 7.3.0 — Worktree isolation for slice commits
 
 7.3.0 restores per-slice git worktree isolation so managed TDD commits no

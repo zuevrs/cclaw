@@ -6,6 +6,10 @@ import { readDelegationEvents, readDelegationLedger } from "../delegation.js";
 import type { DelegationEntry } from "../delegation.js";
 import { readFlowState } from "../runs.js";
 import {
+  DEFAULT_SLICE_STREAM_REL_PATH,
+  readEventStreamFile
+} from "../streaming/event-stream.js";
+import {
   mergeParallelWaveDefinitions,
   parseParallelExecutionPlanWaves,
   parseWavePlanDirectory,
@@ -19,6 +23,7 @@ interface InternalIo {
 
 interface WaveStatusArgs {
   format: "json" | "human";
+  streamMode: "auto" | "live" | "file";
 }
 
 export interface WaveStatusWaveSummary {
@@ -53,20 +58,37 @@ export interface RunWaveStatusOptions {
    * `<projectRoot>/.cclaw/artifacts`.
    */
   artifactsDir?: string;
+  /**
+   * Event ingestion mode:
+   * - auto: prefer live stream file; fallback to delegation-events.jsonl.
+   * - live: force live stream first; fallback to delegation-events.jsonl with warning.
+   * - file: skip stream file and use delegation-events.jsonl only.
+   */
+  streamMode?: "auto" | "live" | "file";
+  /**
+   * Optional absolute stream path override (tests).
+   */
+  streamPath?: string;
 }
 
 const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
 const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
 
 function parseArgs(tokens: string[]): WaveStatusArgs {
-  const args: WaveStatusArgs = { format: "json" };
+  const args: WaveStatusArgs = { format: "json", streamMode: "auto" };
   for (const token of tokens) {
     if (token === "--json") args.format = "json";
     else if (token === "--human" || token === "--text") args.format = "human";
+    else if (token === "--live") args.streamMode = "live";
+    else if (token === "--file-only") args.streamMode = "file";
     else if (token.startsWith("--format=")) {
       const raw = token.slice("--format=".length).trim();
       if (raw === "json" || raw === "human") args.format = raw;
       else throw new Error(`Unknown wave-status --format value: ${raw}`);
+    } else if (token.startsWith("--stream-mode=")) {
+      const raw = token.slice("--stream-mode=".length).trim();
+      if (raw === "auto" || raw === "live" || raw === "file") args.streamMode = raw;
+      else throw new Error(`Unknown wave-status --stream-mode value: ${raw}`);
     } else {
       throw new Error(`Unknown wave-status flag: ${token}`);
     }
@@ -281,28 +303,65 @@ export async function runWaveStatus(
       }
     }
   }
-  // Also consult the JSONL events in case the ledger projection lags.
-  try {
-    const { events } = await readDelegationEvents(projectRoot);
-    for (const ev of events) {
-      if (ev.event !== "completed") continue;
-      if (ev.runId !== activeRunId) continue;
-      if (ev.stage !== "tdd") continue;
-      if (typeof ev.sliceId !== "string") continue;
-      if (typeof ev.phase !== "string") continue;
-      if (TERMINAL_PHASES.has(ev.phase)) {
-        closedSlices.add(ev.sliceId);
-        continue;
-      }
-      if (ev.phase === "green" && ev.refactorOutcome) {
-        const mode = ev.refactorOutcome.mode;
-        if (mode === "inline" || mode === "deferred") {
+  const warnings: string[] = [];
+  const streamMode = options.streamMode ?? "auto";
+  const streamPath = options.streamPath ?? path.join(projectRoot, DEFAULT_SLICE_STREAM_REL_PATH);
+  let shouldReadJsonlFallback = streamMode === "file";
+
+  // Prefer live stream events when requested/available.
+  if (streamMode !== "file") {
+    const streamResult = await readEventStreamFile(streamPath);
+    if (streamResult.droppedLines > 0) {
+      warnings.push(`wave_stream_dropped_lines: ${streamResult.droppedLines}`);
+    }
+    if (streamResult.events.length > 0) {
+      for (const ev of streamResult.events) {
+        if (ev.runId && ev.runId !== activeRunId) continue;
+        if (ev.stage && ev.stage !== "tdd") continue;
+        if (TERMINAL_PHASES.has(ev.phase)) {
           closedSlices.add(ev.sliceId);
+          continue;
+        }
+        if (ev.phase === "green" && ev.refactorOutcome) {
+          const mode = ev.refactorOutcome.mode;
+          if (mode === "inline" || mode === "deferred") {
+            closedSlices.add(ev.sliceId);
+          }
         }
       }
+      shouldReadJsonlFallback = false;
+    } else {
+      shouldReadJsonlFallback = true;
+      if (streamMode === "auto" || streamMode === "live") {
+        warnings.push("wave_status_live_fallback_to_file: no parseable stream events");
+      }
     }
-  } catch {
-    // best-effort; ledger already covers the canonical case.
+  }
+
+  // Fallback to JSONL events when live stream is absent or disabled.
+  if (shouldReadJsonlFallback) {
+    try {
+      const { events } = await readDelegationEvents(projectRoot);
+      for (const ev of events) {
+        if (ev.event !== "completed") continue;
+        if (ev.runId !== activeRunId) continue;
+        if (ev.stage !== "tdd") continue;
+        if (typeof ev.sliceId !== "string") continue;
+        if (typeof ev.phase !== "string") continue;
+        if (TERMINAL_PHASES.has(ev.phase)) {
+          closedSlices.add(ev.sliceId);
+          continue;
+        }
+        if (ev.phase === "green" && ev.refactorOutcome) {
+          const mode = ev.refactorOutcome.mode;
+          if (mode === "inline" || mode === "deferred") {
+            closedSlices.add(ev.sliceId);
+          }
+        }
+      }
+    } catch {
+      // best-effort; ledger already covers the canonical case.
+    }
   }
 
   const waves: WaveStatusWaveSummary[] = merged.map((wave) => {
@@ -324,7 +383,6 @@ export async function runWaveStatus(
     (w) => w.status === "open" || w.status === "partial"
   ) ?? null;
 
-  const warnings: string[] = [];
   if (merged.length === 0 && planRaw.length === 0) {
     warnings.push(
       "wave_plan_missing: 05-plan.md not found or empty under <artifacts-dir>."
@@ -418,7 +476,7 @@ export async function runWaveStatusCommand(
     );
     return 1;
   }
-  const report = await runWaveStatus(projectRoot);
+  const report = await runWaveStatus(projectRoot, { streamMode: parsed.streamMode });
   if (parsed.format === "json") {
     io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } else {
