@@ -11,10 +11,10 @@ describe("gate density policy", () => {
       // spec budget = 5 after wave-9 self-review gate:
       // measurable AC, testability, assumptions, self-review, approval.
       spec: 5,
-      // plan budget = 6: slice budget, dependency batches, acceptance mapping,
-      // execution posture, full parallel-exec coverage, and explicit
-      // WAIT_FOR_CONFIRM.
-      plan: 6,
+      // plan budget = 7: slice budget, dependency batches, acceptance mapping,
+      // execution posture, full parallel-exec coverage, disjoint same-wave
+      // claimed paths, and explicit WAIT_FOR_CONFIRM.
+      plan: 7,
       // tdd budget = 11 after wave-9 enforcement:
       // discovery, impact, RED/GREEN/REFACTOR, verify, docs-drift, traceability (non-quick),
       // plus required iron-law, watched-RED, and vertical-slice-cycle evidence gates.

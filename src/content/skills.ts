@@ -214,14 +214,14 @@ export function tddTopOfSkillBlock(stage: FlowStage): string {
 **Step 1 — Wave status (always first):**
 \`node .cclaw/cli.mjs internal wave-status --json\`
 
-The output names: \`waves[]\` (closed/open), \`nextDispatch.waveId\`, \`nextDispatch.mode\` (\`wave-fanout\` or \`single-slice\`), \`nextDispatch.readyToDispatch\` (slice ids), and \`nextDispatch.pathConflicts\` (overlapping \`claimedPaths\` between members).
+The output names: \`waves[]\` (closed/open), \`nextDispatch.waveId\`, \`nextDispatch.mode\` (\`wave-fanout\`, \`single-slice\`, or \`blocked\`), \`nextDispatch.readyToDispatch\` (slice ids), and \`nextDispatch.pathConflicts\` (overlapping \`claimedPaths\` between members).
 
 **Step 2 — Decide automatically (no user question when paths disjoint):**
 
 | \`mode\`         | \`pathConflicts\` | Action                                                                                                                                  |
 |------------------|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
 | \`wave-fanout\`  | \`[]\`            | **Fan out the entire wave in one tool batch.** Emit one \`Task\` per ready slice in a single controller message. Do NOT ask the user.   |
-| \`wave-fanout\`  | non-empty         | Issue exactly one AskQuestion (resolve the overlap, drop the conflicting slice, or downgrade to single-slice for the disputed member).  |
+| \`blocked\`      | non-empty         | Issue exactly one AskQuestion (resolve overlap, split/serialize, or adjust claimedPaths), then re-run \`wave-status\`.                    |
 | \`single-slice\` | —                 | One \`Task\` for the next ready slice.                                                                                                  |
 
 **Step 3 — Dispatch protocol per slice:** in the SAME controller message that issues the \`Task\` call:
