@@ -275,7 +275,7 @@ const DEPRECATED_HOOK_FILES = [
 ] as const;
 
 const DEPRECATED_RUNTIME_ROOT_FILES = ["learnings.jsonl", "observations.jsonl"] as const;
-const DEPRECATED_RUNTIME_DIRS = ["evals", "worktrees", "references", "contexts"] as const;
+const DEPRECATED_RUNTIME_DIRS = ["evals", "references", "contexts"] as const;
 
 async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
   try {

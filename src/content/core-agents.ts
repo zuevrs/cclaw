@@ -213,6 +213,7 @@ export function sliceBuilderProtocol(): string {
     "### Invariants",
     "- Produce failing RED evidence (or cite the delegated RED artifact) **before** production edits.",
     "- Stay inside the slice contract: `claimedPaths`, acceptance mapping, and forbidden-change lists from the parent.",
+    "- When `tdd.isolationMode=worktree|auto`, run the slice inside the assigned worktree path (never in the shared repo root) so filesystem isolation enforces the claimed-path fence.",
     "- When `tdd.commitMode=managed-per-slice`, do **not** hand-edit git state for slice files (no manual `git add/commit` on claimed paths). Let `.cclaw/hooks/slice-commit.mjs` own per-slice commits.",
     "- After GREEN, refactor inline **or** record deferred refactor via the same `--refactor-outcome` mechanics the controller specifies.",
     "- Own the prose slice summary at `<artifacts-dir>/tdd-slices/S-<id>.md` yourself.",

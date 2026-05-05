@@ -60,6 +60,19 @@ describe("config", () => {
     expect(config.tdd?.commitMode).toBe("checkpoint-only");
   });
 
+  it("reads explicit tdd isolation settings from config", async () => {
+    const root = await createTempProject("config-isolation-explicit");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\ntdd:\n  commitMode: managed-per-slice\n  isolationMode: auto\n  worktreeRoot: .cclaw/custom-worktrees\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.tdd?.isolationMode).toBe("auto");
+    expect(config.tdd?.worktreeRoot).toBe(".cclaw/custom-worktrees");
+  });
+
   it("rejects invalid tdd.commitMode values", async () => {
     const root = await createTempProject("config-commit-mode-invalid");
     await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
@@ -71,6 +84,17 @@ describe("config", () => {
     await expect(readConfig(root)).rejects.toThrow(/tdd\.commitMode/);
   });
 
+  it("rejects invalid tdd.isolationMode values", async () => {
+    const root = await createTempProject("config-isolation-invalid");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\ntdd:\n  isolationMode: sandbox\n",
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/tdd\.isolationMode/);
+  });
+
   it("cclaw init writes harnesses + version stamps + tdd defaults", async () => {
     const root = await createTempProject("config-init-minimal");
     await initCclaw({ projectRoot: root, harnesses: ["claude"] });
@@ -79,6 +103,10 @@ describe("config", () => {
     const parsed = parse(raw) as Record<string, unknown>;
     expect(Object.keys(parsed).sort()).toEqual(["flowVersion", "harnesses", "tdd", "version"]);
     expect(parsed.harnesses).toEqual(["claude"]);
-    expect(parsed.tdd).toEqual({ commitMode: "managed-per-slice" });
+    expect(parsed.tdd).toEqual({
+      commitMode: "managed-per-slice",
+      isolationMode: "worktree",
+      worktreeRoot: ".cclaw/worktrees"
+    });
   });
 });
