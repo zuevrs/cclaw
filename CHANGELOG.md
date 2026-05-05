@@ -1,5 +1,35 @@
 # Changelog
 
+## 7.2.0 — Generic stack discovery + hook drift checks
+
+7.2.0 removes remaining hardcoded stack heuristics and tightens runtime
+integrity around managed hook scripts so `sync` can verify drift without
+mutating workspace state.
+
+- **Shared stack-detection profiles.**
+  Added `src/stack-detection.ts` as a single source of truth for stack review
+  routing and discovery markers. `start-flow`, verify-time context discovery,
+  and stage schema review routing now reuse the same profile data instead of
+  duplicating hardcoded marker lists.
+- **Generic GREEN evidence hints.**
+  Updated `src/content/hooks.ts` runner guidance to be language-agnostic, with
+  canonical pass-line examples for Node/TS, Python, Go, Rust, and Java/JVM.
+  The validator now also accepts Maven/Surefire-style passing output.
+- **Escape-flag cleanup completion.**
+  Delegation hook UX now enforces `--override-cap` with `--reason`, removes the
+  deprecated `--allow-fast-green` path in favor of
+  `--green-mode=observational`, hardens deferred-refactor rationale quality, and
+  emits `cclaw_allow_parallel_auto_flip` audit events when disjoint claimed
+  paths auto-enable parallel fan-out.
+- **`sync --check` hook drift detector.**
+  Added byte-level canonical hook comparison to `sync`:
+  `npx cclaw-cli sync --check` now validates generated managed hooks (including
+  `delegation-record.mjs` and `slice-commit.mjs`) against their render sources
+  and fails fast with actionable drift output.
+- **Tests.**
+  Added parser coverage for `sync --check` and sync drift coverage in
+  `tests/unit/install-disabled-harness-cleanup.test.ts`.
+
 ## 7.1.1 — Plan Atomicity (wave disjointness + path-conflict surfacing)
 
 7.1.1 hardens the planning contract so parallel waves are explicitly safe to

@@ -304,7 +304,8 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
         slice,
         phase: "refactor-deferred",
         evidenceRefs: [`scope contained for ${slice}; no measurable cleanup yet`],
-        refactorRationale: "scope contained, no cleanup needed yet",
+        refactorRationale:
+          `Deferred cleanup for ${slice} / T-10${i} because this pass is constrained to green assertions first; structural cleanup is queued for the next refactor slice.`,
         spanId
       });
     }

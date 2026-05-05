@@ -29,4 +29,24 @@ describe("sync disabled harness cleanup", () => {
       "Cannot strip managed hook entries"
     );
   });
+
+  it("sync --check passes when managed hooks are canonical", async () => {
+    const root = await createTempProject("sync-check-clean");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+
+    await expect(syncCclaw(root, { check: true })).resolves.toBeUndefined();
+  });
+
+  it("sync --check reports drift when a managed hook is edited", async () => {
+    const root = await createTempProject("sync-check-drift");
+    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
+    await writeProjectFile(root, ".cclaw/hooks/delegation-record.mjs", "// drifted\n");
+
+    await expect(syncCclaw(root, { check: true })).rejects.toThrow(
+      /Managed hook drift detected/
+    );
+    await expect(syncCclaw(root, { check: true })).rejects.toThrow(
+      /\.cclaw\/hooks\/delegation-record\.mjs/
+    );
+  });
 });

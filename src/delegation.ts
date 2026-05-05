@@ -641,6 +641,7 @@ const NON_DELEGATION_AUDIT_EVENTS = new Set<string>([
   "cclaw_fanin_resolved",
   "cclaw_fanin_abandoned",
   "cclaw_integration_overseer_skipped",
+  "cclaw_allow_parallel_auto_flip",
   "slice-completed"
 ]);
 

@@ -17,6 +17,10 @@ import {
 } from "../../flow-state.js";
 import { readFlowState } from "../../runs.js";
 import { FLOW_STAGES, TRACK_STAGES, type FlowStage, type FlowTrack } from "../../types.js";
+import {
+  STACK_DISCOVERY_DIR_MARKERS,
+  STACK_DISCOVERY_MARKERS
+} from "../../stack-detection.js";
 import { coerceCandidateFlowState } from "./flow-state-coercion.js";
 import type {
   VerifyCurrentStateArgs,
@@ -227,24 +231,11 @@ export async function discoverStartFlowContext(projectRoot: string): Promise<str
       : "- Origin docs scanned: no PRD/RFC/ADR/design/spec files found in configured locations."
   );
 
-  const stackMarkers = await listExistingFiles(projectRoot, [
-    "package.json",
-    "pyproject.toml",
-    "requirements.txt",
-    "requirements-dev.txt",
-    ".python-version",
-    "go.mod",
-    "Cargo.toml",
-    "pom.xml",
-    "build.gradle",
-    "build.gradle.kts",
-    "Dockerfile",
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    ".gitlab-ci.yml"
-  ]);
-  if (await pathExists(projectRoot, ".github/workflows")) {
-    stackMarkers.push(".github/workflows/");
+  const stackMarkers = await listExistingFiles(projectRoot, [...STACK_DISCOVERY_MARKERS]);
+  for (const markerDir of STACK_DISCOVERY_DIR_MARKERS) {
+    if (await pathExists(projectRoot, markerDir)) {
+      stackMarkers.push(`${markerDir}/`);
+    }
   }
   lines.push(
     stackMarkers.length > 0

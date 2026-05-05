@@ -111,7 +111,7 @@ describe("delegation-record --refactor-outcome ", () => {
       "--agent-definition-path=.cclaw/agents/slice-builder.md",
       "--ack-ts=2026-01-01T00:00:00Z",
       "--refactor-outcome=deferred",
-      "--refactor-rationale=tracked in followups/REF-12"
+      "--refactor-rationale=Deferred cleanup for S-2 / T-202 because this GREEN closes failing assertions first; followup refactor tracked in docs/refactor-plan.md."
     ]);
 
     expect(result.code, result.stderr).toBe(0);
@@ -125,10 +125,13 @@ describe("delegation-record --refactor-outcome ", () => {
     expect(greenEvent).toBeTruthy();
     expect(greenEvent!.refactorOutcome).toEqual({
       mode: "deferred",
-      rationale: "tracked in followups/REF-12"
+      rationale:
+        "Deferred cleanup for S-2 / T-202 because this GREEN closes failing assertions first; followup refactor tracked in docs/refactor-plan.md."
     });
     const refs = greenEvent!.evidenceRefs as string[] | undefined;
-    expect(refs && refs[0]).toBe("tracked in followups/REF-12");
+    expect(refs && refs[0]).toBe(
+      "Deferred cleanup for S-2 / T-202 because this GREEN closes failing assertions first; followup refactor tracked in docs/refactor-plan.md."
+    );
   });
 
   it("rejects --refactor-outcome=deferred without rationale", async () => {

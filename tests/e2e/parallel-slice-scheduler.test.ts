@@ -114,7 +114,7 @@ describe("e2e: parallel slice-builder scheduler", () => {
     const overridden = await runScript(
       root,
       scriptPath,
-      scheduleArgs("span-overflow", ["src/x.ts"], ["--override-cap=10"])
+      scheduleArgs("span-overflow", ["src/x.ts"], ["--override-cap=10", "--reason=cap-burst-e2e"])
     );
     expect(overridden.code, `override stderr=${overridden.stderr}`).toBe(0);
   });
