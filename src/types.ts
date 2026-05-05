@@ -196,6 +196,7 @@ export type TddCommitMode =
   | "agent-required"
   | "checkpoint-only"
   | "off";
+export type TddIsolationMode = "worktree" | "in-place" | "auto";
 
 export interface TddConfig {
   /**
@@ -206,6 +207,17 @@ export interface TddConfig {
    * - off: skip commit-shape enforcement.
    */
   commitMode?: TddCommitMode;
+  /**
+   * Slice execution isolation model.
+   * - worktree: default; allocate one git worktree per slice span.
+   * - in-place: run in the main working tree.
+   * - auto: prefer worktree, degrade to in-place when unavailable.
+   */
+  isolationMode?: TddIsolationMode;
+  /**
+   * Repo-relative root used for managed slice worktrees.
+   */
+  worktreeRoot?: string;
 }
 
 export interface CclawConfig {

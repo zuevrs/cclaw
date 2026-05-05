@@ -208,6 +208,11 @@ export type DelegationEntry = {
    */
   claimedPaths?: string[];
   /**
+   * Absolute path of the isolated git worktree assigned to this span when
+   * `tdd.isolationMode=worktree|auto`.
+   */
+  worktreePath?: string;
+  /**
    * TDD slice identifier, e.g. `"S-1"`. Recorded by the controller when
    * dispatching `slice-builder` so the artifact linter can auto-derive the
    * Watched-RED Proof + Vertical Slice Cycle tables from

@@ -9,7 +9,8 @@ import type {
   FlowTrack,
   HarnessId,
   LanguageRulePack,
-  TddCommitMode
+  TddCommitMode,
+  TddIsolationMode
 } from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
@@ -24,6 +25,10 @@ export const TDD_COMMIT_MODES = [
 ] as const;
 const TDD_COMMIT_MODE_SET = new Set<string>(TDD_COMMIT_MODES);
 export const DEFAULT_TDD_COMMIT_MODE: TddCommitMode = "managed-per-slice";
+export const TDD_ISOLATION_MODES = ["worktree", "in-place", "auto"] as const;
+const TDD_ISOLATION_MODE_SET = new Set<string>(TDD_ISOLATION_MODES);
+export const DEFAULT_TDD_ISOLATION_MODE: TddIsolationMode = "worktree";
+export const DEFAULT_TDD_WORKTREE_ROOT = `${RUNTIME_ROOT}/worktrees`;
 
 // Kept for runtime modules that use these defaults directly.
 export const DEFAULT_TDD_TEST_PATH_PATTERNS: readonly string[] = [
@@ -60,7 +65,9 @@ function configFixExample(): string {
   - claude
   - cursor
 tdd:
-  commitMode: managed-per-slice`;
+  commitMode: managed-per-slice
+  isolationMode: worktree
+  worktreeRoot: .cclaw/worktrees`;
 }
 
 function configValidationError(configFilePath: string, reason: string): InvalidConfigError {
@@ -89,7 +96,9 @@ export function createDefaultConfig(
     flowVersion: FLOW_VERSION,
     harnesses: [...new Set(harnesses)],
     tdd: {
-      commitMode: DEFAULT_TDD_COMMIT_MODE
+      commitMode: DEFAULT_TDD_COMMIT_MODE,
+      isolationMode: DEFAULT_TDD_ISOLATION_MODE,
+      worktreeRoot: DEFAULT_TDD_WORKTREE_ROOT
     }
   };
 }
@@ -102,6 +111,26 @@ export function resolveTddCommitMode(
     return raw as TddCommitMode;
   }
   return DEFAULT_TDD_COMMIT_MODE;
+}
+
+export function resolveTddIsolationMode(
+  config: Pick<CclawConfig, "tdd"> | null | undefined
+): TddIsolationMode {
+  const raw = config?.tdd?.isolationMode;
+  if (typeof raw === "string" && TDD_ISOLATION_MODE_SET.has(raw)) {
+    return raw as TddIsolationMode;
+  }
+  return DEFAULT_TDD_ISOLATION_MODE;
+}
+
+export function resolveTddWorktreeRoot(
+  config: Pick<CclawConfig, "tdd"> | null | undefined
+): string {
+  const raw = config?.tdd?.worktreeRoot;
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    return raw.trim();
+  }
+  return DEFAULT_TDD_WORKTREE_ROOT;
 }
 
 function assertOnlySupportedKeys(parsed: Record<string, unknown>, fullPath: string): void {
@@ -183,6 +212,8 @@ export async function readConfig(
       : FLOW_VERSION;
   const parsedTdd = isRecord(parsed.tdd) ? parsed.tdd : {};
   const rawCommitMode = parsedTdd.commitMode;
+  const rawIsolationMode = parsedTdd.isolationMode;
+  const rawWorktreeRoot = parsedTdd.worktreeRoot;
   if (
     rawCommitMode !== undefined &&
     (typeof rawCommitMode !== "string" || !TDD_COMMIT_MODE_SET.has(rawCommitMode))
@@ -192,16 +223,42 @@ export async function readConfig(
       `"tdd.commitMode" must be one of: ${TDD_COMMIT_MODES.join(", ")}`
     );
   }
+  if (
+    rawIsolationMode !== undefined &&
+    (typeof rawIsolationMode !== "string" || !TDD_ISOLATION_MODE_SET.has(rawIsolationMode))
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"tdd.isolationMode" must be one of: ${TDD_ISOLATION_MODES.join(", ")}`
+    );
+  }
+  if (
+    rawWorktreeRoot !== undefined &&
+    (typeof rawWorktreeRoot !== "string" || rawWorktreeRoot.trim().length === 0)
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"tdd.worktreeRoot" must be a non-empty string when provided`
+    );
+  }
   const commitMode = typeof rawCommitMode === "string"
     ? rawCommitMode as TddCommitMode
     : DEFAULT_TDD_COMMIT_MODE;
+  const isolationMode = typeof rawIsolationMode === "string"
+    ? rawIsolationMode as TddIsolationMode
+    : DEFAULT_TDD_ISOLATION_MODE;
+  const worktreeRoot = typeof rawWorktreeRoot === "string" && rawWorktreeRoot.trim().length > 0
+    ? rawWorktreeRoot.trim()
+    : DEFAULT_TDD_WORKTREE_ROOT;
 
   return {
     version,
     flowVersion,
     harnesses: normalizedHarnesses,
     tdd: {
-      commitMode
+      commitMode,
+      isolationMode,
+      worktreeRoot
     }
   };
 }
@@ -221,7 +278,9 @@ export async function writeConfig(
     flowVersion: config.flowVersion,
     harnesses: config.harnesses,
     tdd: {
-      commitMode: resolveTddCommitMode(config)
+      commitMode: resolveTddCommitMode(config),
+      isolationMode: resolveTddIsolationMode(config),
+      worktreeRoot: resolveTddWorktreeRoot(config)
     }
   };
   await writeFileSafe(configPath(projectRoot), stringify(serialisable));

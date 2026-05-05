@@ -656,6 +656,10 @@ function buildRow(args, status, runId, now, options) {
     riskTierRaw === "low" || riskTierRaw === "medium" || riskTierRaw === "high"
       ? riskTierRaw
       : undefined;
+  const worktreePath =
+    typeof args["worktree-path"] === "string" && args["worktree-path"].trim().length > 0
+      ? args["worktree-path"].trim()
+      : undefined;
   return {
     stage: args.stage,
     agent: args.agent,
@@ -679,6 +683,7 @@ function buildRow(args, status, runId, now, options) {
     schemaVersion: LEDGER_SCHEMA_VERSION,
     allowParallel: args["allow-parallel"] === true ? true : undefined,
     claimedPaths: claimedPaths.length > 0 ? claimedPaths : undefined,
+    worktreePath,
     sliceId,
     phase,
     refactorOutcome,
@@ -1293,6 +1298,24 @@ async function runSliceCommitIfNeeded(root, row, runId) {
     "--span-id=" + spanId,
     "--run-id=" + runId
   ];
+  let explicitWorktreePath =
+    typeof row.worktreePath === "string" && row.worktreePath.trim().length > 0
+      ? row.worktreePath.trim()
+      : "";
+  if (explicitWorktreePath.length === 0) {
+    const priorLedger = await readDelegationLedgerEntries(root);
+    const priorSpanPath = priorLedger
+      .filter((entry) => entry && entry.spanId === spanId && entry.runId === runId)
+      .map((entry) =>
+        entry && typeof entry.worktreePath === "string" ? entry.worktreePath.trim() : "")
+      .find((value) => value.length > 0);
+    if (priorSpanPath) {
+      explicitWorktreePath = priorSpanPath;
+    }
+  }
+  if (explicitWorktreePath.length > 0) {
+    helperArgs.push("--worktree-path=" + explicitWorktreePath);
+  }
   if (typeof row.taskId === "string" && row.taskId.trim().length > 0) {
     helperArgs.push("--task-id=" + row.taskId.trim());
   }
@@ -1347,6 +1370,91 @@ async function runSliceCommitIfNeeded(root, row, runId) {
         payload && typeof payload === "object" && typeof payload.errorCode === "string"
           ? payload.errorCode
           : "slice_commit_failed";
+      resolve({
+        ok: false,
+        errorCode: payloadCode,
+        details:
+          payload && typeof payload === "object"
+            ? payload
+            : {
+              stderr: err.trim(),
+              stdout: out.trim()
+            }
+      });
+    });
+  });
+}
+
+async function runSliceWorktreePrepareIfNeeded(root, row, runId) {
+  if (
+    row.stage !== "tdd" ||
+    row.agent !== "slice-builder" ||
+    row.status !== "scheduled"
+  ) {
+    return { ok: true, skipped: true };
+  }
+  const sliceId = typeof row.sliceId === "string" ? row.sliceId.trim() : "";
+  const spanId = typeof row.spanId === "string" ? row.spanId.trim() : "";
+  if (sliceId.length === 0 || spanId.length === 0) {
+    return { ok: true, skipped: true };
+  }
+  const helperPath = path.join(root, RUNTIME_ROOT, "hooks", "slice-commit.mjs");
+  if (!(await exists(helperPath))) {
+    return { ok: true, skipped: true };
+  }
+  const helperArgs = [
+    helperPath,
+    "--json",
+    "--quiet",
+    "--prepare-worktree",
+    "--slice=" + sliceId,
+    "--span-id=" + spanId,
+    "--run-id=" + runId
+  ];
+  if (Array.isArray(row.claimedPaths) && row.claimedPaths.length > 0) {
+    helperArgs.push("--claimed-paths=" + row.claimedPaths.join(","));
+  }
+  return await new Promise((resolve) => {
+    const child = spawn(process.execPath, helperArgs, {
+      cwd: root,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (chunk) => {
+      out += String(chunk ?? "");
+    });
+    child.stderr.on("data", (chunk) => {
+      err += String(chunk ?? "");
+    });
+    child.on("error", (error) => {
+      resolve({
+        ok: false,
+        errorCode: "worktree_prepare_failed",
+        details: {
+          message: error instanceof Error ? error.message : String(error)
+        }
+      });
+    });
+    child.on("close", (code) => {
+      let payload = null;
+      const trimmed = out.trim();
+      if (trimmed.length > 0) {
+        try {
+          payload = JSON.parse(trimmed);
+        } catch {
+          payload = null;
+        }
+      }
+      if (code === 0) {
+        resolve({ ok: true, payload });
+        return;
+      }
+      const payloadCode =
+        payload && typeof payload === "object" && typeof payload.errorCode === "string"
+          ? payload.errorCode
+          : "worktree_prepare_failed";
       resolve({
         ok: false,
         errorCode: payloadCode,
@@ -1552,6 +1660,16 @@ async function main() {
   const status = args.status;
   const priorLedger = await readDelegationLedgerEntries(root);
   const priorForSpan = priorLedger.filter((e) => e && e.spanId === args["span-id"]);
+  const inheritedWorktreePath = priorForSpan
+    .map((entry) =>
+      entry && typeof entry.worktreePath === "string" ? entry.worktreePath.trim() : "")
+    .find((value) => value.length > 0);
+  if (
+    inheritedWorktreePath &&
+    (typeof args["worktree-path"] !== "string" || args["worktree-path"].trim().length === 0)
+  ) {
+    args["worktree-path"] = inheritedWorktreePath;
+  }
   const inheritedStartTs = priorForSpan
     .map((e) => e.startTs)
     .filter((ts) => typeof ts === "string" && ts.length > 0)
@@ -1613,6 +1731,24 @@ async function main() {
     if (capViolation) {
       emitErrorJson("dispatch_cap", capViolation, json);
       return;
+    }
+    const preparedWorktree = await runSliceWorktreePrepareIfNeeded(root, clean, runId);
+    if (!preparedWorktree.ok) {
+      emitErrorJson(
+        preparedWorktree.errorCode || "worktree_prepare_failed",
+        preparedWorktree.details || {},
+        json
+      );
+      return;
+    }
+    if (
+      preparedWorktree.payload &&
+      typeof preparedWorktree.payload === "object" &&
+      typeof preparedWorktree.payload.worktreePath === "string" &&
+      preparedWorktree.payload.worktreePath.trim().length > 0
+    ) {
+      clean.worktreePath = preparedWorktree.payload.worktreePath.trim();
+      event.worktreePath = clean.worktreePath;
     }
   }
   const dedupViolation = enforceDispatchDedupInline(clean, priorLedger, args);
@@ -1804,7 +1940,7 @@ export function sliceCommitScript(): string {
   return internalHelperScript(
     "slice-commit",
     "slice-commit",
-    "Usage: node " + RUNTIME_ROOT + "/hooks/slice-commit.mjs --slice=<S-N> --span-id=<span-id> [--task-id=<T-id>] [--title=<text>] [--run-id=<run-id>] [--claimed-paths=<path1,path2,...>] [--claimed-path=<path> ...] [--json] [--quiet]"
+    "Usage: node " + RUNTIME_ROOT + "/hooks/slice-commit.mjs --slice=<S-N> --span-id=<span-id> [--task-id=<T-id>] [--title=<text>] [--run-id=<run-id>] [--worktree-path=<abs-or-rel-path>] [--prepare-worktree] [--claimed-paths=<path1,path2,...>] [--claimed-path=<path> ...] [--json] [--quiet]"
   );
 }
 

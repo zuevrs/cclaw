@@ -1,5 +1,35 @@
 # Changelog
 
+## 7.3.0 — Worktree isolation for slice commits
+
+7.3.0 restores per-slice git worktree isolation so managed TDD commits no
+longer rely on one shared working tree during parallel slice execution.
+
+- **New worktree manager control plane.**
+  Added `src/worktree-manager.ts` with explicit APIs:
+  `createSliceWorktree(sliceId, baseRef, claimedPaths)`,
+  `commitAndMergeBack(worktreePath, message)`, and
+  `cleanupWorktree(worktreePath)`.
+- **TDD config defaults now isolate by worktree.**
+  Extended `tdd` config with:
+  `isolationMode: worktree|in-place|auto` (default `worktree`) and
+  `worktreeRoot` (default `.cclaw/worktrees`).
+- **Managed slice commits now support worktree flow.**
+  `internal slice-commit` adds `--prepare-worktree` and `--worktree-path` so
+  DOC closure can commit inside a slice worktree, rebase onto current main
+  head, fast-forward merge back, and clean up the worktree on success.
+- **Graceful degradation + conflict signaling.**
+  Missing/broken worktree support downgrades to an explicit
+  `worktree-unavailable` skip payload (agent-required fallback signal), while
+  merge-back conflicts now surface as `worktree_merge_conflict` and preserve the
+  failing worktree for diagnostics.
+- **Tests.**
+  Added:
+  `tests/unit/worktree-manager.test.ts`,
+  `tests/integration/worktree-parallel-slice.test.ts`,
+  `tests/integration/worktree-merge-conflict.test.ts`,
+  plus config schema coverage for new TDD isolation keys.
+
 ## 7.2.0 — Generic stack discovery + hook drift checks
 
 7.2.0 removes remaining hardcoded stack heuristics and tightens runtime
