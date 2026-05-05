@@ -43,6 +43,7 @@ import {
 import { parsePlanSplitWavesArgs, runPlanSplitWaves } from "./plan-split-waves.js";
 import { runWaveStatusCommand } from "./wave-status.js";
 import { runCohesionContractCommand } from "./cohesion-contract-stub.js";
+import { runSliceCommitCommand } from "./slice-commit.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -72,7 +73,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves | wave-status | cohesion-contract\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | slice-commit | flow-state-repair | waiver-grant | plan-split-waves | wave-status | cohesion-contract\n"
     );
     return 1;
   }
@@ -120,6 +121,9 @@ export async function runInternalCommand(
     if (subcommand === "hook") {
       return await runHookCommand(projectRoot, parseHookArgs(tokens), io);
     }
+    if (subcommand === "slice-commit") {
+      return await runSliceCommitCommand(projectRoot, tokens, io);
+    }
     if (subcommand === "flow-state-repair") {
       return await runFlowStateRepair(projectRoot, parseFlowStateRepairArgs(tokens), io);
     }
@@ -136,7 +140,7 @@ export async function runInternalCommand(
       return await runCohesionContractCommand(projectRoot, tokens, io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves | wave-status | cohesion-contract\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | slice-commit | flow-state-repair | waiver-grant | plan-split-waves | wave-status | cohesion-contract\n`
     );
     return 1;
   } catch (err) {

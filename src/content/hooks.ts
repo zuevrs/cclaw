@@ -242,6 +242,7 @@ export function stageCompleteScript(): string {
 export function delegationRecordScript(): string {
   return `#!/usr/bin/env node
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -1231,6 +1232,101 @@ async function runRepair(args, json) {
   }
 }
 
+async function runSliceCommitIfNeeded(root, row, runId) {
+  if (
+    row.stage !== "tdd" ||
+    row.agent !== "slice-builder" ||
+    row.status !== "completed" ||
+    row.phase !== "doc"
+  ) {
+    return { ok: true, skipped: true };
+  }
+  const sliceId = typeof row.sliceId === "string" ? row.sliceId.trim() : "";
+  const spanId = typeof row.spanId === "string" ? row.spanId.trim() : "";
+  if (sliceId.length === 0 || spanId.length === 0) {
+    return { ok: true, skipped: true };
+  }
+  const helperPath = path.join(root, RUNTIME_ROOT, "hooks", "slice-commit.mjs");
+  if (!(await exists(helperPath))) {
+    return { ok: true, skipped: true };
+  }
+  const helperArgs = [
+    helperPath,
+    "--json",
+    "--quiet",
+    "--slice=" + sliceId,
+    "--span-id=" + spanId,
+    "--run-id=" + runId
+  ];
+  if (typeof row.taskId === "string" && row.taskId.trim().length > 0) {
+    helperArgs.push("--task-id=" + row.taskId.trim());
+  }
+  if (Array.isArray(row.claimedPaths) && row.claimedPaths.length > 0) {
+    helperArgs.push("--claimed-paths=" + row.claimedPaths.join(","));
+  }
+  if (Array.isArray(row.evidenceRefs) && row.evidenceRefs.length > 0) {
+    const title = String(row.evidenceRefs[0] || "").trim();
+    if (title.length > 0) {
+      helperArgs.push("--title=" + title.slice(0, 120));
+    }
+  }
+
+  return await new Promise((resolve) => {
+    const child = spawn(process.execPath, helperArgs, {
+      cwd: root,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (chunk) => {
+      out += String(chunk ?? "");
+    });
+    child.stderr.on("data", (chunk) => {
+      err += String(chunk ?? "");
+    });
+    child.on("error", (error) => {
+      resolve({
+        ok: false,
+        errorCode: "slice_commit_failed",
+        details: {
+          message: error instanceof Error ? error.message : String(error)
+        }
+      });
+    });
+    child.on("close", (code) => {
+      let payload = null;
+      const trimmed = out.trim();
+      if (trimmed.length > 0) {
+        try {
+          payload = JSON.parse(trimmed);
+        } catch {
+          payload = null;
+        }
+      }
+      if (code === 0) {
+        resolve({ ok: true, payload });
+        return;
+      }
+      const payloadCode =
+        payload && typeof payload === "object" && typeof payload.errorCode === "string"
+          ? payload.errorCode
+          : "slice_commit_failed";
+      resolve({
+        ok: false,
+        errorCode: payloadCode,
+        details:
+          payload && typeof payload === "object"
+            ? payload
+            : {
+              stderr: err.trim(),
+              stdout: out.trim()
+            }
+      });
+    });
+  });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const json = args.json !== undefined;
@@ -1615,6 +1711,23 @@ async function main() {
     }
   }
 
+  const sliceCommitResult = await runSliceCommitIfNeeded(root, clean, runId);
+  if (!sliceCommitResult.ok) {
+    emitErrorJson(
+      sliceCommitResult.errorCode || "slice_commit_failed",
+      sliceCommitResult.details || {},
+      json
+    );
+    return;
+  }
+  if (
+    sliceCommitResult.payload &&
+    typeof sliceCommitResult.payload === "object" &&
+    typeof sliceCommitResult.payload.commitSha === "string"
+  ) {
+    event.sliceCommitSha = sliceCommitResult.payload.commitSha;
+  }
+
   await persistEntry(root, runId, clean, event);
 
   process.stdout.write(JSON.stringify({ ok: true, event }, null, 2) + "\\n");
@@ -1622,6 +1735,14 @@ async function main() {
 
 void main();
 `;
+}
+
+export function sliceCommitScript(): string {
+  return internalHelperScript(
+    "slice-commit",
+    "slice-commit",
+    "Usage: node " + RUNTIME_ROOT + "/hooks/slice-commit.mjs --slice=<S-N> --span-id=<span-id> [--task-id=<T-id>] [--title=<text>] [--run-id=<run-id>] [--claimed-paths=<path1,path2,...>] [--claimed-path=<path> ...] [--json] [--quiet]"
+  );
 }
 
 export function runHookCmdScript(): string {

@@ -191,10 +191,28 @@ export interface ReviewLoopConfig {
 }
 
 export type VcsMode = "git-with-remote" | "git-local-only" | "none";
+export type TddCommitMode =
+  | "managed-per-slice"
+  | "agent-required"
+  | "checkpoint-only"
+  | "off";
+
+export interface TddConfig {
+  /**
+   * Commit ownership model for closed TDD slices.
+   * - managed-per-slice: cclaw-generated hook performs one commit per closed slice.
+   * - agent-required: worker/controller must create the commit outside cclaw.
+   * - checkpoint-only: coarse-grained checkpoints are allowed (no per-slice enforcement).
+   * - off: skip commit-shape enforcement.
+   */
+  commitMode?: TddCommitMode;
+}
+
 export interface CclawConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
+  tdd?: TddConfig;
 }
 
 export interface TransitionRule {

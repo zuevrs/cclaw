@@ -30,6 +30,7 @@ import {
   cancelRunScript,
   runHookCmdScript,
   delegationRecordScript,
+  sliceCommitScript,
   opencodePluginJs,
   claudeHooksJson,
   codexHooksJson,
@@ -861,6 +862,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   );
   await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookCmdScript());
   await writeFileSafe(path.join(hooksDir, "delegation-record.mjs"), delegationRecordScript());
+  await writeFileSafe(path.join(hooksDir, "slice-commit.mjs"), sliceCommitScript());
   const opencodePluginSource = opencodePluginJs();
   await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
 
@@ -871,6 +873,7 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
       "run-hook.mjs",
       "run-hook.cmd",
       "delegation-record.mjs",
+      "slice-commit.mjs",
       "opencode-plugin.mjs",
       "cancel-run.mjs"
     ]) {
