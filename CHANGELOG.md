@@ -1,5 +1,32 @@
 # Changelog
 
+## 7.0.3 — Controller dispatch discipline lifted to meta-skill; review army mandates
+
+7.0.2 made TDD waves hard-mandate parallel `slice-builder` dispatch and
+auto-advance, but the same failure modes were still possible at every other
+stage (notably review): the controller would write findings into `07-review.md`
+inline instead of delegating, and the `using-cclaw` meta-skill explicitly told
+it NOT to auto-advance. 7.0.3 hoists the discipline to the meta-skill and
+extends the mandate to review.
+
+- **Meta-skill `Controller dispatch discipline` block.** `using-cclaw` now
+  carries a top-level rule that applies to every stage with mandatory
+  delegations: dispatch via the harness Task tool, fan-out parallel lenses in
+  one controller message, record `scheduled`/`launched`/`acknowledged`/
+  `completed` on the same span, and auto-advance after `stage-complete`.
+- **Failure-guardrail flip.** The contradictory "Do not auto-advance after
+  stage completion unless user asks" line is replaced with "DO auto-advance
+  after `stage-complete` returns ok". The user no longer needs to retype `/cc`
+  between stages.
+- **New red flag.** "I'll just do the worker's job inline so we move faster"
+  is now an explicit red flag in the routing brain.
+- **Review orchestration primer.** The review skill now opens with the same
+  shape as the TDD primer: controller never authors `## Layer 1 Findings`,
+  `## Layer 2 Findings`, `## Lens Coverage`, or `## Final Verdict` content
+  inline; `reviewer` and `security-reviewer` are dispatched in parallel as
+  Task subagents in a single controller message; the controller only writes
+  the reconciled multi-specialist verdict block after all lens spans return.
+
 ## 7.0.2 — Mandatory parallel slice-builder dispatch in TDD waves
 
 The 7.0.0 wave-fanout model was described as a soft preference; in practice

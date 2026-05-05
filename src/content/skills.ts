@@ -247,6 +247,53 @@ Wave resume: reuse \`wave-status\` outputs and parallelize unfinished members in
 `;
 }
 
+/**
+ * Review-only prelude: mandates parallel reviewer / security-reviewer dispatch
+ * via harness Task and forbids inline authoring of findings.
+ *
+ * Empty for non-review stages.
+ */
+export function reviewTopOfSkillBlock(stage: FlowStage): string {
+  if (stage !== "review") return "";
+  return `## Review orchestration primer
+
+**MANDATE — controller never authors findings inline.** In review the controller orchestrates; \`reviewer\` (functional/spec/correctness/architecture/perf/observability) and \`security-reviewer\` (security sweep + dependency/version audit) are the **mandatory delegated workers** that produce findings, lens coverage, and the verdict input. Typing \`## Layer 1 Findings\`, \`## Layer 2 Findings\`, \`## Lens Coverage\`, or \`## Final Verdict\` content directly into \`07-review.md\` in the controller chat is a protocol violation. The controller writes ONLY the reconciled multi-specialist verdict block AFTER all reviewer Tasks return.
+
+**Step 1 — Diff scope (always first):**
+\`git diff --stat <base>...HEAD\` and \`git diff --name-only <base>...HEAD\`.
+If the diff is empty, exit early with APPROVED (no changes to review).
+
+**Step 2 — Dispatch the review army in PARALLEL (single controller message):**
+
+| Lens                     | Worker                | Mandatory? |
+|--------------------------|-----------------------|------------|
+| Spec compliance / Layer 1 | \`reviewer\`         | yes        |
+| Layer 2 cross-slice / correctness / observability | \`reviewer\` | yes |
+| Security sweep + dep/version audit | \`security-reviewer\` | yes (or \`NO_SECURITY_IMPACT\` attestation) |
+| Adversarial second opinion | \`reviewer\` (adversarial framing) | only if trust boundaries moved OR diff is large+high-risk |
+
+Emit ONE \`Task\` per lens in a single controller message. For each lens:
+
+1. Append \`delegation-record --status=scheduled\` for the lens span (one row per lens; reuse the same \`spanId\` for the lens lifecycle).
+2. Append \`delegation-record --status=launched\` immediately after.
+3. Issue the harness Task call: \`Task(subagent_type=<harness reviewer/security-reviewer mapping>, description="<lens> review", prompt="<diff range, files, AC ids, upstream artifacts (spec, design, tdd Per-Slice Reviews), expected output schema for 07-review-army.json>")\`.
+4. The reviewer span ACKs locally and writes its findings/lens coverage to \`07-review-army.json\` (and the structured findings table in \`07-review.md\`) on its own — including \`NO_SECURITY_IMPACT\` rationale if a security pass yields zero findings.
+5. The controller waits for ALL lens spans to return before reconciling.
+
+**Step 3 — Reconcile and verdict:** after all lens spans complete:
+
+1. Run \`validateReviewArmy\` (helper or linter) on \`07-review-army.json\`.
+2. Dedup by fingerprint, mark multi-specialist confirmations.
+3. Confirm acceptance criteria coverage and Pre-Critic / Lens Coverage / Anti-sycophancy fields are present (linter requires them).
+4. Compute the final verdict: APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
+5. If BLOCKED, emit \`ROUTE_BACK_TO_TDD\` with the blocking finding ids and the managed \`npx cclaw-cli internal rewind tdd\` command. Do NOT silently stop.
+
+**Step 4 — Auto-advance after stage-complete:** when \`stage-complete review\` returns \`ok\` with a new \`currentStage\` (typically \`ship\`), immediately load the next stage skill and continue. Announce \"Stage review complete → entering <next>. Continuing.\" and proceed without waiting for the user to retype \`/cc\`.
+
+---
+`;
+}
+
 
 function artifactTemplatePathForStage(stage: FlowStage): string {
   const stageIndex = FLOW_STAGES.indexOf(stage) + 1;
@@ -706,7 +753,7 @@ If you are about to violate the Iron Law, STOP. No amount of urgency, partial pr
 
 </EXTREMELY-IMPORTANT>
 
-${renderTrackTerminology(tddTopOfSkillBlock(stage), trackContext)}${quickStartBlock(stage, track)}
+${renderTrackTerminology(tddTopOfSkillBlock(stage) + reviewTopOfSkillBlock(stage), trackContext)}${quickStartBlock(stage, track)}
 
 ${STAGE_LANGUAGE_POLICY_POINTER}
 ## Philosophy
