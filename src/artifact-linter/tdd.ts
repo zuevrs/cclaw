@@ -543,6 +543,166 @@ function groupBySlice(entries: DelegationEntry[]): Map<string, DelegationEntry[]
   return grouped;
 }
 
+/** Group completed phase rows for a slice by `spanId` (falls back to a single legacy bucket). */
+function groupSliceRowsBySpanId(rows: DelegationEntry[]): Map<string, DelegationEntry[]> {
+  const grouped = new Map<string, DelegationEntry[]>();
+  for (const entry of rows) {
+    const spanKey =
+      typeof entry.spanId === "string" && entry.spanId.length > 0 ? entry.spanId : "__missing-span__";
+    const list = grouped.get(spanKey) ?? [];
+    list.push(entry);
+    grouped.set(spanKey, list);
+  }
+  return grouped;
+}
+
+function maxPhaseTimestampForSpan(rows: DelegationEntry[]): string {
+  let max = "";
+  for (const entry of rows) {
+    const ts = entry.completedTs ?? entry.endTs ?? entry.ts ?? "";
+    if (typeof ts === "string" && ts.length > 0 && ts > max) max = ts;
+  }
+  return max;
+}
+
+/**
+ * Validate RED→GREEN→REFACTOR (incl. green `refactorOutcome`) monotonicity for one slice-builder span.
+ * `rows` must contain only entries for that span.
+ */
+function evaluateSingleSpanSliceCycle(
+  sliceId: string,
+  spanId: string,
+  rows: DelegationEntry[]
+): {
+  ok: boolean;
+  errors: string[];
+  findings: LintFinding[];
+} {
+  const errors: string[] = [];
+  const findings: LintFinding[] = [];
+  const sec = (slug: string): string => `${slug}:${sliceId}@${spanId}`;
+
+  const reds = rows.filter((entry) => entry.phase === "red");
+  const greens = rows.filter((entry) => entry.phase === "green");
+  const refactors = rows.filter(
+    (entry) => entry.phase === "refactor" || entry.phase === "refactor-deferred"
+  );
+
+  const redTs = pickEventTs(reds);
+  const greenTs = pickEventTs(greens);
+
+  if (reds.length === 0) {
+    errors.push(`${sliceId}: phase=red event missing.`);
+    findings.push({
+      section: sec("tdd_slice_red_missing"),
+      required: true,
+      rule: "Each TDD slice with phase events must include a `phase=red` row.",
+      found: false,
+      details: `${sliceId} (span ${spanId}): no phase=red event recorded for the active run.`
+    });
+    return { ok: false, errors, findings };
+  }
+  if (greens.length === 0) {
+    errors.push(`${sliceId}: phase=green event missing.`);
+    findings.push({
+      section: sec("tdd_slice_green_missing"),
+      required: true,
+      rule: "Each TDD slice with a phase=red event must reach a `phase=green` row before stage-complete.",
+      found: false,
+      details: `${sliceId} (span ${spanId}): no phase=green event recorded; RED has no matching GREEN.`
+    });
+    return { ok: false, errors, findings };
+  }
+
+  if (greenTs && redTs && greenTs < redTs) {
+    errors.push(`${sliceId}: phase=green completedTs (${greenTs}) precedes phase=red (${redTs}).`);
+    findings.push({
+      section: sec("tdd_slice_phase_order_invalid"),
+      required: true,
+      rule: "Phase events must be monotonic: phase=green completedTs >= phase=red completedTs.",
+      found: false,
+      details: `${sliceId} (span ${spanId}): green at ${greenTs} precedes red at ${redTs}.`
+    });
+    return { ok: false, errors, findings };
+  }
+
+  const greenEvidenceRef = greens
+    .flatMap((entry) => (Array.isArray(entry.evidenceRefs) ? entry.evidenceRefs : []))
+    .find((ref) => typeof ref === "string" && ref.trim().length > 0);
+  if (!greenEvidenceRef) {
+    errors.push(`${sliceId}: phase=green row has empty evidenceRefs.`);
+    findings.push({
+      section: sec("tdd_slice_evidence_missing"),
+      required: true,
+      rule: "Each `phase=green` event must record at least one evidenceRef (path to test artifact, span id, or pasted-output pointer).",
+      found: false,
+      details: `${sliceId} (span ${spanId}): phase=green event missing evidenceRefs.`
+    });
+    return { ok: false, errors, findings };
+  }
+
+  const greenWithOutcome = greens.find(
+    (entry) =>
+      entry.refactorOutcome &&
+      (entry.refactorOutcome.mode === "inline" || entry.refactorOutcome.mode === "deferred")
+  );
+
+  if (refactors.length === 0 && !greenWithOutcome) {
+    errors.push(`${sliceId}: phase=refactor or phase=refactor-deferred event missing.`);
+    findings.push({
+      section: sec("tdd_slice_refactor_missing"),
+      required: true,
+      rule: "Each TDD slice must close with a `phase=refactor` event, a `phase=refactor-deferred` event whose evidenceRefs / refactorRationale captures why refactor was deferred, OR a `phase=green` event carrying `refactorOutcome`.",
+      found: false,
+      details: `${sliceId} (span ${spanId}): no phase=refactor / phase=refactor-deferred event and no refactorOutcome on phase=green.`
+    });
+    return { ok: false, errors, findings };
+  }
+
+  if (
+    greenWithOutcome &&
+    greenWithOutcome.refactorOutcome?.mode === "deferred" &&
+    !greenWithOutcome.refactorOutcome.rationale &&
+    !(
+      Array.isArray(greenWithOutcome.evidenceRefs) &&
+      greenWithOutcome.evidenceRefs.some((ref) => typeof ref === "string" && ref.trim().length > 0)
+    )
+  ) {
+    errors.push(`${sliceId}: phase=green refactorOutcome=deferred missing rationale.`);
+    findings.push({
+      section: sec("tdd_slice_refactor_missing"),
+      required: true,
+      rule: "phase=green refactorOutcome=deferred requires a rationale (via --refactor-rationale or --evidence-ref).",
+      found: false,
+      details: `${sliceId} (span ${spanId}): phase=green refactorOutcome.mode=deferred recorded without rationale.`
+    });
+    return { ok: false, errors, findings };
+  }
+
+  const deferred = refactors.find((entry) => entry.phase === "refactor-deferred");
+  if (
+    refactors.length > 0 &&
+    deferred &&
+    refactors.every((entry) => entry.phase === "refactor-deferred")
+  ) {
+    const refs = Array.isArray(deferred.evidenceRefs) ? deferred.evidenceRefs : [];
+    const hasRationale = refs.some((ref) => typeof ref === "string" && ref.trim().length > 0);
+    if (!hasRationale) {
+      errors.push(`${sliceId}: phase=refactor-deferred row needs evidenceRefs containing a rationale.`);
+      findings.push({
+        section: sec("tdd_slice_refactor_missing"),
+        required: true,
+        rule: "phase=refactor-deferred must record a rationale via --refactor-rationale or via --evidence-ref pointing at the rationale text.",
+        found: false,
+        details: `${sliceId} (span ${spanId}): phase=refactor-deferred recorded without rationale evidenceRefs.`
+      });
+      return { ok: false, errors, findings };
+    }
+  }
+
+  return { ok: true, errors: [], findings: [] };
+}
+
 interface ParsedSliceCycleResult {
   ok: boolean;
   details: string;
@@ -602,129 +762,28 @@ export function evaluateEventsSliceCycle(
   const errors: string[] = [];
   const findings: LintFinding[] = [];
   for (const [sliceId, rows] of slices.entries()) {
-    const reds = rows.filter((entry) => entry.phase === "red");
-    const greens = rows.filter((entry) => entry.phase === "green");
-    const refactors = rows.filter(
-      (entry) => entry.phase === "refactor" || entry.phase === "refactor-deferred"
-    );
-
-    const redTs = pickEventTs(reds);
-    const greenTs = pickEventTs(greens);
-
-    if (reds.length === 0) {
-      errors.push(`${sliceId}: phase=red event missing.`);
-      findings.push({
-        section: `tdd_slice_red_missing:${sliceId}`,
-        required: true,
-        rule: "Each TDD slice with phase events must include a `phase=red` row.",
-        found: false,
-        details: `${sliceId}: no phase=red event recorded for the active run.`
+    const bySpan = groupSliceRowsBySpanId(rows);
+    type SpanOutcome = {
+      spanId: string;
+      maxTs: string;
+      result: ReturnType<typeof evaluateSingleSpanSliceCycle>;
+    };
+    const spanOutcomes: SpanOutcome[] = [];
+    for (const [spanId, spanRows] of bySpan.entries()) {
+      const result = evaluateSingleSpanSliceCycle(sliceId, spanId, spanRows);
+      spanOutcomes.push({
+        spanId,
+        maxTs: maxPhaseTimestampForSpan(spanRows),
+        result
       });
+    }
+    if (spanOutcomes.some((s) => s.result.ok)) {
       continue;
     }
-    if (greens.length === 0) {
-      errors.push(`${sliceId}: phase=green event missing.`);
-      findings.push({
-        section: `tdd_slice_green_missing:${sliceId}`,
-        required: true,
-        rule: "Each TDD slice with a phase=red event must reach a `phase=green` row before stage-complete.",
-        found: false,
-        details: `${sliceId}: no phase=green event recorded; RED has no matching GREEN.`
-      });
-      continue;
-    }
-
-    if (greenTs && redTs && greenTs < redTs) {
-      errors.push(`${sliceId}: phase=green completedTs (${greenTs}) precedes phase=red (${redTs}).`);
-      findings.push({
-        section: `tdd_slice_phase_order_invalid:${sliceId}`,
-        required: true,
-        rule: "Phase events must be monotonic: phase=green completedTs >= phase=red completedTs.",
-        found: false,
-        details: `${sliceId}: green at ${greenTs} precedes red at ${redTs}.`
-      });
-      continue;
-    }
-
-    const greenEvidenceRef = greens
-      .flatMap((entry) =>
-        Array.isArray(entry.evidenceRefs) ? entry.evidenceRefs : []
-      )
-      .find((ref) => typeof ref === "string" && ref.trim().length > 0);
-    if (!greenEvidenceRef) {
-      errors.push(`${sliceId}: phase=green row has empty evidenceRefs.`);
-      findings.push({
-        section: `tdd_slice_evidence_missing:${sliceId}`,
-        required: true,
-        rule: "Each `phase=green` event must record at least one evidenceRef (path to test artifact, span id, or pasted-output pointer).",
-        found: false,
-        details: `${sliceId}: phase=green event missing evidenceRefs.`
-      });
-      continue;
-    }
-
-    // refactorOutcome on phase=green satisfies REFACTOR coverage
-    // without a separate phase=refactor / phase=refactor-deferred row.
-    // - mode: "inline" → REFACTOR ran inline as part of GREEN.
-    // - mode: "deferred" → rationale required (carried in evidenceRefs[0]
-    //   by the hook helper so legacy linters keep working).
-    const greenWithOutcome = greens.find(
-      (entry) => entry.refactorOutcome &&
-        (entry.refactorOutcome.mode === "inline" || entry.refactorOutcome.mode === "deferred")
-    );
-
-    if (refactors.length === 0 && !greenWithOutcome) {
-      errors.push(`${sliceId}: phase=refactor or phase=refactor-deferred event missing.`);
-      findings.push({
-        section: `tdd_slice_refactor_missing:${sliceId}`,
-        required: true,
-        rule: "Each TDD slice must close with a `phase=refactor` event, a `phase=refactor-deferred` event whose evidenceRefs / refactorRationale captures why refactor was deferred, OR a `phase=green` event carrying `refactorOutcome`.",
-        found: false,
-        details: `${sliceId}: no phase=refactor / phase=refactor-deferred event and no refactorOutcome on phase=green.`
-      });
-      continue;
-    }
-
-    if (
-      greenWithOutcome &&
-      greenWithOutcome.refactorOutcome?.mode === "deferred" &&
-      !greenWithOutcome.refactorOutcome.rationale &&
-      !(Array.isArray(greenWithOutcome.evidenceRefs) &&
-        greenWithOutcome.evidenceRefs.some((ref) => typeof ref === "string" && ref.trim().length > 0))
-    ) {
-      errors.push(`${sliceId}: phase=green refactorOutcome=deferred missing rationale.`);
-      findings.push({
-        section: `tdd_slice_refactor_missing:${sliceId}`,
-        required: true,
-        rule: "phase=green refactorOutcome=deferred requires a rationale (via --refactor-rationale or --evidence-ref).",
-        found: false,
-        details: `${sliceId}: phase=green refactorOutcome.mode=deferred recorded without rationale.`
-      });
-      continue;
-    }
-
-    const deferred = refactors.find((entry) => entry.phase === "refactor-deferred");
-    if (
-      refactors.length > 0 &&
-      deferred &&
-      refactors.every((entry) => entry.phase === "refactor-deferred")
-    ) {
-      const refs = Array.isArray(deferred.evidenceRefs) ? deferred.evidenceRefs : [];
-      const hasRationale = refs.some(
-        (ref) => typeof ref === "string" && ref.trim().length > 0
-      );
-      if (!hasRationale) {
-        errors.push(`${sliceId}: phase=refactor-deferred row needs evidenceRefs containing a rationale.`);
-        findings.push({
-          section: `tdd_slice_refactor_missing:${sliceId}`,
-          required: true,
-          rule: "phase=refactor-deferred must record a rationale via --refactor-rationale or via --evidence-ref pointing at the rationale text.",
-          found: false,
-          details: `${sliceId}: phase=refactor-deferred recorded without rationale evidenceRefs.`
-        });
-        continue;
-      }
-    }
+    spanOutcomes.sort((a, b) => (a.maxTs < b.maxTs ? 1 : a.maxTs > b.maxTs ? -1 : 0));
+    const chosen = spanOutcomes[0]!;
+    errors.push(...chosen.result.errors);
+    findings.push(...chosen.result.findings);
   }
 
   if (errors.length > 0) {
@@ -736,7 +795,7 @@ export function evaluateEventsSliceCycle(
   }
   return {
     ok: true,
-    details: `${slices.size} slice(s) show monotonic phase=red -> phase=green -> phase=refactor (deferred-with-rationale accepted).`,
+    details: `${slices.size} slice(s) show monotonic phase=red -> phase=green -> phase=refactor (deferred-with-rationale accepted); at least one span per slice satisfies the cycle.`,
     findings: []
   };
 }

@@ -281,6 +281,7 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
 
     for (let i = 1; i <= 3; i += 1) {
       const slice = `S-${i}`;
+      const spanId = `span-${slice}`;
       const testFile = path.join(root, "tests/unit", `slice-${i}.test.ts`);
       await fs.mkdir(path.dirname(testFile), { recursive: true });
       await fs.writeFile(testFile, "// test\n", "utf8");
@@ -289,14 +290,14 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
         slice,
         phase: "red",
         evidenceRefs: [`tests/unit/slice-${i}.test.ts`],
-        spanId: `span-red-${slice}`
+        spanId
       });
       await dispatchPhase(root, scriptPath, sbDef, {
         agent: "slice-builder",
         slice,
         phase: "green",
         evidenceRefs: [`tests/unit/slice-${i}.test.ts: vitest run tests/unit/slice-${i}.test.ts => 1 passed; 0 failed`],
-        spanId: `span-green-${slice}`
+        spanId
       });
       await dispatchPhase(root, scriptPath, sbDef, {
         agent: "slice-builder",
@@ -304,7 +305,7 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
         phase: "refactor-deferred",
         evidenceRefs: [`scope contained for ${slice}; no measurable cleanup yet`],
         refactorRationale: "scope contained, no cleanup needed yet",
-        spanId: `span-refactor-${slice}`
+        spanId
       });
     }
 

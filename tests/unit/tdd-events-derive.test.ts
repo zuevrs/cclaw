@@ -199,7 +199,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "green",
       evidenceRefs: ["tests/unit/tdd-events-derive.test.ts"],
-      spanId: "span-green-1",
+      spanId: "span-red-1",
       ts: ts(5),
       completedTs: ts(5)
     });
@@ -211,7 +211,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "refactor",
       evidenceRefs: ["src/artifact-linter/tdd.ts"],
-      spanId: "span-refactor-1",
+      spanId: "span-red-1",
       ts: ts(10),
       completedTs: ts(10)
     });
@@ -254,7 +254,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "green",
       evidenceRefs: ["tests/unit/foo.test.ts"],
-      spanId: "span-green-1",
+      spanId: "span-red-1",
       ts: ts(5),
       completedTs: ts(5)
     });
@@ -266,7 +266,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "refactor",
       evidenceRefs: ["src/foo.ts"],
-      spanId: "span-refactor-1",
+      spanId: "span-red-1",
       ts: ts(10),
       completedTs: ts(10)
     });
@@ -301,6 +301,18 @@ describe("tdd linter — phase events auto-derive", () => {
     await appendDelegation(root, {
       stage: "tdd",
       agent: "slice-builder",
+      mode: "proactive",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "green",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      spanId: "span-red-1",
+      ts: ts(0),
+      completedTs: ts(0)
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -316,21 +328,9 @@ describe("tdd linter — phase events auto-derive", () => {
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
-      phase: "green",
-      evidenceRefs: ["tests/unit/foo.test.ts"],
-      spanId: "span-green-1",
-      ts: ts(0),
-      completedTs: ts(0)
-    });
-    await appendDelegation(root, {
-      stage: "tdd",
-      agent: "slice-builder",
-      mode: "proactive",
-      status: "completed",
-      sliceId: "S-1",
       phase: "refactor",
       evidenceRefs: ["src/foo.ts"],
-      spanId: "span-refactor-1",
+      spanId: "span-red-1",
       ts: ts(30),
       completedTs: ts(30)
     });
@@ -341,6 +341,148 @@ describe("tdd linter — phase events auto-derive", () => {
     );
     expect(orderFinding?.required).toBe(true);
     expect(orderFinding?.found).toBe(false);
+  });
+
+  it("passes when at least one span per slice has a valid cycle", async () => {
+    const root = await createTempProject("tdd-events-multispan-valid");
+    await seedTddRun(root);
+    await writePreTddArtifacts(root);
+    await writeTddArtifact(root, TDD_BARE_BODY());
+
+    // Older failed attempt on the same slice (green before red).
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "green",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      spanId: "span-old",
+      ts: ts(0),
+      completedTs: ts(0)
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "red",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      spanId: "span-old",
+      ts: ts(5),
+      completedTs: ts(5)
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "refactor",
+      evidenceRefs: ["src/foo.ts"],
+      spanId: "span-old",
+      ts: ts(8),
+      completedTs: ts(8)
+    });
+
+    // Most recent successful retry span for the same slice.
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "proactive",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "red",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      spanId: "span-new",
+      ts: ts(20),
+      completedTs: ts(20)
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "proactive",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "green",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      spanId: "span-new",
+      ts: ts(25),
+      completedTs: ts(25)
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "proactive",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "refactor",
+      evidenceRefs: ["src/foo.ts"],
+      spanId: "span-new",
+      ts: ts(30),
+      completedTs: ts(30)
+    });
+
+    const result = await lintArtifact(root, "tdd");
+    const cycle = result.findings.find((f) => f.section === "Vertical Slice Cycle Coverage");
+    expect(cycle?.required).toBe(true);
+    expect(cycle?.found).toBe(true);
+  });
+
+  it("reports the newest failing span when no span is valid", async () => {
+    const root = await createTempProject("tdd-events-multispan-newest-error");
+    await seedTddRun(root);
+    await writePreTddArtifacts(root);
+    await writeTddArtifact(root, TDD_BARE_BODY());
+
+    // Older span fails due to missing refactor.
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "red",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      spanId: "span-old",
+      ts: ts(0),
+      completedTs: ts(0)
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "green",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      spanId: "span-old",
+      ts: ts(5),
+      completedTs: ts(5)
+    });
+
+    // Newer span fails due to missing green; this should be the surfaced error.
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "proactive",
+      status: "completed",
+      sliceId: "S-1",
+      phase: "red",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      spanId: "span-new",
+      ts: ts(20),
+      completedTs: ts(20)
+    });
+
+    const result = await lintArtifact(root, "tdd");
+    const cycle = result.findings.find((f) => f.section === "Vertical Slice Cycle Coverage");
+    expect(cycle?.required).toBe(true);
+    expect(cycle?.found).toBe(false);
+    expect(cycle?.details).toContain("phase=green event missing");
+    expect(cycle?.details).not.toContain("phase=refactor or phase=refactor-deferred event missing");
   });
 
   it("requires phase=refactor or refactor-deferred with rationale", async () => {
@@ -369,7 +511,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "green",
       evidenceRefs: ["tests/unit/foo.test.ts"],
-      spanId: "span-green-1",
+      spanId: "span-red-1",
       ts: ts(5),
       completedTs: ts(5)
     });
@@ -408,7 +550,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "green",
       evidenceRefs: ["tests/unit/foo.test.ts"],
-      spanId: "span-green-1",
+      spanId: "span-red-1",
       ts: ts(5),
       completedTs: ts(5)
     });
@@ -420,7 +562,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "refactor-deferred",
       evidenceRefs: ["scope contained — no measurable cleanup yet"],
-      spanId: "span-refactor-deferred-1",
+      spanId: "span-red-1",
       ts: ts(10),
       completedTs: ts(10)
     });
@@ -488,7 +630,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "green",
       evidenceRefs: ["tests/unit/foo.test.ts"],
-      spanId: "span-green-1",
+      spanId: "span-red-1",
       ts: ts(5),
       completedTs: ts(5)
     });
@@ -500,7 +642,7 @@ describe("tdd linter — phase events auto-derive", () => {
       sliceId: "S-1",
       phase: "refactor",
       evidenceRefs: ["src/foo.ts"],
-      spanId: "span-refactor-1",
+      spanId: "span-red-1",
       ts: ts(10),
       completedTs: ts(10)
     });
@@ -540,7 +682,7 @@ describe("tdd linter — slice-builder DOC coverage (mandatory in deep, advisory
       sliceId: "S-1",
       phase: "green",
       evidenceRefs: ["tests/unit/foo.test.ts"],
-      spanId: "span-green-1",
+      spanId: "span-red-1",
       ts: ts(5),
       completedTs: ts(5)
     });
@@ -552,7 +694,7 @@ describe("tdd linter — slice-builder DOC coverage (mandatory in deep, advisory
       sliceId: "S-1",
       phase: "refactor",
       evidenceRefs: ["src/foo.ts"],
-      spanId: "span-refactor-1",
+      spanId: "span-red-1",
       ts: ts(10),
       completedTs: ts(10)
     });
@@ -591,7 +733,7 @@ describe("tdd linter — slice-builder DOC coverage (mandatory in deep, advisory
       sliceId: "S-1",
       phase: "green",
       evidenceRefs: ["tests/unit/foo.test.ts"],
-      spanId: "span-green-1",
+      spanId: "span-red-1",
       ts: ts(5),
       completedTs: ts(5)
     });
@@ -603,7 +745,7 @@ describe("tdd linter — slice-builder DOC coverage (mandatory in deep, advisory
       sliceId: "S-1",
       phase: "refactor",
       evidenceRefs: ["src/foo.ts"],
-      spanId: "span-refactor-1",
+      spanId: "span-red-1",
       ts: ts(10),
       completedTs: ts(10)
     });

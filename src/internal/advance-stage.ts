@@ -35,8 +35,10 @@ import {
 import {
   DelegationTimestampError,
   DispatchCapError,
+  DispatchClaimedPathProtectedError,
   DispatchDuplicateError,
-  DispatchOverlapError
+  DispatchOverlapError,
+  SliceAlreadyClosedError
 } from "../delegation.js";
 import { parsePlanSplitWavesArgs, runPlanSplitWaves } from "./plan-split-waves.js";
 import { runWaveStatusCommand } from "./wave-status.js";
@@ -154,6 +156,14 @@ export async function runInternalCommand(
     }
     if (err instanceof DispatchOverlapError) {
       io.stderr.write(`error: dispatch_overlap — ${err.message}\n`);
+      return 2;
+    }
+    if (err instanceof DispatchClaimedPathProtectedError) {
+      io.stderr.write(`error: dispatch_claimed_path_protected — ${err.message}\n`);
+      return 2;
+    }
+    if (err instanceof SliceAlreadyClosedError) {
+      io.stderr.write(`error: slice_already_closed — ${err.message}\n`);
       return 2;
     }
     if (err instanceof DispatchCapError) {

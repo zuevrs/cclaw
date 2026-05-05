@@ -922,6 +922,175 @@ export class DispatchCapError extends Error {
 }
 
 /**
+ * Patterns describing repo-relative paths owned by the cclaw managed
+ * runtime under `.cclaw/`. Workers MUST NOT claim these as
+ * `claimedPaths` because they are regenerated/rebound by `cclaw-cli sync`
+ * (and similar managed flows), and worker writes silently bypass the
+ * managed-resources manifest. Note: `.cclaw/artifacts/` is intentionally
+ * NOT protected — slice-builders legitimately write slice cards there.
+ *
+ * Motivated by the hox-session 7.0.5 finding: subagent S-36 hand-edited
+ * `.cclaw/hooks/delegation-record.mjs`, which had to be reverted because
+ * the next `cclaw-cli sync` would have stomped the change.
+ */
+const MANAGED_RUNTIME_PATH_PATTERNS: readonly RegExp[] = [
+  /^\.cclaw\/(hooks|agents|skills|commands|templates|seeds|rules|state)\//u,
+  /^\.cclaw\/config\.yaml$/u,
+  /^\.cclaw\/managed-resources\.json$/u,
+  /^\.cclaw\/\.flow-state\.guard\.json$/u
+];
+
+/**
+ * Return `true` when `path` is a repo-relative path owned by the cclaw
+ * managed runtime under `.cclaw/`. Used by `validateClaimedPathsNotProtected`
+ * during `appendDelegation` to reject `slice-builder` (or any worker)
+ * spans that try to claim ownership of cclaw-managed files. Does not
+ * normalise the input — callers pass the path exactly as the worker wrote
+ * it into `claimedPaths` so the error message points at the real string.
+ */
+export function isManagedRuntimePath(path: string): boolean {
+  if (typeof path !== "string" || path.length === 0) return false;
+  return MANAGED_RUNTIME_PATH_PATTERNS.some((pattern) => pattern.test(path));
+}
+
+/**
+ * Thrown by `appendDelegation` when a scheduled span declares a
+ * `claimedPaths` entry that lives under the cclaw managed runtime
+ * (see `isManagedRuntimePath`). Workers must never edit those paths
+ * directly — they are owned by the managed sync surface. The error
+ * lists the offending paths so the operator can drop or rewrite them.
+ */
+export class DispatchClaimedPathProtectedError extends Error {
+  readonly protectedPaths: string[];
+  readonly spanId: string;
+  constructor(params: { protectedPaths: string[]; spanId: string }) {
+    super(
+      `dispatch_claimed_path_protected — span ${params.spanId} claims managed-runtime path(s) ${params.protectedPaths.join(", ")}; ` +
+        `paths under .cclaw/{hooks,agents,skills,commands,templates,seeds,rules,state}/, .cclaw/config.yaml, .cclaw/managed-resources.json, and .cclaw/.flow-state.guard.json are owned by cclaw-cli sync and must not appear in claimedPaths. ` +
+        `Drop them from claimedPaths or, if a managed-runtime change is genuinely required, ship it through a cclaw release rather than a worker span.`
+    );
+    this.name = "DispatchClaimedPathProtectedError";
+    this.protectedPaths = params.protectedPaths;
+    this.spanId = params.spanId;
+  }
+}
+
+/**
+ * Reject any worker span that declares `claimedPaths` entries owned by
+ * the cclaw managed runtime. Called from `appendDelegation` for
+ * `status === "scheduled"` rows alongside the overlap and fan-out
+ * checks. Throws `DispatchClaimedPathProtectedError` listing every
+ * offending path so the operator can fix the dispatch in one pass.
+ */
+export function validateClaimedPathsNotProtected(stamped: DelegationEntry): void {
+  const claimed = Array.isArray(stamped.claimedPaths) ? stamped.claimedPaths : [];
+  if (claimed.length === 0) return;
+  const offending = claimed.filter((p) => isManagedRuntimePath(p));
+  if (offending.length === 0) return;
+  throw new DispatchClaimedPathProtectedError({
+    protectedPaths: offending,
+    spanId: stamped.spanId ?? "unknown"
+  });
+}
+
+/**
+ * Thrown by `appendDelegation` when a new `scheduled` span would open a
+ * second TDD cycle for a slice that already has at least one closed span
+ * (a span with completed phase rows for `red`, `green`, at least one of
+ * `refactor`/`refactor-deferred`, and `doc`) in the same run. Re-running
+ * a slice under a fresh span is almost always controller drift —
+ * legitimate replay reuses the original spanId and is absorbed by the
+ * existing dedup. Motivated by the hox-session 7.0.5 finding where
+ * `S-36` had two scheduled spans (`span-w07-S-36-final` and `span-w07-S-36`)
+ * that the linter then misread as out-of-order phases.
+ */
+export class SliceAlreadyClosedError extends Error {
+  readonly sliceId: string;
+  readonly runId: string;
+  readonly closedSpanId: string;
+  readonly newSpanId: string;
+  constructor(params: {
+    sliceId: string;
+    runId: string;
+    closedSpanId: string;
+    newSpanId: string;
+  }) {
+    super(
+      `slice ${params.sliceId} already has a closed span (${params.closedSpanId}); refusing to schedule new span ${params.newSpanId} in run ${params.runId}`
+    );
+    this.name = "SliceAlreadyClosedError";
+    this.sliceId = params.sliceId;
+    this.runId = params.runId;
+    this.closedSpanId = params.closedSpanId;
+    this.newSpanId = params.newSpanId;
+  }
+}
+
+/**
+ * Detect closed spans for `(sliceId, runId)`. A span is considered
+ * closed when it has completed phase rows for `red`, `green`, REFACTOR
+ * coverage (either `phase=refactor`, `phase=refactor-deferred`, or
+ * `phase=green` carrying `refactorOutcome`), AND `doc`. Returns the set of
+ * closed spanIds; callers use this to reject new scheduled spans on
+ * already-closed slices.
+ */
+function closedSliceSpans(
+  prior: DelegationEntry[],
+  sliceId: string,
+  runId: string | undefined
+): Set<string> {
+  const closed = new Set<string>();
+  if (typeof sliceId !== "string" || sliceId.length === 0) return closed;
+  const matches = prior.filter(
+    (entry) =>
+      entry.sliceId === sliceId &&
+      entry.runId === runId &&
+      typeof entry.spanId === "string" &&
+      entry.spanId.length > 0
+  );
+  const bySpan = new Map<string, DelegationEntry[]>();
+  for (const entry of matches) {
+    const spanId = entry.spanId as string;
+    const existing = bySpan.get(spanId) ?? [];
+    existing.push(entry);
+    bySpan.set(spanId, existing);
+  }
+  for (const [spanId, entries] of bySpan.entries()) {
+    const phases = new Set(
+      entries
+        .filter((e) => e.status === "completed" && typeof e.phase === "string")
+        .map((e) => e.phase as string)
+    );
+    const hasRed = phases.has("red");
+    const hasGreen = phases.has("green");
+    const hasRefactorPhase = phases.has("refactor") || phases.has("refactor-deferred");
+    const greens = entries.filter((e) => e.status === "completed" && e.phase === "green");
+    const greenWithOutcome = greens.find(
+      (e) =>
+        e.refactorOutcome &&
+        (e.refactorOutcome.mode === "inline" || e.refactorOutcome.mode === "deferred")
+    );
+    let hasRefactorFromGreen = false;
+    if (greenWithOutcome?.refactorOutcome?.mode === "deferred") {
+      hasRefactorFromGreen = !!(
+        (greenWithOutcome.refactorOutcome.rationale &&
+          greenWithOutcome.refactorOutcome.rationale.trim().length > 0) ||
+        (Array.isArray(greenWithOutcome.evidenceRefs) &&
+          greenWithOutcome.evidenceRefs.some((ref) => typeof ref === "string" && ref.trim().length > 0))
+      );
+    } else if (greenWithOutcome?.refactorOutcome?.mode === "inline") {
+      hasRefactorFromGreen = true;
+    }
+    const hasRefactor = hasRefactorPhase || hasRefactorFromGreen;
+    const hasDoc = phases.has("doc");
+    if (hasRed && hasGreen && hasRefactor && hasDoc) {
+      closed.add(spanId);
+    }
+  }
+  return closed;
+}
+
+/**
  * Default cap on active `slice-builder` spans in a single TDD run. Override
  * via `CCLAW_MAX_PARALLEL_SLICE_BUILDERS=<int>` (validated `>=1`).
  */
@@ -1409,7 +1578,25 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       return;
     }
     validateMonotonicTimestamps(stamped, prior.entries);
+    if (
+      stamped.status === "scheduled" &&
+      typeof stamped.sliceId === "string" &&
+      stamped.sliceId.length > 0 &&
+      stamped.phase === undefined
+    ) {
+      const closed = closedSliceSpans(prior.entries, stamped.sliceId, activeRunId);
+      if (closed.size > 0 && !(stamped.spanId && closed.has(stamped.spanId))) {
+        const closedSpanId = closed.values().next().value as string;
+        throw new SliceAlreadyClosedError({
+          sliceId: stamped.sliceId,
+          runId: activeRunId,
+          closedSpanId,
+          newSpanId: stamped.spanId ?? "unknown"
+        });
+      }
+    }
     if (stamped.status === "scheduled") {
+      validateClaimedPathsNotProtected(stamped);
       const sameRunPrior = prior.entries.filter((entry) => entry.runId === activeRunId);
       const activeForRun = computeActiveSubagents(sameRunPrior);
       const overlap = validateFileOverlap(stamped, activeForRun);
