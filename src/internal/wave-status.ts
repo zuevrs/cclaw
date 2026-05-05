@@ -35,7 +35,7 @@ export interface WaveStatusNextDispatch {
   waveId: string | null;
   readyToDispatch: string[];
   pathConflicts: string[];
-  mode: "single-slice" | "wave-fanout" | "none";
+  mode: "single-slice" | "wave-fanout" | "blocked" | "none";
 }
 
 export interface WaveStatusReport {
@@ -54,6 +54,9 @@ export interface RunWaveStatusOptions {
    */
   artifactsDir?: string;
 }
+
+const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
+const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
 
 function parseArgs(tokens: string[]): WaveStatusArgs {
   const args: WaveStatusArgs = { format: "json" };
@@ -79,6 +82,93 @@ function classifyWaveStatus(
   if (closedCount === 0) return "open";
   if (closedCount >= total) return "closed";
   return "partial";
+}
+
+function parsePipeRow(trimmedLine: string): string[] {
+  const inner = trimmedLine.replace(/^\|/u, "").replace(/\|\s*$/u, "");
+  return inner.split("|").map((cell) => cell.trim());
+}
+
+function normalizePathToken(raw: string): string {
+  return raw.trim().replace(/^`|`$/gu, "").replace(/^\.\/+/u, "");
+}
+
+function parseManagedWaveClaimedPaths(planMarkdown: string): Map<string, Map<string, string[]>> {
+  const out = new Map<string, Map<string, string[]>>();
+  const startIdx = planMarkdown.indexOf(PARALLEL_EXEC_MANAGED_START);
+  const endIdx = planMarkdown.indexOf(PARALLEL_EXEC_MANAGED_END);
+  if (startIdx < 0 || endIdx <= startIdx) return out;
+  const body = planMarkdown.slice(startIdx + PARALLEL_EXEC_MANAGED_START.length, endIdx);
+  const lines = body.split(/\r?\n/u);
+  let currentWaveId: string | null = null;
+  let headerIdx = new Map<string, number>();
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    const waveMatch = /^###\s+Wave\s+(?:W-)?(\d+)\b/iu.exec(trimmed);
+    if (waveMatch) {
+      currentWaveId = `W-${waveMatch[1]!.padStart(2, "0")}`;
+      if (!out.has(currentWaveId)) {
+        out.set(currentWaveId, new Map());
+      }
+      headerIdx = new Map<string, number>();
+      continue;
+    }
+    if (!currentWaveId || !trimmed.startsWith("|")) continue;
+    const cells = parsePipeRow(trimmed);
+    if (cells.length === 0) continue;
+    const first = cells[0]!.toLowerCase();
+    if (first === "sliceid" || first === "slice id") {
+      headerIdx = new Map<string, number>();
+      for (let i = 0; i < cells.length; i += 1) {
+        const key = cells[i]!.toLowerCase().replace(/[^a-z0-9]/gu, "");
+        if (key.length > 0 && !headerIdx.has(key)) {
+          headerIdx.set(key, i);
+        }
+      }
+      continue;
+    }
+    if (cells.every((cell) => /^:?-{3,}:?$/u.test(cell))) {
+      continue;
+    }
+    const sliceId = cells[0]!.trim().toUpperCase();
+    if (!/^S-\d+$/u.test(sliceId)) continue;
+    const pathsIdx = headerIdx.get("claimedpaths");
+    const rawPaths = pathsIdx !== undefined ? (cells[pathsIdx] ?? "") : "";
+    const claimedPaths = rawPaths.length === 0
+      ? []
+      : rawPaths
+        .split(",")
+        .map((p) => normalizePathToken(p))
+        .filter((p) => p.length > 0);
+    out.get(currentWaveId)!.set(sliceId, claimedPaths);
+  }
+  return out;
+}
+
+function detectPathConflicts(
+  readySlices: string[],
+  bySlice: Map<string, string[]>
+): string[] {
+  const conflicts = new Set<string>();
+  const ordered = [...readySlices].sort();
+  for (let i = 0; i < ordered.length; i += 1) {
+    const leftSlice = ordered[i]!;
+    const leftPaths = bySlice.get(leftSlice) ?? [];
+    if (leftPaths.length === 0) continue;
+    const leftSet = new Set(leftPaths);
+    for (let j = i + 1; j < ordered.length; j += 1) {
+      const rightSlice = ordered[j]!;
+      const rightPaths = bySlice.get(rightSlice) ?? [];
+      if (rightPaths.length === 0) continue;
+      for (const pathToken of rightPaths) {
+        if (!leftSet.has(pathToken)) continue;
+        conflicts.add(`${leftSlice}:${pathToken}`);
+        conflicts.add(`${rightSlice}:${pathToken}`);
+      }
+    }
+  }
+  return [...conflicts].sort();
 }
 
 const TERMINAL_PHASES = new Set([
@@ -255,11 +345,23 @@ export async function runWaveStatus(
     };
   } else {
     const readyToDispatch = [...firstOpenWave.readyMembers].sort();
+    const claimedPathsByWave = parseManagedWaveClaimedPaths(planRaw);
+    const conflicts = detectPathConflicts(
+      readyToDispatch,
+      claimedPathsByWave.get(firstOpenWave.waveId) ?? new Map()
+    );
+    const mode: WaveStatusNextDispatch["mode"] = conflicts.length > 0
+      ? "blocked"
+      : readyToDispatch.length > 1
+        ? "wave-fanout"
+        : readyToDispatch.length === 1
+          ? "single-slice"
+          : "none";
     nextDispatch = {
       waveId: firstOpenWave.waveId,
       readyToDispatch,
-      pathConflicts: [],
-      mode: readyToDispatch.length > 1 ? "wave-fanout" : "single-slice"
+      pathConflicts: conflicts,
+      mode
     };
   }
 

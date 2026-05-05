@@ -1,5 +1,42 @@
 # Changelog
 
+## 7.1.1 — Plan Atomicity (wave disjointness + path-conflict surfacing)
+
+7.1.1 hardens the planning contract so parallel waves are explicitly safe to
+fan out, and makes `wave-status` report concrete overlap blockers instead of
+always returning empty path conflicts.
+
+- **New required plan gate: `plan_wave_paths_disjoint`.**
+  The plan linter now parses same-wave rows inside
+  `<!-- parallel-exec-managed-start -->` and fails when two slices in one wave
+  overlap on `claimedPaths`.
+- **`wave-status` conflict detection fixed.**
+  `src/internal/wave-status.ts` now parses claimed paths from the managed
+  parallel-exec table, computes same-wave overlaps for ready members, and
+  returns:
+  - `nextDispatch.mode: "blocked"` when overlap exists
+  - `nextDispatch.pathConflicts: ["S-<n>:<path>", ...]` with concrete slices.
+- **Lane and serial-consistency lint checks.**
+  Added advisory checks in plan lint:
+  - `plan_lane_meaningful`: lane values should be one of
+    `production|test|docs|infra|scaffold|migration`.
+  - `plan_parallelizable_consistency`: waves containing
+    `parallelizable: false` slices should carry explicit sequential/serial mode
+    hints in wave notes.
+- **Parallel-exec mermaid advisory.**
+  Added `plan_parallel_exec_mermaid_present` (advisory): encourages including a
+  Mermaid `flowchart`/`gantt` with `W-*` and `S-*` nodes for visual validation.
+- **Plan stage contract updated.**
+  Plan stage checklist/gates now include same-wave path disjointness as a
+  required gate, plus an explicit step to render parallel-exec Mermaid
+  visualization during authoring.
+- **Tests.**
+  Added:
+  `tests/unit/plan-wave-paths-disjoint.test.ts`,
+  `tests/unit/wave-status-path-conflicts.test.ts`,
+  `tests/unit/plan-lane-whitelist.test.ts`,
+  and updated gate budget in `tests/unit/gate-density.test.ts`.
+
 ## 7.1.0 — Commit Atomicity (managed per-slice commits + git-log verification)
 
 7.1.0 introduces explicit commit-ownership modes for TDD and wires a managed

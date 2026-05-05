@@ -24,6 +24,28 @@ import {
 const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
 const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
 const TASK_ID_PATTERN = /\bT-\d{3}[a-z]?(?:\.\d{1,3})?\b/giu;
+const PLAN_LANE_WHITELIST = new Set([
+  "production",
+  "test",
+  "docs",
+  "infra",
+  "scaffold",
+  "migration"
+]);
+
+interface ParallelWaveRowMeta {
+  sliceId: string;
+  unit: string;
+  claimedPaths: string[];
+  parallelizable: boolean | null;
+  lane: string | null;
+}
+
+interface ParallelWaveMeta {
+  waveId: string;
+  rows: ParallelWaveRowMeta[];
+  notes: string[];
+}
 
 /**
  * Extract every distinct T-NNN[a-z]?(.NNN)? id from a markdown body.
@@ -53,6 +75,101 @@ function extractParallelExecManagedBody(planMarkdown: string): string {
     return "";
   }
   return planMarkdown.slice(startIdx + PARALLEL_EXEC_MANAGED_START.length, endIdx);
+}
+
+function normalizePathToken(raw: string): string {
+  return raw.trim().replace(/^`|`$/gu, "").replace(/^\.\/+/u, "");
+}
+
+function parsePipeRow(trimmedLine: string): string[] {
+  const inner = trimmedLine.replace(/^\|/u, "").replace(/\|\s*$/u, "");
+  return inner.split("|").map((cell) => cell.trim());
+}
+
+function headerIndexByName(cells: string[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (let i = 0; i < cells.length; i += 1) {
+    const key = cells[i]!.toLowerCase().replace(/[^a-z0-9]/gu, "");
+    if (key.length > 0 && !map.has(key)) {
+      map.set(key, i);
+    }
+  }
+  return map;
+}
+
+function parseParallelWaveTableMetadata(planMarkdown: string): ParallelWaveMeta[] {
+  const body = extractParallelExecManagedBody(planMarkdown);
+  if (body.trim().length === 0) return [];
+  const lines = body.split(/\r?\n/u);
+  const out: ParallelWaveMeta[] = [];
+  let current: ParallelWaveMeta | null = null;
+  let headerIdx: Map<string, number> | null = null;
+
+  const flush = (): void => {
+    if (current) out.push(current);
+  };
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    const waveMatch = /^###\s+Wave\s+(?:W-)?(\d+)\b/iu.exec(trimmed);
+    if (waveMatch) {
+      flush();
+      current = {
+        waveId: `W-${waveMatch[1]!.padStart(2, "0")}`,
+        rows: [],
+        notes: []
+      };
+      headerIdx = null;
+      continue;
+    }
+    if (!current) continue;
+    current.notes.push(trimmed);
+    if (!trimmed.startsWith("|")) continue;
+    const cells = parsePipeRow(trimmed);
+    if (cells.length === 0) continue;
+    const first = cells[0]!.toLowerCase();
+    const isHeader = first === "sliceid" || first === "slice id";
+    if (isHeader) {
+      headerIdx = headerIndexByName(cells);
+      continue;
+    }
+    if (cells.every((cell) => /^:?-{3,}:?$/u.test(cell))) {
+      continue;
+    }
+    const sliceCell = cells[0]!;
+    if (!/^S-\d+$/iu.test(sliceCell)) continue;
+    const idx = headerIdx ?? new Map<string, number>();
+    const unitIdx = idx.get("unit") ?? idx.get("taskid") ?? 1;
+    const pathsIdx = idx.get("claimedpaths");
+    const parallelizableIdx = idx.get("parallelizable");
+    const laneIdx = idx.get("lane");
+    const rawPaths = pathsIdx !== undefined ? (cells[pathsIdx] ?? "") : "";
+    const claimedPaths = rawPaths.length === 0
+      ? []
+      : rawPaths
+        .split(",")
+        .map((p) => normalizePathToken(p))
+        .filter((p) => p.length > 0);
+    const rawParallel = parallelizableIdx !== undefined ? (cells[parallelizableIdx] ?? "").toLowerCase() : "";
+    let parallelizable: boolean | null = null;
+    if (rawParallel === "true" || rawParallel === "yes") parallelizable = true;
+    if (rawParallel === "false" || rawParallel === "no") parallelizable = false;
+    const laneRaw = laneIdx !== undefined ? (cells[laneIdx] ?? "").trim().toLowerCase() : "";
+    current.rows.push({
+      sliceId: sliceCell.toUpperCase(),
+      unit: (cells[unitIdx] ?? "").trim(),
+      claimedPaths,
+      parallelizable,
+      lane: laneRaw.length > 0 ? laneRaw : null
+    });
+  }
+  flush();
+  return out;
+}
+
+function waveHasSequentialModeHint(wave: ParallelWaveMeta): boolean {
+  const noteText = wave.notes.join("\n").toLowerCase();
+  return /mode\s*:\s*sequential/iu.test(noteText) || /\bsequential\b/iu.test(noteText) || /\bserial\b/iu.test(noteText);
 }
 
 export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
@@ -376,7 +493,8 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
       });
     }
 
-    // plan_parallel_exec_full_coverage: every T-NNN task listed in the
+    // plan_parallel_exec_full_coverage + atomic wave metadata checks.
+    // Every T-NNN task listed in the
     // plan's Task List must be assigned to a slice inside the
     // <!-- parallel-exec-managed-start --> block. Without this, TDD
     // cannot fan out work the plan never authored as waves; the previous
@@ -427,6 +545,96 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
             : uncovered.length === 0
               ? `Parallel Execution Plan covers all ${authoredTaskIds.size} authored task id(s); ${deferredIds.size} task id(s) are explicitly deferred.`
               : `Uncovered task id(s) — author waves for: ${uncovered.slice(0, 25).join(", ")}${uncovered.length > 25 ? `, … (${uncovered.length - 25} more)` : ""}. Either add slices for them inside <!-- parallel-exec-managed-start --> or move them under \`## Deferred Tasks\` with a reason.`
+      });
+
+      const waveMeta = parseParallelWaveTableMetadata(raw);
+      const pathConflicts: string[] = [];
+      for (const wave of waveMeta) {
+        const rows = wave.rows;
+        for (let i = 0; i < rows.length; i += 1) {
+          for (let j = i + 1; j < rows.length; j += 1) {
+            const left = rows[i]!;
+            const right = rows[j]!;
+            const rightPathSet = new Set(right.claimedPaths);
+            const overlap = left.claimedPaths.filter((p) => rightPathSet.has(p));
+            if (overlap.length === 0) continue;
+            pathConflicts.push(
+              `${wave.waveId} ${left.sliceId}<->${right.sliceId} overlap: ${overlap.join(", ")}`
+            );
+          }
+        }
+      }
+      findings.push({
+        section: "plan_wave_paths_disjoint",
+        required: taskListPresent,
+        rule:
+          "Slices within the same wave must keep `claimedPaths` disjoint so TDD can safely fan out parallel slice-builders.",
+        found: taskListPresent && blockPresent && pathConflicts.length === 0,
+        details: !taskListPresent
+          ? "Task List section is empty or missing T-NNN ids; disjoint-path wave check skipped."
+          : !blockPresent
+            ? "`<!-- parallel-exec-managed-start -->` block is missing or empty; cannot validate wave path disjointness."
+            : pathConflicts.length === 0
+              ? "All parsed same-wave slice rows have disjoint claimedPaths."
+              : `Overlapping claimedPaths detected: ${pathConflicts.slice(0, 12).join(" | ")}${pathConflicts.length > 12 ? ` | … (${pathConflicts.length - 12} more)` : ""}.`
+      });
+
+      const invalidLanes: string[] = [];
+      for (const wave of waveMeta) {
+        for (const row of wave.rows) {
+          if (!row.lane) continue;
+          if (!PLAN_LANE_WHITELIST.has(row.lane)) {
+            invalidLanes.push(`${wave.waveId}/${row.sliceId}:${row.lane}`);
+          }
+        }
+      }
+      findings.push({
+        section: "plan_lane_meaningful",
+        required: false,
+        rule:
+          "When a lane is declared, it must be one of: production, test, docs, infra, scaffold, migration.",
+        found: invalidLanes.length === 0,
+        details: invalidLanes.length === 0
+          ? "All declared lane values are either omitted or in the approved lane whitelist."
+          : `Invalid lane value(s): ${invalidLanes.join(", ")}. Remove lane or use a whitelisted value.`
+      });
+
+      const inconsistentParallelizable: string[] = [];
+      for (const wave of waveMeta) {
+        const hasSerialSlice = wave.rows.some((row) => row.parallelizable === false);
+        if (!hasSerialSlice) continue;
+        if (!waveHasSequentialModeHint(wave)) {
+          const serialSlices = wave.rows
+            .filter((row) => row.parallelizable === false)
+            .map((row) => row.sliceId)
+            .join(", ");
+          inconsistentParallelizable.push(`${wave.waveId} [${serialSlices}]`);
+        }
+      }
+      findings.push({
+        section: "plan_parallelizable_consistency",
+        required: false,
+        rule:
+          "Waves containing `parallelizable: false` slices should be explicitly marked sequential in wave notes/mode.",
+        found: inconsistentParallelizable.length === 0,
+        details: inconsistentParallelizable.length === 0
+          ? "No serial slices were found outside a sequentially-labeled wave context."
+          : `Serial slice(s) found without sequential wave mode hints in: ${inconsistentParallelizable.join(", ")}. Add a wave mode/note indicating sequential execution.`
+      });
+
+      const mermaidBlocks = raw.match(/```mermaid[\s\S]*?```/giu) ?? [];
+      const hasParallelExecMermaid = mermaidBlocks.some((block) =>
+        /(flowchart|gantt)/iu.test(block) && /\bW-\d+\b/iu.test(block) && /\bS-\d+\b/iu.test(block)
+      );
+      findings.push({
+        section: "plan_parallel_exec_mermaid_present",
+        required: false,
+        rule:
+          "Plan should include a mermaid flowchart/gantt for parallel waves and slice dependencies to make fanout shape visually reviewable.",
+        found: hasParallelExecMermaid,
+        details: hasParallelExecMermaid
+          ? "Mermaid visualization for parallel execution waves is present."
+          : "No mermaid parallel-execution visualization found (advisory). Add a ` ```mermaid ` flowchart or gantt with W-* and S-* nodes."
       });
     }
 }

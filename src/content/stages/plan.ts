@@ -55,6 +55,7 @@ export const PLAN: StageSchemaInput = {
       "Define validation points — mark where progress must be checked before continuing, with concrete command and expected evidence.",
       "Define execution posture — record whether execution should be sequential, dependency-batched, parallel-safe, or blocked; include risk triggers and RED/GREEN/REFACTOR checkpoint/commit expectations when the repo workflow supports them. This fulfills the `plan_execution_posture_recorded` gate.",
       "**Author the FULL Parallel Execution Plan.** Inside the `<!-- parallel-exec-managed-start -->` block, enumerate ALL waves W-02..W-N covering EVERY T-NNN task in `## Task List` — no `we'll author waves later`, `next batch only`, or open-ended Backlog handwave is acceptable. Each task gets a slice with `sliceId | taskId | dependsOn | claimedPaths | parallelizable | riskTier | lane`. Spike rows (`S-N`) and tasks marked `deferred` in an explicit `Deferred:` column may be omitted, but every other T-NNN must be claimed. This fulfills the `plan_parallel_exec_full_coverage` gate. The TDD stage downstream is a pure consumer of these waves — if the plan does not author them, TDD cannot fan out that work.",
+      "After authoring/refreshing the managed parallel-exec block, render a Mermaid `flowchart` or `gantt` covering waves (`W-*`) and slice dependencies (`S-*`) so parallelism and fan-in boundaries are visually auditable.",
       "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with `node .cclaw/hooks/stage-complete.mjs plan` and tell user to run `/cc`."
     ],
     interactionProtocol: [
@@ -62,6 +63,7 @@ export const PLAN: StageSchemaInput = {
       "Split work into small vertical slices (target 2-5 minute tasks).",
       "Publish explicit dependency batches with entry and exit checks for each batch.",
       "Expose execution posture: sequential vs batch/parallel, stop conditions, and checkpoint cadence for the TDD handoff.",
+      "Keep same-wave `claimedPaths` disjoint; if overlap exists, split waves or serialize explicitly before handoff.",
       "Attach exact verification command/manual step and expected evidence to every task.",
       "Preserve locked scope boundaries: no silent scope reduction language in task rows.",
       "Enforce WAIT_FOR_CONFIRM: present the plan summary with options (A) Approve / (B) Revise / (C) Reject.",
@@ -85,6 +87,7 @@ export const PLAN: StageSchemaInput = {
       { id: "plan_acceptance_mapped", description: "Each task maps to a spec acceptance criterion." },
       { id: "plan_execution_posture_recorded", description: "Execution posture is recorded before implementation handoff." },
       { id: "plan_parallel_exec_full_coverage", description: "Every T-NNN task in `## Task List` (other than spikes/explicitly-deferred) is assigned to at least one slice inside the `<!-- parallel-exec-managed-start -->` block; TDD cannot fan out work that the plan never authored as waves." },
+      { id: "plan_wave_paths_disjoint", description: "Within each authored wave, slice `claimedPaths` remain disjoint so `wave-fanout` can dispatch safely without overlap conflicts." },
       { id: "plan_wait_for_confirm", description: "Execution blocked until explicit user confirmation." }
     ],
     requiredEvidence: [
