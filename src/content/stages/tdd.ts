@@ -80,6 +80,8 @@ export const TDD: StageSchemaV2Input = {
       { id: "tdd_iron_law_acknowledged", description: "Iron Law acknowledgement is explicit (`Acknowledged: yes`) before implementation proceeds." },
       { id: "tdd_watched_red_observed", description: "Watched-RED Proof records at least one observed failing test with ISO timestamp evidence." },
       { id: "tdd_slice_cycle_complete", description: "Vertical Slice Cycle records RED, GREEN, and REFACTOR phases per active slice." },
+      { id: "tdd_slice_closes_ac", description: "Every `tdd-slices/S-<id>.md` card includes valid `Closes: AC-N` links to spec acceptance criteria." },
+      { id: "slice_no_orphan_changes", description: "After `phase=doc`, working tree changes remain inside the slice claimedPaths boundary (worktree root when present)." },
       { id: "tdd_traceable_to_plan", description: "Change traceability to plan slice is explicit." },
       { id: "tdd_docs_drift_check", description: "When public API/config/CLI surfaces change, docs drift is addressed via a completed doc-updater pass." }
     ],

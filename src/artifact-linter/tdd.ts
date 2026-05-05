@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   loadTddReadySlicePool,
   readDelegationLedger,
@@ -7,6 +9,8 @@ import {
   selectReadySlices
 } from "../delegation.js";
 import type { DelegationEntry, DelegationEvent } from "../delegation.js";
+import { resolveArtifactPath as resolveStageArtifactPath } from "../artifact-paths.js";
+import { exists } from "../fs-utils.js";
 import {
   mergeParallelWaveDefinitions,
   parseParallelExecutionPlanWaves,
@@ -15,6 +19,8 @@ import {
 import {
   type LintFinding,
   type StageLintContext,
+  extractAcceptanceCriterionIdsFromMarkdown,
+  extractH2Sections,
   evaluateInvestigationTrace,
   sectionBodyByName
 } from "./shared.js";
@@ -23,6 +29,7 @@ const SLICE_SUMMARY_START = "<!-- auto-start: tdd-slice-summary -->";
 const SLICE_SUMMARY_END = "<!-- auto-end: tdd-slice-summary -->";
 const SLICES_INDEX_START = "<!-- auto-start: slices-index -->";
 const SLICES_INDEX_END = "<!-- auto-end: slices-index -->";
+const execFileAsync = promisify(execFile);
 
 /**
  * TDD stage linter.
@@ -408,6 +415,11 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
   // simply means main-only mode (legacy fallback).
   const slicesDir = path.join(artifactsDir, "tdd-slices");
   const sliceFiles = await listSliceFiles(slicesDir);
+  const specAcceptanceIds = await readSpecAcceptanceCriteriaIds(projectRoot, ctx.track);
+  const specAcceptanceSet = new Set(specAcceptanceIds);
+  const slicesMissingCloses: string[] = [];
+  const slicesWithUnknownAcs: string[] = [];
+  let checkedSliceCards = 0;
   for (const sliceFile of sliceFiles) {
     const sliceId = sliceFile.sliceId;
     const requiredForSlice =
@@ -433,6 +445,16 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     if (!/^##\s+Learnings\b/imu.test(content)) {
       issues.push("missing `## Learnings` section");
     }
+    checkedSliceCards += 1;
+    const closesIds = extractSliceCardClosedAcceptanceCriteria(content);
+    if (closesIds.length === 0) {
+      slicesMissingCloses.push(sliceId);
+    } else if (specAcceptanceSet.size > 0) {
+      const unknown = closesIds.filter((acId) => !specAcceptanceSet.has(acId));
+      if (unknown.length > 0) {
+        slicesWithUnknownAcs.push(`${sliceId}: ${unknown.join(", ")}`);
+      }
+    }
     findings.push({
       section: `tdd_slice_file:${sliceId}`,
       required: requiredForSlice,
@@ -443,6 +465,36 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
         : `tdd-slices/${path.basename(sliceFile.absPath)}: ${issues.join(", ")}.`
     });
   }
+
+  const closesRequired = checkedSliceCards > 0;
+  const closesGatePassed = !closesRequired
+    ? true
+    : slicesMissingCloses.length === 0 &&
+      slicesWithUnknownAcs.length === 0;
+  findings.push({
+    section: "tdd_slice_closes_ac",
+    required: true,
+    rule: "Every `tdd-slices/S-<id>.md` card must include `Closes: AC-N` links (comma-separated allowed) that reference real spec AC ids.",
+    found: closesGatePassed,
+    details: !closesRequired
+      ? "No `tdd-slices/S-*.md` slice cards found yet; `Closes: AC-N` check is idle."
+      : slicesMissingCloses.length > 0
+        ? `Slice card(s) missing \`Closes: AC-N\`: ${slicesMissingCloses.join(", ")}.`
+        : slicesWithUnknownAcs.length > 0
+          ? `Slice card(s) reference unknown AC ids: ${slicesWithUnknownAcs.join(" | ")}.`
+          : specAcceptanceSet.size === 0
+            ? `All ${checkedSliceCards} slice card(s) include Closes links; spec AC list unavailable for strict ID cross-check.`
+            : `All ${checkedSliceCards} slice card(s) include valid Closes links to spec AC ids.`
+  });
+
+  const orphanCheck = await evaluateSliceNoOrphanChanges(projectRoot, activeRunEntries);
+  findings.push({
+    section: "slice_no_orphan_changes",
+    required: true,
+    rule: "On slice phase=doc, there must be no staged/unstaged changes outside the slice `claimedPaths` (worktree root when present, otherwise project root).",
+    found: orphanCheck.ok,
+    details: orphanCheck.details
+  });
 
   // Auto-render the slice summary inside `06-tdd.md` between markers.
   // Idempotent — content outside the markers is preserved. Skipped
@@ -528,6 +580,182 @@ async function listSliceFiles(slicesDir: string): Promise<SliceFileInfo[]> {
 
 function escapeForRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function normalizePathLike(value: string): string {
+  const slashes = value.replace(/\\/gu, "/");
+  const withoutDot = slashes.replace(/^\.\//u, "");
+  return withoutDot.replace(/\/+$/u, "");
+}
+
+function parsePorcelainPaths(raw: string): string[] {
+  const out: string[] = [];
+  for (const line of raw.split(/\r?\n/gu)) {
+    const trimmed = line.trimEnd();
+    if (trimmed.length < 4) continue;
+    const status = trimmed.slice(0, 2);
+    if (status === "??") {
+      const p = normalizePathLike(trimmed.slice(3).trim());
+      if (p.length > 0) out.push(p);
+      continue;
+    }
+    let p = trimmed.slice(3).trim();
+    const renameIdx = p.indexOf(" -> ");
+    if (renameIdx >= 0) {
+      p = p.slice(renameIdx + 4);
+    }
+    p = normalizePathLike(p.replace(/^"/u, "").replace(/"$/u, ""));
+    if (p.length > 0) out.push(p);
+  }
+  return [...new Set(out)];
+}
+
+async function gitChangedPaths(cwd: string): Promise<string[]> {
+  const { stdout } = await execFileAsync("git", ["status", "--porcelain", "-uall"], { cwd });
+  return parsePorcelainPaths(stdout);
+}
+
+function matchesClaimedPath(changedPath: string, claimedPaths: string[]): boolean {
+  const changed = normalizePathLike(changedPath);
+  return claimedPaths.some((rawClaimed) => {
+    const claimed = normalizePathLike(rawClaimed);
+    if (claimed.length === 0) return false;
+    if (changed === claimed) return true;
+    return changed.startsWith(`${claimed}/`);
+  });
+}
+
+function extractSliceCardClosedAcceptanceCriteria(content: string): string[] {
+  const ids = new Set<string>();
+  for (const match of content.matchAll(/^\s*(?:[-*]\s*)?closes\s*:\s*(.+)$/gimu)) {
+    const tail = match[1] ?? "";
+    for (const id of extractAcceptanceCriterionIdsFromMarkdown(tail)) {
+      ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
+async function readSpecAcceptanceCriteriaIds(
+  projectRoot: string,
+  track: StageLintContext["track"]
+): Promise<string[]> {
+  const specArtifact = await resolveStageArtifactPath("spec", {
+    projectRoot,
+    track,
+    intent: "read"
+  });
+  if (!(await exists(specArtifact.absPath))) {
+    return [];
+  }
+  try {
+    const specRaw = await fs.readFile(specArtifact.absPath, "utf8");
+    const specSections = extractH2Sections(specRaw);
+    const acceptanceBody = sectionBodyByName(specSections, "Acceptance Criteria") ?? specRaw;
+    return extractAcceptanceCriterionIdsFromMarkdown(acceptanceBody);
+  } catch {
+    return [];
+  }
+}
+
+function resolveClaimedPathsForDocRow(row: DelegationEntry, allRows: DelegationEntry[]): string[] {
+  const fromRow = Array.isArray(row.claimedPaths) ? row.claimedPaths : [];
+  if (fromRow.length > 0) {
+    return [...new Set(fromRow.map((value) => normalizePathLike(value)).filter((value) => value.length > 0))];
+  }
+  const fromSpan = allRows
+    .filter((entry) =>
+      entry.spanId === row.spanId &&
+      Array.isArray(entry.claimedPaths) &&
+      entry.claimedPaths.length > 0
+    )
+    .flatMap((entry) => entry.claimedPaths as string[]);
+  return [...new Set(fromSpan.map((value) => normalizePathLike(value)).filter((value) => value.length > 0))];
+}
+
+async function resolveWorktreeCwdForDocRow(
+  projectRoot: string,
+  row: DelegationEntry,
+  allRows: DelegationEntry[]
+): Promise<string> {
+  const candidates = [
+    typeof row.worktreePath === "string" ? row.worktreePath.trim() : "",
+    ...allRows
+      .filter((entry) => entry.spanId === row.spanId)
+      .map((entry) => (typeof entry.worktreePath === "string" ? entry.worktreePath.trim() : ""))
+  ].filter((value) => value.length > 0);
+  for (const candidateRaw of candidates) {
+    const candidateAbs = path.isAbsolute(candidateRaw)
+      ? candidateRaw
+      : path.join(projectRoot, candidateRaw);
+    if (await exists(candidateAbs)) {
+      return candidateAbs;
+    }
+  }
+  return projectRoot;
+}
+
+interface SliceNoOrphanChangesResult {
+  ok: boolean;
+  details: string;
+}
+
+export async function evaluateSliceNoOrphanChanges(
+  projectRoot: string,
+  rows: DelegationEntry[]
+): Promise<SliceNoOrphanChangesResult> {
+  if (!(await exists(path.join(projectRoot, ".git")))) {
+    return {
+      ok: true,
+      details: "No .git directory detected; orphan-change check skipped."
+    };
+  }
+  const docRows = rows.filter(
+    (entry) =>
+      entry.stage === "tdd" &&
+      entry.agent === "slice-builder" &&
+      entry.status === "completed" &&
+      entry.phase === "doc"
+  );
+  if (docRows.length === 0) {
+    return {
+      ok: true,
+      details: "No completed phase=doc rows found for the active run."
+    };
+  }
+
+  const missingClaimedPaths: string[] = [];
+  const driftRows: string[] = [];
+  for (const row of docRows) {
+    const claimedPaths = resolveClaimedPathsForDocRow(row, rows);
+    const rowKey = `${row.sliceId ?? "unknown-slice"}@${row.spanId ?? "unknown-span"}`;
+    if (claimedPaths.length === 0) {
+      missingClaimedPaths.push(rowKey);
+      continue;
+    }
+    const cwd = await resolveWorktreeCwdForDocRow(projectRoot, row, rows);
+    const changedPaths = await gitChangedPaths(cwd);
+    const driftPaths = changedPaths.filter((changedPath) => !matchesClaimedPath(changedPath, claimedPaths));
+    if (driftPaths.length > 0) {
+      driftRows.push(`${rowKey}: ${driftPaths.join(", ")}`);
+    }
+  }
+
+  if (missingClaimedPaths.length > 0 || driftRows.length > 0) {
+    const parts: string[] = [];
+    if (missingClaimedPaths.length > 0) {
+      parts.push(`doc row(s) missing claimedPaths: ${missingClaimedPaths.join(", ")}`);
+    }
+    if (driftRows.length > 0) {
+      parts.push(`orphan working-tree changes detected: ${driftRows.join(" | ")}`);
+    }
+    return { ok: false, details: parts.join(". ") };
+  }
+
+  return {
+    ok: true,
+    details: `Checked ${docRows.length} doc row(s); no orphan changes escaped claimedPaths.`
+  };
 }
 
 function groupBySlice(entries: DelegationEntry[]): Map<string, DelegationEntry[]> {

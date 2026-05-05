@@ -388,6 +388,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "design_test_and_perf_defined"
   ],
   spec: [
+    "spec_ac_ids_present",
     "spec_acceptance_measurable",
     "spec_testability_confirmed",
     "spec_assumptions_surfaced",
@@ -413,6 +414,8 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "tdd_iron_law_acknowledged",
     "tdd_watched_red_observed",
     "tdd_slice_cycle_complete",
+    "tdd_slice_closes_ac",
+    "slice_no_orphan_changes",
     "tdd_docs_drift_check",
     ...(track === "quick" ? [] : ["tdd_traceable_to_plan"])
   ],
@@ -427,6 +430,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "ship_review_verdict_valid",
     "ship_preflight_passed",
     "ship_rollback_plan_ready",
+    "ship_all_acceptance_criteria_have_commits",
     "ship_finalization_executed"
   ]
 };
@@ -472,7 +476,7 @@ const REQUIRED_ARTIFACT_SECTIONS: Record<FlowStage, string[]> = {
     "Verification Ladder"
   ],
   review: ["Review Evidence Scope", "Changed-File Coverage", "Layer 1 Verdict", "Review Findings Contract", "Severity Summary", "Final Verdict"],
-  ship: ["Preflight Results", "Release Notes", "Rollback Plan", "Finalization"]
+  ship: ["Preflight Results", "Release Notes", "Traceability Matrix", "Rollback Plan", "Finalization"]
 };
 
 function resolveRequiredGateIds(stage: FlowStage, track: FlowTrack): string[] {

@@ -161,6 +161,8 @@ T-1
 ## Acceptance criteria
 AC-1
 
+Closes: AC-1
+
 ## Why this slice
 Cover slice ${n}.
 
