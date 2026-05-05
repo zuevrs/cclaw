@@ -99,6 +99,7 @@ export interface InitOptions {
 
 export interface SyncOptions {
   harnesses?: HarnessId[];
+  check?: boolean;
 }
 
 const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
@@ -920,6 +921,61 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
   }
 }
 
+interface ManagedHookDriftFinding {
+  file: string;
+  reason: "missing" | "content_mismatch";
+}
+
+async function canonicalHookScripts(): Promise<Record<string, string>> {
+  const hookRuntimeOptions: NodeHookRuntimeOptions = {};
+  const bundledHookRuntime = await readBundledRunHookRuntimeScript(hookRuntimeOptions);
+  return {
+    "stage-complete.mjs": stageCompleteScript(),
+    "start-flow.mjs": startFlowScript(),
+    "cancel-run.mjs": cancelRunScript(),
+    "run-hook.mjs": bundledHookRuntime ?? nodeHookRuntimeScript(hookRuntimeOptions),
+    "run-hook.cmd": runHookCmdScript(),
+    "delegation-record.mjs": delegationRecordScript(),
+    "slice-commit.mjs": sliceCommitScript(),
+    "opencode-plugin.mjs": opencodePluginJs()
+  };
+}
+
+async function checkManagedHookDrift(projectRoot: string): Promise<ManagedHookDriftFinding[]> {
+  const hooksDir = runtimePath(projectRoot, "hooks");
+  const canonical = await canonicalHookScripts();
+  const findings: ManagedHookDriftFinding[] = [];
+  for (const [fileName, expectedSource] of Object.entries(canonical)) {
+    const targetPath = path.join(hooksDir, fileName);
+    let actual: Buffer;
+    try {
+      actual = await fs.readFile(targetPath);
+    } catch {
+      findings.push({ file: fileName, reason: "missing" });
+      continue;
+    }
+    const expected = Buffer.from(expectedSource, "utf8");
+    if (!actual.equals(expected)) {
+      findings.push({ file: fileName, reason: "content_mismatch" });
+    }
+  }
+  return findings;
+}
+
+function formatManagedHookDriftError(findings: ManagedHookDriftFinding[]): string {
+  const details = findings
+    .map((finding) =>
+      `- .cclaw/hooks/${finding.file}: ${
+        finding.reason === "missing" ? "missing" : "content differs from canonical renderer"
+      }`)
+    .join("\n");
+  return (
+    "[sync --check] Managed hook drift detected.\n" +
+    `${details}\n` +
+    "Re-run `npx cclaw-cli sync` to rewrite managed hooks."
+  );
+}
+
 async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
   const storePath = runtimePath(projectRoot, "knowledge.jsonl");
   if (!(await exists(storePath))) {
@@ -1267,6 +1323,13 @@ export async function initCclaw(options: InitOptions): Promise<void> {
 export async function syncCclaw(projectRoot: string, options: SyncOptions = {}): Promise<void> {
   if (options.harnesses !== undefined && options.harnesses.length === 0) {
     throw new Error("Select at least one harness.");
+  }
+  if (options.check === true) {
+    const drift = await checkManagedHookDrift(projectRoot);
+    if (drift.length > 0) {
+      throw new Error(formatManagedHookDriftError(drift));
+    }
+    return;
   }
   const configExists = await exists(configPath(projectRoot));
   let config = await readConfig(projectRoot);

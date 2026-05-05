@@ -14,6 +14,7 @@ import {
 import { stagePolicyNeedlesFromMetadata } from "./stages/_lint-metadata/index.js";
 import { tddStageForTrack } from "./stages/tdd.js";
 import { trackRenderContext } from "./track-render-context.js";
+import { STACK_REVIEW_ROUTE_PROFILES } from "../stack-detection.js";
 import type {
   ArtifactValidation,
   StageComplexityTier,
@@ -126,38 +127,12 @@ export interface StageDelegationSummary {
   stackAwareRoutes: StageStackAwareReviewRoute[];
 }
 
-const REVIEW_STACK_AWARE_ROUTES: StageStackAwareReviewRoute[] = [
-  {
-    stack: "TypeScript/JavaScript",
-    agent: "reviewer",
-    signals: ["package.json", "tsconfig.json"],
-    focus: "type safety, package scripts, build/test config, dependency boundaries"
-  },
-  {
-    stack: "Python",
-    agent: "reviewer",
-    signals: ["pyproject.toml", "requirements.txt"],
-    focus: "packaging, virtualenv assumptions, typing, pytest or unittest evidence"
-  },
-  {
-    stack: "Ruby/Rails",
-    agent: "reviewer",
-    signals: ["Gemfile", "config/"],
-    focus: "Rails conventions, migrations, routes/controllers, RSpec or Minitest evidence"
-  },
-  {
-    stack: "Go",
-    agent: "reviewer",
-    signals: ["go.mod"],
-    focus: "interfaces, concurrency, error handling, go test coverage"
-  },
-  {
-    stack: "Rust",
-    agent: "reviewer",
-    signals: ["Cargo.toml"],
-    focus: "ownership, error/result handling, feature flags, cargo test coverage"
-  }
-];
+const REVIEW_STACK_AWARE_ROUTES: StageStackAwareReviewRoute[] = STACK_REVIEW_ROUTE_PROFILES.map((profile) => ({
+  stack: profile.stack,
+  agent: "reviewer",
+  signals: [...profile.reviewSignals],
+  focus: profile.focus
+}));
 
 function stackAwareRoutesForStage(stage: FlowStage): StageStackAwareReviewRoute[] {
   return stage === "review" ? reviewStackAwareRoutes() : [];

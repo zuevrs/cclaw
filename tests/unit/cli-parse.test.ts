@@ -21,6 +21,12 @@ describe("cli parser", () => {
     expect(parsed.interactive).toBe(true);
   });
 
+  it("parses sync --check flag", () => {
+    const parsed = parseArgs(["sync", "--check"]);
+    expect(parsed.command).toBe("sync");
+    expect(parsed.syncCheck).toBe(true);
+  });
+
   it("rejects empty harness lists", () => {
     expect(() => parseHarnesses("")).toThrowError(/Select at least one harness/);
     expect(() => parseArgs(["sync", "--harnesses="])).toThrowError(/Select at least one harness/);
@@ -142,6 +148,7 @@ describe("cli parser", () => {
     expect(text).toContain("--version");
     expect(text).toContain("-v");
     expect(text).toContain("--harnesses");
+    expect(text).toContain("--check");
     expect(text).toContain("--no-interactive");
     expect(text).toContain("--disposition");
     expect(text).toContain("--reason");

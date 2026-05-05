@@ -376,19 +376,20 @@ function extractRedTestNameInline(redEvidenceRef) {
   return trimmed;
 }
 
-// Match canonical runner pass lines:
-//   cargo: "test result: ok. N passed; 0 failed"
-//   pytest: "===== N passed in 0.42s ====="
-//   go test: "ok   pkg   0.123s"
-//   npm/jest/vitest: "Tests:  N passed"
-// We accept a generic shape: "=> N passed; 0 failed" plus four
-// runner-specific patterns.
+// Match canonical runner pass lines using language-agnostic examples:
+//   Node/TS   (vitest/jest): "=> N passed; 0 failed" or "Tests: N passed"
+//   Python    (pytest): "===== N passed in 0.42s ====="
+//   Go        (go test): "ok   pkg   0.123s"
+//   Rust      (cargo test): "test result: ok. N passed; 0 failed"
+//   Java/JVM  (maven/surefire): "Tests run: N, Failures: 0, Errors: 0"
+// We accept a generic "passed/failed" shape plus runner-specific patterns.
 const GREEN_PASS_PATTERNS = [
   /=>\\s*\\d+\\s+passed/iu,
   /\\b\\d+\\s+passed[;,]\\s*0\\s+failed\\b/iu,
   /\\btest\\s+result:\\s*ok\\b/iu,
   /\\b\\d+\\s+passed\\s+in\\s+\\d+(?:\\.\\d+)?\\s*s\\b/iu,
-  /^ok\\s+\\S+\\s+\\d+(?:\\.\\d+)?s\\b/imu
+  /^ok\\s+\\S+\\s+\\d+(?:\\.\\d+)?s\\b/imu,
+  /tests\\s+run\\s*:\\s*\\d+\\s*,\\s*failures\\s*:\\s*0\\s*,\\s*errors\\s*:\\s*0/iu
 ];
 
 function matchesPassingAssertionInline(value) {
@@ -415,6 +416,16 @@ async function readDelegationEvents(root) {
   }
 }
 
+async function appendAuditEventInline(root, payload) {
+  const stateDir = path.join(root, RUNTIME_ROOT, "state");
+  await fs.mkdir(stateDir, { recursive: true });
+  await fs.appendFile(
+    path.join(stateDir, "delegation-events.jsonl"),
+    JSON.stringify(payload) + "\\n",
+    { encoding: "utf8", mode: 0o600 }
+  );
+}
+
 function hasPriorAck(events, args, runId) {
   return events.some((event) =>
     event.runId === runId &&
@@ -430,7 +441,7 @@ function hasPriorAck(events, args, runId) {
 function usage() {
   process.stderr.write([
     "Usage:",
-    "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--supersede=<prevSpanId>] [--allow-parallel] [--paths=<comma-separated>] [--override-cap=<int>] [--json]",
+    "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--supersede=<prevSpanId>] [--allow-parallel] [--paths=<comma-separated>] [--override-cap=<int>] [--reason=<slug>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --repair --span-id=<id> --repair-reason=\\\"<why>\\\" [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --audit-kind=cclaw_integration_overseer_skipped [--audit-reason=\\\"<comma-separated reasons>\\\"] [--slice-ids=\\\"S-1,S-2\\\"] [--json]    # non-delegation audit row",
@@ -448,11 +459,12 @@ function usage() {
     "TDD parallel scheduler:",
     "  --paths=<a,b,c>           repo-relative paths the slice-builder will edit; disjoint sets auto-promote to allowParallel, overlap throws DispatchOverlapError",
     "  --override-cap=<int>      raise the slice worker fan-out cap once for this dispatch (default cap " + String(5) + ", env CCLAW_MAX_PARALLEL_SLICE_BUILDERS overrides globally)",
+    "  --reason=<slug>           required with --override-cap so cap bypasses are auditable (e.g. red-checkpoint-retry)",
     "",
     "TDD slice phase tagging:",
     "  --slice=<id>              TDD slice identifier (e.g. S-1) used by the linter to auto-derive the Watched-RED + Vertical Slice Cycle tables.",
     "  --phase=<phase>           one of " + VALID_DELEGATION_PHASES.join(", ") + ". Pair with --slice to record a TDD slice phase event.",
-    "  --refactor-rationale=<t>  required when --phase=refactor-deferred unless --evidence-ref carries the rationale text; also paired with --refactor-outcome on phase=green.",
+    "  --refactor-rationale=<t>  required for deferred refactor paths; must be >=80 chars and mention slice + task context (e.g. S-12 / T-103).",
     "  --refactor-outcome=<m>   one of inline|deferred. Folds REFACTOR into the phase=green event so a single row can close RED→GREEN→REFACTOR. Pair --refactor-outcome=deferred with --refactor-rationale.",
     "  --risk-tier=<t>          one of low|medium|high. high triggers integration-overseer in conditional mode.",
     ""
@@ -545,6 +557,28 @@ function normalizeEvidenceRefs(args) {
     return [args["evidence-ref"].trim()];
   }
   return [];
+}
+
+function validateDeferredRationaleInline(rationaleRaw, args) {
+  const rationale = typeof rationaleRaw === "string" ? rationaleRaw.trim() : "";
+  if (rationale.length === 0) {
+    return "missing";
+  }
+  if (rationale.length < 80) {
+    return "too-short";
+  }
+  const lower = rationale.toLowerCase();
+  const sliceRaw = typeof args.slice === "string" ? args.slice.trim().toLowerCase() : "";
+  const hasSliceMention =
+    (sliceRaw.length > 0 && lower.includes(sliceRaw)) ||
+    /\\bs-\\d+\\b/iu.test(rationale);
+  const hasTaskMention =
+    /\\bt-\\d{3}[a-z]?(?:\\.\\d{1,3})?\\b/iu.test(rationale) ||
+    /\\btask\\b/iu.test(rationale);
+  if (!hasSliceMention || !hasTaskMention) {
+    return "missing-context";
+  }
+  return "ok";
 }
 
 function buildRow(args, status, runId, now, options) {
@@ -953,7 +987,8 @@ async function findLegacyEntry(root, spanId) {
 // the helper. Keep in sync with NON_DELEGATION_AUDIT_EVENTS in
 // src/delegation.ts.
 const VALID_AUDIT_KINDS = new Set([
-  "cclaw_integration_overseer_skipped"
+  "cclaw_integration_overseer_skipped",
+  "cclaw_allow_parallel_auto_flip"
 ]);
 
 async function runAuditEmit(args, json) {
@@ -1389,15 +1424,15 @@ async function main() {
     return;
   }
   if (args.phase === "refactor-deferred") {
-    const rationaleProvided =
-      typeof args["refactor-rationale"] === "string" && args["refactor-rationale"].trim().length > 0;
-    const evidenceProvided =
-      (typeof args["evidence-ref"] === "string" && args["evidence-ref"].trim().length > 0) ||
-      (Array.isArray(args["evidence-refs"]) && args["evidence-refs"].some(
-        (ref) => typeof ref === "string" && ref.trim().length > 0
-      ));
-    if (!rationaleProvided && !evidenceProvided) {
-      problems.push("--phase=refactor-deferred requires --refactor-rationale=<text> or --evidence-ref=<text>");
+    const rationaleQuality = validateDeferredRationaleInline(args["refactor-rationale"], args);
+    if (rationaleQuality !== "ok") {
+      if (rationaleQuality === "missing") {
+        problems.push("--phase=refactor-deferred requires --refactor-rationale=<text>");
+      } else if (rationaleQuality === "too-short") {
+        problems.push("--refactor-rationale for deferred refactor must be at least 80 characters");
+      } else {
+        problems.push("--refactor-rationale for deferred refactor must mention slice/task context (e.g. S-12 and T-103)");
+      }
       emitProblems(problems, json, 2);
       return;
     }
@@ -1417,15 +1452,15 @@ async function main() {
     return;
   }
   if (args["refactor-outcome"] === "deferred") {
-    const rationaleProvided =
-      typeof args["refactor-rationale"] === "string" && args["refactor-rationale"].trim().length > 0;
-    const evidenceProvided =
-      (typeof args["evidence-ref"] === "string" && args["evidence-ref"].trim().length > 0) ||
-      (Array.isArray(args["evidence-refs"]) && args["evidence-refs"].some(
-        (ref) => typeof ref === "string" && ref.trim().length > 0
-      ));
-    if (!rationaleProvided && !evidenceProvided) {
-      problems.push("--refactor-outcome=deferred requires --refactor-rationale=<text> or --evidence-ref=<text>");
+    const rationaleQuality = validateDeferredRationaleInline(args["refactor-rationale"], args);
+    if (rationaleQuality !== "ok") {
+      if (rationaleQuality === "missing") {
+        problems.push("--refactor-outcome=deferred requires --refactor-rationale=<text>");
+      } else if (rationaleQuality === "too-short") {
+        problems.push("--refactor-rationale for deferred refactor must be at least 80 characters");
+      } else {
+        problems.push("--refactor-rationale for deferred refactor must mention slice/task context (e.g. S-12 and T-103)");
+      }
       emitProblems(problems, json, 2);
       return;
     }
@@ -1439,6 +1474,21 @@ async function main() {
     problems.push("invalid --risk-tier (allowed: low, medium, high)");
     emitProblems(problems, json, 2);
     return;
+  }
+  if (args["override-cap"] !== undefined) {
+    const overrideRaw = String(args["override-cap"]).trim();
+    const overrideNum = Number(overrideRaw);
+    if (!Number.isInteger(overrideNum) || overrideNum < 1) {
+      problems.push("--override-cap must be an integer >= 1");
+      emitProblems(problems, json, 2);
+      return;
+    }
+    const reasonRaw = typeof args.reason === "string" ? args.reason.trim() : "";
+    if (reasonRaw.length === 0) {
+      problems.push("--override-cap requires --reason=<slug>");
+      emitProblems(problems, json, 2);
+      return;
+    }
   }
 
   if (args.status === "completed" && args["dispatch-surface"] !== "role-switch") {
@@ -1521,6 +1571,7 @@ async function main() {
   const row = buildRow(args, status, runId, now, { spanStartTs });
   const clean = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
   const event = { ...clean, event: status, eventTs: now };
+  let autoParallelAuditEvent = null;
 
   const violation = validateMonotonicTimestampsInline(clean, priorLedger);
   if (violation) {
@@ -1529,8 +1580,8 @@ async function main() {
   }
 
   // File-overlap scheduler + fan-out cap. Run before the dispatch
-  // dedup so disjoint claimedPaths can auto-promote to allowParallel and
-  // bypass the duplicate guard.
+  // dedup so disjoint claimedPaths can auto-promote to allowParallel,
+  // emit an audit event for the flip, and bypass the duplicate guard.
   if (status === "scheduled") {
     const sameRunPrior = priorLedger.filter((entry) => entry.runId === runId);
     const activeForRun = computeActiveSubagentsInline(sameRunPrior);
@@ -1543,6 +1594,18 @@ async function main() {
       clean.allowParallel = true;
       args["allow-parallel"] = true;
       event.allowParallel = true;
+      autoParallelAuditEvent = {
+        event: "cclaw_allow_parallel_auto_flip",
+        runId,
+        ts: now,
+        eventTs: now,
+        stage: clean.stage,
+        agent: clean.agent,
+        spanId: clean.spanId,
+        sliceId: clean.sliceId,
+        reason: "disjoint-claimed-paths-auto-flip",
+        claimedPaths: Array.isArray(clean.claimedPaths) ? clean.claimedPaths : []
+      };
     }
     const overrideRaw = typeof args["override-cap"] === "string" ? args["override-cap"] : null;
     const override = overrideRaw !== null ? Number(overrideRaw) : null;
@@ -1590,8 +1653,7 @@ async function main() {
   //   3. green_evidence_too_fresh — completedTs minus ackTs must be
   //      >= flow-state.json::tddGreenMinElapsedMs (default 4000ms).
   // Escape hatch for legitimate observational GREENs (cross-slice
-  // handoff, no-op verification): pair --allow-fast-green with
-  // --green-mode=observational. Both flags are required.
+  // handoff, no-op verification): --green-mode=observational.
   if (
     clean.stage === "tdd" &&
     clean.agent === "slice-builder" &&
@@ -1601,7 +1663,6 @@ async function main() {
     const isObservational =
       typeof args["green-mode"] === "string" &&
       args["green-mode"].trim().toLowerCase() === "observational";
-    const allowFastGreen = args["allow-fast-green"] === true;
     const greenEvidenceFirst =
       Array.isArray(clean.evidenceRefs) && clean.evidenceRefs.length > 0
         ? String(clean.evidenceRefs[0])
@@ -1628,10 +1689,9 @@ async function main() {
     // nothing to verify GREEN against (legacy ledger imports, RED
     // happened outside cclaw harness, or test fixtures that bypass
     // RED). Once a RED row is present, the contract becomes
-    // mandatory unless explicitly waived via --allow-fast-green
-    // --green-mode=observational.
+    // mandatory unless explicitly waived via --green-mode=observational.
     const hasRedContext = redEvidenceRef !== null;
-    const escapeFastGreen = allowFastGreen && isObservational;
+    const escapeFastGreen = isObservational;
 
     if (hasRedContext && !escapeFastGreen) {
       // Check 1: RED test name match.
@@ -1660,7 +1720,7 @@ async function main() {
             sliceId: clean.sliceId,
             greenEvidenceFirst,
             remediation:
-              "evidenceRefs[0] on the GREEN row must contain a passing-assertion line such as \\"=> N passed; 0 failed\\" (cargo/jest/vitest), \\"N passed in 0.42s\\" (pytest), \\"ok pkg 0.12s\\" (go test), or equivalent runner output. Re-run the test and paste a fresh runner line."
+              "evidenceRefs[0] on the GREEN row must contain a passing-assertion line (language-agnostic examples: Node/Vitest \\"=> N passed; 0 failed\\", Python/Pytest \\"N passed in 0.42s\\", Go \\"ok pkg 0.12s\\", Rust \\"test result: ok\\", Java/Maven \\"Tests run: N, Failures: 0, Errors: 0\\"). Re-run the test and paste a fresh runner line."
           },
           json
         );
@@ -1699,7 +1759,7 @@ async function main() {
                   elapsedMs: elapsed,
                   minMs,
                   remediation:
-                    "GREEN completedTs - ackTs is below the freshness floor. Either run the verification test for real and re-record, or pass --allow-fast-green --green-mode=observational for legitimate no-op verification spans."
+                    "GREEN completedTs - ackTs is below the freshness floor. Either run the verification test for real and re-record, or pass --green-mode=observational for legitimate no-op verification spans."
                 },
                 json
               );
@@ -1729,6 +1789,9 @@ async function main() {
   }
 
   await persistEntry(root, runId, clean, event);
+  if (autoParallelAuditEvent) {
+    await appendAuditEventInline(root, autoParallelAuditEvent);
+  }
 
   process.stdout.write(JSON.stringify({ ok: true, event }, null, 2) + "\\n");
 }

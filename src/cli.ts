@@ -47,6 +47,7 @@ interface ParsedArgs {
   track?: FlowTrack;
   dryRun?: boolean;
   interactive?: boolean;
+  syncCheck?: boolean;
   archiveName?: string;
   archiveSkipRetro?: boolean;
   archiveSkipRetroReason?: string;
@@ -74,6 +75,7 @@ Commands:
   sync       Reconcile generated runtime files with the current config.
              Flags: --harnesses=<list>  Update configured harnesses before syncing.
                     --interactive      Pick harnesses from a numbered TTY menu.
+                    --check            Verify managed hook files are byte-identical to canonical generators.
   upgrade    Refresh generated files in .cclaw. Preserves your config.yaml.
   archive    Archive the active run and reset flow state for the next run.
              Flags: --name=<slug>        Override archive folder suffix.
@@ -91,6 +93,7 @@ Examples:
   npx cclaw-cli
   npx cclaw-cli init --harnesses=claude,cursor --no-interactive
   npx cclaw-cli sync --interactive
+  npx cclaw-cli sync --check
   npx cclaw-cli archive --name=my-run
   npx cclaw-cli archive --disposition=cancelled --reason="deprioritized"
   npx cclaw-cli upgrade
@@ -429,6 +432,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       return flag.startsWith("--harnesses=") ||
         (parsed.command === "init" && flag.startsWith("--track=")) ||
         (parsed.command === "init" && flag.startsWith("--profile=")) ||
+        (parsed.command === "sync" && flag === "--check") ||
         flag === "--interactive" ||
         flag === "--no-interactive" ||
         (parsed.command === "init" && flag === "--dry-run");
@@ -468,6 +472,10 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (flag === "--dry-run") {
       parsed.dryRun = true;
+      continue;
+    }
+    if (flag === "--check") {
+      parsed.syncCheck = true;
       continue;
     }
     if (flag.startsWith("--name=")) {
@@ -553,6 +561,11 @@ async function runCommand(parsed: ParsedArgs, ctx: CliContext): Promise<number> 
   }
 
   if (command === "sync") {
+    if (parsed.syncCheck === true) {
+      await syncCclaw(ctx.cwd, { check: true });
+      info(ctx, "Managed hook drift check passed (no sync required).");
+      return 0;
+    }
     const resolved = await resolveSyncInputs(parsed, ctx);
     await syncCclaw(ctx.cwd, { harnesses: resolved.harnesses });
     const harnessNote = resolved.harnesses ? ` (${resolved.harnesses.join(", ")})` : "";

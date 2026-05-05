@@ -156,7 +156,7 @@ export interface FlowState {
    * Minimum elapsed milliseconds between `acknowledged` and `completed`
    * for a `slice-builder --phase green` row. The hook helper rejects
    * fast-greens (`completedTs - ackTs < this`) with `green_evidence_too_fresh`
-   * unless the dispatch carries `--allow-fast-green --green-mode=observational`.
+   * unless the dispatch carries `--green-mode=observational`.
    *
    * Default 4000ms when omitted (see `effectiveTddGreenMinElapsedMs`).
    * Operators tuning the floor for very fast suites may set it lower
