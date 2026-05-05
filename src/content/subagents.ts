@@ -406,11 +406,11 @@ This document bridges **Superpowers-style task isolation** with the **gstack “
 ## HARD-GATE
 
 ${conversationLanguagePolicyMarkdown()}
-**Never dispatch parallel IMPLEMENTATION agents that write to the same codebase. Parallel agents are for investigation, analysis, and review ONLY.**
+**Default rule:** parallel implementation agents are SAFE for investigation, analysis, review, and the **TDD wave-fanout** path; otherwise keep implementation sequential.
 
-Implementation that touches shared source trees must remain **sequential** unless you have proven disjoint filesystem ownership (rare) and an explicit merge protocol.
+**TDD wave-fanout is the supported parallel-implementation path.** When \`cclaw-cli internal wave-status --json\` reports \`mode: wave-fanout\` and \`pathConflicts: []\`, fan out one \`slice-builder\` span per ready slice in a single controller message. Each span owns its disjoint \`claimedPaths\`; the dispatcher rejects overlapping spans with \`DispatchOverlapError\` inline, so the disjoint-paths invariant is enforced for you.
 
-When explicit bounded TDD fan-out is approved with parallel \`slice-builder\` lanes, author \`.cclaw/artifacts/cohesion-contract.md\` + \`.json\` before launch and run \`integration-overseer\` after fan-in.
+**Outside wave-fanout** — for ad-hoc parallel implementation that touches shared source trees — keep work **sequential** unless you have proven disjoint filesystem ownership and an explicit merge protocol.
 
 ## When to Use
 
@@ -435,7 +435,7 @@ When explicit bounded TDD fan-out is approved with parallel \`slice-builder\` la
 ## Dispatch Protocol
 
 1. **Identify independent problem domains** (no file overlap; no shared mutable working assumptions).
-2. **Author cohesion contract first** whenever fan-out touches shared interfaces or bounded parallel \`slice-builder\` lanes.
+2. **Author a cohesion contract** only when fan-out touches **shared interfaces or shared types** between slices in the same wave. For TDD wave-fanout where every member's \`claimedPaths\` are disjoint, a cohesion contract is NOT required — the disjoint-paths invariant plus the \`integration-overseer\` post-fan-in audit cover the integration risk.
 3. **Craft one prompt per domain** with **full context pasted** — same HARD-GATE as SDD: no “go read X to learn why.”
 4. **Launch ALL agents in a single controller message** (multiple Task tool calls) so they start with comparable timelines.
 5. **Wait for all to return** before synthesis (avoid incremental confirmation bias).

@@ -209,13 +209,37 @@ export function tddTopOfSkillBlock(stage: FlowStage): string {
   if (stage !== "tdd") return "";
   return `## TDD orchestration primer
 
-**Always first:** run \`node .cclaw/cli.mjs internal wave-status --json\` — it reads the managed plan markers; open \`05-plan.md\`/wave-plan files afterward for detail.
+**MANDATE — controller never implements.** In TDD the controller plans, dispatches, and reconciles. **NEVER edit production code, tests, or run cargo/npm/pytest yourself in the controller chat.** Every slice's RED → GREEN → REFACTOR → DOC cycle MUST happen inside an isolated \`slice-builder\` span dispatched via the harness Task tool. Inline code edits in the controller chat are a protocol violation that defeats parallelism, evidence isolation, and the audit ledger.
 
-**Several ready lanes:** Issue exactly one AskQuestion (**launch parallel wave**, default vs **single slice**).
+**Step 1 — Wave status (always first):**
+\`node .cclaw/cli.mjs internal wave-status --json\`
 
-**Delegation order:** Emit \`delegation-record\` \`--status=scheduled\` then \`--status=launched\` *before* every \`Task\`; workers ACK/complete locally.
+The output names: \`waves[]\` (closed/open), \`nextDispatch.waveId\`, \`nextDispatch.mode\` (\`wave-fanout\` or \`single-slice\`), \`nextDispatch.readyToDispatch\` (slice ids), and \`nextDispatch.pathConflicts\` (overlapping \`claimedPaths\` between members).
 
-**Per slice worker:** Prefer \`Task("slice-builder --slice S-<id> ...")\`. Pass explicit \`--paths\`; parallel Tasks are okay when overlaps are disjoint. Follow any lane lease flags the helper still mandates on your ledger.
+**Step 2 — Decide automatically (no user question when paths disjoint):**
+
+| \`mode\`         | \`pathConflicts\` | Action                                                                                                                                  |
+|------------------|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| \`wave-fanout\`  | \`[]\`            | **Fan out the entire wave in one tool batch.** Emit one \`Task\` per ready slice in a single controller message. Do NOT ask the user.   |
+| \`wave-fanout\`  | non-empty         | Issue exactly one AskQuestion (resolve the overlap, drop the conflicting slice, or downgrade to single-slice for the disputed member).  |
+| \`single-slice\` | —                 | One \`Task\` for the next ready slice.                                                                                                  |
+
+**Step 3 — Dispatch protocol per slice:** in the SAME controller message that issues the \`Task\` call:
+
+1. Append \`delegation-record --status=scheduled\` for the \`slice-builder\` span (one row per slice; reuse the same \`spanId\` across the entire RED → GREEN → REFACTOR → DOC lifecycle).
+2. Append \`delegation-record --status=launched\` immediately after.
+3. Issue the harness Task call: \`Task(subagent_type=<harness slice-builder mapping>, description="slice-builder <slice-id>", prompt="<full slice context, claimedPaths, plan-row, AC ids, paths to source/tests, slice-card path>")\`.
+4. The slice-builder span ACKs locally (\`delegation-record --status=acknowledged\`) and runs the **complete** RED → GREEN → REFACTOR → DOC cycle inside the span — including writing \`tdd-slices/S-<id>.md\` and emitting \`--phase=red\`, \`--phase=green\`, \`--phase=refactor\` (or \`--phase=refactor-deferred\` with rationale), and \`--phase=doc\` rows on its own.
+5. The controller waits for ALL parallel spans to terminate before reconciling. Do not page back into the controller chat between spans.
+
+**Step 4 — Wave closeout:** after all in-flight slices report \`completed\`:
+
+1. Re-run \`wave-status --json\`. Confirm the wave is \`closed\` and the next dispatch is the following wave (or \`closeout\`).
+2. If \`integrationCheckRequired\` is true, dispatch \`integration-overseer\` (proactive) and append the \`cclaw_integration_overseer_skipped\` audit kind only when the contract waives it.
+3. If \`wave-status\` reports another \`wave-fanout\` next dispatch with disjoint paths, **immediately repeat Step 2 — do not pause for \"continue\"**.
+4. When all waves are closed and no more slices remain ready, run \`stage-complete tdd\`.
+
+**Step 5 — Auto-advance after stage-complete:** when \`stage-complete\` returns \`ok\` with a new \`currentStage\`, immediately load the next stage skill and continue. The user does NOT need to retype \`/cc\`. Announce \"Stage tdd complete → entering <next>. Continuing.\" and proceed.
 
 Wave resume: reuse \`wave-status\` outputs and parallelize unfinished members instead of restarting finished slices.
 

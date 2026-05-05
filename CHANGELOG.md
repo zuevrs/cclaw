@@ -1,5 +1,31 @@
 # Changelog
 
+## 7.0.2 — Mandatory parallel slice-builder dispatch in TDD waves
+
+The 7.0.0 wave-fanout model was described as a soft preference; in practice
+the controller often did slice work inline in the chat instead of dispatching
+parallel `slice-builder` Task calls, then stopped after each chunk waiting
+for direction. 7.0.2 turns the protocol into hard mandates.
+
+- **Controller-never-implements rule for TDD.** The TDD skill now opens with
+  an explicit ban: the controller plans, dispatches, and reconciles —
+  it never edits production code, tests, or runs language tooling itself.
+  Every slice's RED → GREEN → REFACTOR → DOC cycle MUST happen inside an
+  isolated `slice-builder` span dispatched via the harness Task tool.
+- **Auto fan-out when paths disjoint.** When `wave-status --json` reports
+  `mode: wave-fanout` and `pathConflicts: []`, the controller fans out the
+  whole wave in a single tool batch — one `Task(subagent_type=…,
+  description="slice-builder S-<id>")` per ready slice, side by side. No
+  user confirmation question. AskQuestion only fires when paths overlap.
+- **Auto-advance after stage-complete.** When `stage-complete` returns
+  `ok` with a new `currentStage`, the controller immediately loads the
+  next stage skill and continues — no waiting for the user to retype `/cc`.
+- **Parallel-dispatch HARD-GATE relaxed for wave-fanout.** The blanket ban
+  on parallel implementation now carves out the supported TDD wave-fanout
+  path. Cohesion contracts are required only when fan-out touches shared
+  interfaces or types — disjoint `claimedPaths` plus the
+  `integration-overseer` post-fan-in audit cover the integration risk.
+
 ## 7.0.1 — Prune retired TDD agent files on sync
 
 - `cclaw sync` and `upgrade` now delete `agents/test-author.md`,
