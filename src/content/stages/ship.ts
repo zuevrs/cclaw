@@ -50,6 +50,7 @@ export const SHIP: StageSchemaInput = {
       "Merge-base detection (git only) — identify the correct base branch. Run `git merge-base HEAD <base>`. If the base has diverged significantly, flag for rebase-first.",
       "Re-run tests on merged result — if merging locally, run the full test suite AFTER the merge, not just before. Post-merge failures are common.",
       "Generate release notes — summarize what changed, why, and what it affects. Reference spec criteria. Include: breaking changes, new dependencies, migration steps if any.",
+      "Assemble acceptance traceability matrix — for each spec AC-N, list mapped slice IDs and at least one managed commit proving closure.",
       "Write rollback plan — trigger conditions (what tells you it is broken), rollback steps (exact commands/git operations), and verification (how to confirm rollback worked).",
       "Load utility skills — `verification-before-completion` for fresh evidence and `finishing-a-development-branch` for finalization workflow.",
       "Monitoring checklist — what should be watched after deploy? Error rates, latency, key business metrics. If no monitoring exists, flag it as a risk.",
@@ -83,11 +84,13 @@ export const SHIP: StageSchemaInput = {
       { id: "ship_review_verdict_valid", description: "Review verdict is APPROVED or APPROVED_WITH_CONCERNS." },
       { id: "ship_preflight_passed", description: "Preflight checks passed or exceptions documented and approved." },
       { id: "ship_rollback_plan_ready", description: "Rollback trigger, steps, and verification are documented." },
+      { id: "ship_all_acceptance_criteria_have_commits", description: "Every spec AC-N has at least one `Closes: AC-N` slice mapping and a managed slice commit in the active run." },
       { id: "ship_finalization_executed", description: "Selected finalization action was executed and verified." }
     ],
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/08-ship.md`.",
       "Release notes section is complete.",
+      "Traceability Matrix maps each spec AC-N to slice IDs and managed commit evidence.",
       "Rollback section includes trigger conditions, steps, and verification.",
       "Finalization section shows exactly one selected enum token.",
       "Victory Detector result documented: review verdict valid, preflight fresh, rollback ready, finalization enum selected, and execution result present."
@@ -124,6 +127,7 @@ export const SHIP: StageSchemaInput = {
       { section: "Upstream Handoff", required: false, validationRule: "Summarizes review/tdd decisions, constraints, open questions, and explicit drift before finalization." },
       { section: "Preflight Results", required: true, validationRule: "Build, test, lint, type-check results captured with fresh output. Exceptions documented if any." },
       { section: "Release Notes", required: true, validationRule: "What changed, why, impact. References spec criteria. Breaking changes flagged." },
+      { section: "Traceability Matrix", required: true, validationRule: "One row per spec AC-N with mapped slice IDs (`S-<id>`), managed commit evidence (`^S-<id>/` subject), and coverage status." },
       { section: "Rollback Plan", required: true, validationRule: "Trigger conditions, rollback steps (exact commands), verification steps." },
       { section: "Monitoring", required: false, validationRule: "If applicable: what metrics/logs to watch post-deploy. Risk note if no monitoring." },
       { section: "Finalization", required: true, validationRule: "Exactly one finalization enum token selected (FINALIZE_MERGE_LOCAL | FINALIZE_OPEN_PR | FINALIZE_KEEP_BRANCH | FINALIZE_DISCARD_BRANCH | FINALIZE_NO_VCS). Execution result documented. Worktree cleaned if applicable." },

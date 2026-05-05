@@ -2374,6 +2374,12 @@ export function extractRequirementIdsFromMarkdown(text: string): string[] {
   return [...new Set(ids)];
 }
 
+export function extractAcceptanceCriterionIdsFromMarkdown(text: string): string[] {
+  const ids = text.match(/\bAC-\d+\b/giu) ?? [];
+  const normalized = ids.map((id) => id.toUpperCase());
+  return [...new Set(normalized)];
+}
+
 // Cross-stage decision traceability uses stable D-XX IDs which the
 // agent can edit safely without recomputing content hashes.
 

@@ -1701,6 +1701,17 @@ describe("artifact linter heuristics", () => {
 - Added: notification feed with SSE
 - Breaking changes: None
 
+## Traceability Matrix
+| AC ID | Slice ID(s) | Managed commit evidence | Coverage status |
+|---|---|---|---|
+| AC-1 | S-1 | c0ffee1 S-1/green: add SSE feed | covered |
+
+## Architect Cross-Stage Verification
+- Skill: architect-cross-stage-verification
+- Result: CROSS_STAGE_VERIFIED
+- Evidence refs: spec AC map aligns with review outcomes
+- Drift summary: none
+
 ## Rollback Plan
 - Trigger conditions: error rate >5%
 - Rollback steps: git revert <sha> && git push
@@ -1822,6 +1833,17 @@ describe("artifact linter heuristics", () => {
 
 ## Release Notes
 - Published docs bundle to static hosting.
+
+## Traceability Matrix
+| AC ID | Slice ID(s) | Managed commit evidence | Coverage status |
+|---|---|---|---|
+| AC-1 | S-1 | no-vcs attestation hash: sha256:abc123 | covered |
+
+## Architect Cross-Stage Verification
+- Skill: architect-cross-stage-verification
+- Result: CROSS_STAGE_VERIFIED
+- Evidence refs: release notes and rollback checked for non-vcs handoff
+- Drift summary: none
 
 ## Rollback Plan
 - Trigger conditions: 404 spike on docs routes

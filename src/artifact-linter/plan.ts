@@ -2,7 +2,9 @@ import {
   type StageLintContext,
   evaluateInvestigationTrace,
   evaluateLayeredDocumentReviewStatus,
+  extractAcceptanceCriterionIdsFromMarkdown,
   extractAuthoredBody,
+  extractH2Sections,
   headingPresent,
   sectionBodyByName,
   collectPatternHits,
@@ -24,6 +26,7 @@ import {
 const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
 const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
 const TASK_ID_PATTERN = /\bT-\d{3}[a-z]?(?:\.\d{1,3})?\b/giu;
+const ACCEPTANCE_ID_PATTERN = /\bAC-\d+\b/giu;
 const PLAN_LANE_WHITELIST = new Set([
   "production",
   "test",
@@ -60,6 +63,23 @@ function extractTaskIds(body: string): Set<string> {
     ids.add(match[0]);
   }
   return ids;
+}
+
+function extractAcceptanceTaskLinks(body: string): Array<{ acId: string; taskId: string }> {
+  const links: Array<{ acId: string; taskId: string }> = [];
+  for (const line of body.split(/\r?\n/u)) {
+    const acIds = [...line.matchAll(ACCEPTANCE_ID_PATTERN)].map((match) =>
+      match[0]!.toUpperCase()
+    );
+    const taskIds = [...line.matchAll(TASK_ID_PATTERN)].map((match) => match[0]!);
+    if (acIds.length === 0 || taskIds.length === 0) continue;
+    for (const acId of acIds) {
+      for (const taskId of taskIds) {
+        links.push({ acId, taskId });
+      }
+    }
+  }
+  return links;
 }
 
 /**
@@ -241,6 +261,61 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
           : reductionHits.length === 0
             ? "No scope-reduction phrases detected in Task List."
             : `Detected scope-reduction phrase(s) in Task List: ${reductionHits.join(", ")}.`
+    });
+
+    const authoredTaskIds = extractTaskIds(taskListBody);
+    const acceptanceMappingBody = sectionBodyByName(sections, "Acceptance Mapping") ?? "";
+    const acTaskLinks = [
+      ...extractAcceptanceTaskLinks(taskListBody),
+      ...extractAcceptanceTaskLinks(acceptanceMappingBody)
+    ];
+    const mappedTaskToAcs = new Map<string, Set<string>>();
+    const mappedAcToTasks = new Map<string, Set<string>>();
+    for (const link of acTaskLinks) {
+      const taskSet = mappedTaskToAcs.get(link.taskId) ?? new Set<string>();
+      taskSet.add(link.acId);
+      mappedTaskToAcs.set(link.taskId, taskSet);
+
+      const acSet = mappedAcToTasks.get(link.acId) ?? new Set<string>();
+      acSet.add(link.taskId);
+      mappedAcToTasks.set(link.acId, acSet);
+    }
+    const tasksMissingAc = [...authoredTaskIds].filter((taskId) => !mappedTaskToAcs.has(taskId));
+
+    let specAcIds: string[] = [];
+    const specArtifact = await resolveStageArtifactPath("spec", {
+      projectRoot,
+      track,
+      intent: "read"
+    });
+    if (await exists(specArtifact.absPath)) {
+      try {
+        const specRaw = await fs.readFile(specArtifact.absPath, "utf8");
+        const specSections = extractH2Sections(specRaw);
+        const acceptanceBody = sectionBodyByName(specSections, "Acceptance Criteria") ?? specRaw;
+        specAcIds = extractAcceptanceCriterionIdsFromMarkdown(acceptanceBody);
+      } catch {
+        specAcIds = [];
+      }
+    }
+    const acsMissingTask = specAcIds.filter((acId) => !mappedAcToTasks.has(acId));
+    const mappingFound = authoredTaskIds.size > 0 &&
+      tasksMissingAc.length === 0 &&
+      acsMissingTask.length === 0;
+    findings.push({
+      section: "plan_acceptance_mapped",
+      required: authoredTaskIds.size > 0,
+      rule: "Every T-NNN task must reference >=1 AC-N, and every AC-N from spec must be referenced by >=1 plan task.",
+      found: mappingFound,
+      details: authoredTaskIds.size === 0
+        ? "Task List has no T-NNN ids; acceptance mapping check skipped."
+        : tasksMissingAc.length > 0
+          ? `Task(s) missing AC mapping: ${tasksMissingAc.join(", ")}. Add AC-N references in Task List or Acceptance Mapping.`
+          : acsMissingTask.length > 0
+            ? `Spec AC(s) missing task coverage: ${acsMissingTask.join(", ")}.`
+            : specAcIds.length === 0
+              ? `Mapped ${authoredTaskIds.size} task(s) to AC ids; spec artifact AC list is empty or unavailable.`
+              : `Mapped ${authoredTaskIds.size} task(s) across ${specAcIds.length} spec AC(s).`
     });
 
     // Universal Layer 2.5 structural checks (superpowers writing-plans + ce-plan).

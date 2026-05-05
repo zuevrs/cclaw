@@ -1382,6 +1382,11 @@ ${renderBehaviorAnchorTemplateLine("ship")}
 ## Release Notes
 -
 
+## Traceability Matrix
+| AC ID | Slice ID(s) | Managed commit evidence | Coverage status |
+|---|---|---|---|
+| AC-1 | S-1 | \`abc1234 S-1/green: ...\` | covered |
+
 ## Structured PR Body
 > Required when selected option is \`OPEN_PR\`. The structure is universal — replace placeholder bullets with concrete content, do not introduce domain-specific subsections.
 

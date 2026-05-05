@@ -8,18 +8,20 @@ describe("gate density policy", () => {
       // design budget = 6 after wave-8 freshness gate:
       // research, architecture lock, diagram freshness, data flow, failure modes, test/perf.
       design: 6,
-      // spec budget = 5 after wave-9 self-review gate:
-      // measurable AC, testability, assumptions, self-review, approval.
-      spec: 5,
+      // spec budget = 6 after AC traceability:
+      // AC ids present, measurable AC, testability, assumptions, self-review, approval.
+      spec: 6,
       // plan budget = 7: slice budget, dependency batches, acceptance mapping,
       // execution posture, full parallel-exec coverage, disjoint same-wave
       // claimed paths, and explicit WAIT_FOR_CONFIRM.
       plan: 7,
-      // tdd budget = 11 after wave-9 enforcement:
+      // tdd budget = 13 after AC traceability:
       // discovery, impact, RED/GREEN/REFACTOR, verify, docs-drift, traceability (non-quick),
-      // plus required iron-law, watched-RED, and vertical-slice-cycle evidence gates.
-      tdd: 11,
-      review: 6
+      // iron-law, watched-RED, vertical-slice-cycle, closes-AC links, orphan-change guard.
+      tdd: 13,
+      review: 6,
+      // ship budget = 5 after AC-to-commit coverage gate.
+      ship: 5
     };
     for (const stage of FLOW_STAGES) {
       const required = stageSchema(stage).requiredGates.filter((gate) => gate.tier === "required");

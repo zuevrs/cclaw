@@ -1,6 +1,8 @@
 import {
   type StageLintContext,
+  getMarkdownTableRows,
   evaluateLayeredDocumentReviewStatus,
+  extractAcceptanceCriterionIdsFromMarkdown,
   sectionBodyByName,
   SPEC_MAX_MODULES
 } from "./shared.js";
@@ -159,6 +161,41 @@ export async function lintSpecStage(ctx: StageLintContext): Promise<void> {
     }
 
     const acceptanceCriteriaBody = sectionBodyByName(sections, "Acceptance Criteria");
+    if (acceptanceCriteriaBody === null) {
+      findings.push({
+        section: "spec_ac_ids_present",
+        required: true,
+        rule: "Acceptance Criteria must assign stable IDs in `AC-N` format for every criterion row.",
+        found: false,
+        details: "No ## heading matching required section \"Acceptance Criteria\"."
+      });
+    } else {
+      const tableRows = getMarkdownTableRows(acceptanceCriteriaBody);
+      const bulletRows = acceptanceCriteriaBody
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => /^[-*]\s+/u.test(line));
+      const candidateRows = tableRows.length > 0
+        ? tableRows.map((row) => row.join(" | ").trim()).filter((row) => row.length > 0)
+        : bulletRows;
+      const missingIds = candidateRows.filter(
+        (row) => extractAcceptanceCriterionIdsFromMarkdown(row).length === 0
+      );
+      const found = candidateRows.length > 0 && missingIds.length === 0;
+      findings.push({
+        section: "spec_ac_ids_present",
+        required: true,
+        rule: "Acceptance Criteria must assign stable IDs in `AC-N` format for every criterion row.",
+        found,
+        details:
+          candidateRows.length === 0
+            ? "Acceptance Criteria has no populated criterion rows."
+            : missingIds.length === 0
+              ? `All ${candidateRows.length} acceptance criterion row(s) include AC-N identifiers.`
+              : `${missingIds.length} acceptance criterion row(s) are missing AC-N identifiers.`
+      });
+    }
+
     if (acceptanceCriteriaBody !== null && /\|/u.test(acceptanceCriteriaBody)) {
       const hasParallel = /\bparallelSafe\b/iu.test(acceptanceCriteriaBody);
       const hasTouch = /\btouchSurface\b/iu.test(acceptanceCriteriaBody);

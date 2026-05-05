@@ -71,6 +71,7 @@ export const SPEC: StageSchemaInput = {
       "Write spec artifact and request approval."
     ],
     requiredGates: [
+      { id: "spec_ac_ids_present", description: "Acceptance Criteria rows include stable `AC-N` identifiers." },
       { id: "spec_acceptance_measurable", description: "Acceptance criteria are measurable and observable." },
       { id: "spec_testability_confirmed", description: "Each criterion has a described test method." },
       { id: "spec_assumptions_surfaced", description: "Assumptions were explicitly reviewed with source/confidence, validation path, and disposition before approval." },

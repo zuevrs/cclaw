@@ -1,5 +1,41 @@
 # Changelog
 
+## 7.5.0 — Acceptance-criteria traceability gates
+
+7.5.0 closes the AC traceability loop across spec -> plan -> tdd -> ship so
+every shipped acceptance criterion can be traced to a slice card and managed
+commit evidence.
+
+- **Spec gate: stable AC ids required.**
+  Added `spec_ac_ids_present` in `src/artifact-linter/spec.ts` plus shared AC-id
+  extraction helpers. The gate requires `AC-N` identifiers on every populated
+  acceptance-criteria row.
+- **Plan gate: bidirectional AC mapping enforced.**
+  Added `plan_acceptance_mapped` in `src/artifact-linter/plan.ts` to require:
+  every authored `T-NNN` task maps to at least one `AC-N`, and every spec AC id
+  is covered by at least one plan task.
+- **TDD gates: closes links + orphan-path guard.**
+  Added `tdd_slice_closes_ac` and `slice_no_orphan_changes` in
+  `src/artifact-linter/tdd.ts`. Slice cards now validate `Closes: AC-N` links
+  against spec AC ids, and doc-phase closure checks enforce no staged/unstaged
+  drift outside claimed paths.
+- **Ship gate: AC-to-commit coverage.**
+  Added `ship_all_acceptance_criteria_have_commits` and per-AC uncovered
+  findings in `src/artifact-linter/ship.ts`. Ship now verifies each spec AC is
+  mapped from `tdd-slices/S-*.md` and backed by at least one managed slice
+  commit since run start.
+- **Stage contracts + templates updated.**
+  Stage schema and stage definitions now include new spec/tdd/ship gates. Ship
+  artifacts now require a `Traceability Matrix` section in both stage metadata
+  and canonical template output.
+- **Tests.**
+  Added:
+  `tests/integration/ac-traceability-end-to-end.test.ts`,
+  `tests/unit/ship-all-ac-have-commits.test.ts`,
+  `tests/unit/slice-no-orphan-changes.test.ts`,
+  plus updated regression fixtures in artifact/tdd e2e suites and gate-density
+  budgets for the new required-gate counts.
+
 ## 7.4.0 — Live wave-status streaming with fallback
 
 7.4.0 adds a live event-stream ingestion path for TDD wave orchestration while
