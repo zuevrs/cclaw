@@ -22,14 +22,66 @@ async function seedFlowState(root: string, runId: string): Promise<void> {
 }
 
 describe("managed runtime path protection", () => {
-  it("classifies managed runtime paths and allows .cclaw/artifacts", () => {
+  it("classifies managed runtime paths and allows .cclaw/artifacts and .cclaw-out/", () => {
     expect(isManagedRuntimePath(".cclaw/hooks/delegation-record.mjs")).toBe(true);
     expect(isManagedRuntimePath(".cclaw/agents/slice-builder.md")).toBe(true);
+    expect(isManagedRuntimePath(".cclaw/skills/plan.md")).toBe(true);
+    expect(isManagedRuntimePath(".cclaw/commands/start.md")).toBe(true);
+    expect(isManagedRuntimePath(".cclaw/templates/spec.md")).toBe(true);
+    expect(isManagedRuntimePath(".cclaw/seeds/session.json")).toBe(true);
     expect(isManagedRuntimePath(".cclaw/rules/workflow.md")).toBe(true);
+    expect(isManagedRuntimePath(".cclaw/state/flow-state.json")).toBe(true);
     expect(isManagedRuntimePath(".cclaw/config.yaml")).toBe(true);
     expect(isManagedRuntimePath(".cclaw/managed-resources.json")).toBe(true);
     expect(isManagedRuntimePath(".cclaw/.flow-state.guard.json")).toBe(true);
     expect(isManagedRuntimePath(".cclaw/artifacts/tdd-slices/S-1.md")).toBe(false);
+    expect(isManagedRuntimePath(".cclaw/artifacts/06-tdd.md")).toBe(false);
+    expect(isManagedRuntimePath("src/example.ts")).toBe(false);
+    expect(isManagedRuntimePath(".cclaw-out/foo")).toBe(false);
+  });
+
+  it("accepts scheduled spans claiming src/ and .cclaw-out/ paths (sibling out-tree is fine)", async () => {
+    const root = await createTempProject("delegation-claimed-path-out-sibling");
+    await seedFlowState(root, "run-out-sibling");
+
+    await expect(
+      appendDelegation(root, {
+        stage: "tdd",
+        agent: "slice-builder",
+        mode: "mandatory",
+        status: "scheduled",
+        spanId: "span-out-sibling",
+        sliceId: "S-3",
+        claimedPaths: ["src/example.ts", ".cclaw-out/foo"],
+        ts: "2026-05-05T10:02:00.000Z"
+      })
+    ).resolves.toBeUndefined();
+
+    const ledger = await readDelegationLedger(root);
+    const scheduled = ledger.entries.find((entry) => entry.spanId === "span-out-sibling");
+    expect(scheduled?.claimedPaths).toEqual(["src/example.ts", ".cclaw-out/foo"]);
+  });
+
+  it("accepts scheduled spans claiming `.cclaw/artifacts/06-tdd.md` (artifacts/ is not protected)", async () => {
+    const root = await createTempProject("delegation-claimed-path-artifacts-tdd");
+    await seedFlowState(root, "run-artifacts-tdd");
+
+    await expect(
+      appendDelegation(root, {
+        stage: "tdd",
+        agent: "slice-builder",
+        mode: "mandatory",
+        status: "scheduled",
+        spanId: "span-artifacts-tdd",
+        sliceId: "S-4",
+        claimedPaths: [".cclaw/artifacts/06-tdd.md"],
+        ts: "2026-05-05T10:03:00.000Z"
+      })
+    ).resolves.toBeUndefined();
+
+    const ledger = await readDelegationLedger(root);
+    const scheduled = ledger.entries.find((entry) => entry.spanId === "span-artifacts-tdd");
+    expect(scheduled?.claimedPaths).toEqual([".cclaw/artifacts/06-tdd.md"]);
   });
 
   it("rejects scheduled spans that claim managed runtime files", async () => {

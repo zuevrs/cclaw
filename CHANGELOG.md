@@ -1,38 +1,48 @@
 # Changelog
 
-## 7.0.6 — Containment: protected claimed paths, closed-slice re-dispatch guard, per-span TDD cycle lint
+## 7.0.6 — Containment
 
-This patch closes three containment gaps observed in 7.0.5-era TDD dispatches:
-workers could claim managed runtime files under `.cclaw/`, controllers could
-schedule a second span for a slice that was already fully closed, and the
-TDD phase-cycle validator merged phase events across spans instead of validating
-cycle integrity per span.
+Closes three containment gaps surfaced by the hox W-07 / S-36 session under
+7.0.5: a slice-builder hand-edited managed runtime files under `.cclaw/hooks/`,
+the controller scheduled a second span on an already-closed slice, and the
+TDD linter mis-flagged `tdd_slice_red_completed_before_green` because it
+compared red/green timestamps across the slice's two spans instead of within
+each span.
 
-- **Managed runtime claimed-path protection at dispatch-time.**
-  `src/delegation.ts` now exposes `isManagedRuntimePath(path)` and rejects
-  `status=scheduled` rows whose `claimedPaths` include protected runtime paths:
+- **Managed runtime claimed-path protection at dispatch-time** (managed-path
+  drift on S-36). `src/delegation.ts` now exposes `isManagedRuntimePath(path)`
+  and rejects `status=scheduled` rows whose `claimedPaths` include protected
+  runtime paths:
   `.cclaw/{hooks,agents,skills,commands,templates,seeds,rules,state}/`,
   `.cclaw/config.yaml`, `.cclaw/managed-resources.json`,
-  `.cclaw/.flow-state.guard.json`. `.cclaw/artifacts/**` remains allowed.
-- **Explicit protected-path dispatch error wired to CLI exit-2 path.**
+  `.cclaw/.flow-state.guard.json`. `.cclaw/artifacts/**` remains allowed
+  (slice-builders legitimately write slice cards there). The new
   `DispatchClaimedPathProtectedError` + `validateClaimedPathsNotProtected`
-  are enforced before overlap/cap checks in `appendDelegation`; internal command
-  handling maps it to `error: dispatch_claimed_path_protected — ...` with
-  exit code `2`.
-- **Closed-slice re-dispatch prevention (same run).**
-  `appendDelegation` now rejects a new `scheduled` span with `sliceId` set and
-  no `phase` when a different span in the same run already completed
-  RED+GREEN+REFACTOR+DOC for that slice. REFACTOR coverage accepts both
-  explicit refactor phases and `phase=green` with `refactorOutcome`.
-- **TDD events cycle lint now validates per `spanId`.**
-  `src/artifact-linter/tdd.ts::evaluateEventsSliceCycle` now evaluates each
-  slice span independently and marks a slice passing when at least one span
-  has a valid RED→GREEN→REFACTOR cycle. When none pass, the emitted error is
-  sourced from the most recent failing span.
-- **Tests.**
-  Added `tests/unit/delegation-claimed-path-protection.test.ts`,
+  fire before overlap/cap checks in `appendDelegation`;
+  `src/internal/advance-stage.ts` maps the error to
+  `error: dispatch_claimed_path_protected — …` with exit code `2`.
+- **Closed-slice re-dispatch prevention** (double span on S-36).
+  `appendDelegation` now rejects a new `scheduled` span carrying `sliceId`
+  with no `phase` when another span in the same run already completed
+  RED+GREEN+REFACTOR+DOC for that slice. Surfaces as
+  `SliceAlreadyClosedError` →
+  `error: slice_already_closed — slice <id> already has a closed span (<spanId>); refusing to schedule new span <newSpanId> in run <runId>`,
+  exit code `2`. REFACTOR coverage accepts both explicit refactor phases and
+  `phase=green` with `refactorOutcome`. Replaying phase rows under the
+  already-closed span is still a no-op (existing dedup absorbs them).
+- **Multi-span RED/GREEN linter fix** (S-36 false
+  `tdd_slice_red_completed_before_green`).
+  `src/artifact-linter/tdd.ts::evaluateEventsSliceCycle` groups slice rows by
+  `spanId` and validates the RED→GREEN→evidence→ordering→REFACTOR chain per
+  span. A slice passes when at least one span has a complete clean cycle;
+  when none pass, the most recent failing span's violation is surfaced.
+  Legacy ledgers that scatter a single cycle across distinct phase-only
+  spanIds keep working via a global aggregate fallback.
+- **Tests.** Added
+  `tests/unit/delegation-claimed-path-protection.test.ts`,
   `tests/unit/delegation-slice-redispatch-block.test.ts`, and extended
-  `tests/unit/tdd-events-derive.test.ts` with multi-span cycle coverage.
+  `tests/unit/tdd-events-derive.test.ts` with multi-span cycle coverage
+  (one-span-clean-passes, no-span-clean-fails-with-newest-violation).
 
 ## 7.0.5 — Ledger dedup must include `phase` (slice-builder GREEN/REFACTOR/DOC fix)
 
