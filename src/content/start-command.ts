@@ -118,7 +118,13 @@ If during any stage the agent discovers evidence that contradicts the initial Ph
 2. If flow state is missing → guide the user to run \`npx cclaw-cli init\` and stop.
 3. If flow state is only a fresh init placeholder (\`completedStages: []\`, all \`passed\` arrays empty, and no \`00-idea.md\`) → stop and ask for \`/cc <prompt>\` to start a tracked run. Do not create a brainstorm state implicitly.
 4. Otherwise check current stage gates, resume if incomplete, and advance if complete.
-5. **TDD wave dispatch:** When \`currentStage\` is \`tdd\`, run \`node .cclaw/cli.mjs internal wave-status --json\` first, then read the managed **Parallel Execution Plan** block inside \`${RUNTIME_ROOT}/artifacts/05-plan.md\` plus \`${RUNTIME_ROOT}/artifacts/wave-plans/\` for detail. Resume partial waves on remaining members only. Dispatch one \`slice-builder\` per slice with explicit \`--paths\`; parallelize when overlaps are disjoint. Each \`slice-builder\` span owns the full RED → GREEN → REFACTOR → DOC cycle for its slice. RED-before-GREEN is enforced per-slice.
+5. **TDD wave dispatch:** When \`currentStage\` is \`tdd\`, run \`node .cclaw/cli.mjs internal wave-status --json\` first, then read the managed **Parallel Execution Plan** block inside \`${RUNTIME_ROOT}/artifacts/05-plan.md\` plus \`${RUNTIME_ROOT}/artifacts/wave-plans/\` for detail. Resume partial waves on remaining members only.
+
+   **The controller never edits production code in TDD.** When \`mode: wave-fanout\` and \`pathConflicts: []\`, fan out the entire wave in a SINGLE controller message: one harness \`Task(subagent_type=…, description="slice-builder S-<id>", prompt=<full slice context>)\` call per ready slice, **side by side in the same tool batch**. Each \`slice-builder\` span owns the full RED → GREEN → REFACTOR → DOC cycle for its slice and emits its own \`delegation-record --phase=red|green|refactor|refactor-deferred|doc\` rows. RED-before-GREEN is enforced per-slice by the linter.
+
+   When \`mode: wave-fanout\` reports \`pathConflicts\`, surface exactly one AskQuestion that lets the user resolve the overlap (drop / split / serialize). When \`mode: single-slice\`, dispatch one \`Task\` for the next ready slice.
+
+6. **Auto-advance after stage-complete:** when \`stage-complete\` returns \`ok\` with a new \`currentStage\`, immediately load the next stage skill and continue without waiting for the user to retype \`/cc\`. Announce \`Stage <prev> complete → entering <next>. Continuing.\` and proceed.
 
 ## Headless mode (CI/automation only)
 
@@ -212,10 +218,10 @@ Progress the tracked flow only when one exists:
 2. If missing, guide the user to run \`npx cclaw-cli init\` and stop.
 3. If it is only a fresh init placeholder (\`completedStages: []\`, no passed gates, and no \`${RUNTIME_ROOT}/artifacts/00-idea.md\`), stop and ask for \`/cc <prompt>\` to start a tracked run. Do not silently create a brainstorm run.
 4. Check gates for \`currentStage\`.
-5. **TDD:** When \`currentStage\` is \`tdd\`, run \`wave-status --json\`, then reconcile the managed **Parallel Execution Plan** in \`05-plan.md\` with \`wave-plans/wave-NN.md\` before slice questions. Prefer \`slice-builder\` per slice when it is installed; mirror plan \`dependsOn\` ordering.
+5. **TDD:** When \`currentStage\` is \`tdd\`, run \`wave-status --json\`, then reconcile the managed **Parallel Execution Plan** in \`05-plan.md\` with \`wave-plans/wave-NN.md\`. **The controller never edits production code in TDD.** When \`mode: wave-fanout\` and \`pathConflicts: []\`, fan out the wave in a SINGLE controller message — one \`Task\` per ready slice, side by side. Each \`slice-builder\` span owns its full RED → GREEN → REFACTOR → DOC cycle. Mirror plan \`dependsOn\` ordering between waves.
 6. **Wave resume:** Parallelize unfinished members; never restart completed lanes. Integration-overseer follows \`integrationCheckRequired\`; when skipped, emit \`cclaw_integration_overseer_skipped\` per the hook contract.
 7. If incomplete → load current stage skill and execute.
-8. If complete → advance to next stage and execute.
+8. If complete → advance to next stage and execute. **Auto-advance:** when \`stage-complete\` returns \`ok\`, immediately load the next stage skill and continue without waiting for the user to retype \`/cc\`.
 9. If flow is done → report completion.
 
 ## Public flow habit
