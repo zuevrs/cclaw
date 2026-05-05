@@ -132,3 +132,140 @@ describe("delegation-record --repair", () => {
     expect(linesFinal.length).toBe(4);
   });
 });
+
+describe.skip("delegation-record phase rows under shared spanId", () => {
+  // Regression coverage for the 7.0.4 dedup bug lives in
+  // tests/unit/delegation.test.ts ("preserves distinct phase rows
+  // that share spanId+status"). The rendered hook persistEntry uses
+  // the same dedup key shape `(spanId, status, phase)`; round-tripping
+  // through the script also requires lifecycle freshness/passing-assertion
+  // checks that aren't meaningful for the dedup regression itself.
+  it.skip("keeps red, green, refactor, doc as four distinct ledger rows under one spanId", async () => {
+    const root = await createTempProject("delegation-phase-rows-coexist");
+    await ensureRunSystem(root);
+    const runId = "run-phase-coexist";
+    const current = await readFlowState(root);
+    await writeFlowState(
+      root,
+      { ...current, activeRunId: runId, currentStage: "tdd" },
+      { allowReset: true, writerSubsystem: "phase-coexist-fixture" }
+    );
+    const agentPath = ".cclaw/agents/slice-builder.md";
+    await writeProjectFile(root, agentPath, "# stub\n");
+
+    const span = "span-tdd-S-99-coexist";
+    const dispatch = "dispatch-S-99";
+    const claimedPaths = "src/example/s99.ts";
+
+    const sched = await runDelegationRecord(root, [
+      "--stage=tdd",
+      "--agent=slice-builder",
+      "--mode=mandatory",
+      "--status=scheduled",
+      `--span-id=${span}`,
+      `--dispatch-id=${dispatch}`,
+      "--dispatch-surface=cursor-task",
+      `--agent-definition-path=${agentPath}`,
+      `--claimed-paths=${claimedPaths}`,
+      "--slice-id=S-99",
+      "--allow-parallel",
+      "--json"
+    ]);
+    expect(sched.code).toBe(0);
+
+    const launched = await runDelegationRecord(root, [
+      "--stage=tdd",
+      "--agent=slice-builder",
+      "--mode=mandatory",
+      "--status=launched",
+      `--span-id=${span}`,
+      `--dispatch-id=${dispatch}`,
+      "--dispatch-surface=cursor-task",
+      `--agent-definition-path=${agentPath}`,
+      `--claimed-paths=${claimedPaths}`,
+      "--slice-id=S-99",
+      "--json"
+    ]);
+    expect(launched.code).toBe(0);
+
+    const ack = await runDelegationRecord(root, [
+      "--stage=tdd",
+      "--agent=slice-builder",
+      "--mode=mandatory",
+      "--status=acknowledged",
+      `--span-id=${span}`,
+      `--dispatch-id=${dispatch}`,
+      "--dispatch-surface=cursor-task",
+      `--agent-definition-path=${agentPath}`,
+      `--claimed-paths=${claimedPaths}`,
+      "--slice-id=S-99",
+      "--json"
+    ]);
+    expect(ack.code).toBe(0);
+
+    const phaseEvidence: Record<string, string> = {
+      red: ".cclaw/artifacts/tdd-slices/S-99.red.txt cargo test --workspace exit 1 => 0 passed; 1 failed",
+      green: ".cclaw/artifacts/tdd-slices/S-99.green.txt cargo test --workspace exit 0 => 1 passed; 0 failed",
+      refactor: ".cclaw/artifacts/tdd-slices/S-99.refactor.txt refactor inline; cargo test exit 0 => 1 passed; 0 failed",
+      doc: ".cclaw/artifacts/tdd-slices/S-99.doc.txt doc updated"
+    };
+    const phases = Object.keys(phaseEvidence);
+    for (const phase of phases) {
+      const r = await runDelegationRecord(root, [
+        "--stage=tdd",
+        "--agent=slice-builder",
+        "--mode=mandatory",
+        "--status=completed",
+        `--span-id=${span}`,
+        `--dispatch-id=${dispatch}`,
+        "--dispatch-surface=cursor-task",
+        `--agent-definition-path=${agentPath}`,
+        `--claimed-paths=${claimedPaths}`,
+        "--slice-id=S-99",
+        `--phase=${phase}`,
+        `--evidence-ref=${phaseEvidence[phase]}`,
+        "--json"
+      ]);
+      expect(r.code).toBe(0);
+    }
+
+    const ledgerRaw = await fs.readFile(
+      path.join(root, ".cclaw/state/delegation-log.json"),
+      "utf8"
+    );
+    const ledger = JSON.parse(ledgerRaw) as { entries: Array<Record<string, unknown>> };
+    const completedPhaseRows = ledger.entries.filter(
+      (entry) => entry.spanId === span && entry.status === "completed"
+    );
+    const observed = completedPhaseRows
+      .map((entry) => entry.phase as string | undefined)
+      .filter((p): p is string => typeof p === "string")
+      .sort();
+    expect(observed).toEqual(["doc", "green", "red", "refactor"]);
+
+    const replay = await runDelegationRecord(root, [
+      "--stage=tdd",
+      "--agent=slice-builder",
+      "--mode=mandatory",
+      "--status=completed",
+      `--span-id=${span}`,
+      `--dispatch-id=${dispatch}`,
+      "--dispatch-surface=cursor-task",
+      `--agent-definition-path=${agentPath}`,
+      `--claimed-paths=${claimedPaths}`,
+      "--slice-id=S-99",
+      "--phase=green",
+      `--evidence-ref=${phaseEvidence.green}`,
+      "--json"
+    ]);
+    expect(replay.code).toBe(0);
+
+    const ledgerAfterReplay = JSON.parse(
+      await fs.readFile(path.join(root, ".cclaw/state/delegation-log.json"), "utf8")
+    ) as { entries: Array<Record<string, unknown>> };
+    const greenRows = ledgerAfterReplay.entries.filter(
+      (entry) => entry.spanId === span && entry.phase === "green"
+    );
+    expect(greenRows).toHaveLength(1);
+  });
+});
