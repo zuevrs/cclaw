@@ -210,6 +210,7 @@ describe("e2e: sharded slice files (Phase S)", () => {
       new Date(baseTs + offsetMin * 60_000).toISOString();
     for (let i = 1; i <= 3; i += 1) {
       const sliceId = `S-${i}`;
+      const spanId = `span-${sliceId}`;
       const off = (i - 1) * 30;
       await appendDelegation(root, {
         stage: "tdd",
@@ -219,7 +220,7 @@ describe("e2e: sharded slice files (Phase S)", () => {
         sliceId,
         phase: "red",
         evidenceRefs: [`tests/unit/slice-${i}.test.ts`],
-        spanId: `span-red-${sliceId}`,
+        spanId,
         ts: ts(off),
         completedTs: ts(off)
       });
@@ -231,7 +232,7 @@ describe("e2e: sharded slice files (Phase S)", () => {
         sliceId,
         phase: "green",
         evidenceRefs: [`tests/unit/slice-${i}.test.ts`],
-        spanId: `span-green-${sliceId}`,
+        spanId,
         ts: ts(off + 5),
         completedTs: ts(off + 5)
       });
@@ -243,7 +244,7 @@ describe("e2e: sharded slice files (Phase S)", () => {
         sliceId,
         phase: "refactor-deferred",
         evidenceRefs: [`scope contained for ${sliceId}; no measurable cleanup yet`],
-        spanId: `span-refactor-${sliceId}`,
+        spanId,
         ts: ts(off + 10),
         completedTs: ts(off + 10)
       });
@@ -306,7 +307,7 @@ some prose without the required structural headings
       sliceId: "S-1",
       phase: "red",
       evidenceRefs: ["tests/unit/slice-1.test.ts"],
-      spanId: "span-red-S-1",
+      spanId: "span-S-1",
       ts: refTs,
       completedTs: refTs
     });
@@ -318,7 +319,7 @@ some prose without the required structural headings
       sliceId: "S-1",
       phase: "green",
       evidenceRefs: ["tests/unit/slice-1.test.ts"],
-      spanId: "span-green-S-1",
+      spanId: "span-S-1",
       ts: "2026-01-15T10:05:00Z",
       completedTs: "2026-01-15T10:05:00Z"
     });
@@ -330,7 +331,7 @@ some prose without the required structural headings
       sliceId: "S-1",
       phase: "refactor-deferred",
       evidenceRefs: ["scope contained — no cleanup yet"],
-      spanId: "span-refactor-S-1",
+      spanId: "span-S-1",
       ts: "2026-01-15T10:10:00Z",
       completedTs: "2026-01-15T10:10:00Z"
     });
@@ -342,7 +343,7 @@ some prose without the required structural headings
       sliceId: "S-1",
       phase: "doc",
       evidenceRefs: [".cclaw/artifacts/tdd-slices/S-1.md"],
-      spanId: "span-doc-S-1",
+      spanId: "span-S-1",
       ts: "2026-01-15T10:11:00Z",
       completedTs: "2026-01-15T10:11:00Z"
     });
