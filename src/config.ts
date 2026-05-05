@@ -86,7 +86,7 @@ function assertOnlySupportedKeys(parsed: Record<string, unknown>, fullPath: stri
 }
 
 export async function detectLanguageRulePacks(_projectRoot: string): Promise<LanguageRulePack[]> {
-  // Wave 21: harness-only config. Language packs are no longer configurable.
+  // Harness-only config. Language packs are no longer configurable.
   return [];
 }
 

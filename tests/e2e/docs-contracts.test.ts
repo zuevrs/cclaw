@@ -249,7 +249,7 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
     }
   });
 
-  it("renders the Round 5 Investigation Discipline block exactly once per investigation-stage skill", () => {
+  it("renders the Investigation Discipline block exactly once per investigation-stage skill", () => {
     const investigationStages: Array<typeof FLOW_STAGES[number]> = [
       "brainstorm",
       "scope",
@@ -274,7 +274,7 @@ ${await readRepoFile("docs/scheme-of-work.md")}`;
     expect(shipMd.includes(ladderSnippet)).toBe(false);
   });
 
-  it("renders the Round 5 Behavior anchor block exactly once per stage skill with Bad/Good markers", () => {
+  it("renders the Behavior anchor block exactly once per stage skill with Bad/Good markers", () => {
     for (const stage of FLOW_STAGES) {
       const skillMd = stageSkillMarkdown(stage);
       const headerOccurrences = skillMd.split("## Behavior anchor").length - 1;

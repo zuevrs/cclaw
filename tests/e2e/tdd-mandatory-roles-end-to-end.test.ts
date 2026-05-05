@@ -7,20 +7,19 @@ import { createInitialFlowState } from "../../src/flow-state.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * v6.12.0 — full happy-path e2e for the new mandatory-roles protocol.
+ * Full happy-path e2e for the slice-builder TDD protocol.
  *
- * For 2 disjoint slices, we record:
- *   1. Phase A — RED checkpoint: both `test-author --phase red` events.
- *   2. Phase B — GREEN+DOC fan-out: both `slice-implementer --phase green`
- *      and both `slice-documenter --phase doc` events. The greens have
- *      `completedTs` AFTER both reds (RED checkpoint holds).
- *   3. REFACTOR: `slice-implementer --phase refactor` for each slice.
+ * For 2 disjoint slices, each `slice-builder` span owns the complete
+ * RED → GREEN → REFACTOR → DOC cycle:
+ *   1. Phase A — RED checkpoint: both `slice-builder --phase red` events.
+ *   2. Phase B — GREEN: both `slice-builder --phase green` events with
+ *      `completedTs` after both reds (RED checkpoint holds).
+ *   3. REFACTOR + DOC: `slice-builder --phase refactor` and
+ *      `slice-builder --phase doc` for each slice.
  *
  * After this sequence, the linter must accept the artifact: no
- * `tdd_slice_implementer_missing`, no `tdd_slice_documenter_missing`,
- * no `tdd_red_checkpoint_violation`. Cohesion-contract / integration-
- * overseer findings are out of scope here (covered by their own e2e
- * tests) and filtered out below.
+ * `tdd_slice_builder_missing`, no `tdd_slice_doc_missing`, no
+ * `tdd_red_checkpoint_violation`.
  */
 
 const RUN_ID = "run-tdd-mandatory-roles-e2e";
@@ -53,8 +52,8 @@ const PRE_TDD: Record<string, string> = {
 - Mandatory roles e2e.
 
 ## Problem Decision Record
-- Problem: prove RED → GREEN+DOC fan-out happy path.
-- Why now: v6.12.0.
+- Problem: prove RED → GREEN+DOC cycle inside one slice-builder span.
+- Why now: regression coverage for the TDD gate.
 
 ## Approach Tier
 - Tier: standard
@@ -105,7 +104,7 @@ const TDD_BODY = `# TDD Artifact
 
 ## Upstream Handoff
 - Source artifacts: \`05-plan.md\`, \`04-spec.md\`.
-- Decisions carried forward: dispatch slice-implementer + slice-documenter for every slice.
+- Decisions carried forward: dispatch one slice-builder per slice for the full RED/GREEN/REFACTOR/DOC cycle.
 - Constraints carried forward: minimal change.
 - Open questions: none.
 - Drift from upstream (or \`None\`): None.
@@ -201,17 +200,16 @@ function ts(offsetMin: number): string {
   return new Date(base + offsetMin * 60_000).toISOString();
 }
 
-describe("e2e: TDD mandatory roles end-to-end (v6.12.0 happy path)", () => {
-  it("accepts the gate when each slice records test-author/RED → slice-implementer/GREEN + slice-documenter/DOC → slice-implementer/REFACTOR", async () => {
+describe("e2e: TDD mandatory roles end-to-end (slice-builder happy path)", () => {
+  it("accepts the gate when each slice-builder records RED → GREEN → REFACTOR + DOC for its slice", async () => {
     const root = await createTempProject("tdd-mandatory-roles-e2e");
     await seed(root);
     await writeArtifacts(root);
 
-    // Phase A — RED checkpoint for both slices.
     for (let i = 1; i <= 2; i += 1) {
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "test-author",
+        agent: "slice-builder",
         mode: "mandatory",
         status: "completed",
         sliceId: `S-${i}`,
@@ -223,11 +221,10 @@ describe("e2e: TDD mandatory roles end-to-end (v6.12.0 happy path)", () => {
       });
     }
 
-    // Phase B — GREEN+DOC fan-out for both slices, after both reds completed.
     for (let i = 1; i <= 2; i += 1) {
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "mandatory",
         status: "completed",
         sliceId: `S-${i}`,
@@ -239,7 +236,7 @@ describe("e2e: TDD mandatory roles end-to-end (v6.12.0 happy path)", () => {
       });
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-documenter",
+        agent: "slice-builder",
         mode: "mandatory",
         status: "completed",
         sliceId: `S-${i}`,
@@ -251,11 +248,10 @@ describe("e2e: TDD mandatory roles end-to-end (v6.12.0 happy path)", () => {
       });
     }
 
-    // REFACTOR for each slice.
     for (let i = 1; i <= 2; i += 1) {
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "mandatory",
         status: "completed",
         sliceId: `S-${i}`,
@@ -268,18 +264,17 @@ describe("e2e: TDD mandatory roles end-to-end (v6.12.0 happy path)", () => {
     }
 
     const result = await lintArtifact(root, "tdd");
-    const v612Findings = result.findings.filter((f) =>
+    const blockingFindings = result.findings.filter((f) =>
       [
-        "tdd_slice_implementer_missing",
-        "tdd_slice_documenter_missing",
+        "tdd_slice_builder_missing",
+        "tdd_slice_doc_missing",
         "tdd_red_checkpoint_violation"
       ].includes(f.section)
     );
     expect(
-      v612Findings.map((f) => `${f.section}:${f.found ? "ok" : "fail"}`)
+      blockingFindings.map((f) => `${f.section}:${f.found ? "ok" : "fail"}`)
     ).toEqual([]);
 
-    // Sanity: the auto-render block was populated for both slices.
     const rendered = await fs.readFile(
       path.join(root, ".cclaw/artifacts/06-tdd.md"),
       "utf8"

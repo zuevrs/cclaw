@@ -5,7 +5,7 @@ import { initCclaw } from "../../src/install.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * Wave 22 (Phase C2): cclaw materializes a zero-install Cursor baseline
+ * (Phase C2): cclaw materializes a zero-install Cursor baseline
  * rule at `.cursor/rules/cclaw-guidelines.mdc` whenever the Cursor harness
  * is enabled. The rule pins three behaviours that survive even if no stage
  * skill is loaded:
@@ -42,7 +42,7 @@ describe("cclaw-guidelines.mdc baseline rule", () => {
 
     expect(content).toContain("## 1. Q&A floor before drafting");
     expect(content).toContain("brainstorm / scope / design");
-    // Wave 23 (v5.0.0): linter rule renamed `qa_log_below_min` ->
+    // : linter rule renamed `qa_log_below_min` ->
     // `qa_log_unconverged` (count floor replaced with Ralph-Loop convergence).
     expect(content).toContain("qa_log_unconverged");
 

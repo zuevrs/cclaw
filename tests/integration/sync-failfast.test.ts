@@ -32,7 +32,7 @@ describe("sync fail-fast integration", () => {
     await initCclaw({ projectRoot: root, harnesses: ["claude"] });
     await fs.writeFile(path.join(root, ".cclaw/state/flow-state.json"), "{ not-json", "utf8");
 
-    await expect(syncCclaw(root)).rejects.toThrow("Corrupt flow state detected");
+    await expect(syncCclaw(root)).rejects.toThrow("Corrupt flow-state.json");
   });
 
   it("fails when managed-resources manifest is corrupt JSON", async () => {

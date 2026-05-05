@@ -10,7 +10,7 @@ import type { FlowStage } from "../../src/types.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * Wave 23 (v5.0.0) behavioural floor tests. These exercise the live
+ *  behavioural floor tests. These exercise the live
  * `advance-stage` command path so the linter, gate-evidence layer, and
  * persisted `interactionHints` flag all stay wired with the new
  * `qa_log_unconverged` rule.
@@ -22,7 +22,7 @@ import { createTempProject } from "../helpers/index.js";
  *   4. `--skip-questions` flag -> stage-complete is ALLOWED with the floor
  *      finding downgraded to advisory.
  *
- * Wave 23 removed the count-based floor (no more "10 substantive entries"
+ * removed the count-based floor (no more "10 substantive entries"
  * requirement) and the `CCLAW_ELICITATION_FLOOR=advisory` env override.
  */
 
@@ -160,7 +160,7 @@ async function writeBrainstormArtifact(root: string, qaLogBlock: string = ""): P
   );
 }
 
-describe("Wave 23 elicitation convergence floor (behavioural)", () => {
+describe("elicitation convergence floor (behavioural)", () => {
   it("blocks brainstorm advance when Q&A Log is empty (qa_log_unconverged)", async () => {
     const root = await createTempProject("floor-empty-qa-blocks");
     await ensureRunSystem(root);

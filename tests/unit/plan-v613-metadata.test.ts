@@ -4,12 +4,12 @@ import {
   planArtifactLacksV613ParallelMetadata
 } from "../../src/internal/plan-split-waves.js";
 
-describe("plan v6.13 parallel metadata helpers", () => {
+describe("plan release parallel metadata helpers", () => {
   it("planArtifactLacksV613ParallelMetadata is false when no implementation units", () => {
     expect(planArtifactLacksV613ParallelMetadata("# No units\n")).toBe(false);
   });
 
-  it("accepts plans where every unit has v6.13 bullets", () => {
+  it("accepts plans where every unit has release bullets", () => {
     const raw = `
 ## Implementation Units
 ### Implementation Unit U-1

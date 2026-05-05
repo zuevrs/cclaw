@@ -1,6 +1,6 @@
 # `.cclaw/config.yaml`
 
-Wave 21 (`3.0.0`) is harness-only.
+Config is harness-only.
 
 ## What users can set
 

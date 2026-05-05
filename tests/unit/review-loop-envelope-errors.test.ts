@@ -5,19 +5,19 @@ import {
 } from "../../src/internal/advance-stage/review-loop.js";
 
 /**
- * Wave 25 (v6.1.0) — review-loop envelope error consistency.
+ * — review-loop envelope error consistency.
  *
  * The user's quick-tier test reported `gate evidence format check
  * failed: design_architecture_locked: must be JSON containing a
  * review-loop envelope (type: "review-loop") in top-level, payload,
  * or reviewLoop` and the agent had to guess the envelope shape four
  * times before passing — first putting `stage` inside `payload`,
- * then omitting it for auto-hydrate, etc. Wave 25 promises the
+ * then omitting it for auto-hydrate, etc. promises the
  * error message ALWAYS includes a complete, copy-pasteable JSON
  * shape so the agent never has to guess.
  */
 
-describe("Wave 25 — reviewLoopEnvelopeExample shape", () => {
+describe("— reviewLoopEnvelopeExample shape", () => {
   it("returns a parseable JSON envelope for design", () => {
     const example = reviewLoopEnvelopeExample("design");
     const parsed = JSON.parse(example);
@@ -45,7 +45,7 @@ describe("Wave 25 — reviewLoopEnvelopeExample shape", () => {
   });
 });
 
-describe("Wave 25 — validateReviewLoopGateEvidence error messages", () => {
+describe("— validateReviewLoopGateEvidence error messages", () => {
   it("includes a copy-pasteable envelope example when JSON is invalid", () => {
     const error = validateReviewLoopGateEvidence("design", "not valid json {");
     expect(error).not.toBeNull();

@@ -102,22 +102,19 @@ Finish with the required return schema plus the same \`spanId\` and \`dispatchId
 }
 
 /**
- * v6.14.1 — TDD worker self-record contract. The parent records
- * `scheduled` and `launched` rows BEFORE dispatching the Task; the
- * worker is responsible for `acknowledged` (on entry) and `completed`
- * (on exit). This contract restores the v6.13.1 discipline that
- * v6.14.0 dropped — the controller-side fix in v6.14.1's TDD skill
- * text is paired with this worker-side self-record helper template.
+ * TDD worker self-record contract. The parent records `scheduled` and
+ * `launched` rows BEFORE dispatching the Task; the worker records
+ * `acknowledged` (on entry) and `completed` (on exit).
  */
 function tddWorkerSelfRecordContract(agentName: string): string {
-  const isImplementer = agentName === "slice-implementer";
-  const refactorOutcomeFlag = isImplementer
+  const isBuilder = agentName === "slice-builder";
+  const refactorOutcomeFlag = isBuilder
     ? " --refactor-outcome=inline|deferred [--refactor-rationale=\"<why>\"]"
     : "";
-  const laneFlags = isImplementer
+  const laneFlags = isBuilder
     ? " [--claim-token=<t>] [--lane-id=<lane>] [--lease-until=<iso>]"
     : "";
-  return `## TDD Worker Self-Record Contract (v6.14.2)
+  return `## TDD worker delegation self-record contract
 
 You are a TDD worker dispatched via \`Task\`. The parent already wrote your \`scheduled\` and \`launched\` ledger rows BEFORE invoking you. **Your responsibility is to self-record \`acknowledged\` on entry and \`completed\` on exit** by invoking \`.cclaw/hooks/delegation-record.mjs\` directly. Do NOT skip these — the controller depends on them, the linter validates them, and back-fill via \`--repair\` is reserved for recovery only.
 
@@ -149,7 +146,7 @@ node .cclaw/hooks/delegation-record.mjs \\
   --json
 \`\`\`
 
-Reuse the same \`<spanId>\` and \`<dispatchId>\` across both rows. **v6.14.2 evidence-freshness contract** (slice-implementer GREEN only): the FIRST \`--evidence-ref\` MUST (1) reference the same test the matching \`phase=red\` row cited (basename/stem substring; reject \`green_evidence_red_test_mismatch\`), (2) include a recognized passing-runner line such as \`=> N passed; 0 failed\`, \`N passed in 0.42s\`, or \`ok pkg 0.12s\` (reject \`green_evidence_passing_assertion_missing\`), AND (3) be captured AFTER \`ackTs\` of this span — \`completedTs - ackTs\` must be ≥ \`flow-state.json::tddGreenMinElapsedMs\` (default 4000ms; reject \`green_evidence_too_fresh\`). Escape clause for legitimate observational GREEN: pass BOTH \`--allow-fast-green --green-mode=observational\`. \`--ack-ts\` and \`--completed-ts\` must be monotonic on the span (\`startTs ≤ launchedTs ≤ ackTs ≤ completedTs\`); the helper rejects out-of-order writes with \`delegation_timestamp_non_monotonic\`. If the helper rejects with \`dispatch_active_span_collision\` against a stale span, surface the conflicting \`spanId\` to the parent — do NOT silently retry with \`--allow-parallel\`.`;
+Reuse the same \`<spanId>\` and \`<dispatchId>\` across both rows. **GREEN evidence freshness** (slice-builder): the FIRST \`--evidence-ref\` MUST (1) reference the same test the matching \`phase=red\` row cited (basename/stem substring; reject \`green_evidence_red_test_mismatch\`), (2) include a recognized passing-runner line such as \`=> N passed; 0 failed\`, \`N passed in 0.42s\`, or \`ok pkg 0.12s\` (reject \`green_evidence_passing_assertion_missing\`), AND (3) be captured AFTER \`ackTs\` of this span — \`completedTs - ackTs\` must be ≥ \`flow-state.json::tddGreenMinElapsedMs\` (default 4000ms; reject \`green_evidence_too_fresh\`). Escape clause for legitimate observational GREEN: pass BOTH \`--allow-fast-green --green-mode=observational\`. \`--ack-ts\` and \`--completed-ts\` must be monotonic on the span (\`startTs ≤ launchedTs ≤ ackTs ≤ completedTs\`); the helper rejects out-of-order writes with \`delegation_timestamp_non_monotonic\`. If the helper rejects with \`dispatch_active_span_collision\` against a stale span, surface the conflicting \`spanId\` to the parent — do NOT silently retry with \`--allow-parallel\`.`;
 }
 
 function formatReturnSchema(schema: AgentReturnSchema): string {
@@ -201,6 +198,30 @@ function activationModeSummary(): {
     mandatory: [...mandatory].join(", "),
     proactive: [...proactive].join(", ")
   };
+}
+
+/**
+ * Canonical slice-builder worker protocol text (embedded in the agent body and
+ * echoed in the TDD skill block).
+ */
+export function sliceBuilderProtocol(): string {
+  return [
+    "## slice-builder protocol",
+    "",
+    "**slice-builder** is the canonical worker for **one bounded vertical slice** end-to-end: **RED → GREEN → REFACTOR → inline DOC** in **one** delegated span. Multiple slice-builder spans run in parallel under a single wave when the wave plan declares disjoint `claimedPaths`.",
+    "",
+    "### Invariants",
+    "- Produce failing RED evidence (or cite the delegated RED artifact) **before** production edits.",
+    "- Stay inside the slice contract: `claimedPaths`, acceptance mapping, and forbidden-change lists from the parent.",
+    "- After GREEN, refactor inline **or** record deferred refactor via the same `--refactor-outcome` mechanics the controller specifies.",
+    "- Own the prose slice summary at `<artifacts-dir>/tdd-slices/S-<id>.md` yourself.",
+    "",
+    "### Events",
+    "- Honor every `delegation-record`/`delegation-record.mjs` row shape the controller requests so artifact linters keep passing.",
+    "- The umbrella `slice-completed` row ties RED/GREEN/REFACTOR/DOC timestamps to your builder span.",
+    "",
+    "**Role boundary:** do not widen scope, do not self-approve ship-level review, and do not recurse into other agents unless the parent explicitly directs it."
+  ].join("\n");
 }
 
 /**
@@ -567,7 +588,7 @@ export const CCLAW_AGENTS = [
     body: [
       "You are an **integration overseer** for TDD fan-out runs.",
       "",
-      "You are dispatched after parallel `slice-implementer` lanes complete.",
+      "You are dispatched after parallel `slice-builder` lanes complete.",
       "",
       "Checks:",
       "- every integration test named in `cohesion-contract.md` passes (or has explicit gap rationale)",
@@ -579,28 +600,6 @@ export const CCLAW_AGENTS = [
       "Return `PASS`, `PASS_WITH_GAPS`, `FAIL`, or `BLOCKED` with evidence refs and explicit integration risks.",
       "",
       "**Role boundary:** integration and cohesion oversight only; do NOT implement production code."
-    ].join("\n")
-  },
-  {
-    name: "test-author",
-    description:
-      "MANDATORY in TDD stage. MUST BE USED for RED -> GREEN -> REFACTOR with evidence-first discipline.",
-    tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
-    model: "balanced",
-    activation: "mandatory",
-    relatedStages: ["tdd"],
-    returnSchema: WORKER_RETURN_SCHEMA,
-    body: [
-      "You are a **test-driven development** specialist.",
-      "",
-      "**Iron law:** no production code without a failing test first during RED. In design, focus on testability and verification evidence without editing production code.",
-      "",
-      "Process:",
-      "1. RED: write a failing test for the desired behavior.",
-      "2. Verify RED fails for the right reason.",
-      "3. GREEN: implement minimal code to pass.",
-      "4. Verify GREEN on relevant suite/full suite.",
-      "5. REFACTOR with behavior preserved."
     ].join("\n")
   },
   {
@@ -641,68 +640,24 @@ export const CCLAW_AGENTS = [
     ].join("\n")
   },
   {
-    name: "slice-implementer",
+    name: "slice-builder",
     description:
-      "ON-DEMAND or PROACTIVE during TDD GREEN/REFACTOR for one bounded vertical slice after RED evidence exists and file ownership is non-overlapping.",
+      "MANDATORY for every TDD slice. Owns RED → GREEN → REFACTOR → per-slice DOC for one bounded vertical slice in a single delegated span. Multiple slice-builder spans run in parallel inside one wave when their `claimedPaths` are disjoint.",
     tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
     model: "balanced",
-    activation: "on-demand",
+    activation: "mandatory",
     relatedStages: ["tdd"],
     returnSchema: WORKER_RETURN_SCHEMA,
     body: [
-      "You are a **vertical-slice implementation worker**.",
+      "You are **slice-builder**, the canonical vertical-slice TDD worker.",
       "",
-      "**Mode: TDD-bound** (default)",
-      "- Requires RED evidence before production edits.",
-      "- Requires explicit file boundaries and acceptance mapping from the slice contract.",
+      sliceBuilderProtocol(),
       "",
-      "**Mode: Generic** (only when withTDD=false on quick-track)",
-      "- Allows bounded implementation without full RED/GREEN loop.",
-      "- Still requires explicit scope boundaries and verification evidence.",
+      "**Mode hints:**",
+      "- **TDD-bound (default)** — RED evidence precedes GREEN; preserve behavior across REFACTOR; document outcomes in `tdd-slices/S-<id>.md`.",
+      "- **Generic** — only when the parent explicitly disables TDD gates for quick-track breadth; bounded scope and verification still apply.",
       "",
-      "Rules:",
-      "1. Start only from the assigned RED failure and acceptance mapping.",
-      "2. Edit only the allowed files for the slice.",
-      "3. Implement the minimal GREEN change, then preserve behavior during REFACTOR.",
-      "4. Return files changed, tests run, evidence refs, concerns, and blockers.",
-      "",
-      "**Role boundary:** do not broaden scope, do not review your own work as final approval, and do not spawn subagents."
-    ].join("\n")
-  },
-  {
-    name: "slice-documenter",
-    description:
-      "MANDATORY in PARALLEL with slice-implementer for every TDD slice (regardless of discoveryMode, v6.12.0 Phase R). Writes per-slice prose summary to `<artifacts-dir>/tdd-slices/S-<id>.md`. Does NOT implement, does NOT write tests. Linter rule `tdd_slice_documenter_missing` blocks the gate when a `phase=doc` event is missing for a green slice.",
-    tools: ["Read", "Write", "Edit", "Grep", "Glob"],
-    model: "fast",
-    activation: "mandatory",
-    relatedStages: ["tdd"],
-    returnSchema: {
-      statusField: "status",
-      allowedStatuses: ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"],
-      requiredFields: ["status", "summaryMd", "learnings", "evidenceRefs", "blockers"],
-      evidenceFields: ["summaryMd", "evidenceRefs"]
-    },
-    body: [
-      "You are a **slice-documenter** dispatched in PARALLEL with `slice-implementer` for the same slice.",
-      "",
-      "**Mission:** capture per-slice prose summary while production code is being written.",
-      "Because your only `claimedPath` is `<artifacts-dir>/tdd-slices/S-<id>.md` and the implementer's `claimedPaths` are production code, the file-overlap scheduler auto-allows the parallel dispatch.",
-      "",
-      "When invoked:",
-      "1. Read the active plan unit, acceptance criterion, and the failing RED test for this slice.",
-      "2. Write a thin per-slice file at `<artifacts-dir>/tdd-slices/S-<id>.md` with the headings:",
-      "   - `# Slice S-<id>`",
-      "   - `## Plan unit` (T-... pointer)",
-      "   - `## Acceptance criteria` (AC-... ids)",
-      "   - `## Why this slice`",
-      "   - `## What was tested`",
-      "   - `## What was implemented`",
-      "   - `## REFACTOR notes`",
-      "   - `## Learnings`",
-      "3. Return JSON: `{ status, summaryMd, learnings: string[], evidenceRefs: [\"<artifacts-dir>/tdd-slices/S-<id>.md\"], blockers: [] }`.",
-      "",
-      "**Forbidden:** edit `06-tdd.md`, test files, or production code. Edit ONLY your slice file."
+      "**Role boundary:** obey the parent's phase flags (`--phase=red|green|refactor|doc`); never improvise undeclared parallelism."
     ].join("\n")
   },
   {
@@ -736,15 +691,12 @@ export const CCLAW_AGENTS = [
 export type AgentName = (typeof CCLAW_AGENTS)[number]["name"];
 
 /**
- * v6.14.1 — agents whose rendered `.cclaw/agents/<name>.md` file gets the
- * TDD worker self-record helper template. These agents are the ones the
- * controller dispatches via `Task` during a TDD wave; they are
- * responsible for `acknowledged` and `completed` ledger writes.
+ * Agents whose rendered `.cclaw/agents/<name>.md` file gets the TDD worker
+ * self-record helper template. Controllers dispatch these via `Task` during
+ * TDD; they own `acknowledged` and `completed` ledger writes.
  */
 const TDD_WORKER_SELF_RECORD_AGENTS: ReadonlySet<AgentName> = new Set<AgentName>([
-  "test-author",
-  "slice-implementer",
-  "slice-documenter",
+  "slice-builder",
   "integration-overseer"
 ]);
 
@@ -848,7 +800,7 @@ export function agentCostTierTable(): string {
   return `| Tier | Use for | Example agents |
 |---|---|---|
 | \`deep\` | one heavy planning/strategy pass per stage | planner, product-discovery |
-| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | critic, spec-document-reviewer, coherence-reviewer, scope-guardian-reviewer, feasibility-reviewer, reviewer, security-reviewer, test-author, slice-implementer, fixer |
+| \`balanced\` | discovery, criticism, review, TDD, and bounded worker execution | critic, spec-document-reviewer, coherence-reviewer, scope-guardian-reviewer, feasibility-reviewer, reviewer, security-reviewer, slice-builder, fixer |
 | \`fast\` | bounded maintenance updates with limited blast radius | doc-updater |
 `;
 }
@@ -869,7 +821,8 @@ ${rows}`;
 export function agentsAgentsMdBlock(): string {
   return `### Agent Specialists
 
-cclaw materializes specialist agents under \`.cclaw/agents/\`: ${CCLAW_AGENTS.map((agent) => agent.name).join(", ")}.
+cclaw defines specialist personas for \`.cclaw/agents/\`: ${CCLAW_AGENTS.map((agent) => agent.name).join(", ")}.
+**TDD work** is owned end-to-end by **slice-builder** — one worker per slice, multiple workers in parallel within a wave when \`claimedPaths\` are disjoint.
 
 ${agentRoutingTable()}
 

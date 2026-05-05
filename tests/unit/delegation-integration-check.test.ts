@@ -3,11 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   integrationCheckRequired,
-  recordIntegrationOverseerSkipped
-} from "../../src/delegation.js";
-import type {
-  DelegationEvent,
-  FanInAuditRecord
+  recordIntegrationOverseerSkipped,
+  type DelegationEvent
 } from "../../src/delegation.js";
 import { createTempProject } from "../helpers/index.js";
 
@@ -15,7 +12,7 @@ function greenEvent(overrides: Partial<DelegationEvent>): DelegationEvent {
   const ts = new Date().toISOString();
   return {
     stage: "tdd",
-    agent: "slice-implementer",
+    agent: "slice-builder",
     mode: "mandatory",
     status: "completed",
     phase: "green",
@@ -29,7 +26,7 @@ function greenEvent(overrides: Partial<DelegationEvent>): DelegationEvent {
   } as DelegationEvent;
 }
 
-describe("integrationCheckRequired (v6.14.0)", () => {
+describe("integrationCheckRequired ", () => {
   it("returns required=false on disjoint paths and no risk", () => {
     const events: DelegationEvent[] = [
       greenEvent({ sliceId: "S-1", claimedPaths: ["src/a/x.ts"] }),
@@ -64,23 +61,6 @@ describe("integrationCheckRequired (v6.14.0)", () => {
     expect(v.reasons).toContain("high-risk-slice");
   });
 
-  it("returns required=true when fanin-audit reports a conflict", () => {
-    const events: DelegationEvent[] = [
-      greenEvent({ sliceId: "S-1", claimedPaths: ["src/a/x.ts"] }),
-      greenEvent({ sliceId: "S-2", claimedPaths: ["src/b/y.ts"] })
-    ];
-    const audits: FanInAuditRecord[] = [
-      {
-        event: "cclaw_fanin_conflict",
-        runId: "run-test",
-        ts: new Date().toISOString()
-      }
-    ];
-    const v = integrationCheckRequired(events, audits);
-    expect(v.required).toBe(true);
-    expect(v.reasons).toContain("fanin-conflict");
-  });
-
   it("ignores in-flight slices: only completed phase=green/refactor count", () => {
     const events: DelegationEvent[] = [
       greenEvent({ sliceId: "S-1", claimedPaths: ["src/auth/x.ts"], status: "scheduled" }),
@@ -111,7 +91,7 @@ describe("integrationCheckRequired (v6.14.0)", () => {
   });
 });
 
-describe("recordIntegrationOverseerSkipped (v6.14.0)", () => {
+describe("recordIntegrationOverseerSkipped ", () => {
   it("appends a cclaw_integration_overseer_skipped audit row", async () => {
     const root = await createTempProject("integration-skipped-audit");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

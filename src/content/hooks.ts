@@ -336,22 +336,9 @@ async function readRunId(root) {
   }
 }
 
-async function readWorktreeExecutionModeInline(root) {
-  try {
-    const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "flow-state.json"), "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.worktreeExecutionMode === "worktree-first") {
-      return "worktree-first";
-    }
-    return "single-tree";
-  } catch {
-    return "single-tree";
-  }
-}
-
-// v6.14.2 — read \`tddGreenMinElapsedMs\` from flow-state.json. Defaults to
-// 4000ms when missing or invalid. Operators set 0 to disable the freshness
-// floor while keeping RED-test-name and passing-assertion checks active.
+// Read \`tddGreenMinElapsedMs\` from flow-state.json. Defaults to 4000ms
+// when missing or invalid. Operators set 0 to disable the freshness floor
+// while keeping RED-test-name and passing-assertion checks active.
 async function readTddGreenMinElapsedMsInline(root) {
   try {
     const raw = await fs.readFile(path.join(root, RUNTIME_ROOT, "state", "flow-state.json"), "utf8");
@@ -365,11 +352,11 @@ async function readTddGreenMinElapsedMsInline(root) {
   }
 }
 
-// v6.14.2 Fix 4 — match the RED test name into the GREEN evidenceRef.
-// Returns the basename or stem (without extension) of the most-specific
-// path token in the RED row's first evidenceRef. We deliberately use a
-// substring match, not equality, so callers can include richer text
-// like "REGRESSION: cargo test --test foo => 8 passed; 0 failed".
+// Match the RED test name into the GREEN evidenceRef. Returns the
+// basename or stem (without extension) of the most-specific path token
+// in the RED row's first evidenceRef. We deliberately use a substring
+// match, not equality, so callers can include richer text like
+// "REGRESSION: cargo test --test foo => 8 passed; 0 failed".
 function extractRedTestNameInline(redEvidenceRef) {
   if (typeof redEvidenceRef !== "string") return null;
   const trimmed = redEvidenceRef.trim();
@@ -393,8 +380,8 @@ function extractRedTestNameInline(redEvidenceRef) {
 //   pytest: "===== N passed in 0.42s ====="
 //   go test: "ok   pkg   0.123s"
 //   npm/jest/vitest: "Tests:  N passed"
-// We accept a generic shape: "=> N passed; 0 failed" (the example in
-// the v6.14.2 worker contract) plus four runner-specific patterns.
+// We accept a generic shape: "=> N passed; 0 failed" plus four
+// runner-specific patterns.
 const GREEN_PASS_PATTERNS = [
   /=>\\s*\\d+\\s+passed/iu,
   /\\b\\d+\\s+passed[;,]\\s*0\\s+failed\\b/iu,
@@ -445,7 +432,7 @@ function usage() {
     "  node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|failed|waived|stale> --span-id=<id> [--dispatch-id=<id>] [--worker-run-id=<id>] [--dispatch-surface=<surface>] [--agent-definition-path=<path>] [--ack-ts=<iso>] [--launched-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--waiver-reason=<text>] [--supersede=<prevSpanId>] [--allow-parallel] [--paths=<comma-separated>] [--override-cap=<int>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --rerecord --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--completed-ts=<iso>] [--evidence-ref=<ref>] [--json]",
     "  node .cclaw/hooks/delegation-record.mjs --repair --span-id=<id> --repair-reason=\\\"<why>\\\" [--json]",
-    "  node .cclaw/hooks/delegation-record.mjs --audit-kind=cclaw_integration_overseer_skipped [--audit-reason=\\\"<comma-separated reasons>\\\"] [--slice-ids=\\\"S-1,S-2\\\"] [--json]    # v6.14.1: emit non-delegation audit row only",
+    "  node .cclaw/hooks/delegation-record.mjs --audit-kind=cclaw_integration_overseer_skipped [--audit-reason=\\\"<comma-separated reasons>\\\"] [--slice-ids=\\\"S-1,S-2\\\"] [--json]    # non-delegation audit row",
     "",
     "Allowed --dispatch-surface values:",
     "  " + VALID_DISPATCH_SURFACES.join(", "),
@@ -453,25 +440,20 @@ function usage() {
     "Per-surface allowed --agent-definition-path prefixes:",
     ...VALID_DISPATCH_SURFACES.map((surface) => "  " + surface + ": " + (SURFACE_PATH_PREFIXES[surface].length === 0 ? "(any)" : SURFACE_PATH_PREFIXES[surface].join(", "))),
     "",
-    "Dispatch dedup (v6.8.0):",
+    "Dispatch dedup:",
     "  --supersede=<prevSpanId>  close the previous active span on this (stage, agent) as 'stale' before recording the new scheduled row",
     "  --allow-parallel          record both spans as concurrent; new row is tagged allowParallel: true",
     "",
-    "TDD parallel scheduler (v6.10.0):",
-    "  --paths=<a,b,c>           repo-relative paths the slice-implementer will edit; disjoint sets auto-promote to allowParallel, overlap throws DispatchOverlapError",
-    "  --override-cap=<int>      raise the slice-implementer fan-out cap once for this dispatch (default cap " + String(5) + ", env CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS overrides globally)",
+    "TDD parallel scheduler:",
+    "  --paths=<a,b,c>           repo-relative paths the slice-builder will edit; disjoint sets auto-promote to allowParallel, overlap throws DispatchOverlapError",
+    "  --override-cap=<int>      raise the slice worker fan-out cap once for this dispatch (default cap " + String(5) + ", env CCLAW_MAX_PARALLEL_SLICE_BUILDERS overrides globally)",
     "",
-    "TDD slice phase tagging (v6.11.0):",
+    "TDD slice phase tagging:",
     "  --slice=<id>              TDD slice identifier (e.g. S-1) used by the linter to auto-derive the Watched-RED + Vertical Slice Cycle tables.",
     "  --phase=<phase>           one of " + VALID_DELEGATION_PHASES.join(", ") + ". Pair with --slice to record a TDD slice phase event.",
-    "  --refactor-rationale=<t>  required when --phase=refactor-deferred unless --evidence-ref carries the rationale text. v6.14.0: also paired with --refactor-outcome on phase=green.",
-    "  --claim-token=<opaque>    v6.13 — required for worktree-first slice-implementer schedules with --slice (echo on all terminal rows for the span).",
-    "  --lane-id=<id>            v6.13 — worktree lane id (ownerLaneId metadata).",
-    "  --lease-until=<iso>       v6.13 — ISO8601 lease expiry for reclaim tooling.",
-    "  --depends-on=<a,b>       v6.13 — comma-separated plan unit ids for scheduler diagnostics.",
-    "  --integration-state=<s>  v6.13 — one of pending|applied|conflict|resolved|abandoned.",
-    "  --refactor-outcome=<m>   v6.14.0 — one of inline|deferred. Folds REFACTOR into the phase=green event so a single row can close RED→GREEN→REFACTOR. Pair --refactor-outcome=deferred with --refactor-rationale.",
-    "  --risk-tier=<t>          v6.14.0 — one of low|medium|high. high triggers integration-overseer in conditional mode.",
+    "  --refactor-rationale=<t>  required when --phase=refactor-deferred unless --evidence-ref carries the rationale text; also paired with --refactor-outcome on phase=green.",
+    "  --refactor-outcome=<m>   one of inline|deferred. Folds REFACTOR into the phase=green event so a single row can close RED→GREEN→REFACTOR. Pair --refactor-outcome=deferred with --refactor-rationale.",
+    "  --risk-tier=<t>          one of low|medium|high. high triggers integration-overseer in conditional mode.",
     ""
   ].join("\\n") + "\\n");
 }
@@ -573,16 +555,15 @@ function buildRow(args, status, runId, now, options) {
   // Inherit the span's startTs from prior rows so monotonic validation
   // can compare against the original schedule, not the row write time.
   const startTs = (options && options.spanStartTs) || now;
-  // v6.10.0 (P1): claimedPaths from --paths=<comma-separated>. Empty
-  // arrays are dropped so the row stays compatible with v6.9 readers.
+  // claimedPaths from --paths=<comma-separated>. Empty arrays are dropped.
   const claimedPathsRaw = typeof args.paths === "string" ? args.paths : "";
   const claimedPaths = claimedPathsRaw
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
-  // v6.11.0 (D1+D2): TDD slice tagging via --slice / --phase. Phase
-  // must be one of the canonical enum values; the inline validator
-  // rejects unknown phases before the row hits the ledger.
+  // TDD slice tagging via --slice / --phase. Phase must be one of the
+  // canonical enum values; the inline validator rejects unknown phases
+  // before the row hits the ledger.
   const sliceId =
     typeof args.slice === "string" && args.slice.trim().length > 0
       ? args.slice.trim()
@@ -591,10 +572,10 @@ function buildRow(args, status, runId, now, options) {
     typeof args.phase === "string" && args.phase.trim().length > 0
       ? args.phase.trim()
       : undefined;
-  // v6.11.0 (D2): when --refactor-rationale is supplied it is folded
-  // into evidenceRefs[0] so the linter (which reads evidenceRefs only)
-  // can surface the rationale without touching new fields. The user
-  // may also pass --evidence-ref containing the rationale text.
+  // When --refactor-rationale is supplied it is folded into
+  // evidenceRefs[0] so the linter (which reads evidenceRefs only) can
+  // surface the rationale without touching new fields. The user may
+  // also pass --evidence-ref containing the rationale text.
   let resolvedEvidenceRefs = normalizeEvidenceRefs(args);
   if (
     phase === "refactor-deferred" &&
@@ -606,48 +587,12 @@ function buildRow(args, status, runId, now, options) {
       resolvedEvidenceRefs = [rationale, ...resolvedEvidenceRefs];
     }
   }
-  const integrationStateRaw =
-    typeof args["integration-state"] === "string" ? args["integration-state"].trim() : "";
-  const integrationStateAllowed = new Set([
-    "pending",
-    "applied",
-    "conflict",
-    "resolved",
-    "abandoned"
-  ]);
-  const integrationState =
-    integrationStateRaw.length > 0 && integrationStateAllowed.has(integrationStateRaw)
-      ? integrationStateRaw
-      : undefined;
-  const claimToken =
-    typeof args["claim-token"] === "string" && args["claim-token"].trim().length > 0
-      ? args["claim-token"].trim()
-      : undefined;
-  const ownerLaneId =
-    typeof args["lane-id"] === "string" && args["lane-id"].trim().length > 0
-      ? args["lane-id"].trim()
-      : undefined;
-  const leasedUntil =
-    typeof args["lease-until"] === "string" && args["lease-until"].trim().length > 0
-      ? args["lease-until"].trim()
-      : undefined;
-  const dependsOnRaw =
-    typeof args["depends-on"] === "string" ? args["depends-on"].trim() : "";
-  const dependsOn =
-    dependsOnRaw.length > 0
-      ? dependsOnRaw
-        .split(",")
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0)
-      : undefined;
-  const leaseState =
-    leasedUntil && status === "scheduled" ? "claimed" : undefined;
-  // v6.14.0: refactorOutcome folds REFACTOR into a phase=green event. We
-  // also accept it on phase=refactor / phase=refactor-deferred for forward
-  // compatibility with controllers that emit it on the legacy lifecycle.
-  // When mode=deferred and a --refactor-rationale is supplied we also
-  // mirror the rationale into evidenceRefs[0] so legacy linters keep
-  // reading evidence (matches the v6.11.0 refactor-deferred behavior).
+  // refactorOutcome folds REFACTOR into a phase=green event. We also
+  // accept it on phase=refactor / phase=refactor-deferred for controllers
+  // that emit it on the per-phase lifecycle. When mode=deferred and a
+  // --refactor-rationale is supplied we mirror the rationale into
+  // evidenceRefs[0] so the linter keeps reading evidence (matches the
+  // refactor-deferred behavior).
   const refactorOutcomeMode =
     typeof args["refactor-outcome"] === "string"
       ? args["refactor-outcome"].trim()
@@ -701,12 +646,6 @@ function buildRow(args, status, runId, now, options) {
     claimedPaths: claimedPaths.length > 0 ? claimedPaths : undefined,
     sliceId,
     phase,
-    claimToken,
-    ownerLaneId,
-    leasedUntil,
-    leaseState,
-    dependsOn,
-    integrationState,
     refactorOutcome,
     riskTier
   };
@@ -732,9 +671,9 @@ function findActiveSpanForPairInline(stage, agent, runId, entries) {
   for (const entry of entries) {
     if (!entry || typeof entry !== "object") continue;
     if (typeof entry.spanId !== "string" || entry.spanId.length === 0) continue;
-    // Strict run-scope (v6.9.0 R7 fix): legacy entries without a runId
-    // are treated as foreign so they cannot keep an old span "active"
-    // across runs and trip dispatch_duplicate on a fresh dispatch.
+    // Strict run-scope: entries without a runId are treated as foreign so
+    // they cannot keep an old span "active" across runs and trip
+    // dispatch_duplicate on a fresh dispatch.
     if (typeof entry.runId !== "string" || entry.runId.length === 0) continue;
     if (entry.runId !== runId) continue;
     if (entry.stage !== stage || entry.agent !== agent) continue;
@@ -772,7 +711,7 @@ function computeActiveSubagentsInline(entries) {
 
 // keep in sync with validateFileOverlap in src/delegation.ts
 function validateFileOverlapInline(stamped, activeEntries) {
-  if (stamped.agent !== "slice-implementer" || stamped.stage !== "tdd") {
+  if (stamped.agent !== "slice-builder" || stamped.stage !== "tdd") {
     return { autoParallel: false, conflict: null };
   }
   const newPaths = Array.isArray(stamped.claimedPaths) ? stamped.claimedPaths : [];
@@ -809,10 +748,10 @@ function validateFileOverlapInline(stamped, activeEntries) {
   return { autoParallel: true, conflict: null };
 }
 
-const MAX_PARALLEL_SLICE_IMPLEMENTERS_INLINE = 5;
+const MAX_PARALLEL_SLICE_BUILDERS_INLINE = 5;
 
 function readMaxParallelOverrideFromEnvInline() {
-  const raw = process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS;
+  const raw = process.env.CCLAW_MAX_PARALLEL_SLICE_BUILDERS;
   if (typeof raw !== "string" || raw.trim().length === 0) return null;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) return null;
@@ -821,13 +760,13 @@ function readMaxParallelOverrideFromEnvInline() {
 
 // keep in sync with validateFanOutCap in src/delegation.ts
 function validateFanOutCapInline(stamped, activeEntries, override) {
-  if (stamped.agent !== "slice-implementer" || stamped.stage !== "tdd") return null;
+  if (stamped.agent !== "slice-builder" || stamped.stage !== "tdd") return null;
   if (stamped.status !== "scheduled") return null;
   let cap;
   if (override !== null && override !== undefined && Number.isInteger(override) && override >= 1) {
     cap = override;
   } else {
-    cap = readMaxParallelOverrideFromEnvInline() || MAX_PARALLEL_SLICE_IMPLEMENTERS_INLINE;
+    cap = readMaxParallelOverrideFromEnvInline() || MAX_PARALLEL_SLICE_BUILDERS_INLINE;
   }
   const sameLaneActive = activeEntries.filter(
     (entry) =>
@@ -1000,9 +939,9 @@ async function findLegacyEntry(root, spanId) {
   return ledger.entries.find((entry) => entry && entry.spanId === spanId) || null;
 }
 
-// v6.14.1 — allow-list of non-delegation audit events the controller
-// can emit via the helper. Keep in sync with NON_DELEGATION_AUDIT_EVENTS
-// in src/delegation.ts.
+// Allow-list of non-delegation audit events the controller can emit via
+// the helper. Keep in sync with NON_DELEGATION_AUDIT_EVENTS in
+// src/delegation.ts.
 const VALID_AUDIT_KINDS = new Set([
   "cclaw_integration_overseer_skipped"
 ]);
@@ -1300,8 +1239,8 @@ async function main() {
     return;
   }
 
-  // v6.14.1 — audit-only emit path. When the controller wants to record
-  // a non-delegation audit row (e.g. \`cclaw_integration_overseer_skipped\`
+  // Audit-only emit path. When the controller wants to record a
+  // non-delegation audit row (e.g. \`cclaw_integration_overseer_skipped\`
   // when the wave heuristic chose to skip the overseer dispatch), pass
   // --audit-kind=<event-name> [--audit-reason=<text>] [--slice-ids=<csv>]
   // and the helper appends a single line to delegation-events.jsonl
@@ -1329,11 +1268,11 @@ async function main() {
     return;
   }
 
-  // v6.11.0 (D2) — TDD slice phase tagging validation. --phase is
-  // strictly enum-bound; --slice must be a non-empty string when
-  // provided; --phase=refactor-deferred requires either an explicit
-  // --refactor-rationale or an --evidence-ref with rationale text so
-  // the linter has something to render.
+  // TDD slice phase tagging validation. --phase is strictly enum-bound;
+  // --slice must be a non-empty string when provided;
+  // --phase=refactor-deferred requires either an explicit
+  // --refactor-rationale or an --evidence-ref with rationale text so the
+  // linter has something to render.
   if (args.phase !== undefined && !VALID_DELEGATION_PHASES_SET.has(args.phase)) {
     problems.push("invalid --phase (allowed: " + VALID_DELEGATION_PHASES.join(", ") + ")");
     emitProblems(problems, json, 2);
@@ -1359,10 +1298,10 @@ async function main() {
     }
   }
 
-  // v6.14.0 — --refactor-outcome must be one of inline|deferred. When
-  // mode=deferred a rationale is required (either --refactor-rationale or
-  // --evidence-ref carrying the rationale text). --risk-tier must be one of
-  // low|medium|high if provided.
+  // --refactor-outcome must be one of inline|deferred. When mode=deferred
+  // a rationale is required (either --refactor-rationale or --evidence-ref
+  // carrying the rationale text). --risk-tier must be one of low|medium|high
+  // if provided.
   if (
     args["refactor-outcome"] !== undefined &&
     args["refactor-outcome"] !== "inline" &&
@@ -1484,9 +1423,9 @@ async function main() {
     return;
   }
 
-  // v6.10.0 (P1+P2): file-overlap scheduler + fan-out cap. Run before
-  // the legacy dispatch dedup so disjoint claimedPaths can auto-promote
-  // to allowParallel and bypass the duplicate guard.
+  // File-overlap scheduler + fan-out cap. Run before the dispatch
+  // dedup so disjoint claimedPaths can auto-promote to allowParallel and
+  // bypass the duplicate guard.
   if (status === "scheduled") {
     const sameRunPrior = priorLedger.filter((entry) => entry.runId === runId);
     const activeForRun = computeActiveSubagentsInline(sameRunPrior);
@@ -1536,8 +1475,8 @@ async function main() {
     }
   }
 
-  // v6.14.2 Fix 4 — GREEN evidence freshness contract for
-  // \`slice-implementer --phase green --status=completed\`. Three checks:
+  // GREEN evidence freshness contract for \`slice-builder --phase green
+  // --status=completed\`. Three checks:
   //   1. green_evidence_red_test_mismatch — evidenceRefs[0] must contain
   //      the basename/stem of the RED span's first evidenceRef.
   //   2. green_evidence_passing_assertion_missing — evidenceRefs[0]
@@ -1550,7 +1489,7 @@ async function main() {
   // --green-mode=observational. Both flags are required.
   if (
     clean.stage === "tdd" &&
-    clean.agent === "slice-implementer" &&
+    clean.agent === "slice-builder" &&
     clean.phase === "green" &&
     clean.status === "completed"
   ) {
@@ -1667,34 +1606,8 @@ async function main() {
     }
   }
 
-  if (
-    clean.stage === "tdd" &&
-    clean.agent === "slice-implementer" &&
-    clean.phase === "green" &&
-    (await readWorktreeExecutionModeInline(root)) === "worktree-first"
-  ) {
-    const tok = typeof clean.claimToken === "string" ? clean.claimToken.trim() : "";
-    const lane = typeof clean.ownerLaneId === "string" ? clean.ownerLaneId.trim() : "";
-    const lease = typeof clean.leasedUntil === "string" ? clean.leasedUntil.trim() : "";
-    if (tok.length === 0 || lane.length === 0 || lease.length === 0) {
-      const missing = [];
-      if (tok.length === 0) missing.push("--claim-token");
-      if (lane.length === 0) missing.push("--lane-id");
-      if (lease.length === 0) missing.push("--lease-until");
-      emitErrorJson(
-        "dispatch_lane_metadata_missing",
-        {
-          missing,
-          remediation:
-            "worktree-first mode requires --claim-token, --lane-id, and --lease-until on every slice-implementer --phase green delegation-record write (from scheduled through completed)."
-        },
-        json
-      );
-      return;
-    }
-  }
-
   await persistEntry(root, runId, clean, event);
+
   process.stdout.write(JSON.stringify({ ok: true, event }, null, 2) + "\\n");
 }
 

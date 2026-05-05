@@ -310,7 +310,7 @@ describe("runPlanSplitWaves", () => {
     expect(PLAN_SPLIT_SMALL_PLAN_THRESHOLD).toBe(50);
   });
 
-  it("v6.13.1 merges Parallel Execution Plan managed block with wave-plans/wave-NN.md", async () => {
+  it("release merges Parallel Execution Plan managed block with wave-plans/wave-NN.md", async () => {
     const root = await createTempProject("plan-dual-wave-sources");
     const ad = path.join(root, ".cclaw/artifacts");
     await fs.mkdir(path.join(ad, "wave-plans"), { recursive: true });

@@ -359,7 +359,7 @@ export async function lintBrainstormStage(ctx: StageLintContext): Promise<void> 
       findings.push({
         section: "brainstorm.idea_evidence_carry_forward",
         required: true,
-        rule: "[P1] brainstorm.idea_evidence_carry_forward — when `flow-state.interactionHints.brainstorm.fromIdeaArtifact` is set (Wave 23 / v5.0.0), the brainstorm artifact MUST include `## Idea Evidence Carry-forward` citing the idea artifact path and chosen `I-#`. Reuse divergent + critique + rank work from `/cc-ideate` as the `baseline` Approach; only newly generate the higher-upside challenger row(s).",
+        rule: "[P1] brainstorm.idea_evidence_carry_forward — when `flow-state.interactionHints.brainstorm.fromIdeaArtifact` is set, the brainstorm artifact MUST include `## Idea Evidence Carry-forward` citing the idea artifact path and chosen `I-#`. Reuse divergent + critique + rank work from `/cc-ideate` as the `baseline` Approach; only newly generate the higher-upside challenger row(s).",
         found: ok,
         details: ok
           ? `Idea Evidence Carry-forward cites ${ideaHint.fromIdeaArtifact}${ideaHint.fromIdeaCandidateId ? ` (${ideaHint.fromIdeaCandidateId})` : ""}.`

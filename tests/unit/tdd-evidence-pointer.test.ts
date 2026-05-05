@@ -45,7 +45,7 @@ describe("extractEvidencePointers", () => {
   });
 });
 
-describe("validateTddRedEvidence (v6.11.0 phase-events + pointer mode)", () => {
+describe("validateTddRedEvidence (phase-events + pointer mode)", () => {
   it("auto-satisfies when delegation phase=red events carry evidenceRefs for the slice", () => {
     const result = validateTddRedEvidence("", { phaseEventsSatisfied: true });
     expect(result.ok).toBe(true);
@@ -75,7 +75,7 @@ describe("validateTddRedEvidence (v6.11.0 phase-events + pointer mode)", () => {
   });
 });
 
-describe("validateTddGreenEvidence (v6.11.0 phase-events + pointer mode)", () => {
+describe("validateTddGreenEvidence (phase-events + pointer mode)", () => {
   it("auto-satisfies when delegation phase=green events carry evidenceRefs", () => {
     const result = validateTddGreenEvidence("", { phaseEventsSatisfied: true });
     expect(result.ok).toBe(true);
@@ -105,12 +105,11 @@ describe("validateTddGreenEvidence (v6.11.0 phase-events + pointer mode)", () =>
 });
 
 /**
- * v6.11.0 follow-up — pin the legacy `Evidence:` pointer-resolution
- * branch inside `resolveTddEvidencePointerContext`
- * (`src/artifact-linter.ts`).
+ * Pin the `Evidence:` pointer-resolution branch inside
+ * `resolveTddEvidencePointerContext` (`src/artifact-linter.ts`).
  *
- * Phase D auto-derive landed an events-satisfied short-circuit, which
- * means the new tests routinely hit the phase-events branch and skip
+ * The phase-events auto-derive provides an events-satisfied short-circuit,
+ * which means the new tests routinely hit the phase-events branch and skip
  * the pre-existing pointer resolver. These end-to-end fixtures keep the
  * legacy markdown-pointer fallback (file-on-disk + `spanId:<id>`) under
  * test so it can't silently rot — one branch where every pointer
@@ -171,7 +170,7 @@ describe("resolveTddEvidencePointerContext — legacy Evidence: pointer branch",
     // pointer resolver is the only thing that can clear RED/GREEN.
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       spanId: "span-green-pointer",

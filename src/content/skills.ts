@@ -125,7 +125,7 @@ Any "the failure is real" claim (failing test, broken build, regression catch, d
 
 \`proof: <iso-ts> | <observed snippet — first 200 chars> | source: <command or log path>\`
 
-For TDD specifically, this is the watched-RED proof and is required per new test before \`stage-complete\` accepts the stage. From v6.12.0 onward, every slice on every TDD run dispatches three roles in this exact order: (1) \`test-author --slice S-<id> --phase red\`, (2) ONE message with TWO concurrent Task calls — \`slice-implementer --slice S-<id> --phase green --paths <production paths>\` AND \`slice-documenter --slice S-<id> --phase doc --paths <artifacts-dir>/tdd-slices/S-<id>.md\`, (3) \`slice-implementer --phase refactor\` or \`--phase refactor-deferred --refactor-rationale "<why>"\`. The linter auto-derives the \`Watched-RED Proof\` and \`Vertical Slice Cycle\` tables in \`06-tdd.md\` from \`.cclaw/state/delegation-events.jsonl\`. Do NOT hand-edit those tables. \`slice-implementer\` and \`slice-documenter\` are mandatory regardless of \`discoveryMode\` (v6.12.0 Phase R/M); the controller MUST NOT write GREEN production code or per-slice prose itself. v6.10.0 sidecar (\`06-tdd-slices.jsonl\`) is removed; \`cclaw-cli sync\` cleans the file from existing installs.
+For TDD, watched-RED proof is mandatory before \`stage-complete\` accepts the slice. Dispatch \`slice-builder\` end-to-end: it owns RED/GREEN evidence rows, refactor coverage per the hook flags, \`<artifacts-dir>/tdd-slices/S-<id>.md\`, and (when wired) \`slice-completed\`. The linter mirrors phase history into auto-render markers in \`06-tdd.md\` — never hand-fill those fragments.
 `;
 }
 
@@ -199,68 +199,30 @@ ${items.map((item) => `- ${item}`).join("\n")}
 }
 
 /**
- * v6.12.0 Phase Ritual + Phase W — TDD-only top-of-skill sections that
- * sit immediately after the `<EXTREMELY-IMPORTANT>` Iron Law block and
- * before `## Quick Start`. They establish the per-slice three-dispatch
- * ritual + wave batch mode in imperative voice with literal commands so
- * pattern-matching on read works in our favor.
+ * TDD-only prelude after `<EXTREMELY-IMPORTANT>`: wave routing + canonical
+ * `slice-builder` dispatch. Uses literal commands so pattern-matching on read
+ * matches operator scripts.
  *
  * Empty for non-TDD stages.
  */
 export function tddTopOfSkillBlock(stage: FlowStage): string {
   if (stage !== "tdd") return "";
-  return `## Per-Slice Ritual (v6.12.0+)
+  return `## TDD orchestration primer
 
-ONE slice = THREE dispatches, in this order. Do not skip, do not collapse.
+**Always first:** run \`node .cclaw/cli.mjs internal wave-status --json\` — it reads the managed plan markers; open \`05-plan.md\`/wave-plan files afterward for detail.
 
-1. **RED** — \`Task("test-author --slice S-<id> --phase red")\`.
-2. **Verify RED** — wait for the \`phase=red\` event in \`.cclaw/state/delegation-events.jsonl\` with non-empty \`evidenceRefs\`. No production edits.
-3. **GREEN+DOC fan-out** — ONE message, TWO concurrent Tasks:
-   \`\`\`
-   Task("slice-implementer --slice S-<id> --phase green --paths <prod paths>")
-   Task("slice-documenter  --slice S-<id> --phase doc   --paths <artifacts-dir>/tdd-slices/S-<id>.md")
-   \`\`\`
-   The file-overlap scheduler auto-allows parallel dispatch because \`claimedPaths\` are disjoint. Fire BOTH calls in the same message — never serialize independent work.
-4. **REFACTOR** — \`Task("slice-implementer --slice S-<id> --phase refactor")\` OR \`--phase refactor-deferred --refactor-rationale '<why>'\`.
+**Several ready lanes:** Issue exactly one AskQuestion (**launch parallel wave**, default vs **single slice**).
 
-**Rule 1 (v6.13.1):** Before any slice-routing question, read \`<artifacts-dir>/05-plan.md\` (managed \`## Parallel Execution Plan\`) **and** list \`<artifacts-dir>/wave-plans/wave-NN.md\`. Merge mentally: Parallel Execution Plan first, wave files second; duplicate slices with conflicting wave membership are invalid. If the merged plan shows a wave with **two or more** scheduler-ready slices, issue **exactly one** \`AskQuestion\`: \`Launch wave W-NN with N parallel lanes (S-a, S-b, ...)?\` with default option **launch wave** and alternate **single-slice instead**. Do not ask "which slice next?" when that question is redundant (single ready slice or no wave). After **launch wave** confirmation, execute RED checkpoint → parallel GREEN+DOC → per-lane REFACTOR without further routing asks. After **single-slice instead**, fall back to the legacy single-slice ritual. **Wave dispatch resume:** if part of the wave is already done, parallelize only the remaining members.
+**Delegation order:** Emit \`delegation-record\` \`--status=scheduled\` then \`--status=launched\` *before* every \`Task\`; workers ACK/complete locally.
 
-**FORBIDDEN:**
-- Controller writing GREEN production code. ALL GREEN goes through \`slice-implementer\` — linter rule \`tdd_slice_implementer_missing\` blocks the gate.
-- Controller writing per-slice prose into legacy \`06-tdd.md\` sections (Test Discovery / RED Evidence / GREEN Evidence / Watched-RED Proof / Vertical Slice Cycle / Per-Slice Review / Failure Analysis / Acceptance Mapping). \`slice-documenter\` owns \`tdd-slices/S-<id>.md\` — \`tdd_slice_documenter_missing\` blocks the gate.
-- Hand-editing auto-render blocks between \`auto-start: tdd-slice-summary\` / \`auto-start: slices-index\` markers — overwritten every lint.
+**Per slice worker:** Prefer \`Task("slice-builder --slice S-<id> ...")\`. Pass explicit \`--paths\`; parallel Tasks are okay when overlaps are disjoint. Follow any lane lease flags the helper still mandates on your ledger.
 
-Delegation-record signature (extend with lane metadata for every GREEN row in \`worktree-first\`):
+Wave resume: reuse \`wave-status\` outputs and parallelize unfinished members instead of restarting finished slices.
 
-\`node .cclaw/hooks/delegation-record.mjs --stage=tdd --agent=slice-implementer --mode=mandatory --status=scheduled --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> --slice=S-1 --phase=green --paths=src/a.ts --claim-token=<opaque> --lane-id=<lane> --lease-until=<iso8601> --json\`
-
-## Wave Batch Mode (v6.13.1+)
-
-**Triggers:** managed \`## Parallel Execution Plan\` in \`05-plan.md\` **or** any \`<artifacts-dir>/wave-plans/wave-NN.md\`, OR 2+ slices with disjoint \`claimedPaths\`. Cap = 5 \`slice-implementer\` lanes (10 subagents incl. paired documenters) via \`MAX_PARALLEL_SLICE_IMPLEMENTERS\`. **Preconditions:** Load both sources before routing. Worktree-first: every GREEN delegation-record MUST include \`--claim-token\`, \`--lane-id\`, \`--lease-until\` (hook exits \`2\`, \`dispatch_lane_metadata_missing\` otherwise).
-
-**Phase A — RED checkpoint** — ONE message, all test-authors:
-\`\`\`
-Task("test-author --slice S-1 --phase red")
-Task("test-author --slice S-2 --phase red")
-Task("test-author --slice S-3 --phase red")
-\`\`\`
-Wait for ALL Phase A REDs to land with non-empty \`evidenceRefs\` before Phase B. Linter \`tdd_red_checkpoint_violation\` (required: true) blocks any wave where a \`phase=green\` \`completedTs\` precedes the wave's last \`phase=red\` \`completedTs\`.
-
-**Phase B — GREEN+DOC fan-out** — ONE message; pair per slice (repeat for each lane, flags unique per lane):
-
-\`\`\`
-Task("slice-implementer --slice S-1 --phase green --paths <prod> --claim-token=<t> --lane-id=<lane-1> --lease-until=<iso>")
-Task("slice-documenter  --slice S-1 --phase doc   --paths <artifacts-dir>/tdd-slices/S-1.md")
-\`\`\`
-
-Launch every slice's pair in that same message. **Never serialize independent work.**
-
-**Phase C — REFACTOR per slice** — after GREEN+DOC lands, dispatch refactor/refactor-deferred per slice. **Fan-in (worktree-first):** echo claim/lane/lease on completed GREEN rows; stage-complete runs deterministic \`git apply --3way\` (no \`-X ours/theirs\`). Conflicts: \`slice-implementer --phase resolve-conflict\`. With 2+ lanes, still dispatch \`integration-overseer\` before review.
-
-**slice-documenter:** record the \`phase=doc\` row in the same message as GREEN; write a **provisional** row in \`tdd-slices/S-<id>.md\` immediately at dispatch, then **finalize** that file after the matching \`slice-implementer\` \`phase=green\` event lands (evidence-backed prose, not guesswork before GREEN exists).
-
+---
 `;
 }
+
 
 function artifactTemplatePathForStage(stage: FlowStage): string {
   const stageIndex = FLOW_STAGES.indexOf(stage) + 1;
@@ -509,7 +471,7 @@ function mergedAntiPatterns(philosophy: StagePhilosophy, execution: StageExecuti
 
 function completionParametersBlock(schema: StageSchema, track: FlowTrack): string {
   const gateList = schema.executionModel.requiredGates.map((g) => `\`${g.id}\``).join(", ");
-  // Wave 24 (v6.0.0): mandatory agents are dropped on `quick` track. Surface
+  // Mandatory agents are dropped on `quick` track. Surface
   // the empty list so the rendered SKILL.md doesn't tell quick-track runs to
   // dispatch agents the linter is going to skip.
   const trackAwareMandatoryAgents = track === "quick" ? [] : schema.reviewLens.mandatoryDelegations;
@@ -517,7 +479,7 @@ function completionParametersBlock(schema: StageSchema, track: FlowTrack): strin
   const mandatory = trackAwareMandatoryAgents.length > 0
     ? trackAwareMandatoryAgents.map((a) => `\`${a}\``).join(", ")
     : track === "quick" && schema.reviewLens.mandatoryDelegations.length > 0
-      ? "none (skipped: quick track — Wave 24)"
+      ? "none (skipped: quick track)"
       : "none";
   const resolvedNextStage = nextStageForTrack(schema.stage, track);
   const nextStage = resolvedNextStage ?? "done";
@@ -673,7 +635,11 @@ function dedupeGuidance(
   return result;
 }
 
-export function stageSkillMarkdown(stage: FlowStage, track: FlowTrack = "standard"): string {
+export function stageSkillMarkdown(
+  stage: FlowStage,
+  track: FlowTrack = "standard",
+  _packageVersion?: string | null
+): string {
   const schema = stageSchema(stage, track);
   const trackContext = stageTrackRenderContext(track);
   const philosophy = schema.philosophy;

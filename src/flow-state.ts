@@ -108,8 +108,10 @@ export function createInitialCloseoutState(): CloseoutState {
 }
 
 export interface FlowState {
-  /** Backward-compatible schema marker for future migrations. */
+  /** Schema marker for forward compatibility. */
   schemaVersion: typeof FLOW_STATE_SCHEMA_VERSION;
+  /** Workspace marker stamped during sync/upgrade (semver string). */
+  packageVersion?: string;
   activeRunId: string;
   currentStage: FlowStage;
   completedStages: FlowStage[];
@@ -120,17 +122,14 @@ export interface FlowState {
   /** Run-level upstream shaping mode chosen once at start (`lean` / `guided` / `deep`). */
   discoveryMode: DiscoveryMode;
   /**
-   * Wave 25 (v6.1.0) — optional task class for the active run.
+   * Optional task class for the active run.
    *
-   * Mirrors the `MandatoryDelegationTaskClass` union used by Wave 24's
-   * `mandatoryAgentsFor` helper. When set to `"software-bugfix"`, the
+   * Mirrors the `MandatoryDelegationTaskClass` union used by
+   * `mandatoryAgentsFor`. When set to `"software-bugfix"`, the
    * artifact-validation escape (`shouldDemoteArtifactValidationByTrack`)
    * collapses lite-tier-only checks (Architecture Diagram async/failure
    * edges, Interaction Edge Case mandatory rows, Stale Diagram Drift,
    * Expansion Strategist) from required → advisory.
-   *
-   * Persistence is best-effort: existing flow-state.json files written
-   * before Wave 25 simply omit the field (treated as `null`).
    */
   taskClass?: "software-standard" | "software-trivial" | "software-bugfix" | null;
   /** Stages explicitly skipped for this track (empty for standard; populated for quick). */
@@ -149,153 +148,33 @@ export interface FlowState {
   repoSignals?: RepoSignals;
   /**
    * Best-effort stage completion timestamps (ISO strings) captured as stages
-   * enter `completedStages`. Missing keys behave like legacy flows with no audit
-   * clock for post-closure mutation hints.
+   * enter `completedStages`. Missing keys behave like older flows with no
+   * audit clock for post-closure mutation hints.
    */
   completedStageMeta?: Partial<Record<FlowStage, { completedAt: string }>>;
   /**
-   * v6.12.0 — TDD migration cutover marker. When `cclaw-cli sync` detects an
-   * existing `06-tdd.md` with legacy per-slice tables but no auto-render
-   * markers, it inserts the markers and records the highest legacy slice id
-   * here (e.g. `"S-10"`). The TDD linter uses this value to:
-   *   - exempt slices `<= cutoverSliceId` from new mandatory rules (legacy
-   *     slices keep their markdown tables);
-   *   - emit `tdd_legacy_section_writes_after_cutover` advisory when a slice
-   *     id `> cutoverSliceId` appears in legacy per-slice sections of
-   *     `06-tdd.md` (post-cutover prose belongs in `tdd-slices/S-<id>.md`).
-   *
-   * Optional + best-effort: omitted on fresh installs and on legacy files
-   * sync hasn't visited yet.
-   */
-  tddCutoverSliceId?: string;
-  /**
-   * v6.14.2 — boundary slice id at which worktree-first protocol began
-   * applying. `cclaw-cli sync` auto-stamps this when
-   * `legacyContinuation: true` AND `worktreeExecutionMode: "worktree-first"`
-   * AND the value is not already set.
-   *
-   * Detection rule (v6.14.2): the highest `S-N` among slices with at
-   * least one completed `slice-implementer` row in the active run that
-   * carries NONE of the worktree-first metadata fields (`claimToken`,
-   * `ownerLaneId`, `leasedUntil`). When no such slice exists, sync
-   * falls back to `tddCutoverSliceId` so legacy v6.12 cutover marks
-   * still confer the exemption.
-   *
-   * Effect: closed slices whose numeric id is `<= tddWorktreeCutoverSliceId`
-   * AND whose `slice-implementer` rows in the active run lack ALL
-   * three worktree fields are exempt from `tdd_slice_lane_metadata_missing`,
-   * `tdd_slice_claim_token_missing`, and `tdd_lease_expired_unreclaimed`.
-   *
-   * One-shot: subsequent sync runs leave the value untouched. Operators
-   * may pin it earlier/later by direct edit + `cclaw-cli internal
-   * flow-state-repair --reason=<slug>`.
-   */
-  tddWorktreeCutoverSliceId?: string;
-  /**
-   * v6.13.0 — when `worktree-first` (default for newly initialized runs),
-   * slice-implementer work happens in isolated git worktrees with explicit
-   * claims/leases and deterministic fan-in integration.
-   *
-   * Omitted on legacy `flow-state.json` files: treated as `single-tree` via
-   * `effectiveWorktreeExecutionMode`.
-   */
-  worktreeExecutionMode?: "single-tree" | "worktree-first";
-  /**
-   * v6.13.0 — set by `cclaw-cli sync` when the plan predates parallel-metadata
-   * fields. Relaxes some plan linters for existing implementation units and
-   * defaults scheduler parallelism to opt-in only for those units.
-   */
-  legacyContinuation?: boolean;
-  /**
-   * v6.14.0 — TDD wave checkpoint mode (stream-style parallel TDD).
-   *
-   * - `per-slice` — default for new projects. Each lane runs RED→GREEN as
-   *   soon as its `dependsOn` closes; the linter enforces RED-before-GREEN
-   *   per slice only (`tdd_slice_red_completed_before_green`). No global
-   *   barrier between Phase A REDs and Phase B GREENs.
-   * - `global-red` — legacy v6.12/v6.13 behavior. ALL Phase A REDs in a
-   *   wave must complete before ANY Phase B GREEN starts. Auto-applied
-   *   for projects with `legacyContinuation: true` so hox-style runs
-   *   continue to enforce the wave barrier.
-   *
-   * Omitted on legacy state files (treated as `"global-red"` for
-   * `legacyContinuation: true` and `"per-slice"` otherwise via
-   * `effectiveTddCheckpointMode`).
-   */
-  tddCheckpointMode?: "per-slice" | "global-red";
-  /**
-   * v6.14.0 — integration-overseer dispatch mode.
-   *
-   * - `conditional` — default for new projects. The controller calls
-   *   `integrationCheckRequired(events)` after wave closeout; the
-   *   integration-overseer is dispatched only when (a) two or more
-   *   closed slices share import boundaries (heuristic: shared
-   *   directory in `evidenceRefs`/`claimedPaths`), (b) any slice has
-   *   `riskTier === "high"`, or (c) deterministic fan-in reported a
-   *   `cclaw_fanin_conflict`. Otherwise the linter emits the audit
-   *   row `cclaw_integration_overseer_skipped` and skips dispatch.
-   * - `always` — legacy v6.13 behavior. Run integration-overseer
-   *   after every multi-slice wave regardless of trigger.
-   *
-   * Omitted on legacy state files (treated as `"always"`).
-   */
-  integrationOverseerMode?: "conditional" | "always";
-  /**
-   * v6.14.2 — minimum elapsed milliseconds between `acknowledged` and
-   * `completed` for a `slice-implementer --phase green` row. The hook
-   * helper rejects fast-greens (`completedTs - ackTs < this`) with
-   * `green_evidence_too_fresh` unless the dispatch carries
-   * `--allow-fast-green --green-mode=observational`.
+   * Minimum elapsed milliseconds between `acknowledged` and `completed`
+   * for a `slice-builder --phase green` row. The hook helper rejects
+   * fast-greens (`completedTs - ackTs < this`) with `green_evidence_too_fresh`
+   * unless the dispatch carries `--allow-fast-green --green-mode=observational`.
    *
    * Default 4000ms when omitted (see `effectiveTddGreenMinElapsedMs`).
    * Operators tuning the floor for very fast suites may set it lower
-   * (e.g. `1500`) or set it to `0` to disable the check entirely while
-   * keeping the other Fix 4 contracts (RED test name match, passing
-   * assertion line) active.
+   * (e.g. `1500`) or `0` to disable the check entirely while keeping the
+   * other freshness contracts (RED test name match, passing assertion line)
+   * active.
    */
   tddGreenMinElapsedMs?: number;
-}
-
-/**
- * Effective worktree mode: legacy state files without the field keep
- * single-tree scheduling to avoid breaking existing runs on upgrade.
- */
-export function effectiveWorktreeExecutionMode(state: FlowState): "single-tree" | "worktree-first" {
-  return state.worktreeExecutionMode ?? "single-tree";
-}
-
-/**
- * Effective v6.14 TDD checkpoint mode: legacy state files without the
- * field default to `global-red` when `legacyContinuation: true` (hox)
- * and `per-slice` otherwise. Explicit values always win.
- */
-export function effectiveTddCheckpointMode(
-  state: FlowState
-): "per-slice" | "global-red" {
-  if (state.tddCheckpointMode === "per-slice" || state.tddCheckpointMode === "global-red") {
-    return state.tddCheckpointMode;
-  }
-  return state.legacyContinuation === true ? "global-red" : "per-slice";
-}
-
-/**
- * Effective v6.14 integration-overseer mode: legacy state files without
- * the field default to `always` (matches v6.13 behavior).
- */
-export function effectiveIntegrationOverseerMode(
-  state: FlowState
-): "conditional" | "always" {
-  return state.integrationOverseerMode === "conditional" ? "conditional" : "always";
 }
 
 export const DEFAULT_TDD_GREEN_MIN_ELAPSED_MS = 4000;
 
 /**
- * v6.14.2 — effective minimum GREEN elapsed window in milliseconds.
- * Returns the per-project override when present and finite; otherwise
- * the documented 4000ms default. Negative values or NaN fall through
- * to the default so a hand-edited `flow-state.json` cannot accidentally
- * disable the check via `-1` or `"oops"`.
+ * Effective minimum GREEN elapsed window in milliseconds. Returns the
+ * per-project override when present and finite; otherwise the documented
+ * 4000ms default. Negative values or NaN fall through to the default so a
+ * hand-edited `flow-state.json` cannot accidentally disable the check via
+ * `-1` or `"oops"`.
  */
 export function effectiveTddGreenMinElapsedMs(state: FlowState): number {
   const raw = state.tddGreenMinElapsedMs;
@@ -310,10 +189,10 @@ export interface StageInteractionHint {
   sourceStage?: FlowStage;
   recordedAt?: string;
   /**
-   * Wave 23 (v5.0.0) — `/cc-ideate` handoff carry-forward.
-   * When a brainstorm run is started from a `/cc-ideate` recommendation,
-   * `start-flow` records the originating idea artifact so brainstorm can
-   * reuse the divergent + critique + rank work instead of re-generating it.
+   * `/cc-ideate` handoff carry-forward. When a brainstorm run is started
+   * from a `/cc-ideate` recommendation, `start-flow` records the originating
+   * idea artifact so brainstorm can reuse the divergent + critique + rank
+   * work instead of re-generating it.
    *
    * `fromIdeaArtifact` is a workspace-relative POSIX path to
    * `.cclaw/ideas/idea-YYYY-MM-DD-<slug>.md` (or wherever `/cc-ideate`

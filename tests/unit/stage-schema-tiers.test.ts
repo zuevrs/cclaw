@@ -5,14 +5,12 @@ import {
 } from "../../src/content/stage-schema.js";
 
 /**
- * Wave 22 (Phase G3): document the contract that `stageDelegationSummary`
- * filters dispatch rows by `requiredAtTier`. The current matrix marks all
- * mandatory rows as `requiredAtTier: "standard"`, so `lightweight` falls
- * below the threshold and intentionally has zero mandatory delegations.
- *
- * If a future wave adds `requiredAtTier: "lightweight"` rows, this test
- * documents the intent (lightweight = self-review, no mandatory subagents)
- * and forces a deliberate update if the policy changes.
+ * Document the contract that `stageDelegationSummary` filters dispatch rows
+ * by `requiredAtTier`. The current matrix marks most mandatory rows as
+ * `requiredAtTier: "standard"`, so `lightweight` falls below the threshold
+ * and intentionally has zero mandatory delegations on elicitation stages.
+ * Risk-critical lanes (TDD slice-builder, reviewer/security-reviewer,
+ * architect/release-reviewer) still enforce on the lightweight tier.
  */
 
 describe("stage delegation tier filtering", () => {
@@ -31,7 +29,7 @@ describe("stage delegation tier filtering", () => {
     // unsafe code on a lightweight track would still be a regression — TDD
     // evidence, two-pass review, security attestation, architect cohesion,
     // release readiness, and doc-updater run on every track.
-    expect(mandatoryDelegationsForStage("tdd", "lightweight")).toContain("test-author");
+    expect(mandatoryDelegationsForStage("tdd", "lightweight")).toContain("slice-builder");
     const lightReview = mandatoryDelegationsForStage("review", "lightweight");
     expect(lightReview).toContain("reviewer");
     expect(lightReview).toContain("security-reviewer");

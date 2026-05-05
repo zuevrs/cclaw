@@ -9,8 +9,7 @@ import {
 } from "../../delegation.js";
 import {
   verifyCompletedStagesGateClosure,
-  verifyCurrentStageGateEvidence,
-  verifyTddWorktreeFanInClosure
+  verifyCurrentStageGateEvidence
 } from "../../gate-evidence.js";
 import { extractMarkdownSectionBody, learningsParseFailureHumanSummary, parseLearningsSection } from "../../artifact-linter.js";
 import {
@@ -35,8 +34,6 @@ import type { AdvanceStageArgs } from "./parsers.js";
 import { ensureProactiveDelegationTrace } from "./proactive-delegation-trace.js";
 import { consumeWaiverToken, type WaiverRecord } from "../waiver-grant.js";
 import type { Writable } from "node:stream";
-import { runTddDeterministicFanInBeforeAdvance } from "../../integration-fanin.js";
-
 interface InternalIo {
   stdout: Writable;
   stderr: Writable;
@@ -56,7 +53,7 @@ interface InternalValidationReport {
     corruptEventLines: number[];
     staleWorkers: string[];
     expectedMode: string;
-    /** Wave 24: true when mandatoryAgentsFor returned [] for the run's track / taskClass. */
+    /** True when mandatoryAgentsFor returned [] for the run's track / taskClass. */
     skippedByTrack: boolean;
   };
   gates: {
@@ -131,16 +128,16 @@ function nextInteractionHints(
 }
 
 /**
- * Wave 24 entry point — auto-hydrate evidence for an auto-hydratable
+ * entry point — auto-hydrate evidence for an auto-hydratable
  * gate that the agent already included in --passed but for which they
  * forgot to provide --evidence-json. Returns silently when no
  * hydration is possible (no auto-hydratable gate, no artifact, no
  * envelope, etc.).
  *
- * Wave 25 (v6.1.0) layered `tryAutoHydrateAndSelectReviewLoopGate` on
+ * layered `tryAutoHydrateAndSelectReviewLoopGate` on
  * top of this so the gate is also auto-included in selectedGateIds
  * when the artifact yields a valid envelope. Together the two helpers
- * remove the contradiction the user reported in Wave 24:
+ * remove the contradiction:
  *   - "omit this gate from --evidence-json so stage-complete can
  *      auto-hydrate it" → "missing --evidence-json entries for passed
  *      gates: design_diagram_freshness".
@@ -180,7 +177,7 @@ export async function hydrateReviewLoopEvidenceFromArtifact(
 }
 
 /**
- * Wave 25 (v6.1.0) — auto-include an auto-hydratable review-loop gate
+ * auto-include an auto-hydratable review-loop gate
  * in `selectedGateIds` when:
  *   - The stage has an auto-hydratable gate registered via
  *     `AUTO_REVIEW_LOOP_GATE_BY_STAGE` (currently `design`).
@@ -252,7 +249,7 @@ export async function buildValidationReport(
   flowState: FlowState,
   options: { allowBlockedReviewRoute?: boolean; extraStageFlags?: string[] } = {}
 ): Promise<InternalValidationReport> {
-  // Wave 24 follow-up (v6.1.1): forward `flowState.taskClass` so the
+  // forward `flowState.taskClass` so the
   // bugfix-skip lights up via the `cclaw advance-stage` path. The
   // delegation helper now has its own fallback (it reads `flowState`
   // internally), but threading the value here keeps the call site
@@ -449,11 +446,11 @@ export async function runAdvanceStage(
     args.passedGateIds.length > 0
       ? args.passedGateIds.filter((gateId) => selectableGateIds.has(gateId))
       : requiredGateIds;
-  // Wave 25 (v6.1.0): if the active stage has an auto-hydratable
+  // if the active stage has an auto-hydratable
   // review-loop gate (currently `design.design_architecture_locked`)
   // and the artifact already contains a valid review-loop envelope,
   // include the gate in selectedGateIds and hydrate evidence in one
-  // step. This removes the Wave 24 contradiction between "omit from
+  // step. This removes the contradiction between "omit from
   // --evidence-json so we can auto-hydrate" and "missing
   // --evidence-json entries for passed gates".
   selectedGateIds = await tryAutoHydrateAndSelectReviewLoopGate(
@@ -515,7 +512,7 @@ export async function runAdvanceStage(
     }
   }
 
-  // Wave 25 (v6.1.0): hydration + auto-select happens earlier via
+  // hydration + auto-select happens earlier via
   // `tryAutoHydrateAndSelectReviewLoopGate`. The previous explicit
   // call here was redundant (helper already covered both the
   // already-selected and not-yet-selected paths).
@@ -823,22 +820,6 @@ export async function runAdvanceStage(
     satisfiedGuards,
     new Set(selectedTransitionGuards)
   );
-  if (args.stage === "tdd" && successor !== null && successor !== "tdd") {
-    const fanIn = await runTddDeterministicFanInBeforeAdvance(projectRoot, flowState);
-    if (!fanIn.ok) {
-      io.stderr.write(
-        `cclaw internal advance-stage: deterministic worktree fan-in failed:\n${fanIn.issues
-          .map((line) => `  - ${line}`)
-          .join("\n")}\n`
-      );
-      return 1;
-    }
-    const closure = await verifyTddWorktreeFanInClosure(projectRoot, flowState);
-    if (closure.length > 0) {
-      io.stderr.write(`cclaw internal advance-stage: ${closure.join(" | ")}\n`);
-      return 1;
-    }
-  }
   const completedStages = blockedReviewRoute
     ? flowState.completedStages.filter((finished) => finished !== args.stage)
     : flowState.completedStages.includes(args.stage)

@@ -66,7 +66,7 @@ async function proactiveWaiverFlags(
 }
 
 /**
- * Wave 22: brainstorm/scope/design artifacts must satisfy `qa_log_below_min`
+ * brainstorm/scope/design artifacts must satisfy `qa_log_below_min`
  * floor; tests that focus on lifecycle behaviour use a stop-signal row
  * instead of fully populating Q&A.
  */
@@ -806,7 +806,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "tdd",
         `--evidence-json=${JSON.stringify(malformedEvidence)}`,
-        "--waive-delegation=test-author,slice-implementer,slice-documenter",
+        "--waive-delegation=slice-builder",
         "--waiver-reason=unit_test",
         "--quiet"
       ],
@@ -1043,7 +1043,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "design",
         `--evidence-json=${JSON.stringify(evidence)}`,
-        "--waive-delegation=architect,test-author",
+        "--waive-delegation=architect",
         "--waiver-reason=unit_test",
         ...(await proactiveWaiverFlags(root, "design")),
         "--quiet"
@@ -1086,7 +1086,7 @@ describe("internal advance-stage commands", () => {
         "advance-stage",
         "design",
         `--evidence-json=${JSON.stringify(evidence)}`,
-        "--waive-delegation=architect,test-author",
+        "--waive-delegation=architect",
         "--waiver-reason=unit_test",
         ...(await proactiveWaiverFlags(root, "design")),
         "--quiet"

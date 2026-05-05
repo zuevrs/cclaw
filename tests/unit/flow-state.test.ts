@@ -102,7 +102,7 @@ describe("flow state", () => {
     expect(SHIP_SUBSTATES).toContain(closeout.shipSubstate);
   });
 
-  describe("effectiveTddGreenMinElapsedMs (v6.14.2 Fix 4)", () => {
+  describe("effectiveTddGreenMinElapsedMs (release Fix 4)", () => {
     it("returns the documented default when the field is missing", () => {
       const state = createInitialFlowState();
       expect(effectiveTddGreenMinElapsedMs(state)).toBe(

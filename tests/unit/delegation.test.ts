@@ -580,7 +580,7 @@ const result = await checkMandatoryDelegations(root, "scope");
     expect(ledger.entries).toEqual([]);
   });
 
-  it("Wave 24: drops mandatory delegations entirely when taskClass=software-bugfix (skippedByTrack)", async () => {
+  it("drops mandatory delegations entirely when taskClass=software-bugfix (skippedByTrack)", async () => {
     const root = await createTempProject("delegation-bugfix-skip");
     await seedFlowState(root, "run-bugfix-review", "review");
     // Note: track stays as the default (standard) — only taskClass forces the skip here.
@@ -589,7 +589,7 @@ const result = await checkMandatoryDelegations(root, "scope");
     const result = await checkMandatoryDelegations(root, "review", {
       taskClass: "software-bugfix"
     });
-    // Wave 24 (v6.0.0): bugfix taskClass collapses mandatory delegations
+    // : bugfix taskClass collapses mandatory delegations
     // to [] regardless of track because tdd/review safety gates already
     // cover the regression-risk surface.
     expect(result.satisfied).toBe(true);
@@ -597,7 +597,7 @@ const result = await checkMandatoryDelegations(root, "scope");
     expect(result.skippedByTrack).toBe(true);
   });
 
-  it("Wave 24 follow-up (v6.1.1): reads flowState.taskClass when caller omits options.taskClass", async () => {
+  it("follow-up : reads flowState.taskClass when caller omits options.taskClass", async () => {
     // Regression for the audit follow-up: `buildValidationReport` (the
     // `cclaw advance-stage` path) calls `checkMandatoryDelegations` without
     // forwarding `taskClass`, which left the `software-bugfix` skip dead
@@ -619,7 +619,7 @@ const result = await checkMandatoryDelegations(root, "scope");
     expect(result.skippedByTrack).toBe(true);
   });
 
-  it("Wave 24 follow-up (v6.1.1): explicit options.taskClass=null overrides flowState.taskClass", async () => {
+  it("follow-up : explicit options.taskClass=null overrides flowState.taskClass", async () => {
     // The fallback only fires when the caller leaves `taskClass`
     // undefined. Passing an explicit `null` (e.g. for a caller that
     // wants to suppress the classification) keeps the bugfix skip OFF.
@@ -639,7 +639,7 @@ const result = await checkMandatoryDelegations(root, "scope");
     expect(result.skippedByTrack).toBe(false);
   });
 
-  it("Wave 24: drops mandatory delegations entirely on the quick track (skippedByTrack)", async () => {
+  it("drops mandatory delegations entirely on the quick track (skippedByTrack)", async () => {
     const root = await createTempProject("delegation-track-required-at-tier");
     await seedFlowState(root, "run-quick-review", "review");
     const statePath = path.join(root, ".cclaw/state/flow-state.json");
@@ -651,7 +651,7 @@ const result = await checkMandatoryDelegations(root, "scope");
     await writeConfig(root, createDefaultConfig(["claude"], "quick"));
 
     const result = await checkMandatoryDelegations(root, "review");
-    // Wave 24 (v6.0.0): mandatory delegations are dropped on track === "quick".
+    // : mandatory delegations are dropped on track === "quick".
     // The gate reports satisfied: true, missing: [], and flags the skip via
     // skippedByTrack so audit tooling can see it happened.
     expect(result.satisfied).toBe(true);

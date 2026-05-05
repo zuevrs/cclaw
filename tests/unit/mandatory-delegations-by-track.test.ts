@@ -7,7 +7,7 @@ import { FLOW_STAGES } from "../../src/types.js";
 import type { FlowStage } from "../../src/types.js";
 
 /**
- * Wave 24 (v6.0.0) track-aware mandatory delegation drop.
+ * track-aware mandatory delegation drop.
  *
  * `mandatoryAgentsFor(stage, track, taskClass)` MUST collapse to `[]`
  * for the small-fix lanes (quick track or software-bugfix taskClass) so
@@ -20,7 +20,7 @@ import type { FlowStage } from "../../src/types.js";
 
 const elicitationStages: FlowStage[] = ["brainstorm", "scope", "design"];
 
-describe("mandatoryAgentsFor — Wave 24 track-aware drop", () => {
+describe("mandatoryAgentsFor — track-aware drop", () => {
   it("returns [] for every stage on the quick track regardless of taskClass", () => {
     for (const stage of FLOW_STAGES) {
       expect(mandatoryAgentsFor(stage, "quick")).toEqual([]);
@@ -61,7 +61,7 @@ describe("mandatoryAgentsFor — Wave 24 track-aware drop", () => {
   });
 
   it("software-trivial taskClass on standard track does NOT skip (only bugfix is dropped)", () => {
-    // Wave 24 explicitly chose option (C) — drop only quick + software-bugfix.
+    // explicitly chose option (C) — drop only quick + software-bugfix.
     // software-trivial keeps the registered mandatory list because trivial
     // refactors still want a reviewer/critic stamp.
     for (const stage of FLOW_STAGES) {

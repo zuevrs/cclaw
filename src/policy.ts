@@ -98,7 +98,7 @@ export async function policyChecks(projectRoot: string, options: PolicyOptions =
     { file: runtimeFile("skills/flow-view/SKILL.md"), needle: "## Diff Subcommand", name: "utility_skill:view:diff_section" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:sdd:hard_gate" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## Status Contract", name: "utility_skill:sdd:status_contract" },
-    { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "slice-implementer", name: "utility_skill:sdd:implementer_template" },
+    { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "slice-builder", name: "utility_skill:sdd:implementer_template" },
     { file: runtimeFile("skills/subagent-dev/SKILL.md"), needle: "## Model & Harness Routing Notes", name: "utility_skill:sdd:routing_notes" },
     { file: runtimeFile("skills/parallel-dispatch/SKILL.md"), needle: "## HARD-GATE", name: "utility_skill:parallel:hard_gate" },
     { file: runtimeFile("skills/parallel-dispatch/SKILL.md"), needle: "Review Army", name: "utility_skill:parallel:review_army" },

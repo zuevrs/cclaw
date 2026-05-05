@@ -63,14 +63,14 @@ const QA_LOG_NO_DECISION_TOKENS: RegExp[] = [
 ];
 
 /**
- * Wave 24 (v6.0.0) — language-neutral forcing-question topic descriptor.
+ * Language-neutral forcing-question topic descriptor.
  *
- * Each forcing-question row in a stage's checklist now declares topics as
+ * Each forcing-question row in a stage's checklist declares topics as
  * `id: human-readable label` pairs (e.g. `pain: what pain are we solving`).
  * The `id` (kebab-case ASCII) is the machine-key authors stamp on Q&A Log
  * rows via `[topic:<id>]` so the linter can verify coverage in ANY natural
- * language (RU/EN/UA/etc.). Wave 23's English keyword fallback was removed
- * because it silently mis-reported convergence on RU/UA Q&A.
+ * language (RU/EN/UA/etc.). English keyword detection is intentionally
+ * absent because it silently mis-reports convergence on RU/UA Q&A.
  */
 export interface ForcingQuestionTopic {
   id: string;
@@ -100,7 +100,7 @@ export interface QaLogFloorResult {
   count: number;
   /**
    * Legacy field, retained for harness UI compatibility. Always 0 in
-   * Wave 23 — the convergence floor no longer enforces a fixed count.
+   * the convergence floor no longer enforces a fixed count.
    * Harness can still surface `questionBudgetHint(track, stage).recommended`
    * as a soft hint, but it is NOT tied to gate blocking.
    */
@@ -109,7 +109,7 @@ export interface QaLogFloorResult {
   hasStopSignal: boolean;
   /**
    * Legacy field, retained for harness UI compatibility. Always false in
-   * Wave 23 — convergence semantics replaced the lite-tier short-circuit.
+   * convergence semantics replaced the lite-tier short-circuit.
    */
   liteShortCircuit: boolean;
   /** Whether `--skip-questions` flag downgraded the finding to advisory. */
@@ -157,8 +157,8 @@ function detectStopSignal(rows: string[][]): boolean {
 
 /**
  * Validate the kebab-case ASCII shape of a forcing-question topic ID.
- * Wave 24 enforces that IDs are short, language-neutral identifiers
- * authors can paste into a `[topic:<id>]` tag without typos.
+ * IDs are short, language-neutral identifiers authors can paste into a
+ * `[topic:<id>]` tag without typos.
  */
 const TOPIC_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
 
@@ -170,9 +170,9 @@ function isValidTopicId(id: string): boolean {
  * Parse a single checklist row into the list of forcing-question topic
  * descriptors it declares. Returns `null` when the row is not a
  * forcing-questions header. Throws when the header is found but its
- * body does not match the Wave 24 `id: topic; id: topic; ...` syntax
- * — authors fix the stage definition rather than silently ship
- * un-coverable topics.
+ * body does not match the `id: topic; id: topic; ...` syntax — authors
+ * fix the stage definition rather than silently ship un-coverable
+ * topics.
  *
  * Exposed for unit tests that exercise the parser without depending on
  * the live stage schema.
@@ -201,7 +201,7 @@ export function parseForcingQuestionsRow(
     const match = /^[`*_]?\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*[`*_]?\s*:\s*(.+?)\s*$/u.exec(segment);
     if (!match) {
       throw new Error(
-        `parseForcingQuestionsRow(${context}): segment "${segment}" does not match required \`id: topic\` syntax. Wave 24 (v6.0.0) requires \`id: topic; id: topic; ...\` form.`
+        `parseForcingQuestionsRow(${context}): segment "${segment}" does not match required \`id: topic\` syntax. Use \`id: topic; id: topic; ...\` form.`
       );
     }
     const id = (match[1] ?? "").toLowerCase();
@@ -224,9 +224,9 @@ export function parseForcingQuestionsRow(
 /**
  * Extract forcing-question topics from a stage's checklist.
  *
- * Wave 24 (v6.0.0): only the new `id: topic; id: topic; ...` syntax is
- * accepted. Throws when the syntax is malformed so authors fix the
- * stage definition rather than silently shipping un-coverable topics.
+ * Only the `id: topic; id: topic; ...` syntax is accepted. Throws when
+ * the syntax is malformed so authors fix the stage definition rather
+ * than silently shipping un-coverable topics.
  *
  * Returns empty array when no forcing-questions row is present (caller
  * treats absence as "no forcing requirement" — convergence falls back
@@ -298,10 +298,9 @@ function lastTwoRowsAllNoDecision(substantiveRows: string[][]): boolean {
  *   `skipQuestionsAdvisory` is true (linter treats as non-blocking).
  * - No forcing-questions row in the checklist and ≥1 substantive row.
  *
- * Wave 23 retired the fixed English-only count floor; Wave 24 made
- * `[topic:<id>]` mandatory for topic coverage. The `min` and
- * `liteShortCircuit` fields stay for harness compatibility (min is always 0;
- * liteShortCircuit false).
+ * `[topic:<id>]` is the sole topic-coverage signal. The `min` and
+ * `liteShortCircuit` fields stay for harness compatibility (min is
+ * always 0; liteShortCircuit false).
  */
 export function evaluateQaLogFloor(
   qaLogBody: string | null,
@@ -1057,12 +1056,11 @@ export function extractCanonicalScopeMode(body: string): CanonicalScopeMode | nu
   return null;
 }
 
-// `validatePremiseChallenge` was removed in Wave 23 (v5.0.0). Premise
-// challenge is now owned solely by brainstorm (`## Premise Check`); scope
-// only records `## Premise Drift` when scope-stage Q&A surfaces new
-// evidence that materially changes the brainstorm answer. The drift
-// section is optional and structural-only via the default `validateSectionBody`
-// path (no specialized validator required).
+// Premise challenge is owned solely by brainstorm (`## Premise Check`);
+// scope only records `## Premise Drift` when scope-stage Q&A surfaces
+// new evidence that materially changes the brainstorm answer. The
+// drift section is optional and structural-only via the default
+// `validateSectionBody` path (no specialized validator required).
 
 export function validateScopeSummary(sectionBody: string): { ok: boolean; details: string } {
   const meaningfulLines = sectionBody
@@ -1265,12 +1263,11 @@ export function validateRequirementsTaxonomy(sectionBody: string): { ok: boolean
   };
 }
 
-// `validateLockedDecisionAnchors` and the LD#<sha8> hash contract were
-// removed in Wave 22 (v4.0.0). Decision identity is now anchored only by
-// stable D-XX IDs which the agent can edit safely without recomputing
-// content hashes. The deletion eliminated a class of agent-driven shell
-// hash spam (`shasum`, `sha256sum`, `Get-FileHash`) when rows were
-// reordered or rephrased.
+// Decision identity is anchored only by stable D-XX IDs which the agent
+// can edit safely without recomputing content hashes. This avoids the
+// class of agent-driven shell hash spam (`shasum`, `sha256sum`,
+// `Get-FileHash`) that surfaced when rows were reordered or rephrased
+// under previous content-hash anchors.
 
 export interface InteractionEdgeCaseRequirement {
   label: string;
@@ -1295,13 +1292,13 @@ export const INTERACTION_EDGE_CASE_REQUIREMENTS: readonly InteractionEdgeCaseReq
 ];
 
 /**
- * Wave 25 (v6.1.0) — context for `validateInteractionEdgeCaseMatrix`.
+ * context for `validateInteractionEdgeCaseMatrix`.
  *
- * The user's quick-tier test of a 3-file static landing page hit
- * "Interaction Edge Case row \"nav-away-mid-request\" must mark
- * Handled? as yes/no" because they wrote `N/A` (no network at all).
- * Then `unhandled must reference a deferred item id (for example
- * D-12)`. Wave 25 introduces:
+ * Background: a quick-tier test of a 3-file static landing page used
+ * to trip "Interaction Edge Case row \"nav-away-mid-request\" must mark
+ * Handled? as yes/no" because the author wrote `N/A` (no network at
+ * all), then `unhandled must reference a deferred item id (for example
+ * D-12)`. Two relaxations apply:
  *
  *   1. `N/A — <reason>` (em-dash + free-text reason) is now an
  *      accepted Handled? value. The reason replaces the D-XX
@@ -1392,9 +1389,9 @@ export function validateInteractionEdgeCaseMatrix(
       };
     }
     if (isNA) {
-      // Wave 25: `N/A — <reason>` short-circuits both the "must mark
-      // yes/no" rule and the "must reference a deferred item id"
-      // rule. The reason satisfies justification.
+      // `N/A — <reason>` short-circuits both the "must mark yes/no"
+      // rule and the "must reference a deferred item id" rule. The
+      // reason satisfies justification.
       const hasReason = INTERACTION_EDGE_CASE_NA_WITH_REASON_PATTERN.test(handledRaw) || response.length > 0;
       if (!hasReason) {
         return {
@@ -1477,7 +1474,7 @@ export const DIAGRAM_ARROW_PATTERN = /(?:<--?>|<?==?>|--?>|->>|=>|-\.->|→|⟶|
 export const DIAGRAM_FAILURE_EDGE_PATTERN = /\b(fail(?:ed|ure)?|error|timeout|fallback|degrad(?:e|ed|ation)|retry|backoff|circuit|unavailable|recover(?:y)?|rescue|mitigat(?:e|ion)|rollback|exception|abort|dead[\s-]?letter|dlq)\b/iu;
 export const DIAGRAM_GENERIC_NODE_PATTERN = /\b(service|component|module|system)\s*(?:[A-Z0-9])?\b/iu;
 /**
- * Wave 25 (v6.1.0) — external-dependency keywords that trigger the
+ * external-dependency keywords that trigger the
  * failure-edge requirement. The architecture diagram is allowed to
  * omit failure edges only when ALL of:
  *   - Failure Mode Table has zero rows.
@@ -1519,7 +1516,7 @@ export function hasLabeledDiagramArrow(lines: string[]): boolean {
 }
 
 /**
- * Wave 25 (v6.1.0) — accepted async edge patterns. Returns true when
+ * accepted async edge patterns. Returns true when
  * a line carries any of:
  *
  *   - `-.->`, `-->>`, `~~>` (mermaid dotted/messaging arrows)
@@ -1545,7 +1542,7 @@ export function hasAsyncDiagramEdge(lines: string[]): boolean {
 }
 
 /**
- * Wave 25 (v6.1.0) — accepted sync edge patterns. Returns true when a
+ * accepted sync edge patterns. Returns true when a
  * line carries any of:
  *
  *   - `\bsync\b` text token (label-based)
@@ -1570,7 +1567,7 @@ export function hasSyncDiagramEdge(lines: string[]): boolean {
 }
 
 /**
- * Wave 25 (v6.1.0) — exact accepted-pattern list shown in the error
+ * exact accepted-pattern list shown in the error
  * message when sync/async distinction fails. Keep in sync with
  * `hasAsyncDiagramEdge` / `hasSyncDiagramEdge` above.
  */
@@ -1593,7 +1590,7 @@ export interface ArchitectureDiagramValidationResult {
 }
 
 /**
- * Wave 25 (v6.1.0) — Architecture Diagram structural check.
+ * Architecture Diagram structural check.
  *
  * Promoted out of `validateSectionBody` so it can take a `sections`
  * map and conditionally enforce the failure-edge rule based on
@@ -1650,7 +1647,7 @@ export function validateArchitectureDiagram(
 }
 
 /**
- * Wave 25 (v6.1.0) — decide whether the failure-edge enforcement
+ * decide whether the failure-edge enforcement
  * should fire for the given Architecture Diagram body. Returns
  * `false` (skip the rule) when BOTH:
  *   - The artifact's `## Failure Mode Table` (if present) has zero
@@ -1676,7 +1673,7 @@ function shouldEnforceFailureEdge(
 }
 
 /**
- * v6.10.0 (T3) — pointer-mode evidence acceptance. RED/GREEN sections may
+ * pointer-mode evidence acceptance. RED/GREEN sections may
  * substitute pasted stdout with a single line of the form
  * `Evidence: <relative-or-abs-path>` or `Evidence: spanId:<id>`. The
  * validator alone cannot reach the filesystem or delegation ledger
@@ -1692,11 +1689,11 @@ export interface TddEvidencePointerOptions {
    */
   pointerSatisfied?: boolean;
   /**
-   * v6.11.0 (D5) — true when `delegation-events.jsonl` carries at least
+   * true when `delegation-events.jsonl` carries at least
    * one slice-tagged event for the current run with the matching phase
    * (`phase=red` for RED, `phase=green` for GREEN) and a non-empty
    * `evidenceRefs` array. Phase events are the new source of truth in
-   * v6.11.0, so the markdown evidence block is auto-satisfied without
+   * the markdown evidence block is auto-satisfied without
    * requiring hand-pasted stdout content.
    */
   phaseEventsSatisfied?: boolean;
@@ -2150,7 +2147,7 @@ export function parseLearningsSection(sectionBody: string): LearningsParseResult
 }
 
 /**
- * Round 5 (v6.6.0) — file-path / reference detector for the
+ * file-path / reference detector for the
  * `investigation_path_first_missing` advisory rule.
  *
  * The detector is intentionally permissive: it only needs to recognize
@@ -2274,7 +2271,7 @@ export function checkInvestigationTrace(
 }
 
 /**
- * Round 5 (v6.6.0) — advisory rule wired into the brainstorm / scope /
+ * advisory rule wired into the brainstorm / scope /
  * design / tdd / plan / review linters.
  *
  * Behavior contract:
@@ -2377,14 +2374,8 @@ export function extractRequirementIdsFromMarkdown(text: string): string[] {
   return [...new Set(ids)];
 }
 
-// `extractLockedDecisionAnchors` was removed in Wave 22 (v4.0.0) along
-// with the LD#<sha8> contract. Cross-stage decision traceability now uses
-// stable D-XX IDs.
-
-// `lockedDecisionHash` was removed in Wave 22 (v4.0.0) along with the
-// `Locked Decisions Hash Integrity` linter rule. Decision identity now
-// relies on stable D-XX IDs which the agent can edit safely without
-// recomputing content hashes.
+// Cross-stage decision traceability uses stable D-XX IDs which the
+// agent can edit safely without recomputing content hashes.
 
 export function collectPatternHits(
   text: string,
@@ -2401,14 +2392,14 @@ export function collectPatternHits(
 
 export interface ValidateSectionBodyContext {
   /**
-   * Wave 25 (v6.1.0) — optional H2 sections map for cross-section
+   * optional H2 sections map for cross-section
    * checks (e.g. Architecture Diagram failure-edge enforcement gates
    * on Failure Mode Table presence). When omitted, cross-section
    * checks fall back to legacy blanket enforcement.
    */
   sections?: H2SectionMap | null;
   /**
-   * Wave 25 (v6.1.0) — when true, lite-tier-only relaxations apply.
+   * when true, lite-tier-only relaxations apply.
    * Currently used by the Interaction Edge Case matrix to demote
    * network-dependent mandatory rows to advisory when the design has
    * no Failure Mode Table rows and no external-dependency keywords
@@ -2416,7 +2407,7 @@ export interface ValidateSectionBodyContext {
    */
   liteTier?: boolean;
   /**
-   * v6.10.0 (T3) — pre-resolved RED/GREEN Evidence pointer state. The
+   * pre-resolved RED/GREEN Evidence pointer state. The
    * artifact linter resolves `Evidence: <path|spanId:...>` lines and
    * inspects the TDD slice sidecar before invoking
    * `validateSectionBody`; the resulting booleans here let the
@@ -2612,7 +2603,7 @@ export interface StageLintContext {
    */
   activeStageFlags: string[];
   /**
-   * Wave 25 (v6.1.0) — task class for the active run, mirrored from
+   * task class for the active run, mirrored from
    * `flow-state.json::taskClass`. `null` when not classified. Stage
    * linters read this together with `track` via
    * `shouldDemoteArtifactValidationByTrack` to demote advanced
@@ -2622,42 +2613,7 @@ export interface StageLintContext {
    */
   taskClass: "software-standard" | "software-trivial" | "software-bugfix" | null;
   /**
-   * v6.13.0 — when true, plan parallel-metadata rules downgrade to advisory
-   * for legacy continuation projects (hox-style).
+   * `flow-state.json::packageVersion` when present.
    */
-  legacyContinuation: boolean;
-  /**
-   * v6.13.0 — effective worktree execution mode for TDD linters.
-   */
-  worktreeExecutionMode: "single-tree" | "worktree-first";
-  /**
-   * v6.14.0 — effective TDD checkpoint mode. `per-slice` enforces
-   * RED-before-GREEN per slice (the default for new projects);
-   * `global-red` keeps the v6.12/v6.13 wave-batch barrier (auto-applied
-   * for `legacyContinuation: true` projects on `cclaw-cli sync`).
-   */
-  tddCheckpointMode: "per-slice" | "global-red";
-  /**
-   * v6.14.0 — effective integration-overseer dispatch mode.
-   * `conditional` runs the overseer only when
-   * `integrationCheckRequired()` returns `required: true`; `always`
-   * preserves the v6.13 behavior of running it on every multi-slice
-   * wave.
-   */
-  integrationOverseerMode: "conditional" | "always";
-  /**
-   * v6.14.2 — historical cutover marker (`flow-state.json::tddCutoverSliceId`).
-   * Empty string when not set. Used by the `tdd_cutover_misread_warning`
-   * advisory rule to detect controllers that mistake the historical
-   * marker for an active-slice pointer.
-   */
-  tddCutoverSliceId: string;
-  /**
-   * v6.14.2 — worktree-first boundary
-   * (`flow-state.json::tddWorktreeCutoverSliceId`). Empty string when
-   * not set. Linters that fire on closed worktree slices use this
-   * boundary (with a fallback to `tddCutoverSliceId`) to exempt
-   * pre-flip closed slices on `legacyContinuation: true` projects.
-   */
-  tddWorktreeCutoverSliceId: string;
+  packageVersion?: string | null;
 }

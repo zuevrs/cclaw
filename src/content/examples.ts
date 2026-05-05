@@ -1,7 +1,7 @@
 import type { FlowStage } from "../types.js";
 
 /**
- * Round 5 (v6.6.0) — short bad → good behavior anchor per stage.
+ * short bad → good behavior anchor per stage.
  *
  * Each entry is rendered exactly once in the corresponding stage skill md
  * (via `behaviorAnchorBlock` in `skills.ts`) and exactly once in the stage's
@@ -62,10 +62,10 @@ export const BEHAVIOR_ANCHORS: ReadonlyArray<BehaviorAnchor> = [
   },
   {
     stage: "tdd",
-    section: "Vertical Slice Cycle",
-    bad: "Controller writes the failing test, the GREEN fix, AND per-slice prose into `06-tdd.md` itself, then hand-edits Watched-RED / Vertical Slice Cycle tables. `phase=red`/`green`/`doc` events missing; `tdd_slice_implementer_missing` and `tdd_slice_documenter_missing` block the gate.",
-    good: "Per slice: (1) `Task(\"test-author --slice S-1 --phase red\")`. Verify the event. (2) ONE message, TWO Tasks — `slice-implementer --phase green` AND `slice-documenter --phase doc`. (3) `slice-implementer --phase refactor` (or `refactor-deferred`). Linter auto-renders Vertical Slice Cycle from events.",
-    ruleHint: "Per-Slice Ritual (v6.12.0+): RED → verify → GREEN+DOC fan-out (one message, two Tasks) → REFACTOR. Controller never writes GREEN code or per-slice prose. Mandatory regardless of `discoveryMode`."
+    section: "RED Evidence",
+    bad: "Controller edits production code or per-slice prose directly, skips ledger rows, then hand-edits auto-render tables. Slice workers never ran; lint blocks on missing span history.",
+    good: "`Task(\"slice-builder --slice S-1 --paths …\")` when major ≥7; otherwise the historical trio must still log `phase=red|green|doc` rows. Controller records before dispatch; linter mirrors history into auto-render blocks.",
+    ruleHint: "Wave-status first, record-before-dispatch, one delegated worker owns RED→GREEN→REFACTOR→slice doc; controller stays out of production edits."
   },
   {
     stage: "review",

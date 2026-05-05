@@ -13,8 +13,8 @@ import { verifyCurrentStageGateEvidence } from "../../src/gate-evidence.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * Wave 24 (v6.0.0) unit fixtures for `evaluateQaLogFloor`. These pin the
- * mandatory `[topic:<id>]` tag contract that replaces Wave 23's English
+ * unit fixtures for `evaluateQaLogFloor`. These pin the
+ * mandatory `[topic:<id>]` tag contract that replaces English
  * keyword fallback. The user explicitly REJECTED a backward-compat
  * fallback because keyword matching gave false-pass results on RU/UA
  * Q&A logs.
@@ -31,7 +31,7 @@ import { createTempProject } from "../helpers/index.js";
  *   - Stage exposes no forcing-questions row (e.g. spec/plan/tdd/review/
  *     ship) AND artifact has at least one substantive row.
  *
- * Wave 24 removed:
+ * removed:
  *   - The English keyword fallback (`topicKeywords` + `STOP_WORDS`).
  *   - Multi-token substring scoring.
  */
@@ -99,7 +99,7 @@ const ALL_SKIPPED_QA_LOG = `## Q&A Log
 | 2 | Q2 | A2 | waived |
 `;
 
-describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)", () => {
+describe("evaluateQaLogFloor (/ release mandatory [topic:<id>] contract)", () => {
   it("fails standard/brainstorm with empty Q&A Log (no convergence sources)", () => {
     const result = evaluateQaLogFloor(null, "standard", "brainstorm");
     expect(result.ok).toBe(false);
@@ -130,7 +130,7 @@ describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)"
   });
 
   it("fails when forcing topics are answered in prose but NOT tagged (no keyword fallback)", () => {
-    // Wave 23 would have substring-matched these English answers. Wave 24
+    // would have substring-matched these English answers. 
     // requires the explicit [topic:<id>] tag — no fallback, no rescue.
     const result = evaluateQaLogFloor(UNTAGGED_FULL_PROSE_QA_LOG, "standard", "brainstorm");
     expect(result.ok).toBe(false);
@@ -240,7 +240,7 @@ describe("evaluateQaLogFloor (Wave 24 / v6.0.0 mandatory [topic:<id>] contract)"
   });
 });
 
-describe("extractForcingQuestions (Wave 24 / v6.0.0 mandatory id: topic syntax)", () => {
+describe("extractForcingQuestions (/ release mandatory id: topic syntax)", () => {
   it("brainstorm returns the canonical forcing-question topic descriptors", () => {
     const topics = extractForcingQuestions("brainstorm");
     expect(topics.length).toBeGreaterThanOrEqual(4);
@@ -295,7 +295,7 @@ describe("extractForcingQuestions (Wave 24 / v6.0.0 mandatory id: topic syntax)"
   });
 
   it("convergence helper accepts string ids supplied as forcingQuestions option", () => {
-    // Wave 24 contract: callers must pass ForcingQuestionTopic descriptors
+    // contract: callers must pass ForcingQuestionTopic descriptors
     // (or string ids). Old keyword arrays produce predictable failures.
     const result = evaluateQaLogFloor(
       `## Q&A Log
@@ -312,7 +312,7 @@ describe("extractForcingQuestions (Wave 24 / v6.0.0 mandatory id: topic syntax)"
   });
 });
 
-describe("qa log floor blocking surfaces in gate evidence (v6.9.0)", () => {
+describe("qa log floor blocking surfaces in gate evidence ", () => {
   it("pushes a structured qa_log_unconverged issue into gates.issues when blocking", async () => {
     const root = await createTempProject("qa-log-blocking-issue");
     await fs.mkdir(path.join(root, ".cclaw/state"), { recursive: true });

@@ -23,7 +23,7 @@ export interface FlowStateRepairArgs {
   json: boolean;
   quiet: boolean;
   /**
-   * v6.9.0 — when true, normalize `state/early-loop.json` to the canonical
+   * when true, normalize `state/early-loop.json` to the canonical
    * shape derived from `early-loop-log.jsonl`. Lets operators recover from
    * legacy hand-written `early-loop.json` files that drifted from the
    * source-of-truth log.

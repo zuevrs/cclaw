@@ -33,8 +33,7 @@ export type StageSubagentName =
   | "coherence-reviewer"
   | "scope-guardian-reviewer"
   | "feasibility-reviewer"
-  | "slice-implementer"
-  | "slice-documenter"
+  | "slice-builder"
   | "release-reviewer"
   | "planner"
   | "product-discovery"
@@ -43,7 +42,6 @@ export type StageSubagentName =
   | "reviewer"
   | "security-reviewer"
   | "integration-overseer"
-  | "test-author"
   | "doc-updater"
   | "fixer";
 

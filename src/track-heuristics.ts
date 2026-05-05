@@ -68,7 +68,7 @@ const DEFAULT_RULES: Record<FlowTrack, TrackHeuristicRule> = {
 } satisfies Record<FlowTrack, TrackHeuristicRule>;
 
 // Fixed evaluation order: narrow-to-broad. Overriding this was never wired
-// into runtime, so cclaw stopped offering the knob in v0.38.0.
+// into runtime, so cclaw no longer offers that knob.
 const EVALUATION_ORDER: readonly FlowTrack[] = ["standard", "medium", "quick"];
 const DEFAULT_FALLBACK: FlowTrack = "standard";
 const ADAPTIVE_ELICITATION_STAGES = new Set<FlowStage>(["brainstorm", "scope", "design"]);

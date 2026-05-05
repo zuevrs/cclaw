@@ -1,12 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveArtifactPath as resolveStageArtifactPath } from "./artifact-paths.js";
-import {
-  effectiveIntegrationOverseerMode,
-  effectiveTddCheckpointMode,
-  effectiveWorktreeExecutionMode,
-  type FlowState
-} from "./flow-state.js";
+import type { FlowState } from "./flow-state.js";
 import { exists } from "./fs-utils.js";
 import { stageSchema } from "./content/stage-schema.js";
 import { readFlowState } from "./run-persistence.js";
@@ -194,7 +189,7 @@ export async function lintArtifact(
     ? new Set(schema.trivialOverrideSections!.map((s) => normalizeHeadingTitle(s).toLowerCase()))
     : null;
 
-  // Wave 25: precompute the lite-tier signal so the per-section
+  // Precompute the lite-tier signal so the per-section
   // validators (Interaction Edge Case matrix today, others tomorrow)
   // can relax network-dependent mandatory rows for lite/quick/bugfix
   // runs without each validator having to re-derive the predicate.
@@ -203,43 +198,28 @@ export async function lintArtifact(
   let activeStageFlags: string[] = [];
   let discoveryMode: StageLintContext["discoveryMode"] = "guided";
   let taskClass: StageLintContext["taskClass"] = null;
+  let packageVersion: string | null | undefined;
   let activeRunId: string | null = null;
   let completedStagesForAudit: FlowStage[] = [];
   let completedStageMetaForAudit: FlowState["completedStageMeta"];
-  let legacyContinuation = false;
-  let worktreeExecutionMode: "single-tree" | "worktree-first" = "single-tree";
-  let tddCheckpointMode: "per-slice" | "global-red" = "per-slice";
-  let integrationOverseerMode: "conditional" | "always" = "always";
-  let tddCutoverSliceId = "";
-  let tddWorktreeCutoverSliceId = "";
   try {
     const flowState = await readFlowState(projectRoot);
     const hint = flowState.interactionHints?.[stage];
     if (hint?.skipQuestions === true) activeStageFlags.push("--skip-questions");
     discoveryMode = flowState.discoveryMode ?? "guided";
     taskClass = flowState.taskClass ?? null;
+    packageVersion = flowState.packageVersion;
     activeRunId = flowState.activeRunId ?? null;
     completedStagesForAudit = flowState.completedStages;
     completedStageMetaForAudit = flowState.completedStageMeta;
-    legacyContinuation = flowState.legacyContinuation === true;
-    worktreeExecutionMode = effectiveWorktreeExecutionMode(flowState);
-    tddCheckpointMode = effectiveTddCheckpointMode(flowState);
-    integrationOverseerMode = effectiveIntegrationOverseerMode(flowState);
-    tddCutoverSliceId = flowState.tddCutoverSliceId ?? "";
-    tddWorktreeCutoverSliceId = flowState.tddWorktreeCutoverSliceId ?? "";
   } catch {
     activeStageFlags = [];
     discoveryMode = "guided";
     taskClass = null;
+    packageVersion = undefined;
     activeRunId = null;
     completedStagesForAudit = [];
     completedStageMetaForAudit = undefined;
-    legacyContinuation = false;
-    worktreeExecutionMode = "single-tree";
-    tddCheckpointMode = "per-slice";
-    integrationOverseerMode = "always";
-    tddCutoverSliceId = "";
-    tddWorktreeCutoverSliceId = "";
   }
   for (const extra of options.extraStageFlags ?? []) {
     if (typeof extra === "string" && extra.length > 0 && !activeStageFlags.includes(extra)) {
@@ -248,9 +228,9 @@ export async function lintArtifact(
   }
   const liteTierForValidators = shouldDemoteArtifactValidationByTrack(track, taskClass);
 
-  // v6.11.0 (D5) — pre-resolve RED/GREEN Evidence pointers AND
+  // pre-resolve RED/GREEN Evidence pointers AND
   // delegation phase events so `validateSectionBody` (sync) can
-  // short-circuit. The Evidence: pointer mode (v6.10.0 T3) stays as a
+  // short-circuit. The Evidence: pointer mode (T3) stays as a
   // fallback alongside legacy markdown content; phase events with a
   // `phase=red`/`phase=green` row plus non-empty evidenceRefs auto-pass
   // the corresponding markdown validator.
@@ -380,12 +360,7 @@ export async function lintArtifact(
     overrideSet,
     activeStageFlags,
     taskClass,
-    legacyContinuation,
-    worktreeExecutionMode,
-    tddCheckpointMode,
-    integrationOverseerMode,
-    tddCutoverSliceId,
-    tddWorktreeCutoverSliceId
+    packageVersion
   };
 
   switch (stage) {
@@ -503,7 +478,7 @@ export async function lintArtifact(
       if (!finding.required) continue;
       finding.required = false;
       finding.details =
-        `${finding.details} (Wave 25: demoted to advisory by track="${track}"` +
+        `${finding.details} (demoted to advisory by track="${track}"` +
         (taskClass ? `, taskClass="${taskClass}"` : "") +
         ").";
       demotedSections.push(finding.section);
@@ -548,7 +523,7 @@ export async function lintArtifact(
 }
 
 /**
- * Wave 25 (v6.1.0) — section names whose required-finding outcome is
+ * section names whose required-finding outcome is
  * demoted from blocking → advisory when
  * `shouldDemoteArtifactValidationByTrack(track, taskClass)` returns
  * `true`. Mirrors the user-reported quick-tier failure modes:
@@ -569,7 +544,7 @@ const ARTIFACT_VALIDATION_LITE_DEMOTE_SECTIONS = new Set<string>([
 ]);
 
 /**
- * v6.11.0 (D5) — pre-resolve `Evidence:` pointers and delegation
+ * pre-resolve `Evidence:` pointers and delegation
  * phase-event auto-satisfy state for the TDD stage's RED/GREEN
  * Evidence rows so `validateSectionBody` (sync) can short-circuit.
  *
@@ -580,7 +555,7 @@ const ARTIFACT_VALIDATION_LITE_DEMOTE_SECTIONS = new Set<string>([
  * - Phase-event auto-satisfy fires when `delegation-events.jsonl`
  *   carries at least one slice-tagged event for the active run with
  *   `phase=red`/`phase=green` and non-empty `evidenceRefs`. This is the
- *   v6.11.0 replacement for the v6.10.0 sidecar auto-satisfy hook —
+replacement for the sidecar auto-satisfy hook —
  *   slice events are now the source of truth, the RED/GREEN markdown
  *   tables are auto-rendered from them, and the validators MUST NOT
  *   demand pasted stdout when the events already prove RED/GREEN.

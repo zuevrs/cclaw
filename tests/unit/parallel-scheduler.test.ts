@@ -5,7 +5,7 @@ import {
   appendDelegation,
   DispatchCapError,
   DispatchOverlapError,
-  MAX_PARALLEL_SLICE_IMPLEMENTERS,
+  MAX_PARALLEL_SLICE_BUILDERS,
   readDelegationLedger,
   validateFanOutCap,
   validateFileOverlap
@@ -24,12 +24,12 @@ async function seedFlowState(root: string, runId: string): Promise<void> {
   );
 }
 
-describe("validateFileOverlap (P1)", () => {
-  it("returns autoParallel:false for non-slice-implementer agents", () => {
+describe("validateFileOverlap", () => {
+  it("returns autoParallel:false for non-slice-builder agents", () => {
     const result = validateFileOverlap(
       {
         stage: "tdd",
-        agent: "test-author",
+        agent: "doc-updater",
         mode: "mandatory",
         status: "scheduled",
         ts: "2026-04-15T10:00:00Z",
@@ -42,11 +42,11 @@ describe("validateFileOverlap (P1)", () => {
     expect(result.autoParallel).toBe(false);
   });
 
-  it("returns autoParallel:true when no other slice-implementer is active", () => {
+  it("returns autoParallel:true when no other slice-builder is active", () => {
     const result = validateFileOverlap(
       {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "scheduled",
         ts: "2026-04-15T10:00:00Z",
@@ -59,10 +59,10 @@ describe("validateFileOverlap (P1)", () => {
     expect(result.autoParallel).toBe(true);
   });
 
-  it("returns autoParallel:true when active slice-implementer claims disjoint paths", () => {
+  it("returns autoParallel:true when active slice-builder claims disjoint paths", () => {
     const active = {
       stage: "tdd" as const,
-      agent: "slice-implementer" as const,
+      agent: "slice-builder" as const,
       mode: "proactive" as const,
       status: "scheduled" as const,
       ts: "2026-04-15T09:00:00Z",
@@ -73,7 +73,7 @@ describe("validateFileOverlap (P1)", () => {
     const result = validateFileOverlap(
       {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "scheduled",
         ts: "2026-04-15T10:00:00Z",
@@ -89,7 +89,7 @@ describe("validateFileOverlap (P1)", () => {
   it("throws DispatchOverlapError when claimed paths overlap an active span", () => {
     const active = {
       stage: "tdd" as const,
-      agent: "slice-implementer" as const,
+      agent: "slice-builder" as const,
       mode: "proactive" as const,
       status: "scheduled" as const,
       ts: "2026-04-15T09:00:00Z",
@@ -101,7 +101,7 @@ describe("validateFileOverlap (P1)", () => {
       validateFileOverlap(
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "proactive",
           status: "scheduled",
           ts: "2026-04-15T10:00:00Z",
@@ -115,11 +115,11 @@ describe("validateFileOverlap (P1)", () => {
   });
 });
 
-describe("validateFanOutCap (P2)", () => {
+describe("validateFanOutCap", () => {
   it("does nothing when below the cap", () => {
     const active = Array.from({ length: 4 }, (_, i) => ({
       stage: "tdd" as const,
-      agent: "slice-implementer" as const,
+      agent: "slice-builder" as const,
       mode: "proactive" as const,
       status: "scheduled" as const,
       ts: `2026-04-15T09:0${i}:00Z`,
@@ -131,7 +131,7 @@ describe("validateFanOutCap (P2)", () => {
       validateFanOutCap(
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "proactive",
           status: "scheduled",
           ts: "2026-04-15T10:00:00Z",
@@ -143,10 +143,10 @@ describe("validateFanOutCap (P2)", () => {
     ).not.toThrow();
   });
 
-  it("throws DispatchCapError at the 6th active slice-implementer", () => {
-    const active = Array.from({ length: MAX_PARALLEL_SLICE_IMPLEMENTERS }, (_, i) => ({
+  it("throws DispatchCapError at the 6th active slice-builder", () => {
+    const active = Array.from({ length: MAX_PARALLEL_SLICE_BUILDERS }, (_, i) => ({
       stage: "tdd" as const,
-      agent: "slice-implementer" as const,
+      agent: "slice-builder" as const,
       mode: "proactive" as const,
       status: "scheduled" as const,
       ts: `2026-04-15T09:0${i}:00Z`,
@@ -158,7 +158,7 @@ describe("validateFanOutCap (P2)", () => {
       validateFanOutCap(
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "proactive",
           status: "scheduled",
           ts: "2026-04-15T10:00:00Z",
@@ -171,9 +171,9 @@ describe("validateFanOutCap (P2)", () => {
   });
 
   it("respects the explicit override argument", () => {
-    const active = Array.from({ length: MAX_PARALLEL_SLICE_IMPLEMENTERS }, (_, i) => ({
+    const active = Array.from({ length: MAX_PARALLEL_SLICE_BUILDERS }, (_, i) => ({
       stage: "tdd" as const,
-      agent: "slice-implementer" as const,
+      agent: "slice-builder" as const,
       mode: "proactive" as const,
       status: "scheduled" as const,
       ts: `2026-04-15T09:0${i}:00Z`,
@@ -185,7 +185,7 @@ describe("validateFanOutCap (P2)", () => {
       validateFanOutCap(
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "proactive",
           status: "scheduled",
           ts: "2026-04-15T10:00:00Z",
@@ -199,26 +199,26 @@ describe("validateFanOutCap (P2)", () => {
   });
 });
 
-describe("appendDelegation (P1+P2 integration)", () => {
+describe("appendDelegation (overlap + cap integration)", () => {
   let savedEnv: string | undefined;
   beforeEach(() => {
-    savedEnv = process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS;
+    savedEnv = process.env.CCLAW_MAX_PARALLEL_SLICE_BUILDERS;
   });
   afterEach(() => {
     if (savedEnv === undefined) {
-      delete process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS;
+      delete process.env.CCLAW_MAX_PARALLEL_SLICE_BUILDERS;
     } else {
-      process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS = savedEnv;
+      process.env.CCLAW_MAX_PARALLEL_SLICE_BUILDERS = savedEnv;
     }
   });
 
-  it("schedules two slice-implementers with disjoint paths in the same run", async () => {
+  it("schedules two slice-builders with disjoint paths in the same run", async () => {
     const root = await createTempProject("parallel-disjoint");
     await seedFlowState(root, "run-a");
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "scheduled",
       ts: "2026-04-15T09:00:00Z",
@@ -227,7 +227,7 @@ describe("appendDelegation (P1+P2 integration)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "scheduled",
       ts: "2026-04-15T09:01:00Z",
@@ -240,13 +240,13 @@ describe("appendDelegation (P1+P2 integration)", () => {
     expect(ledger.entries.find((e) => e.spanId === "span-2")?.allowParallel).toBe(true);
   });
 
-  it("blocks a third slice-implementer with overlapping paths", async () => {
+  it("blocks a third slice-builder with overlapping paths", async () => {
     const root = await createTempProject("parallel-overlap");
     await seedFlowState(root, "run-a");
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "scheduled",
       ts: "2026-04-15T09:00:00Z",
@@ -256,7 +256,7 @@ describe("appendDelegation (P1+P2 integration)", () => {
     await expect(
       appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "scheduled",
         ts: "2026-04-15T09:01:00Z",
@@ -266,15 +266,15 @@ describe("appendDelegation (P1+P2 integration)", () => {
     ).rejects.toThrow(DispatchOverlapError);
   });
 
-  it("blocks the 6th disjoint slice-implementer when the cap is the default", async () => {
-    delete process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS;
+  it("blocks the 6th disjoint slice-builder when the cap is the default", async () => {
+    delete process.env.CCLAW_MAX_PARALLEL_SLICE_BUILDERS;
     const root = await createTempProject("parallel-cap");
     await seedFlowState(root, "run-cap");
 
-    for (let i = 0; i < MAX_PARALLEL_SLICE_IMPLEMENTERS; i += 1) {
+    for (let i = 0; i < MAX_PARALLEL_SLICE_BUILDERS; i += 1) {
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "scheduled",
         ts: `2026-04-15T09:0${i}:00Z`,
@@ -285,7 +285,7 @@ describe("appendDelegation (P1+P2 integration)", () => {
     await expect(
       appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "scheduled",
         ts: "2026-04-15T09:10:00Z",
@@ -296,14 +296,14 @@ describe("appendDelegation (P1+P2 integration)", () => {
   });
 
   it("env override raises the cap", async () => {
-    process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS = "10";
+    process.env.CCLAW_MAX_PARALLEL_SLICE_BUILDERS = "10";
     const root = await createTempProject("parallel-cap-env");
     await seedFlowState(root, "run-env");
 
     for (let i = 0; i < 6; i += 1) {
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "scheduled",
         ts: `2026-04-15T09:0${i}:00Z`,

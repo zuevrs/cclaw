@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// Regression guard for v0.39.0: tsc emits `dist/cli.js` with mode 0644
+// Regression guard for release: tsc emits `dist/cli.js` with mode 0644
 // which produced `Permission denied` under npx. The build step now runs
 // `scripts/chmod-bin.mjs` to stamp 0755 on every `bin` target, and this
 // test verifies the post-build state before the tarball is ever packed.

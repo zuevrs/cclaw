@@ -54,7 +54,7 @@ export type LanguageRulePack = (typeof LANGUAGE_RULE_PACKS)[number];
  * - `triggers`: additional substrings that push a prompt toward this track.
  * - `veto`:     substrings that forbid this track even if a trigger matches.
  *
- * Removed in v0.38.0:
+ * Removed:
  * - `patterns` (regex): no runtime ever consumed them; kept authors honest
  *   about what cclaw actually enforces.
  */
@@ -72,7 +72,7 @@ export interface TrackHeuristicRule {
  * result — which is why we only ship `triggers`, `veto`, and `fallback`, not
  * regex patterns or priority overrides.
  *
- * Removed in v0.38.0:
+ * Removed:
  * - `priority`: track evaluation order is always `standard -> medium -> quick`
  *   (narrow-to-broad matching). Overriding it was never wired.
  */

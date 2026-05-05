@@ -13,7 +13,7 @@ import {
   type MandatoryDelegationTaskClass
 } from "./content/stage-schema.js";
 import type { FlowStage } from "./types.js";
-import { effectiveWorktreeExecutionMode, type FlowState } from "./flow-state.js";
+import { type FlowState } from "./flow-state.js";
 import {
   compareCanonicalUnitIds,
   mergeParallelWaveDefinitions,
@@ -47,6 +47,11 @@ export const DELEGATION_DISPATCH_SURFACES = [
   "manual"
 ] as const;
 export type DelegationDispatchSurface = typeof DELEGATION_DISPATCH_SURFACES[number];
+
+/** Agents that declare `claimedPaths` for parallel/disjoint scheduling and fan-out caps. */
+export function isParallelTddSliceWorker(agent: string | undefined): boolean {
+  return agent === "slice-builder";
+}
 
 /**
  * Per-surface allowed agent-definition path prefixes. Used by the generated
@@ -125,9 +130,9 @@ export type DelegationEntry = {
   acceptedBy?: DelegationWaiverAcceptedBy;
   /**
    * Waiver approval token captured from `cclaw-cli internal waiver-grant`.
-   * Present on waiver rows written after v6.7.0. Legacy waiver rows omit
-   * these fields and are surfaced as the advisory linter finding
-   * `waiver_legacy_provenance`.
+   * Present on waiver rows that went through `cclaw-cli internal
+   * waiver-grant`. Legacy rows that lack provenance are surfaced as the
+   * advisory linter finding `waiver_legacy_provenance`.
    */
   approvalToken?: string;
   approvalReason?: string;
@@ -180,49 +185,45 @@ export type DelegationEntry = {
    */
   schemaVersion?: 1 | 2 | 3;
   /**
-   * v6.8.0 — when set, the operator explicitly opted into running this
+   * When set, the operator explicitly opted into running this
    * scheduled span concurrently with another active span on the same
    * `(stage, agent)` pair. Bypasses the dispatch-dedup check.
    */
   allowParallel?: boolean;
   /**
-   * v6.8.0 — set on synthetic terminal `stale` rows written via
+   * Set on synthetic terminal `stale` rows written via
    * `--supersede=<prevSpanId>`. References the new spanId that
    * superseded this span. Helps `/cc tree` and the linter report a
    * coherent successor chain.
    */
   supersededBy?: string;
   /**
-   * v6.10.0 (P1) — repo-relative paths the delegated unit will edit.
-   * Used by the slice-implementer file-overlap scheduler to either
-   * auto-allow parallel dispatch (disjoint paths) or block the row
-   * with `DispatchOverlapError` (overlapping paths). For agents
-   * other than slice-implementer the field is advisory.
+   * Repo-relative paths the delegated slice-builder will edit. Used by the
+   * file-overlap scheduler to either auto-allow parallel dispatch (disjoint
+   * paths) or block the row with `DispatchOverlapError` (overlapping paths).
+   * For agents other than `slice-builder` the field is advisory.
    *
    * keep in sync with the inline copy in
    * `src/content/hooks.ts::delegationRecordScript`.
    */
   claimedPaths?: string[];
   /**
-   * v6.11.0 (D1) — TDD slice identifier, e.g. `"S-1"`. Recorded by the
-   * controller when dispatching `test-author` / `slice-implementer` /
-   * `slice-documenter` so the artifact linter can auto-derive the
+   * TDD slice identifier, e.g. `"S-1"`. Recorded by the controller when
+   * dispatching `slice-builder` so the artifact linter can auto-derive the
    * Watched-RED Proof + Vertical Slice Cycle tables from
-   * `delegation-events.jsonl` instead of requiring agents to maintain
-   * the markdown by hand. Optional: legacy and non-TDD rows omit it.
+   * `delegation-events.jsonl` instead of requiring agents to maintain the
+   * markdown by hand. Optional on non-TDD rows.
    *
    * keep in sync with the inline copy in
    * `src/content/hooks.ts::delegationRecordScript`.
    */
   sliceId?: string;
   /**
-   * v6.11.0 (D1) — explicit phase tag for TDD slice events. Combined
-   * with `sliceId`, the linter validates RED -> GREEN -> REFACTOR
-   * monotonicity per slice. `refactor-deferred` requires a rationale
-   * either via `--refactor-rationale` (recorded into evidenceRefs[0])
-   * or an `evidenceRefs` entry that contains the rationale text.
-   * `doc` is reserved for the parallel `slice-documenter` subagent
-   * (Phase C). Optional: legacy and non-TDD rows omit it.
+   * Explicit phase tag for TDD slice events. Combined with `sliceId`, the
+   * linter validates RED → GREEN → REFACTOR → DOC monotonicity per slice.
+   * `refactor-deferred` requires a rationale either via
+   * `--refactor-rationale` (recorded into `evidenceRefs[0]`) or an
+   * `evidenceRefs` entry that contains the rationale text.
    *
    * keep in sync with the inline copy in
    * `src/content/hooks.ts::delegationRecordScript`.
@@ -235,36 +236,18 @@ export type DelegationEntry = {
     | "doc"
     | "resolve-conflict";
   /**
-   * v6.13.0 — opaque token tying scheduled work to terminal lifecycle rows
-   * under worktree-first execution (mandatory on new schedules).
-   */
-  claimToken?: string;
-  /** v6.13.0 — lane / worktree id owning the slice checkout. */
-  ownerLaneId?: string;
-  /** v6.13.0 — ISO lease expiry for reclaim sweeps. */
-  leasedUntil?: string;
-  /** v6.13.0 — lease bookkeeping for audit + reclaim tooling. */
-  leaseState?: "claimed" | "expired" | "released" | "reclaimed";
-  /** v6.13.0 — plan unit dependency ids echoed for scheduler diagnostics. */
-  dependsOn?: string[];
-  /**
-   * v6.13.0 — integration branch merge status after deterministic fan-in.
-   */
-  integrationState?: "pending" | "applied" | "conflict" | "resolved" | "abandoned";
-  /**
-   * v6.14.0 — refactor outcome folded into `phase=green` events so a single
-   * row can close RED→GREEN→REFACTOR for the slice without a separate
+   * Refactor outcome folded into `phase=green` events so a single row can
+   * close RED → GREEN → REFACTOR for the slice without a separate
    * `phase=refactor` / `phase=refactor-deferred` lifecycle pass.
    *
    * - `mode: "inline"` — refactor pass ran inline as part of the GREEN
    *   delegation (rationale optional but recommended for traceability).
    * - `mode: "deferred"` — refactor was intentionally deferred; rationale
    *   is required (carried in `rationale` and mirrored into
-   *   `evidenceRefs[0]` so legacy linters that read evidence still work).
+   *   `evidenceRefs[0]` so evidence-pointer linters keep matching).
    *
-   * `phase=refactor` and `phase=refactor-deferred` events remain valid
-   * for backward compatibility; the linter accepts either form for
-   * REFACTOR coverage.
+   * `phase=refactor` and `phase=refactor-deferred` events remain valid;
+   * the linter accepts either form for REFACTOR coverage.
    *
    * keep in sync with the inline copy in
    * `src/content/hooks.ts::delegationRecordScript`.
@@ -274,10 +257,10 @@ export type DelegationEntry = {
     rationale?: string;
   };
   /**
-   * v6.14.0 — risk tier hint copied from the plan slice. Used by
-   * `integrationCheckRequired()` to decide whether the
-   * integration-overseer must run. `low` and `medium` are advisory;
-   * `high` always triggers the overseer. Optional on every row.
+   * Risk tier hint copied from the plan slice. Used by
+   * `integrationCheckRequired()` to decide whether the integration-overseer
+   * must run. `low` and `medium` are advisory; `high` always triggers the
+   * overseer. Optional on every row.
    */
   riskTier?: "low" | "medium" | "high";
 };
@@ -516,27 +499,10 @@ function isDelegationEntry(value: unknown): value is DelegationEntry {
     (o.supersededBy === undefined || typeof o.supersededBy === "string") &&
     (o.claimedPaths === undefined ||
       (Array.isArray(o.claimedPaths) && o.claimedPaths.every((item) => typeof item === "string"))) &&
-    (o.sliceId === undefined ||
-      (typeof o.sliceId === "string" && o.sliceId.length > 0)) &&
+    (o.sliceId === undefined || typeof o.sliceId === "string") &&
     (o.phase === undefined ||
       (typeof o.phase === "string" &&
         (DELEGATION_PHASES as readonly string[]).includes(o.phase))) &&
-    (o.claimToken === undefined || typeof o.claimToken === "string") &&
-    (o.ownerLaneId === undefined || typeof o.ownerLaneId === "string") &&
-    (o.leasedUntil === undefined || typeof o.leasedUntil === "string") &&
-    (o.leaseState === undefined ||
-      o.leaseState === "claimed" ||
-      o.leaseState === "expired" ||
-      o.leaseState === "released" ||
-      o.leaseState === "reclaimed") &&
-    (o.dependsOn === undefined ||
-      (Array.isArray(o.dependsOn) && o.dependsOn.every((item) => typeof item === "string"))) &&
-    (o.integrationState === undefined ||
-      o.integrationState === "pending" ||
-      o.integrationState === "applied" ||
-      o.integrationState === "conflict" ||
-      o.integrationState === "resolved" ||
-      o.integrationState === "abandoned") &&
     (o.refactorOutcome === undefined || isRefactorOutcomeShape(o.refactorOutcome)) &&
     (o.riskTier === undefined ||
       o.riskTier === "low" ||
@@ -660,7 +626,7 @@ export async function readDelegationLedger(projectRoot: string): Promise<Delegat
 
 
 /**
- * Wave 24 (v6.0.0) audit-only event types that live in
+ * Audit-only event types that live in
  * `delegation-events.jsonl` but do NOT carry a delegation lifecycle
  * payload (no agent/spanId). The parser must accept them so they
  * don't show up as corrupt lines.
@@ -674,7 +640,8 @@ const NON_DELEGATION_AUDIT_EVENTS = new Set<string>([
   "cclaw_fanin_conflict",
   "cclaw_fanin_resolved",
   "cclaw_fanin_abandoned",
-  "cclaw_integration_overseer_skipped"
+  "cclaw_integration_overseer_skipped",
+  "slice-completed"
 ]);
 
 function isAuditEventLine(parsed: unknown): boolean {
@@ -683,74 +650,16 @@ function isAuditEventLine(parsed: unknown): boolean {
   return typeof evt === "string" && NON_DELEGATION_AUDIT_EVENTS.has(evt);
 }
 
-/** Parsed `cclaw_fanin_*` audit rows from `delegation-events.jsonl`. */
-export interface FanInAuditRecord {
-  event: "cclaw_fanin_applied" | "cclaw_fanin_conflict" | "cclaw_fanin_resolved" | "cclaw_fanin_abandoned";
-  runId?: string;
-  laneId?: string;
-  sliceIds?: string[];
-  integrationBranch?: string;
-  details?: string;
-  ts: string;
-}
-
-const FAN_IN_AUDIT_EVENT_KINDS = new Set<FanInAuditRecord["event"]>([
-  "cclaw_fanin_applied",
-  "cclaw_fanin_conflict",
-  "cclaw_fanin_resolved",
-  "cclaw_fanin_abandoned"
-]);
-
-function isFanInAuditRecord(value: unknown): value is FanInAuditRecord {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const o = value as Record<string, unknown>;
-  const evt = o.event;
-  if (typeof evt !== "string" || !FAN_IN_AUDIT_EVENT_KINDS.has(evt as FanInAuditRecord["event"])) {
-    return false;
-  }
-  return typeof o.ts === "string" && o.ts.length > 0;
-}
-
-/**
- * Append a deterministic fan-in audit row (not a delegation lifecycle event).
- */
-export async function recordCclawFanInAudit(
-  projectRoot: string,
-  params: {
-    kind: FanInAuditRecord["event"];
-    runId: string;
-    laneId: string;
-    sliceIds: string[];
-    integrationBranch: string;
-    details?: string;
-  }
-): Promise<void> {
-  const filePath = delegationEventsPath(projectRoot);
-  const payload: FanInAuditRecord = {
-    event: params.kind,
-    runId: params.runId,
-    laneId: params.laneId,
-    sliceIds: params.sliceIds,
-    integrationBranch: params.integrationBranch,
-    details: params.details,
-    ts: new Date().toISOString()
-  };
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.appendFile(filePath, `${JSON.stringify(payload)}\n`, { encoding: "utf8", mode: 0o600 });
-}
-
 export async function readDelegationEvents(projectRoot: string): Promise<{
   events: DelegationEvent[];
   corruptLines: number[];
-  fanInAudits: FanInAuditRecord[];
 }> {
   const filePath = delegationEventsPath(projectRoot);
   if (!(await exists(filePath))) {
-    return { events: [], corruptLines: [], fanInAudits: [] };
+    return { events: [], corruptLines: [] };
   }
   const events: DelegationEvent[] = [];
   const corruptLines: number[] = [];
-  const fanInAudits: FanInAuditRecord[] = [];
   const text = await fs.readFile(filePath, "utf8").catch(() => "");
   const lines = text.split(/\r?\n/gu);
   for (let index = 0; index < lines.length; index += 1) {
@@ -760,10 +669,8 @@ export async function readDelegationEvents(projectRoot: string): Promise<{
       const parsed: unknown = JSON.parse(line);
       if (isDelegationEvent(parsed)) {
         events.push(parsed);
-      } else if (isFanInAuditRecord(parsed)) {
-        fanInAudits.push(parsed);
       } else if (isAuditEventLine(parsed)) {
-        // Wave 24 audit-only row (e.g. mandatory_delegations_skipped_by_track).
+        // Audit-only row (e.g. mandatory_delegations_skipped_by_track).
         // Not a delegation lifecycle event but valid audit content.
         continue;
       } else {
@@ -773,7 +680,7 @@ export async function readDelegationEvents(projectRoot: string): Promise<{
       corruptLines.push(index + 1);
     }
   }
-  return { events, corruptLines, fanInAudits };
+  return { events, corruptLines };
 }
 
 async function appendDelegationEvent(projectRoot: string, event: DelegationEvent): Promise<void> {
@@ -849,7 +756,7 @@ export function computeActiveSubagents(entries: DelegationEntry[]): DelegationEn
 }
 
 /**
- * v6.8.0 — thrown by `validateMonotonicTimestamps` when an incoming row
+ * Thrown by `validateMonotonicTimestamps` when an incoming row
  * would push a span's timeline backwards. Carries enough context that
  * the CLI / hook surface can format a `delegation_timestamp_non_monotonic`
  * JSON payload without re-deriving the offending field.
@@ -871,7 +778,7 @@ export class DelegationTimestampError extends Error {
 }
 
 /**
- * v6.8.0 — enforce that lifecycle timestamps on a delegation span move
+ * Enforce that lifecycle timestamps on a delegation span move
  * forward (or stay equal). Validates both per-row invariants
  * (`startTs ≤ launchedTs ≤ ackTs ≤ completedTs`) and a cross-row
  * invariant: the union of prior rows for this `spanId` plus the
@@ -931,7 +838,7 @@ export function validateMonotonicTimestamps(
 }
 
 /**
- * v6.8.0 — thrown by `appendDelegation` when the operator opens a
+ * Thrown by `appendDelegation` when the operator opens a
  * second `scheduled` span on the same `(stage, agent)` pair while an
  * earlier span on the same pair is still active. Callers can catch and
  * either pass the existing span id via `--supersede=<id>` (which
@@ -962,13 +869,12 @@ export class DispatchDuplicateError extends Error {
 }
 
 /**
- * v6.10.0 (P1) — thrown by `validateFileOverlap` when a new
- * `slice-implementer` is scheduled on a TDD stage with at least one
- * `claimedPaths` entry that overlaps an active span. The cclaw scheduler
- * auto-allows parallel dispatch when paths are disjoint, so an explicit
- * overlap is treated as a serialization signal: the operator must wait
- * for the existing span to terminate or pass `--allow-parallel`
- * deliberately to acknowledge the conflict.
+ * Thrown by `validateFileOverlap` when a new `slice-builder` is scheduled
+ * on a TDD stage with at least one `claimedPaths` entry that overlaps an
+ * active span. The scheduler auto-allows parallel dispatch when paths are
+ * disjoint, so an explicit overlap is treated as a serialization signal:
+ * the operator must wait for the existing span to terminate or pass
+ * `--allow-parallel` deliberately to acknowledge the conflict.
  */
 export class DispatchOverlapError extends Error {
   readonly existingSpanId: string;
@@ -982,7 +888,7 @@ export class DispatchOverlapError extends Error {
     conflictingPaths: string[];
   }) {
     super(
-      `dispatch_overlap — slice-implementer span ${params.newSpanId} claims path(s) ${params.conflictingPaths.join(", ")} already held by active spanId=${params.existingSpanId} on stage=${params.pair.stage}. ` +
+      `dispatch_overlap — slice-builder span ${params.newSpanId} claims path(s) ${params.conflictingPaths.join(", ")} already held by active spanId=${params.existingSpanId} on stage=${params.pair.stage}. ` +
         `Wait for ${params.existingSpanId} to finish, dispatch a non-overlapping slice, or pass --allow-parallel to acknowledge the conflict.`
     );
     this.name = "DispatchOverlapError";
@@ -994,11 +900,10 @@ export class DispatchOverlapError extends Error {
 }
 
 /**
- * v6.10.0 (P2) — thrown when the count of active `slice-implementer`
- * spans (after fold) reaches `MAX_PARALLEL_SLICE_IMPLEMENTERS` and a new
- * scheduled row would push it past the cap. Cap can be overridden once
- * via `--override-cap=N` on the hook flag or globally via
- * `CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS=<N>` env.
+ * Thrown when the count of active `slice-builder` spans reaches
+ * `MAX_PARALLEL_SLICE_BUILDERS` and a new scheduled row would push it past
+ * the cap. Cap can be overridden once via `--override-cap=N` on the hook
+ * flag or globally via `CCLAW_MAX_PARALLEL_SLICE_BUILDERS=<N>` env.
  */
 export class DispatchCapError extends Error {
   readonly cap: number;
@@ -1007,7 +912,7 @@ export class DispatchCapError extends Error {
   constructor(params: { cap: number; active: number; pair: { stage: string; agent: string } }) {
     super(
       `dispatch_cap — ${params.active} active ${params.pair.agent}(s) at the cap of ${params.cap}. ` +
-        `Complete one before scheduling another, or pass --override-cap=N (or CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS=N) to lift the cap for this run.`
+        `Complete one before scheduling another, or pass --override-cap=N (or CCLAW_MAX_PARALLEL_SLICE_BUILDERS=N) to lift the cap for this run.`
     );
     this.name = "DispatchCapError";
     this.cap = params.cap;
@@ -1017,21 +922,10 @@ export class DispatchCapError extends Error {
 }
 
 /**
- * v6.13.0 — claim / lease contract violation for worktree-first TDD rows.
+ * Default cap on active `slice-builder` spans in a single TDD run. Override
+ * via `CCLAW_MAX_PARALLEL_SLICE_BUILDERS=<int>` (validated `>=1`).
  */
-export class DispatchClaimInvalidError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "DispatchClaimInvalidError";
-  }
-}
-
-/**
- * v6.10.0 (P2) — default cap on active `slice-implementer` spans in a
- * single TDD run. Aligned with evanflow's parallel cap. Override via
- * `CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS=<int>` (validated `>=1`).
- */
-export const MAX_PARALLEL_SLICE_IMPLEMENTERS = 5 as const;
+export const MAX_PARALLEL_SLICE_BUILDERS = 5 as const;
 
 export interface ReadySliceUnit {
   unitId: string;
@@ -1045,7 +939,6 @@ export interface SelectReadySlicesOptions {
   cap: number;
   completedUnitIds: ReadonlySet<string>;
   activePathHolders: ReadonlyArray<{ paths: string[] }>;
-  legacyContinuation: boolean;
 }
 
 /**
@@ -1056,8 +949,7 @@ export function selectReadySlices(
   units: ReadySliceUnit[],
   opts: SelectReadySlicesOptions
 ): ReadySliceUnit[] {
-  const pool = opts.legacyContinuation ? units.filter((u) => u.parallelizable) : units;
-  const ordered = [...pool].sort((a, b) => compareCanonicalUnitIds(a.unitId, b.unitId));
+  const ordered = [...units].sort((a, b) => compareCanonicalUnitIds(a.unitId, b.unitId));
   const selected: ReadySliceUnit[] = [];
   const blockedPaths = new Set<string>();
   for (const holder of opts.activePathHolders) {
@@ -1096,7 +988,7 @@ export function selectReadySlices(
 }
 
 /**
- * v6.13.1 — build scheduler rows from merged parallel wave definitions + plan units.
+ * Build scheduler rows from merged parallel wave definitions + plan units.
  */
 export function readySliceUnitsFromMergedWaves(
   mergedWaves: ParsedParallelWave[],
@@ -1143,14 +1035,14 @@ export function readySliceUnitsFromMergedWaves(
 }
 
 /**
- * v6.14.0 — verdict from `integrationCheckRequired()`.
+ * Verdict from `integrationCheckRequired()`.
  *
  * `required: true` means the controller MUST dispatch
  * `integration-overseer` before stage-complete; `reasons[]` lists the
  * triggers that fired so the controller can quote them in artifacts.
  *
  * `required: false` means the integration check can be safely skipped
- * (disjoint paths, no high-risk slices, no fan-in conflicts). Callers
+ * (disjoint paths and no high-risk slices). Callers
  * that skip dispatch should append a `cclaw_integration_overseer_skipped`
  * audit row to `delegation-events.jsonl` so the run log stays honest
  * about the decision.
@@ -1165,7 +1057,7 @@ interface IntegrationCheckInput {
   sliceId: string;
   /**
    * Repo-relative paths the slice claimed (file-overlap scheduler
-   * input + slice-implementer evidence).
+   * input + slice-builder evidence).
    */
   claimedPaths?: string[];
   /** Optional `riskTier` echoed from the plan row. */
@@ -1173,16 +1065,14 @@ interface IntegrationCheckInput {
 }
 
 /**
- * v6.14.0 — heuristic helper deciding whether a multi-slice wave needs
+ * Heuristic helper deciding whether a multi-slice wave needs
  * the `integration-overseer` dispatch.
  *
  * Triggers (any one):
  *   - **two or more closed slices share import boundaries** (heuristic:
  *     two slices declare a `claimedPaths` whose first 2 path segments
  *     match — same package/module directory);
- *   - any slice has `riskTier === "high"`;
- *   - any `cclaw_fanin_conflict` audit row exists in the supplied
- *     events list (regardless of slice).
+ *   - any slice has `riskTier === "high"`.
  *
  * When none fire, the verdict is `{ required: false, reasons: ["disjoint-paths"] }`
  * and the caller should record a `cclaw_integration_overseer_skipped`
@@ -1192,15 +1082,7 @@ interface IntegrationCheckInput {
  * events list directly so callers can inject synthetic data in tests.
  * Use `readDelegationEvents(projectRoot)` in production paths.
  */
-export function integrationCheckRequired(events: DelegationEvent[]): IntegrationCheckVerdict;
-export function integrationCheckRequired(
-  events: DelegationEvent[],
-  fanInAudits: FanInAuditRecord[]
-): IntegrationCheckVerdict;
-export function integrationCheckRequired(
-  events: DelegationEvent[],
-  fanInAudits?: FanInAuditRecord[]
-): IntegrationCheckVerdict {
+export function integrationCheckRequired(events: DelegationEvent[]): IntegrationCheckVerdict {
   const reasons: string[] = [];
   // Closed slices = ones whose phase=green or phase=refactor row is
   // completed. We collect each unique sliceId's representative paths
@@ -1267,12 +1149,6 @@ export function integrationCheckRequired(
   }
   if (sharedFound) reasons.push("shared-import-boundary");
 
-  // Fan-in conflict trigger — any `cclaw_fanin_conflict` in the supplied
-  // audits forces the overseer regardless of paths/risk.
-  if (Array.isArray(fanInAudits) && fanInAudits.some((a) => a.event === "cclaw_fanin_conflict")) {
-    reasons.push("fanin-conflict");
-  }
-
   if (reasons.length > 0) {
     return { required: true, reasons };
   }
@@ -1280,7 +1156,7 @@ export function integrationCheckRequired(
 }
 
 /**
- * v6.14.0 — append a non-delegation audit event recording that the
+ * Append a non-delegation audit event recording that the
  * integration-overseer dispatch was skipped because
  * `integrationCheckRequired()` returned `required: false`. Best-effort;
  * never throws.
@@ -1310,7 +1186,7 @@ export async function recordIntegrationOverseerSkipped(
 }
 
 /**
- * v6.13.1 — load merged wave plan (Parallel Execution Plan block + wave-plans/) and map to `ReadySliceUnit[]`.
+ * Load merged wave plan (Parallel Execution Plan block + wave-plans/) and map to `ReadySliceUnit[]`.
  */
 export async function loadTddReadySlicePool(
   planMarkdown: string,
@@ -1325,7 +1201,7 @@ export async function loadTddReadySlicePool(
 }
 
 function readMaxParallelOverrideFromEnv(): number | null {
-  const raw = process.env.CCLAW_MAX_PARALLEL_SLICE_IMPLEMENTERS;
+  const raw = process.env.CCLAW_MAX_PARALLEL_SLICE_BUILDERS;
   if (typeof raw !== "string" || raw.trim().length === 0) return null;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) return null;
@@ -1333,20 +1209,19 @@ function readMaxParallelOverrideFromEnv(): number | null {
 }
 
 /**
- * v6.10.0 (P1) — when scheduling a `slice-implementer` on a TDD stage,
- * compare `claimedPaths` against every currently active span on the
- * same `(stage, agent)` pair. Overlap → throw `DispatchOverlapError`;
- * disjoint paths → return `{ autoParallel: true }` so the caller can
- * mark the new entry `allowParallel = true` without explicit operator
- * intent. When the agent is not a slice-implementer or no
- * `claimedPaths` are supplied, the function returns
- * `{ autoParallel: false }` and the legacy dedup path takes over.
+ * When scheduling a `slice-builder` on a TDD stage, compare `claimedPaths`
+ * against every currently active span on the same `(stage, agent)` pair.
+ * Overlap → throw `DispatchOverlapError`; disjoint paths → return
+ * `{ autoParallel: true }` so the caller can mark the new entry
+ * `allowParallel = true` without explicit operator intent. When the agent
+ * is not a slice-builder or no `claimedPaths` are supplied, the function
+ * returns `{ autoParallel: false }` and the standard dedup path takes over.
  */
 export function validateFileOverlap(
   stamped: DelegationEntry,
   activeEntries: DelegationEntry[]
 ): { autoParallel: boolean } {
-  if (stamped.agent !== "slice-implementer" || stamped.stage !== "tdd") {
+  if (!isParallelTddSliceWorker(stamped.agent) || stamped.stage !== "tdd") {
     return { autoParallel: false };
   }
   const newPaths = Array.isArray(stamped.claimedPaths) ? stamped.claimedPaths : [];
@@ -1366,7 +1241,7 @@ export function validateFileOverlap(
     const existingPaths = Array.isArray(existing.claimedPaths) ? existing.claimedPaths : [];
     if (existingPaths.length === 0) {
       // We can't prove disjoint without the other side declaring paths;
-      // be conservative and let the legacy dedup error path fire.
+      // be conservative and let the standard dedup error path fire.
       return { autoParallel: false };
     }
     const overlap = newPaths.filter((p) => existingPaths.includes(p));
@@ -1383,26 +1258,27 @@ export function validateFileOverlap(
 }
 
 /**
- * v6.10.0 (P2) — enforce the slice-implementer fan-out cap. The new
- * scheduled row pushes the active count from N to N+1; if that would
- * exceed the cap (default 5, env-overridable), throw `DispatchCapError`.
+ * Enforce the slice-builder fan-out cap. The new scheduled row pushes the
+ * active count from N to N+1; if that would exceed the cap (default 5,
+ * env-overridable via `CCLAW_MAX_PARALLEL_SLICE_BUILDERS`), throw
+ * `DispatchCapError`.
  *
- * Caller passes the already-folded list of active entries (latest row
- * per spanId, ACTIVE statuses only). The function counts entries that
- * match the agent on the same `stage`. The new row's own spanId is
- * excluded so re-recording a `scheduled` doesn't trip the cap on a
- * span that's already counted.
+ * Caller passes the already-folded list of active entries (latest row per
+ * spanId, ACTIVE statuses only). The function counts entries that match
+ * the agent on the same `stage`. The new row's own spanId is excluded so
+ * re-recording a `scheduled` doesn't trip the cap on a span that's already
+ * counted.
  */
 export function validateFanOutCap(
   stamped: DelegationEntry,
   activeEntries: DelegationEntry[],
   override?: number | null
 ): void {
-  if (stamped.agent !== "slice-implementer" || stamped.stage !== "tdd") return;
+  if (!isParallelTddSliceWorker(stamped.agent) || stamped.stage !== "tdd") return;
   if (stamped.status !== "scheduled") return;
   const cap = (override !== null && override !== undefined && Number.isInteger(override) && override >= 1)
     ? override
-    : (readMaxParallelOverrideFromEnv() ?? MAX_PARALLEL_SLICE_IMPLEMENTERS);
+    : (readMaxParallelOverrideFromEnv() ?? MAX_PARALLEL_SLICE_BUILDERS);
   const sameLaneActive = activeEntries.filter(
     (entry) =>
       entry.stage === stamped.stage &&
@@ -1419,18 +1295,18 @@ export function validateFanOutCap(
 }
 
 /**
- * v6.9.0 — find the latest active span for a given `(stage, agent)`
+ * Find the latest active span for a given `(stage, agent)`
  * pair in the supplied ledger entries. Returns the row whose latest
  * status (after the latest-by-spanId fold) is still in the active set
  * (`scheduled | launched | acknowledged`).
  *
  * Run-scope is **strict**: only entries whose `runId` matches the
  * supplied `runId` are folded. Entries with empty/missing `runId`
- * (legacy ledgers from v6.8 and earlier) are treated as NOT belonging
+ * (older ledgers without explicit run scoping) are treated as NOT belonging
  * to the current run, so they cannot keep an old span "active" across
  * a fresh dispatch and trip a spurious `dispatch_duplicate`. This
- * fixes R7: a slice-implementer that ran in run-1 must not block a
- * slice-implementer scheduled in run-2.
+ * Ensures a slice-builder that ran in run-1 does not block a
+ * slice-builder scheduled in run-2.
  *
  * keep in sync with the inline copy in
  * `src/content/hooks.ts::delegationRecordScript`.
@@ -1470,54 +1346,12 @@ async function writeSubagentTracker(projectRoot: string, entries: DelegationEntr
   await writeFileSafe(subagentsStatePath(projectRoot), `${JSON.stringify({ active, updatedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
 }
 
-function latestClaimTokenForSpan(entries: DelegationEntry[], spanId: string | undefined): string | null {
-  if (!spanId) return null;
-  let latest: string | null = null;
-  for (const e of entries) {
-    if (e.spanId !== spanId) continue;
-    if (typeof e.claimToken === "string" && e.claimToken.trim().length > 0) {
-      latest = e.claimToken.trim();
-    }
-  }
-  return latest;
-}
-
-function assertSliceClaimInvariant(
-  flow: FlowState,
-  stamped: DelegationEntry,
-  prior: DelegationEntry[]
-): void {
-  if (stamped.stage !== "tdd" || stamped.agent !== "slice-implementer") return;
-  if (effectiveWorktreeExecutionMode(flow) !== "worktree-first") return;
-  if (stamped.status === "scheduled" && typeof stamped.sliceId === "string" && stamped.sliceId.length > 0) {
-    const tok = stamped.claimToken?.trim() ?? "";
-    if (tok.length === 0) {
-      throw new DispatchClaimInvalidError(
-        "dispatch_claim_invalid — worktree-first requires --claim-token when scheduling slice-implementer with --slice"
-      );
-    }
-  }
-  if (!TERMINAL_DELEGATION_STATUSES.has(stamped.status)) return;
-  if (stamped.status === "waived" || stamped.status === "stale") return;
-  const expected = latestClaimTokenForSpan(prior, stamped.spanId);
-  if (!expected) return;
-  const got = stamped.claimToken?.trim() ?? "";
-  if (got !== expected) {
-    throw new DispatchClaimInvalidError(
-      "dispatch_claim_invalid — claimToken must match the scheduled claim for this span"
-    );
-  }
-}
-
 export async function appendDelegation(projectRoot: string, entry: DelegationEntry): Promise<void> {
   const flowState = await readFlowState(projectRoot);
   const { activeRunId } = flowState;
   await withDirectoryLock(delegationLockPath(projectRoot), async () => {
     const filePath = delegationLogPath(projectRoot);
     const prior = await readDelegationLedger(projectRoot);
-    // Span start anchor: prefer explicit `startTs`; otherwise fall back to
-    // the earliest provided lifecycle marker so the monotonic validator
-    // never sees a synthetic `now` overshoot a real event timestamp.
     const lifecycleCandidates = [
       entry.startTs,
       entry.launchedTs,
@@ -1567,23 +1401,13 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
         stamped.fulfillmentMode = expectedFulfillmentMode(fallbacks);
       }
     }
-    // Idempotency: a retried hook may replay the same lifecycle row. Allow a
-    // terminal row to close an existing scheduled span, but drop exact same
-    // span/status duplicates so checks do not mis-count repeated writes.
     if (prior.entries.some((existing) =>
       existing.spanId === stamped.spanId && existing.status === stamped.status
     )) {
       return;
     }
-    assertSliceClaimInvariant(flowState, stamped, prior.entries);
     validateMonotonicTimestamps(stamped, prior.entries);
     if (stamped.status === "scheduled") {
-      // v6.10.0 (P1+P2): for slice-implementer rows with declared
-      // claimedPaths, the file-overlap scheduler runs first. Disjoint
-      // paths auto-promote the row to allowParallel so the legacy
-      // dispatch_duplicate guard does not fire. Overlapping paths
-      // throw DispatchOverlapError. The fan-out cap then runs against
-      // the active set (excluding the new row's spanId).
       const sameRunPrior = prior.entries.filter((entry) => entry.runId === activeRunId);
       const activeForRun = computeActiveSubagents(sameRunPrior);
       const overlap = validateFileOverlap(stamped, activeForRun);
@@ -1620,43 +1444,6 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
 }
 
 /**
- * Scan delegation events for expired `leasedUntil` timestamps and append
- * best-effort `cclaw_slice_lease_expired` audit rows (one per span/slice key).
- */
-export async function reclaimExpiredDelegationClaims(
-  projectRoot: string,
-  now = new Date()
-): Promise<number> {
-  const { events } = await readDelegationEvents(projectRoot);
-  const seen = new Set<string>();
-  let count = 0;
-  const ts = now.toISOString();
-  const filePath = delegationEventsPath(projectRoot);
-  const cutoff = Date.parse(ts);
-  for (const e of events) {
-    if (e.leaseState !== "claimed") continue;
-    if (typeof e.leasedUntil !== "string" || e.leasedUntil.length === 0) continue;
-    if (Date.parse(e.leasedUntil) > cutoff) continue;
-    const key = `${e.spanId ?? ""}|${e.sliceId ?? ""}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    await fs.appendFile(
-      filePath,
-      `${JSON.stringify({
-        event: "cclaw_slice_lease_expired",
-        spanId: e.spanId,
-        sliceId: e.sliceId,
-        leasedUntil: e.leasedUntil,
-        eventTs: ts
-      })}\n`,
-      { encoding: "utf8", mode: 0o600 }
-    );
-    count += 1;
-  }
-  return count;
-}
-
-/**
  * Aggregate the fulfillment mode cclaw expects for the active harness set.
  * Priority native > generic-dispatch > role-switch > waiver — the best
  * available mode wins so mixed installs (e.g. claude + codex) inherit the
@@ -1680,10 +1467,10 @@ export async function checkMandatoryDelegations(
     /**
      * Optional task class for the active run. When set to
      * `"software-bugfix"`, the mandatory delegation gate is skipped
-     * entirely (Wave 24). Callers that don't classify the run leave
+     * entirely. Callers that don't classify the run leave
      * this undefined; the function then falls back to
      * `flowState.taskClass` (persisted in `flow-state.json`) so the
-     * Wave 24 bugfix-skip remains active across the `cclaw advance-stage`
+     * Bugfix-skip remains active across the `cclaw advance-stage`
      * code path even when no caller forwards an explicit override.
      */
     taskClass?: MandatoryDelegationTaskClass | null;
@@ -1706,7 +1493,7 @@ export async function checkMandatoryDelegations(
   /** Expected fulfillment mode for the active harness set. */
   expectedMode: DelegationFulfillmentMode;
   /**
-   * Wave 24 (v6.0.0): true when `mandatoryAgentsFor` returned [] for
+   * `true` when `mandatoryAgentsFor` returned [] for
    * this (track, taskClass) combination — i.e. the gate was skipped
    * entirely on quick track or software-bugfix runs. The skip is also
    * recorded as a `mandatory_delegations_skipped_by_track` event in
@@ -1717,7 +1504,7 @@ export async function checkMandatoryDelegations(
   const flowState = await readFlowState(projectRoot, {
     repairFeatureSystem: options.repairFeatureSystem
   });
-  // Wave 24 follow-up (v6.1.1): read `flowState.taskClass` as a fallback
+  // Read `flowState.taskClass` as a fallback
   // when the caller doesn't pass an explicit override. The
   // `cclaw advance-stage` path (`buildValidationReport` →
   // `checkMandatoryDelegations`) never forwarded `taskClass`, which left
@@ -1862,7 +1649,7 @@ export async function checkMandatoryDelegations(
 }
 
 /**
- * Wave 24 (v6.0.0) — append a non-delegation audit event to
+ * Append a non-delegation audit event to
  * `delegation-events.jsonl` recording that the mandatory delegation
  * gate was skipped because of the active track / task class. Plays the
  * same audit role as a `waived` row but does NOT carry an agent —
@@ -1900,12 +1687,12 @@ async function recordMandatorySkippedByTrack(
 }
 
 /**
- * Wave 25 (v6.1.0) — append a non-delegation audit event recording
+ * Append a non-delegation audit event recording
  * that one or more required artifact-validation findings were
  * demoted from blocking to advisory because the active run is on a
  * small-fix lane (`track === "quick"` or `taskClass === "software-bugfix"`).
  *
- * The event mirrors the Wave 24 `mandatory_delegations_skipped_by_track`
+ * The event mirrors `mandatory_delegations_skipped_by_track`
  * audit pattern: best-effort write to `delegation-events.jsonl`, no
  * agent payload, recognized by `readDelegationEvents` so it does not
  * corrupt downstream parsers. Failures are swallowed.
@@ -1940,12 +1727,12 @@ export async function recordArtifactValidationDemotedByTrack(
 }
 
 /**
- * Wave 25 (v6.1.0) — append a non-delegation audit event recording
+ * Append a non-delegation audit event recording
  * that the scope-stage Expansion Strategist (`product-discovery`)
  * delegation requirement was skipped because the active run is on a
  * small-fix lane (`track === "quick"` or `taskClass === "software-bugfix"`).
  *
- * Mirrors the Wave 24 `mandatory_delegations_skipped_by_track`
+ * Mirrors the `mandatory_delegations_skipped_by_track`
  * audit pattern: best-effort write to `delegation-events.jsonl`, no
  * agent payload, recognized by `readDelegationEvents` so it does not
  * corrupt downstream parsers. Failures are swallowed.

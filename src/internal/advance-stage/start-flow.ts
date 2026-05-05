@@ -222,8 +222,7 @@ export async function runStartFlow(
       guardEvidence,
       stageGateCatalog,
       rewinds: current.rewinds,
-      staleStages: current.staleStages,
-      worktreeExecutionMode: current.worktreeExecutionMode ?? "worktree-first"
+      staleStages: current.staleStages
     };
     const validation = await buildValidationReport(projectRoot, nextState);
     const evidenceIssues = completedStageClosureEvidenceIssues(nextState);
@@ -242,7 +241,6 @@ export async function runStartFlow(
     if (nextTaskClass !== undefined) {
       nextState = { ...nextState, taskClass: nextTaskClass };
     }
-    nextState = { ...nextState, worktreeExecutionMode: "worktree-first" };
   }
 
   if (args.fromIdeaArtifact) {

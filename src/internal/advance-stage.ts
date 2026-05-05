@@ -35,14 +35,10 @@ import {
 import {
   DelegationTimestampError,
   DispatchCapError,
-  DispatchClaimInvalidError,
   DispatchDuplicateError,
   DispatchOverlapError
 } from "../delegation.js";
 import { parsePlanSplitWavesArgs, runPlanSplitWaves } from "./plan-split-waves.js";
-import { runSetWorktreeMode } from "./set-worktree-mode.js";
-import { runSetCheckpointMode } from "./set-checkpoint-mode.js";
-import { runSetIntegrationOverseerMode } from "./set-integration-overseer-mode.js";
 import { runWaveStatusCommand } from "./wave-status.js";
 import { runCohesionContractCommand } from "./cohesion-contract-stub.js";
 
@@ -63,10 +59,7 @@ const GUARD_ENFORCED_SUBCOMMANDS = new Set([
   "cancel-run",
   "rewind",
   "verify-flow-state-diff",
-  "verify-current-state",
-  "set-worktree-mode",
-  "set-checkpoint-mode",
-  "set-integration-overseer-mode"
+  "verify-current-state"
 ]);
 
 export async function runInternalCommand(
@@ -77,7 +70,7 @@ export async function runInternalCommand(
   const [subcommand, ...tokens] = argv;
   if (!subcommand) {
     io.stderr.write(
-      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves | set-worktree-mode | set-checkpoint-mode | set-integration-overseer-mode | wave-status | cohesion-contract\n"
+      "cclaw internal requires a subcommand: advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves | wave-status | cohesion-contract\n"
     );
     return 1;
   }
@@ -134,15 +127,6 @@ export async function runInternalCommand(
     if (subcommand === "plan-split-waves") {
       return await runPlanSplitWaves(projectRoot, parsePlanSplitWavesArgs(tokens), io);
     }
-    if (subcommand === "set-worktree-mode") {
-      return await runSetWorktreeMode(projectRoot, tokens, io);
-    }
-    if (subcommand === "set-checkpoint-mode") {
-      return await runSetCheckpointMode(projectRoot, tokens, io);
-    }
-    if (subcommand === "set-integration-overseer-mode") {
-      return await runSetIntegrationOverseerMode(projectRoot, tokens, io);
-    }
     if (subcommand === "wave-status") {
       return await runWaveStatusCommand(projectRoot, tokens, io);
     }
@@ -150,7 +134,7 @@ export async function runInternalCommand(
       return await runCohesionContractCommand(projectRoot, tokens, io);
     }
     io.stderr.write(
-      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves | set-worktree-mode | set-checkpoint-mode | set-integration-overseer-mode | wave-status | cohesion-contract\n`
+      `Unknown internal subcommand: ${subcommand}. Expected advance-stage | start-flow | cancel-run | rewind | verify-flow-state-diff | verify-current-state | envelope-validate | tdd-red-evidence | tdd-loop-status | early-loop-status | compound-readiness | runtime-integrity | hook | flow-state-repair | waiver-grant | plan-split-waves | wave-status | cohesion-contract\n`
     );
     return 1;
   } catch (err) {
@@ -174,10 +158,6 @@ export async function runInternalCommand(
     }
     if (err instanceof DispatchCapError) {
       io.stderr.write(`error: dispatch_cap — ${err.message}\n`);
-      return 2;
-    }
-    if (err instanceof DispatchClaimInvalidError) {
-      io.stderr.write(`error: dispatch_claim_invalid — ${err.message}\n`);
       return 2;
     }
     io.stderr.write(

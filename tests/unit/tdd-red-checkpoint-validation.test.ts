@@ -3,7 +3,7 @@ import { evaluateRedCheckpoint } from "../../src/artifact-linter/tdd.js";
 import type { DelegationEntry } from "../../src/delegation.js";
 
 /**
- * v6.12.0 Phase W (unit) — `evaluateRedCheckpoint` enforces wave-batched
+ * — `evaluateRedCheckpoint` enforces wave-batched
  * RED-before-GREEN ordering. The rule fires only when an explicit wave
  * manifest defines membership, OR an implicit wave (2+ contiguous reds)
  * is detectable from the timestamp ordering. Sequential per-slice runs
@@ -19,7 +19,7 @@ function evt(
   slice: string,
   phase: "red" | "green" | "refactor" | "refactor-deferred" | "doc",
   completedTs: string,
-  agent = phase === "red" ? "test-author" : "slice-implementer"
+  agent = "slice-builder"
 ): DelegationEntry {
   return {
     stage: "tdd",

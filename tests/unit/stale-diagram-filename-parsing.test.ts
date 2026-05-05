@@ -5,14 +5,14 @@ import {
 } from "../../src/artifact-linter/design.js";
 
 /**
- * Wave 25 (v6.1.0) — Stale Diagram Audit filename parsing.
+ * — Stale Diagram Audit filename parsing.
  *
  * The user's quick-tier 3-file landing page test made the audit
  * call `fs.stat("index.html (new)")` (with the literal " (new)"
  * suffix) and fail with
  * `Stale Diagram Audit could not read blast-radius file(s): index.html (new)`.
  * The agent had to `touch` placeholder files just to silence the
- * audit. Wave 25 rewrites the parser so:
+ * audit. rewrites the parser so:
  *
  *   - parenthetical suffixes are stripped before stat
  *   - `(new)` / `(new file)` flags the row as "no stale diagram"
@@ -22,7 +22,7 @@ import {
  *   - a `skip:` token anywhere in the Notes column also marks it
  */
 
-describe("Wave 25 — normalizeCodebaseInvestigationFileRef", () => {
+describe("— normalizeCodebaseInvestigationFileRef", () => {
   it("strips a `(new)` suffix and marks the row as a new file", () => {
     const ref = normalizeCodebaseInvestigationFileRef("index.html (new)", "");
     expect(ref).not.toBeNull();
@@ -95,7 +95,7 @@ describe("Wave 25 — normalizeCodebaseInvestigationFileRef", () => {
   });
 });
 
-describe("Wave 25 — collectCodebaseInvestigationFiles deduplicates and respects markers", () => {
+describe("— collectCodebaseInvestigationFiles deduplicates and respects markers", () => {
   it("collects and deduplicates rows from a Codebase Investigation table", () => {
     const body = [
       "| File | Current responsibility | Patterns discovered |",

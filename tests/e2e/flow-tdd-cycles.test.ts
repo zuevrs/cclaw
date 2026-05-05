@@ -51,15 +51,15 @@ async function readTracker(projectRoot: string): Promise<SubagentsTracker> {
   return JSON.parse(raw) as SubagentsTracker;
 }
 
-describe("e2e: sequential slice-implementer cycles", () => {
-  it("runs five sequential slice-implementer cycles for the same agent without dispatch_duplicate", async () => {
+describe("e2e: sequential slice-builder cycles", () => {
+  it("runs five sequential slice-builder cycles for the same agent without dispatch_duplicate", async () => {
     const root = await createTempProject("e2e-flow-tdd-cycles");
     const scriptPath = await setupHook(root);
 
     const agentDefDir = path.join(root, ".cclaw", "agents");
     await fs.mkdir(agentDefDir, { recursive: true });
-    const agentDefRel = ".cclaw/agents/slice-implementer.md";
-    await fs.writeFile(path.join(root, agentDefRel), "# slice-implementer\n", "utf8");
+    const agentDefRel = ".cclaw/agents/slice-builder.md";
+    await fs.writeFile(path.join(root, agentDefRel), "# slice-builder\n", "utf8");
 
     for (let cycle = 1; cycle <= 5; cycle += 1) {
       const span = `span-S-${cycle}`;
@@ -67,7 +67,7 @@ describe("e2e: sequential slice-implementer cycles", () => {
 
       const scheduled = await runScript(root, scriptPath, [
         "--stage=tdd",
-        "--agent=slice-implementer",
+        "--agent=slice-builder",
         "--mode=mandatory",
         "--status=scheduled",
         `--span-id=${span}`,
@@ -80,7 +80,7 @@ describe("e2e: sequential slice-implementer cycles", () => {
 
       const launched = await runScript(root, scriptPath, [
         "--stage=tdd",
-        "--agent=slice-implementer",
+        "--agent=slice-builder",
         "--mode=mandatory",
         "--status=launched",
         `--span-id=${span}`,
@@ -93,7 +93,7 @@ describe("e2e: sequential slice-implementer cycles", () => {
 
       const acknowledged = await runScript(root, scriptPath, [
         "--stage=tdd",
-        "--agent=slice-implementer",
+        "--agent=slice-builder",
         "--mode=mandatory",
         "--status=acknowledged",
         `--span-id=${span}`,
@@ -106,7 +106,7 @@ describe("e2e: sequential slice-implementer cycles", () => {
 
       const completed = await runScript(root, scriptPath, [
         "--stage=tdd",
-        "--agent=slice-implementer",
+        "--agent=slice-builder",
         "--mode=mandatory",
         "--status=completed",
         `--span-id=${span}`,

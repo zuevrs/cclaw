@@ -74,7 +74,7 @@ const PRE_TDD_ARTIFACTS: Record<string, string> = {
 
 ## Problem Decision Record
 - Problem: prove events drive the linter.
-- Why now: v6.11.0 release.
+- Why now: feature gating.
 
 ## Approach Tier
 - Tier: standard
@@ -125,7 +125,7 @@ const TDD_BARE_BODY = `# TDD Artifact
 
 ## Upstream Handoff
 - Source artifacts: \`05-plan.md\`, \`04-spec.md\`.
-- Decisions carried forward: dispatch test-author + slice-implementer per slice.
+- Decisions carried forward: dispatch slice-builder per slice.
 - Constraints carried forward: minimal change.
 - Open questions: none.
 - Drift from upstream (or \`None\`): None.
@@ -277,30 +277,29 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
     const scriptPath = await setupHook(root);
     await seedTddRun(root);
     await writeArtifacts(root);
-    const taDef = await seedAgentDef(root, "test-author");
-    const siDef = await seedAgentDef(root, "slice-implementer");
+    const sbDef = await seedAgentDef(root, "slice-builder");
 
     for (let i = 1; i <= 3; i += 1) {
       const slice = `S-${i}`;
       const testFile = path.join(root, "tests/unit", `slice-${i}.test.ts`);
       await fs.mkdir(path.dirname(testFile), { recursive: true });
       await fs.writeFile(testFile, "// test\n", "utf8");
-      await dispatchPhase(root, scriptPath, taDef, {
-        agent: "test-author",
+      await dispatchPhase(root, scriptPath, sbDef, {
+        agent: "slice-builder",
         slice,
         phase: "red",
         evidenceRefs: [`tests/unit/slice-${i}.test.ts`],
         spanId: `span-red-${slice}`
       });
-      await dispatchPhase(root, scriptPath, siDef, {
-        agent: "slice-implementer",
+      await dispatchPhase(root, scriptPath, sbDef, {
+        agent: "slice-builder",
         slice,
         phase: "green",
         evidenceRefs: [`tests/unit/slice-${i}.test.ts: vitest run tests/unit/slice-${i}.test.ts => 1 passed; 0 failed`],
         spanId: `span-green-${slice}`
       });
-      await dispatchPhase(root, scriptPath, taDef, {
-        agent: "test-author",
+      await dispatchPhase(root, scriptPath, sbDef, {
+        agent: "slice-builder",
         slice,
         phase: "refactor-deferred",
         evidenceRefs: [`scope contained for ${slice}; no measurable cleanup yet`],
@@ -332,10 +331,9 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
       .filter((f) => f.required && !f.found)
       .filter((f) => !f.section.startsWith("tdd.cohesion_contract"))
       .filter((f) => !f.section.startsWith("tdd.integration_overseer"))
-      // v6.12.0 Phase R — slice-documenter mandatory across all discoveryModes;
-      // this Phase D e2e covers RED/GREEN/REFACTOR auto-derive, not Phase C
-      // documenter coverage, which has its own dedicated suite.
-      .filter((f) => f.section !== "tdd_slice_documenter_missing");
+      // slice-builder DOC coverage is exercised in dedicated suites; this
+      // e2e covers RED/GREEN/REFACTOR auto-derive only.
+      .filter((f) => f.section !== "tdd_slice_doc_missing");
     expect(blockers.map((f) => f.section)).toEqual([]);
 
     const tddArtifact = await fs.readFile(
@@ -349,8 +347,5 @@ describe("e2e: TDD auto-derive (Phase D)", () => {
   });
 });
 
-// Phase C (slice-documenter parallel dispatch) and Phase S (sharded
-// `tdd-slices/S-<id>.md` files) coverage live in dedicated e2e files
-// per the v6.11.0 plan:
-//   tests/e2e/slice-documenter-parallel.test.ts
-//   tests/e2e/sharded-slice-files.test.ts
+// Sharded `tdd-slices/S-<id>.md` files coverage lives in
+// `tests/e2e/sharded-slice-files.test.ts`.

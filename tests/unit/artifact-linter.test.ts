@@ -14,7 +14,7 @@ import { createTempProject } from "../helpers/index.js";
 
 /**
  * Generic Q&A Log block with a recognized stop-signal row, used to satisfy the
- * Wave 23 `qa_log_unconverged` convergence floor for brainstorm/scope/design fixtures whose
+ * `qa_log_unconverged` convergence floor for brainstorm/scope/design fixtures whose
  * focus is on other linter rules. Tests that exercise the floor explicitly
  * either define their own `## Q&A Log` section or pass `--skip-questions` via
  * the gate-evidence flow.
@@ -654,7 +654,7 @@ describe("artifact linter heuristics", () => {
 - Approval: approved by user
 
 ## Wave Carry-forward
-- Carrying forward: Wave 14 critic contract and Wave 15 layered reviewers remain mandatory.
+- Carrying forward: critic contract and layered reviewers remain mandatory.
 - Drift detected: none.
 
 ## Design
@@ -2321,7 +2321,7 @@ ${summaryBody}
     });
   });
 
-  // Wave 23 (v5.0.0): the "Premise Challenge structural validation" describe
+  // : the "Premise Challenge structural validation" describe
   // block was removed. `## Premise Challenge` is no longer a scope artifact
   // section; brainstorm owns Premise Check, scope cites it via `Upstream
   // Handoff`. See plan: phase A (dedupe pure overlaps).
@@ -2414,7 +2414,7 @@ ${summaryBody}
     expect(boundaries?.found).toBe(true);
   });
 
-  it("(Wave 22 regression-guard) does NOT emit a No Scope Reduction Language finding even when reduction phrases appear", async () => {
+  it("(regression-guard) does NOT emit a No Scope Reduction Language finding even when reduction phrases appear", async () => {
     const root = await createTempProject("scope-no-reduction-rule");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
@@ -2450,7 +2450,7 @@ ${summaryBody}
     expect(reduction).toBeUndefined();
   });
 
-  it("(Wave 22 regression-guard) does NOT emit a Locked Decisions Hash Integrity finding for D-XX-only artifacts", async () => {
+  it("(regression-guard) does NOT emit a Locked Decisions Hash Integrity finding for D-XX-only artifacts", async () => {
     const root = await createTempProject("scope-no-ld-hash-rule");
     await writeRuntimeArtifact(root, "02-scope.md", `# Scope Artifact
 
@@ -3826,7 +3826,7 @@ ${TDD_PREFLIGHT_SECTIONS}
     await writeDelegationLog(root, [
       {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "completed",
         ts: "2026-05-01T10:00:00Z",
@@ -3835,7 +3835,7 @@ ${TDD_PREFLIGHT_SECTIONS}
       },
       {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "completed",
         ts: "2026-05-01T10:02:00Z",
@@ -3892,7 +3892,7 @@ ${TDD_PREFLIGHT_SECTIONS}
     await writeDelegationLog(root, [
       {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "completed",
         ts: "2026-05-01T10:00:00Z",
@@ -3901,7 +3901,7 @@ ${TDD_PREFLIGHT_SECTIONS}
       },
       {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "completed",
         ts: "2026-05-01T10:02:00Z",
@@ -4557,7 +4557,7 @@ ${TDD_PREFLIGHT_SECTIONS}
     expect(green?.found).toBe(false);
   });
 
-  // v6.10.0 (T5): merged "Acceptance Mapping" + "Failure Analysis" into a
+  // release (T5): merged "Acceptance Mapping" + "Failure Analysis" into a
   // single optional "Acceptance & Failure Map" section. The two legacy
   // tests below (one each for "Acceptance Mapping is missing" and
   // "Failure Analysis is missing") collapse into a single advisory

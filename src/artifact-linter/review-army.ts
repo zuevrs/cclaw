@@ -423,7 +423,7 @@ function extractTddPerSliceFindings(perSliceBody: string): Map<string, TddFindin
 }
 
 /**
- * Cross-artifact duplication guard (Wave 23 / v5.0.0).
+ * Cross-artifact duplication guard.
  *
  * When the same finding ID (`F-NN`) appears in both
  * `06-tdd.md > Per-Slice Review` and `07-review-army.json`, the

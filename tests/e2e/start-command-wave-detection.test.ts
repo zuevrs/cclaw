@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { startCommandContract, startCommandSkillMarkdown } from "../../src/content/start-command.js";
 
-describe("e2e: start command wave detection prose (v6.13.1)", () => {
+describe("e2e: start command wave detection prose ", () => {
   it("start command contract references Parallel Execution Plan and resume behavior", () => {
     const c = startCommandContract();
     expect(c).toContain("Parallel Execution Plan");
@@ -13,6 +13,6 @@ describe("e2e: start command wave detection prose (v6.13.1)", () => {
     const s = startCommandSkillMarkdown();
     expect(s).toContain("Parallel Execution Plan");
     expect(s).toContain("wave-plans");
-    expect(s).toContain("Wave dispatch resume");
+    expect(s).toContain("Wave resume");
   });
 });
