@@ -880,15 +880,24 @@ async function persistEntry(root, runId, clean, event, options = {}) {
     // Rerecord semantics: replace any pre-existing row with the same spanId
     // (regardless of its status) so the legacy v1/v2 row is upgraded to v3
     // shape on disk. The append path keeps the historical dedup semantics:
-    // an exact (spanId, status) duplicate is dropped to keep retried hooks
-    // idempotent.
+    // an exact (spanId, status, phase) triple is dropped to keep retried hooks
+    // idempotent. Including \`phase\` in the dedup key is required because a
+    // single TDD slice-builder span legitimately emits FOUR rows with
+    // status=completed (one each for phase=red|green|refactor|doc); a
+    // dedup on (spanId, status) alone would silently drop GREEN/REFACTOR/DOC
+    // and leave the linter reporting tdd_slice_green_missing for slices
+    // whose work actually landed.
     if (options.replaceBySpanId) {
       ledger.entries = ledger.entries.filter((entry) => entry.spanId !== clean.spanId);
       ledger.entries.push(clean);
       ledger.runId = runId;
       ledger.schemaVersion = LEDGER_SCHEMA_VERSION;
       await writeDelegationLedgerAtomic(ledgerPath, ledger);
-    } else if (!ledger.entries.some((entry) => entry.spanId === clean.spanId && entry.status === clean.status)) {
+    } else if (!ledger.entries.some((entry) =>
+      entry.spanId === clean.spanId &&
+      entry.status === clean.status &&
+      (entry.phase ?? null) === (clean.phase ?? null)
+    )) {
       ledger.entries.push(clean);
       ledger.runId = runId;
       ledger.schemaVersion = LEDGER_SCHEMA_VERSION;

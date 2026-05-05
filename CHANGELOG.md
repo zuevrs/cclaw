@@ -1,5 +1,42 @@
 # Changelog
 
+## 7.0.5 — Ledger dedup must include `phase` (slice-builder GREEN/REFACTOR/DOC fix)
+
+7.0.2 mandated that a single TDD slice-builder span reuse the same `spanId`
+across the entire RED → GREEN → REFACTOR → DOC lifecycle. That mandate is
+correct, but it interacted badly with a long-standing dedup bug in
+`delegation-record`: the rendered hook (`src/content/hooks.ts > persistEntry`)
+and the runtime helper (`src/delegation.ts > appendDelegation`) both keyed
+ledger dedup on the pair `(spanId, status)` only.
+
+A slice-builder lifecycle legitimately emits **four** rows with
+`status=completed` — one each for `phase=red|green|refactor|doc`. Pre-7.0.5
+the dedup treated the second through fourth `(spanId, "completed")` rows as
+duplicates and silently dropped them from `delegation-log.json`, even though
+they were appended to the audit stream `delegation-events.jsonl`. The
+artifact linter for TDD reads only the ledger, so it reported
+`tdd_slice_green_missing` (and `tdd_slice_builder_missing`) for slices
+whose work had actually landed.
+
+7.0.5 fixes the dedup key in both places to be the triple
+`(spanId, status, phase ?? null)`. Same-`(spanId, status)` rows with
+different phases now coexist in the ledger; an exact replay of the same
+phase row remains idempotent (existing retried-hook semantics preserved).
+
+- **`src/content/hooks.ts > persistEntry`** — append-path dedup updated to
+  `entry.spanId === clean.spanId && entry.status === clean.status &&
+  (entry.phase ?? null) === (clean.phase ?? null)`. The `replaceBySpanId`
+  rerecord path is unchanged.
+- **`src/delegation.ts > appendDelegation`** — same triple dedup applied
+  to the runtime API used by tests and internal commands.
+- **Regression test.** `tests/unit/delegation.test.ts` now covers a single
+  slice-builder span emitting RED, GREEN, REFACTOR, DOC and asserts all
+  four phase rows persist; an exact `(spanId, status, phase)` replay is
+  still deduplicated.
+
+No agent definitions, stage skills, or gates change in 7.0.5; this is a
+runtime-only ledger-shape correctness release.
+
 ## 7.0.4 — Plan must author the FULL Parallel Execution Plan before TDD
 
 In 7.0.3 the controller-dispatch mandate kept TDD honest about parallel

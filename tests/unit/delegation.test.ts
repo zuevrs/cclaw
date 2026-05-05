@@ -106,6 +106,62 @@ describe("delegation ledger run scoping", () => {
     expect(ledger.entries[0]?.spanId).toBe("span-fixed-1");
   });
 
+  it("preserves distinct phase rows that share spanId+status (TDD slice-builder lifecycle)", async () => {
+    // Regression for the 7.0.4 ledger dedup bug: a single slice-builder
+    // span legitimately emits four rows with status=completed (one each
+    // for phase=red|green|refactor|doc). The pre-7.0.5 dedup keyed only
+    // on (spanId, status), so green/refactor/doc were silently dropped
+    // from delegation-log.json and the artifact linter reported
+    // tdd_slice_green_missing for slices whose work actually landed.
+    const root = await createTempProject("delegation-dedup-phase-coexist");
+    await seedFlowState(root, "run-phase-coexist", "tdd");
+
+    const baseTs = Date.parse("2026-05-05T00:00:00.000Z");
+    const isoAt = (offsetMin: number): string =>
+      new Date(baseTs + offsetMin * 60_000).toISOString();
+    const phases = ["red", "green", "refactor", "doc"] as const;
+    for (let i = 0; i < phases.length; i += 1) {
+      const phase = phases[i]!;
+      await appendDelegation(root, {
+        stage: "tdd",
+        agent: "slice-builder",
+        mode: "mandatory",
+        status: "completed",
+        ts: isoAt(i + 1),
+        completedTs: isoAt(i + 1),
+        spanId: "span-tdd-S-99",
+        sliceId: "S-99",
+        phase,
+        evidenceRefs: [`.cclaw/artifacts/tdd-slices/S-99.${phase}.txt`]
+      });
+    }
+
+    const ledger = await readDelegationLedger(root);
+    const phaseRows = ledger.entries.filter(
+      (entry) => entry.spanId === "span-tdd-S-99" && entry.status === "completed"
+    );
+    const observedPhases = phaseRows.map((entry) => entry.phase).sort();
+    expect(observedPhases).toEqual(["doc", "green", "red", "refactor"]);
+
+    // Same (spanId, status, phase) replay is still deduplicated.
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      ts: isoAt(99),
+      completedTs: isoAt(99),
+      spanId: "span-tdd-S-99",
+      sliceId: "S-99",
+      phase: "green",
+      evidenceRefs: [".cclaw/artifacts/tdd-slices/S-99.green.txt"]
+    });
+    const replayed = await readDelegationLedger(root);
+    const greenRows = replayed.entries.filter(
+      (entry) => entry.spanId === "span-tdd-S-99" && entry.phase === "green"
+    );
+    expect(greenRows).toHaveLength(1);
+  });
 
   it("records lifecycle timestamps for scheduled and terminal rows", async () => {
     const root = await createTempProject("delegation-lifecycle-timestamps");

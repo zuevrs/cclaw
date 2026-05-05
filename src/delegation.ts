@@ -1402,7 +1402,9 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       }
     }
     if (prior.entries.some((existing) =>
-      existing.spanId === stamped.spanId && existing.status === stamped.status
+      existing.spanId === stamped.spanId &&
+      existing.status === stamped.status &&
+      (existing.phase ?? null) === (stamped.phase ?? null)
     )) {
       return;
     }
