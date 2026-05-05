@@ -136,7 +136,7 @@ async function resolveDesignDiagramTier(
 }
 
 /**
- * Wave 25 (v6.1.0) — parenthetical suffixes that the audit strips
+ * parenthetical suffixes that the audit strips
  * from a Codebase Investigation filename cell BEFORE attempting
  * `fs.stat`. The user's quick-tier test wrote `index.html (new)` in
  * the table, and the linter then tried to stat the literal string
@@ -192,7 +192,7 @@ export function normalizeCodebaseInvestigationFileRef(value: string, notesCell: 
   }
   if (!stripped) return null;
   if (/^(?:file|n\/a|none|\(none\)|tbd|\?)$/iu.test(stripped)) return null;
-  // Notes column may carry an explicit `skip:` marker (Wave 25).
+  // Notes column may carry an explicit `skip:` marker.
   if (/(?:^|\s|\|)skip\s*:/iu.test(notesCell)) skip = true;
   return { filename: stripped, raw: cleanedFull, newFile, skip };
 }

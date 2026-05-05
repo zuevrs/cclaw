@@ -361,10 +361,10 @@ function coerceRepoSignals(value: unknown): FlowState["repoSignals"] {
 }
 
 /**
- * Wave 24 follow-up (v6.1.1) — preserve `flow-state.json#taskClass`
+ * preserve `flow-state.json#taskClass`
  * across read/write round-trips. Before this audit fix the persistence
- * layer silently dropped the field, which made the Wave 24 bugfix-skip
- * (`mandatoryAgentsFor` short-circuit) and the Wave 25 artifact-validation
+ * layer silently dropped the field, which made the bugfix-skip
+ * (`mandatoryAgentsFor` short-circuit) and the artifact-validation
  * demotion both dead in practice: the only entry point that classified
  * a run was the unit-test harness passing `options.taskClass` directly
  * to `checkMandatoryDelegations`. The accepted union mirrors
@@ -622,16 +622,11 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
   const taskClass = coerceTaskClass(parsed.taskClass);
   const repoSignals = coerceRepoSignals(parsed.repoSignals);
   const completedStageMeta = sanitizeCompletedStageMeta(parsed.completedStageMeta);
-  const tddCutoverSliceId = coerceTddCutoverSliceId(parsed.tddCutoverSliceId);
-  const tddWorktreeCutoverSliceId = coerceTddCutoverSliceId(
-    parsed.tddWorktreeCutoverSliceId
-  );
-  const worktreeExecutionMode = coerceWorktreeExecutionMode(parsed.worktreeExecutionMode);
-  const tddCheckpointMode = coerceTddCheckpointMode(parsed.tddCheckpointMode);
-  const integrationOverseerMode = coerceIntegrationOverseerMode(parsed.integrationOverseerMode);
-  const legacyContinuation =
-    typeof parsed.legacyContinuation === "boolean" ? parsed.legacyContinuation : undefined;
   const tddGreenMinElapsedMs = coerceTddGreenMinElapsedMs(parsed.tddGreenMinElapsedMs);
+  const packageVersion =
+    typeof parsed.packageVersion === "string" && parsed.packageVersion.trim().length > 0
+      ? parsed.packageVersion.trim()
+      : undefined;
   const state: FlowState = {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     activeRunId,
@@ -644,13 +639,8 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
     ...(taskClass !== undefined ? { taskClass } : {}),
     ...(repoSignals ? { repoSignals } : {}),
     ...(completedStageMeta ? { completedStageMeta } : {}),
-    ...(tddCutoverSliceId ? { tddCutoverSliceId } : {}),
-    ...(tddWorktreeCutoverSliceId ? { tddWorktreeCutoverSliceId } : {}),
-    ...(worktreeExecutionMode !== undefined ? { worktreeExecutionMode } : {}),
-    ...(tddCheckpointMode !== undefined ? { tddCheckpointMode } : {}),
-    ...(integrationOverseerMode !== undefined ? { integrationOverseerMode } : {}),
-    ...(legacyContinuation !== undefined ? { legacyContinuation } : {}),
     ...(tddGreenMinElapsedMs !== undefined ? { tddGreenMinElapsedMs } : {}),
+    ...(packageVersion ? { packageVersion } : {}),
     skippedStages: sanitizeSkippedStages(parsed.skippedStages, track),
     staleStages: sanitizeStaleStages(parsed.staleStages),
     rewinds: sanitizeRewinds(parsed.rewinds),
@@ -662,39 +652,7 @@ function coerceFlowState(parsed: Record<string, unknown>): CoercedFlowStateResul
 }
 
 /**
- * v6.12.0 — best-effort coercion for `tddCutoverSliceId`. Returns the value
- * only when it matches the canonical slice id shape `S-<digits>`; otherwise
- * returns null so the field is omitted from the rehydrated state.
- */
-function coerceTddCutoverSliceId(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return /^S-\d+$/u.test(trimmed) ? trimmed : null;
-}
-
-function coerceWorktreeExecutionMode(
-  value: unknown
-): FlowState["worktreeExecutionMode"] | undefined {
-  if (value === "single-tree" || value === "worktree-first") return value;
-  return undefined;
-}
-
-function coerceTddCheckpointMode(
-  value: unknown
-): FlowState["tddCheckpointMode"] | undefined {
-  if (value === "per-slice" || value === "global-red") return value;
-  return undefined;
-}
-
-function coerceIntegrationOverseerMode(
-  value: unknown
-): FlowState["integrationOverseerMode"] | undefined {
-  if (value === "conditional" || value === "always") return value;
-  return undefined;
-}
-
-/**
- * v6.14.2 — coerce `tddGreenMinElapsedMs` from disk. Mirrors the
+ * coerce `tddGreenMinElapsedMs` from disk. Mirrors the
  * defensive read in `effectiveTddGreenMinElapsedMs`: numbers ≥ 0 round
  * down to integers; everything else (NaN, strings, negatives) returns
  * undefined so the field is omitted from the rehydrated state and the
@@ -962,10 +920,10 @@ export interface FlowStateRepairResult {
 }
 
 /**
- * v6.9.0 — backfill missing `completedStageMeta` rows for any stage that
+ * backfill missing `completedStageMeta` rows for any stage that
  * already lives in `completedStages` but has no audit timestamp. Uses the
  * stage's artifact mtime when available, otherwise the current time. This
- * runs as part of `flow-state-repair` so legacy v6.8 flow-state.json files
+ * runs as part of `flow-state-repair` so older flow-state.json files
  * get their meta carried forward without a destructive rewrite.
  */
 async function backfillCompletedStageMeta(

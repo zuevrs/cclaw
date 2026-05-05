@@ -19,7 +19,7 @@ const REVIEW_LOOP_STOP_REASONS = new Set([
 ]);
 
 /**
- * Wave 25 (v6.1.0) — exact JSON shape that gate-evidence validators
+ * exact JSON shape that gate-evidence validators
  * accept for a review-loop envelope. The error messages emitted by
  * `validateReviewLoopGateEvidence` always include this example so the
  * agent never has to guess where `stage` lives (top-level of the
@@ -215,9 +215,9 @@ export async function validateGateEvidenceShape(
 
 export function reviewLoopArtifactFixHint(stage: FlowStage, gateId: string): string {
   if (AUTO_REVIEW_LOOP_GATE_BY_STAGE[stage] !== gateId) return "";
-  // Wave 25 (v6.1.0): the consistent flow is "include the gate in
+  // the consistent flow is "include the gate in
   // --passed AND let stage-complete auto-hydrate evidence from the
-  // artifact". Wave 24's hint told agents to omit the gate from
+  // artifact". An older hint told agents to omit the gate from
   // --evidence-json, but they then hit
   // `missing --evidence-json entries for passed gates: <gateId>`
   // because hydration only runs when --evidence-json is also present

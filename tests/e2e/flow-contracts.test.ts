@@ -268,7 +268,7 @@ describe("flow command contracts", () => {
     }
 
     // Codex uses skill-kind shims under `.agents/skills/cc*/SKILL.md`
-    // since v0.40.0 (renamed from `cclaw-cc*` in v0.39.x). Codex CLI
+    // since release (renamed from `cclaw-cc*` in release). Codex CLI
     // reads that path, not `.codex/commands/`.
     for (const skillName of ["cc", "cc-idea", "cc-cancel"]) {
       const skillPath = path.join(root, ".agents/skills", skillName, "SKILL.md");
@@ -288,14 +288,13 @@ describe("flow command contracts", () => {
       "coherence-reviewer",
       "scope-guardian-reviewer",
       "feasibility-reviewer",
-      "slice-implementer",
+      "slice-builder",
       "release-reviewer",
       "product-discovery",
       "critic",
       "planner",
       "reviewer",
       "security-reviewer",
-      "test-author",
       "doc-updater",
       "divergent-thinker",
       "fixer",
@@ -316,10 +315,10 @@ describe("flow command contracts", () => {
     expect(generatedCritic).toContain("Pre-commitment predictions");
     expect(generatedDivergentThinker).toContain("Generate 3-5 alternative framings");
     expect(generatedIntegrationOverseer).toContain("integration overseer");
-    const generatedSliceImplementer = await fs.readFile(path.join(root, ".cclaw/agents/slice-implementer.md"), "utf8");
-    expect(generatedSliceImplementer).toContain("STRICT_RETURN_SCHEMA");
+    const generatedSliceBuilder = await fs.readFile(path.join(root, ".cclaw/agents/slice-builder.md"), "utf8");
+    expect(generatedSliceBuilder).toContain("STRICT_RETURN_SCHEMA");
 
-    // Codex hooks are managed again since v0.40.0.
+    // Codex hooks are managed again since release.
     const codexHooksPath = path.join(root, ".codex/hooks.json");
     const codexHooksRaw = await fs.readFile(codexHooksPath, "utf8");
     const codexHooks = JSON.parse(codexHooksRaw) as { hooks: Record<string, unknown> };
@@ -330,7 +329,7 @@ describe("flow command contracts", () => {
     expect(codexHooks.hooks).not.toHaveProperty("UserPromptSubmit");
     expect(codexHooksRaw).toContain("statusMessage");
 
-    // Legacy v0.39.x skill layout must be absent (fresh install writes
+    // Legacy release skill layout must be absent (fresh install writes
     // `cc*`, not `cclaw-cc*`).
     for (const legacySkill of ["cclaw-cc", "cclaw-cc-view"]) {
       await expect(
@@ -369,7 +368,6 @@ describe("flow command contracts", () => {
     expect(scopeSkill).not.toContain("For simple web-app flows, default to HOLD SCOPE");
     expect(designSkill).toContain("`mandatory delegations`");
     expect(designSkill).toContain("`architect`");
-    expect(designSkill).toContain("`test-author`");
     expect(brainstormSkill).toContain("`mandatory delegations`: `product-discovery`, `critic`");
   });
 

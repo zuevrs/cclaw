@@ -85,9 +85,7 @@ async function seedFanoutFixture(root: string): Promise<void> {
     JSON.stringify({
       currentStage: "brainstorm",
       activeRunId: "active",
-      completedStages: [],
-      tddCheckpointMode: "per-slice",
-      integrationOverseerMode: "conditional"
+      completedStages: []
     }, null, 2),
     "utf8"
   );
@@ -104,16 +102,13 @@ async function seedFanoutFixture(root: string): Promise<void> {
       entries: [
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "mandatory",
           status: "completed",
-          spanId: "tdd-slice-implementer-001",
+          spanId: "tdd-slice-builder-001",
           phase: "green",
           sliceId: "S-1",
           claimedPaths: ["src/auth/login.ts"],
-          claimToken: "wave-w01-s1",
-          ownerLaneId: "lane-1",
-          leasedUntil: "2099-01-01T00:00:00.000Z",
           ts: "2026-05-01T10:00:00Z",
           completedTs: "2026-05-01T10:00:00Z",
           runId: "active",
@@ -121,16 +116,13 @@ async function seedFanoutFixture(root: string): Promise<void> {
         },
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "mandatory",
           status: "completed",
-          spanId: "tdd-slice-implementer-002",
+          spanId: "tdd-slice-builder-002",
           phase: "green",
           sliceId: "S-2",
           claimedPaths: ["src/billing/stripe.ts"],
-          claimToken: "wave-w01-s2",
-          ownerLaneId: "lane-2",
-          leasedUntil: "2099-01-01T00:00:00.000Z",
           ts: "2026-05-01T10:02:00Z",
           completedTs: "2026-05-01T10:02:00Z",
           runId: "active",
@@ -188,52 +180,38 @@ async function seedFanoutFixture(root: string): Promise<void> {
   );
 }
 
-describe("v6.14.1 — TDD controller discipline skill text", () => {
+describe("TDD controller discipline skill text", () => {
   it("checklist instructs the controller to record scheduled+launched BEFORE Task dispatch", () => {
     const checklistJoined = TDD_STAGE.executionModel.checklist.join("\n");
-    expect(checklistJoined).toMatch(/Controller dispatch ordering \(v6\.14\.1/u);
-    expect(checklistJoined).toMatch(/record\s+`scheduled`\s+then\s+`launched`/iu);
-    expect(checklistJoined).toMatch(/BEFORE\*\* the `Task\(\.\.\.\)`/u);
+    expect(checklistJoined).toMatch(/Record before dispatch/u);
+    expect(checklistJoined).toMatch(/--status=scheduled/u);
+    expect(checklistJoined).toMatch(/--status=launched/u);
+    expect(checklistJoined).toMatch(/before the tool call/iu);
   });
 
-  it("checklist instructs the controller to call integrationCheckRequired() and emit cclaw_integration_overseer_skipped when required: false", () => {
+  it("checklist instructs integrationCheckRequired + cclaw_integration_overseer_skipped when overseer is skipped", () => {
     const checklistJoined = TDD_STAGE.executionModel.checklist.join("\n");
-    expect(checklistJoined).toMatch(/integrationCheckRequired\(events, fanInAudits\)/u);
-    expect(checklistJoined).toMatch(/--audit-kind=cclaw_integration_overseer_skipped/u);
-    expect(checklistJoined).toMatch(/--audit-reason=/u);
+    expect(checklistJoined).toMatch(/integrationCheckRequired/u);
+    expect(checklistJoined).toMatch(/cclaw_integration_overseer_skipped/u);
   });
 
-  it("checklist documents inline DOC opt-in for single-slice non-deep waves via slice-implementer --finalize-doc", () => {
+  it("checklist documents active-span collisions and deliberate --allow-parallel", () => {
     const checklistJoined = TDD_STAGE.executionModel.checklist.join("\n");
-    expect(checklistJoined).toMatch(/Inline DOC opt-in/u);
-    expect(checklistJoined).toMatch(/slice-implementer --finalize-doc/u);
-    expect(checklistJoined).toMatch(/single-slice waves where `flow-state\.json::discoveryMode != "deep"`/u);
-  });
-
-  it("checklist documents the stale active-span recovery (--allow-parallel) workaround", () => {
-    const checklistJoined = TDD_STAGE.executionModel.checklist.join("\n");
-    expect(checklistJoined).toMatch(/Stale active-span recovery/u);
+    expect(checklistJoined).toMatch(/dispatch_duplicate/u);
     expect(checklistJoined).toMatch(/dispatch_active_span_collision/u);
     expect(checklistJoined).toMatch(/--allow-parallel/u);
   });
-
-  it("checklist preserves the v6.14.0 refactor-fold rule with the legacyContinuation+global-red carve-out", () => {
-    const checklistJoined = TDD_STAGE.executionModel.checklist.join("\n");
-    expect(checklistJoined).toMatch(/--refactor-outcome=inline\|deferred/u);
-    expect(checklistJoined).toMatch(/legacyContinuation: true/u);
-    expect(checklistJoined).toMatch(/global-red/u);
-  });
 });
 
-describe("v6.14.1 — worker ACK helper template (rendered agent markdown)", () => {
-  const tddWorkerAgents = ["test-author", "slice-implementer", "slice-documenter", "integration-overseer"];
+describe("worker ACK helper template (rendered agent markdown)", () => {
+  const tddWorkerAgents = ["slice-builder", "integration-overseer"];
 
   for (const name of tddWorkerAgents) {
     it(`includes the TDD worker self-record template in ${name}.md`, () => {
       const def = CCLAW_AGENTS.find((a) => a.name === name);
       expect(def).toBeDefined();
       const md = agentMarkdown(def!);
-      expect(md).toMatch(/## TDD Worker Self-Record Contract \(v6\.14\.\d+\)/u);
+      expect(md).toMatch(/## TDD worker delegation self-record contract/u);
       expect(md).toMatch(/--status=acknowledged/u);
       expect(md).toMatch(/--status=completed/u);
       expect(md).toMatch(/delegation-record\.mjs/u);
@@ -246,12 +224,12 @@ describe("v6.14.1 — worker ACK helper template (rendered agent markdown)", () 
       const def = CCLAW_AGENTS.find((a) => a.name === name);
       expect(def, `agent ${name} should be defined`).toBeDefined();
       const md = agentMarkdown(def!);
-      expect(md).not.toMatch(/## TDD Worker Self-Record Contract \(v6\.14\.\d+\)/u);
+      expect(md).not.toMatch(/## TDD worker delegation self-record contract/u);
     }
   });
 });
 
-describe("v6.14.1 — delegation-record.mjs --audit-kind hook surface", () => {
+describe("delegation-record.mjs --audit-kind hook surface", () => {
   it("usage block documents the new --audit-kind audit-emit path", () => {
     const script = delegationRecordScript();
     expect(script).toMatch(/--audit-kind=cclaw_integration_overseer_skipped/u);
@@ -343,7 +321,7 @@ describe("v6.14.1 — delegation-record.mjs --audit-kind hook surface", () => {
   });
 });
 
-describe("v6.14.1 — tdd_integration_overseer_skipped_audit_missing linter rule", () => {
+describe("tdd_integration_overseer_skipped_audit_missing linter rule", () => {
   it("emits an advisory finding when 2+ closed slices closed without overseer dispatch and no audit row", async () => {
     const root = await createTempProject("tdd-overseer-skipped-audit-missing");
     await seedFanoutFixture(root);
@@ -415,7 +393,7 @@ describe("v6.14.1 — tdd_integration_overseer_skipped_audit_missing linter rule
   });
 });
 
-describe("v6.14.1 — runtime: completed events clear active-span set across stage boundaries", () => {
+describe("runtime: completed events clear active-span set across stage boundaries", () => {
   it("a span scheduled+launched+completed under stage=tdd is cleared from active before a new tdd dispatch", async () => {
     const { computeActiveSubagents } = await import("../../src/delegation.js");
     const t0 = "2026-05-04T13:45:16.787Z";
@@ -423,10 +401,10 @@ describe("v6.14.1 — runtime: completed events clear active-span set across sta
     const t2 = "2026-05-04T13:45:26.519Z";
     const t3 = "2026-05-04T13:45:26.571Z";
     const stale = [
-      { stage: "tdd" as const, agent: "slice-implementer" as const, mode: "mandatory" as const, status: "scheduled" as const, spanId: "tdd-slice-implementer-015", ts: t0, startTs: t0 },
-      { stage: "tdd" as const, agent: "slice-implementer" as const, mode: "mandatory" as const, status: "launched" as const, spanId: "tdd-slice-implementer-015", ts: t1, startTs: t0, launchedTs: t1 },
-      { stage: "tdd" as const, agent: "slice-implementer" as const, mode: "mandatory" as const, status: "acknowledged" as const, spanId: "tdd-slice-implementer-015", ts: t2, startTs: t0, launchedTs: t1, ackTs: t2 },
-      { stage: "tdd" as const, agent: "slice-implementer" as const, mode: "mandatory" as const, status: "completed" as const, spanId: "tdd-slice-implementer-015", ts: t3, startTs: t0, launchedTs: t1, ackTs: t2, completedTs: t3, endTs: t3 }
+      { stage: "tdd" as const, agent: "slice-builder" as const, mode: "mandatory" as const, status: "scheduled" as const, spanId: "tdd-slice-builder-015", ts: t0, startTs: t0 },
+      { stage: "tdd" as const, agent: "slice-builder" as const, mode: "mandatory" as const, status: "launched" as const, spanId: "tdd-slice-builder-015", ts: t1, startTs: t0, launchedTs: t1 },
+      { stage: "tdd" as const, agent: "slice-builder" as const, mode: "mandatory" as const, status: "acknowledged" as const, spanId: "tdd-slice-builder-015", ts: t2, startTs: t0, launchedTs: t1, ackTs: t2 },
+      { stage: "tdd" as const, agent: "slice-builder" as const, mode: "mandatory" as const, status: "completed" as const, spanId: "tdd-slice-builder-015", ts: t3, startTs: t0, launchedTs: t1, ackTs: t2, completedTs: t3, endTs: t3 }
     ];
     expect(computeActiveSubagents(stale)).toEqual([]);
   });
@@ -437,8 +415,8 @@ describe("v6.14.1 — runtime: completed events clear active-span set across sta
     const t1 = "2026-05-04T14:00:00.500Z";
     const t2 = "2026-05-04T14:00:01.000Z";
     const entries = [
-      { stage: "tdd" as const, agent: "slice-implementer" as const, mode: "mandatory" as const, status: "scheduled" as const, spanId: "tdd-slice-implementer-fold", phase: "green" as const, sliceId: "S-1", ts: t0, startTs: t0 },
-      { stage: "tdd" as const, agent: "slice-implementer" as const, mode: "mandatory" as const, status: "completed" as const, spanId: "tdd-slice-implementer-fold", phase: "green" as const, sliceId: "S-1", ts: t2, startTs: t0, launchedTs: t1, completedTs: t2, refactorOutcome: { mode: "deferred" as const, rationale: "no shared state" } }
+      { stage: "tdd" as const, agent: "slice-builder" as const, mode: "mandatory" as const, status: "scheduled" as const, spanId: "tdd-slice-builder-fold", phase: "green" as const, sliceId: "S-1", ts: t0, startTs: t0 },
+      { stage: "tdd" as const, agent: "slice-builder" as const, mode: "mandatory" as const, status: "completed" as const, spanId: "tdd-slice-builder-fold", phase: "green" as const, sliceId: "S-1", ts: t2, startTs: t0, launchedTs: t1, completedTs: t2, refactorOutcome: { mode: "deferred" as const, rationale: "no shared state" } }
     ];
     expect(computeActiveSubagents(entries)).toEqual([]);
   });

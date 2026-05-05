@@ -23,7 +23,7 @@ const SEED_SHELF_SECTION = `## Seed Shelf Candidates (optional)
 | .cclaw/seeds/SEED-YYYY-MM-DD-<slug>.md |  |  |  |`;
 
 /**
- * Shared investigation discipline block (Round 5 / v6.6.0). Rendered once per
+ * Shared investigation discipline block. Rendered once per
  * elicitation/spec stage skill (brainstorm, scope, design, spec, plan, tdd,
  * review). The block enforces a four-step ladder before drafting and a
  * path-passing rule for delegations so token cost and "jumped into code"
@@ -121,7 +121,7 @@ ${renderBehaviorAnchorTemplateLine("brainstorm")}
 | 1 |  |  | scope-shaping [topic:pain] |
 
 > Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
-> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Brainstorm IDs: \`pain\`, \`direct-path\`, \`operator\`, \`no-go\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. Wave 24 (v6.0.0) removed the English keyword fallback; Round 6 (v6.7.0) retired the counterfactual \`do-nothing\` topic (Do-nothing consequence stays in the Problem Decision Record).
+> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Brainstorm IDs: \`pain\`, \`direct-path\`, \`operator\`, \`no-go\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. The counterfactual \`do-nothing\` topic is intentionally absent — Do-nothing consequence lives in the Problem Decision Record.
 
 ## Approach Tier
 - Tier: lite | standard | deep
@@ -247,7 +247,7 @@ ${renderBehaviorAnchorTemplateLine("scope")}
 | 1 |  |  | scope-shaping [topic:in-out] |
 
 > Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
-> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Scope IDs: \`in-out\`, \`locked-upstream\`, \`rollback\`, \`failure-modes\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. Wave 24 (v6.0.0) removed the English keyword fallback.
+> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Scope IDs: \`in-out\`, \`locked-upstream\`, \`rollback\`, \`failure-modes\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag.
 
 ## Pre-Scope System Audit
 | Check | Command | Findings |
@@ -351,7 +351,7 @@ ${renderBehaviorAnchorTemplateLine("scope")}
 > scope/design/spec/plan/review/ship; downstream artifacts reference these IDs
 > verbatim. If a decision is later dropped, keep the row and mark it
 > \`(superseded by D-Y)\`; if a new one is added mid-flow, append with the next
-> free D-number. Wave 22 (v4.0.0) removed the legacy LD#<sha8> hash anchor —
+> free D-number. The earlier LD#<sha8> hash anchor is gone —
 > existing artifacts with LD# anchors remain valid markdown but the linter only
 > tracks D-XX IDs.
 
@@ -488,7 +488,7 @@ ${renderBehaviorAnchorTemplateLine("design")}
 | 1 |  |  | architecture-shaping [topic:data-flow] |
 
 > Append-only by turn. Add one row after each user answer; do not rewrite prior rows.
-> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Design IDs: \`data-flow\`, \`seams\`, \`invariants\`, \`not-refactor\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag. Wave 24 (v6.0.0) removed the English keyword fallback.
+> **Topic tag is MANDATORY for forcing-question rows.** Stamp \`[topic:<id>]\` in the \`Decision impact\` cell so the linter can verify coverage in any natural language (RU/EN/UA/etc.). Design IDs: \`data-flow\`, \`seams\`, \`invariants\`, \`not-refactor\`. Multiple tags allowed when one answer covers several topics. Stop-signal rows do NOT need a tag.
 
 ## Codebase Investigation
 | File | Current responsibility | Patterns discovered | Existing fit / reuse candidate |
@@ -748,7 +748,7 @@ ${renderBehaviorAnchorTemplateLine("spec")}
 |---|---|---|---|---|---|
 | AC-1 | R1 |  |  | false |  |
 
-> Standard ACs reference at least one \`R#\` from \`02-scope.md\`. Quick-track ACs may instead put \`Quick Reproduction Contract\` / bug-slice refs in the Requirement Ref column and \`N/A\` for Design Decision Ref. ACs are stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new ones append with the next free \`AC-#\`. **v6.13.0:** \`parallelSafe\` states whether this AC can be proven in parallel with others; \`touchSurface\` lists repo-relative globs or modules this AC is expected to touch (scheduler + slice planning).
+> Standard ACs reference at least one \`R#\` from \`02-scope.md\`. Quick-track ACs may instead put \`Quick Reproduction Contract\` / bug-slice refs in the Requirement Ref column and \`N/A\` for Design Decision Ref. ACs are stable (never renumber): dropped ACs stay with Priority \`DROPPED\`; new ones append with the next free \`AC-#\`. \`parallelSafe\` states whether this AC can be proven in parallel with others; \`touchSurface\` lists repo-relative globs or modules this AC is expected to touch (scheduler + slice planning).
 
 ## Quick Reproduction Contract
 > Required for quick bug-fix specs; use \`N/A\` for non-bugfix or standard/medium tracks. TDD turns this contract into the RED reproduction test.
@@ -990,7 +990,7 @@ ${renderBehaviorAnchorTemplateLine("tdd")}
 <!-- auto-start: slices-index -->
 ## Slices Index
 
-_Auto-rendered from \`tdd-slices/S-*.md\` once slice-documenter or controller writes per-slice files. Do not edit by hand._
+_Auto-rendered from \`tdd-slices/S-*.md\` once \`slice-builder\` or the controller writes per-slice files. Do not edit by hand._
 <!-- auto-end: slices-index -->
 
 ## Test Discovery
@@ -1002,17 +1002,17 @@ _Auto-rendered from \`tdd-slices/S-*.md\` once slice-documenter or controller wr
 | S-1 |  | covered/out-of-scope because  |
 
 ## RED Evidence
-> From v6.11.0 the per-slice RED rows are auto-satisfied by \`phase=red\` events in \`delegation-events.jsonl\` (controller dispatches \`test-author --slice S-<id> --phase red\`). Legacy hand-filled tables continue to validate as a fallback. Use \`Evidence: <path>\` or \`Evidence: spanId:<id>\` pointers if you prefer a manual reference.
+> Per-slice RED rows are auto-satisfied by \`phase=red\` events in \`delegation-events.jsonl\` (controller dispatches \`slice-builder --slice S-<id> --phase red\`). Use \`Evidence: <path>\` or \`Evidence: spanId:<id>\` pointers if you prefer a manual reference.
 
 ## Acceptance & Failure Map
 | Slice | Source ID | AC ID | Expected behavior | RED-link |
 |---|---|---|---|---|
 | S-1 | SRC-1 | AC-1 |  |  |
 
-> Each slice maps to the active track's source item (plan slice on standard/medium, or the \`Quick Reproduction Contract\` bug slice / spec acceptance item on quick) and to a spec criterion. The RED-link column is satisfied by either a \`spanId:<id>\` from the delegation ledger or an \`<artifacts-dir>/<file>\` evidence pointer. From v6.11.0 the column is auto-derivable: a \`phase=red\` event in \`delegation-events.jsonl\` with non-empty evidenceRefs auto-satisfies the row.
+> Each slice maps to the active track's source item (plan slice on standard/medium, or the \`Quick Reproduction Contract\` bug slice / spec acceptance item on quick) and to a spec criterion. The RED-link column is satisfied by either a \`spanId:<id>\` from the delegation ledger or an \`<artifacts-dir>/<file>\` evidence pointer. The column is also auto-derivable: a \`phase=red\` event in \`delegation-events.jsonl\` with non-empty evidenceRefs auto-satisfies the row.
 
 ## GREEN Evidence
-> From v6.11.0 GREEN rows are auto-satisfied by \`phase=green\` events in \`delegation-events.jsonl\` (controller dispatches \`slice-implementer --slice S-<id> --phase green\`). Legacy hand-filled tables continue to validate as a fallback. Use \`Evidence: <path>\` or \`Evidence: spanId:<id>\` pointers if you prefer a manual reference.
+> GREEN rows are auto-satisfied by \`phase=green\` events in \`delegation-events.jsonl\` (controller dispatches \`slice-builder --slice S-<id> --phase green\`). Use \`Evidence: <path>\` or \`Evidence: spanId:<id>\` pointers if you prefer a manual reference.
 
 ## REFACTOR Notes
 - What changed:
@@ -1032,7 +1032,7 @@ _Auto-rendered from \`tdd-slices/S-*.md\` once slice-documenter or controller wr
 <!-- auto-start: tdd-slice-summary -->
 ## Vertical Slice Cycle
 
-_Auto-rendered from \`delegation-events.jsonl\` once \`test-author\` and \`slice-implementer\` are dispatched with \`--slice <id> --phase red|green|refactor|refactor-deferred\`. Do not edit by hand._
+_Auto-rendered from \`delegation-events.jsonl\` once \`slice-builder\` is dispatched per slice with \`--slice <id> --phase red|green|refactor|refactor-deferred\`. Do not edit by hand._
 <!-- auto-end: tdd-slice-summary -->
 
 ## Assertion Correctness Notes
@@ -1224,7 +1224,7 @@ ${renderBehaviorAnchorTemplateLine("review")}
 | AC-1 | PASS/FAIL |  |
 
 ## Layer 2 Findings
-> Wave 23 (v5.0.0): Layer 2 categories OWNED by review = cross-slice correctness, security, dependency/version, observability, external-safety. Performance + architecture findings are CARRY-FORWARD from \`03-design-<slug>.md\` (Performance Budget, ADR) — cite, do NOT re-derive. Single-slice findings stay in \`06-tdd.md > Per-Slice Review\`; review may cite their IDs (severity/disposition must match — cross-artifact-duplication linter blocks otherwise).
+> Layer 2 categories OWNED by review = cross-slice correctness, security, dependency/version, observability, external-safety. Performance + architecture findings are CARRY-FORWARD from \`03-design-<slug>.md\` (Performance Budget, ADR) — cite, do NOT re-derive. Single-slice findings stay in \`06-tdd.md > Per-Slice Review\`; review may cite their IDs (severity/disposition must match — cross-artifact-duplication linter blocks otherwise).
 
 | ID | Severity | Category | File:line / no-line reason | Description | Status |
 |---|---|---|---|---|---|
@@ -1505,7 +1505,7 @@ delegate to a specialized agent or skill if the harness supports it. The primary
 /**
  * Always-on baseline rule materialized at `.cursor/rules/cclaw-guidelines.mdc`.
  * Independent of skill activation — kicks in even when the agent skips
- * loading skills. Three hard rules cover the most common Wave 22 regressions
+ * loading skills. Three hard rules cover the most common regressions
  * (premature draft, premature subagent dispatch, command-line echo to chat).
  */
 export const CURSOR_GUIDELINES_RULE_MDC = `---
@@ -1536,18 +1536,17 @@ draft after 1-2 questions while forcing topic ids remain untagged, STOP
 and continue the loop.
 
 The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when
-convergence has not been reached. Wave 24 (v6.0.0) made \`[topic:<id>]\`
-tagging mandatory; the English keyword fallback was removed because it
-mis-reported convergence on RU/UA Q&A logs.
+convergence has not been reached. \`[topic:<id>]\` tagging is mandatory:
+English keyword detection is intentionally absent because it mis-reports
+convergence on RU/UA Q&A logs.
 
 ## 2. Mandatory subagents run after Q&A approval
 
 For brainstorm / scope / design, mandatory subagents (
-\`product-discovery\`, \`critic\`, \`planner\`, \`architect\`,
-\`test-author\`) run **only AFTER the user approves the elicitation
-outcome**, never before the Q&A loop converges. Dispatching them early
-preempts the user dialogue and violates the elicitation contract — the
-linter will block stage-complete.
+\`product-discovery\`, \`critic\`, \`planner\`, \`architect\`) run **only
+AFTER the user approves the elicitation outcome**, never before the Q&A
+loop converges. Dispatching them early preempts the user dialogue and
+violates the elicitation contract — the linter will block stage-complete.
 
 See each stage's "Run Phase: post-elicitation" rows in the materialized
 Automatic Subagent Dispatch table.
@@ -1632,9 +1631,9 @@ Track-specific skips are allowed only when \`flow-state.track\` + \`skippedStage
 `;
 
 /**
- * v6.11.0 (S2) — per-slice prose file written by `slice-documenter`
- * (or the controller) to `<artifacts-dir>/tdd-slices/S-<id>.md`. The
- * main `06-tdd.md` is auto-indexed via `## Slices Index`.
+ * Per-slice prose file written by `slice-builder` (or the controller)
+ * to `<artifacts-dir>/tdd-slices/S-<id>.md`. The main `06-tdd.md` is
+ * auto-indexed via `## Slices Index`.
  */
 export function tddSliceFileTemplate(sliceId: string): string {
   return `# Slice ${sliceId}

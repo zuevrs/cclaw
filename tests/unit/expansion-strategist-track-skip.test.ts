@@ -9,10 +9,10 @@ import {
 } from "../../src/delegation.js";
 
 /**
- * Wave 25 (v6.1.0) — Expansion Strategist track-aware skip audit.
+ * — Expansion Strategist track-aware skip audit.
  *
- * Mirrors `mandatory_delegations_skipped_by_track` (Wave 24) and
- * `artifact_validation_demoted_by_track` (Wave 25-A): a non-delegation
+ * Mirrors `mandatory_delegations_skipped_by_track` () and
+ * `artifact_validation_demoted_by_track` (): a non-delegation
  * audit event written to `delegation-events.jsonl` whenever the
  * scope-stage Expansion Strategist (`product-discovery`) requirement
  * is dropped because the active run is on a small-fix lane.
@@ -21,7 +21,7 @@ import {
  * surface as a corrupt line.
  */
 
-describe("Wave 25 — recordExpansionStrategistSkippedByTrack audit", () => {
+describe("— recordExpansionStrategistSkippedByTrack audit", () => {
   it("appends an audit event recognized by readDelegationEvents", async () => {
     const root = await createTempProject("wave-25-strategist-skip-quick");
     await recordExpansionStrategistSkippedByTrack(root, {
@@ -60,7 +60,7 @@ describe("Wave 25 — recordExpansionStrategistSkippedByTrack audit", () => {
   });
 });
 
-describe("Wave 25 — recordArtifactValidationDemotedByTrack audit (W25-A)", () => {
+describe("— recordArtifactValidationDemotedByTrack audit (W25-A)", () => {
   it("appends an audit event with the demoted section list", async () => {
     const root = await createTempProject("wave-25-artifact-demote-quick");
     await recordArtifactValidationDemotedByTrack(root, {

@@ -62,9 +62,9 @@ import {
 import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
 import { SUBAGENT_CONTEXT_SKILLS } from "./content/subagent-context-skills.js";
 import { CCLAW_AGENTS } from "./content/core-agents.js";
-import { createInitialFlowState, effectiveWorktreeExecutionMode, type FlowState } from "./flow-state.js";
+import { createInitialFlowState } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
-import { ManagedResourceSession, setActiveManagedResourceSession } from "./managed-resources.js";
+import { ManagedResourceSession, readManagedResourceManifest, setActiveManagedResourceSession } from "./managed-resources.js";
 import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
 import {
   HARNESS_ADAPTERS,
@@ -80,16 +80,12 @@ import {
   codexConfigPath,
   readCodexConfig
 } from "./codex-feature-flag.js";
-import { CorruptFlowStateError, ensureRunSystem, readFlowState, writeFlowState } from "./runs.js";
+import { CorruptFlowStateError, ensureRunSystem } from "./runs.js";
 import {
-  PLAN_SPLIT_DEFAULT_WAVE_SIZE,
-  buildParallelExecutionPlanSection,
   formatNextParallelWaveSyncHint,
   mergeParallelWaveDefinitions,
   parseParallelExecutionPlanWaves,
-  parseWavePlanDirectory,
-  planArtifactLacksV613ParallelMetadata,
-  upsertParallelExecutionPlanSection
+  parseWavePlanDirectory
 } from "./internal/plan-split-waves.js";
 import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
 import { FLOW_STAGES } from "./types.js";
@@ -249,17 +245,13 @@ const DEPRECATED_STATE_FILES = [
   "context-mode.json",
   "session-digest.md",
   "context-warnings.jsonl",
-  // Runtime Honesty 6.9.0 removed the per-run TDD cycle JSONL: gate evidence
-  // now reads cycle phase progression directly from the artifact table.
   "tdd-cycle-log.jsonl"
 ] as const;
 
-// v6.11.0 (R5): files under `<runtime>/artifacts/` that previous releases
-// generated and v6.11.0 removed. `cclaw-cli sync` deletes each so existing
+// Files under `<runtime>/artifacts/` that older releases generated and
+// the current release removes. `cclaw-cli sync` deletes each so existing
 // installs lose the obsolete sidecar without requiring manual cleanup.
 const DEPRECATED_ARTIFACT_FILES = [
-  // v6.10.0 sidecar — replaced in v6.11.0 by phase events in
-  // delegation-events.jsonl + auto-rendered tables in 06-tdd.md.
   "06-tdd-slices.jsonl"
 ] as const;
 
@@ -296,10 +288,10 @@ async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
 }
 
 
-// Legacy cleanup: prior versions installed Node-based git pre-commit/pre-push relays
-// under .git/hooks/* and a runtime tree at .cclaw/hooks/git/. Runtime Honesty 6.9.0
-// removed managed git hooks entirely; the cleanup below stays so existing installs
-// shed the leftover files on next sync/uninstall.
+// Older versions installed Node-based git pre-commit/pre-push relays under
+// `.git/hooks/*` and a runtime tree at `.cclaw/hooks/git/`. cclaw no longer
+// manages git hooks; the cleanup below stays so existing installs shed the
+// leftover files on next sync/uninstall.
 const LEGACY_GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
 const LEGACY_GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
 
@@ -347,12 +339,14 @@ async function writeWavePlansScaffold(projectRoot: string): Promise<void> {
 
 async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
   void config;
+  const manifest = await readManagedResourceManifest(projectRoot).catch(() => null);
+  const packageVersion = manifest?.packageVersion ?? null;
   const skillTrack = "standard";
   for (const stage of FLOW_STAGES) {
     const folder = stageSkillFolder(stage);
     await writeFileSafe(
       runtimePath(projectRoot, "skills", folder, "SKILL.md"),
-      stageSkillMarkdown(stage, skillTrack)
+      stageSkillMarkdown(stage, skillTrack, packageVersion)
     );
   }
 
@@ -417,7 +411,6 @@ async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<v
     await writeFileSafe(runtimePath(projectRoot, "skills", folderName, "SKILL.md"), markdown);
   }
 
-  // Wave 21: language packs are no longer materialized from config.
   await fs.rm(runtimePath(projectRoot, ...LANGUAGE_RULE_PACK_DIR), { recursive: true, force: true });
 
   for (const legacyFolder of LEGACY_LANGUAGE_RULE_PACK_FOLDERS) {
@@ -907,13 +900,12 @@ async function writeHooks(projectRoot: string, config: CclawConfig): Promise<voi
       await ensureDir(cursorDir);
       await writeMergedHookJson(projectRoot, path.join(cursorDir, "hooks.json"), cursorHooksJson());
     } else if (harness === "codex") {
-      // Codex CLI ≥ v0.114 (Mar 2026) supports lifecycle hooks at
-      // `.codex/hooks.json`, gated behind the `[features] codex_hooks = true`
-      // flag in `~/.codex/config.toml`. cclaw always writes the file so
-      // the moment the flag flips on, the cclaw hooks start firing. See
-      // `codexHooksJsonWithObservation` for the Bash-only caveat on
-      // PreToolUse/PostToolUse. If the feature flag is off, hooks remain
-      // inert until the user enables codex_hooks in ~/.codex/config.toml.
+      // Codex CLI lifecycle hooks live at `.codex/hooks.json`, gated by
+      // `[features] codex_hooks = true` in `~/.codex/config.toml`. cclaw
+      // always writes the file so the moment the flag flips on, cclaw
+      // hooks start firing. PreToolUse/PostToolUse remain Bash-only on
+      // Codex; if the feature flag is off, hooks stay inert until the
+      // user enables `codex_hooks` in `~/.codex/config.toml`.
       const codexDir = path.join(projectRoot, ".codex");
       await ensureDir(codexDir);
       await writeMergedHookJson(projectRoot, path.join(codexDir, "hooks.json"), codexHooksJson());
@@ -964,10 +956,6 @@ async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId
 
 async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
   const enabled = new Set<HarnessId>(harnesses);
-  // v0.40.0: `.codex/hooks.json` is back on the managed list now that
-  // Codex CLI actually consumes it (v0.114+, Mar 2026). Legacy
-  // `.codex/commands/` cleanup still happens unconditionally from
-  // `cleanupLegacyCodexSurfaces` inside `syncHarnessShims`.
   const managedHookFiles: Array<{ harness: HarnessId; hookPath: string }> = [
     { harness: "claude", hookPath: path.join(projectRoot, ".claude/hooks/hooks.json") },
     { harness: "cursor", hookPath: path.join(projectRoot, ".cursor/hooks.json") },
@@ -1016,428 +1004,6 @@ async function writeState(projectRoot: string, config: CclawConfig, forceReset =
 
   const state = createInitialFlowState({ track: "standard" });
   await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-}
-
-/**
- * v6.12.0 — TDD auto-cutover sync. When sync detects a legacy `06-tdd.md`
- * (no auto-render markers) carrying observable slice activity (e.g. `S-N`
- * referenced ≥3 times in slice-section bodies), insert the v6.11.0 marker
- * skeleton + a one-line cutover banner and stamp the highest legacy slice
- * id into `flow-state.json::tddCutoverSliceId`. Idempotent: re-running sync
- * is byte-stable once markers are present.
- *
- * Design notes:
- *   - Best-effort: read failures, missing flow-state, or unparseable JSON
- *     all short-circuit silently. We never throw inside sync for migration
- *     bookkeeping.
- *   - We use `writeFlowState({ allowReset: true })` so we don't trip
- *     `validateFlowTransition` (the only field we mutate is the new
- *     additive `tddCutoverSliceId`; transition rules don't apply).
- *   - The banner mirrors the language in the `## Per-Slice Ritual`
- *     skill section so a reader of `06-tdd.md` who hasn't seen v6.12.0
- *     understands the contract change.
- */
-async function applyTddCutoverIfNeeded(projectRoot: string): Promise<void> {
-  const tddArtifactPath = runtimePath(projectRoot, "artifacts", "06-tdd.md");
-  let existing: string;
-  try {
-    existing = await fs.readFile(tddArtifactPath, "utf8");
-  } catch {
-    return;
-  }
-  if (existing.includes("<!-- auto-start: tdd-slice-summary -->")) {
-    return;
-  }
-
-  const sliceMatches = [...existing.matchAll(/\bS-(\d+)\b/gu)];
-  if (sliceMatches.length < 3) {
-    return;
-  }
-  let maxSliceNum = 0;
-  for (const match of sliceMatches) {
-    const n = Number.parseInt(match[1]!, 10);
-    if (Number.isFinite(n) && n > maxSliceNum) {
-      maxSliceNum = n;
-    }
-  }
-  if (maxSliceNum <= 0) {
-    return;
-  }
-  const cutoverSliceId = `S-${maxSliceNum}`;
-
-  const banner = [
-    `<!-- v6.12.0 cutover: slices S-1..${cutoverSliceId} use legacy per-slice tables.`,
-    `     New slices (S-${maxSliceNum + 1}+) use phase events + tdd-slices/<id>.md.`,
-    "     Controller MUST NOT add new rows to legacy sections. -->"
-  ].join("\n");
-  const slicesIndexBlock = [
-    "<!-- auto-start: slices-index -->",
-    "## Slices Index",
-    "",
-    "_Auto-rendered from `tdd-slices/S-*.md` once slice-documenter or controller writes per-slice files. Do not edit by hand._",
-    "<!-- auto-end: slices-index -->"
-  ].join("\n");
-  const summaryBlock = [
-    "<!-- auto-start: tdd-slice-summary -->",
-    "<!-- auto-end: tdd-slice-summary -->"
-  ].join("\n");
-
-  let nextRaw: string;
-  if (existing.startsWith("---\n")) {
-    const fmEnd = existing.indexOf("\n---", 4);
-    if (fmEnd >= 0) {
-      const fmClose = fmEnd + 4;
-      const head = existing.slice(0, fmClose);
-      const tail = existing.slice(fmClose);
-      nextRaw = `${head}\n\n${banner}\n\n${slicesIndexBlock}\n\n${summaryBlock}\n${tail}`;
-    } else {
-      nextRaw = `${banner}\n\n${slicesIndexBlock}\n\n${summaryBlock}\n\n${existing}`;
-    }
-  } else {
-    nextRaw = `${banner}\n\n${slicesIndexBlock}\n\n${summaryBlock}\n\n${existing}`;
-  }
-
-  await writeFileSafe(tddArtifactPath, nextRaw);
-  const slicesDir = runtimePath(projectRoot, "artifacts", "tdd-slices");
-  await ensureDir(slicesDir);
-
-  const flowStatePath = runtimePath(projectRoot, "state", "flow-state.json");
-  let flowStateRaw: string;
-  try {
-    flowStateRaw = await fs.readFile(flowStatePath, "utf8");
-  } catch {
-    return;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(flowStateRaw);
-  } catch {
-    return;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return;
-  }
-  const obj = parsed as Record<string, unknown>;
-  if (typeof obj.tddCutoverSliceId === "string" && obj.tddCutoverSliceId.length > 0) {
-    return;
-  }
-  // v6.14.3 — refresh the SHA256 sidecar by writing through
-  // `writeFlowState`. The previous direct `writeFileSafe` invocation
-  // left the sidecar stale, so the very next guarded hook on a synced
-  // legacy project rejected its own `tddCutoverSliceId` stamp.
-  try {
-    const state = await readFlowState(projectRoot);
-    await writeFlowState(
-      projectRoot,
-      { ...state, tddCutoverSliceId: cutoverSliceId },
-      {
-        allowReset: true,
-        writerSubsystem: "sync-v6.12-tdd-cutover-stamp"
-      }
-    );
-  } catch {
-    // Best-effort: corrupt/missing state is handled elsewhere on sync.
-  }
-}
-
-const V613_LEGACY_PLAN_BANNER =
-  "<!-- legacy-continuation: predates v6.13 parallel metadata. New units MAY add dependsOn/claimedPaths/parallelizable; existing units treated as best-effort serial. -->";
-
-/**
- * v6.13.0 — when `05-plan.md` lacks parallel-metadata bullets on any
- * implementation unit, stamp `flow-state.json::legacyContinuation`, insert
- * a banner + managed Parallel Execution Plan stub, and keep behavior idempotent.
- */
-async function applyPlanLegacyContinuationIfNeeded(projectRoot: string): Promise<void> {
-  const planArtifactPath = runtimePath(projectRoot, "artifacts", "05-plan.md");
-  let existingPlan: string;
-  try {
-    existingPlan = await fs.readFile(planArtifactPath, "utf8");
-  } catch {
-    return;
-  }
-  if (!planArtifactLacksV613ParallelMetadata(existingPlan)) {
-    return;
-  }
-  let nextPlan = existingPlan;
-  if (!nextPlan.includes("legacy-continuation: predates v6.13")) {
-    if (nextPlan.startsWith("---\n")) {
-      const fmEnd = nextPlan.indexOf("\n---", 4);
-      if (fmEnd >= 0) {
-        const fmClose = fmEnd + 4;
-        const head = nextPlan.slice(0, fmClose);
-        const tail = nextPlan.slice(fmClose);
-        nextPlan = `${head}\n\n${V613_LEGACY_PLAN_BANNER}\n${tail}`;
-      } else {
-        nextPlan = `${V613_LEGACY_PLAN_BANNER}\n\n${nextPlan}`;
-      }
-    } else {
-      nextPlan = `${V613_LEGACY_PLAN_BANNER}\n\n${nextPlan}`;
-    }
-  }
-  const parallelStub = buildParallelExecutionPlanSection([], PLAN_SPLIT_DEFAULT_WAVE_SIZE);
-  if (!nextPlan.includes("<!-- parallel-exec-managed-start -->")) {
-    nextPlan = upsertParallelExecutionPlanSection(nextPlan, parallelStub);
-  }
-  if (nextPlan !== existingPlan) {
-    await writeFileSafe(planArtifactPath, nextPlan);
-  }
-  const flowStatePath = runtimePath(projectRoot, "state", "flow-state.json");
-  if (!(await exists(flowStatePath))) {
-    return;
-  }
-  try {
-    const state = await readFlowState(projectRoot);
-    if (state.legacyContinuation === true) {
-      return;
-    }
-    await writeFlowState(projectRoot, { ...state, legacyContinuation: true }, {
-      allowReset: true,
-      writerSubsystem: "plan-legacy-continuation-sync"
-    });
-  } catch {
-    // Best-effort: corrupt/missing state is handled elsewhere on sync.
-  }
-}
-
-/**
- * v6.14.0 — set stream-style defaults on `cclaw-cli sync` and print a
- * one-line hint when defaults change.
- *
- * v6.14.2 update — flip the legacyContinuation defaults from
- * `global-red`/`always` to `per-slice`/`conditional`. Rationale: hox-shape
- * projects ran into S-17 misroutes precisely because the default
- * preserved the v6.12 wave barrier even after the project itself had
- * moved to stream-mode. Existing flow-state values are NEVER overwritten
- * — operators who want to pin `global-red`/`always` may set them
- * explicitly via `cclaw-cli internal set-checkpoint-mode global-red` and
- * `set-integration-overseer-mode always`.
- *
- * Strategy:
- *
- * - When `legacyContinuation: true` and `tddCheckpointMode` is unset,
- *   default to `tddCheckpointMode: "per-slice"` (v6.14.2 — was
- *   `global-red` in v6.14.0/v6.14.1).
- * - When `legacyContinuation: true` and `integrationOverseerMode` is
- *   unset, default to `integrationOverseerMode: "conditional"` (v6.14.2
- *   — was `always` in v6.14.0/v6.14.1).
- * - When `legacyContinuation` is NOT true (new / standard projects) and
- *   neither field is set, default to `tddCheckpointMode: "per-slice"`,
- *   `integrationOverseerMode: "conditional"`. Also default
- *   `worktreeExecutionMode: "worktree-first"` if unset.
- *
- * Returns a one-line hint string (or `null` if nothing changed) so callers
- * can print it through the standard sync hint surface.
- */
-async function applyV614DefaultsIfNeeded(projectRoot: string): Promise<string | null> {
-  // Defensive read — match `applyTddCutoverIfNeeded`'s pattern (raw +
-  // JSON.parse) so corrupt state is left untouched for the downstream
-  // fail-fast check in `materializeRuntime` (which expects to see the
-  // CorruptFlowStateError surfaced via `ensureRunSystem`). Calling
-  // `readFlowState` directly would quarantine the corrupt file and hide
-  // the failure from the caller.
-  const flowStatePath = runtimePath(projectRoot, "state", "flow-state.json");
-  let flowStateRaw: string;
-  try {
-    flowStateRaw = await fs.readFile(flowStatePath, "utf8");
-  } catch {
-    return null;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(flowStateRaw);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  const obj = parsed as Record<string, unknown>;
-  const updates: Record<string, unknown> = {};
-  const summary: string[] = [];
-
-  const tddCheckpointModeSet =
-    obj.tddCheckpointMode === "per-slice" || obj.tddCheckpointMode === "global-red";
-  const integrationOverseerModeSet =
-    obj.integrationOverseerMode === "conditional" || obj.integrationOverseerMode === "always";
-  const worktreeExecutionModeSet =
-    obj.worktreeExecutionMode === "worktree-first" || obj.worktreeExecutionMode === "single-tree";
-  const legacyContinuation = obj.legacyContinuation === true;
-
-  if (legacyContinuation) {
-    if (!tddCheckpointModeSet) {
-      updates.tddCheckpointMode = "per-slice";
-      summary.push("tddCheckpointMode=per-slice (legacyContinuation, v6.14.2 default flip)");
-    }
-    if (!integrationOverseerModeSet) {
-      updates.integrationOverseerMode = "conditional";
-      summary.push("integrationOverseerMode=conditional (legacyContinuation, v6.14.2 default flip)");
-    }
-  } else {
-    if (!tddCheckpointModeSet) {
-      updates.tddCheckpointMode = "per-slice";
-      summary.push("tddCheckpointMode=per-slice");
-    }
-    if (!integrationOverseerModeSet) {
-      updates.integrationOverseerMode = "conditional";
-      summary.push("integrationOverseerMode=conditional");
-    }
-    if (!worktreeExecutionModeSet) {
-      updates.worktreeExecutionMode = "worktree-first";
-      summary.push("worktreeExecutionMode=worktree-first");
-    }
-  }
-
-  if (summary.length === 0) {
-    return null;
-  }
-
-  // v6.14.3 — refresh the SHA256 sidecar in lockstep so guarded reads
-  // (verify-current-state, advance-stage, etc.) don't trip a guard
-  // mismatch immediately after `cclaw-cli sync`/`upgrade` writes the
-  // v6.14.2 stream-style defaults.
-  try {
-    const state = await readFlowState(projectRoot);
-    await writeFlowState(
-      projectRoot,
-      { ...state, ...(updates as Partial<FlowState>) },
-      {
-        allowReset: true,
-        writerSubsystem: "sync-v6.14.2-stream-defaults"
-      }
-    );
-  } catch {
-    return null;
-  }
-
-  return `v6.14.2 stream-style defaults applied: ${summary.join(", ")}. To opt out, run cclaw-cli internal set-checkpoint-mode global-red --reason="..." and/or cclaw-cli internal set-integration-overseer-mode always --reason="...".`;
-}
-
-/**
- * v6.14.2 — auto-stamp `tddWorktreeCutoverSliceId` for legacyContinuation
- * projects in worktree-first mode that haven't yet recorded a boundary.
- *
- * Detection ("any-metadata" rule): scan the active run's
- * `slice-implementer` rows. The boundary is the highest `S-N` whose
- * rows for the active run lack ALL of `claimToken`, `ownerLaneId`, and
- * `leasedUntil`. When no such slice exists (every slice carries at
- * least one worktree field), fall back to `tddCutoverSliceId` so the
- * v6.12 cutover marker still confers exemption.
- *
- * Idempotent: when the field is already set, returns null without
- * writing. Best-effort: read failures, missing ledger, or unparseable
- * rows all short-circuit silently — the existing flow-state.json is
- * never corrupted.
- *
- * Returns a one-line hint string (or `null` if nothing changed).
- */
-async function applyV6142WorktreeCutoverIfNeeded(
-  projectRoot: string
-): Promise<string | null> {
-  const flowStatePath = runtimePath(projectRoot, "state", "flow-state.json");
-  let flowStateRaw: string;
-  try {
-    flowStateRaw = await fs.readFile(flowStatePath, "utf8");
-  } catch {
-    return null;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(flowStateRaw);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  const obj = parsed as Record<string, unknown>;
-  if (obj.legacyContinuation !== true) return null;
-  if (obj.worktreeExecutionMode !== "worktree-first") return null;
-  if (
-    typeof obj.tddWorktreeCutoverSliceId === "string" &&
-    obj.tddWorktreeCutoverSliceId.trim().length > 0
-  ) {
-    return null;
-  }
-
-  const ledgerPath = runtimePath(projectRoot, "state", "delegation-log.json");
-  const activeRunId = typeof obj.activeRunId === "string" ? obj.activeRunId : "";
-  let ledgerRaw: string;
-  try {
-    ledgerRaw = await fs.readFile(ledgerPath, "utf8");
-  } catch {
-    ledgerRaw = "";
-  }
-  let ledgerParsed: unknown = null;
-  if (ledgerRaw.length > 0) {
-    try {
-      ledgerParsed = JSON.parse(ledgerRaw);
-    } catch {
-      ledgerParsed = null;
-    }
-  }
-  const entries =
-    ledgerParsed &&
-    typeof ledgerParsed === "object" &&
-    !Array.isArray(ledgerParsed) &&
-    Array.isArray((ledgerParsed as Record<string, unknown>).entries)
-      ? ((ledgerParsed as Record<string, unknown>).entries as Array<Record<string, unknown>>)
-      : [];
-
-  let boundary = -1;
-  for (const entry of entries) {
-    if (entry.agent !== "slice-implementer") continue;
-    if (entry.status !== "completed") continue;
-    if (typeof entry.sliceId !== "string") continue;
-    if (activeRunId && entry.runId && entry.runId !== activeRunId) continue;
-    const tok = typeof entry.claimToken === "string" ? entry.claimToken.trim() : "";
-    const lane = typeof entry.ownerLaneId === "string" ? entry.ownerLaneId.trim() : "";
-    const lease =
-      typeof entry.leasedUntil === "string" ? entry.leasedUntil.trim() : "";
-    if (tok.length > 0 || lane.length > 0 || lease.length > 0) continue;
-    const m = /^S-(\d+)$/u.exec(entry.sliceId);
-    if (!m) continue;
-    const n = Number.parseInt(m[1]!, 10);
-    if (!Number.isFinite(n)) continue;
-    if (n > boundary) boundary = n;
-  }
-
-  let stamped: string | null = null;
-  if (boundary >= 0) {
-    stamped = `S-${boundary}`;
-  } else if (
-    typeof obj.tddCutoverSliceId === "string" &&
-    /^S-\d+$/u.test(obj.tddCutoverSliceId)
-  ) {
-    stamped = obj.tddCutoverSliceId;
-  }
-  if (!stamped) return null;
-
-  // v6.14.3 — go through `writeFlowState` so the SHA256 sidecar
-  // (`.cclaw/.flow-state.guard.json`) is refreshed in lockstep with
-  // the on-disk flow-state.json. The previous v6.14.2 implementation
-  // wrote the field via `writeFileSafe` directly, which left the
-  // sidecar pointing at the pre-stamp digest; the next guarded hook
-  // (e.g. `cclaw internal verify-current-state`) then failed with
-  // `flow-state guard mismatch` and demanded a manual repair.
-  try {
-    const state = await readFlowState(projectRoot);
-    await writeFlowState(
-      projectRoot,
-      { ...state, tddWorktreeCutoverSliceId: stamped },
-      {
-        allowReset: true,
-        writerSubsystem: "sync-v6.14.2-worktree-cutover-stamp"
-      }
-    );
-  } catch {
-    return null;
-  }
-  return (
-    `v6.14.2 stamped tddWorktreeCutoverSliceId=${stamped}; closed slices ≤ ${stamped} ` +
-    "are exempt from worktree-first findings under legacyContinuation. " +
-    "Edit .cclaw/state/flow-state.json to override (advisory)."
-  );
 }
 
 async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
@@ -1589,8 +1155,6 @@ async function maybeLogParallelWaveDispatchHint(projectRoot: string): Promise<vo
   const flowPath = runtimePath(projectRoot, "state", "flow-state.json");
   if (!(await exists(flowPath))) return;
   try {
-    const state = await readFlowState(projectRoot);
-    if (effectiveWorktreeExecutionMode(state) !== "worktree-first") return;
     const planPath = runtimePath(projectRoot, "artifacts", "05-plan.md");
     if (!(await exists(planPath))) return;
     const planRaw = await fs.readFile(planPath, "utf8");
@@ -1630,18 +1194,6 @@ async function materializeRuntime(
       writeRulebook(projectRoot)
     ]);
     await writeState(projectRoot, config, forceStateReset);
-    if (operation === "sync" || operation === "upgrade") {
-      await applyTddCutoverIfNeeded(projectRoot);
-      await applyPlanLegacyContinuationIfNeeded(projectRoot);
-      const v614Hint = await applyV614DefaultsIfNeeded(projectRoot);
-      if (v614Hint) {
-        process.stdout.write(`cclaw: ${v614Hint}\n`);
-      }
-      const v6142Hint = await applyV6142WorktreeCutoverIfNeeded(projectRoot);
-      if (v6142Hint) {
-        process.stdout.write(`cclaw: ${v6142Hint}\n`);
-      }
-    }
     try {
       await ensureRunSystem(projectRoot, { createIfMissing: false });
     } catch (error) {
@@ -1700,7 +1252,6 @@ export async function initCclaw(options: InitOptions): Promise<void> {
     throw new Error("Select at least one harness.");
   }
   const config = createDefaultConfig(options.harnesses, options.track);
-  // Wave 21: config is always minimal and harness-only.
   await writeConfig(options.projectRoot, config, { mode: "minimal" });
   // Init should scaffold runtime surfaces but leave flow-state creation to the
   // first managed start-flow invocation.
@@ -1954,14 +1505,11 @@ export async function uninstallCclaw(projectRoot: string): Promise<void> {
     }
   }
 
-  // Codex shim location history:
-  // - < v0.39.0: `.codex/commands/cc*.md` (never consumed by Codex CLI)
-  // - v0.39.0 / v0.39.1: `.agents/skills/cclaw-cc*/SKILL.md`
-  // - ≥ v0.40.0: `.agents/skills/cc*/SKILL.md` (matches Codex's `/use cc`
-  //   prompt verbatim)
-  // Remove all three legacy layouts on uninstall so orphans can't linger.
-  // We only touch cclaw-owned folder names — other tools share
-  // `.agents/skills/` with us.
+  // Codex shims live at `.agents/skills/cc*/SKILL.md`, matching Codex's
+  // `/use cc` prompt verbatim. Older layouts (`.codex/commands/cc*.md` and
+  // `.agents/skills/cclaw-cc*/SKILL.md`) are purged on uninstall so orphans
+  // can't linger. We only touch cclaw-owned folder names — other tools
+  // share `.agents/skills/` with us.
   const codexSkillsRoot = path.join(projectRoot, ".agents/skills");
   try {
     const entries = await fs.readdir(codexSkillsRoot);

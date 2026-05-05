@@ -24,7 +24,7 @@ function automaticStageDelegationTable(): string {
 |---|---|---|
 ${rows}
 
-> **Track-aware skip (Wave 24, v6.0.0):** mandatory agents are skipped entirely when \`track === "quick"\` OR \`taskClass === "software-bugfix"\`. Use \`mandatoryAgentsFor(stage, track, taskClass)\` from \`src/content/stage-schema.ts\` for the authoritative list at runtime. Proactive agents are trigger-driven opportunities, not a blanket completion gate, and lean/lightweight early-stage runs may intentionally record none.`;
+> **Track-aware skip:** mandatory agents are skipped entirely when \`track === "quick"\` OR \`taskClass === "software-bugfix"\`. Use \`mandatoryAgentsFor(stage, track, taskClass)\` from \`src/content/stage-schema.ts\` for the authoritative list at runtime. Proactive agents are trigger-driven opportunities, not a blanket completion gate, and lean/lightweight early-stage runs may intentionally record none.`;
 }
 
 type StageAgentSummary = ReturnType<typeof stageDelegationSummary>[number];
@@ -47,7 +47,7 @@ description: "Orchestrate implementation via isolated subagents — one fresh ag
 Use a **controller -> coder -> overseer** loop when building multi-step software work.
 
 - **Controller (parent agent):** owns the plan, gating, sequencing, and dispatch decisions; never mixes deep implementation context with review evidence.
-- **Coder / slice-implementer (subagent):** receives a **single self-contained task** and edits code only within that scope; exits with a structured status contract.
+- **Coder / slice-builder (subagent):** receives a **single self-contained task** and edits code only within that scope; exits with a structured status contract.
 - **Overseer / reviewer (subagent):** validates outputs against the specification **by reading code** and never edits during the overseer pass.
 
 This pattern is intentionally **Superpowers-style**: cheap parallelism where it doesn’t corrupt state, strict serialization where it would.
@@ -72,14 +72,15 @@ Reconcile findings into \`.cclaw/artifacts/07-review-army.json\` with explicit s
 
 ### TDD evidence protocol
 
-Treat RED, GREEN, and REFACTOR as phase intents inside one mandatory \`test-author\` delegation by default:
+Each parallel slice runs end-to-end inside one \`slice-builder\` delegation, with RED, GREEN, REFACTOR, and per-slice DOC as phase intents on a single span:
 
-- \`tdd-red\`: tests only, no production writes
-- \`tdd-green\`: minimal production implementation, no new RED tests
-- \`tdd-refactor\`: cleanup only after GREEN is proven
+- \`--phase red\`: failing tests only, no production writes
+- \`--phase green\`: minimal production implementation that passes the matching RED
+- \`--phase refactor\` (or \`--phase refactor-deferred --refactor-rationale "<why>"\`): behavior-preserving cleanup, only after GREEN is proven
+- \`--phase doc\`: write \`<artifacts-dir>/tdd-slices/S-<id>.md\` for the slice
 
 Set \`CCLAW_ACTIVE_AGENT\` to the active phase name when possible so workflow-guard
-can enforce phase-appropriate write boundaries. Use separate workers only when the harness and slice boundary make the split genuinely useful; the mandatory gate is the evidence-backed \`test-author\` row, not three default subagents.
+can enforce phase-appropriate write boundaries. The mandatory gate is the evidence-backed \`slice-builder\` row, not multiple default subagents.
 
 ## Model & Harness Routing Notes
 
@@ -121,7 +122,7 @@ The only time a \`harness_limitation\` waiver fires automatically is when every 
 | Tier | Use for | Example agents |
 |---|---|---|
 | \`deep\` | one heavy reasoning pass per stage (planner, final reconciliation) | planner |
-| \`balanced\` | spec compliance + code/security review with enough context | reviewer, security-reviewer, test-author |
+| \`balanced\` | spec compliance + code/security review with enough context | reviewer, security-reviewer, slice-builder |
 | \`fast\` | bounded maintenance updates and doc hygiene | doc-updater |
 
 **Routing rules:**
@@ -138,7 +139,7 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 |---|---|---|---|---|
 | brainstorm | planner (only if ambiguity spans >1 module) | product-discovery / critic when product value or premise is uncertain | run in-thread research playbooks | promote to \`balanced\` critic if the do-nothing path may beat the idea |
 | scope | planner (always) | product-discovery / critic when mode changes value, trajectory, or boundaries | run \`research/git-history.md\` in-thread when churn is high | promote to \`balanced\` critic if scope mode is disputed |
-| design | planner (always) | critic, security-reviewer, test-author when alternatives/trust/testability apply | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
+| design | planner (always) | critic, security-reviewer when alternatives/trust apply | run \`research/framework-docs-lookup.md\` + \`research/best-practices-lookup.md\` in-thread | escalate one specialist to \`deep\` only if a failure mode is Critical-severity |
 | spec | — | spec-validator / spec-document-reviewer / reviewer (for long or high-risk specs) | — | escalate to \`deep\` only for spec ↔ design contradictions |
 | plan | planner (solo, always) | — | — | never fan out at plan stage; one owner for dependency graph |
 | tdd | — | ${formatAgentList(stageSummary("tdd").primaryAgents)} (per slice, carrying RED/GREEN/REFACTOR evidence) · reviewer (slice-local only when sliceReview triggers) | doc-updater (API surface changes) | escalate to \`deep\` only when a RED test cannot be expressed (design leak) |
@@ -149,7 +150,7 @@ Concrete per-stage rules so the controller does not have to guess which tier fit
 - If a \`deep\` planner run returns low-uncertainty output (single unambiguous plan), do **not** add a second \`deep\` pass in the same stage.
 - If a \`fast\` researcher's evidence is the only input to a decision, the consuming agent must be \`balanced\` or higher.
 - Review-stage reviewers should default to \`balanced\`; bump to \`deep\` only when findings cite architectural contradictions.
-- Refactor-only TDD slices (state-based, no behavioral change) can drop test-author to \`fast\` if the test pyramid stays green.
+- Refactor-only TDD slices (state-based, no behavioral change) can drop \`slice-builder\` to \`fast\` if the test pyramid stays green.
 
 ## HARD-GATE
 
@@ -409,7 +410,7 @@ ${conversationLanguagePolicyMarkdown()}
 
 Implementation that touches shared source trees must remain **sequential** unless you have proven disjoint filesystem ownership (rare) and an explicit merge protocol.
 
-When explicit bounded TDD fan-out is approved with parallel \`slice-implementer\` lanes, author \`.cclaw/artifacts/cohesion-contract.md\` + \`.json\` before launch and run \`integration-overseer\` after fan-in.
+When explicit bounded TDD fan-out is approved with parallel \`slice-builder\` lanes, author \`.cclaw/artifacts/cohesion-contract.md\` + \`.json\` before launch and run \`integration-overseer\` after fan-in.
 
 ## When to Use
 
@@ -434,7 +435,7 @@ When explicit bounded TDD fan-out is approved with parallel \`slice-implementer\
 ## Dispatch Protocol
 
 1. **Identify independent problem domains** (no file overlap; no shared mutable working assumptions).
-2. **Author cohesion contract first** whenever fan-out touches shared interfaces or bounded parallel \`slice-implementer\` lanes.
+2. **Author cohesion contract first** whenever fan-out touches shared interfaces or bounded parallel \`slice-builder\` lanes.
 3. **Craft one prompt per domain** with **full context pasted** — same HARD-GATE as SDD: no “go read X to learn why.”
 4. **Launch ALL agents in a single controller message** (multiple Task tool calls) so they start with comparable timelines.
 5. **Wait for all to return** before synthesis (avoid incremental confirmation bias).
@@ -685,35 +686,6 @@ ${MARKDOWN_CODE_FENCE}
 `;
 }
 
-function sliceImplementerEnhancedBody(): string {
-  return `
-
-## Task Tool Delegation
-
-${MARKDOWN_CODE_FENCE}
-You are a slice-implementer subagent.
-
-SLICE: {single vertical slice — controller MUST dispatch you with --slice S-<id> --phase green --paths <comma-separated>}
-RED_EVIDENCE: {failing test and expected failure}
-ALLOWED_FILES: {explicit file boundaries — surfaced to scheduler as Files: <paths>}
-FORBIDDEN_CHANGES: {scope/compatibility limits}
-VERIFICATION: {commands expected}
-
-Rules:
-- Implement only the minimal GREEN change for the existing RED evidence.
-- Keep REFACTOR behavior-preserving.
-- Return the strict worker JSON schema first.
-
-Slice phase-event contract (v6.11.0):
-- Do NOT hand-edit \`## Watched-RED Proof\`, \`## Vertical Slice Cycle\`, \`## RED Evidence\`, or \`## GREEN Evidence\` markdown tables in 06-tdd.md. The linter auto-renders them between \`<!-- auto-start: tdd-slice-summary -->\` markers from \`delegation-events.jsonl\` slice phase rows.
-- Your dispatch row IS the evidence: the harness-generated delegation-record hook stamps \`sliceId=S-<id>\`, \`phase=green\`, and \`completedTs\` automatically. Attach evidenceRefs (test path, span ref, or pasted-output pointer) so the linter validates the row.
-- After REFACTOR, ask the controller to re-dispatch you with \`--phase refactor\` (or \`--phase refactor-deferred --refactor-rationale "<why>"\`); each call appends a new ledger row.
-- Per-slice prose summary lives in \`<artifacts-dir>/tdd-slices/S-<id>.md\` and is owned by the parallel \`slice-documenter\` (or the controller). You do NOT touch that file.
-${MARKDOWN_CODE_FENCE}
-
-`;
-}
-
 function performanceReviewerEnhancedBody(): string {
   return `${codeReviewerEnhancedBody()}
 
@@ -941,41 +913,6 @@ Requirements:
 - Include a short proof-of-concept attack vector (conceptual, no weaponization).
 - Recommend concrete controls (validation, sandboxing, authz checks, safer APIs).
 - Close with SECURITY_VERDICT: SHIP | SHIP_WITH_HOTFIXES | NO_SHIP and cite top 3 drivers.
-${MARKDOWN_CODE_FENCE}
-
-`;
-}
-
-function testAuthorEnhancedBody(): string {
-  return `
-
-## Task Tool Delegation
-
-Delegate TDD loops carefully — one behavioral slice per subagent to avoid clobbering tests.
-This agent runs in two explicit stage modes to respect cclaw hard-gates:
-- \`TEST_RED_ONLY\` (only failing tests + evidence; no production edits)
-- \`BUILD_GREEN_REFACTOR\` (implementation + full-suite green + refactor notes)
-
-${MARKDOWN_CODE_FENCE}
-You are a TDD implementer subagent.
-
-STAGE_MODE: {TEST_RED_ONLY | BUILD_GREEN_REFACTOR}
-FEATURE SLICE: {single behavior expressed as a user-observable outcome}
-CURRENT TEST COMMANDS: {exact command names + cwd assumptions}
-FIXTURES / PATTERNS: {links to helper modules by path + naming conventions}
-
-Process (mandatory):
-1) If STAGE_MODE=TEST_RED_ONLY:
-   - Controller dispatched you with \`--slice S-<id> --phase red\`. Add failing tests proving the gap (show failing output excerpt).
-   - Do NOT edit production code.
-   - Do NOT hand-edit \`## Watched-RED Proof\` / \`## RED Evidence\` markdown tables in 06-tdd.md — the linter auto-renders them from your dispatch row in \`delegation-events.jsonl\`. Just ensure your worker return includes evidenceRefs (test path, span ref, or pasted-output pointer) so the harness can stamp them on the ledger row.
-   - Report: TESTS_ADDED, RED_COMMAND_RUN, RED_EVIDENCE, STATUS: DONE|BLOCKED.
-2) If STAGE_MODE=BUILD_GREEN_REFACTOR:
-   - Controller dispatched you with \`--slice S-<id> --phase green\` (and later \`--phase refactor\` or \`--phase refactor-deferred --refactor-rationale "<why>"\`).
-   - GREEN — minimal production code to satisfy existing RED tests, rerun full suite.
-   - REFACTOR — only after full suite is green; preserve behavior.
-   - Do NOT hand-edit \`## Vertical Slice Cycle\` / \`## GREEN Evidence\` markdown tables — auto-rendered from your dispatch row.
-   - Report: FILES_EDITED, GREEN_COMMAND_RUN, REFACTOR_NOTES, STATUS: DONE|BLOCKED.
 ${MARKDOWN_CODE_FENCE}
 
 `;

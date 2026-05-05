@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { selectReadySlices, type ReadySliceUnit } from "../../src/delegation.js";
 
-describe("selectReadySlices (v6.13 DAG-ready)", () => {
+describe("selectReadySlices (DAG-ready)", () => {
   const units: ReadySliceUnit[] = [
     {
       unitId: "U-10",
@@ -23,36 +23,9 @@ describe("selectReadySlices (v6.13 DAG-ready)", () => {
     const ready = selectReadySlices(units, {
       cap: 5,
       completedUnitIds: new Set(),
-      activePathHolders: [],
-      legacyContinuation: false
+      activePathHolders: []
     });
     expect(ready.map((u) => u.unitId)).toEqual(["U-2", "U-10"]);
-  });
-
-  it("serializes legacy units without explicit parallelizable (pool filters to parallelizable-only)", () => {
-    const mixed: ReadySliceUnit[] = [
-      {
-        unitId: "U-1",
-        sliceId: "S-1",
-        dependsOn: [],
-        claimedPaths: ["x"],
-        parallelizable: false
-      },
-      {
-        unitId: "U-2",
-        sliceId: "S-2",
-        dependsOn: [],
-        claimedPaths: ["y"],
-        parallelizable: true
-      }
-    ];
-    const ready = selectReadySlices(mixed, {
-      cap: 5,
-      completedUnitIds: new Set(),
-      activePathHolders: [],
-      legacyContinuation: true
-    });
-    expect(ready.map((u) => u.unitId)).toEqual(["U-2"]);
   });
 
   it("respects dependsOn and disjoint paths with cap", () => {
@@ -82,15 +55,13 @@ describe("selectReadySlices (v6.13 DAG-ready)", () => {
     const first = selectReadySlices(dag, {
       cap: 5,
       completedUnitIds: new Set(),
-      activePathHolders: [],
-      legacyContinuation: false
+      activePathHolders: []
     });
     expect(first.map((u) => u.unitId).sort()).toEqual(["U-1", "U-3"]);
     const second = selectReadySlices(dag, {
       cap: 5,
       completedUnitIds: new Set(["U-1", "U-3"]),
-      activePathHolders: [],
-      legacyContinuation: false
+      activePathHolders: []
     });
     expect(second.map((u) => u.unitId)).toEqual(["U-2"]);
   });

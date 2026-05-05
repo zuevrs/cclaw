@@ -44,7 +44,7 @@ describe("stage schema and subagent alignment", () => {
     expect(mandatoryDelegationsForStage("scope", "lightweight")).toEqual([]);
     expect(mandatoryDelegationsForStage("scope", "standard")).toEqual(["planner", "critic"]);
     expect(mandatoryDelegationsForStage("brainstorm", "standard")).toEqual(["product-discovery", "critic"]);
-    expect(mandatoryDelegationsForStage("design", "standard")).toEqual(["architect", "test-author"]);
+    expect(mandatoryDelegationsForStage("design", "standard")).toEqual(["architect"]);
     expect(mandatoryDelegationsForStage("spec", "standard")).toEqual(["spec-validator"]);
     expect(mandatoryDelegationsForStage("review", "lightweight")).toContain("reviewer");
     expect(mandatoryDelegationsForStage("ship", "lightweight")).toContain("release-reviewer");
@@ -103,49 +103,28 @@ describe("stage schema and subagent alignment", () => {
     expect(lightweightScope?.mandatoryAgents).toEqual([]);
 
     const tdd = lightweight.find((row) => row.stage === "tdd");
-    // v6.12.0 Phase M — slice-implementer + slice-documenter joined the
-    // mandatory list so controllers can no longer skip GREEN dispatch or
-    // per-slice prose authoring.
-    expect(tdd?.mandatoryAgents).toEqual([
-      "test-author",
-      "slice-implementer",
-      "slice-documenter"
-    ]);
+    // slice-builder owns RED → GREEN → REFACTOR → DOC end-to-end.
+    expect(tdd?.mandatoryAgents).toEqual(["slice-builder"]);
   });
 
-  it("keeps tdd dispatch with mandatory test-author + slice-implementer + slice-documenter (v6.12.0 Phase M)", () => {
+  it("keeps tdd dispatch with mandatory slice-builder", () => {
     const tddDispatch = stageAutoSubagentDispatch("tdd");
-    const testAuthorRows = tddDispatch
-      .filter((row) => row.agent === "test-author");
-    const sliceImplementerRows = tddDispatch
-      .filter((row) => row.agent === "slice-implementer");
-    const sliceDocumenterRows = tddDispatch
-      .filter((row) => row.agent === "slice-documenter");
+    const sliceBuilderRows = tddDispatch
+      .filter((row) => row.agent === "slice-builder");
     const integrationOverseerRows = tddDispatch
       .filter((row) => row.agent === "integration-overseer");
 
-    expect(testAuthorRows).toHaveLength(1);
-    expect(testAuthorRows[0]?.mode).toBe("mandatory");
-    expect(testAuthorRows[0]?.skill).toBe("tdd-cycle-evidence");
-    expect(testAuthorRows[0]?.purpose).toContain("RED/GREEN/REFACTOR evidence");
-
-    expect(sliceImplementerRows).toHaveLength(1);
-    expect(sliceImplementerRows[0]?.mode).toBe("mandatory");
-    expect(sliceImplementerRows[0]?.when).toContain("Controller MUST NOT write production code");
-
-    expect(sliceDocumenterRows).toHaveLength(1);
-    expect(sliceDocumenterRows[0]?.mode).toBe("mandatory");
-    expect(sliceDocumenterRows[0]?.when).toContain("PARALLEL");
+    expect(sliceBuilderRows).toHaveLength(1);
+    expect(sliceBuilderRows[0]?.mode).toBe("mandatory");
+    expect(sliceBuilderRows[0]?.skill).toBe("tdd-cycle-evidence");
+    expect(sliceBuilderRows[0]?.purpose).toContain("RED → GREEN → REFACTOR");
+    expect(sliceBuilderRows[0]?.when).toContain("Controller MUST NOT write tests or production code");
 
     expect(integrationOverseerRows).toHaveLength(1);
     expect(integrationOverseerRows[0]?.mode).toBe("proactive");
-    expect(integrationOverseerRows[0]?.when).toContain("2+ parallel slice-implementers");
+    expect(integrationOverseerRows[0]?.when).toContain("2+ parallel slice-builder");
     expect(integrationOverseerRows[0]?.returnSchema).toBe("review-return");
-    expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual([
-      "test-author",
-      "slice-implementer",
-      "slice-documenter"
-    ]);
+    expect(mandatoryDelegationsForStage("tdd", "lightweight")).toEqual(["slice-builder"]);
   });
 
   it("renders critic multi-perspective contract with prediction fields", () => {
@@ -416,7 +395,7 @@ describe("stage schema and subagent alignment", () => {
     expect(scope).toContain("Invariant to preserve");
     expect(design).toContain("## Reference-Grade Contracts");
     expect(design).toContain("Reusable invariant");
-    // v6.11.0 (D6): per-slice Watched-RED Proof and Vertical Slice
+    // release (D6): per-slice Watched-RED Proof and Vertical Slice
     // Cycle tables were removed from the TDD template body; the linter
     // auto-renders both between `<!-- auto-start: tdd-slice-summary -->`
     // markers from `delegation-events.jsonl` slice phase rows. Per-slice
@@ -545,11 +524,9 @@ describe("stage schema and subagent alignment", () => {
       "reviewer",
       "scope-guardian-reviewer",
       "security-reviewer",
-      "slice-documenter",
-      "slice-implementer",
+      "slice-builder",
       "spec-document-reviewer",
-      "spec-validator",
-      "test-author"
+      "spec-validator"
     ]);
   });
 
@@ -560,7 +537,7 @@ describe("stage schema and subagent alignment", () => {
       expect(agent.returnSchema.requiredFields).toContain("status");
       expect(agent.returnSchema.evidenceFields.length).toBeGreaterThan(0);
     }
-    expect(CCLAW_AGENTS.find((agent) => agent.name === "slice-implementer")?.activation).toBe("on-demand");
+    expect(CCLAW_AGENTS.find((agent) => agent.name === "slice-builder")?.activation).toBe("mandatory");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "fixer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "integration-overseer")?.activation).toBe("on-demand");
     expect(CCLAW_AGENTS.find((agent) => agent.name === "integration-overseer")?.relatedStages).toEqual(["tdd", "review"]);
@@ -586,10 +563,7 @@ describe("stage schema and subagent alignment", () => {
       returnSchema: "review-return"
     });
     const tdd = stageDelegationSummary("lightweight").find((row) => row.stage === "tdd");
-    expect(tdd?.dispatchRules.find((rule) => rule.agent === "test-author")).toMatchObject({
-      returnSchema: "tdd-return"
-    });
-    expect(tdd?.dispatchRules.find((rule) => rule.agent === "slice-implementer")).toMatchObject({
+    expect(tdd?.dispatchRules.find((rule) => rule.agent === "slice-builder")).toMatchObject({
       dispatchClass: "worker",
       returnSchema: "worker-return"
     });
@@ -609,7 +583,6 @@ describe("stage schema and subagent alignment", () => {
     const design = stageSchema("design");
     expect(stageAutoSubagentDispatch("design").map((row) => row.agent)).toEqual(expect.arrayContaining([
       "architect",
-      "test-author",
       "researcher",
       "coherence-reviewer",
       "feasibility-reviewer",
@@ -634,7 +607,7 @@ describe("stage schema and subagent alignment", () => {
     const plan = stageSchema("plan");
 
     expect(design.executionModel.checklist).toEqual(expect.arrayContaining([
-      // Wave 23 (v5.0.0): "Investigator pass" was replaced by
+      // : "Investigator pass" was replaced by
       // "Blast-radius diff (do NOT re-audit the whole repo)" — design only
       // diffs since scope baseline; scope owns the full repo audit.
       expect.stringContaining("Blast-radius diff"),
@@ -844,7 +817,7 @@ describe("stage schema and subagent alignment", () => {
     expect(designTemplate).toContain("Standard/Deep add-on; omit");
   });
 
-  it("review contract aligns required layer coverage and blocked route gates (Wave 23 boundary)", () => {
+  it("review contract aligns required layer coverage and blocked route gates (boundary)", () => {
     const review = stageSchema("review", "quick");
     const requiredGateIds = review.requiredGates
       .filter((gate) => gate.tier === "required")
@@ -853,7 +826,7 @@ describe("stage schema and subagent alignment", () => {
     expect(requiredGateIds).toContain("review_layer_coverage_complete");
     expect(review.requiredGates.find((gate) => gate.id === "review_criticals_resolved")?.description)
       .toContain("BLOCKED routes use review_verdict_blocked instead");
-    // Wave 23 (v5.0.0): Layer 2 owns cross-slice integration findings only.
+    // : Layer 2 owns cross-slice integration findings only.
     // Performance + architecture come from design lens carry-forward; they
     // are NOT re-derived in review. tdd Per-Slice Review owns single-slice
     // findings; review cites tdd IDs (cross-artifact-duplication linter
@@ -1149,25 +1122,22 @@ describe("stage schema and subagent alignment", () => {
       "tdd_watched_red_observed",
       "tdd_slice_cycle_complete"
     ]));
-    // v6.11.0: per-slice tables (Test Discovery, RED Evidence,
-    // GREEN Evidence, Watched-RED Proof, Vertical Slice Cycle) are
-    // demoted to advisory because the linter auto-derives them from
-    // `delegation-events.jsonl` slice phase rows (see
-    // `lintTddStage` in `src/artifact-linter/tdd.ts`).
-    expect(tdd.artifactValidation.find((row) => row.section === "Test Discovery"))
-      .toMatchObject({ required: false, tier: "recommended" });
+    // TDD artifactValidation is trimmed to ledger-first sections; tiers come
+    // from REQUIRED_ARTIFACT_SECTIONS in stage-schema.ts + row.required.
+    expect(tdd.artifactValidation.find((row) => row.section === "Test Discovery")).toBeUndefined();
+    expect(tdd.artifactValidation.find((row) => row.section === "Watched-RED Proof")).toBeUndefined();
+    expect(tdd.artifactValidation.find((row) => row.section === "Vertical Slice Cycle")).toBeUndefined();
+    expect(tdd.artifactValidation.find((row) => row.section === "Mock Preference Order")).toBeUndefined();
     expect(tdd.artifactValidation.find((row) => row.section === "System-Wide Impact Check"))
       .toMatchObject({ required: true, tier: "required" });
     expect(tdd.artifactValidation.find((row) => row.section === "Iron Law Acknowledgement"))
       .toMatchObject({ required: true, tier: "required" });
-    expect(tdd.artifactValidation.find((row) => row.section === "Watched-RED Proof"))
+    expect(tdd.artifactValidation.find((row) => row.section === "Acceptance & Failure Map"))
       .toMatchObject({ required: false, tier: "recommended" });
-    expect(tdd.artifactValidation.find((row) => row.section === "Vertical Slice Cycle"))
+    expect(tdd.artifactValidation.find((row) => row.section === "TDD Blocker Taxonomy"))
       .toMatchObject({ required: false, tier: "recommended" });
-    expect(tdd.artifactValidation.find((row) => row.section === "Mock Preference Order"))
-      .toMatchObject({ required: false, tier: "recommended" });
-    expect(stageSkillMarkdown("tdd")).toContain("Before writing RED tests, discover relevant existing tests");
-    expect(stageSkillMarkdown("tdd")).toContain("system-wide impact check across callbacks, state, interfaces, schemas, and external contracts");
+    expect(stageSkillMarkdown("tdd")).toContain("Discover existing tests and commands before RED");
+    expect(stageSkillMarkdown("tdd")).toContain("system-wide impact check");
     expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## Test Discovery");
     expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## System-Wide Impact Check");
     expect(ARTIFACT_TEMPLATES["06-tdd.md"]).toContain("## Per-Slice Review");

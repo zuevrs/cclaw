@@ -9,7 +9,7 @@ import { writeFlowState } from "../../src/run-persistence.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * v6.11.0 Phase S — sharded `tdd-slices/S-<id>.md` files. Each slice
+ * Phase note — sharded `tdd-slices/S-<id>.md` files. Each slice
  * file owns its own writer; the main `06-tdd.md` stays thin and lists
  * the slice files via the auto-rendered `## Slices Index` block.
  *
@@ -50,7 +50,7 @@ const PRE_TDD_ARTIFACTS: Record<string, string> = {
 
 ## Problem Decision Record
 - Problem: prove sharded slice files validate independently.
-- Why now: v6.11.0 release.
+- Why now: feature gating.
 
 ## Approach Tier
 - Tier: standard
@@ -213,7 +213,7 @@ describe("e2e: sharded slice files (Phase S)", () => {
       const off = (i - 1) * 30;
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "test-author",
+        agent: "slice-builder",
         mode: "mandatory",
         status: "completed",
         sliceId,
@@ -225,7 +225,7 @@ describe("e2e: sharded slice files (Phase S)", () => {
       });
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "completed",
         sliceId,
@@ -237,7 +237,7 @@ describe("e2e: sharded slice files (Phase S)", () => {
       });
       await appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "proactive",
         status: "completed",
         sliceId,
@@ -254,11 +254,10 @@ describe("e2e: sharded slice files (Phase S)", () => {
       .filter((f) => f.required && !f.found)
       .filter((f) => !f.section.startsWith("tdd.cohesion_contract"))
       .filter((f) => !f.section.startsWith("tdd.integration_overseer"))
-      // v6.12.0 Phase R — slice-documenter is mandatory regardless of
-      // discoveryMode; this Phase S sharded-files test focuses on the
-      // index auto-render and per-file heading validation, not the new
-      // mandatory documenter dispatch.
-      .filter((f) => f.section !== "tdd_slice_documenter_missing");
+      // slice-builder DOC coverage is exercised in dedicated tests; this
+      // file focuses on the index auto-render and per-file heading
+      // validation.
+      .filter((f) => f.section !== "tdd_slice_doc_missing");
     expect(blockers.map((f) => f.section)).toEqual([]);
 
     const tddArtifact = await fs.readFile(
@@ -301,7 +300,7 @@ some prose without the required structural headings
     const refTs = "2026-01-15T10:00:00Z";
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -313,7 +312,7 @@ some prose without the required structural headings
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -325,7 +324,7 @@ some prose without the required structural headings
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -337,7 +336,7 @@ some prose without the required structural headings
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-documenter",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",

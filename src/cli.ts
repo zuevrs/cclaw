@@ -197,7 +197,7 @@ function buildInitSurfacePreview(harnesses: HarnessId[]): string[] {
       lines.push(".cursor/rules/cclaw-workflow.mdc");
     }
     if (harness === "codex") {
-      // v0.40.0: .codex/hooks.json is managed again now that Codex CLI
+      // .codex/hooks.json is managed because Codex CLI
       // grew a real hooks API (v0.114+, behind the `codex_hooks`
       // feature flag). Legacy `.codex/commands/*` is still auto-cleaned.
       lines.push(".codex/hooks.json (requires `codex_hooks = true` in ~/.codex/config.toml)");

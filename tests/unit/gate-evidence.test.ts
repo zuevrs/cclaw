@@ -654,7 +654,7 @@ vcs: none
     const root = await createTempProject("gate-evidence-missing");
     await prepareRoot(root);
     const state = createInitialFlowState("run-active");
-    // v6.9.0: surface the qa-log convergence advisory so the underlying
+    // surface the qa-log convergence advisory so the underlying
     // gate-catalog signal isn't muted by the brainstorm Q&A Log floor.
     state.interactionHints = {
       [state.currentStage]: {

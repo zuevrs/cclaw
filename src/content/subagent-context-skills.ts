@@ -15,16 +15,17 @@ function skillFrontmatter(name: SubagentContextSkillId, description: string): st
 function tddCycleEvidenceSkill(): string {
   return `${skillFrontmatter(
     "tdd-cycle-evidence",
-    "Evidence contract for the mandatory test-author delegation during RED/GREEN/REFACTOR."
+    "Evidence contract for the mandatory slice-builder delegation across RED/GREEN/REFACTOR/DOC."
   )}# TDD Cycle Evidence
 
-Use with the \`test-author\` delegation in the \`tdd\` stage.
+Use with the \`slice-builder\` delegation in the \`tdd\` stage. One \`slice-builder\` span owns the full cycle for a single vertical slice.
 
 ## Required Output
 
 - RED evidence: failing test command, failing assertion/error, and why it fails for the intended reason.
 - GREEN evidence: implementation summary plus relevant passing command.
-- REFACTOR evidence: changed/unchanged behavior statement plus full-suite or highest available verification command.
+- REFACTOR evidence: changed/unchanged behavior statement plus full-suite or highest available verification command. \`refactor-deferred\` is acceptable when paired with rationale and a tracked follow-up.
+- DOC evidence: \`<artifacts-dir>/tdd-slices/S-<id>.md\` populated with the slice summary.
 - Trace refs: plan task ID, acceptance criterion ID, and touched test files.
 
 ## Guardrails
@@ -32,6 +33,7 @@ Use with the \`test-author\` delegation in the \`tdd\` stage.
 - No production code before RED evidence exists.
 - If a RED test cannot be expressed, stop and route back to design/spec with the blocker.
 - Record command output summaries, not just "tests passed".
+- Multiple \`slice-builder\` spans run in parallel inside one wave only when their \`claimedPaths\` are disjoint.
 `;
 }
 

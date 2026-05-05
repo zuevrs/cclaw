@@ -7,7 +7,7 @@ import { createInitialFlowState } from "../../src/flow-state.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * v6.11.0 Phase D — TDD linter auto-derives Watched-RED Proof + Vertical
+ * Phase note — TDD linter auto-derives Watched-RED Proof + Vertical
  * Slice Cycle from `delegation-events.jsonl` slice phase rows. These tests
  * cover three paths:
  *
@@ -17,7 +17,7 @@ import { createTempProject } from "../helpers/index.js";
  * 2. Legacy markdown-only — no slice phase events; the linter falls back
  *    to parsing `## Watched-RED Proof` and `## Vertical Slice Cycle`.
  * 3. Phase=doc coverage on `discoveryMode=deep` — every slice with a
- *    green event must also carry a `slice-documenter` `phase=doc` event.
+ *    green event must also carry a `slice-builder` `phase=doc` event.
  */
 
 const RUN_ID = "run-tdd-events";
@@ -106,7 +106,7 @@ const TDD_BARE_BODY = (extras: string = ""): string => `# TDD Artifact
 
 ## Upstream Handoff
 - Source artifacts: \`05-plan.md\`, \`04-spec.md\`.
-- Decisions carried forward: dispatch test-author/slice-implementer per slice.
+- Decisions carried forward: dispatch slice-builder per slice.
 - Constraints carried forward: minimal change.
 - Open questions: none.
 - Drift from upstream (or \`None\`): None.
@@ -172,7 +172,7 @@ function ts(offsetMin: number): string {
   return new Date(base + offsetMin * 60_000).toISOString();
 }
 
-describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
+describe("tdd linter — phase events auto-derive", () => {
   it("accepts events-only path: phase=red/green/refactor with no markdown tables", async () => {
     const root = await createTempProject("tdd-events-only");
     await seedTddRun(root);
@@ -181,7 +181,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -193,7 +193,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -205,7 +205,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -221,10 +221,9 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
       .filter((f) => f.required && !f.found)
       .filter((f) => !f.section.startsWith("tdd.cohesion_contract"))
       .filter((f) => !f.section.startsWith("tdd.integration_overseer"))
-      // v6.12.0 Phase R/M — slice-documenter / slice-implementer mandatory rules
-      // are exercised in dedicated tests; this test focuses on phase-event
-      // round-trip and table-free rendering, not on the new mandatory roles.
-      .filter((f) => f.section !== "tdd_slice_documenter_missing");
+      // slice-builder mandatory DOC coverage is exercised in dedicated tests;
+      // this test focuses on phase-event round-trip and table-free rendering.
+      .filter((f) => f.section !== "tdd_slice_doc_missing");
     expect(blockers.map((f) => f.section)).toEqual([]);
   });
 
@@ -237,7 +236,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -249,7 +248,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -261,7 +260,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -301,7 +300,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -313,7 +312,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -325,7 +324,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -352,7 +351,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -364,7 +363,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -391,7 +390,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -403,7 +402,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -415,7 +414,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -471,7 +470,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -483,7 +482,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -495,7 +494,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -514,7 +513,7 @@ describe("tdd linter — phase events auto-derive (v6.11.0 Phase D)", () => {
   });
 });
 
-describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, advisory in lean/guided)", () => {
+describe("tdd linter — slice-builder DOC coverage (mandatory in deep, advisory in lean/guided)", () => {
   it("requires phase=doc on every green slice when discoveryMode=deep", async () => {
     const root = await createTempProject("tdd-doc-deep-required");
     await seedTddRun(root, { discoveryMode: "deep" });
@@ -523,7 +522,7 @@ describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, 
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -535,7 +534,7 @@ describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, 
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -547,7 +546,7 @@ describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, 
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -560,13 +559,13 @@ describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, 
 
     const result = await lintArtifact(root, "tdd");
     const docFinding = result.findings.find((f) =>
-      f.section === "tdd_slice_documenter_missing"
+      f.section === "tdd_slice_doc_missing"
     );
     expect(docFinding?.required).toBe(true);
     expect(docFinding?.found).toBe(false);
   });
 
-  it("flags phase=doc as advisory (required=false) on every green slice when discoveryMode is not deep (v6.14.0)", async () => {
+  it("flags phase=doc as advisory (required=false) on every green slice when discoveryMode is not deep ", async () => {
     const root = await createTempProject("tdd-doc-not-deep");
     await seedTddRun(root, { discoveryMode: "guided" });
     await writePreTddArtifacts(root);
@@ -574,7 +573,7 @@ describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, 
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-1",
@@ -586,7 +585,7 @@ describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, 
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -598,7 +597,7 @@ describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, 
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "proactive",
       status: "completed",
       sliceId: "S-1",
@@ -611,21 +610,21 @@ describe("tdd linter — slice-documenter coverage (v6.14.0: mandatory in deep, 
 
     const result = await lintArtifact(root, "tdd");
     const docFinding = result.findings.find((f) =>
-      f.section === "tdd_slice_documenter_missing"
+      f.section === "tdd_slice_doc_missing"
     );
     expect(docFinding?.required).toBe(false);
     expect(docFinding?.found).toBe(false);
   });
 });
 
-describe("tdd delegation entry round-trip (Phase D1)", () => {
+describe("tdd delegation entry round-trip", () => {
   it("preserves sliceId and phase across appendDelegation -> readDelegationLedger", async () => {
     const root = await createTempProject("tdd-events-roundtrip");
     await seedTddRun(root);
 
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       sliceId: "S-7",

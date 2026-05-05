@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
-  integrationCheckRequired,
   loadTddReadySlicePool,
   readDelegationLedger,
   readDelegationEvents,
@@ -26,7 +25,7 @@ const SLICES_INDEX_START = "<!-- auto-start: slices-index -->";
 const SLICES_INDEX_END = "<!-- auto-end: slices-index -->";
 
 /**
- * v6.11.0 — TDD stage linter.
+ * TDD stage linter.
  *
  * Source-of-truth ladder, in order of precedence:
  *
@@ -36,41 +35,16 @@ const SLICES_INDEX_END = "<!-- auto-end: slices-index -->";
  *    auto-derives Watched-RED / Vertical Slice Cycle from the events
  *    and writes a rendered summary block between auto-render markers
  *    in `06-tdd.md`. Markdown table content is no longer required.
- * 2. **Legacy markdown tables** (Watched-RED Proof + Vertical Slice
- *    Cycle) — used as a fallback when the events ledger has no slice
- *    phase rows for the active run. Existing v6.10 and earlier
- *    artifacts continue to validate via this path.
+ * 2. **Hand-authored markdown tables** (Watched-RED Proof + Vertical
+ *    Slice Cycle) — used as a fallback when the events ledger has no
+ *    slice phase rows for the active run.
  * 3. **Sharded slice files** under `<artifacts-dir>/tdd-slices/S-*.md`.
  *    Per-slice prose lives there. The main `06-tdd.md` is auto-indexed
  *    via `## Slices Index`.
  */
 export async function lintTddStage(ctx: StageLintContext): Promise<void> {
-  const {
-    projectRoot,
-    discoveryMode,
-    raw,
-    absFile,
-    sections,
-    findings,
-    parsedFrontmatter,
-    worktreeExecutionMode,
-    legacyContinuation,
-    tddCheckpointMode,
-    integrationOverseerMode,
-    tddCutoverSliceId,
-    tddWorktreeCutoverSliceId
-  } = ctx;
+  const { projectRoot, discoveryMode, raw, absFile, sections, findings, parsedFrontmatter } = ctx;
   void parsedFrontmatter;
-
-  // v6.14.2 — boundary slice for the "any-metadata" exemption applied
-  // to worktree-first findings. Falls back to the v6.12 cutover marker
-  // when the boundary is absent (sync hasn't run, or `cclaw-cli sync`
-  // detected no auto-detectable boundary). The exemption only kicks in
-  // for `legacyContinuation: true` projects — fresh worktree-first
-  // projects continue to enforce all three rules globally.
-  const worktreeCutoverBoundary = legacyContinuation
-    ? parseSliceNumber(tddWorktreeCutoverSliceId || tddCutoverSliceId || "")
-    : null;
 
   const artifactsDir = path.dirname(absFile);
   const planPath = path.join(artifactsDir, "05-plan.md");
@@ -191,123 +165,62 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     }
   }
 
-  // v6.14.0 Phase 4 — slice-documenter coverage is mandatory only on
-  // `discoveryMode === "deep"` runs. lean/guided still emit the finding
-  // but as advisory (`required: false`) so the controller can choose to
-  // run a tighter inline-doc pass instead. The DOC role still exists;
-  // the linter just stops blocking the gate on lean/guided. Reference
-  // research report Section 4: "soften slice-documenter mandate".
+  // slice-builder owns DOC inline. For every slice with a phase=green
+  // row, require a matching phase=doc event whose evidenceRefs reference
+  // `<artifacts-dir>/tdd-slices/S-<id>.md`. Mandatory only on deep
+  // discoveryMode; advisory otherwise.
   if (eventsActive) {
-    const docResult = evaluateSliceDocumenterCoverage(slicesByEvents);
+    const docResult = evaluateSliceDocCoverage(slicesByEvents);
     if (docResult.missing.length > 0) {
       const required = discoveryMode === "deep";
       findings.push({
-        section: "tdd_slice_documenter_missing",
+        section: "tdd_slice_doc_missing",
         required,
         rule: required
-          ? "deep mode: every TDD slice with a phase=green event must also carry a slice-documenter `phase=doc` event whose evidenceRefs reference `<artifacts-dir>/tdd-slices/S-<id>.md`."
-          : "lean/guided modes (v6.14.0): the slice-documenter `phase=doc` event is advisory; controllers may use slice-implementer --finalize-doc inline instead. Required only for deep mode.",
+          ? "deep mode: every TDD slice with a phase=green event must also carry a slice-builder `phase=doc` event whose evidenceRefs reference `<artifacts-dir>/tdd-slices/S-<id>.md`."
+          : "lean/guided modes: the slice-builder `phase=doc` event is advisory; the doc step may be folded into the GREEN span. Required only for deep mode.",
         found: false,
         details:
-          `Slices missing slice-documenter coverage: ${docResult.missing.join(", ")}. ` +
+          `Slices missing per-slice DOC coverage: ${docResult.missing.join(", ")}. ` +
           (required
-            ? "Dispatch slice-documenter --slice <id> --phase doc in parallel with slice-implementer --phase green for each slice."
-            : "Either dispatch slice-documenter --phase doc or call slice-implementer --finalize-doc inline at GREEN-completion.")
+            ? "Have the slice-builder emit a `--phase doc` row referencing `tdd-slices/S-<id>.md` after GREEN."
+            : "Either emit a `--phase doc` row referencing `tdd-slices/S-<id>.md` or fold the doc write into GREEN.")
       });
     }
   }
 
-  // v6.12.0 Phase M — slice-implementer must own GREEN. For each slice
-  // with a phase=red row carrying non-empty evidenceRefs, require a
-  // matching phase=green event whose `agent === "slice-implementer"`.
-  // This catches "controller wrote GREEN itself" — the most common
-  // backslide we have observed in fresh runs (hox S-11).
+  // slice-builder must own GREEN. For each slice with a phase=red row
+  // carrying non-empty evidenceRefs, require a matching phase=green event
+  // whose `agent === "slice-builder"`. Catches "controller wrote GREEN
+  // itself" backslides.
   if (eventsActive) {
-    const implResult = evaluateSliceImplementerCoverage(slicesByEvents);
+    const implResult = evaluateSliceBuilderCoverage(slicesByEvents);
     if (implResult.missing.length > 0) {
       findings.push({
-        section: "tdd_slice_implementer_missing",
+        section: "tdd_slice_builder_missing",
         required: true,
-        rule: "Every TDD slice that recorded a phase=red event with non-empty evidenceRefs must reach phase=green via the `slice-implementer` agent. Controller writing GREEN production code itself is forbidden (v6.12.0 Phase M).",
+        rule: "Every TDD slice that recorded a phase=red event with non-empty evidenceRefs must reach phase=green via `slice-builder`. Controller writing GREEN production code itself is forbidden.",
         found: false,
-        details: `Slices missing slice-implementer GREEN coverage: ${implResult.missing.join(", ")}. Dispatch slice-implementer --slice <id> --phase green --paths <comma-separated production paths>.`
+        details: `Slices missing slice-builder-owned GREEN coverage: ${implResult.missing.join(", ")}. Dispatch slice-builder --slice <id> --phase green --paths <comma-separated production paths>.`
       });
     }
   }
 
-  // v6.14.0 Phase 1 — RED checkpoint enforcement. The mode is selected
-  // by `flow-state.json::tddCheckpointMode`:
-  //
-  //   - `per-slice` (default for new projects): enforce RED-before-GREEN
-  //     per slice only. No global wave barrier; lanes run RED→GREEN as
-  //     soon as their dependsOn closes. Rule id:
-  //     `tdd_slice_red_completed_before_green`.
-  //   - `global-red` (auto-applied for legacyContinuation): enforce the
-  //     v6.12 wave-batch barrier — every slice in a wave must complete
-  //     phase=red before any slice in the same wave starts phase=green.
-  //     Rule id: `tdd_red_checkpoint_violation` (legacy).
+  // Per-slice RED-before-GREEN only (no global-red wave barrier in the linter).
   if (eventsActive) {
-    if (tddCheckpointMode === "global-red") {
-      const waveManifest = await readMergedWaveManifestForCheckpoint(artifactsDir, planRaw);
-      const checkpointResult = evaluateGlobalRedCheckpoint(slicesByEvents, waveManifest);
-      if (!checkpointResult.ok) {
-        findings.push({
-          section: "tdd_red_checkpoint_violation",
-          required: true,
-          rule: "Wave Batch Mode (legacy global-red mode, v6.12.0 Phase W): every slice in a wave must complete phase=red before any slice in the same wave starts phase=green. Detected: a phase=green completedTs precedes the last phase=red completedTs of the same wave.",
-          found: false,
-          details: checkpointResult.details
-        });
-      }
-    } else {
-      const perSliceResult = evaluatePerSliceRedBeforeGreen(slicesByEvents);
-      if (!perSliceResult.ok) {
-        findings.push({
-          section: "tdd_slice_red_completed_before_green",
-          required: true,
-          rule: "Stream-style TDD (v6.14.0): each slice's phase=green completedTs must be >= the same slice's last phase=red completedTs. No global wave barrier — lanes run independently.",
-          found: false,
-          details: perSliceResult.details
-        });
-      }
+    const perSliceResult = evaluatePerSliceRedBeforeGreen(slicesByEvents);
+    if (!perSliceResult.ok) {
+      findings.push({
+        section: "tdd_slice_red_completed_before_green",
+        required: true,
+        rule: "Each slice's phase=green completedTs must be >= the same slice's last phase=red completedTs. Lanes run independently within a wave.",
+        found: false,
+        details: perSliceResult.details
+      });
     }
   }
 
-  // v6.12.0 Phase L — advisory backslide detection. When a cutover is
-  // recorded in flow-state, slice-id rows in the legacy per-slice
-  // sections of `06-tdd.md` that exceed the cutover boundary should
-  // migrate to `tdd-slices/S-<id>.md`. Surface as advisory so it does
-  // not block the gate but does keep the controller honest.
-  const cutoverFinding = await evaluateLegacySectionBackslide({
-    projectRoot,
-    raw,
-    sections
-  });
-  if (cutoverFinding) {
-    findings.push(cutoverFinding);
-  }
-
-  // v6.14.2 Fix 2 — advisory cutover-misread detection. Fires when the
-  // active run scheduled NEW work for the slice id stored in
-  // `tddCutoverSliceId` AND that slice has already closed (terminal
-  // refactor* row recorded for the same id, possibly under a prior
-  // run). This is the "controller mistook the historical marker for an
-  // active-slice pointer" pattern observed in hox W-03/S-17. Advisory
-  // only — clears as soon as the controller pivots to a different
-  // slice, and never blocks stage-complete.
-  if (tddCutoverSliceId) {
-    const misreadFinding = evaluateCutoverMisread({
-      projectRoot,
-      tddCutoverSliceId,
-      activeRunEntries,
-      ledgerEntries: delegationLedger.entries
-    });
-    if (misreadFinding) {
-      findings.push(misreadFinding);
-    }
-  }
-
-  const { events: jsonlEvents, fanInAudits } = await readDelegationEvents(projectRoot);
+  const { events: jsonlEvents } = await readDelegationEvents(projectRoot);
   const runEvents = jsonlEvents.filter((e) => e.runId === delegationLedger.runId);
 
   if (eventsActive && planRaw.length > 0) {
@@ -316,184 +229,10 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       planMarkdown: planRaw,
       runEvents,
       runId: delegationLedger.runId,
-      slices: slicesByEvents,
-      legacyContinuation
+      slices: slicesByEvents
     });
     if (ignoredWave) {
       findings.push(ignoredWave);
-    }
-  }
-
-  if (eventsActive && worktreeExecutionMode === "worktree-first") {
-    const terminalPhases = new Set([
-      "refactor",
-      "refactor-deferred",
-      "resolve-conflict"
-    ]);
-
-    // v6.14.3 — under `legacyContinuation: true` AND a stamped
-    // boundary, exempt every slice closed at or before
-    // `tddWorktreeCutoverSliceId`. The cutover boundary itself is the
-    // contract: slices ≤ boundary were closed before the
-    // worktree-first metadata mandate took effect, so we trust the
-    // boundary as authoritative and do not require the slice to have
-    // recorded zero metadata across all rows.
-    //
-    // The earlier v6.14.2 "all-or-nothing" rule rejected the common
-    // hox-shape pattern where the GREEN row carries claim/lane/lease
-    // (added on the v6.14.x worktree-first flip) but a later
-    // `refactor-deferred` terminal row does not. That partial-
-    // metadata layout is the operator-visible signature of the
-    // failure mode this exemption was introduced to fix; flagging it
-    // again under a different code defeated the entire migration.
-    //
-    // Operators who want a strict gate can opt out by clearing
-    // `legacyContinuation` (or omitting `tddWorktreeCutoverSliceId`)
-    // — both fields are explicit, persisted, and operator-editable.
-    const isExemptLegacySlice = (sliceId: string): boolean => {
-      if (!legacyContinuation) return false;
-      if (worktreeCutoverBoundary === null) return false;
-      const n = parseSliceNumber(sliceId);
-      if (n === null) return false;
-      return n <= worktreeCutoverBoundary;
-    };
-
-    const missingGreenMeta = new Set<string>();
-    const exemptedGreenMeta = new Set<string>();
-    for (const ev of runEvents) {
-      if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
-      if (ev.status !== "completed" || ev.phase !== "green") continue;
-      if (typeof ev.sliceId !== "string") continue;
-      const tok = ev.claimToken?.trim() ?? "";
-      const lane = ev.ownerLaneId?.trim() ?? "";
-      const lease = ev.leasedUntil?.trim() ?? "";
-      if (tok.length === 0 || lane.length === 0 || lease.length === 0) {
-        if (isExemptLegacySlice(ev.sliceId)) {
-          exemptedGreenMeta.add(ev.sliceId);
-        } else {
-          missingGreenMeta.add(ev.sliceId);
-        }
-      }
-    }
-    if (missingGreenMeta.size > 0) {
-      findings.push({
-        section: "tdd_slice_lane_metadata_missing",
-        required: true,
-        rule: "Worktree-first: every completed slice-implementer phase=green row must record claimToken, ownerLaneId (--lane-id), and leasedUntil (--lease-until).",
-        found: false,
-        details: `Slices missing one or more lane fields on GREEN: ${[...missingGreenMeta].sort().join(", ")}. Remediation: include --claim-token, --lane-id, and --lease-until on every slice-implementer --phase green delegation-record write (schedule through completion); the hook fails fast with dispatch_lane_metadata_missing when they are omitted.`
-      });
-    } else if (exemptedGreenMeta.size > 0) {
-      findings.push({
-        section: "tdd_slice_lane_metadata_legacy_exempt",
-        required: false,
-        rule: "v6.14.2 legacyContinuation amnesty: closed slices ≤ tddWorktreeCutoverSliceId whose slice-implementer rows lack ALL worktree-first metadata are exempt from `tdd_slice_lane_metadata_missing`.",
-        found: true,
-        details: `Legacy-exempt slices (no claimToken/ownerLaneId/leasedUntil recorded; all closed before worktree-first flip): ${[...exemptedGreenMeta].sort().join(", ")}.`
-      });
-    }
-    const missingClaim = new Set<string>();
-    const exemptedClaim = new Set<string>();
-    for (const ev of runEvents) {
-      if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
-      if (ev.status !== "completed" && ev.status !== "failed") continue;
-      if (!ev.phase || !terminalPhases.has(ev.phase)) continue;
-      const tok = ev.claimToken?.trim() ?? "";
-      if (tok.length === 0 && typeof ev.sliceId === "string") {
-        if (isExemptLegacySlice(ev.sliceId)) {
-          exemptedClaim.add(ev.sliceId);
-        } else {
-          missingClaim.add(ev.sliceId);
-        }
-      }
-    }
-    if (missingClaim.size > 0) {
-      findings.push({
-        section: "tdd_slice_claim_token_missing",
-        required: true,
-        rule: "Worktree-first: terminal slice-implementer rows (refactor / refactor-deferred / resolve-conflict) must echo --claim-token. Remediation: pass the same --claim-token used on the scheduled row for every completed/failed terminal phase.",
-        found: false,
-        details: `Slices missing claim token on non-GREEN terminal rows: ${[...missingClaim].join(", ")}.`
-      });
-    } else if (exemptedClaim.size > 0) {
-      findings.push({
-        section: "tdd_slice_claim_token_legacy_exempt",
-        required: false,
-        rule: "v6.14.2 legacyContinuation amnesty: closed pre-cutover slices without claim tokens on terminal rows are exempt from `tdd_slice_claim_token_missing`.",
-        found: true,
-        details: `Legacy-exempt slices: ${[...exemptedClaim].sort().join(", ")}.`
-      });
-    }
-    const conflictSlices = [
-      ...new Set(
-        [
-          ...runEvents
-            .filter((e) => e.integrationState === "conflict")
-            .map((e) => e.sliceId)
-            .filter((s): s is string => typeof s === "string"),
-          ...fanInAudits
-            .filter(
-              (a) =>
-                a.runId === delegationLedger.runId &&
-                a.event === "cclaw_fanin_conflict" &&
-                Array.isArray(a.sliceIds)
-            )
-            .flatMap((a) => a.sliceIds ?? [])
-        ].filter((s): s is string => typeof s === "string" && s.length > 0)
-      )
-    ];
-    if (conflictSlices.length > 0) {
-      findings.push({
-        section: "tdd_fanin_conflict_unresolved",
-        required: true,
-        rule: "Resolve fan-in conflicts before stage-complete: dispatch slice-implementer --phase resolve-conflict or abandon the slice explicitly.",
-        found: false,
-        details: `integrationState=conflict for slice(s): ${conflictSlices.join(
-          ", "
-        )}. Remediation: finish deterministic fan-in or mark integrationState=resolved after manual merge evidence.`
-      });
-    }
-    const now = Date.now();
-    const leaseStale = new Set<string>();
-    const leaseStaleExempted = new Set<string>();
-    // v6.14.2 — also exempt slices whose lease has expired but the
-    // slice was already closed (terminal row recorded) before the
-    // expiry. The reclaim audit row was just never written —
-    // bookkeeping advisory, not a blocker.
-    const closedBeforeLeaseExpiry = computeClosedBeforeLeaseExpiry(runEvents);
-    for (const ev of runEvents) {
-      if (typeof ev.leasedUntil !== "string") continue;
-      const until = Date.parse(ev.leasedUntil);
-      if (!Number.isFinite(until) || until >= now) continue;
-      if (ev.leaseState === "reclaimed" || ev.leaseState === "released") continue;
-      if (typeof ev.sliceId !== "string") continue;
-      const sliceId = ev.sliceId;
-      if (isExemptLegacySlice(sliceId)) {
-        leaseStaleExempted.add(sliceId);
-        continue;
-      }
-      if (closedBeforeLeaseExpiry.has(sliceId)) {
-        leaseStaleExempted.add(sliceId);
-        continue;
-      }
-      leaseStale.add(sliceId);
-    }
-    if (leaseStale.size > 0) {
-      findings.push({
-        section: "tdd_lease_expired_unreclaimed",
-        required: true,
-        rule: "Leases past leasedUntil must be reclaimed or released. Remediation: run scheduler reclaim or emit leaseState=reclaimed audit rows after controller action.",
-        found: false,
-        details: `Expired leases not reclaimed for slice(s): ${[...leaseStale].join(", ")}.`
-      });
-    } else if (leaseStaleExempted.size > 0) {
-      findings.push({
-        section: "tdd_lease_expired_legacy_exempt",
-        required: false,
-        rule: "v6.14.2 amnesty: expired leases are exempt when the slice closed before the expiry timestamp (reclaim audit just never recorded) OR when the slice predates the worktree-first cutover under legacyContinuation.",
-        found: true,
-        details: `Lease-expiry-exempt slices: ${[...leaseStaleExempted].sort().join(", ")}.`
-      });
     }
   }
 
@@ -542,10 +281,10 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
     });
   }
 
-  const completedSliceImplementers = activeRunEntries.filter(
-    (entry) => entry.agent === "slice-implementer" && entry.status === "completed"
+  const completedSliceBuilders = activeRunEntries.filter(
+    (entry) => entry.agent === "slice-builder" && entry.status === "completed"
   );
-  const fanOutDetected = completedSliceImplementers.length > 1;
+  const fanOutDetected = completedSliceBuilders.length > 1;
 
   if (fanOutDetected) {
     const cohesionContractMarkdownPath = path.join(artifactsDir, "cohesion-contract.md");
@@ -588,27 +327,14 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       cohesionErrors.push("cohesion-contract.json is missing or invalid JSON.");
     }
 
-    // v6.14.2 — soften cohesion-contract under `legacyContinuation: true`.
-    // Pre-flip projects (hox) carry many closed implementer rows but
-    // never recorded cross-slice cohesion data because that schema
-    // didn't exist when the slices closed. Flag advisory + suggest the
-    // auto-stub helper instead of blocking the gate.
-    const cohesionRequired = legacyContinuation === true ? false : true;
-    const advisoryNote = cohesionRequired
-      ? cohesionErrors.join(" ")
-      : `${cohesionErrors.join(" ")} ` +
-        "Cohesion contract is advisory under legacyContinuation: true — emit a stub via " +
-        "`cclaw-cli internal cohesion-contract --stub` to silence this finding.";
     findings.push({
       section: "tdd.cohesion_contract_missing",
-      required: cohesionRequired,
-      rule: cohesionRequired
-        ? "When delegation ledger has >1 completed slice-implementer rows for active TDD run, require `.cclaw/artifacts/cohesion-contract.md` and parseable `.cclaw/artifacts/cohesion-contract.json` sidecar."
-        : "v6.14.2 advisory under legacyContinuation: cohesion contract is recommended, not required. Use `cclaw-cli internal cohesion-contract --stub` to write a baseline.",
+      required: true,
+      rule: "When the delegation ledger has >1 completed slice-builder rows for the active TDD run, require `.cclaw/artifacts/cohesion-contract.md` and a parseable `.cclaw/artifacts/cohesion-contract.json` sidecar.",
       found: cohesionContractFound,
       details: cohesionContractFound
-        ? `Fan-out detected (${completedSliceImplementers.length} completed slice-implementer rows); cohesion contract markdown+JSON sidecar are present and parseable.`
-        : advisoryNote
+        ? `Fan-out detected (${completedSliceBuilders.length} completed slice-builder rows); cohesion contract markdown+JSON sidecar are present and parseable.`
+        : `${cohesionErrors.join(" ")} Use \`cclaw-cli internal cohesion-contract --stub\` only as a scaffold; the gate expects real cohesion data for fan-out waves.`
     });
 
     const completedOverseerRows = activeRunEntries.filter(
@@ -623,54 +349,19 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       completedOverseerRows.length > 0 &&
       (overseerStatusInEvidence || overseerStatusInArtifact);
 
-    // v6.14.0 Phase 3 — conditional integration-overseer dispatch. When
-    // `integrationOverseerMode === "conditional"` and
-    // `integrationCheckRequired()` returns required=false, the gate is
-    // soft (advisory) and an audit-only finding is emitted so the
-    // controller can record the deliberate skip in artifacts.
-    //
-    // v6.14.1 — also surface the audit row presence. When the controller
-    // skips `integration-overseer` dispatch (or the heuristic returns
-    // false), the run log MUST contain a
-    // `cclaw_integration_overseer_skipped` audit row for traceability.
-    // The advisory `tdd_integration_overseer_skipped_audit_missing`
-    // surfaces a missing audit row when 2+ closed slices closed without
-    // any overseer dispatch AND no audit was recorded.
-    let overseerVerdict: ReturnType<typeof integrationCheckRequired> | null = null;
-    let overseerRequired = true;
     const skippedAuditRowCount = await countIntegrationOverseerSkippedAudits(
       projectRoot,
       delegationLedger.runId
     );
     const skippedAuditRowFound = skippedAuditRowCount > 0;
-    if (integrationOverseerMode === "conditional") {
-      const eventsForVerdict = runEvents.length > 0 ? runEvents : [];
-      const auditsForVerdict = fanInAudits.filter(
-        (a) => a.runId === delegationLedger.runId
-      );
-      overseerVerdict = integrationCheckRequired(eventsForVerdict, auditsForVerdict);
-      overseerRequired = overseerVerdict.required;
-      if (!overseerVerdict.required) {
-        const auditRowSuffix = skippedAuditRowFound
-          ? "audit row recorded — skip is fully traceable."
-          : "audit row MISSING — controller should append `cclaw_integration_overseer_skipped` for traceability (see `tdd_integration_overseer_skipped_audit_missing`).";
-        findings.push({
-          section: "tdd_integration_overseer_skipped_by_disjoint_paths",
-          required: false,
-          rule: "v6.14.0+ conditional integration-overseer mode: the heuristic returned `required: false` (disjoint claimedPaths, no high-risk slices, no fan-in conflicts). The controller may skip dispatching `integration-overseer` and emit a `cclaw_integration_overseer_skipped` audit row instead.",
-          found: true,
-          details: `integrationCheckRequired() reasons: ${overseerVerdict.reasons.join(", ")}. Skip is safe — ${auditRowSuffix}`
-        });
-      }
-    }
 
-    // v6.14.1 — `tdd_integration_overseer_skipped_audit_missing` (advisory).
-    // Fires when fan-out is detected (2+ completed slice-implementers),
+    // Advisory: when fan-out is detected (2+ completed slice-builders) and
     // no `integration-overseer` was dispatched at all (no scheduled or
     // completed row for the active run), AND no
-    // `cclaw_integration_overseer_skipped` audit row exists. This pairs
-    // with the controller skill text rule that the wave-closure decision
-    // ("dispatch overseer or skip") MUST leave a trail.
+    // `cclaw_integration_overseer_skipped` audit row exists, the controller
+    // should call `integrationCheckRequired()` and emit a
+    // `cclaw_integration_overseer_skipped` audit row so the decision stays
+    // traceable.
     const overseerDispatched = activeRunEntries.some(
       (entry) => entry.agent === "integration-overseer"
     );
@@ -678,29 +369,23 @@ export async function lintTddStage(ctx: StageLintContext): Promise<void> {
       findings.push({
         section: "tdd_integration_overseer_skipped_audit_missing",
         required: false,
-        rule: "v6.14.1: when a wave with 2+ closed slices closes without any integration-overseer dispatch, the controller should call `integrationCheckRequired()` and emit a `cclaw_integration_overseer_skipped` audit row so the decision is traceable. Advisory — never blocks stage-complete.",
+        rule: "When a wave with 2+ closed slices closes without any integration-overseer dispatch, the controller should call `integrationCheckRequired()` and emit a `cclaw_integration_overseer_skipped` audit row so the decision is traceable. Advisory — never blocks stage-complete.",
         found: false,
         details:
-          `Fan-out detected (${completedSliceImplementers.length} completed slice-implementer rows) but no integration-overseer dispatch row OR cclaw_integration_overseer_skipped audit row exists for active run. ` +
+          `Fan-out detected (${completedSliceBuilders.length} completed slice-builder rows) but no integration-overseer dispatch row OR cclaw_integration_overseer_skipped audit row exists for active run. ` +
           "Remediation: emit `node .cclaw/hooks/delegation-record.mjs --audit-kind=cclaw_integration_overseer_skipped --audit-reason=\"<reasons>\" --slice-ids=\"<S-1,S-2,...>\"` after wave closure."
       });
     }
 
     findings.push({
       section: "tdd.integration_overseer_missing",
-      required: overseerRequired,
-      rule: overseerRequired
-        ? "When fan-out is detected, require completed `integration-overseer` evidence with PASS or PASS_WITH_GAPS."
-        : "v6.14.0+ conditional integration-overseer mode: integration-overseer dispatch is advisory because `integrationCheckRequired()` returned required=false. Run it anyway if the run touches new boundaries.",
+      required: true,
+      rule: "When fan-out is detected, require completed `integration-overseer` evidence with PASS or PASS_WITH_GAPS.",
       found: integrationOverseerFound,
       details: integrationOverseerFound
         ? "integration-overseer completion recorded with PASS/PASS_WITH_GAPS evidence."
         : completedOverseerRows.length === 0
-          ? overseerRequired
-            ? "Fan-out detected but no completed integration-overseer delegation row exists for active run."
-            : skippedAuditRowFound
-              ? "Fan-out detected; integration-overseer not dispatched (conditional mode skipped on disjoint paths) and `cclaw_integration_overseer_skipped` audit row recorded. Audit-only."
-              : "Fan-out detected; integration-overseer not dispatched (conditional mode skipped on disjoint paths). Audit-only."
+          ? "Fan-out detected but no completed integration-overseer delegation row exists for active run."
           : "integration-overseer completion exists, but PASS/PASS_WITH_GAPS evidence is missing in delegation evidenceRefs and artifact text."
     });
   }
@@ -784,7 +469,7 @@ interface SliceFileInfo {
 }
 
 /**
- * v6.14.1 — count `cclaw_integration_overseer_skipped` audit rows in
+ * count `cclaw_integration_overseer_skipped` audit rows in
  * `delegation-events.jsonl` for a given runId. The audit row is not a
  * `DelegationEvent` (no agent/status), so `readDelegationEvents`
  * filters it out; we re-scan the raw file with a narrow JSON match.
@@ -896,7 +581,7 @@ export function evaluateEventsWatchedRed(
   if (redCount === 0) {
     return {
       ok: false,
-      details: "Watched-RED Proof: events ledger has slice phase rows but none with phase=red. Dispatch test-author --slice <id> --phase red so RED is observable in delegation-events.jsonl."
+      details: "Watched-RED Proof: events ledger has slice phase rows but none with phase=red. Dispatch slice-builder --slice <id> --phase red so RED is observable in delegation-events.jsonl."
     };
   }
   if (errors.length > 0) {
@@ -978,7 +663,7 @@ export function evaluateEventsSliceCycle(
       continue;
     }
 
-    // v6.14.0 — refactorOutcome on phase=green satisfies REFACTOR coverage
+    // refactorOutcome on phase=green satisfies REFACTOR coverage
     // without a separate phase=refactor / phase=refactor-deferred row.
     // - mode: "inline" → REFACTOR ran inline as part of GREEN.
     // - mode: "deferred" → rationale required (carried in evidenceRefs[0]
@@ -993,7 +678,7 @@ export function evaluateEventsSliceCycle(
       findings.push({
         section: `tdd_slice_refactor_missing:${sliceId}`,
         required: true,
-        rule: "Each TDD slice must close with a `phase=refactor` event, a `phase=refactor-deferred` event whose evidenceRefs / refactorRationale captures why refactor was deferred, OR a `phase=green` event carrying `refactorOutcome` (v6.14.0).",
+        rule: "Each TDD slice must close with a `phase=refactor` event, a `phase=refactor-deferred` event whose evidenceRefs / refactorRationale captures why refactor was deferred, OR a `phase=green` event carrying `refactorOutcome`.",
         found: false,
         details: `${sliceId}: no phase=refactor / phase=refactor-deferred event and no refactorOutcome on phase=green.`
       });
@@ -1060,20 +745,17 @@ interface DocCoverageResult {
   missing: string[];
 }
 
-export function evaluateSliceDocumenterCoverage(
+export function evaluateSliceDocCoverage(
   slices: Map<string, DelegationEntry[]>
 ): DocCoverageResult {
   const missing: string[] = [];
   for (const [sliceId, rows] of slices.entries()) {
     const hasGreen = rows.some((entry) => entry.phase === "green");
     if (!hasGreen) continue;
-    const docRow = rows.find((entry) => entry.phase === "doc");
-    if (!docRow) {
-      missing.push(sliceId);
-      continue;
-    }
-    const refs = Array.isArray(docRow.evidenceRefs) ? docRow.evidenceRefs : [];
-    const hasSliceFileRef = refs.some(
+    const refsAcrossPhases = rows.flatMap((entry) =>
+      Array.isArray(entry.evidenceRefs) ? entry.evidenceRefs : []
+    );
+    const hasSliceFileRef = refsAcrossPhases.some(
       (ref) => typeof ref === "string" && /tdd-slices\/S-[^/]+\.md/u.test(ref)
     );
     if (!hasSliceFileRef) {
@@ -1083,20 +765,18 @@ export function evaluateSliceDocumenterCoverage(
   return { missing };
 }
 
-interface ImplementerCoverageResult {
+interface BuilderCoverageResult {
   missing: string[];
 }
 
 /**
- * v6.12.0 Phase M — slice-implementer must own GREEN. For each slice
- * that recorded a phase=red event with non-empty evidenceRefs, require a
- * phase=green event whose `agent === "slice-implementer"`. Slices whose
- * GREEN event came from a different agent (e.g. controller wrote GREEN
- * itself and recorded a green row under another agent name) are flagged.
+ * `slice-builder` must own GREEN. For each slice that recorded a phase=red
+ * event with non-empty evidenceRefs, require a phase=green whose agent is
+ * `slice-builder`.
  */
-export function evaluateSliceImplementerCoverage(
+export function evaluateSliceBuilderCoverage(
   slices: Map<string, DelegationEntry[]>
-): ImplementerCoverageResult {
+): BuilderCoverageResult {
   const missing: string[] = [];
   for (const [sliceId, rows] of slices.entries()) {
     const reds = rows.filter((entry) => entry.phase === "red");
@@ -1107,8 +787,8 @@ export function evaluateSliceImplementerCoverage(
     });
     if (!hasRedEvidence) continue;
     const greens = rows.filter((entry) => entry.phase === "green");
-    const ownedByImplementer = greens.some((entry) => entry.agent === "slice-implementer");
-    if (!ownedByImplementer) {
+    const ownedByBuilder = greens.some((entry) => entry.agent === "slice-builder");
+    if (!ownedByBuilder) {
       missing.push(sliceId);
     }
   }
@@ -1120,26 +800,6 @@ interface RedCheckpointResult {
   details: string;
 }
 
-async function readMergedWaveManifestForCheckpoint(
-  artifactsDir: string,
-  planMarkdown: string
-): Promise<Map<string, Set<string>> | null> {
-  try {
-    const merged = mergeParallelWaveDefinitions(
-      parseParallelExecutionPlanWaves(planMarkdown),
-      await parseWavePlanDirectory(artifactsDir)
-    );
-    if (merged.length === 0) return null;
-    const map = new Map<string, Set<string>>();
-    for (const w of merged) {
-      map.set(w.waveId, new Set(w.members.map((m) => m.sliceId)));
-    }
-    return map.size > 0 ? map : null;
-  } catch {
-    return null;
-  }
-}
-
 function sliceRefactorTerminal(
   sliceId: string,
   slices: Map<string, DelegationEntry[]>
@@ -1148,15 +808,15 @@ function sliceRefactorTerminal(
   if (!rows) return false;
   return rows.some(
     (e) =>
-      e.agent === "slice-implementer" &&
+      e.agent === "slice-builder" &&
       (e.phase === "refactor" || e.phase === "refactor-deferred") &&
       (e.status === "completed" || e.status === "failed")
   );
 }
 
 /**
- * v6.13.1 — detect single-slice dispatch when the merged wave plan
- * requires parallel ready slice-implementer fan-out.
+ * Detect single-slice dispatch when the merged wave plan requires parallel
+ * ready slice-builder fan-out.
  */
 export async function evaluateWavePlanDispatchIgnored(params: {
   artifactsDir: string;
@@ -1164,7 +824,6 @@ export async function evaluateWavePlanDispatchIgnored(params: {
   runEvents: DelegationEvent[];
   runId: string;
   slices: Map<string, DelegationEntry[]>;
-  legacyContinuation: boolean;
 }): Promise<LintFinding | null> {
   let merged;
   try {
@@ -1180,7 +839,7 @@ export async function evaluateWavePlanDispatchIgnored(params: {
   let pool;
   try {
     pool = await loadTddReadySlicePool(params.planMarkdown, params.artifactsDir, {
-      legacyParallelDefaultSerial: params.legacyContinuation
+      legacyParallelDefaultSerial: false
     });
   } catch {
     return null;
@@ -1196,13 +855,17 @@ export async function evaluateWavePlanDispatchIgnored(params: {
 
   const scoped = params.runEvents.filter((e) => e.runId === params.runId);
   const tail = scoped.slice(-20);
-  const implInTail = new Set<string>();
+  const builderInTail = new Set<string>();
   for (const e of tail) {
-    if (e.agent === "slice-implementer" && typeof e.sliceId === "string" && e.sliceId.length > 0) {
-      implInTail.add(e.sliceId);
+    if (
+      e.agent === "slice-builder" &&
+      typeof e.sliceId === "string" &&
+      e.sliceId.length > 0
+    ) {
+      builderInTail.add(e.sliceId);
     }
   }
-  if (implInTail.size !== 1) return null;
+  if (builderInTail.size !== 1) return null;
 
   for (const wave of merged) {
     const waveSliceSet = new Set(wave.members.map((m) => m.sliceId));
@@ -1215,28 +878,28 @@ export async function evaluateWavePlanDispatchIgnored(params: {
     const ready = selectReadySlices(wavePool, {
       cap: Math.max(32, wavePool.length),
       completedUnitIds,
-      activePathHolders: [],
-      legacyContinuation: params.legacyContinuation
+      activePathHolders: []
     });
     if (ready.length < 2) continue;
 
-    const only = [...implInTail][0]!;
+    const only = [...builderInTail][0]!;
     const missed = ready.map((r) => r.sliceId).filter((s) => s !== only);
     if (missed.length === 0) continue;
 
     return {
       section: "tdd_wave_plan_ignored",
       required: true,
-      rule: "When the Parallel Execution Plan (or wave-plans/) defines an open wave with two or more ready parallelizable slices, the controller must fan out slice-implementer work for each ready slice instead of serializing to one slice only.",
+      rule: "When the Parallel Execution Plan (or wave-plans/) defines an open wave with two or more ready parallelizable slices, the controller must fan out slice-builder Tasks for each ready slice instead of serializing to one slice only.",
       found: false,
-      details: `Wave ${wave.waveId}: scheduler-ready members ${ready.map((r) => r.sliceId).join(", ")}; last 20 delegation events show slice-implementer only for ${only}. Missed parallel dispatch: ${missed.join(", ")}. Remediation: load \`05-plan.md\` (Parallel Execution Plan) and \`wave-plans/\` before routing, launch the wave (AskQuestion only when waveCount>=2 and single-slice is a real alternative), then dispatch GREEN+DOC for every ready slice with mandatory worktree-first flags on GREEN.`
+      details: `Wave ${wave.waveId}: scheduler-ready members ${ready.map((r) => r.sliceId).join(", ")}; last 20 delegation events show slice workers only for ${only}. Missed parallel dispatch: ${missed.join(", ")}. Remediation: load \`05-plan.md\` (Parallel Execution Plan) and \`wave-plans/\` before routing, launch the wave (AskQuestion only when waveCount>=2 and single-slice is a real alternative), then dispatch workers for every ready slice.`
     };
   }
   return null;
 }
 
 /**
- * v6.12.0 Phase W (legacy `global-red` mode) — RED checkpoint enforcement.
+ * Global RED checkpoint enforcement (`global-red` mode).
+ *
  * The wave protocol requires ALL Phase A REDs to land before ANY Phase B
  * GREEN starts. The rule is enforced on a per-wave basis, where a wave is
  * defined by the managed `## Parallel Execution Plan` block in
@@ -1246,10 +909,9 @@ export async function evaluateWavePlanDispatchIgnored(params: {
  * with no other-phase events between them; the rule fires only when the
  * implicit wave has 2+ members.
  *
- * v6.14.0: this function powers the `global-red` checkpoint mode. New
- * projects default to `per-slice` mode (see
- * `evaluatePerSliceRedBeforeGreen`); `legacyContinuation: true` projects
- * auto-keep this behavior. Exported under both `evaluateGlobalRedCheckpoint`
+ * Default mode is `per-slice` (see `evaluatePerSliceRedBeforeGreen`);
+ * this checkpoint applies when a project explicitly opts into
+ * `global-red`. Exported under both `evaluateGlobalRedCheckpoint`
  * (canonical name) and `evaluateRedCheckpoint` (back-compat alias for
  * existing tests/consumers).
  *
@@ -1334,32 +996,23 @@ export function evaluateGlobalRedCheckpoint(
     ok: false,
     details:
       `RED checkpoint violation: ${violations.join("; ")}. ` +
-      "Dispatch ALL Phase A test-author --phase red calls in one message, verify every phase=red event lands with non-empty evidenceRefs, and only then dispatch Phase B slice-implementer --phase green + slice-documenter --phase doc fan-out."
+      "When using the global wave barrier, dispatch ALL slice-builder --phase red calls in one message, verify every phase=red event lands with non-empty evidenceRefs, and only then dispatch the GREEN/REFACTOR/DOC fan-out."
   };
 }
 
 /**
- * Back-compat alias for `evaluateGlobalRedCheckpoint` (v6.12.0 Phase W
- * behavior). Existing tests/consumers can keep importing
- * `evaluateRedCheckpoint`. The v6.14.0 stream-style mode uses
- * `evaluatePerSliceRedBeforeGreen` instead.
+ * Back-compat alias for `evaluateGlobalRedCheckpoint`. The default mode
+ * uses `evaluatePerSliceRedBeforeGreen` instead.
  */
 export const evaluateRedCheckpoint = evaluateGlobalRedCheckpoint;
 
 /**
- * v6.14.0 — per-slice RED-before-GREEN enforcement (default mode).
+ * Per-slice RED-before-GREEN enforcement (default mode).
  *
  * For each slice with both phase=red and phase=green completed events,
  * fail if any green completedTs precedes the slice's last red completedTs.
  * No global wave barrier — different slices may freely interleave their
  * RED/GREEN/REFACTOR phases.
- *
- * Note: this is intentionally weaker than `evaluateGlobalRedCheckpoint`
- * because the W-02 measurement on hox showed ~6 minutes of barrier
- * overhead when slices were already disjoint (file-overlap scheduler did
- * the parallelism job). The per-slice rule retains the only invariant
- * that mattered for correctness: no slice goes GREEN before its own
- * RED is observed failing.
  */
 export function evaluatePerSliceRedBeforeGreen(
   slices: Map<string, DelegationEntry[]>
@@ -1400,243 +1053,12 @@ export function evaluatePerSliceRedBeforeGreen(
   };
 }
 
-const LEGACY_PER_SLICE_SECTIONS = [
-  "Test Discovery",
-  "RED Evidence",
-  "GREEN Evidence",
-  "Watched-RED Proof",
-  "Vertical Slice Cycle",
-  "Per-Slice Review",
-  "Failure Analysis",
-  "Acceptance Mapping"
-];
-
-interface LegacyBackslideContext {
-  projectRoot: string;
-  raw: string;
-  sections: StageLintContext["sections"];
-}
-
-/**
- * v6.12.0 Phase L — advisory finding when post-cutover slice ids appear
- * in legacy per-slice sections of `06-tdd.md`. Reads
- * `flow-state.json::tddCutoverSliceId` (e.g. `"S-10"`) and scans each
- * legacy section for `S-<N>` references with N > cutover.
- */
-async function evaluateLegacySectionBackslide(
-  ctx: LegacyBackslideContext
-): Promise<LintFinding | null> {
-  const cutover = await readTddCutoverSliceId(ctx.projectRoot);
-  if (cutover === null) return null;
-  const cutoverNum = parseSliceNumber(cutover);
-  if (cutoverNum === null) return null;
-  const offenders: { section: string; sliceId: string }[] = [];
-  for (const sectionName of LEGACY_PER_SLICE_SECTIONS) {
-    const body = sectionBodyByName(ctx.sections, sectionName);
-    if (body === null) continue;
-    const ids = extractSliceIdsFromBody(body);
-    for (const id of ids) {
-      const num = parseSliceNumber(id);
-      if (num === null) continue;
-      if (num > cutoverNum) {
-        offenders.push({ section: sectionName, sliceId: id });
-      }
-    }
-  }
-  if (offenders.length === 0) return null;
-  const summary = offenders
-    .map((row) => `${row.sliceId} appears in legacy section \`## ${row.section}\``)
-    .join("; ");
-  return {
-    section: "tdd_legacy_section_writes_after_cutover",
-    required: false,
-    rule: "After v6.12.0 cutover, per-slice prose for slices > cutoverSliceId must live in `tdd-slices/S-<id>.md`, not in legacy `06-tdd.md` sections (Test Discovery, RED Evidence, GREEN Evidence, Watched-RED Proof, Vertical Slice Cycle, Per-Slice Review, Failure Analysis, Acceptance Mapping).",
-    found: false,
-    details: `${summary}. Move post-cutover slice prose into \`tdd-slices/<id>.md\` and let slice-documenter own the writes.`
-  };
-}
-
-async function readTddCutoverSliceId(projectRoot: string): Promise<string | null> {
-  const flowStatePath = path.join(projectRoot, ".cclaw/state/flow-state.json");
-  let raw: string;
-  try {
-    raw = await fs.readFile(flowStatePath, "utf8");
-  } catch {
-    return null;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  const value = (parsed as Record<string, unknown>).tddCutoverSliceId;
-  if (typeof value !== "string" || value.length === 0) return null;
-  return value;
-}
-
-function parseSliceNumber(sliceId: string): number | null {
-  const match = /^S-(\d+)\b/u.exec(sliceId);
-  if (!match) return null;
-  const num = Number.parseInt(match[1]!, 10);
-  return Number.isFinite(num) ? num : null;
-}
-
-function extractSliceIdsFromBody(body: string): string[] {
-  const ids = new Set<string>();
-  const regex = /\bS-(\d+)\b/gu;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(body)) !== null) {
-    ids.add(`S-${match[1]}`);
-  }
-  return [...ids];
-}
-
 function pickEventTs(rows: DelegationEntry[]): string | undefined {
   for (const entry of rows) {
     const ts = entry.completedTs ?? entry.endTs ?? entry.ts;
     if (typeof ts === "string" && ts.length > 0) return ts;
   }
   return undefined;
-}
-
-/**
- * v6.14.2 — slices whose terminal closure event recorded a `completedTs`
- * that PRECEDES the latest `leasedUntil` for the same slice. The lease
- * was never reclaimed but the wave closed in time; the missing audit
- * row is advisory bookkeeping, not a correctness failure.
- *
- * v6.14.4 — also recognize stream-mode (per-slice checkpoint) closure:
- * a `phase=green status=completed` row carrying `refactorOutcome`
- * (`inline` or `deferred`) IS the slice closure. Without this, every
- * stream-mode slice incorrectly fired `tdd_lease_expired_unreclaimed`
- * once its lease expired, even though the slice was already closed
- * (this mirrors the same predicate already used in
- * `src/internal/wave-status.ts` for `closedSlices` tracking — same
- * decision, just now applied to lease-closure detection).
- */
-function computeClosedBeforeLeaseExpiry(events: DelegationEntry[]): Set<string> {
-  const terminalPhases = new Set([
-    "refactor",
-    "refactor-deferred",
-    "resolve-conflict"
-  ]);
-  const lastLease = new Map<string, number>();
-  const earliestTerminal = new Map<string, number>();
-
-  const recordTerminal = (sliceId: string, completedTs: string): void => {
-    const ts = Date.parse(completedTs);
-    if (!Number.isFinite(ts)) return;
-    const prev = earliestTerminal.get(sliceId);
-    if (prev === undefined || ts < prev) {
-      earliestTerminal.set(sliceId, ts);
-    }
-  };
-
-  for (const ev of events) {
-    if (ev.stage !== "tdd" || ev.agent !== "slice-implementer") continue;
-    if (typeof ev.sliceId !== "string") continue;
-    if (typeof ev.leasedUntil === "string") {
-      const until = Date.parse(ev.leasedUntil);
-      if (Number.isFinite(until)) {
-        const prev = lastLease.get(ev.sliceId);
-        if (prev === undefined || until > prev) {
-          lastLease.set(ev.sliceId, until);
-        }
-      }
-    }
-    if (ev.status !== "completed" || typeof ev.completedTs !== "string") {
-      continue;
-    }
-    if (typeof ev.phase !== "string") continue;
-    if (terminalPhases.has(ev.phase)) {
-      recordTerminal(ev.sliceId, ev.completedTs);
-      continue;
-    }
-    // v6.14.4 — stream-mode closure: GREEN-only with refactorOutcome
-    // folded inline IS the slice's terminal row.
-    if (ev.phase === "green" && ev.refactorOutcome) {
-      const mode = ev.refactorOutcome.mode;
-      if (mode === "inline" || mode === "deferred") {
-        recordTerminal(ev.sliceId, ev.completedTs);
-      }
-    }
-  }
-  const out = new Set<string>();
-  for (const [sliceId, terminalTs] of earliestTerminal.entries()) {
-    const leaseTs = lastLease.get(sliceId);
-    if (leaseTs === undefined) continue;
-    if (terminalTs < leaseTs) {
-      out.add(sliceId);
-    }
-  }
-  return out;
-}
-
-interface CutoverMisreadInput {
-  projectRoot: string;
-  tddCutoverSliceId: string;
-  activeRunEntries: DelegationEntry[];
-  ledgerEntries: DelegationEntry[];
-}
-
-/**
- * v6.14.2 Fix 2 — advisory linter rule.
- *
- * Fires when:
- *   (a) `tddCutoverSliceId` is set on the active flow state, AND
- *   (b) the active run has a `scheduled` row whose `sliceId === tddCutoverSliceId`
- *       AND `phase ∈ {red, green, doc}`, AND
- *   (c) that slice already has a terminal `refactor` / `refactor-deferred` /
- *       `resolve-conflict` event recorded for it (under any run) — i.e.
- *       it's already closed.
- *
- * This is the diagnostic hox surfaced on S-17/W-03: the controller
- * read `tddCutoverSliceId: "S-11"` and treated it as the active slice
- * pointer, then dispatched new work for S-11 (already closed under
- * v6.12 markdown). Advisory — never blocks stage-complete.
- */
-function evaluateCutoverMisread(input: CutoverMisreadInput): LintFinding | null {
-  const { tddCutoverSliceId, activeRunEntries, ledgerEntries } = input;
-  const cutoverPhases = new Set(["red", "green", "doc"]);
-  const newWork = activeRunEntries.find(
-    (entry) =>
-      entry.sliceId === tddCutoverSliceId &&
-      typeof entry.phase === "string" &&
-      cutoverPhases.has(entry.phase) &&
-      // any schedule/launch/ack/completed for the cutover slice in this run
-      (entry.status === "scheduled" ||
-        entry.status === "launched" ||
-        entry.status === "acknowledged" ||
-        entry.status === "completed")
-  );
-  if (!newWork) return null;
-  const terminalPhases = new Set([
-    "refactor",
-    "refactor-deferred",
-    "resolve-conflict"
-  ]);
-  const closure = ledgerEntries.find(
-    (entry) =>
-      entry.sliceId === tddCutoverSliceId &&
-      entry.status === "completed" &&
-      typeof entry.phase === "string" &&
-      terminalPhases.has(entry.phase)
-  );
-  if (!closure) return null;
-  const closedTs = closure.completedTs ?? closure.endTs ?? closure.ts ?? "(unknown)";
-  const closedRunId = closure.runId ?? "(unknown-run)";
-  return {
-    section: "tdd_cutover_misread_warning",
-    required: false,
-    rule:
-      "v6.14.2 Fix 2 advisory: `tddCutoverSliceId` is a HISTORICAL boundary set by sync, NOT a pointer to the active slice. The controller appears to have scheduled new work on the cutover slice id while that slice already closed.",
-    found: false,
-    details:
-      `Active run scheduled new ${newWork.phase} work for slice ${tddCutoverSliceId} but that slice closed at ${closedTs} (run ${closedRunId}) — confirm this is intentional re-work, not a misread of tddCutoverSliceId. ` +
-      "Use `cclaw-cli internal wave-status --json` to find the next ready slice."
-  };
 }
 
 export function parseVerticalSliceCycle(body: string): ParsedSliceCycleResult {

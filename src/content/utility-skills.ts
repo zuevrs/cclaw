@@ -156,7 +156,7 @@ export const LANGUAGE_RULE_PACK_GENERATORS: Record<string, () => string> = {
 };
 
 /**
- * Legacy per-language folders under `.cclaw/skills/` used in v0.7.0. Listed
+ * Older per-language folders under `.cclaw/skills/`. Listed
  * here so `cclaw sync` and `sync` can surface drift and the installer can
  * clean them up after the move to `.cclaw/rules/lang/`.
  */

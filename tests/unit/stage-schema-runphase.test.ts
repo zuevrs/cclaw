@@ -3,7 +3,7 @@ import { stageAutoSubagentDispatch } from "../../src/content/stage-schema.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 
 /**
- * Wave 22: every brainstorm/scope/design dispatch entry must declare
+ * every brainstorm/scope/design dispatch entry must declare
  * `runPhase: "post-elicitation"` so the materialized stage skill renders the
  * "Run Phase" column with the correct value, and so subagents do not preempt
  * the adaptive elicitation Q&A loop. Other stages keep `any` (or undefined)
@@ -12,7 +12,7 @@ import { stageSkillMarkdown } from "../../src/content/skills.js";
 
 const ELICITATION_STAGES = ["brainstorm", "scope", "design"] as const;
 
-describe("Wave 22 STAGE_AUTO_SUBAGENT_DISPATCH runPhase coverage", () => {
+describe("STAGE_AUTO_SUBAGENT_DISPATCH runPhase coverage", () => {
   it("every dispatch entry on brainstorm/scope/design declares runPhase=post-elicitation", () => {
     for (const stage of ELICITATION_STAGES) {
       const rules = stageAutoSubagentDispatch(stage);

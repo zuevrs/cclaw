@@ -19,8 +19,8 @@ function ev(partial: Partial<DelegationEvent> & Pick<DelegationEvent, "agent" | 
   } as DelegationEvent;
 }
 
-describe("tdd_wave_plan_ignored (v6.13.1)", () => {
-  it("fires when parallel plan shows 2+ ready slices but only one slice-implementer in tail", async () => {
+describe("tdd_wave_plan_ignored", () => {
+  it("fires when parallel plan shows 2+ ready slices but only one slice-builder in tail", async () => {
     const root = await createTempProject("tdd-wave-ignored");
     const planMarkdown = `# Plan
 ## Implementation Units
@@ -48,7 +48,7 @@ describe("tdd_wave_plan_ignored (v6.13.1)", () => {
     for (let i = 0; i < 19; i += 1) {
       tail.push(
         ev({
-          agent: "test-author",
+          agent: "slice-builder",
           sliceId: "S-1",
           phase: "red",
           completedTs: new Date(Date.UTC(2026, 0, 1, 12, 0, i)).toISOString()
@@ -57,7 +57,7 @@ describe("tdd_wave_plan_ignored (v6.13.1)", () => {
     }
     tail.push(
       ev({
-        agent: "slice-implementer",
+        agent: "slice-builder",
         sliceId: "S-1",
         phase: "green",
         completedTs: new Date(Date.UTC(2026, 0, 1, 13, 0, 0)).toISOString()
@@ -70,15 +70,14 @@ describe("tdd_wave_plan_ignored (v6.13.1)", () => {
       planMarkdown,
       runEvents: tail.map((t) => ({ ...t, runId: "run-wave-ignore" })),
       runId: "run-wave-ignore",
-      slices,
-      legacyContinuation: false
+      slices
     });
     expect(finding).toBeDefined();
     expect(finding!.section).toBe("tdd_wave_plan_ignored");
     expect(finding!.details).toContain("S-2");
   });
 
-  it("passes when tail shows multiple slice-implementer slices", async () => {
+  it("passes when tail shows multiple slice-builder slices", async () => {
     const root = await createTempProject("tdd-wave-not-ignored");
     const planMarkdown = `<!-- parallel-exec-managed-start -->
 ## Parallel Execution Plan
@@ -102,16 +101,15 @@ describe("tdd_wave_plan_ignored (v6.13.1)", () => {
     await fs.writeFile(path.join(root, ".cclaw/artifacts/05-plan.md"), planMarkdown, "utf8");
 
     const tail: DelegationEvent[] = [
-      ev({ agent: "slice-implementer", sliceId: "S-1", phase: "green" }),
-      ev({ agent: "slice-implementer", sliceId: "S-2", phase: "green" })
+      ev({ agent: "slice-builder", sliceId: "S-1", phase: "green" }),
+      ev({ agent: "slice-builder", sliceId: "S-2", phase: "green" })
     ];
     const finding = await evaluateWavePlanDispatchIgnored({
       artifactsDir: path.join(root, ".cclaw/artifacts"),
       planMarkdown,
       runEvents: tail.map((t) => ({ ...t, runId: "run-wave-ignore-2" })),
       runId: "run-wave-ignore-2",
-      slices: new Map(),
-      legacyContinuation: false
+      slices: new Map()
     });
     expect(finding).toBeNull();
   });

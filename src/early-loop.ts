@@ -219,7 +219,7 @@ export function parseEarlyLoopLog(
       }
     }
 
-    // v6.9.0 schema repair: legacy logs may carry rows with no runId
+    // schema repair: legacy logs may carry rows with no runId
     // (the prior parser silently coerced them to "active", which then
     // collided across runs). Surface a structured warning on read but
     // skip the row so derived status doesn't fold cross-run state.

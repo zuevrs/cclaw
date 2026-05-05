@@ -30,9 +30,7 @@ function buildContext(markdown: string): StageLintContext {
     isTrivialOverride: false,
     overrideSet: null,
     activeStageFlags: [],
-    taskClass: null,
-    legacyContinuation: false,
-    worktreeExecutionMode: "single-tree"
+    taskClass: null
   };
 }
 

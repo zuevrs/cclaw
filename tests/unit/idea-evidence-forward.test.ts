@@ -9,7 +9,7 @@ import { lintArtifact } from "../../src/artifact-linter.js";
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * Wave 23 (v5.0.0): `/cc-ideate` -> brainstorm evidence forwarding.
+ * : `/cc-ideate` -> brainstorm evidence forwarding.
  *
  * Coverage:
  *   - `start-flow --from-idea-artifact=<path> --from-idea-candidate=I-#`
@@ -48,7 +48,7 @@ function captureIo(): CapturedIo {
   };
 }
 
-describe("Wave 23 idea-evidence forward (start-flow + brainstorm linter)", () => {
+describe("idea-evidence forward (start-flow + brainstorm linter)", () => {
   it("start-flow persists fromIdeaArtifact + fromIdeaCandidateId into interactionHints.brainstorm", async () => {
     const root = await createTempProject("idea-evidence-forward-startflow");
     const captured = captureIo();

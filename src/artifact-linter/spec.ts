@@ -165,7 +165,7 @@ export async function lintSpecStage(ctx: StageLintContext): Promise<void> {
       findings.push({
         section: "spec_acs_not_sliceable",
         required: false,
-        rule: "Acceptance criteria should declare `parallelSafe` and `touchSurface` per row (v6.13.0) so plan/TDD can schedule slices safely.",
+        rule: "Acceptance criteria should declare `parallelSafe` and `touchSurface` per row so plan/TDD can schedule slices safely.",
         found: hasParallel && hasTouch,
         details:
           hasParallel && hasTouch

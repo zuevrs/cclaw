@@ -11,9 +11,9 @@ import {
 import { FLOW_STAGES } from "../../src/types.js";
 
 /**
- * Wave 25 (v6.1.0) — track-aware ARTIFACT validation escape.
+ * — track-aware ARTIFACT validation escape.
  *
- * Mirrors Wave 24 Phase B's `mandatoryAgentsFor` predicate
+ * Mirrors Phase B's `mandatoryAgentsFor` predicate
  * (`track === "quick"` OR `taskClass === "software-bugfix"`) but
  * applies it to ARTIFACT VALIDATION rules instead of delegation
  * gates. The user's quick-tier 3-file landing page test reported
@@ -22,7 +22,7 @@ import { FLOW_STAGES } from "../../src/types.js";
  * lanes and stays silent on standard tracks.
  */
 
-describe("Wave 25 — shouldDemoteArtifactValidationByTrack predicate", () => {
+describe("— shouldDemoteArtifactValidationByTrack predicate", () => {
   it("demotes for the quick track regardless of taskClass", () => {
     expect(shouldDemoteArtifactValidationByTrack("quick")).toBe(true);
     expect(shouldDemoteArtifactValidationByTrack("quick", null)).toBe(true);
@@ -44,7 +44,7 @@ describe("Wave 25 — shouldDemoteArtifactValidationByTrack predicate", () => {
     expect(shouldDemoteArtifactValidationByTrack("standard", "software-trivial")).toBe(false);
   });
 
-  it("matches the Wave 24 mandatory-agents predicate (same trigger logic)", () => {
+  it("matches the mandatory-agents predicate (same trigger logic)", () => {
     // The two predicates intentionally share the same trigger so we
     // never end up in a state where the artifact escape fires but
     // the mandatory-agents drop does not (or vice versa).
@@ -68,7 +68,7 @@ describe("Wave 25 — shouldDemoteArtifactValidationByTrack predicate", () => {
   });
 });
 
-describe("Wave 25 — Interaction Edge Case matrix lite-tier relaxations", () => {
+describe("— Interaction Edge Case matrix lite-tier relaxations", () => {
   const standardEdgeMatrixWithMissingNetworkRows = [
     "| Edge case | Handled? | Design response | Deferred item |",
     "|---|---|---|---|",
@@ -199,7 +199,7 @@ describe("Wave 25 — Interaction Edge Case matrix lite-tier relaxations", () =>
   });
 });
 
-describe("Wave 25 — Architecture Diagram failure-edge conditional enforcement", () => {
+describe("— Architecture Diagram failure-edge conditional enforcement", () => {
   const minimalDiagram = "```mermaid\nflowchart LR\n  Hero -->|sync: render| Section\n  Section -.->|async: log analytics| Telemetry\n```";
 
   it("skips failure-edge requirement when no Failure Mode rows AND no external-dep keywords in diagram", () => {

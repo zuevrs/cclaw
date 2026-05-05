@@ -3,7 +3,7 @@ import { extractForcingQuestions } from "../../src/artifact-linter/shared.js";
 import { stageSkillMarkdown } from "../../src/content/skills.js";
 
 /**
- * Round 6 (v6.7.0) — counterfactual forcing-question pruning.
+ * — counterfactual forcing-question pruning.
  *
  * Rationale: these forcing topics either duplicated information the
  * downstream artifact already captured (`do-nothing` ↔ brainstorm's
@@ -16,7 +16,7 @@ import { stageSkillMarkdown } from "../../src/content/skills.js";
  * Design's Failure Mode Table is UNTOUCHED — it remains mandatory for
  * design stage output.
  */
-describe("no-counterfactual-forcing (Round 6 / v6.7.0)", () => {
+describe("no-counterfactual-forcing ", () => {
   it("brainstorm forcing-question list no longer contains `do-nothing`", () => {
     const topics = extractForcingQuestions("brainstorm");
     const ids = topics.map((t) => t.id);

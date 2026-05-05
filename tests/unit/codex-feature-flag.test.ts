@@ -7,7 +7,7 @@ import {
   patchCodexHooksFlag
 } from "../../src/codex-feature-flag.js";
 
-// These are unit tests for the tiny TOML-surgery module that v0.40.0
+// These are unit tests for the tiny TOML-surgery module that release
 // uses to flip `[features] codex_hooks = true` in `~/.codex/config.toml`
 // on behalf of the user. They deliberately do not touch the filesystem;
 // the classify/patch pair is pure. The interactive prompt wiring in

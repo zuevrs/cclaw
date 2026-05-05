@@ -108,7 +108,7 @@ describe("node hook runtime", () => {
     expect(context).toContain("run=run-node");
   });
 
-  it("session-start loads iron-laws into the bootstrap digest (v6.9.0)", async () => {
+  it("session-start loads iron-laws into the bootstrap digest ", async () => {
     const root = await createTempProject("node-hook-session-start-iron-laws");
     await seedFlowState(root, "scope");
     await fs.mkdir(path.join(root, ".cclaw/skills/iron-laws"), { recursive: true });

@@ -2,20 +2,20 @@ import { describe, expect, it } from "vitest";
 import { adaptiveElicitationSkillMarkdown } from "../../src/content/skills-elicitation.js";
 
 /**
- * Wave 22 (Phase A1): adaptive-elicitation SKILL.md must enforce a hard
+ * (Phase A1): adaptive-elicitation SKILL.md must enforce a hard
  * floor, document anti-patterns, and remove the soft "never as hard stop"
  * language from earlier waves. This test pins those properties so future
  * edits cannot silently revert the tone change.
  */
 
-describe("adaptive-elicitation SKILL.md (Wave 22 hardening)", () => {
+describe("adaptive-elicitation SKILL.md (hardening)", () => {
   const skill = adaptiveElicitationSkillMarkdown();
 
   it("declares a HARD-GATE block", () => {
     expect(skill).toMatch(/##\s*HARD-GATE/u);
   });
 
-  it("contains an explicit Convergence floor instruction (Wave 23 / v5.0.0 — replaces hard count floor)", () => {
+  it("contains an explicit Convergence floor instruction (/ release — replaces hard count floor)", () => {
     expect(skill).toMatch(/Convergence floor|qa_log_unconverged/iu);
     expect(skill).toContain("stage-complete.mjs");
     expect(skill).toContain("Q&A Log");

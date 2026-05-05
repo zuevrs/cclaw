@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { RUNTIME_ROOT } from "./constants.js";
 import { conversationLanguagePolicyMarkdown } from "./content/language-policy.js";
-import { CCLAW_AGENTS, agentMarkdown } from "./content/core-agents.js";
+import { CCLAW_AGENTS, agentMarkdown, type AgentDefinition } from "./content/core-agents.js";
 import { IRON_LAWS } from "./content/iron-laws.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
 import { type HarnessId } from "./types.js";
@@ -99,7 +99,7 @@ export interface HarnessAdapter {
      *   (`codex-rs/collaboration-mode-templates`). Available to agents running
      *   inside Codex but may be hidden on very old builds.
      * - `plain-text`        — fallback only; used when no native primitive is
-     *   available (no shipping harness uses this in v0.41.0).
+     *   available (no shipping harness uses this).
      */
     structuredAsk:
       | "AskUserQuestion"
@@ -447,7 +447,7 @@ export function harnessesByTier(): HarnessId[] {
 }
 
 function ironLawsAgentsMdBlock(): string {
-  // v6.9.0: keep this set in sync with `ironLawsSkillMarkdown()` —
+  // keep this set in sync with `ironLawsSkillMarkdown()` —
   // post-Phase A, only `stop-clean-or-handoff` is still hook-enforced
   // (Stop hook). All other iron laws live in stage HARD-GATE blocks.
   const enforcedLawIds = new Set([
@@ -507,8 +507,8 @@ Before responding to a coding request:
 
 Three rules apply to every cclaw stage in this project, regardless of which skills loaded:
 
-1. **Q&A convergence before drafting** — for brainstorm / scope / design, walk the stage forcing questions one at a time via the harness-native question tool (Claude \`AskUserQuestion\`, Cursor \`AskQuestion\`, Codex \`request_user_input\`, Gemini \`ask_user\`). The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when convergence has not been reached. Convergence is satisfied when ANY of: (a) every forcing-question topic id is tagged \`[topic:<id>]\` in at least one \`## Q&A Log\` row, (b) the last 2 substantive rows produce no decision-changing impact (Ralph-Loop), or (c) an explicit user stop-signal row is recorded. The fixed count floor (10 for standard) was removed in Wave 23. Wave 24 (v6.0.0) made \`[topic:<id>]\` tagging mandatory (no English keyword fallback) so the gate works in any natural language.
-2. **Subagents run after Q&A approval** — mandatory subagents in brainstorm / scope / design (\`product-discovery\`, \`critic\`, \`planner\`, \`architect\`, \`test-author\`) run only AFTER the user approves the elicitation outcome. See each stage's "Run Phase: post-elicitation" rows in the materialized Automatic Subagent Dispatch table.
+1. **Q&A convergence before drafting** — for brainstorm / scope / design, walk the stage forcing questions one at a time via the harness-native question tool (Claude \`AskUserQuestion\`, Cursor \`AskQuestion\`, Codex \`request_user_input\`, Gemini \`ask_user\`). The \`qa_log_unconverged\` linter rule will block \`stage-complete\` when convergence has not been reached. Convergence is satisfied when ANY of: (a) every forcing-question topic id is tagged \`[topic:<id>]\` in at least one \`## Q&A Log\` row, (b) the last 2 substantive rows produce no decision-changing impact (Ralph-Loop), or (c) an explicit user stop-signal row is recorded. \`[topic:<id>]\` tagging is mandatory (no English keyword fallback) so the gate works in any natural language.
+2. **Subagents run after Q&A approval** — mandatory subagents in brainstorm / scope / design (\`product-discovery\`, \`critic\`, \`planner\`, \`architect\`) run only AFTER the user approves the elicitation outcome. See each stage's "Run Phase: post-elicitation" rows in the materialized Automatic Subagent Dispatch table.
 3. **No command-line echo to chat** — the user does not run cclaw helpers manually. Never paste \`node .cclaw/hooks/...\` invocations, \`--evidence-json '{...}'\` payloads, or shell hash commands (\`shasum\`, \`sha256sum\`, \`Get-FileHash\`, \`certutil\`, etc.) into chat. Run helpers via the tool layer; report only the resulting summary.
 
 ${ironLawsAgentsMdBlock()}
@@ -810,15 +810,15 @@ async function writeSkillKindShims(commandDir: string): Promise<void> {
 }
 
 /**
- * Legacy codex surfaces cclaw wrote before v0.39.0 that Codex CLI never
+ * Legacy codex surfaces cclaw wrote before that Codex CLI never
  * consumed (`.codex/commands/*.md` had no discovery primitive). We keep
  * removing `.codex/commands/` on every sync so upgrades from those
- * installs leave a clean slate, but as of v0.40.0 we DO write
+ * installs leave a clean slate, but as of we DO write
  * `.codex/hooks.json` again — Codex CLI grew a real hooks API in
- * v0.114.0 (Mar 2026), and that file is the current, supported target.
+(Mar 2026), and that file is the current, supported target.
  *
  * This function also removes skill folders named after the old
- * `cclaw-cc*` scheme (v0.39.0 / v0.39.1) now that cclaw installs them
+ * `cclaw-cc*` scheme now that cclaw installs them
  * as plain `cc*`. Leaving them around would make Codex list two skills
  * for the same entry point.
  */
@@ -864,7 +864,7 @@ async function cleanupLegacyCodexSurfaces(projectRoot: string): Promise<void> {
   }
 }
 
-function codexAgentToml(agent: (typeof CCLAW_AGENTS)[number]): string {
+function codexAgentToml(agent: AgentDefinition): string {
   const instructions = `${agentMarkdown(agent)}\n\n${enhancedAgentInstruction(agent.name)}`.trim();
   const sandboxMode = agent.tools.some((tool) => ["Write", "Edit", "Bash"].includes(tool))
     ? "workspace-write"
@@ -880,7 +880,7 @@ function codexAgentToml(agent: (typeof CCLAW_AGENTS)[number]): string {
   ].join("\n");
 }
 
-function opencodeAgentMarkdown(agent: (typeof CCLAW_AGENTS)[number]): string {
+function opencodeAgentMarkdown(agent: AgentDefinition): string {
   const editPermission = agent.tools.some((tool) => ["Write", "Edit"].includes(tool)) ? "ask" : "deny";
   const bashPermission = (agent.tools as readonly string[]).includes("Bash") ? "ask" : "deny";
   return `---
@@ -899,9 +899,11 @@ function enhancedAgentInstruction(agentName: string): string {
 }
 
 async function syncAgentFiles(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
+  const agents = CCLAW_AGENTS;
+
   const agentsDir = path.join(projectRoot, RUNTIME_ROOT, "agents");
   await ensureDir(agentsDir);
-  for (const agent of CCLAW_AGENTS) {
+  for (const agent of agents) {
     await writeFileSafe(
       path.join(agentsDir, `${agent.name}.md`),
       agentMarkdown(agent)
@@ -911,7 +913,7 @@ async function syncAgentFiles(projectRoot: string, harnesses: HarnessId[]): Prom
   if (harnesses.includes("opencode")) {
     const opencodeAgentsDir = path.join(projectRoot, ".opencode/agents");
     await ensureDir(opencodeAgentsDir);
-    for (const agent of CCLAW_AGENTS) {
+    for (const agent of agents) {
       await writeFileSafe(
         path.join(opencodeAgentsDir, `${agent.name}.md`),
         opencodeAgentMarkdown(agent)
@@ -922,7 +924,7 @@ async function syncAgentFiles(projectRoot: string, harnesses: HarnessId[]): Prom
   if (harnesses.includes("codex")) {
     const codexAgentsDir = path.join(projectRoot, ".codex/agents");
     await ensureDir(codexAgentsDir);
-    for (const agent of CCLAW_AGENTS) {
+    for (const agent of agents) {
       await writeFileSafe(
         path.join(codexAgentsDir, `${agent.name}.toml`),
         codexAgentToml(agent)

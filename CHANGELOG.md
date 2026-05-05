@@ -1,5 +1,33 @@
 # Changelog
 
+## 7.0.0 — Clean slice-builder runtime
+
+This release is a forward-looking clean cut of the toolkit. Every TDD-flow knob
+that referred to a previous data-plane shape has been removed; the runtime is
+a single coherent design built around parallel waves of `slice-builder` spans.
+
+**Breaking (major):**
+
+- **`slice-builder` is the only TDD worker.** `test-author`, `slice-implementer`,
+  and `slice-documenter` agent files, skills, and audit rules are gone. Each
+  parallel slice in a wave runs `slice-builder` end-to-end through
+  RED → GREEN → REFACTOR → DOC inside one delegated span.
+- **Parallel slice waves are the canonical TDD shape.** The controller dispatches
+  the entire wave concurrently. A fan-out cap (default 5, override via
+  `CCLAW_MAX_PARALLEL_SLICE_BUILDERS`) and `claimedPaths` overlap detection are
+  enforced inline — overlapping spans are blocked with `DispatchOverlapError`
+  instead of being serialized.
+- **Removed migration / cutover surfaces.** `cclaw internal migrate-from-v6`,
+  `tddCheckpointMode`, `tddCutoverSliceId`, `worktreeExecutionMode`,
+  `legacyContinuation`, the integration-overseer/checkpoint setters, and the
+  `v7-upgrade-guard` are gone. `flow-state.json` no longer carries those keys
+  and `sync`/`upgrade` no longer rewrite older data-plane shapes — fresh
+  installs are the supported entry point.
+- **Linters and skills unified.** TDD linter findings reference `slice-builder`
+  only (`tdd_slice_builder_missing`, `tdd_slice_doc_missing`). The TDD skill,
+  start-command contract, and subagent guidance describe the
+  `slice-builder` end-to-end cycle without optional appendices.
+
 ## 6.14.4 — Table-format wave parser + stream-mode lease closure
 
 This is a SURGICAL hot-patch on top of v6.14.3 that fixes two production bugs surfaced by the live `npx cclaw-cli@6.14.3 upgrade && sync` migration on the hox project. Both are tightly scoped: no new helpers, no new flags, no skill-text changes (the v6.14.2 wording is correct — the parser plumbing underneath was the actual blocker).

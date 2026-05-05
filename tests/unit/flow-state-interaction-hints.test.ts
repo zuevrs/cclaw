@@ -5,7 +5,7 @@ import { ensureRunSystem, readFlowState, writeFlowState } from "../../src/runs.j
 import { createTempProject } from "../helpers/index.js";
 
 /**
- * Wave 22 (Phase E6): the `interactionHints[stage].skipQuestions` flag must
+ * (Phase E6): the `interactionHints[stage].skipQuestions` flag must
  * round-trip through the standard flow-state write path so it can be read by
  * the linter via `readFlowState` regardless of the host OS.
  *
@@ -66,15 +66,15 @@ describe("interactionHints round-trip + atomic write", () => {
 });
 
 /**
- * Wave 24 follow-up (v6.1.1): `taskClass` was declared on `FlowState`
- * (Wave 25 W25-A) and is read by the artifact-linter and the mandatory
+ * follow-up : `taskClass` was declared on `FlowState`
+ * (W25-A) and is read by the artifact-linter and the mandatory
  * delegation gate, but `coerceFlowState` in `src/run-persistence.ts`
- * silently dropped it during read AND write — making both Wave 24's
- * `software-bugfix` mandatory-delegation skip and Wave 25's
+ * silently dropped it during read AND write — making both 's
+ * `software-bugfix` mandatory-delegation skip and 's
  * artifact-validation demotion dead in practice for any flow-state file
  * carrying the classification. This regression locks the round-trip.
  */
-describe("taskClass round-trip (Wave 24 follow-up, v6.1.1)", () => {
+describe("taskClass round-trip ()", () => {
   it("persists taskClass=software-bugfix through writeFlowState + readFlowState", async () => {
     const root = await createTempProject("flow-state-task-class-roundtrip");
     await ensureRunSystem(root);

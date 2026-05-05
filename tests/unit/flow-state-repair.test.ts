@@ -41,7 +41,7 @@ describe("cclaw internal flow-state-repair", () => {
     expect(stderr).toMatch(/requires --reason/u);
   });
 
-  it("backfills missing completedStageMeta entries from completedStages on repair (v6.9.0)", async () => {
+  it("backfills missing completedStageMeta entries from completedStages on repair ", async () => {
     const root = await createTempProject("flow-state-repair-backfill-meta");
     await ensureRunSystem(root);
     const initial = createInitialFlowState({ track: "standard", discoveryMode: "guided" });
@@ -106,7 +106,7 @@ describe("cclaw internal flow-state-repair", () => {
     expect(loaded.currentStage).toBe("plan");
   });
 
-  it("--early-loop normalizes early-loop.json from early-loop-log.jsonl (v6.9.0 hox repair)", async () => {
+  it("--early-loop normalizes early-loop.json from early-loop-log.jsonl (release repair)", async () => {
     const root = await createTempProject("flow-state-repair-early-loop");
     await ensureRunSystem(root);
     const initial = createInitialFlowState({ track: "standard", discoveryMode: "guided" });

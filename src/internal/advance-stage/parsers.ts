@@ -67,7 +67,7 @@ export interface StartFlowArgs {
   reclassify: boolean;
   quiet: boolean;
   /**
-   * Wave 23 (v5.0.0) — `/cc-ideate` handoff carry-forward.
+   * `/cc-ideate` handoff carry-forward.
    * Workspace-relative POSIX path to `.cclaw/ideas/idea-YYYY-MM-DD-<slug>.md`
    * (or wherever `/cc-ideate` wrote its artifact).
    */

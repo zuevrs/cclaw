@@ -64,8 +64,6 @@ AI coding sessions fail when decisions live only in chat. cclaw puts the operati
   archive/                archived run snapshots (durable closeout proof)
 ```
 
-Legacy `.cclaw/runs/` directories are only auto-removed when empty. If the directory still contains data, migrate it manually to `.cclaw/archive/`.
-
 That gives you:
 
 - **One path** from idea to ship, with one user-chosen discovery mode (`lean`, `guided`, `deep`) and internal `quick` / `medium` / `standard` tracks.

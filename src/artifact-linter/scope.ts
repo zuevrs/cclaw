@@ -66,7 +66,7 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
     const strategistRequired =
       selectedScopeMode === "SCOPE EXPANSION" || selectedScopeMode === "SELECTIVE EXPANSION";
     if (strategistRequired) {
-      // Wave 25 (v6.1.0) — for `track === "quick"` (lite-tier) or
+      // for `track === "quick"` (lite-tier) or
       // `taskClass === "software-bugfix"`, the Expansion Strategist
       // delegation requirement is dropped entirely. The user's
       // 3-file static landing page hit this gate without any
@@ -82,7 +82,7 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
           details:
             `Product-discovery delegation requirement skipped for track="${track}"` +
             (taskClass ? `, taskClass="${taskClass}"` : "") +
-            ` (Wave 25: lite-tier escape; selectedMode=${selectedScopeMode}).`
+            ` (lite-tier escape; selectedMode=${selectedScopeMode}).`
         });
         // Best-effort audit; we read the flow-state runId here
         // because StageLintContext does not surface it directly.
@@ -140,7 +140,7 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
 
     if (sectionBodyByHeadingPrefix(sections, "Locked Decisions") !== null) {
       // D-XX IDs are the stable contract. The legacy LD#<sha8> hash anchor
-      // check was removed in Wave 22 (v4.0.0) — it caused agents to spam
+      // check was removed in it caused agents to spam
       // shell hash commands when shifting decision rows around, and provided
       // no signal beyond the D-XX uniqueness check below.
       const listDecisionLines = lockedDecisionsBody
@@ -179,7 +179,7 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
       findings.push({
         section: "Locked Decisions ID Integrity",
         required: false,
-        rule: "Locked Decisions section must list each decision with a unique stable D-XX ID. (D-XX IDs replaced the legacy LD#<sha8> hash anchors in Wave 22.)",
+        rule: "Locked Decisions section must list each decision with a unique stable D-XX ID.",
         found: issues.length === 0,
         details:
           issues.length === 0
@@ -188,11 +188,11 @@ export async function lintScopeStage(ctx: StageLintContext): Promise<void> {
       });
     }
 
-    // Wave 23 (v5.0.0): scope no longer owns architecture-tier alternatives
+    // scope no longer owns architecture-tier alternatives
     // (`## Implementation Alternatives` was removed from the scope template
     // and stage schema). Design OWNS the architecture-tier decision via
     // `## Architecture Decision Record (ADR)` and `## Engineering Lock`.
     // The legacy linter rule `Implementation Alternatives Recommendation`
-    // was removed in Wave 23 — if a legacy artifact still has the section,
+    // was removed in if a legacy artifact still has the section,
     // it is now treated as informational only.
 }

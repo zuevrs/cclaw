@@ -43,7 +43,7 @@ describe("harness parity model", () => {
     expect(HARNESS_ADAPTERS.codex.capabilities.subagentFallback).not.toBe("role-switch");
   });
 
-  it("maps every harness onto its real structured-ask primitive (v0.41.0)", () => {
+  it("maps every harness onto its real structured-ask primitive (release)", () => {
     // Wave Q honesty check: every shipping harness has a real
     // structured-ask tool, no `plain-text` freeloaders.
     expect(HARNESS_ADAPTERS.claude.capabilities.structuredAsk).toBe("AskUserQuestion");

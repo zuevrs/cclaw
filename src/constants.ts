@@ -84,7 +84,7 @@ export const REQUIRED_GITIGNORE_PATTERNS = [
   ".opencode/commands/cc-*.md",
   ".opencode/commands/cc.md",
   // Codex uses skill-kind shims under `.agents/skills/cc*/` since
-  // v0.40.0 (renamed from the `cclaw-cc*` layout in v0.39.0/v0.39.1).
+  // Codex shim layout (renamed from the older `cclaw-cc*` layout).
   // `cclaw sync` and `cclaw uninstall` both auto-remove the legacy
   // `cclaw-cc*` directories.
   ".agents/skills/cc/SKILL.md",

@@ -165,7 +165,7 @@ describe("dispatch dedup on (stage, agent)", () => {
       entries: [
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "mandatory",
           status: "scheduled",
           spanId: "span-S5-run1",
@@ -175,7 +175,7 @@ describe("dispatch dedup on (stage, agent)", () => {
         },
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "mandatory",
           status: "completed",
           spanId: "span-S5-run1",
@@ -186,7 +186,7 @@ describe("dispatch dedup on (stage, agent)", () => {
         }
       ]
     };
-    expect(findActiveSpanForPair("tdd", "slice-implementer", "run-2", ledger)).toBeNull();
+    expect(findActiveSpanForPair("tdd", "slice-builder", "run-2", ledger)).toBeNull();
   });
 
   it("findActiveSpanForPair ignores legacy entries with empty/missing runId (strict run-scope)", () => {
@@ -195,7 +195,7 @@ describe("dispatch dedup on (stage, agent)", () => {
       entries: [
         {
           stage: "tdd",
-          agent: "slice-implementer",
+          agent: "slice-builder",
           mode: "mandatory",
           status: "scheduled",
           spanId: "span-legacy",
@@ -205,17 +205,17 @@ describe("dispatch dedup on (stage, agent)", () => {
         }
       ]
     };
-    expect(findActiveSpanForPair("tdd", "slice-implementer", "run-2", ledger)).toBeNull();
+    expect(findActiveSpanForPair("tdd", "slice-builder", "run-2", ledger)).toBeNull();
   });
 
-  it("R7 hox scenario: legacy run-1 entries do not block a fresh run-2 dispatch", async () => {
-    const root = await createTempProject("dispatch-dedup-r7-hox");
+  it("entries from a previous run do not block a fresh run-2 dispatch", async () => {
+    const root = await createTempProject("dispatch-dedup-cross-run");
     await seedFlowState(root, "run-1");
 
-    // run-1: full lifecycle for slice-implementer S-5
+    // run-1: full lifecycle for slice-builder S-5
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "scheduled",
       spanId: "span-S5-run1",
@@ -223,7 +223,7 @@ describe("dispatch dedup on (stage, agent)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       spanId: "span-S5-run1",
@@ -239,12 +239,12 @@ describe("dispatch dedup on (stage, agent)", () => {
     stateJson.activeRunId = "run-2";
     await fs.writeFile(flowStatePath, `${JSON.stringify(stateJson, null, 2)}\n`, "utf8");
 
-    // run-2: a fresh slice-implementer dispatch must NOT trip dispatch_duplicate
+    // run-2: a fresh slice-builder dispatch must NOT trip dispatch_duplicate
     // even though run-1's spans live in the same ledger file.
     await expect(
       appendDelegation(root, {
         stage: "tdd",
-        agent: "slice-implementer",
+        agent: "slice-builder",
         mode: "mandatory",
         status: "scheduled",
         spanId: "span-S5-run2",
@@ -258,7 +258,7 @@ describe("dispatch dedup on (stage, agent)", () => {
     await seedFlowState(root, "run-1");
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "scheduled",
       spanId: "span-cycle",
@@ -266,7 +266,7 @@ describe("dispatch dedup on (stage, agent)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "launched",
       spanId: "span-cycle",
@@ -275,7 +275,7 @@ describe("dispatch dedup on (stage, agent)", () => {
     });
     await appendDelegation(root, {
       stage: "tdd",
-      agent: "slice-implementer",
+      agent: "slice-builder",
       mode: "mandatory",
       status: "completed",
       spanId: "span-cycle",

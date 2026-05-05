@@ -41,9 +41,6 @@ export interface WaveStatusNextDispatch {
 export interface WaveStatusReport {
   activeRunId: string;
   currentStage: string;
-  tddCutoverSliceId: string | null;
-  tddWorktreeCutoverSliceId: string | null;
-  legacyContinuation: boolean;
   waves: WaveStatusWaveSummary[];
   nextDispatch: WaveStatusNextDispatch;
   warnings: string[];
@@ -91,11 +88,11 @@ const TERMINAL_PHASES = new Set([
 ]);
 
 /**
- * v6.14.2 — deterministic helper for the TDD controller. Reads the
- * managed `<!-- parallel-exec-managed-start -->` block from
+ * Deterministic helper for the TDD controller. Reads the managed
+ * `<!-- parallel-exec-managed-start -->` block from
  * `<artifacts-dir>/05-plan.md` plus the `wave-plans/` directory and
  * reports waves + the next dispatchable members so the controller does
- * NOT have to page through a 1400-line plan to find the active wave.
+ * NOT have to page through a long plan to find the active wave.
  *
  * Always exits 0 unless the plan is malformed (no managed block AND no
  * wave-plans directory), in which case exit 2 with a structured error.
@@ -110,10 +107,6 @@ export async function runWaveStatus(
   const flowState = await readFlowState(projectRoot).catch(() => null);
   const activeRunId = flowState?.activeRunId ?? "unknown-run";
   const currentStage = flowState?.currentStage ?? "tdd";
-  const tddCutoverSliceId = flowState?.tddCutoverSliceId ?? null;
-  const tddWorktreeCutoverSliceId =
-    flowState?.tddWorktreeCutoverSliceId ?? null;
-  const legacyContinuation = flowState?.legacyContinuation === true;
 
   let planRaw = "";
   try {
@@ -129,9 +122,6 @@ export async function runWaveStatus(
     return {
       activeRunId,
       currentStage,
-      tddCutoverSliceId,
-      tddWorktreeCutoverSliceId,
-      legacyContinuation,
       waves: [],
       nextDispatch: {
         waveId: null,
@@ -158,9 +148,6 @@ export async function runWaveStatus(
     return {
       activeRunId,
       currentStage,
-      tddCutoverSliceId,
-      tddWorktreeCutoverSliceId,
-      legacyContinuation,
       waves: [],
       nextDispatch: {
         waveId: null,
@@ -177,8 +164,8 @@ export async function runWaveStatus(
   // Collect closed slice ids from the active run delegation ledger +
   // events. A slice is "closed" once it carries a terminal phase
   // (refactor, refactor-deferred, resolve-conflict) OR a phase=green
-  // event with refactorOutcome (v6.14.0 fold-inline path). Anything else
-  // we treat as still open so the helper never falsely advances.
+  // event with `refactorOutcome` recorded inline. Anything else we treat
+  // as still open so the helper never falsely advances.
   const closedSlices = new Set<string>();
   let ledgerEntries: DelegationEntry[] = [];
   try {
@@ -248,11 +235,6 @@ export async function runWaveStatus(
   ) ?? null;
 
   const warnings: string[] = [];
-  if (tddCutoverSliceId) {
-    warnings.push(
-      "tddCutoverSliceId is a historical boundary; do not use it to find the active slice."
-    );
-  }
   if (merged.length === 0 && planRaw.length === 0) {
     warnings.push(
       "wave_plan_missing: 05-plan.md not found or empty under <artifacts-dir>."
@@ -284,9 +266,6 @@ export async function runWaveStatus(
   return {
     activeRunId,
     currentStage,
-    tddCutoverSliceId,
-    tddWorktreeCutoverSliceId,
-    legacyContinuation,
     waves,
     nextDispatch,
     warnings
@@ -297,13 +276,6 @@ function formatHumanReport(report: WaveStatusReport): string {
   const lines: string[] = [];
   lines.push(`activeRunId: ${report.activeRunId}`);
   lines.push(`currentStage: ${report.currentStage}`);
-  if (report.tddCutoverSliceId) {
-    lines.push(`tddCutoverSliceId: ${report.tddCutoverSliceId} (HISTORICAL)`);
-  }
-  if (report.tddWorktreeCutoverSliceId) {
-    lines.push(`tddWorktreeCutoverSliceId: ${report.tddWorktreeCutoverSliceId}`);
-  }
-  lines.push(`legacyContinuation: ${report.legacyContinuation}`);
   lines.push("waves:");
   if (report.waves.length === 0) {
     lines.push("  (no waves discovered)");

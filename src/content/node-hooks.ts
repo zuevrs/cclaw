@@ -558,7 +558,7 @@ async function handleSessionStart(runtime) {
   );
   const knowledge = await buildKnowledgeDigest(runtime.root, state.currentStage, knowledgeRaw);
 
-  // Wave 21 honest-core: session-start no longer runs background helper
+  // honest-core: session-start no longer runs background helper
   // pipelines or digest caches. It rehydrates flow + knowledge only.
   const ralphLoopLine = "";
   const earlyLoopLine = "";
@@ -628,7 +628,7 @@ async function handleSessionStart(runtime) {
   if (metaContent.length > 0) {
     parts.push(metaContent);
   }
-  // v6.9.0: load iron-laws content into the session-start digest so the
+  // load iron-laws content into the session-start digest so the
   // non-negotiable workflow constraints are visible from the first turn,
   // not lazily on tool dispatch.
   if (ironLawsContent.length > 0) {

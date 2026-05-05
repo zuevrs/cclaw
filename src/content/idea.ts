@@ -347,7 +347,7 @@ ${frameBullets}
    letters. Default = "Start /cc on the top recommendation". When the user
    picks the start option, plumb the chosen candidate forward via
    \`start-flow --from-idea-artifact=<path> --from-idea-candidate=I-<n>\`
-   (Wave 23 / v5.0.0) so brainstorm reuses the idea's divergent + critique +
+   so brainstorm reuses the idea's divergent + critique +
    rank work via \`interactionHints.brainstorm.fromIdeaArtifact\`; do NOT
    ask brainstorm to regenerate it.
 
@@ -493,7 +493,7 @@ Required options, in this order:
 ### Phase 6 - Execute the choice
 
 - Start /cc: load \`${RUNTIME_ROOT}/skills/using-cclaw/SKILL.md\` and run
-  \`/cc <phrase>\`. **Wave 23 (v5.0.0) handoff carry-forward (mandatory when starting from /cc-idea):**
+  \`/cc <phrase>\`. **Handoff carry-forward (mandatory when starting from /cc-idea):**
   the harness shim that turns \`/cc <phrase>\` into a \`start-flow\` invocation
   MUST forward the originating idea artifact and chosen candidate so brainstorm
   reuses divergent + critique + rank work instead of redoing it. Equivalent CLI

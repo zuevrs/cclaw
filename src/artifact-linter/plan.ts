@@ -33,8 +33,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     brainstormShortCircuitBody,
     brainstormShortCircuitActivated,
     staleDiagramAuditEnabled,
-    isTrivialOverride,
-    legacyContinuation
+    isTrivialOverride
   } = ctx;
 
     evaluateInvestigationTrace(ctx, "Implementation Units");
@@ -166,7 +165,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
         : `Detected forbidden token(s) elsewhere in plan: ${filteredPlanHits.join(", ")}.`
     });
 
-    // v6.10.0 (P4) — advisory `plan_too_large_no_waves`. Fires when a
+    // advisory `plan_too_large_no_waves`. Fires when a
     // standard-track plan has more than the wave-split threshold of
     // implementation units AND the wave-plans/ directory is empty.
     // Linter advisories never block stage-complete (`required: false`),
@@ -280,7 +279,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     const parallelMetaApplies =
       strictPlanGuards && planUnits.length > 0;
     if (parallelMetaApplies) {
-      const metaRulesRequired = !legacyContinuation;
+      const metaRulesRequired = true;
       const missingDepends: string[] = [];
       const missingPaths: string[] = [];
       const missingParallelMeta: string[] = [];
@@ -299,7 +298,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
       findings.push({
         section: "plan_units_missing_dependsOn",
         required: metaRulesRequired,
-        rule: "Every implementation unit must declare `dependsOn:` (v6.13.0) — use comma-separated unit ids or `none`.",
+        rule: "Every implementation unit must declare `dependsOn:` — use comma-separated unit ids or `none`.",
         found: missingDepends.length === 0,
         details:
           missingDepends.length === 0
@@ -309,7 +308,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
       findings.push({
         section: "plan_units_missing_claimedPaths",
         required: metaRulesRequired,
-        rule: "Every implementation unit must declare explicit `claimedPaths:` predictions for parallel scheduling (v6.13.0).",
+        rule: "Every implementation unit must declare explicit `claimedPaths:` predictions for parallel scheduling.",
         found: missingPaths.length === 0,
         details:
           missingPaths.length === 0
@@ -319,7 +318,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
       findings.push({
         section: "plan_units_missing_parallel_metadata",
         required: metaRulesRequired,
-        rule: "Every implementation unit must declare `parallelizable:` and `riskTier:` (low|standard|high) (v6.13.0).",
+        rule: "Every implementation unit must declare `parallelizable:` and `riskTier:` (low|standard|high).",
         found: missingParallelMeta.length === 0,
         details:
           missingParallelMeta.length === 0

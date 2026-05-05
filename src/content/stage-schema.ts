@@ -220,8 +220,7 @@ function defaultReturnSchemaForAgent(
     case "scope-guardian-reviewer":
     case "feasibility-reviewer":
       return "review-return";
-    case "slice-implementer":
-    case "slice-documenter":
+    case "slice-builder":
       return "worker-return";
     case "release-reviewer":
       return "release-return";
@@ -237,8 +236,6 @@ function defaultReturnSchemaForAgent(
       return "review-return";
     case "security-reviewer":
       return "security-return";
-    case "test-author":
-      return "tdd-return";
     case "doc-updater":
       return "docs-return";
     case "fixer":
@@ -250,7 +247,7 @@ function dispatchClassForRow(
   row: StageAutoSubagentDispatch
 ): NonNullable<StageAutoSubagentDispatch["dispatchClass"]> {
   if (row.dispatchClass) return row.dispatchClass;
-  if (row.agent === "fixer" || row.agent === "slice-implementer" || row.agent === "slice-documenter") return "worker";
+  if (row.agent === "fixer" || row.agent === "slice-builder") return "worker";
   return row.skill?.includes("review") || row.agent === "reviewer" || row.agent === "security-reviewer" || row.agent.endsWith("-reviewer")
     ? "review-lens"
     : "stage-specialist";
@@ -723,15 +720,6 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiresUserGate: false
     },
     {
-      agent: "test-author",
-      mode: "mandatory",
-      requiredAtTier: "standard",
-      runPhase: "post-elicitation",
-      when: "Always during design lock. Runs only after the adaptive elicitation Q&A loop converges.",
-      purpose: "Check test diagram mapping, RED expressibility, assertion quality, and verification routes before implementation.",
-      requiresUserGate: false
-    },
-    {
       agent: "critic",
       mode: "proactive",
       runPhase: "post-elicitation",
@@ -783,13 +771,6 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       requiredAtTier: "standard",
       when: "Always for standard/deep specs before plan handoff.",
       purpose: "Validate measurability, edge cases, assumptions, and AC-to-testability mapping.",
-      requiresUserGate: false
-    },
-    {
-      agent: "test-author",
-      mode: "proactive",
-      when: "When acceptance criteria need testability review or RED expressibility is uncertain.",
-      purpose: "Confirm likely test levels, commands/manual evidence, and assertion surfaces are concrete.",
       requiresUserGate: false
     },
     {
@@ -852,34 +833,18 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
   ],
   tdd: [
     {
-      agent: "test-author",
+      agent: "slice-builder",
       mode: "mandatory",
       requiredAtTier: "lightweight",
-      when: "Always during the TDD cycle.",
-      purpose: "Own RED quality and per-slice RED/GREEN/REFACTOR evidence: failing tests before production writes, minimal GREEN implementation, then behavior-preserving refactor notes.",
+      when: "Always during the TDD cycle. Controller MUST NOT write tests or production code itself.",
+      purpose: "Own one bounded vertical slice end-to-end: RED → GREEN → REFACTOR → per-slice DOC in a single delegated span. Multiple slice-builder spans run in parallel inside one wave when their `claimedPaths` are disjoint. Linter rules `tdd_slice_builder_missing` and `tdd_slice_doc_missing` block unauthorized GREEN authors and missing per-slice prose.",
       requiresUserGate: false,
       skill: "tdd-cycle-evidence"
     },
     {
-      agent: "slice-implementer",
-      mode: "mandatory",
-      requiredAtTier: "lightweight",
-      when: "Always for GREEN and REFACTOR phases. Controller MUST NOT write production code itself.",
-      purpose: "Implement the minimal passing slice inside explicit file boundaries and return strict worker evidence. v6.12.0 Phase M makes this dispatch mandatory; the linter rule `tdd_slice_implementer_missing` blocks the gate when GREEN was authored by anyone other than `slice-implementer`.",
-      requiresUserGate: false
-    },
-    {
-      agent: "slice-documenter",
-      mode: "mandatory",
-      requiredAtTier: "lightweight",
-      when: "Always in PARALLEL with `slice-implementer --phase green` for the same slice.",
-      purpose: "Write per-slice prose into `<artifacts-dir>/tdd-slices/S-<id>.md` while production code is being implemented. v6.12.0 Phase R makes this mandatory regardless of `discoveryMode`; the linter rule `tdd_slice_documenter_missing` blocks the gate when a `phase=doc` event is missing.",
-      requiresUserGate: false
-    },
-    {
       agent: "integration-overseer",
       mode: "proactive",
-      when: "When TDD fan-out used 2+ parallel slice-implementers, or when slices touch shared interfaces.",
+      when: "When a wave fans out 2+ parallel slice-builder spans, or when slices touch shared interfaces.",
       purpose: "Verify cohesion-contract integrity across shared types, touchpoints, invariants, and integration test outcomes after fan-in.",
       requiresUserGate: false
     },
@@ -988,7 +953,7 @@ export function mandatoryDelegationsForStage(
 }
 
 /**
- * Wave 24 (v6.0.0) — track-aware mandatory delegation lookup.
+ * Track-aware mandatory delegation lookup.
  *
  * Returns `[]` (skip the gate entirely) when the run is on a small-fix
  * track or classified as a software bugfix:
@@ -1037,7 +1002,7 @@ export function mandatoryAgentsFor(
 }
 
 /**
- * Wave 25 (v6.1.0) — track-aware artifact validation demotion.
+ * Track-aware artifact validation demotion.
  *
  * Mirrors `mandatoryAgentsFor`'s skip logic for the small-fix lanes.
  * Returns `true` when artifact-level "advanced" validation rules
@@ -1048,7 +1013,7 @@ export function mandatoryAgentsFor(
  *   - `track === "quick"` — quick-tier runs (single-purpose
  *     landing-page edits, doc tweaks, config nudges). The advanced
  *     checks fire on architecture surfaces a quick-track artifact
- *     usually doesn't have. Same trigger as Wave 24 Phase B.
+ *     usually doesn't have.
  *   - `taskClass === "software-bugfix"` — bugfixes carry RED-first
  *     repro coverage; tdd/review own the safety surface.
  *
@@ -1154,9 +1119,6 @@ export function buildTransitionRules(): TransitionRule[] {
   const seen = new Set<string>();
   // Derive transitions from every track so medium/quick (which skip stages)
   // get their neighbour edges registered alongside the standard chain.
-  // Previously only the standard track produced rules, so `canTransition`
-  // returned false for legitimate medium/quick transitions (e.g. brainstorm
-  // -> spec on medium) even though `nextStage` correctly advanced them.
   for (const track of FLOW_TRACKS) {
     const ordered = TRACK_STAGES[track];
     for (let i = 0; i < ordered.length - 1; i += 1) {

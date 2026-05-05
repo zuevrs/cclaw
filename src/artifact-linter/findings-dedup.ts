@@ -7,7 +7,7 @@ import type { FlowStage } from "../types.js";
 import type { LintFinding } from "./shared.js";
 
 /**
- * Wave 26 (v6.7.0) linter-dedup cache. The linter persists a per-stage
+ * linter-dedup cache. The linter persists a per-stage
  * fingerprint of each finding between runs so authors can tell at a
  * glance what's `new`, `repeat`, or `resolved` relative to the last run.
  *

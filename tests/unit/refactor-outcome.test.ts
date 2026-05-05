@@ -12,7 +12,7 @@ interface RunResult {
   stdout: string;
 }
 
-const AGENT_DEF_REL = ".cclaw/agents/slice-implementer.md";
+const AGENT_DEF_REL = ".cclaw/agents/slice-builder.md";
 
 async function setupHook(projectRoot: string): Promise<string> {
   const hookPath = path.join(projectRoot, ".cclaw/hooks/delegation-record.mjs");
@@ -21,7 +21,7 @@ async function setupHook(projectRoot: string): Promise<string> {
   await fs.mkdir(path.join(projectRoot, ".cclaw/agents"), { recursive: true });
   await fs.writeFile(
     path.join(projectRoot, AGENT_DEF_REL),
-    "# slice-implementer\n",
+    "# slice-builder\n",
     "utf8"
   );
   return hookPath;
@@ -59,7 +59,7 @@ async function readEvents(projectRoot: string): Promise<unknown[]> {
     .map((line) => JSON.parse(line));
 }
 
-describe("delegation-record --refactor-outcome (v6.14.0)", () => {
+describe("delegation-record --refactor-outcome ", () => {
   it("records refactorOutcome.mode=inline on phase=green", async () => {
     const root = await createTempProject("refactor-outcome-inline");
     await ensureRunSystem(root);
@@ -67,18 +67,15 @@ describe("delegation-record --refactor-outcome (v6.14.0)", () => {
 
     const result = await runHook(root, [
       "--stage=tdd",
-      "--agent=slice-implementer",
+      "--agent=slice-builder",
       "--mode=mandatory",
       "--status=completed",
       "--phase=green",
       "--slice-id=S-1",
       "--span-id=span-green-inline-1",
       "--dispatch-id=disp-green-inline-1",
-      "--claim-token=tok-1",
-      "--owner-lane-id=lane-1",
-      "--leased-until=2099-01-01T00:00:00Z",
       "--dispatch-surface=claude-task",
-      "--agent-definition-path=.cclaw/agents/slice-implementer.md",
+      "--agent-definition-path=.cclaw/agents/slice-builder.md",
       "--ack-ts=2026-01-01T00:00:00Z",
       "--refactor-outcome=inline"
     ]);
@@ -103,18 +100,15 @@ describe("delegation-record --refactor-outcome (v6.14.0)", () => {
 
     const result = await runHook(root, [
       "--stage=tdd",
-      "--agent=slice-implementer",
+      "--agent=slice-builder",
       "--mode=mandatory",
       "--status=completed",
       "--phase=green",
       "--slice-id=S-2",
       "--span-id=span-green-deferred-2",
       "--dispatch-id=disp-green-deferred-2",
-      "--claim-token=tok-2",
-      "--owner-lane-id=lane-2",
-      "--leased-until=2099-01-01T00:00:00Z",
       "--dispatch-surface=claude-task",
-      "--agent-definition-path=.cclaw/agents/slice-implementer.md",
+      "--agent-definition-path=.cclaw/agents/slice-builder.md",
       "--ack-ts=2026-01-01T00:00:00Z",
       "--refactor-outcome=deferred",
       "--refactor-rationale=tracked in followups/REF-12"
@@ -144,17 +138,14 @@ describe("delegation-record --refactor-outcome (v6.14.0)", () => {
 
     const result = await runHook(root, [
       "--stage=tdd",
-      "--agent=slice-implementer",
+      "--agent=slice-builder",
       "--mode=mandatory",
       "--status=completed",
       "--phase=green",
       "--slice-id=S-3",
       "--span-id=span-green-deferred-3",
-      "--claim-token=tok-3",
-      "--owner-lane-id=lane-3",
-      "--leased-until=2099-01-01T00:00:00Z",
       "--dispatch-surface=claude-task",
-      "--agent-definition-path=.cclaw/agents/slice-implementer.md",
+      "--agent-definition-path=.cclaw/agents/slice-builder.md",
       "--ack-ts=2026-01-01T00:00:00Z",
       "--refactor-outcome=deferred"
     ]);
@@ -170,17 +161,14 @@ describe("delegation-record --refactor-outcome (v6.14.0)", () => {
 
     const result = await runHook(root, [
       "--stage=tdd",
-      "--agent=slice-implementer",
+      "--agent=slice-builder",
       "--mode=mandatory",
       "--status=completed",
       "--phase=green",
       "--slice-id=S-4",
       "--span-id=span-green-invalid-4",
-      "--claim-token=tok-4",
-      "--owner-lane-id=lane-4",
-      "--leased-until=2099-01-01T00:00:00Z",
       "--dispatch-surface=claude-task",
-      "--agent-definition-path=.cclaw/agents/slice-implementer.md",
+      "--agent-definition-path=.cclaw/agents/slice-builder.md",
       "--ack-ts=2026-01-01T00:00:00Z",
       "--refactor-outcome=skipped"
     ]);
@@ -196,18 +184,15 @@ describe("delegation-record --refactor-outcome (v6.14.0)", () => {
 
     const result = await runHook(root, [
       "--stage=tdd",
-      "--agent=slice-implementer",
+      "--agent=slice-builder",
       "--mode=mandatory",
       "--status=completed",
       "--phase=green",
       "--slice-id=S-5",
       "--span-id=span-green-high-5",
       "--dispatch-id=disp-green-high-5",
-      "--claim-token=tok-5",
-      "--owner-lane-id=lane-5",
-      "--leased-until=2099-01-01T00:00:00Z",
       "--dispatch-surface=claude-task",
-      "--agent-definition-path=.cclaw/agents/slice-implementer.md",
+      "--agent-definition-path=.cclaw/agents/slice-builder.md",
       "--ack-ts=2026-01-01T00:00:00Z",
       "--risk-tier=high"
     ]);
@@ -231,17 +216,14 @@ describe("delegation-record --refactor-outcome (v6.14.0)", () => {
 
     const result = await runHook(root, [
       "--stage=tdd",
-      "--agent=slice-implementer",
+      "--agent=slice-builder",
       "--mode=mandatory",
       "--status=completed",
       "--phase=green",
       "--slice-id=S-6",
       "--span-id=span-green-tier-6",
-      "--claim-token=tok-6",
-      "--owner-lane-id=lane-6",
-      "--leased-until=2099-01-01T00:00:00Z",
       "--dispatch-surface=claude-task",
-      "--agent-definition-path=.cclaw/agents/slice-implementer.md",
+      "--agent-definition-path=.cclaw/agents/slice-builder.md",
       "--ack-ts=2026-01-01T00:00:00Z",
       "--risk-tier=critical"
     ]);

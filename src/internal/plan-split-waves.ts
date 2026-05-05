@@ -11,7 +11,7 @@ interface InternalIo {
 }
 
 /**
- * v6.10.0 (P3) — split a large `05-plan.md` Implementation Units section
+ * split a large `05-plan.md` Implementation Units section
  * into wave-NN.md sub-files so an executor can carry one wave at a time
  * without re-reading the whole plan.
  *
@@ -46,7 +46,7 @@ const WAVE_MANAGED_END = "<!-- wave-split-managed-end -->";
 const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
 const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
 
-/** v6.13.1 — member line in Parallel Execution Plan or wave-NN.md */
+/** Member line in Parallel Execution Plan or wave-NN.md */
 export interface ParsedParallelWaveMember {
   sliceId: string;
   unitId: string;
@@ -110,11 +110,10 @@ export function extractMembersListFromLine(trimmedLine: string): string | null {
 }
 
 /**
- * v6.14.4 — extract a `(sliceId, unitId)` pair from a markdown table data
- * row whose first column is an `S-NN` token. Used by the wave parser to
- * recognize the table-format Parallel Execution Plan that hox-shape
- * projects emit alongside (or instead of) the legacy `**Members:**`
- * bullet line.
+ * Extract a `(sliceId, unitId)` pair from a markdown table data row
+ * whose first column is an `S-NN` token. Used by the wave parser to
+ * recognize the table-format Parallel Execution Plan alongside (or
+ * instead of) the `**Members:**` bullet line.
  *
  * Rules:
  * - The line must start with `|` (after trimming).
@@ -123,12 +122,11 @@ export function extractMembersListFromLine(trimmedLine: string): string | null {
  *   silently skipped.
  * - Column 2, when present and non-empty, becomes the `unitId`
  *   verbatim (after stripping whitespace + backticks/quotes/brackets).
- *   This preserves the hox convention of recording task ids
- *   (`T-010`, `T-008a`, …) in the `unit` column without forcing a
- *   `U-NN` derivation.
- * - When column 2 is absent or empty, fall back to the legacy
- *   `S-NN → U-NN` derivation so the existing `**Members:**` parser path
- *   stays bit-identical for non-table plans.
+ *   This lets authors record task ids (`T-010`, `T-008a`, …) in the
+ *   `unit` column without forcing a `U-NN` derivation.
+ * - When column 2 is absent or empty, fall back to the
+ *   `S-NN → U-NN` derivation so the `**Members:**` parser path stays
+ *   bit-identical for non-table plans.
  */
 export function parseTableRowMember(
   trimmedLine: string
@@ -158,15 +156,14 @@ export function parseTableRowMember(
 
 /**
  * Parse `## Parallel Execution Plan` managed block for wave headings and
- * member declarations. Recognizes BOTH the legacy `**Members:**` /
- * `Members:` line shape AND the markdown-table shape
- * (`| sliceId | unit | dependsOn | …`) used by hox-shape projects and by
- * any plan written by `cclaw-cli sync` after v6.13.x.
+ * member declarations. Recognizes BOTH the `**Members:**` / `Members:`
+ * line shape AND the markdown-table shape
+ * (`| sliceId | unit | dependsOn | …`).
  *
  * Wave headings accepted (case-insensitive, trailing text allowed):
  * - `### Wave 04`
  * - `### Wave W-04`
- * - `### Wave W-04 — после успешного fan-in W-03 (5 lanes …)`
+ * - `### Wave W-04 — after fan-in W-03 (5 lanes …)`
  *
  * Within a single wave the parser dedupes by `sliceId`: if the same
  * slice appears in both `**Members:**` and a table row, the first
@@ -195,7 +192,7 @@ export function parseParallelExecutionPlanWaves(planMarkdown: string): ParsedPar
 
   /**
    * Strict add: throw on duplicates within the same wave OR across waves.
-   * Used for the `**Members:**` path so v6.13.1's duplicate-detection
+   * Used for the `**Members:**` path so the duplicate-detection
    * contract is preserved bit-identically.
    */
   const addMemberStrict = (member: ParsedParallelWaveMember): void => {
@@ -404,7 +401,7 @@ export interface ImplementationUnitParallelFields {
 
 export interface ParseImplementationUnitParallelOptions {
   /**
-   * Legacy continuation (v6.13.0): when the plan predates explicit parallel
+   * Continuation: when the plan predates explicit parallel
    * bullets, units without a `parallelizable:` line default to serial eligibility
    * in the scheduler (`parallelizable: false`).
    */
@@ -412,7 +409,7 @@ export interface ParseImplementationUnitParallelOptions {
 }
 
 /**
- * Parse v6.13 parallel-metadata bullets from an implementation unit body.
+ * Parse parallel-metadata bullets from an implementation unit body.
  * Missing keys use conservative defaults (`dependsOn: []`, `parallelizable: true`
  * unless `legacyParallelDefaultSerial` is set).
  */
@@ -473,7 +470,7 @@ function unitBodyHasV613ParallelBullet(body: string, label: string): boolean {
 }
 
 /**
- * True when the plan has implementation units but any unit is missing v6.13.0
+ * True when the plan has implementation units but any unit is missing
  * `dependsOn` / `claimedPaths` / `parallelizable` / `riskTier` bullets.
  */
 export function planArtifactLacksV613ParallelMetadata(planMarkdown: string): boolean {
