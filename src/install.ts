@@ -201,7 +201,10 @@ const DEPRECATED_AGENT_FILES = [
   "learnings-researcher.md",
   "framework-docs-researcher.md",
   "best-practices-researcher.md",
-  "git-history-analyzer.md"
+  "git-history-analyzer.md",
+  "test-author.md",
+  "slice-implementer.md",
+  "slice-documenter.md"
 ] as const;
 
 const DEPRECATED_COMMAND_FILES = [

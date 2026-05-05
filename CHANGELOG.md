@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.0.1 — Prune retired TDD agent files on sync
+
+- `cclaw sync` and `upgrade` now delete `agents/test-author.md`,
+  `agents/slice-implementer.md`, and `agents/slice-documenter.md` left over
+  from earlier installs. The runtime materializes only `slice-builder` for
+  TDD; this turns sync into a one-shot cleanup for projects upgrading from
+  6.x.
+
 ## 7.0.0 — Clean slice-builder runtime
 
 This release is a forward-looking clean cut of the toolkit. Every TDD-flow knob
