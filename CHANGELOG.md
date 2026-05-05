@@ -1,5 +1,42 @@
 # Changelog
 
+## 7.1.0 — Commit Atomicity (managed per-slice commits + git-log verification)
+
+7.1.0 introduces explicit commit-ownership modes for TDD and wires a managed
+per-slice commit path into the runtime so closed slices can be validated
+against real git history instead of free-form SHA strings.
+
+- **New hook: `.cclaw/hooks/slice-commit.mjs`.**
+  Generated from `src/content/hooks.ts`, installed/synced alongside
+  `delegation-record.mjs`, and routed to the new internal command
+  `cclaw internal slice-commit`. It creates one commit for a slice span in
+  `tdd.commitMode=managed-per-slice`, stages only claimed paths, and blocks
+  path drift with `slice_commit_path_drift`.
+- **Auto-call from `delegation-record` at DOC closure.**
+  When `slice-builder` records `status=completed phase=doc`, the helper now
+  invokes `slice-commit` before persisting the terminal row, so commit
+  enforcement remains atomic with slice closure.
+- **Config schema extension (`.cclaw/config.yaml`).**
+  Added `tdd.commitMode` with modes:
+  `managed-per-slice | agent-required | checkpoint-only | off`
+  (default: `managed-per-slice`). `readConfig` validates this enum and
+  `writeConfig` persists it.
+- **Verification gate switched to real git checks in managed mode.**
+  `tdd_verified_before_complete` now verifies, per closed slice in the active
+  run, that git history contains a matching managed commit (slice-prefixed
+  subject) when `.git` exists and commit mode is managed. Non-managed modes
+  keep prior evidence semantics; `off` disables commit-reference enforcement.
+- **Worker protocol update.**
+  `sliceBuilderProtocol()` now states that workers must not hand-edit git for
+  slice paths when `tdd.commitMode=managed-per-slice`; managed hook flow owns
+  those commits.
+- **Tests.**
+  Added:
+  `tests/integration/slice-commit-managed.test.ts` and
+  `tests/unit/slice-commit-path-drift.test.ts`,
+  plus managed-commit gate coverage in `tests/unit/gate-evidence.test.ts` and
+  config schema coverage in `tests/unit/config.test.ts`.
+
 ## 7.0.6 — Containment
 
 Closes three containment gaps surfaced by the hox W-07 / S-36 session under

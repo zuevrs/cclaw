@@ -12,6 +12,7 @@ import {
   verifyCompletedStagesGateClosure,
   verifyCurrentStageGateEvidence
 } from "../../src/gate-evidence.js";
+import { appendDelegation } from "../../src/delegation.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -798,6 +799,89 @@ describe("gate evidence reconciliation", () => {
     expect(persisted.stageGateCatalog.brainstorm.passed).toEqual([]);
     expect(persisted.stageGateCatalog.brainstorm.blocked).toContain(firstGate);
   });
+
+  it("requires real git commits for closed slices in managed-per-slice mode", async () => {
+    const root = await createTempProject("gate-evidence-managed-slice-commits");
+    await prepareRoot(root);
+    await git(root, ["init"]);
+    await git(root, ["config", "user.email", "tests@example.com"]);
+    await git(root, ["config", "user.name", "Test Runner"]);
+    await fs.mkdir(path.join(root, "src"), { recursive: true });
+    await fs.writeFile(path.join(root, "src/slice.ts"), "export const value = 1;\n", "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "bootstrap"]);
+
+    const state = createInitialFlowState("run-managed-commit");
+    state.currentStage = "tdd";
+    state.stageGateCatalog.tdd.passed = ["tdd_verified_before_complete"];
+    state.guardEvidence.tdd_verified_before_complete = "npm test PASS";
+    await fs.writeFile(
+      path.join(root, ".cclaw/state/flow-state.json"),
+      `${JSON.stringify(state, null, 2)}\n`,
+      "utf8"
+    );
+
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      spanId: "span-S-1",
+      phase: "red",
+      evidenceRefs: ["tests/unit/foo.test.ts"],
+      ts: "2026-05-05T10:00:00.000Z",
+      completedTs: "2026-05-05T10:00:00.000Z"
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      spanId: "span-S-1",
+      phase: "green",
+      evidenceRefs: ["tests/unit/foo.test.ts => PASS"],
+      ts: "2026-05-05T10:01:00.000Z",
+      completedTs: "2026-05-05T10:01:00.000Z"
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      spanId: "span-S-1",
+      phase: "refactor",
+      evidenceRefs: ["src/slice.ts"],
+      ts: "2026-05-05T10:02:00.000Z",
+      completedTs: "2026-05-05T10:02:00.000Z"
+    });
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "mandatory",
+      status: "completed",
+      sliceId: "S-1",
+      spanId: "span-S-1",
+      phase: "doc",
+      evidenceRefs: [".cclaw/artifacts/tdd-slices/S-1.md"],
+      ts: "2026-05-05T10:03:00.000Z",
+      completedTs: "2026-05-05T10:03:00.000Z"
+    });
+
+    const missing = await verifyCurrentStageGateEvidence(root, state);
+    expect(missing.issues.join("\n")).toContain("managed-per-slice commit check failed");
+    expect(missing.issues.join("\n")).toContain("S-1");
+
+    await fs.writeFile(path.join(root, "src/slice.ts"), "export const value = 2;\n", "utf8");
+    await git(root, ["add", "src/slice.ts"]);
+    await git(root, ["commit", "-m", "S-1/T-1: close slice"]);
+
+    const cleared = await verifyCurrentStageGateEvidence(root, state);
+    expect(cleared.issues.join("\n")).not.toContain("managed-per-slice commit check failed");
+  });
+
   it("accepts no-VCS attestation for tdd verification when no git repo exists", async () => {
     const root = await createTempProject("gate-evidence-tdd-no-vcs");
     await prepareRoot(root);

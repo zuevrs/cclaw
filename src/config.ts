@@ -4,12 +4,26 @@ import { parse, stringify } from "yaml";
 import { CCLAW_VERSION, DEFAULT_HARNESSES, FLOW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import { HARNESS_IDS } from "./types.js";
-import type { CclawConfig, FlowTrack, HarnessId, LanguageRulePack } from "./types.js";
+import type {
+  CclawConfig,
+  FlowTrack,
+  HarnessId,
+  LanguageRulePack,
+  TddCommitMode
+} from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
-const ALLOWED_CONFIG_KEYS = new Set<string>(["version", "flowVersion", "harnesses"]);
+const ALLOWED_CONFIG_KEYS = new Set<string>(["version", "flowVersion", "harnesses", "tdd"]);
 const SUPPORTED_HARNESSES_TEXT = HARNESS_IDS.join(", ");
+export const TDD_COMMIT_MODES = [
+  "managed-per-slice",
+  "agent-required",
+  "checkpoint-only",
+  "off"
+] as const;
+const TDD_COMMIT_MODE_SET = new Set<string>(TDD_COMMIT_MODES);
+export const DEFAULT_TDD_COMMIT_MODE: TddCommitMode = "managed-per-slice";
 
 // Kept for runtime modules that use these defaults directly.
 export const DEFAULT_TDD_TEST_PATH_PATTERNS: readonly string[] = [
@@ -44,7 +58,9 @@ export class InvalidConfigError extends Error {
 function configFixExample(): string {
   return `harnesses:
   - claude
-  - cursor`;
+  - cursor
+tdd:
+  commitMode: managed-per-slice`;
 }
 
 function configValidationError(configFilePath: string, reason: string): InvalidConfigError {
@@ -71,8 +87,21 @@ export function createDefaultConfig(
   return {
     version: CCLAW_VERSION,
     flowVersion: FLOW_VERSION,
-    harnesses: [...new Set(harnesses)]
+    harnesses: [...new Set(harnesses)],
+    tdd: {
+      commitMode: DEFAULT_TDD_COMMIT_MODE
+    }
   };
+}
+
+export function resolveTddCommitMode(
+  config: Pick<CclawConfig, "tdd"> | null | undefined
+): TddCommitMode {
+  const raw = config?.tdd?.commitMode;
+  if (typeof raw === "string" && TDD_COMMIT_MODE_SET.has(raw)) {
+    return raw as TddCommitMode;
+  }
+  return DEFAULT_TDD_COMMIT_MODE;
 }
 
 function assertOnlySupportedKeys(parsed: Record<string, unknown>, fullPath: string): void {
@@ -120,6 +149,12 @@ export async function readConfig(
   ) {
     throw configValidationError(fullPath, `"harnesses" must be an array`);
   }
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "tdd") &&
+    !isRecord(parsed.tdd)
+  ) {
+    throw configValidationError(fullPath, `"tdd" must be an object when provided`);
+  }
 
   const rawHarnesses = Array.isArray(parsed.harnesses) ? parsed.harnesses : DEFAULT_HARNESSES;
   const normalizedHarnesses: HarnessId[] = [];
@@ -146,11 +181,28 @@ export async function readConfig(
     typeof parsed.flowVersion === "string" && parsed.flowVersion.trim().length > 0
       ? parsed.flowVersion
       : FLOW_VERSION;
+  const parsedTdd = isRecord(parsed.tdd) ? parsed.tdd : {};
+  const rawCommitMode = parsedTdd.commitMode;
+  if (
+    rawCommitMode !== undefined &&
+    (typeof rawCommitMode !== "string" || !TDD_COMMIT_MODE_SET.has(rawCommitMode))
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"tdd.commitMode" must be one of: ${TDD_COMMIT_MODES.join(", ")}`
+    );
+  }
+  const commitMode = typeof rawCommitMode === "string"
+    ? rawCommitMode as TddCommitMode
+    : DEFAULT_TDD_COMMIT_MODE;
 
   return {
     version,
     flowVersion,
-    harnesses: normalizedHarnesses
+    harnesses: normalizedHarnesses,
+    tdd: {
+      commitMode
+    }
   };
 }
 
@@ -167,7 +219,10 @@ export async function writeConfig(
   const serialisable = {
     version: config.version,
     flowVersion: config.flowVersion,
-    harnesses: config.harnesses
+    harnesses: config.harnesses,
+    tdd: {
+      commitMode: resolveTddCommitMode(config)
+    }
   };
   await writeFileSafe(configPath(projectRoot), stringify(serialisable));
 }
