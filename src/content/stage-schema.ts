@@ -424,6 +424,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "plan_dependency_batches_defined",
     "plan_acceptance_mapped",
     "plan_execution_posture_recorded",
+    "plan_parallel_exec_full_coverage",
     "plan_wait_for_confirm"
   ],
   tdd: (track) => [

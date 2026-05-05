@@ -1,5 +1,36 @@
 # Changelog
 
+## 7.0.4 — Plan must author the FULL Parallel Execution Plan before TDD
+
+In 7.0.3 the controller-dispatch mandate kept TDD honest about parallel
+slice-builder fan-out, but the plan stage was still allowed to ship a
+Parallel Execution Plan covering only a subset of the authored tasks. The
+classic failure mode: 178 tasks in `## Task List`, only ~14 of them assigned
+to slices in `<!-- parallel-exec-managed-start -->`, the first batch of
+waves runs to completion, `stage-complete tdd` succeeds because there are
+no open waves left, and the flow advances to review with ~150 tasks never
+even dispatched.
+
+7.0.4 closes that hole at the plan stage so TDD becomes a pure consumer
+of waves the plan already authored.
+
+- **New required gate `plan_parallel_exec_full_coverage`.** Every T-NNN
+  task listed in `## Task List` must appear at least once inside the
+  `<!-- parallel-exec-managed-start -->` block (typically as the
+  `taskId` column of a slice row). Tasks may be excluded only by moving
+  them under an explicit `## Deferred Tasks` or `## Backlog` section
+  with a reason. Spike rows (`S-N`) are out of scope by design.
+- **Plan checklist mandate.** The plan stage skill now instructs the
+  planner to enumerate the full set of waves W-02..W-N up front — no
+  `we'll author waves later`, `next batch only`, or open-ended Backlog
+  handwave is acceptable before WAIT_FOR_CONFIRM.
+- **Linter coverage.** `src/artifact-linter/plan.ts` parses the Task List
+  body, parses the parallel-exec managed block, and reports any uncovered
+  T-NNN ids as a required finding (`plan_parallel_exec_full_coverage`),
+  matching the new required gate.
+- **Gate density budget bumped.** Plan budget moves from 5 to 6 required
+  gates to account for the new full-coverage gate.
+
 ## 7.0.3 — Controller dispatch discipline lifted to meta-skill; review army mandates
 
 7.0.2 made TDD waves hard-mandate parallel `slice-builder` dispatch and
