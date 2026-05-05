@@ -222,6 +222,11 @@ export function sliceBuilderProtocol(): string {
     "- Honor every `delegation-record`/`delegation-record.mjs` row shape the controller requests so artifact linters keep passing.",
     "- The umbrella `slice-completed` row ties RED/GREEN/REFACTOR/DOC timestamps to your builder span.",
     "",
+    "### Streaming output contract",
+    "- Emit one JSON line to stdout per completed phase: `{\"event\":\"phase-completed\",\"stage\":\"tdd\",\"sliceId\":\"S-<n>\",\"phase\":\"<red|green|refactor|refactor-deferred|doc>\",\"spanId\":\"<span>\",\"runId\":\"<run>\",\"ts\":\"<iso>\"}`.",
+    "- For `phase=green` with inline/deferred refactor folding, include `refactorOutcome.mode` in the same JSON line so live controllers can close the slice without waiting for file sync.",
+    "- If streaming is unavailable in your harness/runtime, keep writing canonical `delegation-record` rows; controller-side live mode will fall back to file-based events.",
+    "",
     "**Role boundary:** do not widen scope, do not self-approve ship-level review, and do not recurse into other agents unless the parent explicitly directs it."
   ].join("\n");
 }
