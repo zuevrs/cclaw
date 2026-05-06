@@ -24,6 +24,7 @@ import {
   type ParseImplementationUnitParallelOptions,
   type ParsedParallelWave
 } from "./internal/plan-split-waves.js";
+import { compareSliceIds } from "./util/slice-id.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -1000,6 +1001,76 @@ export function validateClaimedPathsNotProtected(stamped: DelegationEntry): void
 }
 
 /**
+ * Thrown by `appendDelegation` (and the inline `delegation-record.mjs`
+ * helper) when an event with a non-null `phase` is recorded with
+ * `status="acknowledged"`. Phase-level granularity only makes sense on
+ * terminal outcomes (`completed` or `failed`); the dispatch-level ACK
+ * (no phase) is the controller saying "I see the dispatch surface back".
+ *
+ * Motivated by hox W-08/S-41: the slice-builder agent recorded all four
+ * phase events with `--status=acknowledged`, which the helper silently
+ * accepted but `slice-commit.mjs` only fires on `phase=doc status=completed`.
+ * `wave-status` then saw the slice as phantom-open even though the
+ * worker had finished. Recovery required raw backfill commands.
+ *
+ * 7.6.0 makes the constraint explicit: pair `--phase=<phase>` with
+ * `--status=completed` (or `--status=failed`) and use
+ * `--status=acknowledged` only for the dispatch-level ack (no phase).
+ */
+export class PhaseEventRequiresTerminalStatusError extends Error {
+  readonly phase: string;
+  readonly status: DelegationStatus;
+  readonly spanId: string;
+  readonly correctedCommandHint: string;
+  constructor(params: {
+    phase: string;
+    status: DelegationStatus;
+    spanId: string;
+    correctedCommandHint: string;
+  }) {
+    super(
+      `phase_event_requires_completed_or_failed_status — span ${params.spanId} recorded --phase=${params.phase} with --status=${params.status}; ` +
+        `phase-level events are only valid on terminal outcomes (--status=completed or --status=failed). ` +
+        `The dispatch-level ack (no --phase) can still use --status=acknowledged. ` +
+        `Corrected command: ${params.correctedCommandHint}`
+    );
+    this.name = "PhaseEventRequiresTerminalStatusError";
+    this.phase = params.phase;
+    this.status = params.status;
+    this.spanId = params.spanId;
+    this.correctedCommandHint = params.correctedCommandHint;
+  }
+}
+
+/**
+ * Reject delegation rows where `phase` is set but `status` is not
+ * `completed` or `failed`. Acknowledged/launched/scheduled/waived/stale
+ * rows must NOT carry a phase — the phase-level lifecycle exists only
+ * to record terminal outcomes per phase (RED/GREEN/REFACTOR/DOC).
+ *
+ * Throws `PhaseEventRequiresTerminalStatusError`; the message includes
+ * an actionable corrected-command hint that the controller can paste.
+ */
+export function validatePhaseEventStatus(stamped: DelegationEntry): void {
+  if (typeof stamped.phase !== "string" || stamped.phase.length === 0) return;
+  if (stamped.status === "completed" || stamped.status === "failed") return;
+  const phase = stamped.phase;
+  const sliceFlag = typeof stamped.sliceId === "string" && stamped.sliceId.length > 0
+    ? `--slice=${stamped.sliceId} `
+    : "";
+  const spanFlag = typeof stamped.spanId === "string" && stamped.spanId.length > 0
+    ? `--span-id=${stamped.spanId} `
+    : "";
+  const correctedCommandHint = `node .cclaw/hooks/delegation-record.mjs --stage=${stamped.stage} --agent=${stamped.agent} --mode=${stamped.mode} --status=completed --phase=${phase} ${sliceFlag}${spanFlag}--evidence-ref="<phase outcome>"`;
+  throw new PhaseEventRequiresTerminalStatusError({
+    phase,
+    status: stamped.status,
+    spanId: stamped.spanId ?? "unknown",
+    correctedCommandHint
+  });
+}
+
+/**
  * Thrown by `appendDelegation` when a new `scheduled` span would open a
  * second TDD cycle for a slice that already has at least one closed span
  * (a span with completed phase rows for `red`, `green`, at least one of
@@ -1184,7 +1255,7 @@ export function readySliceUnitsFromMergedWaves(
     }
   }
   const out: ReadySliceUnit[] = [];
-  for (const sliceId of [...sliceSet].sort((a, b) => a.localeCompare(b))) {
+  for (const sliceId of [...sliceSet].sort(compareSliceIds)) {
     const member = mergedWaves.flatMap((w) => w.members).find((x) => x.sliceId === sliceId);
     if (!member) continue;
     const meta = metaByUnit.get(member.unitId);
@@ -1584,6 +1655,7 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       return;
     }
     validateMonotonicTimestamps(stamped, prior.entries);
+    validatePhaseEventStatus(stamped);
     if (
       stamped.status === "scheduled" &&
       typeof stamped.sliceId === "string" &&

@@ -9,6 +9,7 @@ import type {
   FlowTrack,
   HarnessId,
   LanguageRulePack,
+  LockfileTwinPolicy,
   TddCommitMode,
   TddIsolationMode
 } from "./types.js";
@@ -29,6 +30,9 @@ export const TDD_ISOLATION_MODES = ["worktree", "in-place", "auto"] as const;
 const TDD_ISOLATION_MODE_SET = new Set<string>(TDD_ISOLATION_MODES);
 export const DEFAULT_TDD_ISOLATION_MODE: TddIsolationMode = "worktree";
 export const DEFAULT_TDD_WORKTREE_ROOT = `${RUNTIME_ROOT}/worktrees`;
+export const LOCKFILE_TWIN_POLICIES = ["auto-include", "auto-revert", "strict-fence"] as const;
+const LOCKFILE_TWIN_POLICY_SET = new Set<string>(LOCKFILE_TWIN_POLICIES);
+export const DEFAULT_LOCKFILE_TWIN_POLICY: LockfileTwinPolicy = "auto-include";
 
 // Kept for runtime modules that use these defaults directly.
 export const DEFAULT_TDD_TEST_PATH_PATTERNS: readonly string[] = [
@@ -98,7 +102,8 @@ export function createDefaultConfig(
     tdd: {
       commitMode: DEFAULT_TDD_COMMIT_MODE,
       isolationMode: DEFAULT_TDD_ISOLATION_MODE,
-      worktreeRoot: DEFAULT_TDD_WORKTREE_ROOT
+      worktreeRoot: DEFAULT_TDD_WORKTREE_ROOT,
+      lockfileTwinPolicy: DEFAULT_LOCKFILE_TWIN_POLICY
     }
   };
 }
@@ -131,6 +136,16 @@ export function resolveTddWorktreeRoot(
     return raw.trim();
   }
   return DEFAULT_TDD_WORKTREE_ROOT;
+}
+
+export function resolveLockfileTwinPolicy(
+  config: Pick<CclawConfig, "tdd"> | null | undefined
+): LockfileTwinPolicy {
+  const raw = config?.tdd?.lockfileTwinPolicy;
+  if (typeof raw === "string" && LOCKFILE_TWIN_POLICY_SET.has(raw)) {
+    return raw as LockfileTwinPolicy;
+  }
+  return DEFAULT_LOCKFILE_TWIN_POLICY;
 }
 
 function assertOnlySupportedKeys(parsed: Record<string, unknown>, fullPath: string): void {
@@ -214,6 +229,7 @@ export async function readConfig(
   const rawCommitMode = parsedTdd.commitMode;
   const rawIsolationMode = parsedTdd.isolationMode;
   const rawWorktreeRoot = parsedTdd.worktreeRoot;
+  const rawLockfileTwinPolicy = parsedTdd.lockfileTwinPolicy;
   if (
     rawCommitMode !== undefined &&
     (typeof rawCommitMode !== "string" || !TDD_COMMIT_MODE_SET.has(rawCommitMode))
@@ -241,6 +257,15 @@ export async function readConfig(
       `"tdd.worktreeRoot" must be a non-empty string when provided`
     );
   }
+  if (
+    rawLockfileTwinPolicy !== undefined &&
+    (typeof rawLockfileTwinPolicy !== "string" || !LOCKFILE_TWIN_POLICY_SET.has(rawLockfileTwinPolicy))
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"tdd.lockfileTwinPolicy" must be one of: ${LOCKFILE_TWIN_POLICIES.join(", ")}`
+    );
+  }
   const commitMode = typeof rawCommitMode === "string"
     ? rawCommitMode as TddCommitMode
     : DEFAULT_TDD_COMMIT_MODE;
@@ -250,6 +275,9 @@ export async function readConfig(
   const worktreeRoot = typeof rawWorktreeRoot === "string" && rawWorktreeRoot.trim().length > 0
     ? rawWorktreeRoot.trim()
     : DEFAULT_TDD_WORKTREE_ROOT;
+  const lockfileTwinPolicy = typeof rawLockfileTwinPolicy === "string"
+    ? rawLockfileTwinPolicy as LockfileTwinPolicy
+    : DEFAULT_LOCKFILE_TWIN_POLICY;
 
   return {
     version,
@@ -258,7 +286,8 @@ export async function readConfig(
     tdd: {
       commitMode,
       isolationMode,
-      worktreeRoot
+      worktreeRoot,
+      lockfileTwinPolicy
     }
   };
 }
@@ -280,7 +309,8 @@ export async function writeConfig(
     tdd: {
       commitMode: resolveTddCommitMode(config),
       isolationMode: resolveTddIsolationMode(config),
-      worktreeRoot: resolveTddWorktreeRoot(config)
+      worktreeRoot: resolveTddWorktreeRoot(config),
+      lockfileTwinPolicy: resolveLockfileTwinPolicy(config)
     }
   };
   await writeFileSafe(configPath(projectRoot), stringify(serialisable));

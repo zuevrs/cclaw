@@ -197,6 +197,21 @@ export type TddCommitMode =
   | "checkpoint-only"
   | "off";
 export type TddIsolationMode = "worktree" | "in-place" | "auto";
+/**
+ * 7.6.0 — what slice-commit does when a manifest in the slice's
+ * claim drifts its corresponding lockfile twin (e.g. Cargo.toml +
+ * Cargo.lock; package.json + package-lock.json; pyproject.toml +
+ * poetry.lock; etc).
+ *
+ * - `auto-include` (default) — fold the lockfile drift into the slice
+ *   commit so the manifest + lockfile land atomically.
+ * - `auto-revert` — revert the lockfile drift before commit so the
+ *   slice ships only the manifest change; the next CI/test run will
+ *   regenerate the lockfile.
+ * - `strict-fence` — reject the lockfile drift as
+ *   `slice_commit_path_drift` (pre-7.6.0 behavior).
+ */
+export type LockfileTwinPolicy = "auto-include" | "auto-revert" | "strict-fence";
 
 export interface TddConfig {
   /**
@@ -218,6 +233,13 @@ export interface TddConfig {
    * Repo-relative root used for managed slice worktrees.
    */
   worktreeRoot?: string;
+  /**
+   * 7.6.0 — slice-commit policy when a manifest claim drifts its lockfile
+   * twin (Cargo.toml/Cargo.lock, package.json/package-lock.json, etc).
+   * Defaults to `auto-include` so the manifest + regenerated lockfile
+   * land in the same managed commit instead of failing on drift.
+   */
+  lockfileTwinPolicy?: LockfileTwinPolicy;
 }
 
 export interface CclawConfig {

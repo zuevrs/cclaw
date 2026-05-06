@@ -1,6 +1,99 @@
 # Changelog
 
-## 7.5.0 — Acceptance-criteria traceability gates
+## 7.6.0 — Universal Plan-Stage Hardening + Lockfile/Wiring Awareness
+
+7.6.0 is the universalisation pass that follows the 7.0.6 → 7.5.0 atomicity stack.
+Every fix is stack-agnostic at the surface and routes stack-specific behavior
+through the existing stack-adapter layer. The harness now works cleanly on Rust,
+Node-TS, Python, Go, Java, Ruby, PHP, Swift, .NET, and Elixir projects and
+degrades gracefully (no-op) when a stack is unknown. All five defects surfaced
+in the real `hox` run (`run-moo5mbun-qne7vm` W-08).
+
+- **Slice-id parser is no longer numeric-only.**
+  Plan amendments needed to insert lettered sub-slices (`S-36a`, `S-36b`)
+  between numeric ones, but the strict `/^S-\d+$/` parser silently dropped
+  them from wave membership and forced renumbering. Added
+  `src/util/slice-id.ts` with `parseSliceId`, `isSliceId`, `compareSliceIds`,
+  and `sortSliceIds`. The new shape is `S-<integer>(<lowercase letter+>)?`,
+  sorted numeric-first then lexical suffix
+  (`S-1 < S-2 < S-10 < S-36 < S-36a < S-36b < S-37`). Audited and routed
+  every slice-id consumer (`src/internal/wave-status.ts`,
+  `src/internal/plan-split-waves.ts`, `src/artifact-linter/plan.ts`,
+  `src/artifact-linter/tdd.ts`, `src/internal/cohesion-contract-stub.ts`,
+  `src/tdd-cycle.ts`, `src/delegation.ts`) through the shared helper. Added
+  `tests/unit/slice-id-parser.test.ts` and
+  `tests/unit/wave-status-lettered-slice-ids.test.ts`.
+
+- **Phase-event status validation enforced at the canonical writer + hook.**
+  `delegation-record` previously accepted `--phase=red|green|refactor|doc
+  --status=acknowledged` silently, leaving `slice-commit.mjs` waiting for a
+  doc/completed event that never came (the hox S-41 phantom-open bug).
+  `src/delegation.ts` now exports `validatePhaseEventStatus` and
+  `PhaseEventRequiresTerminalStatusError`; `appendDelegation` rejects any
+  row with `phase != null && status !== completed && status !== failed`,
+  exits 2, and emits a corrected command hint. The same validation is
+  inlined into the rendered `delegation-record.mjs` script
+  (`src/content/hooks.ts`). The `slice-builder` agent template
+  (`src/content/core-agents.ts`) now carries an unambiguous
+  `(event → required --status flag)` table so workers cannot record
+  phase-level acks. Added
+  `tests/unit/delegation-phase-event-status.test.ts` and
+  `tests/unit/delegation-record-phase-event-status.test.ts`.
+
+- **Lockfile-twin auto-claim via stack-adapter (`lockfileTwinPolicy`).**
+  When a slice modifies a manifest (Cargo.toml, package.json, pyproject.toml,
+  …), `cargo build` / `npm install` / `poetry install` regenerates the
+  lockfile and `slice-commit.mjs` previously rejected the drift as
+  `slice_commit_path_drift`. Extended `src/stack-detection.ts` with a
+  universal `StackAdapter` contract exposing `lockfileTwins` for rust, node
+  (auto-detects npm/yarn/pnpm), python (auto-detects poetry/uv/pdm/Pipfile),
+  go, ruby, php, swift, dotnet, and elixir. Java has no canonical lockfile
+  and ships an empty list (no-op). New `tdd.lockfileTwinPolicy` config
+  (`auto-include` default, `auto-revert`, `strict-fence`) controls behavior;
+  `init`/`sync` writes the default into `.cclaw/config.yaml`. Slice-commit
+  (`src/internal/slice-commit.ts`) now folds drifted twins into the managed
+  commit (auto-include), restores them via `git restore` (auto-revert), or
+  rejects them (strict-fence) with a `lockfileTwinPolicy` field on the error
+  payload. Added `tests/unit/stack-adapter-lockfile-twins.test.ts` and
+  `tests/integration/slice-commit-lockfile-twin.test.ts`.
+
+- **New required plan gate: `plan_module_introducing_slice_wires_root`.**
+  `plan_wave_paths_disjoint` passed for waves whose slices each claimed a
+  single new module file but never the corresponding `lib.rs` /
+  `__init__.py` / `index.ts` aggregator, leaving RED structurally
+  unexpressible (the hox W-08 S-39/40/41 bug). Stack-adapter now exposes
+  `wiringAggregator?: { aggregatorPattern; resolveAggregatorFor(filePath,
+  repoState?) }` for Rust (`lib.rs`/`main.rs`/`mod.rs`), Node-TS
+  (`index.{ts,tsx,js,jsx}` only when one already exists in the parent
+  dir — barrel projects opt in), and Python (`__init__.py`, with PEP 420
+  namespace-package layouts auto-skipped). The new linter
+  (`src/artifact-linter/plan.ts`) checks every NEW path in each wave row
+  against its required aggregator, walks the `dependsOn` graph for
+  predecessor coverage, and emits actionable issues. Plan gate budget bumped
+  from 7 → 8 (`tests/unit/gate-density.test.ts`); the gate is `required`
+  for stacks with a wiring contract and advisory for stacks without.
+  Added `tests/unit/plan-module-introducing-slice-wires-root.test.ts`
+  covering rust, node-ts barrel/no-barrel, python `__init__.py`/PEP 420,
+  and Go (no-op).
+
+- **Bias audit — `start-flow` and gate-evidence stop hardcoding stacks.**
+  Swept `src/` for hardcoded Rust-only / Node-only assumptions:
+  `src/internal/advance-stage/start-flow.ts` no longer probes the literal
+  trio `["package.json", "pyproject.toml", "Cargo.toml"]`; it now walks
+  `stackAdapter.manifestGlobs`. `src/gate-evidence.ts` no longer hardcodes
+  `pyproject.toml` / `go.mod` / `Cargo.toml` / `pom.xml` / `build.gradle`
+  test-command discovery; it pulls from `stackAdapter.testCommandHints`
+  (still keeping `pytest.ini` as an explicit fallback). Stage skill prose
+  and runner comments that already carried parallel multi-stack examples
+  were left intact.
+
+- **Cross-slice coherence (uninhabited-stub liability tracking) deferred to
+  7.7.0.** The `match e {}` / `unimplemented!()` /
+  `throw new Error('TODO')` / `raise NotImplementedError` / `pass`-only
+  AST-light analysis at phase=green is a separate architectural piece and
+  was intentionally not included in 7.6.0.
+
+
 
 7.5.0 closes the AC traceability loop across spec -> plan -> tdd -> ship so
 every shipped acceptance criterion can be traced to a slice card and managed

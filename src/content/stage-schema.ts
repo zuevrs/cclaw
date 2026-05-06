@@ -402,6 +402,7 @@ const REQUIRED_GATE_IDS: Record<FlowStage, RequiredGateSet> = {
     "plan_execution_posture_recorded",
     "plan_parallel_exec_full_coverage",
     "plan_wave_paths_disjoint",
+    "plan_module_introducing_slice_wires_root",
     "plan_wait_for_confirm"
   ],
   tdd: (track) => [

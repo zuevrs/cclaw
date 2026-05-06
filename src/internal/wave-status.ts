@@ -15,6 +15,7 @@ import {
   parseWavePlanDirectory,
   type ParsedParallelWave
 } from "./plan-split-waves.js";
+import { compareSliceIds, parseSliceId } from "../util/slice-id.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -153,8 +154,9 @@ function parseManagedWaveClaimedPaths(planMarkdown: string): Map<string, Map<str
     if (cells.every((cell) => /^:?-{3,}:?$/u.test(cell))) {
       continue;
     }
-    const sliceId = cells[0]!.trim().toUpperCase();
-    if (!/^S-\d+$/u.test(sliceId)) continue;
+    const parsedSlice = parseSliceId(cells[0]);
+    if (!parsedSlice) continue;
+    const sliceId = parsedSlice.id;
     const pathsIdx = headerIdx.get("claimedpaths");
     const rawPaths = pathsIdx !== undefined ? (cells[pathsIdx] ?? "") : "";
     const claimedPaths = rawPaths.length === 0
@@ -173,7 +175,7 @@ function detectPathConflicts(
   bySlice: Map<string, string[]>
 ): string[] {
   const conflicts = new Set<string>();
-  const ordered = [...readySlices].sort();
+  const ordered = [...readySlices].sort(compareSliceIds);
   for (let i = 0; i < ordered.length; i += 1) {
     const leftSlice = ordered[i]!;
     const leftPaths = bySlice.get(leftSlice) ?? [];
@@ -402,7 +404,7 @@ export async function runWaveStatus(
       mode: "none"
     };
   } else {
-    const readyToDispatch = [...firstOpenWave.readyMembers].sort();
+    const readyToDispatch = [...firstOpenWave.readyMembers].sort(compareSliceIds);
     const claimedPathsByWave = parseManagedWaveClaimedPaths(planRaw);
     const conflicts = detectPathConflicts(
       readyToDispatch,

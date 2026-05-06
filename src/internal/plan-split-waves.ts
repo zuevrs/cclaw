@@ -3,6 +3,7 @@ import path from "node:path";
 import { resolveArtifactPath } from "../artifact-paths.js";
 import { exists, writeFileSafe } from "../fs-utils.js";
 import { readFlowState } from "../runs.js";
+import { compareSliceIds, parseSliceId } from "../util/slice-id.js";
 import type { Writable } from "node:stream";
 
 interface InternalIo {
@@ -83,15 +84,17 @@ export function extractParallelExecutionManagedBody(planMarkdown: string): strin
 
 function tokenToSliceAndUnit(token: string): ParsedParallelWaveMember | null {
   const t = token.trim().replace(/^[`"'[\]()]+|[`"'[\]()]+$/gu, "");
-  const u = /^U-(\d+)$/u.exec(t);
+  const u = /^U-(\d+)([a-z][a-z0-9]*)?$/iu.exec(t);
   if (u) {
-    const n = u[1]!;
-    return { unitId: `U-${n}`, sliceId: `S-${n}` };
+    const num = u[1]!;
+    const suffix = (u[2] ?? "").toLowerCase();
+    const tail = suffix.length > 0 ? `${num}${suffix}` : num;
+    return { unitId: `U-${tail}`, sliceId: `S-${tail}` };
   }
-  const s = /^S-(\d+)$/u.exec(t);
-  if (s) {
-    const n = s[1]!;
-    return { unitId: `U-${n}`, sliceId: `S-${n}` };
+  const parsed = parseSliceId(t);
+  if (parsed) {
+    const tail = parsed.suffix.length > 0 ? `${parsed.numeric}${parsed.suffix}` : `${parsed.numeric}`;
+    return { unitId: `U-${tail}`, sliceId: parsed.id };
   }
   return null;
 }
@@ -139,11 +142,13 @@ export function parseTableRowMember(
   const stripDecorations = (raw: string): string =>
     raw.replace(/^[`"'[\]()]+|[`"'[\]()]+$/gu, "").trim();
   const col1 = stripDecorations(cells[0]!);
-  const sliceMatch = /^S-(\d+)$/u.exec(col1);
-  if (!sliceMatch) return null;
-  const sliceNum = sliceMatch[1]!;
-  const sliceId = `S-${sliceNum}`;
-  let unitId = `U-${sliceNum}`;
+  const parsedSlice = parseSliceId(col1);
+  if (!parsedSlice) return null;
+  const sliceTail = parsedSlice.suffix.length > 0
+    ? `${parsedSlice.numeric}${parsedSlice.suffix}`
+    : `${parsedSlice.numeric}`;
+  const sliceId = parsedSlice.id;
+  let unitId = `U-${sliceTail}`;
   if (cells.length >= 2) {
     const col2 = stripDecorations(cells[1]!);
     if (col2.length > 0) {
@@ -287,7 +292,7 @@ export function parseWavePlanFileBody(body: string, waveId: string): ParsedParal
     }
   }
   if (members.length === 0) {
-    const regex = /\b(S-\d+)\b/gu;
+    const regex = /\b(S-\d+(?:[a-z][a-z0-9]*)?)\b/giu;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(body)) !== null) {
       const ids = tokenToSliceAndUnit(match[1]!);
@@ -364,7 +369,7 @@ export function mergeParallelWaveDefinitions(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([wid, memMap]) => ({
       waveId: wid,
-      members: [...memMap.values()].sort((p, q) => p.sliceId.localeCompare(q.sliceId))
+      members: [...memMap.values()].sort((p, q) => compareSliceIds(p.sliceId, q.sliceId))
     }));
 }
 

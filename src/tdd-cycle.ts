@@ -1,3 +1,5 @@
+import { isSliceId } from "./util/slice-id.js";
+
 export type TddCyclePhase = "red" | "green" | "refactor";
 
 export interface TddCycleEntry {
@@ -124,8 +126,6 @@ export function parseTddCycleLog(
   return out;
 }
 
-const SLICE_ID_PATTERN = /^S-\d+$/u;
-
 export function validateTddCycleOrder(
   entries: TddCycleEntry[],
   options: { runId?: string } = {}
@@ -143,13 +143,15 @@ export function validateTddCycleOrder(
   const issues: string[] = [];
   const openRedSlices: string[] = [];
 
-  // Reject slices whose ID does not match the stable `S-<number>` contract.
+  // Reject slices whose ID does not match the stable slice-id contract.
   // Entries that drop the slice field entirely were previously coerced to
   // `S-unknown` and silently bucketed together, which means multiple distinct
-  // cycles could appear to share a RED/GREEN pair.
+  // cycles could appear to share a RED/GREEN pair. 7.6.0 relaxed the shape
+  // to allow lettered sub-slice ids (e.g. `S-36a`) so plan amendments can
+  // insert work between numeric slices without renumbering.
   for (const slice of bySlice.keys()) {
-    if (!SLICE_ID_PATTERN.test(slice)) {
-      issues.push(`slice "${slice}": id must match /^S-\\d+$/ (e.g. S-1); repair by re-logging RED/GREEN/REFACTOR with a stable slice id.`);
+    if (!isSliceId(slice)) {
+      issues.push(`slice "${slice}": id must match S-<number>(<letter><suffix>)? (e.g. S-1, S-36a); repair by re-logging RED/GREEN/REFACTOR with a stable slice id.`);
     }
   }
 

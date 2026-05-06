@@ -18,7 +18,8 @@ import {
 } from "./helpers.js";
 import {
   STACK_DISCOVERY_DIR_MARKERS,
-  STACK_DISCOVERY_MARKERS
+  STACK_DISCOVERY_MARKERS,
+  loadStackAdapter
 } from "../../stack-detection.js";
 import { TRACK_STAGES } from "../../types.js";
 import type { StartFlowArgs } from "./parsers.js";
@@ -86,10 +87,19 @@ export async function collectRepoSignals(projectRoot: string): Promise<RepoSigna
       // ignore
     }
   }
-  for (const manifest of ["package.json", "pyproject.toml", "Cargo.toml"]) {
+  // 7.6.0 — manifest detection now routes through the stack-adapter
+  // contract instead of hardcoding `package.json` / `pyproject.toml` /
+  // `Cargo.toml`. Adapters that declare manifestGlobs probe their
+  // declared paths; the unknown adapter is a no-op.
+  const stackAdapter = await loadStackAdapter(projectRoot);
+  for (const manifestGlob of stackAdapter.manifestGlobs) {
+    if (manifestGlob.includes("*")) continue;
     try {
-      const st = await fs.stat(path.join(projectRoot, manifest));
-      if (st.isFile()) hasPackageManifest = true;
+      const st = await fs.stat(path.join(projectRoot, manifestGlob));
+      if (st.isFile()) {
+        hasPackageManifest = true;
+        break;
+      }
     } catch {
       // ignore
     }
