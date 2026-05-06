@@ -10,6 +10,14 @@ import {
   readEventStreamFile
 } from "../streaming/event-stream.js";
 import {
+  readConfig,
+  resolveExecutionStrictness,
+  resolveExecutionTopology,
+  resolveMaxBuilders
+} from "../config.js";
+import { routeExecutionTopology } from "../execution-topology.js";
+import type { ExecutionTopology } from "../types.js";
+import {
   mergeParallelWaveDefinitions,
   parseParallelExecutionPlanWaves,
   parseWavePlanDirectory,
@@ -42,6 +50,9 @@ export interface WaveStatusNextDispatch {
   readyToDispatch: string[];
   pathConflicts: string[];
   mode: "single-slice" | "wave-fanout" | "blocked" | "none";
+  topology: Exclude<ExecutionTopology, "auto"> | "none";
+  topologyReason: string;
+  maxBuilders: number;
 }
 
 export interface WaveStatusReport {
@@ -141,7 +152,13 @@ function parseManagedWaveClaimedPaths(planMarkdown: string): Map<string, Map<str
     const cells = parsePipeRow(trimmed);
     if (cells.length === 0) continue;
     const first = cells[0]!.toLowerCase();
-    if (first === "sliceid" || first === "slice id") {
+    if (
+      first === "sliceid" ||
+      first === "slice id" ||
+      first === "unitid" ||
+      first === "unit id" ||
+      first === "unit"
+    ) {
       headerIdx = new Map<string, number>();
       for (let i = 0; i < cells.length; i += 1) {
         const key = cells[i]!.toLowerCase().replace(/[^a-z0-9]/gu, "");
@@ -154,9 +171,11 @@ function parseManagedWaveClaimedPaths(planMarkdown: string): Map<string, Map<str
     if (cells.every((cell) => /^:?-{3,}:?$/u.test(cell))) {
       continue;
     }
-    const parsedSlice = parseSliceId(cells[0]);
-    if (!parsedSlice) continue;
-    const sliceId = parsedSlice.id;
+    const firstCell = (cells[0] ?? "").replace(/^`|`$/gu, "").trim();
+    const parsedSlice = parseSliceId(firstCell);
+    const parsedUnit = /^U-(\d+(?:[a-z][a-z0-9]*)?)$/iu.exec(firstCell);
+    if (!parsedSlice && !parsedUnit) continue;
+    const sliceId = parsedSlice?.id ?? `S-${parsedUnit![1]!.toLowerCase()}`;
     const pathsIdx = headerIdx.get("claimedpaths");
     const rawPaths = pathsIdx !== undefined ? (cells[pathsIdx] ?? "") : "";
     const claimedPaths = rawPaths.length === 0
@@ -241,7 +260,10 @@ export async function runWaveStatus(
         waveId: null,
         readyToDispatch: [],
         pathConflicts: [],
-        mode: "none"
+        mode: "none",
+        topology: "none",
+        topologyReason: "wave plan could not be parsed",
+        maxBuilders: 0
       },
       warnings: [
         `wave_plan_parse_error: ${err instanceof Error ? err.message : String(err)}`
@@ -267,7 +289,10 @@ export async function runWaveStatus(
         waveId: null,
         readyToDispatch: [],
         pathConflicts: [],
-        mode: "none"
+        mode: "none",
+        topology: "none",
+        topologyReason: "wave plan sources conflict",
+        maxBuilders: 0
       },
       warnings: [
         `wave_plan_merge_conflict: ${err instanceof Error ? err.message : String(err)}`
@@ -396,12 +421,19 @@ export async function runWaveStatus(
   }
 
   let nextDispatch: WaveStatusNextDispatch;
+  const config = await readConfig(projectRoot).catch(() => null);
+  const configuredTopology = resolveExecutionTopology(config);
+  const strictness = resolveExecutionStrictness(config);
+  const maxBuilders = resolveMaxBuilders(config);
   if (firstOpenWave === null) {
     nextDispatch = {
       waveId: null,
       readyToDispatch: [],
       pathConflicts: [],
-      mode: "none"
+      mode: "none",
+      topology: "none",
+      topologyReason: "no open wave has ready units",
+      maxBuilders
     };
   } else {
     const readyToDispatch = [...firstOpenWave.readyMembers].sort(compareSliceIds);
@@ -417,11 +449,28 @@ export async function runWaveStatus(
         : readyToDispatch.length === 1
           ? "single-slice"
           : "none";
+    const topologyDecision = mode === "none"
+      ? null
+      : routeExecutionTopology({
+        configuredTopology,
+        strictness,
+        maxBuilders,
+        shape: {
+          unitCount: readyToDispatch.length,
+          independentUnitCount: conflicts.length > 0 ? 0 : readyToDispatch.length,
+          substantialUnitCount: readyToDispatch.length,
+          hasPathConflicts: conflicts.length > 0,
+          inlineSafe: false
+        }
+      });
     nextDispatch = {
       waveId: firstOpenWave.waveId,
       readyToDispatch,
       pathConflicts: conflicts,
-      mode
+      mode,
+      topology: topologyDecision?.topology ?? "none",
+      topologyReason: topologyDecision?.reason ?? "no ready units",
+      maxBuilders: topologyDecision?.maxBuilders ?? maxBuilders
     };
   }
 
@@ -453,6 +502,7 @@ function formatHumanReport(report: WaveStatusReport): string {
   lines.push(
     `nextDispatch: wave=${report.nextDispatch.waveId ?? "(none)"} ` +
       `mode=${report.nextDispatch.mode} ` +
+      `topology=${report.nextDispatch.topology} ` +
       `ready=[${report.nextDispatch.readyToDispatch.join(",")}]`
   );
   if (report.warnings.length > 0) {

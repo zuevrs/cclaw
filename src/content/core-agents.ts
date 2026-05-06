@@ -208,7 +208,7 @@ export function sliceBuilderProtocol(): string {
   return [
     "## slice-builder protocol",
     "",
-    "**slice-builder** is the canonical worker for **one bounded vertical slice** end-to-end: **RED → GREEN → REFACTOR → inline DOC** in **one** delegated span. Multiple slice-builder spans run in parallel under a single wave when the wave plan declares disjoint `claimedPaths`.",
+    "**slice-builder** is the canonical worker for **one feature-atomic implementation unit/slice** end-to-end: **RED → GREEN → REFACTOR → inline DOC** in **one** delegated span. The unit may contain internal 2-5 minute TDD steps; do not split those into separate agents unless the parent selected `strict-micro`. Multiple slice-builder spans run in parallel only when topology is `parallel-builders` and the wave plan declares disjoint `claimedPaths`.",
     "",
     "### Invariants",
     "- Produce failing RED evidence (or cite the delegated RED artifact) **before** production edits.",
@@ -664,7 +664,7 @@ export const CCLAW_AGENTS = [
   {
     name: "slice-builder",
     description:
-      "MANDATORY for every TDD slice. Owns RED → GREEN → REFACTOR → per-slice DOC for one bounded vertical slice in a single delegated span. Multiple slice-builder spans run in parallel inside one wave when their `claimedPaths` are disjoint.",
+      "MANDATORY for delegated TDD slices. Owns RED → GREEN → REFACTOR → per-slice DOC for one feature-atomic implementation unit/slice in a single delegated span. Multiple slice-builder spans run in parallel only under `parallel-builders` topology with disjoint `claimedPaths`; `strict-micro` keeps tiny tasks separate.",
     tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
     model: "balanced",
     activation: "mandatory",

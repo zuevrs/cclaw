@@ -197,6 +197,15 @@ export type TddCommitMode =
   | "checkpoint-only"
   | "off";
 export type TddIsolationMode = "worktree" | "in-place" | "auto";
+export type ExecutionTopology =
+  | "auto"
+  | "inline"
+  | "single-builder"
+  | "parallel-builders"
+  | "strict-micro";
+export type ExecutionStrictnessProfile = "fast" | "balanced" | "strict";
+export type PlanSliceGranularity = "feature-atomic" | "strict-micro";
+export type PlanMicroTaskPolicy = "advisory" | "strict";
 /**
  * 7.6.0 — what slice-commit does when a manifest in the slice's
  * claim drifts its corresponding lockfile twin (e.g. Cargo.toml +
@@ -242,11 +251,54 @@ export interface TddConfig {
   lockfileTwinPolicy?: LockfileTwinPolicy;
 }
 
+export interface ExecutionConfig {
+  /**
+   * 7.7.0 — adaptive execution topology for implementation units.
+   *
+   * - `auto` (default): choose the cheapest safe route from plan shape.
+   * - `inline`: controller may execute a low-risk unit inline while still
+   *   recording RED/GREEN/REFACTOR evidence.
+   * - `single-builder`: one slice-builder owns a feature-atomic unit.
+   * - `parallel-builders`: fan out independent substantial units only.
+   * - `strict-micro`: preserve the pre-7.7 posture where each tiny task is
+   *   its own schedulable slice.
+   */
+  topology?: ExecutionTopology;
+  /**
+   * 7.7.0 — default calibration for topology and plan-shape advisories.
+   * `balanced` is the default: prefer feature-atomic units with internal
+   * 2-5 minute TDD steps, warning on microtask-only plans without blocking.
+   */
+  strictness?: ExecutionStrictnessProfile;
+  /**
+   * 7.7.0 — upper bound for simultaneous slice-builder workers when the
+   * router selects `parallel-builders`.
+   */
+  maxBuilders?: number;
+}
+
+export interface PlanConfig {
+  /**
+   * 7.7.0 — default schedulable surface for plan authoring.
+   * - feature-atomic: U-* slices contain internal 2-5 minute TDD steps.
+   * - strict-micro: one tiny task can remain one schedulable slice.
+   */
+  sliceGranularity?: PlanSliceGranularity;
+  /**
+   * 7.7.0 — how strongly the plan linter reacts to microtask-only plans.
+   * `advisory` warns in fast/balanced execution; `strict` treats strict
+   * microtask planning as intentional.
+   */
+  microTaskPolicy?: PlanMicroTaskPolicy;
+}
+
 export interface CclawConfig {
   version: string;
   flowVersion: string;
   harnesses: HarnessId[];
   tdd?: TddConfig;
+  execution?: ExecutionConfig;
+  plan?: PlanConfig;
 }
 
 export interface TransitionRule {

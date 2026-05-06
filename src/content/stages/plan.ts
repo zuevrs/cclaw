@@ -13,8 +13,8 @@ export const PLAN: StageSchemaInput = {
   skillDescription: "Execution planning stage with strict confirmation gate before implementation.",
   philosophy: {
     hardGate: "Do NOT write code or tests. Planning only. This stage produces a task graph and execution order. WAIT_FOR_CONFIRM before any handoff to implementation.",
-    ironLaw: "EVERY TASK IS 2–5 MINUTES, FULLY SPELLED OUT, AND CARRIES A STABLE ID — NO PLACEHOLDERS, NO ‘ETC.’.",
-    purpose: "Create small executable tasks with dependencies and pause for explicit user confirmation.",
+    ironLaw: "EVERY IMPLEMENTATION UNIT IS FEATURE-ATOMIC, WITH INTERNAL 2–5 MINUTE TDD STEPS — STRICT MICRO-SLICES ARE RESERVED FOR HIGH-RISK WORK.",
+    purpose: "Create feature-atomic implementation units with dependencies, internal TDD steps, and explicit confirmation before execution.",
     whenToUse: [
       "After spec approval",
       "Before writing tests or implementation",
@@ -46,21 +46,21 @@ export const PLAN: StageSchemaInput = {
       "Read upstream — load spec, design, and scope artifacts. Cross-reference acceptance criteria.",
       "Build dependency graph — identify task ordering, parallel opportunities, and blocking dependencies.",
       "Group tasks into dependency batches — batch N+1 cannot start until batch N has verification evidence.",
-      "Slice into vertical tasks — each task targets 2-5 minutes, produces one testable outcome, and touches one coherent area.",
-      "Task Contract — every task has one coherent outcome, AC mapping, exact verification command/manual step, and expected evidence snippet or pass condition. Avoid vague `run tests` wording.",
+      "Slice into implementation units — each unit is feature-atomic and testable end-to-end, with internal 2-5 minute RED/GREEN/REFACTOR steps. Use `strict-micro` only for high-risk or explicitly requested micro-slice execution.",
+      "Task Contract — every unit has one coherent outcome, AC mapping, exact verification command/manual step, and expected evidence snippet or pass condition. Internal steps may be `T-NNN` rows, but they are not automatically separate schedulable agents in balanced/fast mode.",
       "Annotate slice-review metadata — task rows may carry `touchCount` (rough number of files expected to change), `touchPaths` (glob hints, e.g. `migrations/**`, `src/auth/**`), and optional `highRisk: true` to force a review pass. These fields feed the TDD stage's Per-Slice Review point.",
       "For every `### Implementation Unit U-<n>`, declare parallel metadata bullets: `id`, `dependsOn` (unit ids or `none`), `claimedPaths` (repo-relative), `parallelizable` (true|false), `riskTier` (low|standard|high), optional `lane` — used for conflict-aware wave plans and schedulers.",
       "Map scope Locked Decisions — every D-XX ID from scope is referenced by at least one plan task (or explicitly marked deferred with reason).",
       "Run anti-placeholder + anti-scope-reduction scans — block `TODO/TBD/...` and phrasing like `v1`, `for now`, `later` for locked boundaries.",
       "Define validation points — mark where progress must be checked before continuing, with concrete command and expected evidence.",
-      "Define execution posture — record whether execution should be sequential, dependency-batched, parallel-safe, or blocked; include risk triggers and RED/GREEN/REFACTOR checkpoint/commit expectations when the repo workflow supports them. This fulfills the `plan_execution_posture_recorded` gate.",
-      "**Author the FULL Parallel Execution Plan.** Inside the `<!-- parallel-exec-managed-start -->` block, enumerate ALL waves W-02..W-N covering EVERY T-NNN task in `## Task List` — no `we'll author waves later`, `next batch only`, or open-ended Backlog handwave is acceptable. Each task gets a slice with `sliceId | taskId | dependsOn | claimedPaths | parallelizable | riskTier | lane`. Spike rows (`S-N`) and tasks marked `deferred` in an explicit `Deferred:` column may be omitted, but every other T-NNN must be claimed. This fulfills the `plan_parallel_exec_full_coverage` gate. The TDD stage downstream is a pure consumer of these waves — if the plan does not author them, TDD cannot fan out that work.",
-      "After authoring/refreshing the managed parallel-exec block, render a Mermaid `flowchart` or `gantt` covering waves (`W-*`) and slice dependencies (`S-*`) so parallelism and fan-in boundaries are visually auditable.",
+      "Define execution topology — record `execution.topology` (`auto|inline|single-builder|parallel-builders|strict-micro`), `execution.strictness` (`fast|balanced|strict`), `execution.maxBuilders`, `plan.sliceGranularity`, `plan.microTaskPolicy`, stop conditions, and RED/GREEN/REFACTOR checkpoint/commit expectations. Default posture is `auto` + `balanced`: choose the cheapest safe route, not the most parallel one.",
+      "**Author the FULL Parallel Execution Plan.** Inside the `<!-- parallel-exec-managed-start -->` block, enumerate all waves W-01..W-N covering every feature-atomic `U-*` implementation unit/slice. Legacy strict-micro plans may cover each non-deferred `T-NNN` task instead. Each row carries `unit|sliceId | dependsOn | claimedPaths | parallelizable | riskTier | lane`. Do not leave `we'll author waves later`, `next batch only`, or open-ended Backlog handwaves. This fulfills the `plan_parallel_exec_full_coverage` gate. The TDD stage downstream is a pure consumer of these waves — if the plan does not author them, TDD cannot fan out that work.",
+      "After authoring/refreshing the managed parallel-exec block, render a Mermaid `flowchart` or `gantt` covering waves (`W-*`) and unit/slice dependencies (`U-*`/`S-*`) so topology and fan-in boundaries are visually auditable.",
       "WAIT_FOR_CONFIRM — write plan artifact and explicitly pause. **STOP.** Do NOT proceed until user confirms. Then close the stage with `node .cclaw/hooks/stage-complete.mjs plan` and tell user to run `/cc`."
     ],
     interactionProtocol: [
       "Plan in read-only mode relative to implementation.",
-      "Split work into small vertical slices (target 2-5 minute tasks).",
+      "Split work into feature-atomic vertical units; place 2-5 minute TDD steps inside each unit.",
       "Publish explicit dependency batches with entry and exit checks for each batch.",
       "Expose execution posture: sequential vs batch/parallel, stop conditions, and checkpoint cadence for the TDD handoff.",
       "Keep same-wave `claimedPaths` disjoint; if overlap exists, split waves or serialize explicitly before handoff.",
@@ -82,18 +82,18 @@ export const PLAN: StageSchemaInput = {
       "Write plan artifact and pause at WAIT_FOR_CONFIRM."
     ],
     requiredGates: [
-      { id: "plan_tasks_sliced_2_5_min", description: "Tasks are small, executable slices." },
+      { id: "plan_tasks_sliced_2_5_min", description: "Implementation units are feature-atomic and contain internal 2-5 minute TDD steps; strict micro-slices are explicit." },
       { id: "plan_dependency_batches_defined", description: "Tasks are grouped into executable batches with gate checks and execution posture." },
       { id: "plan_acceptance_mapped", description: "Each task maps to a spec acceptance criterion." },
-      { id: "plan_execution_posture_recorded", description: "Execution posture is recorded before implementation handoff." },
-      { id: "plan_parallel_exec_full_coverage", description: "Every T-NNN task in `## Task List` (other than spikes/explicitly-deferred) is assigned to at least one slice inside the `<!-- parallel-exec-managed-start -->` block; TDD cannot fan out work that the plan never authored as waves." },
+      { id: "plan_execution_posture_recorded", description: "Execution topology/posture is recorded before implementation handoff." },
+      { id: "plan_parallel_exec_full_coverage", description: "Every U-* implementation unit/slice (or every T-NNN task in explicit strict-micro plans) is assigned inside the `<!-- parallel-exec-managed-start -->` block; TDD cannot fan out work that the plan never authored as waves." },
       { id: "plan_wave_paths_disjoint", description: "Within each authored wave, slice `claimedPaths` remain disjoint so `wave-fanout` can dispatch safely without overlap conflicts." },
       { id: "plan_module_introducing_slice_wires_root", description: "When a slice introduces a new module file, the stack-adapter's wiring aggregator (Rust `lib.rs`, Python `__init__.py`, Node-TS barrel when present) must appear in the same slice's claim or a transitive predecessor's claim so RED can be expressed." },
       { id: "plan_wait_for_confirm", description: "Execution blocked until explicit user confirmation." }
     ],
     requiredEvidence: [
       "Artifact written to `.cclaw/artifacts/05-plan.md`.",
-      "Task list includes acceptance mapping, exact verification command/manual step, and expected evidence/pass condition.",
+      "Implementation units include acceptance mapping, internal 2-5 minute TDD steps, exact verification command/manual step, and expected evidence/pass condition.",
       "Locked decision coverage table present with D-XX trace links.",
       "Dependency graph documented.",
       "Dependency batches documented with batch-by-batch verification gates.",
@@ -139,13 +139,13 @@ export const PLAN: StageSchemaInput = {
       { section: "Upstream Handoff", required: false, validationRule: "Summarizes spec/design/scope decisions, constraints, open questions, and explicit drift before task breakdown." },
       { section: "Dependency Graph", required: false, validationRule: "Ordering and parallel opportunities explicit. No circular dependencies." },
       { section: "Dependency Batches", required: true, validationRule: "Every task belongs to a batch. Each batch has an exit gate and dependency statement." },
-      { section: "Task List", required: true, validationRule: "Each task row includes ID, description, acceptance criterion, exact verification command/manual step, expected evidence/pass condition, and effort estimate (S/M/L). Every task must also carry a minutes estimate within the 2-5 minute budget. When present, touchCount/touchPaths/highRisk metadata drives Per-Slice Review escalation in TDD." },
+      { section: "Task List", required: true, validationRule: "Task rows may describe internal 2-5 minute TDD steps. In balanced/fast mode, the schedulable unit is the feature-atomic Implementation Unit, not every T-NNN row. Strict-micro plans may still use one T-NNN per slice." },
       { section: "Acceptance Mapping", required: true, validationRule: "Every spec criterion is covered by at least one task." },
-      { section: "Execution Posture", required: true, validationRule: "States sequential/batch/parallel posture, stop conditions, risk triggers, and RED/GREEN/REFACTOR checkpoint or commit expectations for TDD when consistent with the repo workflow." },
+      { section: "Execution Posture", required: true, validationRule: "States `execution.topology` (`auto|inline|single-builder|parallel-builders|strict-micro`), `execution.strictness`, `execution.maxBuilders`, `plan.sliceGranularity`, `plan.microTaskPolicy`, stop conditions, risk triggers, and RED/GREEN/REFACTOR checkpoint or commit expectations for TDD when consistent with the repo workflow." },
       { section: "Locked Decision Coverage", required: false, validationRule: "Every locked decision ID (D-XX) from scope is listed with linked task IDs or explicit defer rationale." },
       { section: "Risk Assessment", required: false, validationRule: "If present: per-task or per-batch risk identification with likelihood, impact, and mitigation strategy." },
       { section: "Boundary Map", required: false, validationRule: "If present: per-batch or per-task interface contracts listing what each task produces (exports) and consumes (imports) from other tasks." },
-      { section: "Implementation Units", required: false, validationRule: "If present: each `### Implementation Unit U-<n>` includes Goal, Files, Approach, Test scenarios, Verification fields, plus bullets (`id`, `dependsOn`, `claimedPaths`, `parallelizable`, `riskTier`, optional `lane`)." },
+      { section: "Implementation Units", required: false, validationRule: "Each `### Implementation Unit U-<n>` includes Goal, Files, Approach, Test scenarios, Verification, internal 2-5 minute TDD steps, plus bullets (`id`, `dependsOn`, `claimedPaths`, `parallelizable`, `riskTier`, optional `lane`)." },
       { section: "Calibrated Findings", required: false, validationRule: "If present: either `None this stage` or one or more lines in `[P1|P2|P3] (confidence: <n>/10) <path>[:<line>] — <description>` format." },
       { section: "Regression Iron Rule", required: false, validationRule: "If present: includes `Iron rule acknowledged: yes`." },
       { section: "WAIT_FOR_CONFIRM", required: true, validationRule: "Explicit marker present. Status: pending until user approves." },
@@ -159,7 +159,7 @@ export const PLAN: StageSchemaInput = {
         title: "Task Decomposition Audit",
         evaluationPoints: [
           "Does every task target a single coherent area (vertical slice)?",
-          "Can each task be completed in 2-5 minutes?",
+          "Is each implementation unit feature-atomic, with internal steps that fit 2-5 minutes each?",
           "Does every task have an acceptance criterion link, exact verification command/manual step, and expected evidence/pass condition?",
           "Are there tasks that touch multiple unrelated areas?",
           "Would a new engineer understand and start each task within two minutes?"
@@ -181,7 +181,7 @@ export const PLAN: StageSchemaInput = {
       {
         title: "Five-Minute Budget + No-Placeholders Audit",
         evaluationPoints: [
-          "Does every task carry an explicit minutes estimate (e.g. `[~3m]`) and does every estimate fit the 2-to-5-minute budget? Estimates >5 minutes must be split.",
+          "Does every internal TDD step carry a bounded 2-to-5-minute estimate or checkbox-level step? Whole units may be larger when feature-atomic.",
           "Are all file paths, test commands, verification commands, and expected evidence copy-pasteable/specific as written — no `TODO`, `TBD`, `FIXME`, `<fill-in>`, `<your-*-here>`, `xxx`, bare `run tests`, or ellipsis standing in for omitted args?",
           "Does every acceptance-criterion reference resolve to a real R# / AC-### in the spec (not a blank link)?",
           "If an estimate is genuinely uncertain (first-time integration, unfamiliar library), is the uncertainty named explicitly and scheduled as a spike task in batch 0, rather than hidden behind a large estimate?"

@@ -818,8 +818,8 @@ const STAGE_AUTO_SUBAGENT_DISPATCH: Record<FlowStage, StageAutoSubagentDispatch[
       agent: "slice-builder",
       mode: "mandatory",
       requiredAtTier: "lightweight",
-      when: "Always during the TDD cycle. Controller MUST NOT write tests or production code itself.",
-      purpose: "Own one bounded vertical slice end-to-end: RED → GREEN → REFACTOR → per-slice DOC in a single delegated span. Multiple slice-builder spans run in parallel inside one wave when their `claimedPaths` are disjoint. Linter rules `tdd_slice_builder_missing` and `tdd_slice_doc_missing` block unauthorized GREEN authors and missing per-slice prose.",
+      when: "During delegated TDD topologies (`single-builder`, `parallel-builders`, `strict-micro`). Inline topology may skip the dispatch only when the same RED/GREEN/REFACTOR evidence gates are preserved.",
+      purpose: "Own one feature-atomic implementation unit/slice end-to-end: RED → GREEN → REFACTOR → per-slice DOC in a single delegated span. Multiple slice-builder spans run in parallel only under `parallel-builders` topology with disjoint `claimedPaths`. Linter rules `tdd_slice_builder_missing` and `tdd_slice_doc_missing` block unauthorized GREEN authors and missing per-slice prose unless inline topology is explicitly recorded.",
       requiresUserGate: false,
       skill: "tdd-cycle-evidence"
     },

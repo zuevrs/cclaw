@@ -1,12 +1,18 @@
 # `.cclaw/config.yaml`
 
-Config is harness-only.
+Config is mostly managed by cclaw. Users normally edit harnesses and, when needed, the TDD execution policy.
 
 ## What users can set
 
-Only one user-facing key remains:
+User-facing keys:
 
 - `harnesses`: which harness shims/hooks cclaw materializes.
+- `execution.topology`: `auto` (default), `inline`, `single-builder`, `parallel-builders`, or `strict-micro`.
+- `execution.strictness`: `fast`, `balanced` (default), or `strict`.
+- `execution.maxBuilders`: maximum simultaneous slice-builder workers when topology is `parallel-builders` (default `5`).
+- `plan.sliceGranularity`: `feature-atomic` (default) or `strict-micro`.
+- `plan.microTaskPolicy`: `advisory` (default) or `strict`.
+- `tdd.lockfileTwinPolicy`: `auto-include` (default), `auto-revert`, or `strict-fence`.
 
 ## What cclaw manages automatically
 
@@ -23,11 +29,25 @@ harnesses:
   - cursor
   - opencode
   - codex
+tdd:
+  commitMode: managed-per-slice
+  isolationMode: worktree
+  worktreeRoot: .cclaw/worktrees
+  lockfileTwinPolicy: auto-include
+execution:
+  topology: auto
+  strictness: balanced
+  maxBuilders: 5
+plan:
+  sliceGranularity: feature-atomic
+  microTaskPolicy: advisory
 ```
+
+`execution.topology: auto` + `execution.strictness: balanced` means cclaw treats feature-atomic implementation units as the schedulable surface, with internal 2-5 minute TDD steps. Use `execution.topology: strict-micro`, `execution.strictness: strict`, or `plan.microTaskPolicy: strict` when high-risk work should preserve the older one-tiny-task-per-slice discipline.
 
 ## Removed in 3.0.0
 
-These keys are no longer supported: `strictness`, `hookProfile`, `disabledHooks`, `gitHookGuards`, `vcs`, `tdd`, `tddTestGlobs`, `compound`, `earlyLoop`, `defaultTrack`, `languageRulePacks`, `trackHeuristics`, `sliceReview`, `ironLaws`, `optInAudits`, `reviewLoop`.
+These keys are no longer supported at top level: `strictness`, `hookProfile`, `disabledHooks`, `gitHookGuards`, `vcs`, `tddTestGlobs`, `compound`, `earlyLoop`, `defaultTrack`, `languageRulePacks`, `trackHeuristics`, `sliceReview`, `ironLaws`, `optInAudits`, `reviewLoop`.
 
 If any removed key is present, config parsing fails with:
 

@@ -161,6 +161,13 @@ describe("parseTableRowMember ", () => {
     });
   });
 
+  it("accepts implementation-unit rows as schedulable members", () => {
+    expect(parseTableRowMember("| U-11 | [] | src/feature.ts |")).toEqual({
+      sliceId: "S-11",
+      unitId: "U-11"
+    });
+  });
+
   it("returns null for header rows", () => {
     expect(parseTableRowMember("| sliceId | unit | dependsOn |")).toBeNull();
   });

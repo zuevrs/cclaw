@@ -118,7 +118,7 @@ describe("stage schema and subagent alignment", () => {
     expect(sliceBuilderRows[0]?.mode).toBe("mandatory");
     expect(sliceBuilderRows[0]?.skill).toBe("tdd-cycle-evidence");
     expect(sliceBuilderRows[0]?.purpose).toContain("RED → GREEN → REFACTOR");
-    expect(sliceBuilderRows[0]?.when).toContain("Controller MUST NOT write tests or production code");
+    expect(sliceBuilderRows[0]?.when).toContain("delegated TDD topologies");
 
     expect(integrationOverseerRows).toHaveLength(1);
     expect(integrationOverseerRows[0]?.mode).toBe("proactive");
@@ -298,7 +298,7 @@ describe("stage schema and subagent alignment", () => {
     const skill = subagentDrivenDevSkill();
     expect(skill).toContain("## Anti-Drift Team Defaults");
     expect(skill).toContain("One controller owns alignment");
-    expect(skill).toContain("at most 3-5 parallel agents");
+    expect(skill).toContain("at most configured `maxBuilders` parallel builders");
     expect(skill).toContain("No parallel writes to adjacent surfaces");
     expect(skill).toContain("Consensus is for hard calls only");
     expect(skill).toContain("executing-waves");
@@ -619,7 +619,7 @@ describe("stage schema and subagent alignment", () => {
     expect(spec.artifactValidation.find((row) => row.section === "Acceptance Mapping")?.validationRule)
       .toContain("observable evidence");
     expect(plan.artifactValidation.find((row) => row.section === "Task List")?.validationRule)
-      .toContain("expected evidence/pass condition");
+      .toContain("schedulable unit is the feature-atomic Implementation Unit");
   });
 
   it("design stage requires research-fleet completion gate", () => {

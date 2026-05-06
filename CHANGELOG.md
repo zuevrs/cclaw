@@ -1,5 +1,50 @@
 # Changelog
 
+## 7.7.0 — Adaptive Execution Topology + TDD Calibration
+
+7.7.0 changes the default TDD planning posture from "every 2-5 minute task is
+its own schedulable agent" to feature-atomic implementation units with internal
+2-5 minute RED/GREEN/REFACTOR steps. Strict micro-slice execution remains
+available for high-risk work.
+
+- **Execution Topology Router.**
+  Added `src/execution-topology.ts` and new top-level config fields:
+  `execution.topology`
+  (`auto|inline|single-builder|parallel-builders|strict-micro`),
+  `execution.strictness` (`fast|balanced|strict`), and
+  `execution.maxBuilders`. Defaults are `auto`, `balanced`, and `5`.
+  `auto` chooses the cheapest safe topology: inline only for low-risk
+  inline-safe work, single-builder for one feature-atomic unit or conflicts,
+  parallel-builders only for genuinely independent substantial units, and
+  strict-micro for strict/high-risk posture.
+
+- **Plan granularity policy.**
+  Added top-level `plan.sliceGranularity` (`feature-atomic|strict-micro`) and
+  `plan.microTaskPolicy` (`advisory|strict`) defaults. These keep planning
+  policy out of the TDD commit/isolation/lockfile safety block while letting
+  strict plans intentionally preserve one-tiny-task-per-slice execution.
+
+- **Unit-level wave coverage.**
+  Plan linting and wave parsing now accept `U-*` implementation units/slices as
+  the schedulable Parallel Execution Plan surface. Legacy strict-micro plans can
+  still cover every non-deferred `T-NNN` row. Same-wave path conflicts, invalid
+  lanes, AC mapping, WAIT_FOR_CONFIRM, and stack-aware wiring aggregator gates
+  remain hard safety checks.
+
+- **Controller and worker guidance recalibrated.**
+  Planning, TDD, meta-skill, generated subagent guidance, slice-builder agent
+  text, templates, README, and config docs now describe feature-atomic units,
+  inline/single-builder execution, controlled parallel builders, and strict
+  micro-slice fallback while preserving RED-before-GREEN, AC traceability,
+  path containment, lockfile twin, managed commit/worktree, and orphan-change
+  invariants.
+
+- **Tests.**
+  Added focused coverage for topology routing, config parsing/defaults,
+  unit-level wave parsing/status, feature-atomic plan acceptance, balanced-mode
+  microtask-only advisories, strict-mode microtask allowance, and config-driven
+  `maxBuilders`.
+
 ## 7.6.0 — Universal Plan-Stage Hardening + Lockfile/Wiring Awareness
 
 7.6.0 is the universalisation pass that follows the 7.0.6 → 7.5.0 atomicity stack.

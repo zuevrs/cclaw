@@ -240,6 +240,39 @@ describe("appendDelegation (overlap + cap integration)", () => {
     expect(ledger.entries.find((e) => e.spanId === "span-2")?.allowParallel).toBe(true);
   });
 
+  it("uses execution.maxBuilders from config as the fan-out cap", async () => {
+    const root = await createTempProject("parallel-config-cap");
+    await seedFlowState(root, "run-a");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, ".cclaw/config.yaml"),
+      "harnesses:\n  - claude\nexecution:\n  maxBuilders: 1\n",
+      "utf8"
+    );
+
+    await appendDelegation(root, {
+      stage: "tdd",
+      agent: "slice-builder",
+      mode: "proactive",
+      status: "scheduled",
+      ts: "2026-04-15T09:00:00Z",
+      spanId: "span-1",
+      claimedPaths: ["src/foo.ts"]
+    });
+
+    await expect(
+      appendDelegation(root, {
+        stage: "tdd",
+        agent: "slice-builder",
+        mode: "proactive",
+        status: "scheduled",
+        ts: "2026-04-15T09:01:00Z",
+        spanId: "span-2",
+        claimedPaths: ["src/bar.ts"]
+      })
+    ).rejects.toThrow(DispatchCapError);
+  });
+
   it("blocks a third slice-builder with overlapping paths", async () => {
     const root = await createTempProject("parallel-overlap");
     await seedFlowState(root, "run-a");

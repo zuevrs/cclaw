@@ -120,8 +120,11 @@ export function extractMembersListFromLine(trimmedLine: string): string | null {
  *
  * Rules:
  * - The line must start with `|` (after trimming).
- * - Column 1 (after stripping markdown noise) must match `^S-(\d+)$` —
- *   header rows (`| sliceId | …`) and separator rows (`|---|---|…`) are
+ * - Column 1 (after stripping markdown noise) may be either a slice id
+ *   (`S-N`) or an implementation-unit id (`U-N`). Unit ids derive their
+ *   execution slice as `S-N`, which lets 7.7+ plans schedule feature-atomic
+ *   units without inventing a tiny `T-NNN` row per dispatch lane. Header rows
+ *   (`| sliceId | …`, `| unit | …`) and separator rows (`|---|---|…`) are
  *   silently skipped.
  * - Column 2, when present and non-empty, becomes the `unitId`
  *   verbatim (after stripping whitespace + backticks/quotes/brackets).
@@ -143,12 +146,15 @@ export function parseTableRowMember(
     raw.replace(/^[`"'[\]()]+|[`"'[\]()]+$/gu, "").trim();
   const col1 = stripDecorations(cells[0]!);
   const parsedSlice = parseSliceId(col1);
-  if (!parsedSlice) return null;
-  const sliceTail = parsedSlice.suffix.length > 0
-    ? `${parsedSlice.numeric}${parsedSlice.suffix}`
-    : `${parsedSlice.numeric}`;
-  const sliceId = parsedSlice.id;
-  let unitId = `U-${sliceTail}`;
+  const parsedUnit = tokenToSliceAndUnit(col1);
+  if (!parsedSlice && !parsedUnit) return null;
+  const sliceTail = parsedSlice
+    ? parsedSlice.suffix.length > 0
+      ? `${parsedSlice.numeric}${parsedSlice.suffix}`
+      : `${parsedSlice.numeric}`
+    : "";
+  const sliceId = parsedSlice ? parsedSlice.id : parsedUnit!.sliceId;
+  let unitId = parsedSlice ? `U-${sliceTail}` : parsedUnit!.unitId;
   if (cells.length >= 2) {
     const col2 = stripDecorations(cells[1]!);
     if (col2.length > 0) {

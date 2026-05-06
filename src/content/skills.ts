@@ -209,28 +209,32 @@ export function tddTopOfSkillBlock(stage: FlowStage): string {
   if (stage !== "tdd") return "";
   return `## TDD orchestration primer
 
-**MANDATE — controller never implements.** In TDD the controller plans, dispatches, and reconciles. **NEVER edit production code, tests, or run cargo/npm/pytest yourself in the controller chat.** Every slice's RED → GREEN → REFACTOR → DOC cycle MUST happen inside an isolated \`slice-builder\` span dispatched via the harness Task tool. Inline code edits in the controller chat are a protocol violation that defeats parallelism, evidence isolation, and the audit ledger.
+**MANDATE — controller preserves TDD evidence.** In TDD the controller routes, dispatches when needed, and reconciles. Default topology is \`auto\` + \`balanced\`: feature-atomic units contain internal 2-5 minute RED/GREEN/REFACTOR steps. Inline execution is allowed only when \`wave-status\`/the plan selects \`inline\`; it still must satisfy RED-before-GREEN, AC traceability, path containment, verification, managed commit/worktree, lockfile twin, and orphan-change gates. \`single-builder\` and \`parallel-builders\` use \`slice-builder\`; \`strict-micro\` preserves one tiny task per schedulable slice for high-risk work.
 
 **Step 1 — Wave status (always first):**
 \`node .cclaw/cli.mjs internal wave-status --json\`
 
-The output names: \`waves[]\` (closed/open), \`nextDispatch.waveId\`, \`nextDispatch.mode\` (\`wave-fanout\`, \`single-slice\`, or \`blocked\`), \`nextDispatch.readyToDispatch\` (slice ids), and \`nextDispatch.pathConflicts\` (overlapping \`claimedPaths\` between members).
+The output names: \`waves[]\` (closed/open), \`nextDispatch.waveId\`, \`nextDispatch.mode\` (\`wave-fanout\`, \`single-slice\`, or \`blocked\`), \`nextDispatch.topology\` (\`inline\`, \`single-builder\`, \`parallel-builders\`, or \`strict-micro\`), \`nextDispatch.readyToDispatch\` (slice ids), and \`nextDispatch.pathConflicts\` (overlapping \`claimedPaths\` between members).
 
 **Step 2 — Decide automatically (no user question when paths disjoint):**
 
-| \`mode\`         | \`pathConflicts\` | Action                                                                                                                                  |
-|------------------|-------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
-| \`wave-fanout\`  | \`[]\`            | **Fan out the entire wave in one tool batch.** Emit one \`Task\` per ready slice in a single controller message. Do NOT ask the user.   |
-| \`blocked\`      | non-empty         | Issue exactly one AskQuestion (resolve overlap, split/serialize, or adjust claimedPaths), then re-run \`wave-status\`.                    |
-| \`single-slice\` | —                 | One \`Task\` for the next ready slice.                                                                                                  |
+| \`topology\`              | \`pathConflicts\` | Action                                                                                                                                     |
+|---------------------------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| \`parallel-builders\`     | \`[]\`            | **Fan out independent substantial units in one tool batch.** Emit one \`Task\` per routed ready builder in a single controller message. Do NOT ask. |
+| \`single-builder\`        | any/none          | Dispatch one \`slice-builder\` for the next feature-atomic unit; serialize remaining ready units.                                          |
+| \`inline\`                | \`[]\`            | Execute inline only for low-risk inline-safe units; record equivalent RED/GREEN/REFACTOR evidence before completion.                       |
+| \`strict-micro\`          | any/none          | Preserve micro-slice sequencing: one tiny task/slice at a time unless the strict plan explicitly proves safe fan-out.                      |
+| \`blocked\`/mode blocked  | non-empty         | Issue exactly one AskQuestion (resolve overlap, split/serialize, or adjust claimedPaths), then re-run \`wave-status\`.                     |
 
-**Step 3 — Dispatch protocol per slice:** in the SAME controller message that issues the \`Task\` call:
+**Step 3 — Dispatch protocol per delegated slice:** for \`single-builder\`, \`parallel-builders\`, and delegated \`strict-micro\`, in the SAME controller message that issues the \`Task\` call:
 
 1. Append \`delegation-record --status=scheduled\` for the \`slice-builder\` span (one row per slice; reuse the same \`spanId\` across the entire RED → GREEN → REFACTOR → DOC lifecycle).
 2. Append \`delegation-record --status=launched\` immediately after.
 3. Issue the harness Task call: \`Task(subagent_type=<harness slice-builder mapping>, description="slice-builder <slice-id>", prompt="<full slice context, claimedPaths, plan-row, AC ids, paths to source/tests, slice-card path>")\`.
 4. The slice-builder span ACKs locally (\`delegation-record --status=acknowledged\`) and runs the **complete** RED → GREEN → REFACTOR → DOC cycle inside the span — including writing \`tdd-slices/S-<id>.md\` and emitting \`--phase=red\`, \`--phase=green\`, \`--phase=refactor\` (or \`--phase=refactor-deferred\` with rationale), and \`--phase=doc\` rows on its own.
 5. The controller waits for ALL parallel spans to terminate before reconciling. Do not page back into the controller chat between spans.
+
+For \`inline\`, skip the Task call but do not skip evidence: write the same per-slice card/evidence refs, run RED before GREEN, verify before completion, and keep all path/commit/worktree gates satisfied.
 
 **Step 4 — Wave closeout:** after all in-flight slices report \`completed\`:
 

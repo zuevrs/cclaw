@@ -20,18 +20,27 @@ import path from "node:path";
 import {
   PLAN_SPLIT_SMALL_PLAN_THRESHOLD,
   parseImplementationUnits,
-  parseImplementationUnitParallelFields
+  parseImplementationUnitParallelFields,
+  parseParallelExecutionPlanWaves
 } from "../internal/plan-split-waves.js";
 import { compareSliceIds, parseSliceId } from "../util/slice-id.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { loadStackAdapter } from "../stack-detection.js";
+import {
+  readConfig,
+  resolveExecutionStrictness,
+  resolveExecutionTopology,
+  resolvePlanMicroTaskPolicy,
+  resolvePlanSliceGranularity
+} from "../config.js";
 
 const execFileAsync = promisify(execFile);
 
 const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
 const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
 const TASK_ID_PATTERN = /\bT-\d{3}[a-z]?(?:\.\d{1,3})?\b/giu;
+const UNIT_ID_PATTERN = /\bU-\d+(?:[a-z][a-z0-9]*)?\b/giu;
 const ACCEPTANCE_ID_PATTERN = /\bAC-\d+\b/giu;
 const PLAN_LANE_WHITELIST = new Set([
   "production",
@@ -68,6 +77,14 @@ function extractTaskIds(body: string): Set<string> {
   const ids = new Set<string>();
   for (const match of body.matchAll(TASK_ID_PATTERN)) {
     ids.add(match[0]);
+  }
+  return ids;
+}
+
+function extractUnitIds(body: string): Set<string> {
+  const ids = new Set<string>();
+  for (const match of body.matchAll(UNIT_ID_PATTERN)) {
+    ids.add(match[0]!.toUpperCase());
   }
   return ids;
 }
@@ -155,7 +172,12 @@ function parseParallelWaveTableMetadata(planMarkdown: string): ParallelWaveMeta[
     const cells = parsePipeRow(trimmed);
     if (cells.length === 0) continue;
     const first = cells[0]!.toLowerCase();
-    const isHeader = first === "sliceid" || first === "slice id";
+    const isHeader =
+      first === "sliceid" ||
+      first === "slice id" ||
+      first === "unitid" ||
+      first === "unit id" ||
+      first === "unit";
     if (isHeader) {
       headerIdx = headerIndexByName(cells);
       continue;
@@ -163,9 +185,11 @@ function parseParallelWaveTableMetadata(planMarkdown: string): ParallelWaveMeta[
     if (cells.every((cell) => /^:?-{3,}:?$/u.test(cell))) {
       continue;
     }
-    const sliceCell = cells[0]!;
+    const sliceCell = cells[0]!.replace(/^`|`$/gu, "").trim();
     const parsedSlice = parseSliceId(sliceCell);
-    if (!parsedSlice) continue;
+    const parsedUnit = /^U-(\d+(?:[a-z][a-z0-9]*)?)$/iu.exec(sliceCell);
+    if (!parsedSlice && !parsedUnit) continue;
+    const sliceId = parsedSlice?.id ?? `S-${parsedUnit![1]!.toLowerCase()}`;
     const idx = headerIdx ?? new Map<string, number>();
     const unitIdx = idx.get("unit") ?? idx.get("taskid") ?? 1;
     const pathsIdx = idx.get("claimedpaths");
@@ -194,7 +218,7 @@ function parseParallelWaveTableMetadata(planMarkdown: string): ParallelWaveMeta[
         .map((token) => parseSliceId(token)?.id ?? "")
         .filter((id) => id.length > 0);
     current.rows.push({
-      sliceId: parsedSlice.id,
+      sliceId,
       unit: (cells[unitIdx] ?? "").trim(),
       claimedPaths,
       parallelizable,
@@ -294,6 +318,11 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     isTrivialOverride
   } = ctx;
 
+    const config = await readConfig(projectRoot).catch(() => null);
+    const executionStrictness = resolveExecutionStrictness(config);
+    const executionTopology = resolveExecutionTopology(config);
+    const planSliceGranularity = resolvePlanSliceGranularity(config);
+    const planMicroTaskPolicy = resolvePlanMicroTaskPolicy(config);
     evaluateInvestigationTrace(ctx, "Implementation Units");
 
     const strictPlanGuards =
@@ -589,6 +618,33 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     }
 
     const planUnits = parseImplementationUnits(raw);
+    const authoredTaskIdsForShape = extractTaskIds(sectionBodyByName(sections, "Task List") ?? "");
+    const microtaskOnlyPlan =
+      authoredTaskIdsForShape.size > 1 &&
+      planUnits.length === 0 &&
+      executionTopology !== "strict-micro" &&
+      planSliceGranularity !== "strict-micro";
+    const strictMicroPolicy =
+      executionStrictness === "strict" ||
+      executionTopology === "strict-micro" ||
+      planSliceGranularity === "strict-micro" ||
+      planMicroTaskPolicy === "strict";
+    const microtaskOnlyAdvisoryApplies =
+      microtaskOnlyPlan &&
+      !strictMicroPolicy &&
+      (executionStrictness === "fast" || executionStrictness === "balanced");
+    findings.push({
+      section: "plan_microtask_only_advisory",
+      required: false,
+      rule:
+        "Balanced/fast execution should plan feature-atomic implementation units/slices with internal 2-5 minute TDD steps; reserve one-task-one-slice microtask plans for `execution.topology: strict-micro`, `execution.strictness: strict`, or `plan.microTaskPolicy: strict`.",
+      found: !microtaskOnlyAdvisoryApplies,
+      details: microtaskOnlyAdvisoryApplies
+        ? `Task List has ${authoredTaskIdsForShape.size} tiny task id(s) but no Implementation Units. In execution.strictness=${executionStrictness} with plan.microTaskPolicy=${planMicroTaskPolicy}, group related tasks into U-* feature-atomic slices with internal RED/GREEN/REFACTOR steps, or set execution.topology=strict-micro / plan.microTaskPolicy=strict for high-risk micro-slice execution.`
+        : strictMicroPolicy
+          ? "Strict micro-slice posture is configured; microtask-only planning is allowed."
+          : "Plan includes implementation units or does not look microtask-only."
+    });
     const parallelMetaApplies =
       strictPlanGuards && planUnits.length > 0;
     if (parallelMetaApplies) {
@@ -671,6 +727,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
     if (strictPlanGuards) {
       const taskListSection = sectionBodyByName(sections, "Task List") ?? "";
       const authoredTaskIds = extractTaskIds(taskListSection);
+      const authoredUnitIds = new Set(planUnits.map((unit) => unit.id.toUpperCase()));
 
       // Collect deferred / backlog task ids so they don't trigger the
       // "uncovered" finding. Both heading variants are accepted.
@@ -682,31 +739,57 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
 
       const parallelExecBody = extractParallelExecManagedBody(raw);
       const claimedIds = extractTaskIds(parallelExecBody);
+      const claimedUnitIds = extractUnitIds(parallelExecBody);
+      try {
+        for (const wave of parseParallelExecutionPlanWaves(raw)) {
+          for (const member of wave.members) {
+            if (/^U-\d+(?:[a-z][a-z0-9]*)?$/iu.test(member.unitId)) {
+              claimedUnitIds.add(member.unitId.toUpperCase());
+            }
+          }
+        }
+      } catch {
+        // Duplicate/malformed wave plans are reported by the wave parser/status
+        // path; this coverage gate falls back to raw token extraction.
+      }
 
+      const useImplementationUnitCoverage = authoredUnitIds.size > 0;
       const uncovered: string[] = [];
-      for (const id of authoredTaskIds) {
-        if (claimedIds.has(id)) continue;
-        if (deferredIds.has(id)) continue;
-        uncovered.push(id);
+      if (useImplementationUnitCoverage) {
+        for (const id of authoredUnitIds) {
+          if (claimedUnitIds.has(id)) continue;
+          uncovered.push(id);
+        }
+      } else {
+        for (const id of authoredTaskIds) {
+          if (claimedIds.has(id)) continue;
+          if (deferredIds.has(id)) continue;
+          uncovered.push(id);
+        }
       }
       uncovered.sort();
 
       const blockPresent = parallelExecBody.length > 0;
-      const taskListPresent = authoredTaskIds.size > 0;
+      const coverageTargetPresent = useImplementationUnitCoverage || authoredTaskIds.size > 0;
+      const coverageTargetLabel = useImplementationUnitCoverage
+        ? "implementation unit"
+        : "task id";
 
       findings.push({
         section: "plan_parallel_exec_full_coverage",
-        required: taskListPresent,
+        required: coverageTargetPresent,
         rule:
-          "Every T-NNN task in `## Task List` must be assigned to at least one slice inside the `<!-- parallel-exec-managed-start -->` block (or moved to an explicit `## Deferred Tasks` / `## Backlog` section). TDD cannot fan out waves the plan never authored.",
-        found: taskListPresent && blockPresent && uncovered.length === 0,
-        details: !taskListPresent
-          ? "Task List section is empty or missing T-NNN ids; full-coverage check skipped."
+          "Every feature-atomic Implementation Unit (`U-*`) must be assigned to at least one slice/wave inside the `<!-- parallel-exec-managed-start -->` block. Legacy strict-micro plans without units may instead cover every non-deferred `T-NNN` task. TDD cannot fan out waves the plan never authored.",
+        found: coverageTargetPresent && blockPresent && uncovered.length === 0,
+        details: !coverageTargetPresent
+          ? "No Implementation Units or T-NNN task ids found; full-coverage check skipped."
           : !blockPresent
-            ? "`<!-- parallel-exec-managed-start -->` block is missing or empty. Author the Parallel Execution Plan with W-02..W-N covering every task before plan-final-approval."
+            ? "`<!-- parallel-exec-managed-start -->` block is missing or empty. Author the Parallel Execution Plan with W-02..W-N covering every implementation unit/slice before plan-final-approval."
             : uncovered.length === 0
-              ? `Parallel Execution Plan covers all ${authoredTaskIds.size} authored task id(s); ${deferredIds.size} task id(s) are explicitly deferred.`
-              : `Uncovered task id(s) — author waves for: ${uncovered.slice(0, 25).join(", ")}${uncovered.length > 25 ? `, … (${uncovered.length - 25} more)` : ""}. Either add slices for them inside <!-- parallel-exec-managed-start --> or move them under \`## Deferred Tasks\` with a reason.`
+              ? useImplementationUnitCoverage
+                ? `Parallel Execution Plan covers all ${authoredUnitIds.size} implementation unit(s); internal ${authoredTaskIds.size} T-NNN step(s) remain inside those units.`
+                : `Parallel Execution Plan covers all ${authoredTaskIds.size} authored task id(s); ${deferredIds.size} task id(s) are explicitly deferred.`
+              : `Uncovered ${coverageTargetLabel}(s) — author waves for: ${uncovered.slice(0, 25).join(", ")}${uncovered.length > 25 ? `, … (${uncovered.length - 25} more)` : ""}. ${useImplementationUnitCoverage ? "Add U-* rows/members inside <!-- parallel-exec-managed-start -->." : "Either add slices for them inside <!-- parallel-exec-managed-start --> or move them under `## Deferred Tasks` with a reason."}`
       });
 
       const waveMeta = parseParallelWaveTableMetadata(raw);
@@ -728,12 +811,12 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
       }
       findings.push({
         section: "plan_wave_paths_disjoint",
-        required: taskListPresent,
+        required: coverageTargetPresent,
         rule:
           "Slices within the same wave must keep `claimedPaths` disjoint so TDD can safely fan out parallel slice-builders.",
-        found: taskListPresent && blockPresent && pathConflicts.length === 0,
-        details: !taskListPresent
-          ? "Task List section is empty or missing T-NNN ids; disjoint-path wave check skipped."
+        found: coverageTargetPresent && blockPresent && pathConflicts.length === 0,
+        details: !coverageTargetPresent
+          ? "No Implementation Units or T-NNN task ids found; disjoint-path wave check skipped."
           : !blockPresent
             ? "`<!-- parallel-exec-managed-start -->` block is missing or empty; cannot validate wave path disjointness."
             : pathConflicts.length === 0
@@ -854,7 +937,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
       const wiringApplies = stackAdapter.wiringAggregator !== undefined;
       findings.push({
         section: "plan_module_introducing_slice_wires_root",
-        required: taskListPresent && wiringApplies,
+        required: coverageTargetPresent && wiringApplies,
         rule:
           "When a slice introduces a new module file, the stack-adapter's wiring aggregator (e.g. Rust `lib.rs`, Python `__init__.py`, Node-TS barrel `index.*` when present) must be in the same slice's claim or in a transitive predecessor's claim, otherwise the new module is dead code and RED can't be expressed.",
         found: !wiringApplies || wiringIssues.length === 0,
