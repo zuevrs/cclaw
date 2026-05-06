@@ -1177,9 +1177,9 @@ export async function evaluateWavePlanDispatchIgnored(params: {
     return {
       section: "tdd_wave_plan_ignored",
       required: true,
-      rule: "When the Parallel Execution Plan (or wave-plans/) defines an open wave with two or more ready parallelizable slices, the controller must fan out slice-builder Tasks for each ready slice instead of serializing to one slice only.",
+      rule: "When the Parallel Execution Plan (or wave-plans/) defines an open wave with two or more ready parallelizable units/slices, the controller must honor the parallel-builders topology instead of serializing to one slice only.",
       found: false,
-      details: `Wave ${wave.waveId}: scheduler-ready members ${ready.map((r) => r.sliceId).join(", ")}; last 20 delegation events show slice workers only for ${only}. Missed parallel dispatch: ${missed.join(", ")}. Remediation: load \`05-plan.md\` (Parallel Execution Plan) and \`wave-plans/\` before routing, launch the wave (AskQuestion only when waveCount>=2 and single-slice is a real alternative), then dispatch workers for every ready slice.`
+      details: `Wave ${wave.waveId}: scheduler-ready members ${ready.map((r) => r.sliceId).join(", ")}; last 20 delegation events show slice workers only for ${only}. Missed parallel dispatch: ${missed.join(", ")}. Remediation: load \`05-plan.md\` (Parallel Execution Plan) and \`wave-plans/\` before routing, honor \`nextDispatch.topology=parallel-builders\`, then dispatch the routed ready builders in one controller message.`
     };
   }
   return null;

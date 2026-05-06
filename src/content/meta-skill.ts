@@ -67,14 +67,14 @@ If you think any of these, stop and follow the routing flow:
 - "I can answer from memory without loading the active stage skill." -> No. Load the skill first.
 - "Hook guard warned, but I can ignore it." -> No. Resolve the warning before continuing.
 - "I'll edit \`.cclaw/state\` directly to move faster." -> No. Use managed commands only.
-- "I'll just do the worker's job inline so we move faster." -> No. See the Controller dispatch discipline below.
+- "I'll just do the worker's job inline so we move faster." -> Only if the active TDD topology is explicitly \`inline\`; otherwise see the Controller dispatch discipline below.
 
 ## Controller dispatch discipline (applies to every stage)
 
-cclaw stages have **mandatory delegations** (TDD: \`slice-builder\`; review: \`reviewer\` + \`security-reviewer\`; design: \`architect\`; scope: \`planner\`; etc.). The controller is the **orchestrator**, not the worker. When a stage declares a mandatory delegation:
+cclaw stages have **mandatory delegations** (TDD normally routes through \`slice-builder\`; review: \`reviewer\` + \`security-reviewer\`; design: \`architect\`; scope: \`planner\`; etc.). The controller is the **orchestrator**, not the worker, except when TDD topology is explicitly \`inline\` for a low-risk unit. When a stage declares a mandatory delegation:
 
-- **Dispatch via the harness Task tool.** Do NOT write the worker's output (slice code, review findings, architect notes) into the artifact yourself as a substitute for delegating. Editing \`06-tdd.md\` slice cards, \`07-review.md\` findings, or any other "result of mandatory worker" content inline in the controller chat is a protocol violation.
-- **Parallel by default when paths/lenses are independent.** TDD wave-fanout (disjoint \`claimedPaths\`) and review-army (independent reviewer lenses) MUST emit all parallel \`Task\` calls in a SINGLE controller message — not sequentially over multiple turns. The controller waits for all spans to return before reconciling.
+- **Dispatch via the harness Task tool unless topology says inline.** Do NOT write the worker's output (slice code, review findings, architect notes) into the artifact yourself as a substitute for delegating. For TDD \`inline\`, record the routing reason and satisfy the same RED/GREEN/REFACTOR, AC traceability, path containment, managed commit/worktree, lockfile twin, and orphan-change gates.
+- **Parallel only when topology says parallel-builders.** TDD fan-out requires genuinely independent substantial units with disjoint \`claimedPaths\`; review-army (independent reviewer lenses) MUST emit all parallel \`Task\` calls in a SINGLE controller message — not sequentially over multiple turns. The controller waits for all spans to return before reconciling.
 - **Record lifecycle on the same span** via \`delegation-record --status=scheduled|launched|acknowledged|completed\`; the worker emits its own \`--phase=…\` and evidence rows. A \`completed\` row without a matching ACK or dispatch surface is a forgery.
 - **Auto-advance when stage-complete returns ok.** When the helper reports a new \`currentStage\`, immediately load the next stage skill and continue. Announce \`Stage <prev> complete → entering <next>. Continuing.\` Do NOT pause for the user to retype \`/cc\` or say \"продолжай\" — that pause is the failure mode 7.0.2 explicitly removed. The only legitimate stop is a real blocker (missing user input, ambiguous decision, hook fail).
 

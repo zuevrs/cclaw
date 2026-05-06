@@ -873,7 +873,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 ## Task List
 
 **Rules (apply before writing rows):**
-- Every task fits the **2-5 minute budget**. If \`[~Nm]\` is >5, split the task.
+- Task rows are internal TDD steps unless \`Execution Topology\` is \`strict-micro\`. Keep each step in the **2-5 minute budget**; group related steps into feature-atomic \`U-*\` Implementation Units.
 - **No placeholders.** Forbidden tokens anywhere in this table: \`TODO\`, \`TBD\`, \`FIXME\`, \`<fill-in>\`, \`<your-*-here>\`, \`xxx\`, bare ellipsis. Every file path, test, and verification command must be copy-pasteable as written.
 - **No silent scope reduction.** Forbidden phrasing when locked decisions exist: \`v1\`, \`for now\`, \`later\`, \`temporary\`, \`placeholder\`, \`mock for now\`, \`hardcoded for now\`, \`will improve later\`.
 - If an estimate is genuinely uncertain (new library, unfamiliar subsystem), add a **spike task in batch 0** to de-risk — do NOT hide the uncertainty inside a large estimate.
@@ -888,7 +888,12 @@ Execution rule: complete and verify each batch before starting the next batch.
 | AC-1 | T-1 |
 
 ## Execution Posture
-- Posture: sequential | dependency-batched | parallel-safe | blocked
+- execution.topology: auto | inline | single-builder | parallel-builders | strict-micro
+- execution.strictness: fast | balanced | strict
+- execution.maxBuilders: 5
+- plan.sliceGranularity: feature-atomic | strict-micro
+- plan.microTaskPolicy: advisory | strict
+- Posture rationale: (why this is the cheapest safe topology)
 - Stop conditions:
 - Risk triggers:
 - TDD checkpoint plan: RED commit/checkpoint -> GREEN commit/checkpoint -> REFACTOR commit/checkpoint (or deferred because: )
@@ -909,7 +914,7 @@ Execution rule: complete and verify each batch before starting the next batch.
 |  |  |  |
 
 ## Implementation Units
-> Required structural form per implementation unit. Use ≥1 unit; bite-sized 2-5 minute steps inside each. The linter validates shape, not topic.
+> Required structural form per implementation unit. Default is feature-atomic units with bite-sized 2-5 minute TDD steps inside each. Use strict micro-slices only for high-risk work or when explicitly configured.
 
 ### Implementation Unit U-1
 - **id:** U-1
@@ -952,10 +957,10 @@ Execution rule: complete and verify each batch before starting the next batch.
 - Required pre-merge proof:
 
 ## Execution Handoff
-- **Posture chosen:** Subagent-Driven (recommended) | Inline executor
-- **Why this posture:** (one line tying choice to plan size, parallelism, novelty)
-- **Subagent recipe (if Subagent-Driven):** \`<harness>\` -> \`<dispatch surface>\` -> \`<agent-definition path>\` (substitute neutral placeholders; full recipes in \`docs/harnesses.md\`)
-- **Inline recipe (if Inline executor):** TDD loop unit-by-unit with batch checkpoints
+- **Topology chosen:** execution.topology = auto | inline | single-builder | parallel-builders | strict-micro
+- **Why this topology:** (one line tying choice to unit count, path independence, risk, and maxBuilders)
+- **Subagent recipe (if single/parallel builder):** \`<harness>\` -> \`<dispatch surface>\` -> \`<agent-definition path>\` (substitute neutral placeholders; full recipes in \`docs/harnesses.md\`)
+- **Inline recipe (if inline):** TDD loop unit-by-unit with the same RED-before-GREEN, AC traceability, path containment, verification, and managed commit/worktree gates
 
 ## Plan Quality Scan
 <!-- linter-meta -->

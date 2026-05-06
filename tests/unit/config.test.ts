@@ -101,7 +101,14 @@ describe("config", () => {
 
     const raw = await fs.readFile(configPath(root), "utf8");
     const parsed = parse(raw) as Record<string, unknown>;
-    expect(Object.keys(parsed).sort()).toEqual(["flowVersion", "harnesses", "tdd", "version"]);
+    expect(Object.keys(parsed).sort()).toEqual([
+      "execution",
+      "flowVersion",
+      "harnesses",
+      "plan",
+      "tdd",
+      "version"
+    ]);
     expect(parsed.harnesses).toEqual(["claude"]);
     expect(parsed.tdd).toEqual({
       commitMode: "managed-per-slice",
@@ -109,5 +116,52 @@ describe("config", () => {
       worktreeRoot: ".cclaw/worktrees",
       lockfileTwinPolicy: "auto-include"
     });
+    expect(parsed.execution).toEqual({
+      topology: "auto",
+      strictness: "balanced",
+      maxBuilders: 5
+    });
+    expect(parsed.plan).toEqual({
+      sliceGranularity: "feature-atomic",
+      microTaskPolicy: "advisory"
+    });
+  });
+
+  it("reads explicit adaptive execution topology settings from config", async () => {
+    const root = await createTempProject("config-execution-topology-explicit");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nexecution:\n  topology: parallel-builders\n  strictness: fast\n  maxBuilders: 3\nplan:\n  sliceGranularity: strict-micro\n  microTaskPolicy: strict\n",
+      "utf8"
+    );
+    const config = await readConfig(root);
+    expect(config.execution?.topology).toBe("parallel-builders");
+    expect(config.execution?.strictness).toBe("fast");
+    expect(config.execution?.maxBuilders).toBe(3);
+    expect(config.plan?.sliceGranularity).toBe("strict-micro");
+    expect(config.plan?.microTaskPolicy).toBe("strict");
+  });
+
+  it("rejects invalid adaptive execution topology settings", async () => {
+    const root = await createTempProject("config-execution-topology-invalid");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nexecution:\n  topology: swarm\n",
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/execution\.topology/);
+  });
+
+  it("rejects invalid adaptive plan policy settings", async () => {
+    const root = await createTempProject("config-plan-policy-invalid");
+    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
+    await fs.writeFile(
+      configPath(root),
+      "harnesses:\n  - claude\nplan:\n  microTaskPolicy: maybe\n",
+      "utf8"
+    );
+    await expect(readConfig(root)).rejects.toThrow(/plan\.microTaskPolicy/);
   });
 });

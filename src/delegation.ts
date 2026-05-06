@@ -3,7 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { RUNTIME_ROOT } from "./constants.js";
-import { readConfig } from "./config.js";
+import { readConfig, resolveMaxBuilders } from "./config.js";
 import { exists, withDirectoryLock, writeFileSafe } from "./fs-utils.js";
 import { HARNESS_ADAPTERS, type SubagentFallback } from "./harness-adapters.js";
 import { readFlowState } from "./runs.js";
@@ -909,8 +909,9 @@ export class DispatchOverlapError extends Error {
 /**
  * Thrown when the count of active `slice-builder` spans reaches
  * `MAX_PARALLEL_SLICE_BUILDERS` and a new scheduled row would push it past
- * the cap. Cap can be overridden once via `--override-cap=N` on the hook
- * flag or globally via `CCLAW_MAX_PARALLEL_SLICE_BUILDERS=<N>` env.
+ * the cap. Cap can be configured via `.cclaw/config.yaml::execution.maxBuilders`,
+ * overridden once via `--override-cap=N` on the hook flag, or globally via
+ * `CCLAW_MAX_PARALLEL_SLICE_BUILDERS=<N>` env.
  */
 export class DispatchCapError extends Error {
   readonly cap: number;
@@ -1505,7 +1506,7 @@ export function validateFileOverlap(
 
 /**
  * Enforce the slice-builder fan-out cap. The new scheduled row pushes the
- * active count from N to N+1; if that would exceed the cap (default 5,
+ * active count from N to N+1; if that would exceed the cap (default/config 5,
  * env-overridable via `CCLAW_MAX_PARALLEL_SLICE_BUILDERS`), throw
  * `DispatchCapError`.
  *
@@ -1522,9 +1523,16 @@ export function validateFanOutCap(
 ): void {
   if (!isParallelTddSliceWorker(stamped.agent) || stamped.stage !== "tdd") return;
   if (stamped.status !== "scheduled") return;
-  const cap = (override !== null && override !== undefined && Number.isInteger(override) && override >= 1)
-    ? override
-    : (readMaxParallelOverrideFromEnv() ?? MAX_PARALLEL_SLICE_BUILDERS);
+  const cap =
+    readMaxParallelOverrideFromEnv() ??
+    (
+      override !== null &&
+      override !== undefined &&
+      Number.isInteger(override) &&
+      override >= 1
+        ? override
+        : MAX_PARALLEL_SLICE_BUILDERS
+    );
   const sameLaneActive = activeEntries.filter(
     (entry) =>
       entry.stage === stamped.stage &&
@@ -1681,7 +1689,8 @@ export async function appendDelegation(projectRoot: string, entry: DelegationEnt
       if (overlap.autoParallel && stamped.allowParallel !== true) {
         stamped.allowParallel = true;
       }
-      validateFanOutCap(stamped, activeForRun);
+      const config = await readConfig(projectRoot).catch(() => null);
+      validateFanOutCap(stamped, activeForRun, resolveMaxBuilders(config));
       if (stamped.allowParallel !== true) {
         const existing = findActiveSpanForPair(
           stamped.stage,

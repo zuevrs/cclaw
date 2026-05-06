@@ -18,7 +18,7 @@ function tddCycleEvidenceSkill(): string {
     "Evidence contract for the mandatory slice-builder delegation across RED/GREEN/REFACTOR/DOC."
   )}# TDD Cycle Evidence
 
-Use with the \`slice-builder\` delegation in the \`tdd\` stage. One \`slice-builder\` span owns the full cycle for a single vertical slice.
+Use with the \`slice-builder\` delegation in the \`tdd\` stage. One \`slice-builder\` span owns the full cycle for a feature-atomic implementation unit/slice, including its internal 2-5 minute TDD steps.
 
 ## Required Output
 
@@ -33,7 +33,7 @@ Use with the \`slice-builder\` delegation in the \`tdd\` stage. One \`slice-buil
 - No production code before RED evidence exists.
 - If a RED test cannot be expressed, stop and route back to design/spec with the blocker.
 - Record command output summaries, not just "tests passed".
-- Multiple \`slice-builder\` spans run in parallel inside one wave only when their \`claimedPaths\` are disjoint.
+- Multiple \`slice-builder\` spans run in parallel inside one wave only when topology is \`parallel-builders\` and their \`claimedPaths\` are disjoint. \`strict-micro\` keeps tiny tasks separate; \`inline\` skips delegation but not RED/GREEN/REFACTOR evidence.
 `;
 }
 

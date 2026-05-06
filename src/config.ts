@@ -6,17 +6,28 @@ import { exists, writeFileSafe } from "./fs-utils.js";
 import { HARNESS_IDS } from "./types.js";
 import type {
   CclawConfig,
+  ExecutionStrictnessProfile,
+  ExecutionTopology,
   FlowTrack,
   HarnessId,
   LanguageRulePack,
   LockfileTwinPolicy,
+  PlanMicroTaskPolicy,
+  PlanSliceGranularity,
   TddCommitMode,
   TddIsolationMode
 } from "./types.js";
 
 const CONFIG_PATH = `${RUNTIME_ROOT}/config.yaml`;
 const HARNESS_ID_SET = new Set<string>(HARNESS_IDS);
-const ALLOWED_CONFIG_KEYS = new Set<string>(["version", "flowVersion", "harnesses", "tdd"]);
+const ALLOWED_CONFIG_KEYS = new Set<string>([
+  "version",
+  "flowVersion",
+  "harnesses",
+  "tdd",
+  "execution",
+  "plan"
+]);
 const SUPPORTED_HARNESSES_TEXT = HARNESS_IDS.join(", ");
 export const TDD_COMMIT_MODES = [
   "managed-per-slice",
@@ -33,6 +44,25 @@ export const DEFAULT_TDD_WORKTREE_ROOT = `${RUNTIME_ROOT}/worktrees`;
 export const LOCKFILE_TWIN_POLICIES = ["auto-include", "auto-revert", "strict-fence"] as const;
 const LOCKFILE_TWIN_POLICY_SET = new Set<string>(LOCKFILE_TWIN_POLICIES);
 export const DEFAULT_LOCKFILE_TWIN_POLICY: LockfileTwinPolicy = "auto-include";
+export const EXECUTION_TOPOLOGIES = [
+  "auto",
+  "inline",
+  "single-builder",
+  "parallel-builders",
+  "strict-micro"
+] as const;
+const EXECUTION_TOPOLOGY_SET = new Set<string>(EXECUTION_TOPOLOGIES);
+export const DEFAULT_EXECUTION_TOPOLOGY: ExecutionTopology = "auto";
+export const EXECUTION_STRICTNESS_PROFILES = ["fast", "balanced", "strict"] as const;
+const EXECUTION_STRICTNESS_PROFILE_SET = new Set<string>(EXECUTION_STRICTNESS_PROFILES);
+export const DEFAULT_EXECUTION_STRICTNESS: ExecutionStrictnessProfile = "balanced";
+export const DEFAULT_MAX_BUILDERS = 5;
+export const PLAN_SLICE_GRANULARITIES = ["feature-atomic", "strict-micro"] as const;
+const PLAN_SLICE_GRANULARITY_SET = new Set<string>(PLAN_SLICE_GRANULARITIES);
+export const DEFAULT_PLAN_SLICE_GRANULARITY: PlanSliceGranularity = "feature-atomic";
+export const PLAN_MICRO_TASK_POLICIES = ["advisory", "strict"] as const;
+const PLAN_MICRO_TASK_POLICY_SET = new Set<string>(PLAN_MICRO_TASK_POLICIES);
+export const DEFAULT_PLAN_MICRO_TASK_POLICY: PlanMicroTaskPolicy = "advisory";
 
 // Kept for runtime modules that use these defaults directly.
 export const DEFAULT_TDD_TEST_PATH_PATTERNS: readonly string[] = [
@@ -71,7 +101,14 @@ function configFixExample(): string {
 tdd:
   commitMode: managed-per-slice
   isolationMode: worktree
-  worktreeRoot: .cclaw/worktrees`;
+  worktreeRoot: .cclaw/worktrees
+execution:
+  topology: auto
+  strictness: balanced
+  maxBuilders: 5
+plan:
+  sliceGranularity: feature-atomic
+  microTaskPolicy: advisory`;
 }
 
 function configValidationError(configFilePath: string, reason: string): InvalidConfigError {
@@ -104,6 +141,15 @@ export function createDefaultConfig(
       isolationMode: DEFAULT_TDD_ISOLATION_MODE,
       worktreeRoot: DEFAULT_TDD_WORKTREE_ROOT,
       lockfileTwinPolicy: DEFAULT_LOCKFILE_TWIN_POLICY
+    },
+    execution: {
+      topology: DEFAULT_EXECUTION_TOPOLOGY,
+      strictness: DEFAULT_EXECUTION_STRICTNESS,
+      maxBuilders: DEFAULT_MAX_BUILDERS
+    },
+    plan: {
+      sliceGranularity: DEFAULT_PLAN_SLICE_GRANULARITY,
+      microTaskPolicy: DEFAULT_PLAN_MICRO_TASK_POLICY
     }
   };
 }
@@ -146,6 +192,56 @@ export function resolveLockfileTwinPolicy(
     return raw as LockfileTwinPolicy;
   }
   return DEFAULT_LOCKFILE_TWIN_POLICY;
+}
+
+export function resolveExecutionTopology(
+  config: Pick<CclawConfig, "execution"> | null | undefined
+): ExecutionTopology {
+  const raw = config?.execution?.topology;
+  if (typeof raw === "string" && EXECUTION_TOPOLOGY_SET.has(raw)) {
+    return raw as ExecutionTopology;
+  }
+  return DEFAULT_EXECUTION_TOPOLOGY;
+}
+
+export function resolveExecutionStrictness(
+  config: Pick<CclawConfig, "execution"> | null | undefined
+): ExecutionStrictnessProfile {
+  const raw = config?.execution?.strictness;
+  if (typeof raw === "string" && EXECUTION_STRICTNESS_PROFILE_SET.has(raw)) {
+    return raw as ExecutionStrictnessProfile;
+  }
+  return DEFAULT_EXECUTION_STRICTNESS;
+}
+
+export function resolveMaxBuilders(
+  config: Pick<CclawConfig, "execution"> | null | undefined
+): number {
+  const raw = config?.execution?.maxBuilders;
+  if (typeof raw === "number" && Number.isInteger(raw) && raw >= 1) {
+    return raw;
+  }
+  return DEFAULT_MAX_BUILDERS;
+}
+
+export function resolvePlanSliceGranularity(
+  config: Pick<CclawConfig, "plan"> | null | undefined
+): PlanSliceGranularity {
+  const raw = config?.plan?.sliceGranularity;
+  if (typeof raw === "string" && PLAN_SLICE_GRANULARITY_SET.has(raw)) {
+    return raw as PlanSliceGranularity;
+  }
+  return DEFAULT_PLAN_SLICE_GRANULARITY;
+}
+
+export function resolvePlanMicroTaskPolicy(
+  config: Pick<CclawConfig, "plan"> | null | undefined
+): PlanMicroTaskPolicy {
+  const raw = config?.plan?.microTaskPolicy;
+  if (typeof raw === "string" && PLAN_MICRO_TASK_POLICY_SET.has(raw)) {
+    return raw as PlanMicroTaskPolicy;
+  }
+  return DEFAULT_PLAN_MICRO_TASK_POLICY;
 }
 
 function assertOnlySupportedKeys(parsed: Record<string, unknown>, fullPath: string): void {
@@ -199,6 +295,18 @@ export async function readConfig(
   ) {
     throw configValidationError(fullPath, `"tdd" must be an object when provided`);
   }
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "execution") &&
+    !isRecord(parsed.execution)
+  ) {
+    throw configValidationError(fullPath, `"execution" must be an object when provided`);
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(parsed, "plan") &&
+    !isRecord(parsed.plan)
+  ) {
+    throw configValidationError(fullPath, `"plan" must be an object when provided`);
+  }
 
   const rawHarnesses = Array.isArray(parsed.harnesses) ? parsed.harnesses : DEFAULT_HARNESSES;
   const normalizedHarnesses: HarnessId[] = [];
@@ -230,6 +338,13 @@ export async function readConfig(
   const rawIsolationMode = parsedTdd.isolationMode;
   const rawWorktreeRoot = parsedTdd.worktreeRoot;
   const rawLockfileTwinPolicy = parsedTdd.lockfileTwinPolicy;
+  const parsedExecution = isRecord(parsed.execution) ? parsed.execution : {};
+  const rawExecutionTopology = parsedExecution.topology;
+  const rawExecutionStrictness = parsedExecution.strictness;
+  const rawMaxBuilders = parsedExecution.maxBuilders;
+  const parsedPlan = isRecord(parsed.plan) ? parsed.plan : {};
+  const rawPlanSliceGranularity = parsedPlan.sliceGranularity;
+  const rawPlanMicroTaskPolicy = parsedPlan.microTaskPolicy;
   if (
     rawCommitMode !== undefined &&
     (typeof rawCommitMode !== "string" || !TDD_COMMIT_MODE_SET.has(rawCommitMode))
@@ -266,6 +381,60 @@ export async function readConfig(
       `"tdd.lockfileTwinPolicy" must be one of: ${LOCKFILE_TWIN_POLICIES.join(", ")}`
     );
   }
+  if (
+    rawExecutionTopology !== undefined &&
+    (typeof rawExecutionTopology !== "string" || !EXECUTION_TOPOLOGY_SET.has(rawExecutionTopology))
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"execution.topology" must be one of: ${EXECUTION_TOPOLOGIES.join(", ")}`
+    );
+  }
+  if (
+    rawExecutionStrictness !== undefined &&
+    (
+      typeof rawExecutionStrictness !== "string" ||
+      !EXECUTION_STRICTNESS_PROFILE_SET.has(rawExecutionStrictness)
+    )
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"execution.strictness" must be one of: ${EXECUTION_STRICTNESS_PROFILES.join(", ")}`
+    );
+  }
+  if (
+    rawMaxBuilders !== undefined &&
+    (!Number.isInteger(rawMaxBuilders) || (rawMaxBuilders as number) < 1)
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"execution.maxBuilders" must be an integer >= 1 when provided`
+    );
+  }
+  if (
+    rawPlanSliceGranularity !== undefined &&
+    (
+      typeof rawPlanSliceGranularity !== "string" ||
+      !PLAN_SLICE_GRANULARITY_SET.has(rawPlanSliceGranularity)
+    )
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"plan.sliceGranularity" must be one of: ${PLAN_SLICE_GRANULARITIES.join(", ")}`
+    );
+  }
+  if (
+    rawPlanMicroTaskPolicy !== undefined &&
+    (
+      typeof rawPlanMicroTaskPolicy !== "string" ||
+      !PLAN_MICRO_TASK_POLICY_SET.has(rawPlanMicroTaskPolicy)
+    )
+  ) {
+    throw configValidationError(
+      fullPath,
+      `"plan.microTaskPolicy" must be one of: ${PLAN_MICRO_TASK_POLICIES.join(", ")}`
+    );
+  }
   const commitMode = typeof rawCommitMode === "string"
     ? rawCommitMode as TddCommitMode
     : DEFAULT_TDD_COMMIT_MODE;
@@ -278,6 +447,23 @@ export async function readConfig(
   const lockfileTwinPolicy = typeof rawLockfileTwinPolicy === "string"
     ? rawLockfileTwinPolicy as LockfileTwinPolicy
     : DEFAULT_LOCKFILE_TWIN_POLICY;
+  const executionTopology = typeof rawExecutionTopology === "string"
+    ? rawExecutionTopology as ExecutionTopology
+    : DEFAULT_EXECUTION_TOPOLOGY;
+  const executionStrictness = typeof rawExecutionStrictness === "string"
+    ? rawExecutionStrictness as ExecutionStrictnessProfile
+    : DEFAULT_EXECUTION_STRICTNESS;
+  const maxBuilders = typeof rawMaxBuilders === "number" &&
+    Number.isInteger(rawMaxBuilders) &&
+    rawMaxBuilders >= 1
+    ? rawMaxBuilders
+    : DEFAULT_MAX_BUILDERS;
+  const planSliceGranularity = typeof rawPlanSliceGranularity === "string"
+    ? rawPlanSliceGranularity as PlanSliceGranularity
+    : DEFAULT_PLAN_SLICE_GRANULARITY;
+  const planMicroTaskPolicy = typeof rawPlanMicroTaskPolicy === "string"
+    ? rawPlanMicroTaskPolicy as PlanMicroTaskPolicy
+    : DEFAULT_PLAN_MICRO_TASK_POLICY;
 
   return {
     version,
@@ -288,6 +474,15 @@ export async function readConfig(
       isolationMode,
       worktreeRoot,
       lockfileTwinPolicy
+    },
+    execution: {
+      topology: executionTopology,
+      strictness: executionStrictness,
+      maxBuilders
+    },
+    plan: {
+      sliceGranularity: planSliceGranularity,
+      microTaskPolicy: planMicroTaskPolicy
     }
   };
 }
@@ -311,6 +506,15 @@ export async function writeConfig(
       isolationMode: resolveTddIsolationMode(config),
       worktreeRoot: resolveTddWorktreeRoot(config),
       lockfileTwinPolicy: resolveLockfileTwinPolicy(config)
+    },
+    execution: {
+      topology: resolveExecutionTopology(config),
+      strictness: resolveExecutionStrictness(config),
+      maxBuilders: resolveMaxBuilders(config)
+    },
+    plan: {
+      sliceGranularity: resolvePlanSliceGranularity(config),
+      microTaskPolicy: resolvePlanMicroTaskPolicy(config)
     }
   };
   await writeFileSafe(configPath(projectRoot), stringify(serialisable));

@@ -61,6 +61,7 @@ describe("wave-status pathConflicts detection", () => {
     const report = await runWaveStatus(root);
     expect(report.nextDispatch.waveId).toBe("W-02");
     expect(report.nextDispatch.mode).toBe("blocked");
+    expect(report.nextDispatch.topology).toBe("single-builder");
     expect(report.nextDispatch.readyToDispatch).toEqual(["S-1", "S-2"]);
     expect(report.nextDispatch.pathConflicts).toEqual(["S-1:src/shared.ts", "S-2:src/shared.ts"]);
   });
@@ -83,6 +84,27 @@ describe("wave-status pathConflicts detection", () => {
     const report = await runWaveStatus(root);
     expect(report.nextDispatch.waveId).toBe("W-02");
     expect(report.nextDispatch.mode).toBe("wave-fanout");
+    expect(report.nextDispatch.topology).toBe("parallel-builders");
     expect(report.nextDispatch.pathConflicts).toEqual([]);
+  });
+
+  it("derives ready slice ids from implementation-unit wave rows", async () => {
+    const root = await createTempProject("wave-status-unit-rows");
+    await seedPlan(
+      root,
+      `<!-- parallel-exec-managed-start -->
+## Parallel Execution Plan
+
+### Wave W-02
+| unit | dependsOn | claimedPaths | parallelizable | riskTier | lane |
+|---|---|---|---|---|---|
+| U-1 | [] | src/a.ts | true | low | production |
+| U-2 | [] | src/b.ts | true | low | production |
+<!-- parallel-exec-managed-end -->`
+    );
+
+    const report = await runWaveStatus(root);
+    expect(report.nextDispatch.readyToDispatch).toEqual(["S-1", "S-2"]);
+    expect(report.nextDispatch.topology).toBe("parallel-builders");
   });
 });

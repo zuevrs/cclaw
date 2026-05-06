@@ -68,7 +68,8 @@ That gives you:
 
 - **One path** from idea to ship, with one user-chosen discovery mode (`lean`, `guided`, `deep`) and internal `quick` / `medium` / `standard` tracks.
 - **Real gates** for evidence, tests, review, delegation, stale-stage recovery, and closeout.
-- **Subagents with accountability**: controller owns state, workers do bounded tasks, overseers validate, evidence lands in `delegation-log.json`.
+- **Adaptive TDD execution**: feature-atomic slices carry internal 2-5 minute RED/GREEN/REFACTOR steps; cclaw routes them inline, through one builder, through parallel builders, or through strict micro-slices when risk demands it.
+- **Subagents with accountability**: controller owns state, workers do bounded implementation units, overseers validate, evidence lands in `delegation-log.json`.
 - **Recovery instead of confusion**: `npx cclaw-cli sync` tells you blockers and next fixes.
 - **Portable harness behavior** across Claude Code, Cursor, OpenCode, and Codex.
 

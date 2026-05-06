@@ -47,7 +47,7 @@ description: "Orchestrate implementation via isolated subagents — one fresh ag
 Use a **controller -> coder -> overseer** loop when building multi-step software work.
 
 - **Controller (parent agent):** owns the plan, gating, sequencing, and dispatch decisions; never mixes deep implementation context with review evidence.
-- **Coder / slice-builder (subagent):** receives a **single self-contained task** and edits code only within that scope; exits with a structured status contract.
+- **Coder / slice-builder (subagent):** receives a **single feature-atomic implementation unit/slice** and edits code only within that scope; exits with a structured status contract.
 - **Overseer / reviewer (subagent):** validates outputs against the specification **by reading code** and never edits during the overseer pass.
 
 This pattern is intentionally **Superpowers-style**: cheap parallelism where it doesn’t corrupt state, strict serialization where it would.
@@ -72,7 +72,7 @@ Reconcile findings into \`.cclaw/artifacts/07-review-army.json\` with explicit s
 
 ### TDD evidence protocol
 
-Each parallel slice runs end-to-end inside one \`slice-builder\` delegation, with RED, GREEN, REFACTOR, and per-slice DOC as phase intents on a single span:
+Each delegated feature-atomic slice runs end-to-end inside one \`slice-builder\` delegation, with RED, GREEN, REFACTOR, and per-slice DOC as phase intents on a single span. The slice may contain internal 2-5 minute TDD steps; \`strict-micro\` is the explicit mode for one tiny task per slice:
 
 - \`--phase red\`: failing tests only, no production writes
 - \`--phase green\`: minimal production implementation that passes the matching RED
@@ -80,7 +80,7 @@ Each parallel slice runs end-to-end inside one \`slice-builder\` delegation, wit
 - \`--phase doc\`: write \`<artifacts-dir>/tdd-slices/S-<id>.md\` for the slice
 
 Set \`CCLAW_ACTIVE_AGENT\` to the active phase name when possible so workflow-guard
-can enforce phase-appropriate write boundaries. The mandatory gate is the evidence-backed \`slice-builder\` row, not multiple default subagents.
+can enforce phase-appropriate write boundaries. The mandatory gate is the evidence-backed \`slice-builder\` row for delegated topologies, not multiple default subagents. When TDD topology is \`inline\`, the controller may skip the builder but must preserve the same RED-before-GREEN, AC traceability, path containment, verification, managed commit/worktree, lockfile twin, and orphan-change gates.
 
 ## Model & Harness Routing Notes
 
@@ -164,7 +164,7 @@ If you catch yourself writing “read PLAN.md Task 3” or “implement the next
 Borrow the good part of Team/Ruflo-style orchestration without adding a swarm runtime:
 
 - **One controller owns alignment.** The parent keeps the task list, gate state, and final synthesis.
-- **Small fan-out by default.** Run at most 3-5 parallel agents, and only for independent read-only research or non-overlapping files.
+- **Small fan-out by topology.** Run at most configured \`maxBuilders\` parallel builders, and only for independent substantial units or independent read-only research/review lenses.
 - **No parallel writes to adjacent surfaces.** If tasks may touch the same module, serialize them.
 - **Checkpoint before synthesis.** Each agent returns status, files inspected/changed, evidence, and blockers before the parent acts.
 - **Consensus is for hard calls only.** Use two reviewers when severity or architecture is disputed; otherwise one evidence-backed reviewer is enough.
@@ -187,7 +187,7 @@ Before parallel dispatch, answer yes to all gates: tasks are independent, write 
    - Copy each task verbatim into a working queue (checklist is fine).
    - Normalize each task so it includes: goal, acceptance criteria, constraints, and explicit “out of scope.”
 
-2. **For each task — sequential by default; parallel only with cohesion controls:**
+2. **For each unit — cheapest safe topology first; parallel only with cohesion controls:**
    - Implementation subagents are sequential by default. Parallel implementers
      are allowed only when ALL three conditions hold:
      - (a) the lanes touch non-overlapping files (verify via the plan's task
@@ -408,7 +408,7 @@ This document bridges **Superpowers-style task isolation** with the **gstack “
 ${conversationLanguagePolicyMarkdown()}
 **Default rule:** parallel implementation agents are SAFE for investigation, analysis, review, and the **TDD wave-fanout** path; otherwise keep implementation sequential.
 
-**TDD wave-fanout is the supported parallel-implementation path.** When \`cclaw-cli internal wave-status --json\` reports \`mode: wave-fanout\` and \`pathConflicts: []\`, fan out one \`slice-builder\` span per ready slice in a single controller message. Each span owns its disjoint \`claimedPaths\`; the dispatcher rejects overlapping spans with \`DispatchOverlapError\` inline, so the disjoint-paths invariant is enforced for you.
+**TDD wave-fanout is the supported parallel-implementation path.** When \`cclaw-cli internal wave-status --json\` reports \`topology: parallel-builders\` and \`pathConflicts: []\`, fan out one \`slice-builder\` span per ready feature-atomic unit/slice in a single controller message, capped by \`maxBuilders\`. Each span owns its disjoint \`claimedPaths\`; the dispatcher rejects overlapping spans with \`DispatchOverlapError\` inline, so the disjoint-paths invariant is enforced for you.
 
 **Outside wave-fanout** — for ad-hoc parallel implementation that touches shared source trees — keep work **sequential** unless you have proven disjoint filesystem ownership and an explicit merge protocol.
 
