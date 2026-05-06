@@ -18,6 +18,14 @@ export interface ExecutionTopologyShape {
   requiresStrictMicro?: boolean;
   /** True when the controller can safely execute the unit inline in the current harness. */
   inlineSafe?: boolean;
+  /**
+   * 7.7.1 — count of ready units classified as discovery-only/scaffold/docs
+   * lanes that are not high-risk and have no path conflicts. When this equals
+   * `unitCount`, the auto router collapses the wave into `inline` (small
+   * batch) or `single-builder` (large batch) so trivial markdown spikes never
+   * fan out into one slice-builder span per file.
+   */
+  discoveryOnlyUnits?: number;
 }
 
 export interface ExecutionTopologyDecision {
@@ -88,6 +96,31 @@ export function routeExecutionTopology(
       topology: "single-builder",
       maxBuilders,
       reason: "path conflicts require serialized execution"
+    };
+  }
+
+  // 7.7.1 — lane-aware short-circuit. When every ready unit is a non-high-risk
+  // discovery/scaffold/docs lane with no path conflicts, never fan out: the
+  // controller should fulfil a small batch inline, or hand the whole wave to a
+  // single builder when the batch is large enough that one inline turn would
+  // bloat the controller transcript.
+  const discoveryOnly = shape.discoveryOnlyUnits ?? 0;
+  if (
+    !shape.highRisk &&
+    discoveryOnly === unitCount &&
+    unitCount >= 1
+  ) {
+    if (unitCount <= 3) {
+      return {
+        topology: "inline",
+        maxBuilders,
+        reason: "discovery-only ready set; controller can fulfill inline"
+      };
+    }
+    return {
+      topology: "single-builder",
+      maxBuilders,
+      reason: "discovery-only ready set is large; one builder owns the wave"
     };
   }
 

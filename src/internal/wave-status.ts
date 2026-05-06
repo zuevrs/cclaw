@@ -45,14 +45,25 @@ export interface WaveStatusWaveSummary {
   status: "closed" | "open" | "partial" | "empty";
 }
 
+/**
+ * 7.7.1 — `controller-inline` is added so the controller knows it must
+ * fulfil the ready slices in this turn (no slice-builder dispatch). The
+ * remaining values (`single-slice`, `wave-fanout`, `blocked`, `none`) keep
+ * their pre-7.7.1 contract.
+ */
 export interface WaveStatusNextDispatch {
   waveId: string | null;
   readyToDispatch: string[];
   pathConflicts: string[];
-  mode: "single-slice" | "wave-fanout" | "blocked" | "none";
+  mode: "single-slice" | "wave-fanout" | "blocked" | "none" | "controller-inline";
   topology: Exclude<ExecutionTopology, "auto"> | "none";
   topologyReason: string;
   maxBuilders: number;
+  /**
+   * Optional natural-language hint for the controller, populated when the
+   * router selects a non-default mode (currently only `inline`).
+   */
+  controllerHint?: string;
 }
 
 export interface WaveStatusReport {
@@ -127,8 +138,21 @@ function normalizePathToken(raw: string): string {
   return raw.trim().replace(/^`|`$/gu, "").replace(/^\.\/+/u, "");
 }
 
-function parseManagedWaveClaimedPaths(planMarkdown: string): Map<string, Map<string, string[]>> {
-  const out = new Map<string, Map<string, string[]>>();
+/**
+ * Per-slice metadata pulled from the managed Parallel Execution Plan
+ * table. `claimedPaths` is preserved for path-conflict detection;
+ * `lane` and `riskTier` feed the 7.7.1 lane-aware topology router.
+ */
+interface ManagedWaveSliceMeta {
+  claimedPaths: string[];
+  lane?: string;
+  riskTier?: string;
+}
+
+function parseManagedWaveSliceMeta(
+  planMarkdown: string
+): Map<string, Map<string, ManagedWaveSliceMeta>> {
+  const out = new Map<string, Map<string, ManagedWaveSliceMeta>>();
   const startIdx = planMarkdown.indexOf(PARALLEL_EXEC_MANAGED_START);
   const endIdx = planMarkdown.indexOf(PARALLEL_EXEC_MANAGED_END);
   if (startIdx < 0 || endIdx <= startIdx) return out;
@@ -184,9 +208,56 @@ function parseManagedWaveClaimedPaths(planMarkdown: string): Map<string, Map<str
         .split(",")
         .map((p) => normalizePathToken(p))
         .filter((p) => p.length > 0);
-    out.get(currentWaveId)!.set(sliceId, claimedPaths);
+    const laneIdx = headerIdx.get("lane");
+    const rawLane = laneIdx !== undefined ? (cells[laneIdx] ?? "") : "";
+    const lane = rawLane.replace(/^`|`$/gu, "").trim().toLowerCase();
+    const riskIdx = headerIdx.get("risktier");
+    const rawRisk = riskIdx !== undefined ? (cells[riskIdx] ?? "") : "";
+    const riskTier = rawRisk.replace(/^`|`$/gu, "").trim().toLowerCase();
+    out.get(currentWaveId)!.set(sliceId, {
+      claimedPaths,
+      lane: lane.length > 0 ? lane : undefined,
+      riskTier: riskTier.length > 0 ? riskTier : undefined
+    });
   }
   return out;
+}
+
+/**
+ * Backward-compatible projection: callers that only need claimed paths
+ * keep getting `Map<sliceId, paths[]>` shapes.
+ */
+function projectClaimedPaths(
+  meta: Map<string, ManagedWaveSliceMeta>
+): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const [sliceId, info] of meta) {
+    out.set(sliceId, info.claimedPaths);
+  }
+  return out;
+}
+
+const DISCOVERY_LANES: ReadonlySet<string> = new Set(["scaffold", "docs"]);
+
+/**
+ * 7.7.1 — count ready members whose lane is `scaffold` or `docs` and whose
+ * `riskTier` is not `high`. Members with no recorded lane fall back to
+ * non-discovery (so the controller never collapses substantive work into
+ * inline by accident).
+ */
+function countDiscoveryOnlyUnits(
+  readySlices: string[],
+  meta: Map<string, ManagedWaveSliceMeta>
+): number {
+  let count = 0;
+  for (const sliceId of readySlices) {
+    const info = meta.get(sliceId);
+    if (!info) continue;
+    if (!info.lane || !DISCOVERY_LANES.has(info.lane)) continue;
+    if (info.riskTier === "high") continue;
+    count += 1;
+  }
+  return count;
 }
 
 function detectPathConflicts(
@@ -437,19 +508,22 @@ export async function runWaveStatus(
     };
   } else {
     const readyToDispatch = [...firstOpenWave.readyMembers].sort(compareSliceIds);
-    const claimedPathsByWave = parseManagedWaveClaimedPaths(planRaw);
+    const sliceMetaByWave = parseManagedWaveSliceMeta(planRaw);
+    const sliceMeta = sliceMetaByWave.get(firstOpenWave.waveId) ?? new Map();
     const conflicts = detectPathConflicts(
       readyToDispatch,
-      claimedPathsByWave.get(firstOpenWave.waveId) ?? new Map()
+      projectClaimedPaths(sliceMeta)
     );
-    const mode: WaveStatusNextDispatch["mode"] = conflicts.length > 0
-      ? "blocked"
-      : readyToDispatch.length > 1
-        ? "wave-fanout"
-        : readyToDispatch.length === 1
-          ? "single-slice"
-          : "none";
-    const topologyDecision = mode === "none"
+    const discoveryOnlyUnits = countDiscoveryOnlyUnits(readyToDispatch, sliceMeta);
+    const baseMode: Exclude<WaveStatusNextDispatch["mode"], "controller-inline"> =
+      conflicts.length > 0
+        ? "blocked"
+        : readyToDispatch.length > 1
+          ? "wave-fanout"
+          : readyToDispatch.length === 1
+            ? "single-slice"
+            : "none";
+    const topologyDecision = baseMode === "none"
       ? null
       : routeExecutionTopology({
         configuredTopology,
@@ -460,9 +534,20 @@ export async function runWaveStatus(
           independentUnitCount: conflicts.length > 0 ? 0 : readyToDispatch.length,
           substantialUnitCount: readyToDispatch.length,
           hasPathConflicts: conflicts.length > 0,
-          inlineSafe: false
+          inlineSafe: false,
+          discoveryOnlyUnits
         }
       });
+    // 7.7.1 — when the router collapses a discovery-only ready set into
+    // `inline`, surface `controller-inline` mode + a controllerHint so the
+    // controller knows it must fulfil the slices this turn instead of
+    // dispatching slice-builder per file.
+    const mode: WaveStatusNextDispatch["mode"] = topologyDecision?.topology === "inline"
+      ? "controller-inline"
+      : baseMode;
+    const controllerHint = topologyDecision?.topology === "inline"
+      ? "Fulfill ready slices in this turn without dispatching slice-builder. Record delegation rows with role=controller (scheduled→completed) per slice."
+      : undefined;
     nextDispatch = {
       waveId: firstOpenWave.waveId,
       readyToDispatch,
@@ -470,7 +555,8 @@ export async function runWaveStatus(
       mode,
       topology: topologyDecision?.topology ?? "none",
       topologyReason: topologyDecision?.reason ?? "no ready units",
-      maxBuilders: topologyDecision?.maxBuilders ?? maxBuilders
+      maxBuilders: topologyDecision?.maxBuilders ?? maxBuilders,
+      ...(controllerHint ? { controllerHint } : {})
     };
   }
 
