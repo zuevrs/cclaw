@@ -106,7 +106,8 @@ describe("config", () => {
     expect(parsed.tdd).toEqual({
       commitMode: "managed-per-slice",
       isolationMode: "worktree",
-      worktreeRoot: ".cclaw/worktrees"
+      worktreeRoot: ".cclaw/worktrees",
+      lockfileTwinPolicy: "auto-include"
     });
   });
 });

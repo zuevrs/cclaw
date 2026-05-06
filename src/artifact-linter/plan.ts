@@ -22,6 +22,12 @@ import {
   parseImplementationUnits,
   parseImplementationUnitParallelFields
 } from "../internal/plan-split-waves.js";
+import { compareSliceIds, parseSliceId } from "../util/slice-id.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { loadStackAdapter } from "../stack-detection.js";
+
+const execFileAsync = promisify(execFile);
 
 const PARALLEL_EXEC_MANAGED_START = "<!-- parallel-exec-managed-start -->";
 const PARALLEL_EXEC_MANAGED_END = "<!-- parallel-exec-managed-end -->";
@@ -42,6 +48,7 @@ interface ParallelWaveRowMeta {
   claimedPaths: string[];
   parallelizable: boolean | null;
   lane: string | null;
+  dependsOn: string[];
 }
 
 interface ParallelWaveMeta {
@@ -157,12 +164,14 @@ function parseParallelWaveTableMetadata(planMarkdown: string): ParallelWaveMeta[
       continue;
     }
     const sliceCell = cells[0]!;
-    if (!/^S-\d+$/iu.test(sliceCell)) continue;
+    const parsedSlice = parseSliceId(sliceCell);
+    if (!parsedSlice) continue;
     const idx = headerIdx ?? new Map<string, number>();
     const unitIdx = idx.get("unit") ?? idx.get("taskid") ?? 1;
     const pathsIdx = idx.get("claimedpaths");
     const parallelizableIdx = idx.get("parallelizable");
     const laneIdx = idx.get("lane");
+    const dependsOnIdx = idx.get("dependson");
     const rawPaths = pathsIdx !== undefined ? (cells[pathsIdx] ?? "") : "";
     const claimedPaths = rawPaths.length === 0
       ? []
@@ -175,12 +184,22 @@ function parseParallelWaveTableMetadata(planMarkdown: string): ParallelWaveMeta[
     if (rawParallel === "true" || rawParallel === "yes") parallelizable = true;
     if (rawParallel === "false" || rawParallel === "no") parallelizable = false;
     const laneRaw = laneIdx !== undefined ? (cells[laneIdx] ?? "").trim().toLowerCase() : "";
+    const rawDeps = dependsOnIdx !== undefined ? (cells[dependsOnIdx] ?? "") : "";
+    const dependsOn = rawDeps.length === 0
+      ? []
+      : rawDeps
+        .replace(/^\[|\]$/gu, "")
+        .split(/[,\s]+/u)
+        .map((token) => token.trim().replace(/^`|`$/gu, ""))
+        .map((token) => parseSliceId(token)?.id ?? "")
+        .filter((id) => id.length > 0);
     current.rows.push({
-      sliceId: sliceCell.toUpperCase(),
+      sliceId: parsedSlice.id,
       unit: (cells[unitIdx] ?? "").trim(),
       claimedPaths,
       parallelizable,
-      lane: laneRaw.length > 0 ? laneRaw : null
+      lane: laneRaw.length > 0 ? laneRaw : null,
+      dependsOn
     });
   }
   flush();
@@ -190,6 +209,74 @@ function parseParallelWaveTableMetadata(planMarkdown: string): ParallelWaveMeta[
 function waveHasSequentialModeHint(wave: ParallelWaveMeta): boolean {
   const noteText = wave.notes.join("\n").toLowerCase();
   return /mode\s*:\s*sequential/iu.test(noteText) || /\bsequential\b/iu.test(noteText) || /\bserial\b/iu.test(noteText);
+}
+
+/**
+ * Capture the set of repo-relative paths tracked at HEAD. Returns an
+ * empty set when the project root is not a git repo or `git ls-files`
+ * fails — the wiring linter degrades to "no aggregator required" in
+ * that case rather than crashing the whole stage check.
+ */
+async function readHeadFiles(projectRoot: string): Promise<Set<string>> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["ls-files", "-z"],
+      { cwd: projectRoot, maxBuffer: 64 * 1024 * 1024 }
+    );
+    const out = new Set<string>();
+    for (const segment of stdout.split("\u0000")) {
+      const trimmed = segment.trim();
+      if (trimmed.length === 0) continue;
+      out.add(trimmed.replace(/\\/gu, "/"));
+    }
+    return out;
+  } catch {
+    return new Set<string>();
+  }
+}
+
+interface SliceClaimGraph {
+  bySliceId: Map<string, ParallelWaveRowMeta>;
+}
+
+function buildSliceClaimGraph(waves: readonly ParallelWaveMeta[]): SliceClaimGraph {
+  const bySliceId = new Map<string, ParallelWaveRowMeta>();
+  for (const wave of waves) {
+    for (const row of wave.rows) {
+      bySliceId.set(row.sliceId, row);
+    }
+  }
+  return { bySliceId };
+}
+
+/**
+ * Walk the dependsOn graph from `sliceId` and return the set of
+ * predecessor slice ids (transitive). Skips ids that aren't in the
+ * graph and handles cycles via a `visiting` set so a malformed plan
+ * doesn't lock the linter.
+ */
+function transitivePredecessors(
+  sliceId: string,
+  graph: SliceClaimGraph
+): Set<string> {
+  const out = new Set<string>();
+  const stack: string[] = [sliceId];
+  const visiting = new Set<string>();
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (visiting.has(current)) continue;
+    visiting.add(current);
+    const row = graph.bySliceId.get(current);
+    if (!row) continue;
+    for (const predecessor of row.dependsOn) {
+      const normalized = parseSliceId(predecessor)?.id ?? predecessor;
+      if (out.has(normalized)) continue;
+      out.add(normalized);
+      stack.push(normalized);
+    }
+  }
+  return out;
 }
 
 export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
@@ -699,7 +786,7 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
 
       const mermaidBlocks = raw.match(/```mermaid[\s\S]*?```/giu) ?? [];
       const hasParallelExecMermaid = mermaidBlocks.some((block) =>
-        /(flowchart|gantt)/iu.test(block) && /\bW-\d+\b/iu.test(block) && /\bS-\d+\b/iu.test(block)
+        /(flowchart|gantt)/iu.test(block) && /\bW-\d+\b/iu.test(block) && /\bS-\d+(?:[a-z][a-z0-9]*)?\b/iu.test(block)
       );
       findings.push({
         section: "plan_parallel_exec_mermaid_present",
@@ -710,6 +797,72 @@ export async function lintPlanStage(ctx: StageLintContext): Promise<void> {
         details: hasParallelExecMermaid
           ? "Mermaid visualization for parallel execution waves is present."
           : "No mermaid parallel-execution visualization found (advisory). Add a ` ```mermaid ` flowchart or gantt with W-* and S-* nodes."
+      });
+
+      // 7.6.0 — plan_module_introducing_slice_wires_root.
+      // Stack-aware: stack-adapter exposes a `wiringAggregator` contract
+      // for stacks where introducing a new module file requires a
+      // sibling aggregator update (Rust lib.rs, Python __init__.py,
+      // optional Node-TS index.ts). For each NEW path in a slice's
+      // claim, if the adapter says an aggregator is required, the
+      // aggregator path must appear in the slice's own claim or in any
+      // transitive predecessor's claim within the same flow.
+      //
+      // For unknown stacks (Go, Java, Ruby, Swift, .NET, Elixir, …)
+      // the adapter returns `wiringAggregator: undefined`, so this
+      // gate is a no-op and `found: true`.
+      const stackAdapter = await loadStackAdapter(projectRoot);
+      const headFiles = await readHeadFiles(projectRoot);
+      const wiringIssues: string[] = [];
+      if (stackAdapter.wiringAggregator) {
+        const claimGraph = buildSliceClaimGraph(waveMeta);
+        for (const wave of waveMeta) {
+          for (const row of [...wave.rows].sort((a, b) =>
+            compareSliceIds(a.sliceId, b.sliceId)
+          )) {
+            const predecessors = transitivePredecessors(row.sliceId, claimGraph);
+            const predecessorClaims = new Set<string>();
+            for (const predId of predecessors) {
+              const predRow = claimGraph.bySliceId.get(predId);
+              if (!predRow) continue;
+              for (const claim of predRow.claimedPaths) {
+                predecessorClaims.add(normalizePathToken(claim));
+              }
+            }
+            const ownClaims = new Set(row.claimedPaths.map(normalizePathToken));
+            for (const rawClaim of row.claimedPaths) {
+              const claim = normalizePathToken(rawClaim);
+              if (claim.length === 0) continue;
+              // Only NEW paths (not present at HEAD) require an
+              // aggregator update — existing modules are already wired.
+              if (headFiles.size > 0 && headFiles.has(claim)) continue;
+              const required = stackAdapter.wiringAggregator.resolveAggregatorFor(
+                claim,
+                { headFiles }
+              );
+              if (!required) continue;
+              const aggregatorPath = normalizePathToken(required);
+              if (ownClaims.has(aggregatorPath)) continue;
+              if (predecessorClaims.has(aggregatorPath)) continue;
+              wiringIssues.push(
+                `${wave.waveId}/${row.sliceId} introduces ${claim} but wiring aggregator ${aggregatorPath} is not in its claim or any predecessor's claim`
+              );
+            }
+          }
+        }
+      }
+      const wiringApplies = stackAdapter.wiringAggregator !== undefined;
+      findings.push({
+        section: "plan_module_introducing_slice_wires_root",
+        required: taskListPresent && wiringApplies,
+        rule:
+          "When a slice introduces a new module file, the stack-adapter's wiring aggregator (e.g. Rust `lib.rs`, Python `__init__.py`, Node-TS barrel `index.*` when present) must be in the same slice's claim or in a transitive predecessor's claim, otherwise the new module is dead code and RED can't be expressed.",
+        found: !wiringApplies || wiringIssues.length === 0,
+        details: !wiringApplies
+          ? `Stack adapter (id=${stackAdapter.id}) does not declare a wiring aggregator; gate is a no-op for this stack.`
+          : wiringIssues.length === 0
+            ? `Stack adapter (id=${stackAdapter.id}) wiring aggregator coverage verified across all wave slices.`
+            : `Wiring aggregator coverage gaps: ${wiringIssues.slice(0, 12).join(" | ")}${wiringIssues.length > 12 ? ` | … (${wiringIssues.length - 12} more)` : ""}.`
       });
     }
 }

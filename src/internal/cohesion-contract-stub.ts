@@ -4,6 +4,7 @@ import type { Writable } from "node:stream";
 import { RUNTIME_ROOT } from "../constants.js";
 import { writeFileSafe } from "../fs-utils.js";
 import { readDelegationLedger, isParallelTddSliceWorker } from "../delegation.js";
+import { compareSliceIds } from "../util/slice-id.js";
 
 interface InternalIo {
   stdout: Writable;
@@ -173,17 +174,5 @@ function collectSliceIds(
     if (entry.sliceId.length === 0) continue;
     set.add(entry.sliceId);
   }
-  return [...set].sort((a, b) => {
-    const an = parseSliceNum(a);
-    const bn = parseSliceNum(b);
-    if (an !== null && bn !== null) return an - bn;
-    return a.localeCompare(b);
-  });
-}
-
-function parseSliceNum(sliceId: string): number | null {
-  const m = /^S-(\d+)$/u.exec(sliceId);
-  if (!m) return null;
-  const n = Number.parseInt(m[1]!, 10);
-  return Number.isFinite(n) ? n : null;
+  return [...set].sort(compareSliceIds);
 }

@@ -1531,6 +1531,43 @@ async function main() {
     emitProblems(problems, json, 2);
     return;
   }
+  // 7.6.0 — phase-event status validation.
+  // \`--phase=<phase>\` carries phase-level granularity (RED/GREEN/REFACTOR/DOC
+  // outcomes). It is only meaningful on terminal statuses
+  // (\`completed\` or \`failed\`). The dispatch-level ack (no phase) keeps
+  // \`--status=acknowledged\`. Refuse acknowledged/launched/scheduled/waived/stale
+  // rows that carry a phase so phantom-open slices cannot be recorded.
+  if (
+    typeof args.phase === "string" &&
+    args.phase.length > 0 &&
+    args.status !== "completed" &&
+    args.status !== "failed"
+  ) {
+    const sliceFlag = typeof args.slice === "string" && args.slice.length > 0
+      ? "--slice=" + args.slice + " "
+      : "";
+    const spanFlag = typeof args["span-id"] === "string" && args["span-id"].length > 0
+      ? "--span-id=" + args["span-id"] + " "
+      : "";
+    const correctedCommandHint =
+      "node .cclaw/hooks/delegation-record.mjs --stage=" + (args.stage || "<stage>") +
+      " --agent=" + (args.agent || "<agent>") +
+      " --mode=" + (args.mode || "mandatory") +
+      " --status=completed --phase=" + args.phase +
+      " " + sliceFlag + spanFlag +
+      '--evidence-ref="<phase outcome>"';
+    emitErrorJson(
+      "phase_event_requires_completed_or_failed_status",
+      {
+        phase: args.phase,
+        status: args.status,
+        spanId: args["span-id"] || "unknown",
+        correctedCommandHint
+      },
+      json
+    );
+    return;
+  }
   if (args.phase === "refactor-deferred") {
     const rationaleQuality = validateDeferredRationaleInline(args["refactor-rationale"], args);
     if (rationaleQuality !== "ok") {

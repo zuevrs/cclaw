@@ -88,6 +88,7 @@ export const PLAN: StageSchemaInput = {
       { id: "plan_execution_posture_recorded", description: "Execution posture is recorded before implementation handoff." },
       { id: "plan_parallel_exec_full_coverage", description: "Every T-NNN task in `## Task List` (other than spikes/explicitly-deferred) is assigned to at least one slice inside the `<!-- parallel-exec-managed-start -->` block; TDD cannot fan out work that the plan never authored as waves." },
       { id: "plan_wave_paths_disjoint", description: "Within each authored wave, slice `claimedPaths` remain disjoint so `wave-fanout` can dispatch safely without overlap conflicts." },
+      { id: "plan_module_introducing_slice_wires_root", description: "When a slice introduces a new module file, the stack-adapter's wiring aggregator (Rust `lib.rs`, Python `__init__.py`, Node-TS barrel when present) must appear in the same slice's claim or a transitive predecessor's claim so RED can be expressed." },
       { id: "plan_wait_for_confirm", description: "Execution blocked until explicit user confirmation." }
     ],
     requiredEvidence: [

@@ -4,12 +4,16 @@ import { promisify } from "node:util";
 import type { Writable } from "node:stream";
 import {
   readConfig,
+  resolveLockfileTwinPolicy,
   resolveTddCommitMode,
   resolveTddIsolationMode,
   resolveTddWorktreeRoot
 } from "../config.js";
 import { readDelegationLedger } from "../delegation.js";
 import { exists } from "../fs-utils.js";
+import { loadStackAdapter } from "../stack-detection.js";
+import type { ManifestLockfileTwin, StackAdapter } from "../stack-detection.js";
+import type { LockfileTwinPolicy } from "../types.js";
 import {
   cleanupWorktree,
   commitAndMergeBack,
@@ -204,6 +208,80 @@ function matchesClaimedPath(changedPath: string, claimedPaths: string[]): boolea
   });
 }
 
+/**
+ * 7.6.0 — match a candidate path against a stack-adapter glob pattern.
+ *
+ * Adapter globs are intentionally simple: literal paths (`Cargo.toml`),
+ * recursive prefix (`**\/Cargo.toml`), or single-level wildcard
+ * (`*.csproj`). We translate those shapes here without pulling in a
+ * full glob library so the slice-commit hook stays dependency-light.
+ */
+function matchesAdapterGlob(candidate: string, glob: string): boolean {
+  const normalizedCandidate = normalizePathLike(candidate);
+  const normalizedGlob = normalizePathLike(glob);
+  if (normalizedGlob.length === 0) return false;
+  if (normalizedGlob.includes("**")) {
+    // `**/foo` → match either `foo` at root or any nested `foo`.
+    if (normalizedGlob.startsWith("**/")) {
+      const tail = normalizedGlob.slice(3);
+      if (tail === normalizedCandidate) return true;
+      return normalizedCandidate.endsWith(`/${tail}`);
+    }
+    // Generic ** in the middle: collapse to suffix match for simplicity.
+    const tail = normalizedGlob.split("**/").pop() ?? "";
+    return tail.length > 0 && normalizedCandidate.endsWith(tail);
+  }
+  if (normalizedGlob.includes("*")) {
+    // Single-segment wildcard like `*.csproj`. Convert to a basic regex.
+    const regexSrc = normalizedGlob
+      .split("/")
+      .map((segment) =>
+        segment
+          .replace(/[.+?^${}()|[\]\\]/gu, "\\$&")
+          .replace(/\*/gu, "[^/]*")
+      )
+      .join("/");
+    return new RegExp(`^${regexSrc}$`, "u").test(normalizedCandidate);
+  }
+  return normalizedGlob === normalizedCandidate;
+}
+
+/**
+ * Find lockfile twins whose manifestGlob matches at least one claimed
+ * path. The returned twins are the candidates whose lockfileGlob we
+ * should auto-include / auto-revert when they drift.
+ */
+function activeLockfileTwins(
+  adapter: StackAdapter,
+  claimedPaths: string[]
+): ManifestLockfileTwin[] {
+  if (adapter.lockfileTwins.length === 0) return [];
+  const active: ManifestLockfileTwin[] = [];
+  for (const twin of adapter.lockfileTwins) {
+    const claimedManifest = claimedPaths.some((claimed) =>
+      matchesAdapterGlob(claimed, twin.manifestGlob)
+    );
+    if (claimedManifest) active.push(twin);
+  }
+  return active;
+}
+
+/**
+ * Partition a candidate path: `is it a lockfile twin we should
+ * auto-handle?`. Returns the twin entry that matches, or null.
+ */
+function findMatchingLockfileTwin(
+  changedPath: string,
+  twins: readonly ManifestLockfileTwin[]
+): ManifestLockfileTwin | null {
+  for (const twin of twins) {
+    if (matchesAdapterGlob(changedPath, twin.lockfileGlob)) {
+      return twin;
+    }
+  }
+  return null;
+}
+
 async function resolveClaimedPathsFromLedger(
   projectRoot: string,
   args: SliceCommitArgs
@@ -246,6 +324,8 @@ export async function runSliceCommitCommand(
   const commitMode = resolveTddCommitMode(config);
   const isolationMode = resolveTddIsolationMode(config);
   const worktreeRoot = resolveTddWorktreeRoot(config);
+  const lockfileTwinPolicy = resolveLockfileTwinPolicy(config);
+  const stackAdapter = await loadStackAdapter(projectRoot);
   const gitPresent = await exists(path.join(projectRoot, ".git"));
 
   if (args.prepareWorktree) {
@@ -415,8 +495,25 @@ export async function runSliceCommitCommand(
     return 0;
   }
 
-  const pathDrift = changedPaths.filter((p) => !matchesClaimedPath(p, claimedPaths));
-  if (pathDrift.length > 0) {
+  const initialDrift = changedPaths.filter((p) => !matchesClaimedPath(p, claimedPaths));
+  const twinsForCommit = activeLockfileTwins(stackAdapter, claimedPaths);
+
+  // 7.6.0 — split drift into "lockfile twin drift" (handle per policy)
+  // vs "true drift" (always rejected).
+  const lockfileTwinDrift: { path: string; twin: ManifestLockfileTwin }[] = [];
+  const trueDrift: string[] = [];
+  for (const driftPath of initialDrift) {
+    const twin = findMatchingLockfileTwin(driftPath, twinsForCommit);
+    if (twin) {
+      lockfileTwinDrift.push({ path: driftPath, twin });
+    } else {
+      trueDrift.push(driftPath);
+    }
+  }
+  // Report a separate true-drift error when there is actual non-twin
+  // drift, regardless of policy: the operator's claim should still
+  // cover everything they changed.
+  if (trueDrift.length > 0) {
     output(io, args, {
       ok: false,
       errorCode: "slice_commit_path_drift",
@@ -424,14 +521,83 @@ export async function runSliceCommitCommand(
         sliceId: args.sliceId,
         spanId: args.spanId,
         claimedPaths,
-        driftPaths: pathDrift
+        driftPaths: trueDrift
       },
-      message: `slice_commit_path_drift: ${pathDrift.join(", ")}`
+      message: `slice_commit_path_drift: ${trueDrift.join(", ")}`
     }, "stderr");
     return 2;
   }
 
-  const changedInClaim = changedPaths.filter((p) => matchesClaimedPath(p, claimedPaths));
+  // strict-fence: lockfile twins still count as drift.
+  if (lockfileTwinDrift.length > 0 && lockfileTwinPolicy === "strict-fence") {
+    const driftPaths = lockfileTwinDrift.map((entry) => entry.path);
+    output(io, args, {
+      ok: false,
+      errorCode: "slice_commit_path_drift",
+      details: {
+        sliceId: args.sliceId,
+        spanId: args.spanId,
+        claimedPaths,
+        driftPaths,
+        lockfileTwinPolicy,
+        stackAdapterId: stackAdapter.id
+      },
+      message: `slice_commit_path_drift: ${driftPaths.join(", ")} (lockfileTwinPolicy=strict-fence)`
+    }, "stderr");
+    return 2;
+  }
+
+  // auto-revert: restore the lockfile, then exclude from changed set.
+  const revertedTwinPaths: string[] = [];
+  if (lockfileTwinDrift.length > 0 && lockfileTwinPolicy === "auto-revert") {
+    for (const entry of lockfileTwinDrift) {
+      try {
+        await execFileAsync("git", ["restore", "--", entry.path], { cwd: activeCwd });
+        revertedTwinPaths.push(entry.path);
+      } catch {
+        // Fall through; if restore fails the drift will reappear in the
+        // recomputed status and we'll reject as drift.
+      }
+    }
+    changedPaths = await gitChangedPaths(activeCwd);
+    const remainingDrift = changedPaths.filter((p) => !matchesClaimedPath(p, claimedPaths));
+    if (remainingDrift.length > 0) {
+      output(io, args, {
+        ok: false,
+        errorCode: "slice_commit_path_drift",
+        details: {
+          sliceId: args.sliceId,
+          spanId: args.spanId,
+          claimedPaths,
+          driftPaths: remainingDrift,
+          lockfileTwinPolicy,
+          stackAdapterId: stackAdapter.id
+        },
+        message: `slice_commit_path_drift: ${remainingDrift.join(", ")}`
+      }, "stderr");
+      return 2;
+    }
+  }
+
+  // auto-include: add the twin path(s) to the effective claim so the
+  // commit picks them up. We don't mutate the persisted claim — only
+  // the in-memory list used for the upcoming `git add`.
+  const effectiveCommitPaths = [...claimedPaths];
+  const includedTwinPaths: string[] = [];
+  if (lockfileTwinDrift.length > 0 && lockfileTwinPolicy === "auto-include") {
+    for (const entry of lockfileTwinDrift) {
+      if (!effectiveCommitPaths.includes(entry.path)) {
+        effectiveCommitPaths.push(entry.path);
+      }
+      includedTwinPaths.push(entry.path);
+    }
+  }
+
+  const changedInClaim = changedPaths.filter((p) =>
+    matchesClaimedPath(p, claimedPaths) ||
+    (lockfileTwinPolicy === "auto-include" &&
+      findMatchingLockfileTwin(p, twinsForCommit) !== null)
+  );
   if (changedInClaim.length === 0) {
     await cleanupManagedWorktree();
     output(io, args, {
@@ -444,7 +610,7 @@ export async function runSliceCommitCommand(
   }
 
   try {
-    await execFileAsync("git", ["add", "--", ...claimedPaths], {
+    await execFileAsync("git", ["add", "--", ...effectiveCommitPaths], {
       cwd: activeCwd
     });
     const taskPart = args.taskId && args.taskId.length > 0 ? args.taskId : "task";
@@ -523,6 +689,10 @@ export async function runSliceCommitCommand(
     changedPaths: changedInClaim,
     worktreePath: managedWorktreePath ?? undefined,
     degradedToInPlace: degradedToInPlace || undefined,
+    lockfileTwinPolicy,
+    lockfileTwinsIncluded: includedTwinPaths.length > 0 ? includedTwinPaths : undefined,
+    lockfileTwinsReverted: revertedTwinPaths.length > 0 ? revertedTwinPaths : undefined,
+    stackAdapterId: stackAdapter.id,
     message: `slice commit created for ${args.sliceId}: ${commitSha}`
   });
   return 0;

@@ -11,10 +11,10 @@ describe("gate density policy", () => {
       // spec budget = 6 after AC traceability:
       // AC ids present, measurable AC, testability, assumptions, self-review, approval.
       spec: 6,
-      // plan budget = 7: slice budget, dependency batches, acceptance mapping,
+      // plan budget = 8: slice budget, dependency batches, acceptance mapping,
       // execution posture, full parallel-exec coverage, disjoint same-wave
-      // claimed paths, and explicit WAIT_FOR_CONFIRM.
-      plan: 7,
+      // claimed paths, module-wires-root (7.6.0), and explicit WAIT_FOR_CONFIRM.
+      plan: 8,
       // tdd budget = 13 after AC traceability:
       // discovery, impact, RED/GREEN/REFACTOR, verify, docs-drift, traceability (non-quick),
       // iron-law, watched-RED, vertical-slice-cycle, closes-AC links, orphan-change guard.

@@ -16,6 +16,7 @@ import {
   parseParallelExecutionPlanWaves,
   parseWavePlanDirectory
 } from "../internal/plan-split-waves.js";
+import { compareSliceIds } from "../util/slice-id.js";
 import {
   type LintFinding,
   type StageLintContext,
@@ -574,7 +575,7 @@ async function listSliceFiles(slicesDir: string): Promise<SliceFileInfo[]> {
     if (!match) continue;
     files.push({ sliceId: match[1]!, absPath: path.join(slicesDir, name) });
   }
-  files.sort((a, b) => (a.sliceId < b.sliceId ? -1 : a.sliceId > b.sliceId ? 1 : 0));
+  files.sort((a, b) => compareSliceIds(a.sliceId, b.sliceId));
   return files;
 }
 

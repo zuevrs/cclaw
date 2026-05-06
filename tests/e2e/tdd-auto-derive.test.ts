@@ -220,9 +220,14 @@ function lifecycleArgs(
     "--dispatch-surface=cursor-task",
     `--agent-definition-path=${agentDef}`,
     `--slice=${opts.slice}`,
-    `--phase=${opts.phase}`,
     "--json"
   ];
+  // 7.6.0 contract: --phase is only valid on terminal statuses
+  // (`completed` or `failed`). Dispatch-lifecycle rows
+  // (scheduled/launched/acknowledged) carry the slice id but no phase.
+  if (status === "completed" || status === "failed") {
+    base.push(`--phase=${opts.phase}`);
+  }
   for (const ref of opts.evidenceRefs) {
     base.push(`--evidence-ref=${ref}`);
   }

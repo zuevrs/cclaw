@@ -22,6 +22,7 @@ import {
 import { detectPublicApiChanges } from "./internal/detect-public-api-changes.js";
 import { detectSupplyChainChanges } from "./internal/detect-supply-chain-changes.js";
 import { readFlowState, writeFlowState } from "./runs.js";
+import { loadStackAdapter } from "./stack-detection.js";
 import { validateTddVerificationEvidence } from "./tdd-verification-evidence.js";
 import { FLOW_STAGES, type FlowStage } from "./types.js";
 
@@ -174,17 +175,16 @@ async function discoverRealTestCommands(projectRoot: string): Promise<string[]> 
       commands.push(name === "test" ? "bun test" : `bun run ${name}`);
     }
   }
-  if (await exists(path.join(projectRoot, "pyproject.toml"))) commands.push("pytest");
-  if (await exists(path.join(projectRoot, "pytest.ini"))) commands.push("pytest");
-  if (await exists(path.join(projectRoot, "go.mod"))) commands.push("go test ./...");
-  if (await exists(path.join(projectRoot, "Cargo.toml"))) commands.push("cargo test");
-  if (await exists(path.join(projectRoot, "pom.xml"))) commands.push("mvn test");
-  if (
-    await exists(path.join(projectRoot, "build.gradle")) ||
-    await exists(path.join(projectRoot, "build.gradle.kts"))
-  ) {
-    commands.push("gradle test", "./gradlew test");
+  // 7.6.0 — pull additional commands from the stack-adapter's
+  // testCommandHints rather than hardcoding pytest/go test/cargo
+  // test/mvn/gradle here. Adapters that don't apply to the project
+  // contribute no commands; pytest.ini support is kept as an
+  // explicit fallback because pyproject.toml-less projects exist.
+  const stackAdapter = await loadStackAdapter(projectRoot);
+  for (const hint of stackAdapter.testCommandHints) {
+    commands.push(hint);
   }
+  if (await exists(path.join(projectRoot, "pytest.ini"))) commands.push("pytest");
   return unique(commands);
 }
 
