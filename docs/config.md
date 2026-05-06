@@ -45,6 +45,8 @@ plan:
 
 `execution.topology: auto` + `execution.strictness: balanced` means cclaw treats feature-atomic implementation units as the schedulable surface, with internal 2-5 minute TDD steps. Use `execution.topology: strict-micro`, `execution.strictness: strict`, or `plan.microTaskPolicy: strict` when high-risk work should preserve the older one-tiny-task-per-slice discipline.
 
+Since 7.7.1 the auto router is also lane-aware: when every ready member of the active wave is in a non-high-risk `scaffold` or `docs` lane and `claimedPaths` are disjoint, the wave is collapsed to `inline` (small batch ≤ 3 ready slices) or `single-builder` (larger batch). `inline` mode surfaces in `wave-status --json` as `nextDispatch.mode: controller-inline` plus a `nextDispatch.controllerHint`; the controller fulfils the ready slices itself with `delegation-record --dispatch-surface=role-switch --agent-definition-path=.cclaw/skills/tdd/SKILL.md` lifecycle rows instead of dispatching a slice-builder per file.
+
 ## Removed in 3.0.0
 
 These keys are no longer supported at top level: `strictness`, `hookProfile`, `disabledHooks`, `gitHookGuards`, `vcs`, `tddTestGlobs`, `compound`, `earlyLoop`, `defaultTrack`, `languageRulePacks`, `trackHeuristics`, `sliceReview`, `ironLaws`, `optInAudits`, `reviewLoop`.

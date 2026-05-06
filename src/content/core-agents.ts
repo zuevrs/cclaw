@@ -210,6 +210,8 @@ export function sliceBuilderProtocol(): string {
     "",
     "**slice-builder** is the canonical worker for **one feature-atomic implementation unit/slice** end-to-end: **RED → GREEN → REFACTOR → inline DOC** in **one** delegated span. The unit may contain internal 2-5 minute TDD steps; do not split those into separate agents unless the parent selected `strict-micro`. Multiple slice-builder spans run in parallel only when topology is `parallel-builders` and the wave plan declares disjoint `claimedPaths`.",
     "",
+    "**Multi-slice batch under `single-builder`:** the controller may dispatch ONE slice-builder span that owns MORE than one ready slice (e.g. when the router collapses a wave into single-builder mode). Treat each slice in the batch as its own RED → GREEN → REFACTOR → DOC mini-cycle: emit a separate `phase=red|green|refactor|doc` row per `--slice` value (use the same `spanId`/`dispatchId` for the whole batch), keep `claimedPaths` disjoint per-slice within the batch, and author one `tdd-slices/S-<id>.md` per slice. Phase-status rules from the table below stay unchanged — never collapse multiple slices into one phase row.",
+    "",
     "### Invariants",
     "- Produce failing RED evidence (or cite the delegated RED artifact) **before** production edits.",
     "- Stay inside the slice contract: `claimedPaths`, acceptance mapping, and forbidden-change lists from the parent.",

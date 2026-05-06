@@ -1,5 +1,78 @@
 # Changelog
 
+## 7.7.1 — Inline-default for discovery-only waves
+
+7.7.1 calibrates the 7.7.0 Execution Topology Router so trivial markdown /
+docs / scaffold work no longer fans out into one slice-builder agent per
+file. The pain that triggered this patch came from a real ebg-figma run:
+W-01 had 3 markdown-only discovery spikes with `lane: scaffold`, the auto
+router saw 3 independent units and chose `parallel-builders`, and the
+controller dispatched 3 separate slice-builder agents to write 3 trivial
+markdown files. The original plan explicitly says: do NOT launch subagents
+for trivial units. 7.7.1 makes the router honor that.
+
+- **Lane-aware router (`src/execution-topology.ts`).**
+  Extended `ExecutionTopologyShape` with `discoveryOnlyUnits`. When
+  `configuredTopology === "auto"`, strictness is not strict, the wave is
+  not high-risk, has no path conflicts, and `discoveryOnlyUnits ===
+  unitCount` with `unitCount >= 1`, the router now collapses the wave:
+  `unitCount <= 3` → `topology: "inline"` (controller fulfils inline);
+  `unitCount > 3` → `topology: "single-builder"` (one builder owns the
+  whole wave). High-risk and explicit strict-micro/strict paths still
+  bypass this branch; inline + high-risk remains unreachable.
+
+- **Controller-inline mode in `wave-status`
+  (`src/internal/wave-status.ts`).**
+  `parseManagedWaveSliceMeta` now captures `lane` and `riskTier` per
+  slice from the managed Parallel Execution Plan table and feeds
+  `discoveryOnlyUnits` into `routeExecutionTopology`. When the router
+  picks `inline`, `nextDispatch.mode` becomes the new value
+  `controller-inline` and `nextDispatch.controllerHint` describes what
+  the controller must do this turn ("Fulfill ready slices in this turn
+  without dispatching slice-builder. Record delegation rows with
+  role=controller (scheduled→completed) per slice."). The remaining
+  `mode` values (`single-slice`, `wave-fanout`, `blocked`, `none`) keep
+  their pre-7.7.1 contract.
+
+- **Controller dispatch protocol updates.**
+  `src/content/stages/tdd.ts`, `src/content/meta-skill.ts`, and
+  `src/content/core-agents.ts` (slice-builder template) now make the
+  three live cases explicit:
+  - `topology=inline`: do NOT use `Task`; record lifecycle rows with
+    `--dispatch-surface=role-switch
+    --agent-definition-path=.cclaw/skills/tdd/SKILL.md`.
+  - `topology=single-builder` with multiple ready slices: issue exactly
+    ONE `Task` dispatch and let the single span own multi-slice TDD,
+    emitting per-slice phase rows with the same `spanId`/`dispatchId`.
+  - `topology=parallel-builders`: keep current fanout discipline, but
+    only when at least one ready unit is non-discovery (otherwise the
+    router collapses to inline/single-builder).
+  Removed obsolete prose ("Routing AskQuestion: launch wave or single
+  builder?") that wrapped routing in user-confirmation ceremony — the
+  router decides, the controller acts.
+
+- **Tests.**
+  Added five new cases to `tests/unit/execution-topology.test.ts`
+  (3-unit discovery → inline; 5-unit discovery → single-builder; mixed
+  lanes keep parallel-builders; high-risk discovery never inlines under
+  balanced; high-risk + strict goes strict-micro). Added
+  `tests/unit/wave-status-discovery-only.test.ts` covering the
+  end-to-end JSON envelope: 3-member scaffold lane → `topology: inline`
+  + `mode: controller-inline` + populated `controllerHint`; 5-member
+  docs lane → `topology: single-builder`; mixed lane → keeps
+  `parallel-builders`; high-risk discovery → not inline. Existing
+  `tests/unit/parallel-scheduler.test.ts` invariants
+  (`validateFileOverlap`, `validateFanOutCap`, `MAX_PARALLEL_SLICE_BUILDERS`,
+  `execution.maxBuilders` config-cap path) are unchanged.
+
+- **No spec/safety regressions.** Preserved invariants: protected-path /
+  orphan-changes / lockfile-twin / wave path-disjoint / phase-status
+  validation; AC traceability; RED-before-GREEN; managed-per-slice commit
+  shape; worker self-record contract (`acknowledged` + `completed` with
+  GREEN evidence freshness); fan-out cap (`MAX_PARALLEL_SLICE_BUILDERS` +
+  `execution.maxBuilders` override); strict-micro routing for
+  `requiresStrictMicro` or `strictness === "strict"` configurations.
+
 ## 7.7.0 — Adaptive Execution Topology + TDD Calibration
 
 7.7.0 changes the default TDD planning posture from "every 2-5 minute task is
