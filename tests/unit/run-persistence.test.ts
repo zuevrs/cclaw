@@ -1,58 +1,83 @@
-import { describe, expect, it } from "vitest";
-import { createInitialFlowState } from "../../src/flow-state.js";
-import { ensureRunSystem, readFlowState, writeFlowState } from "../../src/runs.js";
-import { createTempProject } from "../helpers/index.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { FLOW_STATE_REL_PATH } from "../../src/constants.js";
+import { LegacyFlowStateError } from "../../src/flow-state.js";
+import {
+  ensureRunSystem,
+  patchFlowState,
+  readFlowState,
+  resetFlowState,
+  writeFlowState
+} from "../../src/run-persistence.js";
+import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
-describe("flow-state persistence (repoSignals)", () => {
-  it("round-trips repoSignals", async () => {
-    const root = await createTempProject("run-persistence-repo-signals");
-    await ensureRunSystem(root);
-    const rs = {
-      fileCount: 4,
-      hasReadme: true,
-      hasPackageManifest: false,
-      capturedAt: "2026-05-01T12:00:00.000Z"
-    };
-    await writeFlowState(
-      root,
-      { ...createInitialFlowState({ track: "standard", discoveryMode: "guided" }), repoSignals: rs },
-      { allowReset: true }
+describe("run-persistence", () => {
+  let project: string;
+  afterEach(async () => {
+    if (project) await removeProject(project);
+  });
+
+  it("creates an initial state on first read", async () => {
+    project = await createTempProject();
+    await ensureRunSystem(project);
+    const state = await readFlowState(project);
+    expect(state.schemaVersion).toBe(2);
+    expect(state.currentSlug).toBeNull();
+    expect(state.ac).toEqual([]);
+  });
+
+  it("round-trips a written state", async () => {
+    project = await createTempProject();
+    await writeFlowState(project, {
+      schemaVersion: 2,
+      currentSlug: "demo",
+      currentStage: "plan",
+      ac: [{ id: "AC-1", text: "t", status: "pending" }],
+      lastSpecialist: null,
+      startedAt: "2026-05-07T00:00:00Z",
+      reviewIterations: 0,
+      securityFlag: false
+    });
+    const state = await readFlowState(project);
+    expect(state.currentSlug).toBe("demo");
+    expect(state.ac).toHaveLength(1);
+  });
+
+  it("patches a state immutably", async () => {
+    project = await createTempProject();
+    await ensureRunSystem(project);
+    const next = await patchFlowState(project, { currentSlug: "x", currentStage: "build" });
+    expect(next.currentSlug).toBe("x");
+    expect(next.currentStage).toBe("build");
+  });
+
+  it("rejects loading a 7.x flow-state on read", async () => {
+    project = await createTempProject();
+    await fs.mkdir(path.join(project, ".cclaw", "state"), { recursive: true });
+    await fs.writeFile(
+      path.join(project, FLOW_STATE_REL_PATH),
+      JSON.stringify({ schemaVersion: 1, currentStage: "spec" }),
+      "utf8"
     );
-    const state = await readFlowState(root);
-    expect(state.repoSignals).toEqual(rs);
+    await expect(readFlowState(project)).rejects.toBeInstanceOf(LegacyFlowStateError);
   });
 
-  it("treats omitted repoSignals as undefined", async () => {
-    const root = await createTempProject("run-persistence-no-repo-signals");
-    await ensureRunSystem(root);
-    await writeFlowState(root, createInitialFlowState({ track: "standard" }), { allowReset: true });
-    const state = await readFlowState(root);
-    expect(state.repoSignals).toBeUndefined();
-  });
-
-  it("round-trips completedStageMeta timestamps", async () => {
-    const root = await createTempProject("run-persistence-stage-meta");
-    await ensureRunSystem(root);
-    const base = createInitialFlowState({ track: "standard", discoveryMode: "guided" });
-    await writeFlowState(
-      root,
-      {
-        ...base,
-        completedStages: ["brainstorm"],
-        completedStageMeta: {
-          brainstorm: { completedAt: "2026-05-02T09:30:00.000Z" }
-        }
-      },
-      { allowReset: true }
-    );
-    const state = await readFlowState(root);
-    expect(state.completedStageMeta?.brainstorm?.completedAt).toBe("2026-05-02T09:30:00.000Z");
-  });
-
-  it("treats omitted completedStageMeta as undefined", async () => {
-    const root = await createTempProject("run-persistence-no-stage-meta-extra");
-    await ensureRunSystem(root);
-    await writeFlowState(root, createInitialFlowState({ track: "standard" }), { allowReset: true });
-    expect((await readFlowState(root)).completedStageMeta).toBeUndefined();
+  it("resetFlowState zeroes slug and AC", async () => {
+    project = await createTempProject();
+    await writeFlowState(project, {
+      schemaVersion: 2,
+      currentSlug: "demo",
+      currentStage: "plan",
+      ac: [{ id: "AC-1", text: "t", status: "committed", commit: "abc" }],
+      lastSpecialist: null,
+      startedAt: "2026-05-07T00:00:00Z",
+      reviewIterations: 0,
+      securityFlag: false
+    });
+    await resetFlowState(project);
+    const state = await readFlowState(project);
+    expect(state.currentSlug).toBeNull();
+    expect(state.ac).toEqual([]);
   });
 });

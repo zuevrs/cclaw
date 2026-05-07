@@ -1,311 +1,35 @@
-export const FLOW_STAGES = [
-  "brainstorm",
-  "scope",
-  "design",
-  "spec",
-  "plan",
-  "tdd",
-  "review",
-  "ship"
-] as const;
-
+export const FLOW_STAGES = ["plan", "build", "review", "ship"] as const;
 export type FlowStage = (typeof FLOW_STAGES)[number];
-
-export const FLOW_TRACKS = ["quick", "medium", "standard"] as const;
-export type FlowTrack = (typeof FLOW_TRACKS)[number];
-
-export const DISCOVERY_MODES = ["lean", "guided", "deep"] as const;
-export type DiscoveryMode = (typeof DISCOVERY_MODES)[number];
-
-/**
- * Ordered stages that make up each flow track.
- *
- * - `standard` runs the full 8-stage pipeline (default — same as before tracks existed).
- * - `medium` keeps product framing but skips heavy scope/design lock-in:
- *   brainstorm -> spec -> plan -> tdd -> review -> ship.
- * - `quick` skips the upstream product stages (brainstorm/scope/design/plan) for
- *   small bug fixes or single-purpose changes where the spec is already known.
- *   It still keeps the non-negotiable safety gates: spec → tdd → review → ship.
- */
-export const TRACK_STAGES: Record<FlowTrack, readonly FlowStage[]> = {
-  standard: FLOW_STAGES,
-  medium: ["brainstorm", "spec", "plan", "tdd", "review", "ship"],
-  quick: ["spec", "tdd", "review", "ship"]
-} as const;
 
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
-/**
- * Opt-in language rule packs. When enabled in config, `cclaw sync` installs the
- * corresponding utility skill so the meta-skill router can load language-specific
- * anti-patterns, idioms, and review heuristics during review/tdd stages.
- *
- * Opt-in intentional: cclaw stays language-agnostic by default; rule packs are
- * additive context that the user must explicitly enable.
- */
-export const LANGUAGE_RULE_PACKS = ["typescript", "python", "go"] as const;
-export type LanguageRulePack = (typeof LANGUAGE_RULE_PACKS)[number];
+export const DISCOVERY_SPECIALISTS = ["brainstormer", "architect", "planner"] as const;
+export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
 
-/**
- * Per-track vocabulary hints the LLM applies when classifying a /cc prompt.
- *
- * Intentionally minimal:
- * - `triggers`: additional substrings that push a prompt toward this track.
- * - `veto`:     substrings that forbid this track even if a trigger matches.
- *
- * Removed:
- * - `patterns` (regex): no runtime ever consumed them; kept authors honest
- *   about what cclaw actually enforces.
- */
-export interface TrackHeuristicRule {
-  triggers?: string[];
-  veto?: string[];
+export const SPECIALISTS = [
+  ...DISCOVERY_SPECIALISTS,
+  "reviewer",
+  "security-reviewer",
+  "slice-builder"
+] as const;
+export type SpecialistId = (typeof SPECIALISTS)[number];
+
+export type ReviewerMode = "code" | "text-review" | "integration" | "release" | "adversarial";
+export type SecurityReviewerMode = "threat-model" | "sensitive-change";
+export type SliceBuilderMode = "build" | "fix-only";
+
+export type ArtifactStatus = "active" | "shipped";
+export type AcceptanceCriterionStatus = "pending" | "committed";
+
+export interface AcceptanceCriterionState {
+  id: string;
+  text: string;
+  commit?: string;
+  status: AcceptanceCriterionStatus;
 }
 
-/**
- * Optional prompt-to-track overrides for /cc classification.
- *
- * Honesty note: this config is **advisory**. cclaw surfaces these lists in
- * the /cc skill and contract prose so the LLM can apply them when picking a
- * track. There is no Node-level routing layer that mechanically enforces the
- * result — which is why we only ship `triggers`, `veto`, and `fallback`, not
- * regex patterns or priority overrides.
- *
- * Removed:
- * - `priority`: track evaluation order is always `standard -> medium -> quick`
- *   (narrow-to-broad matching). Overriding it was never wired.
- */
-export interface TrackHeuristicsConfig {
-  /** Track used when no trigger matches. Defaults to `standard`. */
-  fallback?: FlowTrack;
-  /** Per-track vocabulary hints. */
-  tracks?: Partial<Record<FlowTrack, TrackHeuristicRule>>;
-}
-
-/**
- * Opt-in plan-slice review heuristic.
- *
- * When enabled, the TDD stage skill is instructed to insert a
- * `## Per-Slice Review` section into `06-tdd.md` for every plan slice
- * whose estimated `touchCount` meets `filesChangedThreshold`, whose
- * `touchPaths` match any `touchTriggers` glob, or whose plan row is
- * flagged `highRisk: true`. The section records a short spec-compliance
- * pass plus a short quality pass (delegated to the `reviewer` subagent
- * when the harness supports native dispatch, otherwise fulfilled via
- * an explicit in-session role switch with evidence).
- *
- * Track gating: `enforceOnTracks` lists the tracks where the sync/runtime check escalates to a warning. Tracks outside this list still see
- * the skill prose but leave the decision to the user.
- *
- * All fields optional; sensible defaults: disabled, threshold 5, no
- * touch triggers, `enforceOnTracks: ["standard"]`.
- */
-export interface SliceReviewConfig {
-  /** Turn the heuristic on (disabled by default). */
-  enabled?: boolean;
-  /** Minimum estimated touchCount for a slice to be eligible. */
-  filesChangedThreshold?: number;
-  /** Glob hints; any plan-task touchPath match triggers review. */
-  touchTriggers?: string[];
-  /** Tracks on which missed reviews escalate to a sync/runtime warning. */
-  enforceOnTracks?: FlowTrack[];
-}
-
-/**
- * File-path routing hints used by workflow-guard during `tdd` stage.
- *
- * - `testPathPatterns`: paths considered test-side changes (RED writes).
- * - `productionPathPatterns`: optional allowlist for production paths that
- *   participate in GREEN/REFACTOR checks. When omitted, workflow-guard treats
- *   non-test code files as production writes.
- */
-export interface TddPathConfig {
-  testPathPatterns?: string[];
-  productionPathPatterns?: string[];
-  /**
-   * Verification reference policy for tdd_verified_before_complete evidence.
-   * - auto: require commit SHA when .git exists; with vcs:none require no-VCS reason plus content/artifact hash.
-   * - required: always require a commit SHA except explicit vcs:none still uses no-VCS hash evidence.
-   * - disabled: command + pass status are enough.
-   */
-  verificationRef?: "auto" | "required" | "disabled";
-}
-
-/**
- * Compound-stage clustering policy.
- *
- * `recurrenceThreshold` is the base minimum repeat count for a trigger/action
- * cluster before it is eligible for promotion into durable rules/skills.
- */
-export interface CompoundConfig {
-  recurrenceThreshold?: number;
-}
-
-/**
- * Early-stage Ralph loop policy for brainstorm/scope/design.
- *
- * - enabled: when false, skip early-loop gate/diagnostics and hook writes.
- * - maxIterations: capped producer/critic iterations before convergence
- *   escalation. Defaults to 3.
- */
-export interface EarlyLoopConfig {
-  enabled?: boolean;
-  maxIterations?: number;
-}
-
-export interface IronLawsConfig {
-  /**
-   * Per-law escape hatch: list the iron-law ids that must always be strict,
-   * independent of the project-wide `strictness` knob. Kept as an advanced
-   * override for teams that want e.g. `tdd-red-before-write` strict while the
-   * rest of the pipeline stays advisory.
-   */
-  strictLaws?: string[];
-}
-
-/**
- * Optional opt-in audit toggles for additional stage lint gates.
- *
- * `scopePreAudit` stays opt-in (disabled by default). `staleDiagramAudit` is
- * default-on and can be explicitly disabled when teams intentionally skip it.
- */
-export interface OptInAuditsConfig {
-  /** When true, scope lint requires a filled `Pre-Scope System Audit` section. */
-  scopePreAudit?: boolean;
-  /** Default true; when enabled, design lint runs stale diagram drift checks against blast radius files. */
-  staleDiagramAudit?: boolean;
-}
-
-export interface ReviewLoopExternalSecondOpinionConfig {
-  /** Enables a second outside-voice pass for review-loop iterations. */
-  enabled?: boolean;
-  /** Optional model label for traceability in artifacts/logs. */
-  model?: string;
-  /** Minimum score delta that should be surfaced as disagreement context. */
-  scoreDeltaThreshold?: number;
-}
-
-export interface ReviewLoopConfig {
-  externalSecondOpinion?: ReviewLoopExternalSecondOpinionConfig;
-}
-
-export type VcsMode = "git-with-remote" | "git-local-only" | "none";
-export type TddCommitMode =
-  | "managed-per-slice"
-  | "agent-required"
-  | "checkpoint-only"
-  | "off";
-export type TddIsolationMode = "worktree" | "in-place" | "auto";
-export type ExecutionTopology =
-  | "auto"
-  | "inline"
-  | "single-builder"
-  | "parallel-builders"
-  | "strict-micro";
-export type ExecutionStrictnessProfile = "fast" | "balanced" | "strict";
-export type PlanSliceGranularity = "feature-atomic" | "strict-micro";
-export type PlanMicroTaskPolicy = "advisory" | "strict";
-/**
- * 7.6.0 — what slice-commit does when a manifest in the slice's
- * claim drifts its corresponding lockfile twin (e.g. Cargo.toml +
- * Cargo.lock; package.json + package-lock.json; pyproject.toml +
- * poetry.lock; etc).
- *
- * - `auto-include` (default) — fold the lockfile drift into the slice
- *   commit so the manifest + lockfile land atomically.
- * - `auto-revert` — revert the lockfile drift before commit so the
- *   slice ships only the manifest change; the next CI/test run will
- *   regenerate the lockfile.
- * - `strict-fence` — reject the lockfile drift as
- *   `slice_commit_path_drift` (pre-7.6.0 behavior).
- */
-export type LockfileTwinPolicy = "auto-include" | "auto-revert" | "strict-fence";
-
-export interface TddConfig {
-  /**
-   * Commit ownership model for closed TDD slices.
-   * - managed-per-slice: cclaw-generated hook performs one commit per closed slice.
-   * - agent-required: worker/controller must create the commit outside cclaw.
-   * - checkpoint-only: coarse-grained checkpoints are allowed (no per-slice enforcement).
-   * - off: skip commit-shape enforcement.
-   */
-  commitMode?: TddCommitMode;
-  /**
-   * Slice execution isolation model.
-   * - worktree: default; allocate one git worktree per slice span.
-   * - in-place: run in the main working tree.
-   * - auto: prefer worktree, degrade to in-place when unavailable.
-   */
-  isolationMode?: TddIsolationMode;
-  /**
-   * Repo-relative root used for managed slice worktrees.
-   */
-  worktreeRoot?: string;
-  /**
-   * 7.6.0 — slice-commit policy when a manifest claim drifts its lockfile
-   * twin (Cargo.toml/Cargo.lock, package.json/package-lock.json, etc).
-   * Defaults to `auto-include` so the manifest + regenerated lockfile
-   * land in the same managed commit instead of failing on drift.
-   */
-  lockfileTwinPolicy?: LockfileTwinPolicy;
-}
-
-export interface ExecutionConfig {
-  /**
-   * 7.7.0 — adaptive execution topology for implementation units.
-   *
-   * - `auto` (default): choose the cheapest safe route from plan shape.
-   * - `inline`: controller may execute a low-risk unit inline while still
-   *   recording RED/GREEN/REFACTOR evidence.
-   * - `single-builder`: one slice-builder owns a feature-atomic unit.
-   * - `parallel-builders`: fan out independent substantial units only.
-   * - `strict-micro`: preserve the pre-7.7 posture where each tiny task is
-   *   its own schedulable slice.
-   */
-  topology?: ExecutionTopology;
-  /**
-   * 7.7.0 — default calibration for topology and plan-shape advisories.
-   * `balanced` is the default: prefer feature-atomic units with internal
-   * 2-5 minute TDD steps, warning on microtask-only plans without blocking.
-   */
-  strictness?: ExecutionStrictnessProfile;
-  /**
-   * 7.7.0 — upper bound for simultaneous slice-builder workers when the
-   * router selects `parallel-builders`.
-   */
-  maxBuilders?: number;
-}
-
-export interface PlanConfig {
-  /**
-   * 7.7.0 — default schedulable surface for plan authoring.
-   * - feature-atomic: U-* slices contain internal 2-5 minute TDD steps.
-   * - strict-micro: one tiny task can remain one schedulable slice.
-   */
-  sliceGranularity?: PlanSliceGranularity;
-  /**
-   * 7.7.0 — how strongly the plan linter reacts to microtask-only plans.
-   * `advisory` warns in fast/balanced execution; `strict` treats strict
-   * microtask planning as intentional.
-   */
-  microTaskPolicy?: PlanMicroTaskPolicy;
-}
-
-export interface CclawConfig {
-  version: string;
-  flowVersion: string;
-  harnesses: HarnessId[];
-  tdd?: TddConfig;
-  execution?: ExecutionConfig;
-  plan?: PlanConfig;
-}
-
-export interface TransitionRule {
-  from: FlowStage;
-  to: FlowStage;
-  guards: string[];
-}
+export type RoutingClass = "trivial" | "small-medium" | "large-risky";
 
 export interface CliContext {
   cwd: string;

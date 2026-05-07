@@ -1,26 +1,20 @@
-export function cancelCommandContract(): string {
-  return `# /cc-cancel command contract
+export const CANCEL_COMMAND_BODY = `# /cc-cancel — cancel the active cclaw run
 
-Use this command when the user wants to stop the active run without claiming completion.
+This command stops the current cclaw flow without finishing it.
 
-## Protocol
+## Behaviour
 
-1. Ask for a concise cancellation reason if the user has not already provided one.
-2. Run \`node .cclaw/hooks/cancel-run.mjs --reason="<reason>"\` from the project root. Use \`--disposition=abandoned\` only when the user explicitly frames the run as abandoned rather than cancelled.
-3. Report the archive path and reset run id. Make clear that the archived run is not a completed ship.
+1. Read \`.cclaw/state/flow-state.json\`.
+2. If \`currentSlug\` is null: there is nothing to cancel; tell the user.
+3. Otherwise:
+   - Move every active artifact for \`<slug>\` into \`.cclaw/cancelled/<slug>/\` (do **not** push to shipped).
+   - Reset flow-state to fresh (currentSlug=null, currentStage=null, ac=[]).
+   - Do not auto-commit anything; leave the working tree as is.
+4. Confirm the cancellation in one line.
 
-Cancelled and abandoned archives are allowed from any stage, but they require a required reason so future readers know why the run ended.
+Cancelling does **not** delete artifacts. They stay in \`.cclaw/cancelled/<slug>/\` so the user can recover them or revisit them later.
 `;
-}
 
-export function cancelCommandSkillMarkdown(): string {
-  return `---
-name: flow-cancel
-description: Cancel or abandon the active cclaw run with a required reason. Use when the user types /cc-cancel or asks to cancel, abandon, stop, discard, or reset an unfinished run.
----
-
-# Cancel cclaw Run
-
-Load and follow \`.cclaw/commands/cancel.md\`. This is a non-completion path: require a reason, run the generated cancel helper, and archive with cancelled or abandoned disposition.
-`;
+export function renderCancelCommand(): string {
+  return CANCEL_COMMAND_BODY;
 }

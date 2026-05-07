@@ -1,167 +1,23 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
-import { configPath, readConfig, writeConfig } from "../../src/config.js";
-import { initCclaw } from "../../src/install.js";
-import { createTempProject } from "../helpers/index.js";
+import { createDefaultConfig, validateHarnesses } from "../../src/config.js";
 
 describe("config", () => {
-  it("defaults to harness-only config when file is missing", async () => {
-    const root = await createTempProject("config-default-minimal");
-    const config = await readConfig(root);
-    expect(config.harnesses.length).toBeGreaterThan(0);
-    expect(config.version.length).toBeGreaterThan(0);
-    expect(config.flowVersion.length).toBeGreaterThan(0);
+  it("default config locks v8 flow + minimal hooks", () => {
+    const config = createDefaultConfig();
+    expect(config.flowVersion).toBe("8");
+    expect(config.hooks.profile).toBe("minimal");
+    expect(config.harnesses).toEqual(["cursor"]);
   });
 
-  it("rejects explicit empty harness list", async () => {
-    const root = await createTempProject("config-empty");
-    await writeConfig(root, {
-      version: "0.1.0",
-      flowVersion: "1.0.0",
-      harnesses: []
-    });
-    await expect(readConfig(root)).rejects.toThrow(/"harnesses" must include at least one harness/);
+  it("validateHarnesses accepts known ids", () => {
+    expect(validateHarnesses(["cursor", "claude"]).sort()).toEqual(["claude", "cursor"]);
   });
 
-  it("rejects unknown top-level config keys with migration hint", async () => {
-    const root = await createTempProject("config-unknown-key");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\nsurpriseMode: true\n",
-      "utf8"
-    );
-    await expect(readConfig(root)).rejects.toThrow(
-      /no longer supported in cclaw 3.0.0; see CHANGELOG\.md/
-    );
+  it("validateHarnesses rejects unknown ids", () => {
+    expect(() => validateHarnesses(["bogus"])).toThrow();
   });
 
-  it("throws on malformed yaml instead of silently defaulting", async () => {
-    const root = await createTempProject("config-malformed");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(configPath(root), "::: not valid yaml :::", "utf8");
-    await expect(readConfig(root)).rejects.toThrow(/Invalid cclaw config/);
-    await expect(readConfig(root)).rejects.toThrow(
-      /failed to parse YAML|top-level config must be a YAML mapping\/object/
-    );
-  });
-
-  it("reads explicit tdd.commitMode from config", async () => {
-    const root = await createTempProject("config-commit-mode-explicit");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\ntdd:\n  commitMode: checkpoint-only\n",
-      "utf8"
-    );
-    const config = await readConfig(root);
-    expect(config.tdd?.commitMode).toBe("checkpoint-only");
-  });
-
-  it("reads explicit tdd isolation settings from config", async () => {
-    const root = await createTempProject("config-isolation-explicit");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\ntdd:\n  commitMode: managed-per-slice\n  isolationMode: auto\n  worktreeRoot: .cclaw/custom-worktrees\n",
-      "utf8"
-    );
-    const config = await readConfig(root);
-    expect(config.tdd?.isolationMode).toBe("auto");
-    expect(config.tdd?.worktreeRoot).toBe(".cclaw/custom-worktrees");
-  });
-
-  it("rejects invalid tdd.commitMode values", async () => {
-    const root = await createTempProject("config-commit-mode-invalid");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\ntdd:\n  commitMode: fast-and-loose\n",
-      "utf8"
-    );
-    await expect(readConfig(root)).rejects.toThrow(/tdd\.commitMode/);
-  });
-
-  it("rejects invalid tdd.isolationMode values", async () => {
-    const root = await createTempProject("config-isolation-invalid");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\ntdd:\n  isolationMode: sandbox\n",
-      "utf8"
-    );
-    await expect(readConfig(root)).rejects.toThrow(/tdd\.isolationMode/);
-  });
-
-  it("cclaw init writes harnesses + version stamps + tdd defaults", async () => {
-    const root = await createTempProject("config-init-minimal");
-    await initCclaw({ projectRoot: root, harnesses: ["claude"] });
-
-    const raw = await fs.readFile(configPath(root), "utf8");
-    const parsed = parse(raw) as Record<string, unknown>;
-    expect(Object.keys(parsed).sort()).toEqual([
-      "execution",
-      "flowVersion",
-      "harnesses",
-      "plan",
-      "tdd",
-      "version"
-    ]);
-    expect(parsed.harnesses).toEqual(["claude"]);
-    expect(parsed.tdd).toEqual({
-      commitMode: "managed-per-slice",
-      isolationMode: "worktree",
-      worktreeRoot: ".cclaw/worktrees",
-      lockfileTwinPolicy: "auto-include"
-    });
-    expect(parsed.execution).toEqual({
-      topology: "auto",
-      strictness: "balanced",
-      maxBuilders: 5
-    });
-    expect(parsed.plan).toEqual({
-      sliceGranularity: "feature-atomic",
-      microTaskPolicy: "advisory"
-    });
-  });
-
-  it("reads explicit adaptive execution topology settings from config", async () => {
-    const root = await createTempProject("config-execution-topology-explicit");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\nexecution:\n  topology: parallel-builders\n  strictness: fast\n  maxBuilders: 3\nplan:\n  sliceGranularity: strict-micro\n  microTaskPolicy: strict\n",
-      "utf8"
-    );
-    const config = await readConfig(root);
-    expect(config.execution?.topology).toBe("parallel-builders");
-    expect(config.execution?.strictness).toBe("fast");
-    expect(config.execution?.maxBuilders).toBe(3);
-    expect(config.plan?.sliceGranularity).toBe("strict-micro");
-    expect(config.plan?.microTaskPolicy).toBe("strict");
-  });
-
-  it("rejects invalid adaptive execution topology settings", async () => {
-    const root = await createTempProject("config-execution-topology-invalid");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\nexecution:\n  topology: swarm\n",
-      "utf8"
-    );
-    await expect(readConfig(root)).rejects.toThrow(/execution\.topology/);
-  });
-
-  it("rejects invalid adaptive plan policy settings", async () => {
-    const root = await createTempProject("config-plan-policy-invalid");
-    await fs.mkdir(path.join(root, ".cclaw"), { recursive: true });
-    await fs.writeFile(
-      configPath(root),
-      "harnesses:\n  - claude\nplan:\n  microTaskPolicy: maybe\n",
-      "utf8"
-    );
-    await expect(readConfig(root)).rejects.toThrow(/plan\.microTaskPolicy/);
+  it("validateHarnesses rejects empty list", () => {
+    expect(() => validateHarnesses([])).toThrow();
   });
 });

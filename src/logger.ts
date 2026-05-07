@@ -1,9 +1,21 @@
-import type { CliContext } from "./types.js";
+type Stream = NodeJS.WriteStream | { write: (chunk: string) => unknown };
 
-export function info(ctx: CliContext, message: string): void {
-  ctx.stdout.write(`[cclaw] ${message}\n`);
+let stdout: Stream = process.stdout;
+let stderr: Stream = process.stderr;
+
+export function configureLogger(out: Stream, err: Stream): void {
+  stdout = out;
+  stderr = err;
 }
 
-export function error(ctx: CliContext, message: string): void {
-  ctx.stderr.write(`[cclaw:error] ${message}\n`);
+export function info(message: string): void {
+  stdout.write(`${message}\n`);
+}
+
+export function warn(message: string): void {
+  stderr.write(`${message}\n`);
+}
+
+export function error(message: string): void {
+  stderr.write(`${message}\n`);
 }

@@ -1,7 +1,7 @@
 {
   "name": "cclaw-cli",
-  "version": "7.7.1",
-  "description": "Installer-first flow toolkit for coding agents",
+  "version": "8.0.0",
+  "description": "Lightweight harness-first flow toolkit for coding agents",
   "type": "module",
   "bin": {
     "cclaw-cli": "dist/cli.js",
@@ -33,7 +33,10 @@
     "cli",
     "agent",
     "workflow",
-    "tdd",
+    "harness",
+    "claude",
+    "cursor",
+    "opencode",
     "npx"
   ],
   "license": "MIT",

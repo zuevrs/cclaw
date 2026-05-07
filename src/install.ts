@@ -1,1645 +1,213 @@
-import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
-import {
-  CCLAW_VERSION,
-  FLOW_VERSION,
-  REQUIRED_DIRS,
-  RUNTIME_ROOT
-} from "./constants.js";
-import {
-  writeConfig,
-  createDefaultConfig,
-  readConfig,
-  configPath,
-  detectAdvancedKeys
-} from "./config.js";
-import { learnSkillMarkdown } from "./content/learnings.js";
-import { stageCommandShimMarkdown } from "./content/stage-command.js";
-import { ideaCommandContract, ideaCommandSkillMarkdown } from "./content/idea.js";
-import { startCommandContract, startCommandSkillMarkdown } from "./content/start-command.js";
-import { viewCommandContract, viewCommandSkillMarkdown } from "./content/view-command.js";
-import { cancelCommandContract, cancelCommandSkillMarkdown } from "./content/cancel-command.js";
-import { subagentDrivenDevSkill, parallelAgentsSkill } from "./content/subagents.js";
-import { sessionHooksSkillMarkdown } from "./content/session-hooks.js";
-import { ironLawsSkillMarkdown } from "./content/iron-laws.js";
-import {
-  stageCompleteScript,
-  startFlowScript,
-  cancelRunScript,
-  runHookCmdScript,
-  delegationRecordScript,
-  sliceCommitScript,
-  opencodePluginJs,
-  claudeHooksJson,
-  codexHooksJson,
-  cursorHooksJson
-} from "./content/hooks.js";
-import {
-  nodeHookRuntimeScript,
-  type NodeHookRuntimeOptions
-} from "./content/node-hooks.js";
-import { META_SKILL_NAME, usingCclawSkillMarkdown } from "./content/meta-skill.js";
-import {
-  ARTIFACT_TEMPLATES,
-  CURSOR_GUIDELINES_RULE_MDC,
-  CURSOR_WORKFLOW_RULE_MDC,
-  RULEBOOK_MARKDOWN,
-  buildRulesJson
-} from "./content/templates.js";
-import { STATE_CONTRACTS } from "./content/state-contracts.js";
-import { REVIEW_PROMPTS } from "./content/review-prompts.js";
-import {
-  stageSkillFolder,
-  stageSkillMarkdown,
-  executingWavesSkillMarkdown
-} from "./content/skills.js";
-import { adaptiveElicitationSkillMarkdown } from "./content/skills-elicitation.js";
-import {
-  LANGUAGE_RULE_PACK_DIR,
-  LEGACY_LANGUAGE_RULE_PACK_FOLDERS
-} from "./content/utility-skills.js";
-import { RESEARCH_PLAYBOOKS } from "./content/research-playbooks.js";
-import { SUBAGENT_CONTEXT_SKILLS } from "./content/subagent-context-skills.js";
-import { CCLAW_AGENTS } from "./content/core-agents.js";
-import { createInitialFlowState } from "./flow-state.js";
-import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
-import { ManagedResourceSession, readManagedResourceManifest, setActiveManagedResourceSession } from "./managed-resources.js";
-import { ensureGitignore, removeGitignorePatterns } from "./gitignore.js";
-import {
-  HARNESS_ADAPTERS,
-  harnessShimFileNames,
-  harnessShimSkillNames,
-  syncHarnessShims,
-  removeCclawFromAgentsMd
-} from "./harness-adapters.js";
-import { validateHookDocument } from "./hook-schema.js";
-import { detectHarnesses } from "./init-detect.js";
-import {
-  classifyCodexHooksFlag,
-  codexConfigPath,
-  readCodexConfig
-} from "./codex-feature-flag.js";
-import { CorruptFlowStateError, ensureRunSystem } from "./runs.js";
-import {
-  formatNextParallelWaveSyncHint,
-  mergeParallelWaveDefinitions,
-  parseParallelExecutionPlanWaves,
-  parseWavePlanDirectory
-} from "./internal/plan-split-waves.js";
-import type { CclawConfig, FlowTrack, HarnessId } from "./types.js";
-import { FLOW_STAGES } from "./types.js";
+import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
+import { ACTIVE_ARTIFACT_DIRS, type ArtifactStage } from "./artifact-paths.js";
+import { CORE_AGENTS, renderAgentMarkdown } from "./content/core-agents.js";
+import { COMMIT_HELPER_HOOK_SPEC, NODE_HOOKS, SESSION_START_HOOK_SPEC, STOP_HANDOFF_HOOK_SPEC, type NodeHookSpec } from "./content/node-hooks.js";
+import { renderStartCommand } from "./content/start-command.js";
+import { renderCancelCommand } from "./content/cancel-command.js";
+import { renderIdeaCommand } from "./content/idea-command.js";
+import { ensureDir, exists, writeFileSafe, removePath } from "./fs-utils.js";
+import { ensureRunSystem } from "./run-persistence.js";
+import { createDefaultConfig, readConfig, renderConfig, type CclawConfig } from "./config.js";
+import { HARNESS_IDS, type HarnessId } from "./types.js";
+import { ironLawsMarkdown } from "./content/iron-laws.js";
 
-export interface InitOptions {
-  projectRoot: string;
-  harnesses?: HarnessId[];
-  track?: FlowTrack;
+export interface HarnessLayout {
+  id: HarnessId;
+  commandsDir: string;
+  agentsDir: string;
+  hooksConfig: { dir: string; fileName: string } | null;
 }
+
+const HARNESS_LAYOUTS: Record<HarnessId, HarnessLayout> = {
+  claude: {
+    id: "claude",
+    commandsDir: ".claude/commands",
+    agentsDir: ".claude/agents",
+    hooksConfig: { dir: ".claude/hooks", fileName: "hooks.json" }
+  },
+  cursor: {
+    id: "cursor",
+    commandsDir: ".cursor/commands",
+    agentsDir: ".cursor/agents",
+    hooksConfig: { dir: ".cursor", fileName: "hooks.json" }
+  },
+  opencode: {
+    id: "opencode",
+    commandsDir: ".opencode/commands",
+    agentsDir: ".opencode/agents",
+    hooksConfig: { dir: ".opencode/plugins", fileName: "cclaw-plugin.mjs" }
+  },
+  codex: {
+    id: "codex",
+    commandsDir: ".codex/commands",
+    agentsDir: ".codex/agents",
+    hooksConfig: { dir: ".codex", fileName: "hooks.json" }
+  }
+};
 
 export interface SyncOptions {
+  cwd: string;
   harnesses?: HarnessId[];
-  check?: boolean;
 }
 
-const OPENCODE_PLUGIN_REL_PATH = ".opencode/plugins/cclaw-plugin.mjs";
-const CURSOR_RULE_REL_PATH = ".cursor/rules/cclaw-workflow.mdc";
-const CURSOR_GUIDELINES_REL_PATH = ".cursor/rules/cclaw-guidelines.mdc";
-const INIT_SENTINEL_FILE = ".init-in-progress";
-const execFileAsync = promisify(execFile);
-
-function runtimePath(projectRoot: string, ...segments: string[]): string {
-  return path.join(projectRoot, RUNTIME_ROOT, ...segments);
+export interface SyncResult {
+  installedHarnesses: HarnessId[];
+  configPath: string;
 }
 
-async function writeInitSentinel(projectRoot: string, operation: string): Promise<string> {
-  const sentinelPath = runtimePath(projectRoot, "state", INIT_SENTINEL_FILE);
-  await ensureDir(path.dirname(sentinelPath));
+const PLAN_TEMPLATE_BODY = `_Replace this paragraph with one or two sentences explaining what we are doing and why._\n\n## Context\n\n_(brainstormer fills this when invoked.)_\n\n## Acceptance Criteria\n\n- AC-1: _Describe a single observable outcome that closes one commit._\n\n## Plan\n\n- Step 1.\n\n## Traceability\n\n- AC-1 → commit pending\n`;
+
+function planTemplate(slug: string): string {
+  return `---\nslug: ${slug}\nstage: plan\nstatus: active\nac:\n  - id: AC-1\n    text: \"Replace with the first observable outcome.\"\n    status: pending\nlast_specialist: null\nrefines: null\nshipped_at: null\nship_commit: null\nreview_iterations: 0\nsecurity_flag: false\n---\n\n# ${slug}\n\n${PLAN_TEMPLATE_BODY}`;
+}
+
+export async function ensureRuntimeRoot(projectRoot: string): Promise<void> {
+  const root = path.join(projectRoot, RUNTIME_ROOT);
+  for (const dir of [
+    "state",
+    ...Object.values(ACTIVE_ARTIFACT_DIRS),
+    "shipped",
+    "agents",
+    "hooks",
+    "templates"
+  ]) {
+    await ensureDir(path.join(root, dir));
+  }
   await writeFileSafe(
-    sentinelPath,
-    `${JSON.stringify({ operation, startedAt: new Date().toISOString() }, null, 2)}\n`
-  );
-  return sentinelPath;
-}
-
-async function warnStaleInitSentinel(projectRoot: string, operation: string): Promise<void> {
-  const sentinelPath = runtimePath(projectRoot, "state", INIT_SENTINEL_FILE);
-  if (!(await exists(sentinelPath))) return;
-
-  let startedAt = "unknown time";
-  try {
-    const raw = await fs.readFile(sentinelPath, "utf8");
-    const parsed = JSON.parse(raw) as { startedAt?: unknown } | null;
-    if (parsed && typeof parsed.startedAt === "string" && parsed.startedAt.trim().length > 0) {
-      startedAt = parsed.startedAt;
-    }
-  } catch {
-    // best-effort parse of stale sentinel metadata
-  }
-
-  process.stderr.write(
-    `[${operation}] Detected stale .init-in-progress sentinel from ${startedAt}; previous run may have crashed. Continuing.\n`
+    path.join(root, ".gitkeep"),
+    "cclaw v8 runtime root. Generated by cclaw-cli; safe to keep in version control.\n"
   );
 }
 
+async function writeHookFile(projectRoot: string, hook: NodeHookSpec): Promise<void> {
+  const hookPath = path.join(projectRoot, RUNTIME_ROOT, "hooks", hook.fileName);
+  await writeFileSafe(hookPath, hook.body);
+  await fs.chmod(hookPath, 0o755);
+}
 
-async function removeBestEffort(targetPath: string, recursive = false): Promise<void> {
-  try {
-    await fs.rm(targetPath, { recursive, force: true });
-  } catch {
-    // best-effort cleanup
+async function writeAgentFiles(projectRoot: string): Promise<void> {
+  for (const agent of CORE_AGENTS) {
+    const agentPath = path.join(projectRoot, RUNTIME_ROOT, "agents", `${agent.id}.md`);
+    await writeFileSafe(agentPath, renderAgentMarkdown(agent));
   }
 }
 
-const DEPRECATED_UTILITY_SKILL_FOLDERS = [
-  "project-learnings",
-  "auto-orchestration",
-  "autoplan",
-  "red-first-testing",
-  "incremental-implementation",
-  "subagent-driven-development",
-  "dispatching-parallel-agents",
-  "session-guidelines",
-  "security-review",
-  "documentation",
-  "browser-qa-testing",
-  "feature-workspaces",
-  "security",
-  "debugging",
-  "performance",
-  "ci-cd",
-  "docs",
-  "executing-plans",
-  "verification-before-completion",
-  "finishing-a-development-branch",
-  "context-engineering",
-  "source-driven-development",
-  "frontend-accessibility",
-  "landscape-check",
-  "knowledge-curation",
-  "retrospective",
-  "document-review",
-  "flow-status",
-  "flow-tree",
-  "flow-diff"
-] as const;
-
-const DEPRECATED_STAGE_SKILL_FOLDERS = [
-  "brainstorming",
-  "scope-shaping",
-  "engineering-design-lock",
-  "specification-authoring",
-  "planning-and-task-breakdown",
-  "test-driven-development",
-  "two-layer-review",
-  "shipping-and-handoff"
-] as const;
-
-const DEPRECATED_AGENT_FILES = [
-  "securityer.md",
-  "spec-reviewer.md",
-  "code-reviewer.md",
-  "repo-research-analyst.md",
-  "learnings-researcher.md",
-  "framework-docs-researcher.md",
-  "best-practices-researcher.md",
-  "git-history-analyzer.md",
-  "test-author.md",
-  "slice-implementer.md",
-  "slice-documenter.md"
-] as const;
-
-const DEPRECATED_COMMAND_FILES = [
-  "learn.md",
-  "finish.md",
-  "status.md",
-  "tree.md",
-  "diff.md",
-  "feature.md",
-  "ops.md",
-  "tdd-log.md",
-  "retro.md",
-  "compound.md",
-  "archive.md",
-  "rewind.md"
-] as const;
-
-const DEPRECATED_SKILL_FILES = [
-  ["flow-finish", "SKILL.md"],
-  ["flow-ops", "SKILL.md"],
-  ["flow-retro", "SKILL.md"],
-  ["flow-compound", "SKILL.md"],
-  ["flow-archive", "SKILL.md"],
-  ["flow-rewind", "SKILL.md"],
-  ["using-git-worktrees", "SKILL.md"]
-] as const;
-
-// Skill folders whose entire directory should be removed on sync so the
-// abandoned tree doesn't linger in user projects.
-const DEPRECATED_SKILL_FOLDERS_FULL = [
-  "tdd-cycle-log"
-] as const;
-
-const DEPRECATED_STATE_FILES = [
-  "checkpoint.json",
-  "flow-state.snapshot.json",
-  "stage-activity.jsonl",
-  "knowledge-digest.md",
-  "suggestion-memory.json",
-  "harness-gaps.json",
-  "context-mode.json",
-  "session-digest.md",
-  "context-warnings.jsonl",
-  "tdd-cycle-log.jsonl"
-] as const;
-
-// Files under `<runtime>/artifacts/` that older releases generated and
-// the current release removes. `cclaw-cli sync` deletes each so existing
-// installs lose the obsolete sidecar without requiring manual cleanup.
-const DEPRECATED_ARTIFACT_FILES = [
-  "06-tdd-slices.jsonl"
-] as const;
-
-const DEPRECATED_HOOK_FILES = [
-  "observe.sh",
-  "summarize-observations.sh",
-  "summarize-observations.mjs",
-  "_lib.sh",
-  "session-start.sh",
-  "stop-checkpoint.sh",
-  "stage-complete.sh",
-  "pre-compact.sh",
-  "prompt-guard.sh",
-  "workflow-guard.sh",
-  "context-monitor.sh"
-] as const;
-
-const DEPRECATED_RUNTIME_ROOT_FILES = ["learnings.jsonl", "observations.jsonl"] as const;
-const DEPRECATED_RUNTIME_DIRS = ["evals", "references", "contexts"] as const;
-
-async function resolveGitHooksDir(projectRoot: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", "hooks"], {
-      cwd: projectRoot
-    });
-    const rel = stdout.trim();
-    if (rel.length === 0) {
-      return null;
-    }
-    return path.resolve(projectRoot, rel);
-  } catch {
-    return null;
-  }
+async function writeTemplates(projectRoot: string): Promise<void> {
+  await writeFileSafe(
+    path.join(projectRoot, RUNTIME_ROOT, "templates", "plan.md"),
+    planTemplate("EXAMPLE-SLUG")
+  );
+  await writeFileSafe(
+    path.join(projectRoot, RUNTIME_ROOT, "templates", "iron-laws.md"),
+    ironLawsMarkdown()
+  );
 }
 
+async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): Promise<void> {
+  await ensureDir(path.join(projectRoot, layout.commandsDir));
+  await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc.md"), renderStartCommand());
+  await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc-cancel.md"), renderCancelCommand());
+  await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc-idea.md"), renderIdeaCommand());
 
-// Older versions installed Node-based git pre-commit/pre-push relays under
-// `.git/hooks/*` and a runtime tree at `.cclaw/hooks/git/`. cclaw no longer
-// manages git hooks; the cleanup below stays so existing installs shed the
-// leftover files on next sync/uninstall.
-const LEGACY_GIT_HOOK_MANAGED_MARKER = "cclaw-managed-git-hook";
-const LEGACY_GIT_HOOK_RUNTIME_REL_DIR = `${RUNTIME_ROOT}/hooks/git`;
-
-async function cleanupLegacyManagedGitHookRelays(projectRoot: string): Promise<void> {
-  const hooksDir = await resolveGitHooksDir(projectRoot);
-  if (hooksDir) {
-    for (const hookName of ["pre-commit", "pre-push"] as const) {
-      const hookPath = path.join(hooksDir, hookName);
-      if (!(await exists(hookPath))) continue;
-      let content = "";
-      try {
-        content = await fs.readFile(hookPath, "utf8");
-      } catch {
-        content = "";
-      }
-      if (!content.includes(LEGACY_GIT_HOOK_MANAGED_MARKER)) continue;
-      await fs.rm(hookPath, { force: true });
-    }
+  await ensureDir(path.join(projectRoot, layout.agentsDir));
+  for (const agent of CORE_AGENTS) {
+    await writeFileSafe(
+      path.join(projectRoot, layout.agentsDir, `${agent.id}.md`),
+      renderAgentMarkdown(agent)
+    );
   }
-  try {
-    await fs.rm(path.join(projectRoot, LEGACY_GIT_HOOK_RUNTIME_REL_DIR), { recursive: true, force: true });
-  } catch {
-    // best-effort cleanup
-  }
-}
 
-async function ensureStructure(projectRoot: string): Promise<void> {
-  for (const dir of REQUIRED_DIRS) {
+  if (layout.hooksConfig) {
+    const { dir, fileName } = layout.hooksConfig;
     await ensureDir(path.join(projectRoot, dir));
-  }
-}
-
-async function writeArtifactTemplates(projectRoot: string): Promise<void> {
-  await Promise.all(Object.entries(ARTIFACT_TEMPLATES).map(async ([fileName, content]) => {
-    await writeFileSafe(runtimePath(projectRoot, "templates", fileName), content);
-  }));
-  await Promise.all(Object.entries(STATE_CONTRACTS).map(async ([fileName, content]) => {
-    await writeFileSafe(runtimePath(projectRoot, "templates", "state-contracts", fileName), content);
-  }));
-}
-
-async function writeWavePlansScaffold(projectRoot: string): Promise<void> {
-  await writeFileSafe(runtimePath(projectRoot, "wave-plans", ".gitkeep"), "");
-}
-
-async function writeSkills(projectRoot: string, config?: CclawConfig): Promise<void> {
-  void config;
-  const manifest = await readManagedResourceManifest(projectRoot).catch(() => null);
-  const packageVersion = manifest?.packageVersion ?? null;
-  const skillTrack = "standard";
-  for (const stage of FLOW_STAGES) {
-    const folder = stageSkillFolder(stage);
-    await writeFileSafe(
-      runtimePath(projectRoot, "skills", folder, "SKILL.md"),
-      stageSkillMarkdown(stage, skillTrack, packageVersion)
-    );
-  }
-
-  // Utility skills (not flow stages)
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "learnings", "SKILL.md"),
-    learnSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-idea", "SKILL.md"),
-    ideaCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-start", "SKILL.md"),
-    startCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-view", "SKILL.md"),
-    viewCommandSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "flow-cancel", "SKILL.md"),
-    cancelCommandSkillMarkdown()
-  );
-
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "subagent-dev", "SKILL.md"),
-    subagentDrivenDevSkill()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "parallel-dispatch", "SKILL.md"),
-    parallelAgentsSkill()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "session", "SKILL.md"),
-    sessionHooksSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "iron-laws", "SKILL.md"),
-    ironLawsSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "executing-waves", "SKILL.md"),
-    executingWavesSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", "adaptive-elicitation", "SKILL.md"),
-    adaptiveElicitationSkillMarkdown()
-  );
-  await writeFileSafe(
-    runtimePath(projectRoot, "skills", META_SKILL_NAME, "SKILL.md"),
-    usingCclawSkillMarkdown()
-  );
-  // In-thread research procedures (no YAML frontmatter, not delegated personas).
-  for (const [fileName, markdown] of Object.entries(RESEARCH_PLAYBOOKS)) {
-    await writeFileSafe(runtimePath(projectRoot, "skills", "research", fileName), markdown);
-  }
-  for (const [fileName, markdown] of Object.entries(REVIEW_PROMPTS)) {
-    await writeFileSafe(runtimePath(projectRoot, "skills", "review-prompts", fileName), markdown);
-  }
-  for (const [folderName, markdown] of Object.entries(SUBAGENT_CONTEXT_SKILLS)) {
-    await writeFileSafe(runtimePath(projectRoot, "skills", folderName, "SKILL.md"), markdown);
-  }
-
-  await fs.rm(runtimePath(projectRoot, ...LANGUAGE_RULE_PACK_DIR), { recursive: true, force: true });
-
-  for (const legacyFolder of LEGACY_LANGUAGE_RULE_PACK_FOLDERS) {
-    const legacyPath = runtimePath(projectRoot, "skills", legacyFolder);
-    if (await exists(legacyPath)) {
-      await fs.rm(legacyPath, { recursive: true, force: true });
-    }
-  }
-
-}
-
-async function writeEntryCommands(projectRoot: string): Promise<void> {
-  await writeFileSafe(runtimePath(projectRoot, "commands", "start.md"), startCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "idea.md"), ideaCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "view.md"), viewCommandContract());
-  await writeFileSafe(runtimePath(projectRoot, "commands", "cancel.md"), cancelCommandContract());
-  for (const stage of FLOW_STAGES) {
-    await writeFileSafe(
-      runtimePath(projectRoot, "commands", `${stage}.md`),
-      stageCommandShimMarkdown(stage)
-    );
-  }
-}
-
-function toObject(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-}
-
-/**
- * Removes // and /* *\/ comments only outside JSON strings (double-quoted).
- * Used for recovering user-edited hook JSON without corrupting string contents.
- */
-function stripJsonCommentsOutsideStrings(input: string): string {
-  let out = "";
-  let i = 0;
-  let inString = false;
-  let escape = false;
-  while (i < input.length) {
-    const c = input[i]!;
-    if (inString) {
-      out += c;
-      if (escape) {
-        escape = false;
-      } else if (c === "\\") {
-        escape = true;
-      } else if (c === '"') {
-        inString = false;
-      }
-      i += 1;
-      continue;
-    }
-    if (c === '"') {
-      inString = true;
-      out += c;
-      i += 1;
-      continue;
-    }
-    const next = input[i + 1];
-    if (c === "/" && next === "/") {
-      while (i < input.length && input[i] !== "\n" && input[i] !== "\r") i += 1;
-      continue;
-    }
-    if (c === "/" && next === "*") {
-      i += 2;
-      while (i < input.length - 1 && !(input[i] === "*" && input[i + 1] === "/")) i += 1;
-      i = Math.min(i + 2, input.length);
-      continue;
-    }
-    out += c;
-    i += 1;
-  }
-  return out;
-}
-
-function normalizeJsonLike(raw: string): string {
-  return stripJsonCommentsOutsideStrings(raw).replace(/,\s*([}\]])/gu, "$1");
-}
-
-function tryParseHookDocument(raw: string): { parsed: unknown; recovered: boolean } | null {
-  try {
-    return { parsed: JSON.parse(raw), recovered: false };
-  } catch {
-    // continue with relaxed parse
-  }
-
-  try {
-    return { parsed: JSON.parse(normalizeJsonLike(raw)), recovered: true };
-  } catch {
-    return null;
-  }
-}
-
-function opencodeConfigCandidates(projectRoot: string): string[] {
-  return [
-    path.join(projectRoot, "opencode.json"),
-    path.join(projectRoot, "opencode.jsonc"),
-    path.join(projectRoot, ".opencode", "opencode.json"),
-    path.join(projectRoot, ".opencode", "opencode.jsonc")
-  ];
-}
-
-function normalizeOpenCodePluginEntry(entry: unknown): string | null {
-  if (typeof entry === "string" && entry.trim().length > 0) {
-    return entry.trim();
-  }
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-    return null;
-  }
-  const obj = entry as Record<string, unknown>;
-  for (const key of ["path", "src", "plugin"] as const) {
-    const value = obj[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return null;
-}
-
-function mergeOpenCodePluginConfig(
-  existingDoc: unknown,
-  pluginRelPath: string
-): { merged: Record<string, unknown>; changed: boolean } {
-  const root = toObject(existingDoc) ?? {};
-  const pluginsRaw = Array.isArray(root.plugin) ? [...root.plugin] : [];
-  const normalized = new Set(pluginsRaw.map((entry) => normalizeOpenCodePluginEntry(entry)).filter(Boolean));
-  if (!normalized.has(pluginRelPath)) {
-    pluginsRaw.push(pluginRelPath);
-  }
-  const permission = toObject(root.permission) ?? {};
-  const permissionChanged = permission.question !== "allow";
-  const changed =
-    !normalized.has(pluginRelPath) ||
-    !Array.isArray(root.plugin) ||
-    permissionChanged ||
-    !toObject(root.permission);
-  return {
-    merged: {
-      ...root,
-      plugin: pluginsRaw,
-      permission: {
-        ...permission,
-        question: "allow"
-      }
-    },
-    changed
-  };
-}
-
-async function resolveOpenCodeConfigPath(projectRoot: string): Promise<string> {
-  for (const candidate of opencodeConfigCandidates(projectRoot)) {
-    if (await exists(candidate)) {
-      return candidate;
-    }
-  }
-  return path.join(projectRoot, "opencode.json");
-}
-
-async function writeMergedOpenCodePluginConfig(
-  projectRoot: string,
-  pluginRelPath: string
-): Promise<void> {
-  const configPath = await resolveOpenCodeConfigPath(projectRoot);
-  await ensureDir(path.dirname(configPath));
-  let existingDoc: unknown = {};
-  if (await exists(configPath)) {
-    try {
-      const raw = await fs.readFile(configPath, "utf8");
-      const parsed = tryParseHookDocument(raw);
-      existingDoc = parsed?.parsed ?? {};
-    } catch {
-      existingDoc = {};
-    }
-  }
-  const { merged, changed } = mergeOpenCodePluginConfig(existingDoc, pluginRelPath);
-  if (changed || !(await exists(configPath))) {
-    await writeFileSafe(configPath, `${JSON.stringify(merged, null, 2)}\n`);
-  }
-}
-
-async function removeManagedOpenCodePluginConfig(projectRoot: string, pluginRelPath: string): Promise<void> {
-  for (const configPath of opencodeConfigCandidates(projectRoot)) {
-    if (!(await exists(configPath))) continue;
-    let parsed: unknown = null;
-    try {
-      const raw = await fs.readFile(configPath, "utf8");
-      parsed = tryParseHookDocument(raw)?.parsed ?? null;
-    } catch {
-      parsed = null;
-    }
-    const root = toObject(parsed);
-    if (!root || !Array.isArray(root.plugin)) continue;
-    const filtered = root.plugin.filter((entry) => normalizeOpenCodePluginEntry(entry) !== pluginRelPath);
-    if (filtered.length === root.plugin.length) {
-      continue;
-    }
-    root.plugin = filtered;
-    const remainingKeys = Object.keys(root).filter((k) => k !== "plugin" || filtered.length > 0);
-    if (remainingKeys.length === 0 || (remainingKeys.length === 1 && remainingKeys[0] === "plugin" && filtered.length === 0)) {
-      await fs.rm(configPath, { force: true });
+    if (fileName.endsWith(".mjs")) {
+      const moduleBody = `// cclaw v${CCLAW_VERSION} opencode plugin (minimal). Wires session-start and stop-handoff hooks.\nimport { spawn } from \"node:child_process\";\nimport path from \"node:path\";\nfunction run(filePath) {\n  return () => spawn(process.execPath, [path.join(\".cclaw\", \"hooks\", filePath)], { stdio: \"inherit\" });\n}\nexport default {\n  events: {\n    \"session.start\": run(\"session-start.mjs\"),\n    \"session.stop\": run(\"stop-handoff.mjs\")\n  }\n};\n`;
+      await writeFileSafe(path.join(projectRoot, dir, fileName), moduleBody);
     } else {
-      if (filtered.length === 0) {
-        delete root.plugin;
-      }
-      await writeFileSafe(configPath, `${JSON.stringify(root, null, 2)}\n`);
-    }
-  }
-}
-
-function backupFileNameForHook(projectRoot: string, hookFilePath: string): string {
-  const rel = path.relative(projectRoot, hookFilePath).replace(/[\\/]/gu, "__");
-  const ts = new Date().toISOString().replace(/[:.]/gu, "-");
-  return `${rel}.${ts}.bak`;
-}
-
-function harnessForHookFile(projectRoot: string, hookFilePath: string): "claude" | "cursor" | "codex" | null {
-  const rel = path.relative(projectRoot, hookFilePath).replace(/\\/gu, "/");
-  if (rel === ".claude/hooks/hooks.json") return "claude";
-  if (rel === ".cursor/hooks.json") return "cursor";
-  if (rel === ".codex/hooks.json") return "codex";
-  return null;
-}
-
-async function pruneOldHookBackups(backupsDir: string, maxBackups = 20): Promise<void> {
-  let entries: string[] = [];
-  try {
-    entries = await fs.readdir(backupsDir);
-  } catch {
-    entries = [];
-  }
-  if (entries.length <= maxBackups) return;
-
-  const withStats = await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(backupsDir, entry);
-    const stat = await fs.stat(fullPath);
-    return { fullPath, mtimeMs: stat.mtimeMs };
-  }));
-  withStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const stale = withStats.slice(maxBackups);
-  await Promise.all(stale.map(async (item) => {
-    await fs.rm(item.fullPath, { force: true });
-  }));
-}
-
-async function backupHookFile(projectRoot: string, hookFilePath: string, rawContent: string): Promise<string> {
-  const backupsDir = runtimePath(projectRoot, "backups", "hooks");
-  await ensureDir(backupsDir);
-  const fileName = backupFileNameForHook(projectRoot, hookFilePath);
-  const backupPath = path.join(backupsDir, fileName);
-  await writeFileSafe(backupPath, rawContent);
-  await pruneOldHookBackups(backupsDir);
-  return backupPath;
-}
-
-function normalizeHookCommandForDedupe(command: string): string {
-  return command.trim().replace(/\s+/gu, " ").replace(/\\/gu, "/");
-}
-
-function dedupeHookEntryByCommand(entry: unknown, seenCommands: Set<string>): unknown | undefined {
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-    return entry;
-  }
-
-  const obj = entry as Record<string, unknown>;
-  let changed = false;
-  if (typeof obj.command === "string") {
-    const normalized = normalizeHookCommandForDedupe(obj.command);
-    if (seenCommands.has(normalized)) {
-      return undefined;
-    }
-    seenCommands.add(normalized);
-  }
-
-  if (Array.isArray(obj.hooks)) {
-    const hooks: unknown[] = [];
-    for (const nested of obj.hooks) {
-      const deduped = dedupeHookEntryByCommand(nested, seenCommands);
-      if (deduped !== undefined) {
-        hooks.push(deduped);
-      } else {
-        changed = true;
-      }
-    }
-    if (hooks.length !== obj.hooks.length) {
-      changed = true;
-    }
-    if (hooks.length === 0 && typeof obj.command !== "string") {
-      return undefined;
-    }
-    return changed ? { ...obj, hooks } : entry;
-  }
-
-  return entry;
-}
-
-function dedupeHookEntriesByCommand(entries: unknown[]): unknown[] {
-  const seenCommands = new Set<string>();
-  const deduped: unknown[] = [];
-  for (const entry of entries) {
-    const next = dedupeHookEntryByCommand(entry, seenCommands);
-    if (next !== undefined) {
-      deduped.push(next);
-    }
-  }
-  return deduped;
-}
-
-function mergeHookDocuments(existingDoc: unknown, generatedDoc: unknown): Record<string, unknown> {
-  const generatedRoot = toObject(generatedDoc) ?? {};
-  const generatedHooks = toObject(generatedRoot.hooks) ?? {};
-
-  const strippedExisting = stripManagedHookCommands(existingDoc).updated;
-  const existingRoot = toObject(strippedExisting) ?? {};
-  const existingHooks = toObject(existingRoot.hooks) ?? {};
-  const mergedHooks: Record<string, unknown> = { ...existingHooks };
-
-  for (const [eventName, generatedEntries] of Object.entries(generatedHooks)) {
-    const existingEntries = existingHooks[eventName];
-    if (Array.isArray(generatedEntries)) {
-      const preservedEntries = Array.isArray(existingEntries) ? existingEntries : [];
-      mergedHooks[eventName] = dedupeHookEntriesByCommand([...generatedEntries, ...preservedEntries]);
-      continue;
-    }
-    // Defensive: malformed generated event payload must not wipe user hooks.
-    if (Array.isArray(existingEntries)) {
-      mergedHooks[eventName] = existingEntries;
-    } else {
-      mergedHooks[eventName] = generatedEntries;
-    }
-  }
-
-  const mergedRoot: Record<string, unknown> = {
-    ...existingRoot,
-    hooks: mergedHooks
-  };
-
-  for (const [key, value] of Object.entries(generatedRoot)) {
-    if (key === "hooks") continue;
-    if (!(key in mergedRoot)) {
-      mergedRoot[key] = value;
-    }
-  }
-
-  return mergedRoot;
-}
-
-async function writeMergedHookJson(
-  projectRoot: string,
-  hookFilePath: string,
-  generatedJson: string
-): Promise<void> {
-  let existingDoc: unknown = {};
-  if (await exists(hookFilePath)) {
-    try {
-      const raw = await fs.readFile(hookFilePath, "utf8");
-      const parsed = tryParseHookDocument(raw);
-      if (parsed) {
-        existingDoc = parsed.parsed;
-        if (parsed.recovered) {
-          await backupHookFile(projectRoot, hookFilePath, raw);
+      const hooksJson = {
+        version: 1,
+        generatedBy: `cclaw-cli@${CCLAW_VERSION}`,
+        events: {
+          "session.start": [
+            { command: "node", args: [`./${RUNTIME_ROOT}/hooks/${SESSION_START_HOOK_SPEC.fileName}`] }
+          ],
+          "session.stop": [
+            { command: "node", args: [`./${RUNTIME_ROOT}/hooks/${STOP_HANDOFF_HOOK_SPEC.fileName}`] }
+          ]
         }
-      } else {
-        await backupHookFile(projectRoot, hookFilePath, raw);
-        existingDoc = {};
-      }
-    } catch {
-      existingDoc = {};
+      };
+      await writeFileSafe(path.join(projectRoot, dir, fileName), `${JSON.stringify(hooksJson, null, 2)}\n`);
     }
-  }
-
-  const generatedDoc = JSON.parse(generatedJson) as Record<string, unknown>;
-  const harness = harnessForHookFile(projectRoot, hookFilePath);
-  if (harness) {
-    const generatedSchema = validateHookDocument(harness, generatedDoc);
-    if (!generatedSchema.ok) {
-      throw new Error(
-        `[sync fail-fast] Hook document drift detected for ${harness}: generated hook document is invalid (${generatedSchema.errors.join("; ")}). ` +
-        "Run `npx cclaw-cli sync` to regenerate managed hooks or repair the generated hook shape manually."
-      );
-    }
-  }
-
-  const mergedDoc = mergeHookDocuments(existingDoc, generatedDoc);
-  if (harness) {
-    const mergedSchema = validateHookDocument(harness, mergedDoc);
-    if (!mergedSchema.ok) {
-      throw new Error(
-        `[sync fail-fast] Hook document drift detected for ${harness}: merged hook document is invalid (${mergedSchema.errors.join("; ")}). ` +
-        "Run `npx cclaw-cli sync` after fixing the custom hook entry or remove the malformed user-authored hook block."
-      );
-    }
-  }
-  await writeFileSafe(hookFilePath, `${JSON.stringify(mergedDoc, null, 2)}\n`);
-}
-
-interface BundledRunHookModule {
-  buildRunHookRuntimeScript?: (options?: NodeHookRuntimeOptions) => string;
-  default?: (options?: NodeHookRuntimeOptions) => string;
-}
-
-async function readBundledRunHookRuntimeScript(
-  options: NodeHookRuntimeOptions
-): Promise<string | null> {
-  const bundleUrl = new URL("./runtime/run-hook.mjs", import.meta.url);
-  try {
-    await fs.stat(bundleUrl);
-  } catch {
-    return null;
-  }
-
-  try {
-    const moduleUrl = `${bundleUrl.href}?ts=${Date.now()}`;
-    const loaded = await import(moduleUrl) as BundledRunHookModule;
-    const factory = typeof loaded.buildRunHookRuntimeScript === "function"
-      ? loaded.buildRunHookRuntimeScript
-      : typeof loaded.default === "function"
-        ? loaded.default
-        : null;
-    if (!factory) return null;
-    const script = factory(options);
-    if (typeof script !== "string") return null;
-    return script.trim().length > 0 ? script : null;
-  } catch {
-    return null;
   }
 }
 
-async function writeHooks(projectRoot: string, config: CclawConfig): Promise<void> {
-  const harnesses = config.harnesses;
-  const hooksDir = runtimePath(projectRoot, "hooks");
-  const stateDir = runtimePath(projectRoot, "state");
-  await ensureDir(hooksDir);
-  await ensureDir(stateDir);
+async function writeConfig(projectRoot: string, config: CclawConfig): Promise<string> {
+  const configPath = path.join(projectRoot, RUNTIME_ROOT, "config.yaml");
+  await writeFileSafe(configPath, renderConfig(config));
+  return configPath;
+}
 
-  await writeFileSafe(path.join(hooksDir, "stage-complete.mjs"), stageCompleteScript());
-  await writeFileSafe(path.join(hooksDir, "start-flow.mjs"), startFlowScript());
-  await writeFileSafe(path.join(hooksDir, "cancel-run.mjs"), cancelRunScript());
-  const hookRuntimeOptions: NodeHookRuntimeOptions = {};
-  const bundledHookRuntime = await readBundledRunHookRuntimeScript(hookRuntimeOptions);
-  await writeFileSafe(
-    path.join(hooksDir, "run-hook.mjs"),
-    bundledHookRuntime ?? nodeHookRuntimeScript(hookRuntimeOptions)
-  );
-  await writeFileSafe(path.join(hooksDir, "run-hook.cmd"), runHookCmdScript());
-  await writeFileSafe(path.join(hooksDir, "delegation-record.mjs"), delegationRecordScript());
-  await writeFileSafe(path.join(hooksDir, "slice-commit.mjs"), sliceCommitScript());
-  const opencodePluginSource = opencodePluginJs();
-  await writeFileSafe(path.join(hooksDir, "opencode-plugin.mjs"), opencodePluginSource);
-
-  try {
-    for (const script of [
-      "stage-complete.mjs",
-      "start-flow.mjs",
-      "run-hook.mjs",
-      "run-hook.cmd",
-      "delegation-record.mjs",
-      "slice-commit.mjs",
-      "opencode-plugin.mjs",
-      "cancel-run.mjs"
-    ]) {
-      await fs.chmod(path.join(hooksDir, script), 0o755);
-    }
-  } catch {
-    // chmod may fail on some filesystems
-  }
-
-  if (harnesses.includes("opencode")) {
-    const opencodePluginsDir = path.join(projectRoot, ".opencode/plugins");
-    const opencodePluginPath = path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH);
-    await ensureDir(opencodePluginsDir);
-    await writeFileSafe(opencodePluginPath, opencodePluginSource);
-    await writeMergedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
-    try {
-      await fs.chmod(opencodePluginPath, 0o755);
-    } catch {
-      // chmod may fail on some filesystems
-    }
-  }
-
+export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
+  const projectRoot = options.cwd;
+  await ensureRuntimeRoot(projectRoot);
+  const existing = await readConfig(projectRoot);
+  const harnesses = options.harnesses ?? existing?.harnesses ?? ["cursor"];
   for (const harness of harnesses) {
-    if (harness === "claude") {
-      const dir = path.join(projectRoot, ".claude/hooks");
-      await ensureDir(dir);
-      await writeMergedHookJson(projectRoot, path.join(dir, "hooks.json"), claudeHooksJson());
-    } else if (harness === "cursor") {
-      const cursorDir = path.join(projectRoot, ".cursor");
-      await ensureDir(cursorDir);
-      await writeMergedHookJson(projectRoot, path.join(cursorDir, "hooks.json"), cursorHooksJson());
-    } else if (harness === "codex") {
-      // Codex CLI lifecycle hooks live at `.codex/hooks.json`, gated by
-      // `[features] codex_hooks = true` in `~/.codex/config.toml`. cclaw
-      // always writes the file so the moment the flag flips on, cclaw
-      // hooks start firing. PreToolUse/PostToolUse remain Bash-only on
-      // Codex; if the feature flag is off, hooks stay inert until the
-      // user enables `codex_hooks` in `~/.codex/config.toml`.
-      const codexDir = path.join(projectRoot, ".codex");
-      await ensureDir(codexDir);
-      await writeMergedHookJson(projectRoot, path.join(codexDir, "hooks.json"), codexHooksJson());
-    }
-    // OpenCode registration is auto-managed via opencode.json/opencode.jsonc.
-  }
-}
-
-interface ManagedHookDriftFinding {
-  file: string;
-  reason: "missing" | "content_mismatch";
-}
-
-async function canonicalHookScripts(): Promise<Record<string, string>> {
-  const hookRuntimeOptions: NodeHookRuntimeOptions = {};
-  const bundledHookRuntime = await readBundledRunHookRuntimeScript(hookRuntimeOptions);
-  return {
-    "stage-complete.mjs": stageCompleteScript(),
-    "start-flow.mjs": startFlowScript(),
-    "cancel-run.mjs": cancelRunScript(),
-    "run-hook.mjs": bundledHookRuntime ?? nodeHookRuntimeScript(hookRuntimeOptions),
-    "run-hook.cmd": runHookCmdScript(),
-    "delegation-record.mjs": delegationRecordScript(),
-    "slice-commit.mjs": sliceCommitScript(),
-    "opencode-plugin.mjs": opencodePluginJs()
-  };
-}
-
-async function checkManagedHookDrift(projectRoot: string): Promise<ManagedHookDriftFinding[]> {
-  const hooksDir = runtimePath(projectRoot, "hooks");
-  const canonical = await canonicalHookScripts();
-  const findings: ManagedHookDriftFinding[] = [];
-  for (const [fileName, expectedSource] of Object.entries(canonical)) {
-    const targetPath = path.join(hooksDir, fileName);
-    let actual: Buffer;
-    try {
-      actual = await fs.readFile(targetPath);
-    } catch {
-      findings.push({ file: fileName, reason: "missing" });
-      continue;
-    }
-    const expected = Buffer.from(expectedSource, "utf8");
-    if (!actual.equals(expected)) {
-      findings.push({ file: fileName, reason: "content_mismatch" });
+    if (!HARNESS_IDS.includes(harness)) {
+      throw new Error(`Unknown harness: ${harness}. Supported: ${HARNESS_IDS.join(", ")}`);
     }
   }
-  return findings;
-}
-
-function formatManagedHookDriftError(findings: ManagedHookDriftFinding[]): string {
-  const details = findings
-    .map((finding) =>
-      `- .cclaw/hooks/${finding.file}: ${
-        finding.reason === "missing" ? "missing" : "content differs from canonical renderer"
-      }`)
-    .join("\n");
-  return (
-    "[sync --check] Managed hook drift detected.\n" +
-    `${details}\n` +
-    "Re-run `npx cclaw-cli sync` to rewrite managed hooks."
-  );
-}
-
-async function ensureKnowledgeStore(projectRoot: string): Promise<void> {
-  const storePath = runtimePath(projectRoot, "knowledge.jsonl");
-  if (!(await exists(storePath))) {
-    await writeFileSafe(storePath, "", { mode: 0o600 });
+  const config = existing ? { ...existing, version: CCLAW_VERSION, flowVersion: "8" as const, harnesses } : createDefaultConfig(harnesses);
+  await ensureRunSystem(projectRoot);
+  await writeAgentFiles(projectRoot);
+  for (const hook of NODE_HOOKS) {
+    await writeHookFile(projectRoot, hook);
   }
-  const legacyMdPath = runtimePath(projectRoot, "knowledge.md");
-  if (await exists(legacyMdPath)) {
-    await fs.rm(legacyMdPath, { force: true });
-  }
-}
-
-
-
-async function writeRulebook(projectRoot: string): Promise<void> {
-  await writeFileSafe(runtimePath(projectRoot, "rules", "RULES.md"), RULEBOOK_MARKDOWN);
-  await writeFileSafe(
-    runtimePath(projectRoot, "rules", "rules.json"),
-    `${JSON.stringify(buildRulesJson(), null, 2)}\n`
-  );
-}
-
-async function writeCursorWorkflowRule(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
-  const rulePath = path.join(projectRoot, CURSOR_RULE_REL_PATH);
-  const guidelinesPath = path.join(projectRoot, CURSOR_GUIDELINES_REL_PATH);
-  if (!harnesses.includes("cursor")) {
-    for (const target of [rulePath, guidelinesPath]) {
-      try {
-        await fs.rm(target, { force: true });
-      } catch {
-        // best-effort cleanup
-      }
-    }
-    return;
-  }
-  await ensureDir(path.dirname(rulePath));
-  await writeFileSafe(rulePath, CURSOR_WORKFLOW_RULE_MDC);
-  await ensureDir(path.dirname(guidelinesPath));
-  await writeFileSafe(guidelinesPath, CURSOR_GUIDELINES_RULE_MDC);
-}
-
-async function syncDisabledHarnessArtifacts(projectRoot: string, harnesses: HarnessId[]): Promise<void> {
-  const enabled = new Set<HarnessId>(harnesses);
-  const managedHookFiles: Array<{ harness: HarnessId; hookPath: string }> = [
-    { harness: "claude", hookPath: path.join(projectRoot, ".claude/hooks/hooks.json") },
-    { harness: "cursor", hookPath: path.join(projectRoot, ".cursor/hooks.json") },
-    { harness: "codex", hookPath: path.join(projectRoot, ".codex/hooks.json") }
-  ];
-
-  for (const entry of managedHookFiles) {
-    if (enabled.has(entry.harness)) continue;
-    await removeManagedHookEntries(entry.hookPath, { failOnParseError: true });
-  }
-
-  if (!enabled.has("opencode")) {
-    try {
-      await fs.rm(path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH), { force: true });
-    } catch {
-      // best-effort cleanup
-    }
-    try {
-      await fs.rm(path.join(projectRoot, ".opencode/agents"), { recursive: true, force: true });
-    } catch {
-      // best-effort cleanup
-    }
-    await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
-  }
-
-  if (!enabled.has("codex")) {
-    try {
-      await fs.rm(path.join(projectRoot, ".codex/agents"), { recursive: true, force: true });
-    } catch {
-      // best-effort cleanup
-    }
-  }
-}
-
-async function writeState(projectRoot: string, config: CclawConfig, forceReset = false): Promise<void> {
-  void config;
-  // Fresh init no longer materializes flow-state.json. The first managed
-  // `/cc <idea>` start-flow call creates the state file.
-  if (!forceReset) {
-    return;
-  }
-  const statePath = runtimePath(projectRoot, "state", "flow-state.json");
-  if (await exists(statePath)) {
-    return;
-  }
-
-  const state = createInitialFlowState({ track: "standard" });
-  await writeFileSafe(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-}
-
-async function cleanLegacyArtifacts(projectRoot: string): Promise<void> {
-  for (const legacyFolder of DEPRECATED_UTILITY_SKILL_FOLDERS) {
-    await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
-  }
-  for (const legacyFolder of DEPRECATED_STAGE_SKILL_FOLDERS) {
-    await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
-  }
-  for (const legacyFolder of DEPRECATED_SKILL_FOLDERS_FULL) {
-    await removeBestEffort(runtimePath(projectRoot, "skills", legacyFolder), true);
-  }
-
-  for (const legacyAgentFile of DEPRECATED_AGENT_FILES) {
-    await removeBestEffort(runtimePath(projectRoot, "agents", legacyAgentFile));
-  }
-
-  for (const legacyPlugin of [
-    path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
-    path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
-    path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH)
-  ]) {
-    await removeBestEffort(legacyPlugin);
-  }
-
-  for (const legacyRuntimeFile of [
-    ...DEPRECATED_COMMAND_FILES.map((file) => runtimePath(projectRoot, "commands", file)),
-    ...DEPRECATED_SKILL_FILES.map((segments) => runtimePath(projectRoot, "skills", ...segments)),
-    ...DEPRECATED_STATE_FILES.map((file) => runtimePath(projectRoot, "state", file)),
-    ...DEPRECATED_ARTIFACT_FILES.map((file) => runtimePath(projectRoot, "artifacts", file)),
-    ...DEPRECATED_RUNTIME_ROOT_FILES.map((file) => runtimePath(projectRoot, file)),
-    ...DEPRECATED_HOOK_FILES.map((file) => runtimePath(projectRoot, "hooks", file))
-  ]) {
-    await removeBestEffort(legacyRuntimeFile);
-  }
-
-  // Runtime simplification cleanup: these folders were generated in older
-  // releases and are now intentionally removed from user projects.
-  for (const legacyRuntimeDir of DEPRECATED_RUNTIME_DIRS) {
-    await removeBestEffort(runtimePath(projectRoot, legacyRuntimeDir), true);
-  }
-
-  // Archive storage migration: `.cclaw/runs` is legacy and no longer a valid
-  // archive root. Remove only when empty; otherwise keep it so users can
-  // manually migrate or inspect old data.
-  const legacyRunsDir = runtimePath(projectRoot, "runs");
-  try {
-    const entries = await fs.readdir(legacyRunsDir);
-    if (entries.length === 0) {
-      await fs.rm(legacyRunsDir, { recursive: true, force: true });
-    }
-  } catch {
-    // missing or unreadable legacy dir; keep best-effort behavior
-  }
-
-  // D-4 terminology migration: rename historical ideation artifact prefixes to
-  // the canonical idea-* naming without deleting user-authored content.
-  const legacyIdeaArtifactPattern = /^ideation-(.+\.md)$/u;
-  const artifactsDir = runtimePath(projectRoot, "artifacts");
-  try {
-    const entries = await fs.readdir(artifactsDir);
-    for (const entry of entries) {
-      const match = legacyIdeaArtifactPattern.exec(entry);
-      if (!match) continue;
-      const nextName = `idea-${match[1]}`;
-      const from = path.join(artifactsDir, entry);
-      const to = path.join(artifactsDir, nextName);
-      if (await exists(to)) {
-        continue;
-      }
-      await fs.rename(from, to);
-    }
-  } catch {
-    // no artifacts directory yet (fresh init) or read-only FS
-  }
-}
-
-async function cleanStaleFiles(projectRoot: string): Promise<void> {
-  const expectedShimFiles = new Set<string>(harnessShimFileNames());
-  const expectedShimSkills = new Set<string>(harnessShimFileNames().map((fileName) => fileName.replace(/\.md$/u, "")));
-
-  for (const adapter of Object.values(HARNESS_ADAPTERS)) {
-    const commandDir = path.join(projectRoot, adapter.commandDir);
-    if (!(await exists(commandDir))) continue;
-
-    let entries: string[] = [];
-    try {
-      entries = await fs.readdir(commandDir);
-    } catch {
-      entries = [];
-    }
-
-    if (adapter.shimKind === "skill") {
-      for (const entry of entries) {
-        if (!/^cc(?:-.*)?$/u.test(entry)) continue;
-        if (expectedShimSkills.has(entry)) continue;
-        await fs.rm(path.join(commandDir, entry), { recursive: true, force: true });
-      }
-      continue;
-    }
-
-    for (const entry of entries) {
-      if (!/^cc(?:-.*)?\.md$/u.test(entry)) continue;
-      if (expectedShimFiles.has(entry)) continue;
-      await fs.rm(path.join(commandDir, entry), { force: true });
-    }
-  }
-  // Keep user-owned custom assets under .cclaw/agents and .cclaw/skills.
-  // Legacy managed removals happen in cleanLegacyArtifacts() with explicit paths.
-}
-
-
-
-async function assertExpectedHarnessShims(
-  projectRoot: string,
-  harnesses: readonly HarnessId[]
-): Promise<void> {
-  const expectedFiles = harnessShimFileNames();
-  const expectedSkillFolders = harnessShimSkillNames();
+  await writeTemplates(projectRoot);
   for (const harness of harnesses) {
-    const adapter = HARNESS_ADAPTERS[harness];
-    const base = path.join(projectRoot, adapter.commandDir);
-    for (const fileName of expectedFiles) {
-      const target = adapter.shimKind === "skill"
-        ? path.join(base, fileName.replace(/\.md$/u, ""), "SKILL.md")
-        : path.join(base, fileName);
-      if (!(await exists(target))) {
-        throw new Error(
-          `[sync fail-fast] Harness shim drift detected for ${harness}: missing ${target}. ` +
-          `Run \`npx cclaw-cli sync\` again; if the file is still missing, inspect harness permissions/paths.`
-        );
-      }
+    await writeHarnessAssets(projectRoot, HARNESS_LAYOUTS[harness]);
+  }
+  const configPath = await writeConfig(projectRoot, config);
+  return { installedHarnesses: harnesses, configPath };
+}
+
+export async function initCclaw(options: SyncOptions): Promise<SyncResult> {
+  return syncCclaw(options);
+}
+
+export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
+  const projectRoot = options.cwd;
+  const config = await readConfig(projectRoot);
+  const harnesses = config?.harnesses ?? (HARNESS_IDS as readonly HarnessId[]);
+  await removePath(path.join(projectRoot, RUNTIME_ROOT));
+  for (const harness of harnesses as HarnessId[]) {
+    const layout = HARNESS_LAYOUTS[harness];
+    for (const filename of ["cc.md", "cc-cancel.md", "cc-idea.md"]) {
+      await removePath(path.join(projectRoot, layout.commandsDir, filename));
     }
-    if (adapter.shimKind === "skill") {
-      for (const folder of expectedSkillFolders) {
-        const skillPath = path.join(base, folder, "SKILL.md");
-        if (!(await exists(skillPath))) {
-          throw new Error(
-            `[sync fail-fast] Harness skill shim drift detected for ${harness}: missing ${skillPath}. ` +
-            `Run \`npx cclaw-cli sync\` again; if the issue persists, inspect generated .agents/skills surfaces.`
-          );
-        }
-      }
+    for (const agent of CORE_AGENTS) {
+      await removePath(path.join(projectRoot, layout.agentsDir, `${agent.id}.md`));
+    }
+    if (layout.hooksConfig) {
+      await removePath(path.join(projectRoot, layout.hooksConfig.dir, layout.hooksConfig.fileName));
+    }
+    if (await exists(path.join(projectRoot, layout.commandsDir))) {
+      const remaining = await fs.readdir(path.join(projectRoot, layout.commandsDir));
+      if (remaining.length === 0) await removePath(path.join(projectRoot, layout.commandsDir));
+    }
+    if (await exists(path.join(projectRoot, layout.agentsDir))) {
+      const remaining = await fs.readdir(path.join(projectRoot, layout.agentsDir));
+      if (remaining.length === 0) await removePath(path.join(projectRoot, layout.agentsDir));
     }
   }
 }
 
-async function maybeLogParallelWaveDispatchHint(projectRoot: string): Promise<void> {
-  const flowPath = runtimePath(projectRoot, "state", "flow-state.json");
-  if (!(await exists(flowPath))) return;
-  try {
-    const planPath = runtimePath(projectRoot, "artifacts", "05-plan.md");
-    if (!(await exists(planPath))) return;
-    const planRaw = await fs.readFile(planPath, "utf8");
-    const merged = mergeParallelWaveDefinitions(
-      parseParallelExecutionPlanWaves(planRaw),
-      await parseWavePlanDirectory(runtimePath(projectRoot, "artifacts"))
-    );
-    const hint = formatNextParallelWaveSyncHint(merged);
-    if (hint) {
-      process.stdout.write(`cclaw: ${hint}\n`);
-    }
-  } catch {
-    // best-effort note only
-  }
+export async function upgradeCclaw(options: SyncOptions): Promise<SyncResult> {
+  return syncCclaw(options);
 }
 
-async function materializeRuntime(
-  projectRoot: string,
-  config: CclawConfig,
-  forceStateReset: boolean,
-  operation = "sync"
-): Promise<void> {
-  await warnStaleInitSentinel(projectRoot, operation);
-  const sentinelPath = await writeInitSentinel(projectRoot, operation);
-  const managedSession = await ManagedResourceSession.create({ projectRoot, operation });
-  setActiveManagedResourceSession(managedSession);
-  try {
-    const harnesses = config.harnesses;
-    await ensureStructure(projectRoot);
-    await cleanLegacyArtifacts(projectRoot);
-    await cleanStaleFiles(projectRoot);
-    await Promise.all([
-      writeEntryCommands(projectRoot),
-      writeSkills(projectRoot, config),
-      writeArtifactTemplates(projectRoot),
-      writeWavePlansScaffold(projectRoot),
-      writeRulebook(projectRoot)
-    ]);
-    await writeState(projectRoot, config, forceStateReset);
-    try {
-      await ensureRunSystem(projectRoot, { createIfMissing: false });
-    } catch (error) {
-      if (error instanceof CorruptFlowStateError) {
-        throw new Error(
-          `[sync fail-fast] Corrupt flow state detected: ${error.message} ` +
-          `Resolve the quarantined flow-state file and re-run \`npx cclaw-cli sync\`.`
-        );
-      }
-      throw error;
-    }
-    await ensureKnowledgeStore(projectRoot);
-    await writeHooks(projectRoot, config);
-    await syncDisabledHarnessArtifacts(projectRoot, harnesses);
-    await cleanupLegacyManagedGitHookRelays(projectRoot);
-    await syncHarnessShims(projectRoot, harnesses);
-    await assertExpectedHarnessShims(projectRoot, harnesses);
-    await writeCursorWorkflowRule(projectRoot, harnesses);
-    await ensureGitignore(projectRoot);
-    if (operation === "sync" || operation === "upgrade") {
-      await maybeLogParallelWaveDispatchHint(projectRoot);
-    }
-    await managedSession.commit();
-    await fs.unlink(sentinelPath).catch(() => undefined);
-  } catch (error) {
-    // Leave the sentinel in place so the interrupted run is visible.
-    throw error;
-  } finally {
-    setActiveManagedResourceSession(null);
-  }
-}
-
-async function warnCodexHooksFeatureFlagIfDisabled(harnesses: readonly HarnessId[]): Promise<void> {
-  if (!harnesses.includes("codex")) return;
-  const codexTomlPath = codexConfigPath();
-  let existing: string | null;
-  try {
-    existing = await readCodexConfig(codexTomlPath);
-  } catch (error) {
-    process.stderr.write(
-      `cclaw: could not read ${codexTomlPath} to validate codex_hooks flag: ${
-        error instanceof Error ? error.message : String(error)
-      }\n`
-    );
-    return;
-  }
-
-  if (classifyCodexHooksFlag(existing) === "enabled") return;
-  process.stderr.write(
-    `cclaw: Codex hooks file written, but [features] codex_hooks is not true in ${codexTomlPath} — hooks are inert until you enable it.\n`
-  );
-}
-
-export async function initCclaw(options: InitOptions): Promise<void> {
-  if (options.harnesses !== undefined && options.harnesses.length === 0) {
-    throw new Error("Select at least one harness.");
-  }
-  const config = createDefaultConfig(options.harnesses, options.track);
-  await writeConfig(options.projectRoot, config, { mode: "minimal" });
-  // Init should scaffold runtime surfaces but leave flow-state creation to the
-  // first managed start-flow invocation.
-  await materializeRuntime(options.projectRoot, config, false, "init");
-}
-
-export async function syncCclaw(projectRoot: string, options: SyncOptions = {}): Promise<void> {
-  if (options.harnesses !== undefined && options.harnesses.length === 0) {
-    throw new Error("Select at least one harness.");
-  }
-  if (options.check === true) {
-    const drift = await checkManagedHookDrift(projectRoot);
-    if (drift.length > 0) {
-      throw new Error(formatManagedHookDriftError(drift));
-    }
-    return;
-  }
-  const configExists = await exists(configPath(projectRoot));
-  let config = await readConfig(projectRoot);
-  if (!configExists) {
-    // Prefer detected harness markers over the hardcoded default list.
-    // Without this, a user running `cclaw sync` in a `.claude`-only
-    // project ends up with a config that also enables cursor/opencode/
-    // codex, which then creates invalid harness expectations.
-    // Fall back to the previous default (config.harnesses) if no markers
-    // are found so brand-new projects still bootstrap cleanly.
-    const detected = await detectHarnesses(projectRoot);
-    const harnesses = options.harnesses ?? (detected.length > 0 ? detected : config.harnesses);
-    const defaultConfig = createDefaultConfig(harnesses);
-    await writeConfig(projectRoot, defaultConfig);
-    config = defaultConfig;
-  } else if (options.harnesses !== undefined) {
-    config = {
-      ...config,
-      harnesses: options.harnesses
-    };
-    await writeConfig(projectRoot, config, {
-      mode: "minimal",
-      advancedKeysPresent: await detectAdvancedKeys(projectRoot)
-    });
-  }
-  await materializeRuntime(projectRoot, config, false, "sync");
-  await warnCodexHooksFeatureFlagIfDisabled(config.harnesses);
-}
-
-/**
- * Refresh generated files in `.cclaw/` without touching user-authored
- * artifacts or state. Config remains harness-only with managed version
- * stamps.
- */
-export async function upgradeCclaw(projectRoot: string): Promise<void> {
-  const configExists = await exists(configPath(projectRoot));
-  const advancedKeysPresent = await detectAdvancedKeys(projectRoot);
-  const detectedHarnesses = configExists ? [] : await detectHarnesses(projectRoot);
-  const existing = configExists
-    ? await readConfig(projectRoot)
-    : createDefaultConfig(detectedHarnesses.length > 0 ? detectedHarnesses : undefined);
-  const upgraded: CclawConfig = {
-    ...existing,
-    version: CCLAW_VERSION,
-    flowVersion: FLOW_VERSION
-  };
-  await writeConfig(projectRoot, upgraded, {
-    mode: "minimal",
-    advancedKeysPresent
-  });
-  await materializeRuntime(projectRoot, upgraded, false, "upgrade");
-}
-
-function stripManagedHookCommands(value: unknown): { updated: unknown; changed: boolean } {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { updated: value, changed: false };
-  }
-
-  const root = { ...(value as Record<string, unknown>) };
-  const hooks = root.hooks;
-  if (!hooks || typeof hooks !== "object" || Array.isArray(hooks)) {
-    return { updated: root, changed: false };
-  }
-
-  let changed = false;
-  const cleanedHooks: Record<string, unknown> = {};
-  for (const [eventName, entries] of Object.entries(hooks as Record<string, unknown>)) {
-    if (!Array.isArray(entries)) {
-      cleanedHooks[eventName] = entries;
-      continue;
-    }
-
-    const cleanedEntries = entries.flatMap((entry) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        return [entry];
-      }
-
-      const obj = entry as Record<string, unknown>;
-      if (typeof obj.command === "string" && isManagedRuntimeHookCommand(obj.command)) {
-        changed = true;
-        return [];
-      }
-
-      if (Array.isArray(obj.hooks)) {
-        const nested = obj.hooks.filter((nestedHook) => {
-          if (!nestedHook || typeof nestedHook !== "object" || Array.isArray(nestedHook)) return true;
-          const nestedObj = nestedHook as Record<string, unknown>;
-          return !(typeof nestedObj.command === "string" && isManagedRuntimeHookCommand(nestedObj.command));
-        });
-
-        if (nested.length !== obj.hooks.length) {
-          changed = true;
-        }
-        if (nested.length === 0) {
-          changed = true;
-          return [];
-        }
-        return [{ ...obj, hooks: nested }];
-      }
-
-      return [entry];
-    });
-
-    if (cleanedEntries.length > 0) {
-      cleanedHooks[eventName] = cleanedEntries;
-    } else if (entries.length > 0) {
-      changed = true;
-    }
-  }
-
-  if (!changed) {
-    return { updated: root, changed: false };
-  }
-
-  root.hooks = cleanedHooks;
-  return { updated: root, changed: true };
-}
-
-function isManagedRuntimeHookCommand(command: string): boolean {
-  // Normalize whitespace and collapse any Windows-style backslash path
-  // separators to forward slashes so user-edited hook configs on Windows
-  // (e.g. `node .cclaw\hooks\run-hook.mjs ...`) still round-trip through
-  // sync without being duplicated alongside freshly generated entries.
-  const normalized = command.trim().replace(/\s+/gu, " ").replace(/\\/gu, "/");
-  if (
-    /(^|\s)(?:node\s+)?(?:"|')?(?:\.\/)?\.cclaw\/hooks\/run-hook\.(?:mjs|cmd)(?:"|')?\s+(?:session-start|stop-handoff|stop-checkpoint|pre-compact|prompt-guard|workflow-guard|pre-tool-pipeline|prompt-pipeline|context-monitor|verify-current-state)(?:\s|$)/u.test(
-      normalized
-    )
-  ) {
-    return true;
-  }
-  // Codex UserPromptSubmit non-blocking state nudge.
-  return /internal verify-current-state(?:\s|$)/u.test(normalized);
-}
-
-async function removeManagedHookEntries(
-  hookFilePath: string,
-  options: { failOnParseError?: boolean } = {}
-): Promise<void> {
-  if (!(await exists(hookFilePath))) return;
-
-  let parsed: unknown = null;
-  try {
-    const raw = await fs.readFile(hookFilePath, "utf8");
-    const recovered = tryParseHookDocument(raw);
-    if (recovered === null) {
-      if (options.failOnParseError === true) {
-        throw new Error(
-          `[sync fail-fast] Cannot strip managed hook entries from ${hookFilePath} — JSON is unparseable. ` +
-          `Run \`rm ${hookFilePath}\` and rerun \`npx cclaw-cli sync\`.`
-        );
-      }
-      return;
-    }
-    parsed = recovered.parsed;
-  } catch (error) {
-    if (options.failOnParseError === true) {
-      throw new Error(
-        `[sync fail-fast] Cannot strip managed hook entries from ${hookFilePath} — ${
-          error instanceof Error ? error.message : String(error)
-        }. Run \`rm ${hookFilePath}\` and rerun \`npx cclaw-cli sync\`.`
-      );
-    }
-    return;
-  }
-
-  const { updated, changed } = stripManagedHookCommands(parsed);
-  if (!changed) return;
-
-  const root = updated as Record<string, unknown>;
-  const hooks = root.hooks;
-  const hasHooks =
-    typeof hooks === "object" &&
-    hooks !== null &&
-    !Array.isArray(hooks) &&
-    Object.keys(hooks as Record<string, unknown>).length > 0;
-
-  if (!hasHooks) {
-    const onlyHooksShell = Object.keys(root).every(
-      (key) => key === "hooks" || key === "version" || key === "cclawHookSchemaVersion"
-    );
-    if (onlyHooksShell) {
-      await fs.rm(hookFilePath, { force: true });
-      return;
-    }
-    root.hooks = {};
-  }
-
-  await writeFileSafe(hookFilePath, `${JSON.stringify(root, null, 2)}\n`);
-}
-
-async function removeIfEmpty(dirPath: string): Promise<void> {
-  try {
-    const entries = await fs.readdir(dirPath);
-    if (entries.length === 0) {
-      await fs.rmdir(dirPath);
-    }
-  } catch {
-    // directory not present or not removable
-  }
-}
-
-export async function uninstallCclaw(projectRoot: string): Promise<void> {
-  const fullRuntimePath = path.join(projectRoot, RUNTIME_ROOT);
-  try {
-    await fs.rm(fullRuntimePath, { recursive: true, force: true });
-  } catch {
-    // path not present
-  }
-
-  await removeCclawFromAgentsMd(projectRoot);
-  await removeGitignorePatterns(projectRoot);
-  await cleanupLegacyManagedGitHookRelays(projectRoot);
-
-  const hookFiles = [
-    ".claude/hooks/hooks.json",
-    ".cursor/hooks.json",
-    ".codex/hooks.json"
-  ];
-  for (const hf of hookFiles) {
-    await removeManagedHookEntries(path.join(projectRoot, hf));
-  }
-
-  const commandDirs = [
-    ".claude/commands",
-    ".cursor/commands",
-    ".opencode/commands",
-    ".codex/commands"
-  ];
-
-  for (const relDir of commandDirs) {
-    const fullDir = path.join(projectRoot, relDir);
-    try {
-      const entries = await fs.readdir(fullDir);
-      for (const entry of entries) {
-        if (/^(?:viby|cc)(?:-.*)?\.md$/u.test(entry)) {
-          await fs.rm(path.join(fullDir, entry), { force: true });
-        }
-      }
-    } catch {
-      // directory not present
-    }
-  }
-
-  // Codex shims live at `.agents/skills/cc*/SKILL.md`, matching Codex's
-  // `/use cc` prompt verbatim. Older layouts (`.codex/commands/cc*.md` and
-  // `.agents/skills/cclaw-cc*/SKILL.md`) are purged on uninstall so orphans
-  // can't linger. We only touch cclaw-owned folder names — other tools
-  // share `.agents/skills/` with us.
-  const codexSkillsRoot = path.join(projectRoot, ".agents/skills");
-  try {
-    const entries = await fs.readdir(codexSkillsRoot);
-    for (const entry of entries) {
-      if (/^(?:cclaw-)?cc(?:-(?:next|view|finish|cancel|ops|idea|brainstorm|scope|design|spec|plan|tdd|review|ship))?$/u.test(entry)) {
-        await fs.rm(path.join(codexSkillsRoot, entry), { recursive: true, force: true });
-      }
-    }
-  } catch {
-    // directory not present
-  }
-  await removeIfEmpty(codexSkillsRoot);
-  await removeIfEmpty(path.join(projectRoot, ".agents"));
-
-
-  const managedAgentNames = CCLAW_AGENTS.map((agent) => agent.name);
-  for (const agentName of managedAgentNames) {
-    await removeBestEffort(path.join(projectRoot, ".opencode/agents", `${agentName}.md`));
-    await removeBestEffort(path.join(projectRoot, ".codex/agents", `${agentName}.toml`));
-  }
-
-  for (const pluginPath of [
-    path.join(projectRoot, ".opencode/plugins/viby-plugin.mjs"),
-    path.join(projectRoot, ".opencode/plugins/opencode-plugin.mjs"),
-    path.join(projectRoot, OPENCODE_PLUGIN_REL_PATH)
-  ]) {
-    try {
-      await fs.rm(pluginPath, { force: true });
-    } catch {
-      // best-effort cleanup
-    }
-  }
-
-  await removeManagedOpenCodePluginConfig(projectRoot, OPENCODE_PLUGIN_REL_PATH);
-  for (const target of [
-    path.join(projectRoot, CURSOR_RULE_REL_PATH),
-    path.join(projectRoot, CURSOR_GUIDELINES_REL_PATH)
-  ]) {
-    try {
-      await fs.rm(target, { force: true });
-    } catch {
-      // best-effort cleanup
-    }
-  }
-
-  const managedDirs = [
-    ".claude/hooks",
-    ".claude/commands",
-    ".claude",
-    ".cursor/rules",
-    ".cursor/commands",
-    ".cursor",
-    ".codex/agents",
-    ".codex/commands",
-    ".codex",
-    ".opencode/agents",
-    ".opencode/plugins",
-    ".opencode/commands",
-    ".opencode"
-  ];
-  for (const relDir of managedDirs) {
-    await removeIfEmpty(path.join(projectRoot, relDir));
-  }
-}
+export const HARNESS_LAYOUT_TABLE = HARNESS_LAYOUTS;
+export type { NodeHookSpec };
+export const COMMIT_HELPER_HOOK = COMMIT_HELPER_HOOK_SPEC;
