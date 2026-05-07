@@ -100,34 +100,69 @@ stage: build
 status: active
 build_iterations: 0
 last_commit: null
+tdd_cycle: enforced
 ---
 
 # Build log — SLUG-PLACEHOLDER
 
-This is the implementation journal. The orchestrator and \`slice-builder\` append here as work progresses. Every commit must show up below.
+This is the TDD implementation journal. Every AC goes through RED → GREEN → REFACTOR; every phase is a separate commit recorded by \`commit-helper.mjs --phase=…\`.
+
+> **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
 
 ## Plan summary
 
 _(One paragraph mirroring \`plans/SLUG-PLACEHOLDER.md\` Plan section.)_
 
-## Commits
+## TDD cycle log
 
-| AC | commit | files | note |
-| --- | --- | --- | --- |
-| AC-1 | _pending_ | _file:path:line_ | _what changed and why_ |
+For every AC, append one row with **all six columns filled** before the AC is considered done.
 
-## Open work
+| AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
+| --- | --- | --- | --- | --- | --- |
+| AC-1 | _file:path:line refs from discovery_ | _failing test name + 1-3 line failure excerpt_ | _full-suite command + PASS summary_ | _shape change or "skipped: reason"_ | _red SHA, green SHA, refactor SHA (or "skipped")_ |
 
-- AC-2 _description_ — owner: slice-builder
-- …
+## Watched-RED proofs
+
+\`\`\`text
+_(Per AC: command run, test name, 1-3 line failure excerpt that proves RED failed for the right reason.)_
+_AC-1: npm test src/lib/permissions.ts -- -t "renders email"_
+_         AssertionError: expected 'anna@example.com' got undefined_
+\`\`\`
+
+## GREEN suite evidence
+
+\`\`\`text
+_(Per AC: command run, PASS/FAIL summary of the FULL relevant suite — not the single test.)_
+_AC-1: npm test src/lib/__       47 passed, 0 failed (in 1.8s)_
+\`\`\`
+
+## REFACTOR notes
+
+_(Per AC: one-line shape change applied, or explicit "skipped: <reason>". Silence is not acceptable; the gate forces the question.)_
+
+- AC-1: extracted \`hasViewEmail\` helper from inline check.
+
+## Fix iterations (after a review block)
+
+_(Append one fix-iteration block per review iteration that returned \`block\`. Same TDD cycle applies; same AC id is reused; finding F-N is cited in the message.)_
+
+### Fix iteration 1 — review block 1
+
+| F-N | AC | phase | commit | files | note |
+| --- | --- | --- | --- | --- | --- |
+| F-2 | AC-1 | red | _SHA_ | _tests/...:line_ | _what the new RED encodes_ |
+| F-2 | AC-1 | green | _SHA_ | _src/...:line_ | _minimal fix_ |
+| F-2 | AC-1 | refactor (skipped) | — | — | _reason_ |
 
 ## Hooks invoked
 
-- \`commit-helper.mjs --ac=AC-1 --message="…"\` — _records SHA and updates flow-state.json_
+- \`commit-helper.mjs --ac=AC-1 --phase=red --message="red(AC-1): …"\` → _SHA_
+- \`commit-helper.mjs --ac=AC-1 --phase=green --message="green(AC-1): …"\` → _SHA_
+- \`commit-helper.mjs --ac=AC-1 --phase=refactor --message="refactor(AC-1): …"\` → _SHA_ or _skipped_
 
 ## Notes
 
-_(Surprises, deviations from the plan, tests added, refactors that came up, etc.)_
+_(Surprises, deviations from the plan, tests added, refactors that came up, paths considered and discarded, etc.)_
 `;
 
 const REVIEW_TEMPLATE = `---

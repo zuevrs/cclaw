@@ -90,6 +90,46 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 **Correction.** \`security_flag\` is set whenever the diff touches authn / authz / secrets / supply chain / data exposure, even when the change feels small. The cost of a spurious security flag is a few minutes; the cost of a missed one is a CVE.
 
+## A-13 — "Implementation is obvious, skipping RED"
+
+**Symptom.** Build commits land for AC-N with \`--phase=green\` but no \`--phase=red\` recorded earlier.
+
+**Underlying mistake.** The TDD cycle was treated as a formality and skipped because the implementation looked obvious.
+
+**Correction.** \`commit-helper.mjs\` rejects GREEN without a prior RED. Write the failing test first; commit it; then write the smallest implementation that turns it green. The cycle is the contract; obvious code still gets a test.
+
+## A-14 — Single test green, didn't run the suite
+
+**Symptom.** \`builds/<slug>.md\` GREEN evidence column shows \`npm test path/to/single.test\` only; full-suite run is missing.
+
+**Underlying mistake.** A passing single test is not GREEN. Production change can break adjacent tests; without running the suite, the AC is shipped on a regression.
+
+**Correction.** GREEN evidence must be the **full relevant suite** for the affected module(s), not the single test. The reviewer cites this as a block finding.
+
+## A-15 — REFACTOR phase silently skipped
+
+**Symptom.** AC has RED + GREEN commits but no \`--phase=refactor\` (skipped or applied) entry in flow-state.
+
+**Underlying mistake.** REFACTOR was skipped without an explicit decision; the gate question was avoided.
+
+**Correction.** REFACTOR is mandatory. Either commit a refactor or explicitly skip it with \`commit-helper.mjs --ac=AC-N --phase=refactor --skipped --message="refactor(AC-N) skipped: <reason>"\`. Silence fails the gate.
+
+## A-16 — \`git add -A\` inside build
+
+**Symptom.** A commit produced by \`commit-helper.mjs\` contains files that are unrelated to the AC.
+
+**Underlying mistake.** \`git add -A\` was used to stage; the AC commit absorbed unrelated edits sitting in the working tree.
+
+**Correction.** Stage AC-related files explicitly. Use \`git add path/to/file\` per file, or \`git add -p\` to pick hunks. Never \`git add -A\` inside \`/cc\`.
+
+## A-17 — Production code in the RED commit
+
+**Symptom.** A \`--phase=red\` commit touches \`src/\`, \`lib/\`, or \`app/\`. \`commit-helper.mjs\` should have rejected it; if it slipped through (e.g. via a non-standard root), the reviewer cites it.
+
+**Underlying mistake.** RED is test-files-only. Including production code under RED breaks the "failing test is the spec" contract — the test only fails because the as-yet-unfinished implementation doesn't compile, not because the assertion encoded the AC.
+
+**Correction.** Stage only test files for RED. Implementation lives in the GREEN commit, after RED is recorded.
+
 ## A-12 — Architect with one option
 
 **Symptom.** \`decisions/<slug>.md\` lists exactly one option; the "Considered" section reads "we did the thing".

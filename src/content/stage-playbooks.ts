@@ -79,67 +79,136 @@ Then the orchestrator transitions to build-stage.
 - Authoring more than 12 AC. Above 12 the request is two requests; ask the user to split.
 `;
 
-const BUILD_PLAYBOOK = `# Stage runbook — build
+const BUILD_PLAYBOOK = `# Stage runbook — build (TDD cycle)
 
-The orchestrator opens this file before invoking \`slice-builder\` or implementing inline.
+**Build is a TDD cycle.** Every AC goes through RED → GREEN → REFACTOR. There is no other build mode in cclaw v8. The orchestrator opens this file before invoking \`slice-builder\` or implementing inline; \`slice-builder\` opens it on every AC.
+
+## Iron Law
+
+> NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. THE RED FAILURE IS THE SPEC.
+
+Build refuses to commit production code that is not preceded by a recorded RED test. \`commit-helper.mjs\` invocations carry a \`--phase\` flag (\`red\` / \`green\` / \`refactor\`) so the AC traceability chain encodes the cycle.
 
 ## 1. Pick the next pending AC
 
 Read \`.cclaw/state/flow-state.json\` and pick the first AC with \`status: pending\`. If none, exit build-stage and transition to review.
 
-## 2. Read the targets
+## 2. Discover before RED (mandatory)
 
-Open every \`file:path:line\` reference in the AC's verification line. Do not invent file paths. If the planner cited a file that does not exist, **stop** and surface it back as a planner-stage finding.
+Before writing the failing test, **read** the affected surface:
 
-## 3. Make the smallest change that satisfies the AC
+- Existing test files for the module (run \`rg\` for the function name in \`tests/\`).
+- Fixture and helper files used by the closest existing tests.
+- The runnable command(s) that execute those tests (\`npm test path\`, \`pytest path\`, \`go test ./pkg/...\`).
+- Public API surfaces, callbacks, state transitions, schemas, and contracts the AC touches.
 
-Smallest in three senses:
+Cite each citation as \`file:path:line\`. No invented paths. If the planner cited a file that does not exist, **stop** and surface it back as a planner-stage finding.
 
-1. **smallest diff** that makes the verification pass;
-2. **smallest scope** — touches only files declared in the plan;
-3. **smallest cognitive load** — no new abstraction layer unless the plan called for one.
+The discovery output goes into \`builds/<slug>.md\` under the AC's row, in the **Discovery** column. Skipping discovery is one of the five mandatory gate failures.
 
-If the smallest-correct change requires touching files outside the plan, **stop** and surface it. This is scope creep, not progress.
+## 3. RED — write a failing test that encodes the AC verification
 
-## 4. Stage and run commit-helper
+Rules for the RED phase:
+
+- Touch test files only. **No production edits in the RED commit.**
+- The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax error or import error.
+- Capture the test runner output that proves the failure. The captured output is the **watched-RED proof**.
+- One AC = one RED commit. If the AC needs more than one test to be observable, stage them all and commit together.
+
+Stage and commit:
 
 \`\`\`bash
-git add path/to/changed/file
-node .cclaw/hooks/commit-helper.mjs --ac=AC-N --message="…"
+git add tests/path/to/new-or-updated.test.ts
+node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=red \\
+  --message="red(AC-N): assert <observable behaviour>"
 \`\`\`
 
-The hook does the commit, captures the SHA, updates flow-state, and re-renders the traceability block. Never call \`git commit\` directly.
+Append the watched-RED proof to \`builds/<slug>.md\` under the AC row, in the **RED proof** column (test name + 1-2 line failure excerpt).
 
-## 5. Append a row to builds/<slug>.md
+## 4. GREEN — minimal production change to make RED pass
 
-\`.cclaw/builds/<slug>.md\` is the implementation log. Each AC adds a row with:
+Rules for the GREEN phase:
 
-- AC id,
-- short SHA,
-- file:line refs (every file touched, with the exact line range),
-- a one-line note explaining the why (not the what — the diff is the what).
+- Smallest possible production diff that turns RED into PASS.
+- Run the **full relevant suite**, not the single test, before committing. A passing single test with the rest of the suite broken is not GREEN.
+- Capture the suite output (command + PASS/FAIL summary). This is the **GREEN evidence**.
+- Touch only files declared in the plan. If the GREEN-correct change requires touching files outside the plan, **stop** and surface it. Scope creep is not progress.
 
-## 6. Repeat or hand off
+Stage and commit:
 
-If more AC are pending, repeat from step 1. If all AC are committed, transition to review-stage. If a finding from the previous review iteration applies, jump to fix-only flow (see below).
+\`\`\`bash
+git add src/path/to/implementation.ts
+node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=green \\
+  --message="green(AC-N): minimal impl that satisfies RED"
+\`\`\`
 
-## 7. Fix-only flow (after a review iteration)
+Append the GREEN evidence to \`builds/<slug>.md\` under the AC row, in the **GREEN evidence** column.
 
-When \`reviewer\` returns \`block\`, the slice-builder is dispatched in \`fix-only\` mode with the bounded set of file:line refs from the latest review block.
+## 5. REFACTOR — keep behaviour, improve shape (mandatory)
 
-Hard rules:
+REFACTOR is **not optional**. Even when the GREEN diff feels clean, run a deliberate refactor pass:
 
-- only files cited in the latest review block may be touched;
-- the fix commit reuses the original AC id (\`commit-helper.mjs --ac=AC-N --message="fix: F-2"\`);
-- a separate row in \`builds/<slug>.md\` records the F-N → AC-N → commit chain;
-- after the fix commits, the orchestrator re-invokes the same reviewer mode.
+- Behaviour-preserving cleanups: rename, extract, inline, deduplicate, narrow types.
+- Run the same suite again after the refactor; it must still pass with **identical expected output**.
+- If no refactor is warranted (the GREEN diff is genuinely minimal and idiomatic), **say so explicitly** in the row's **REFACTOR notes** column ("no refactor: 12-line addition, idiomatic"). Silence is not acceptable; the gate exists to force the question.
 
-## 8. Common pitfalls
+If a refactor lands, commit it separately:
 
-- Bypassing commit-helper "just this once". Don't. The traceability gate breaks.
-- Staging unrelated edits along with the AC change. Use \`git add\` per file, never \`git add -A\` inside \`/cc\`.
-- Writing tests in a follow-up commit. Tests live with the AC commit unless the plan explicitly separates them.
-- Refactoring "while we're here". Refusal is the right answer; capture the refactor as a follow-up in \`.cclaw/ideas.md\`.
+\`\`\`bash
+git add src/path/to/refactored.ts
+node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=refactor \\
+  --message="refactor(AC-N): <one-line shape change>"
+\`\`\`
+
+Otherwise call \`commit-helper.mjs --ac=AC-N --phase=refactor --skipped\` so the chain records the explicit decision.
+
+## 6. Append the AC row to builds/<slug>.md
+
+After REFACTOR, the AC row in \`.cclaw/builds/<slug>.md\` carries:
+
+| AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
+| --- | --- | --- | --- | --- | --- |
+| AC-N | tests/path:line, fixtures... | test name + failure excerpt | command + PASS summary | one-line shape change or "skipped: reason" | red SHA, green SHA, refactor SHA (or "skipped") |
+
+The build is complete for this AC only when all six columns are filled.
+
+## 7. Repeat or hand off
+
+If more AC are pending, repeat from step 1. If all AC are through REFACTOR, transition to review-stage.
+
+## 8. Fix-only flow (after a review iteration)
+
+When \`reviewer\` returns \`block\`, the slice-builder is dispatched in \`fix-only\` mode bound to the file:line refs from the latest review block. The TDD cycle still applies:
+
+- if the fix changes observable behaviour, write a new RED test that encodes the corrected behaviour, then GREEN, then REFACTOR;
+- if the fix is purely a refactor of existing code (no behaviour change), commit it under \`--phase=refactor\` with a citation of the F-N finding;
+- the AC id stays the same (\`commit-helper.mjs --ac=AC-N --phase=… --message="fix: F-N …"\`);
+- a separate set of rows in \`builds/<slug>.md\` records F-N → phase → commit.
+
+## 9. Mandatory gates (every AC)
+
+Before transitioning to review, every AC must satisfy:
+
+1. **discovery_complete** — relevant tests / fixtures / helpers / commands cited.
+2. **impact_check_complete** — affected callbacks / state / interfaces / contracts named.
+3. **red_test_written** — failing test exists, recorded with watched-RED proof.
+4. **red_fails_for_right_reason** — RED captured a real assertion failure, not a syntax error.
+5. **green_full_suite** — full relevant suite green after GREEN, not the single test.
+6. **refactor_completed_or_skipped_with_reason** — REFACTOR ran, or was explicitly skipped with a one-line reason.
+7. **traceable_to_plan** — AC commits reference plan AC ids and the plan's file set.
+8. **commit_chain_intact** — \`commit-helper.mjs\` recorded RED + GREEN + REFACTOR SHAs in flow-state.
+
+\`commit-helper.mjs\` enforces 1, 3, 6, 8 mechanically. The reviewer enforces 2, 4, 5, 7 in iteration 1.
+
+## 10. Common pitfalls
+
+- Skipping RED because "the implementation is obvious". The cycle is the contract; obvious code still gets a test.
+- Single test passes, full suite fails, but commit anyway. That is not GREEN; it is a regression.
+- REFACTOR phase silently skipped. Always emit the explicit "skipped: reason" note.
+- Writing production code in the RED commit. Stage and commit test files only in the RED phase.
+- Bypassing commit-helper "just this once". The traceability gate breaks.
+- \`git add -A\` inside build. Stage AC-related files only.
+- Refactoring across files outside the AC scope. That is a separate slug.
 `;
 
 const REVIEW_PLAYBOOK = `# Stage runbook — review

@@ -22,12 +22,23 @@ export type SliceBuilderMode = "build" | "fix-only";
 export type ArtifactStatus = "active" | "shipped";
 export type AcceptanceCriterionStatus = "pending" | "committed";
 
+export type TddPhase = "red" | "green" | "refactor";
+
+export interface TddPhaseRecord {
+  sha?: string;
+  skipped?: boolean;
+  reason?: string;
+}
+
 export interface AcceptanceCriterionState {
   id: string;
   text: string;
   commit?: string;
   status: AcceptanceCriterionStatus;
+  phases?: Partial<Record<TddPhase, TddPhaseRecord>>;
 }
+
+export type BuildProfile = "default" | "bootstrap";
 
 export type RoutingClass = "trivial" | "small-medium" | "large-risky";
 

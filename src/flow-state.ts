@@ -1,4 +1,4 @@
-import { FLOW_STAGES, type AcceptanceCriterionState, type DiscoverySpecialistId, type FlowStage } from "./types.js";
+import { FLOW_STAGES, type AcceptanceCriterionState, type BuildProfile, type DiscoverySpecialistId, type FlowStage } from "./types.js";
 
 export const FLOW_STATE_SCHEMA_VERSION = 2;
 
@@ -11,6 +11,7 @@ export interface FlowStateV8 {
   startedAt: string;
   reviewIterations: number;
   securityFlag: boolean;
+  buildProfile?: BuildProfile;
 }
 
 export type FlowState = FlowStateV8;
@@ -54,6 +55,16 @@ function assertAcArray(value: unknown): asserts value is AcceptanceCriterionStat
     if (ac.status !== "pending" && ac.status !== "committed") {
       throw new Error(`Invalid AC status: ${String(ac.status)}`);
     }
+    if (ac.phases !== undefined) {
+      if (typeof ac.phases !== "object" || ac.phases === null) {
+        throw new Error("flow-state.ac.phases must be an object when present");
+      }
+      for (const phaseKey of Object.keys(ac.phases)) {
+        if (phaseKey !== "red" && phaseKey !== "green" && phaseKey !== "refactor") {
+          throw new Error(`Invalid TDD phase key: ${phaseKey}`);
+        }
+      }
+    }
   }
 }
 
@@ -82,5 +93,8 @@ export function assertFlowStateV8(value: unknown): asserts value is FlowStateV8 
   }
   if (typeof state.securityFlag !== "boolean") {
     throw new Error("flow-state.securityFlag must be a boolean");
+  }
+  if (state.buildProfile !== undefined && state.buildProfile !== "default" && state.buildProfile !== "bootstrap") {
+    throw new Error(`Invalid buildProfile: ${String(state.buildProfile)}`);
   }
 }

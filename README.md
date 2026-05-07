@@ -25,7 +25,7 @@
                   active artifacts → shipped/<slug>/
 ```
 
-Three slash commands. Four stages. Six specialists. Ten skills. Ten templates. Four runbooks. Eight reference patterns. Five research playbooks. Five recovery playbooks. Thirteen worked examples. One mandatory gate (AC traceability).
+Three slash commands. Four stages (`plan → build → review → ship`, where **build IS a TDD cycle**: RED → GREEN → REFACTOR per AC). Six specialists. Eleven skills (including a TDD-cycle skill that's always-on while building). Ten templates. Four runbooks. Eight reference patterns. Five research playbooks. Five recovery playbooks. Thirteen worked examples. Two mandatory gates (AC traceability + TDD phase chain).
 
 ## What changed in v8
 
@@ -34,6 +34,7 @@ cclaw v8.0 is a breaking redesign. We dropped the 7.x stage machine: no more `br
 What we kept and made deeper:
 
 - plans with **acceptance criteria + YAML frontmatter** (`slug`, `stage`, `status`, `ac[]`, `last_specialist`, `refines`, `shipped_at`, `ship_commit`, `review_iterations`, `security_flag`);
+- **build is a TDD stage** — every AC goes through RED → GREEN → REFACTOR; `commit-helper.mjs --phase=red|green|refactor` enforces the cycle (production files in RED are rejected, GREEN without prior RED is rejected, REFACTOR is mandatory);
 - **AC ↔ commit traceability** enforced by `commit-helper.mjs`;
 - **artifact templates** for every stage (`plan`, `build`, `review`, `ship`, `decisions`, `learnings`, `manifest`, `ideas`, `agents-block`, `iron-laws`);
 - **ten auto-trigger skills** — plan-authoring, AC traceability, refinement, parallel-build, security-review, review-loop, commit-message-quality, AC-quality, refactor-safety, breaking-changes, plus a meta-skill that ties them together;

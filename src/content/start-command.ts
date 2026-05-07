@@ -29,8 +29,19 @@ security_flag: false
 \`\`\``;
 
 const COMMIT_HELPER_EXAMPLE = `\`\`\`bash
-git add src/components/ApprovalPill.tsx tests/unit/approval-pill.test.tsx
-node .cclaw/hooks/commit-helper.mjs --ac=AC-1 --message="Approval pill renders pending status"
+# RED — failing test only, no production edits
+git add tests/unit/approval-pill.test.tsx
+node .cclaw/hooks/commit-helper.mjs --ac=AC-1 --phase=red \\
+  --message="red(AC-1): pill renders pending status"
+
+# GREEN — minimal production change, full suite must be green
+git add src/components/ApprovalPill.tsx
+node .cclaw/hooks/commit-helper.mjs --ac=AC-1 --phase=green \\
+  --message="green(AC-1): minimal pill component for pending state"
+
+# REFACTOR — applied or explicitly skipped (silence is not allowed)
+node .cclaw/hooks/commit-helper.mjs --ac=AC-1 --phase=refactor --skipped \\
+  --message="refactor(AC-1) skipped: 18-line addition, idiomatic"
 \`\`\``;
 
 const REFINEMENT_EXAMPLE = `\`\`\`yaml
@@ -130,19 +141,26 @@ For a refinement, set \`refines\` to the parent slug:
 
 ${REFINEMENT_EXAMPLE}
 
-## Step 5 — Build
+## Step 5 — Build (TDD cycle)
 
-Use \`slice-builder\` (or implement inline for small tasks). For each AC:
+**Build is the TDD stage.** Every AC goes through RED → GREEN → REFACTOR. There is no other build mode in cclaw v8. Use \`slice-builder\` (or implement inline for small tasks).
 
-1. Stage AC-related changes only.
-2. Run \`commit-helper.mjs\`:
+For each AC:
+
+1. **Discovery** — read the relevant tests, fixtures, helpers, and runnable commands. Cite each finding as \`file:path:line\` in the AC's row in \`builds/<slug>.md\`.
+2. **RED** — write a failing test that encodes the AC's verification line. The test must fail for the **right reason** (the assertion that encodes the AC, not a syntax/import error). Stage **test files only**, then commit:
 
 ${COMMIT_HELPER_EXAMPLE}
 
-3. The hook validates that \`AC-N\` is declared in plan.md, runs \`git commit\`, captures the new SHA, and writes it into \`flow-state.json\`.
-4. Append a row to \`builds/<slug>.md\` with file:path:line references and a short note.
+3. **GREEN** — write the smallest production change that turns RED into PASS. Run the **full relevant suite** (not the single test). Stage and commit with \`--phase=green\`.
+4. **REFACTOR** (mandatory) — either apply a real refactor and commit with \`--phase=refactor\`, or explicitly skip with \`--phase=refactor --skipped --message="refactor(AC-N) skipped: <reason>"\`. Silence fails the gate.
+5. Append the row to \`builds/<slug>.md\` with all six columns (Discovery, RED proof, GREEN evidence, REFACTOR notes, commits) filled.
 
-Never call \`git commit\` directly. The hook is the only path that keeps AC ↔ commit traceability intact.
+\`commit-helper.mjs\` enforces the cycle: GREEN without a prior RED is rejected; REFACTOR without RED+GREEN is rejected; RED commits that contain production files (\`src/\`, \`lib/\`, \`app/\`) are rejected.
+
+> **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
+
+Never call \`git commit\` directly. The hook is the only path that keeps AC ↔ commit traceability and the TDD cycle intact.
 
 ## Step 6 — Review
 

@@ -281,6 +281,78 @@ If the project policy forbids deprecation aliases (some libraries), the refactor
 Refactor AC verification is "no behavioural diff": tests pass, snapshots unchanged, fixtures unchanged. If anything changes, the refactor leaked behaviour and must be split.
 `;
 
+const TDD_CYCLE = `---
+name: tdd-cycle
+trigger: always-on whenever stage=build (mandatory; build IS the TDD stage)
+---
+
+# Skill: tdd-cycle (RED → GREEN → REFACTOR)
+
+cclaw v8 build is a TDD stage. Every AC goes through the cycle. There is no other build mode.
+
+> **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
+
+## The three phases
+
+### RED — write a failing test
+
+- Touch test files **only**. No production edits in the RED commit.
+- The test must encode the AC verification line authored by planner.
+- The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax / import / fixture error.
+- Capture the runner output that proves the failure (command + 1-3 line excerpt). This is the **watched-RED proof**.
+- Commit: \`commit-helper.mjs --ac=AC-N --phase=red --message="red(AC-N): …"\`.
+
+### GREEN — minimal production change
+
+- Smallest possible production diff that turns RED into PASS.
+- Run the **full relevant suite**, not the single test. A passing single test with the suite broken elsewhere is a regression, not GREEN.
+- Capture the suite command + PASS/FAIL summary. This is the **GREEN evidence**.
+- Touch only files declared in the plan. If a file outside the plan is required, **stop** and surface the conflict.
+- Commit: \`commit-helper.mjs --ac=AC-N --phase=green --message="green(AC-N): …"\`.
+
+### REFACTOR — mandatory pass
+
+REFACTOR is **not optional**. Even when the GREEN diff feels minimal, you must consider rename / extract / inline / type-narrow / dedup / dead-code-removal. Run the same suite again; it must pass with **identical** expected output.
+
+If a refactor is warranted, apply it and commit:
+
+\`commit-helper.mjs --ac=AC-N --phase=refactor --message="refactor(AC-N): …"\`.
+
+If no refactor is warranted, say so **explicitly**:
+
+\`commit-helper.mjs --ac=AC-N --phase=refactor --skipped --message="refactor(AC-N) skipped: <reason>"\`.
+
+Silence fails the gate.
+
+## Mandatory gates per AC
+
+\`commit-helper\` enforces (a) ↔ (e) mechanically. The reviewer checks (b), (d), (f), (g) on iteration 1.
+
+(a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited.\n(b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named.\n(c) **red_test_recorded** — failing test exists, watched-RED proof attached.\n(d) **red_fails_for_right_reason** — RED captured a real assertion failure.\n(e) **green_full_suite** — full relevant suite green after GREEN.\n(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran, or explicitly skipped with reason.\n(g) **traceable_to_plan** — commits reference plan AC ids and the plan's file set.\n(h) **commit_chain_intact** — RED + GREEN + REFACTOR SHAs (or skipped sentinel) recorded in flow-state.
+
+## Anti-patterns
+
+- "The implementation is obvious, skipping RED." A-13 — gate fails immediately.
+- "Single test green, didn't run the suite." A-14 — that's not GREEN; it's a regression.
+- "Nothing to refactor, skipping silently." A-15 — emit the explicit \`--skipped\` commit with reason.
+- "Stage everything with \`git add -A\`." A-16 — staged unrelated edits leak into the AC commit.
+- "Production code in the RED commit." A-17 — RED is test files only.
+
+## Fix-only flow
+
+When reviewer returns \`block\`, the same TDD cycle applies to the fix:
+
+- F-N changes observable behaviour → new RED test that encodes the corrected behaviour, then GREEN, then REFACTOR.
+- F-N is purely a refactor → commit under \`--phase=refactor\`.
+- F-N is a docs / log / config nit → commit under \`--phase=refactor\` or \`--phase=refactor --skipped\`.
+
+The AC id stays the same; commit messages cite \`F-N\`.
+
+## When TDD does not apply
+
+The single exception is **bootstrap of the test framework itself** — a slug whose AC-1 is "test framework installed and one passing example test exists". In that case the orchestrator must mark the slug as \`build_profile: bootstrap\` in plan frontmatter, and \`commit-helper\` accepts the GREEN commit without a prior RED for AC-1 only. Every subsequent AC and every other slug uses the full cycle.
+`;
+
 const BREAKING_CHANGES = `---
 name: breaking-changes
 trigger: when the diff modifies public API surface or persisted contracts
@@ -363,6 +435,13 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     description: "Wraps every reviewer / security-reviewer invocation.",
     triggers: ["specialist:reviewer", "specialist:security-reviewer"],
     body: REVIEW_LOOP
+  },
+  {
+    id: "tdd-cycle",
+    fileName: "tdd-cycle.md",
+    description: "Mandatory always-on skill while stage=build. Enforces RED → GREEN → REFACTOR per AC, with watched-RED proof and full-suite GREEN evidence.",
+    triggers: ["stage:build", "specialist:slice-builder"],
+    body: TDD_CYCLE
   },
   {
     id: "commit-message-quality",

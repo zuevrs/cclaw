@@ -28,6 +28,12 @@ export const IRON_LAWS: IronLaw[] = [
     title: "Goal-Driven Execution",
     description:
       "Every action must move a specific AC closer to committed status. If the action does not, do not run it; record the question for the user."
+  },
+  {
+    id: "red-before-green",
+    title: "No Production Code Without a Failing Test First",
+    description:
+      "Build is a TDD cycle. Every AC starts with a failing test (RED), then the minimal implementation that makes it pass (GREEN), then the refactor that keeps it passing (REFACTOR). The RED failure is the spec; never write production code before it exists."
   }
 ];
 

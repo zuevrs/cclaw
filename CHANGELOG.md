@@ -9,6 +9,43 @@ auto-trigger skills, runbooks, reference patterns, research playbooks,
 recovery playbooks, examples library, antipatterns, decision protocol,
 AGENTS.md routing block).
 
+### Build is the TDD stage (third pass)
+
+Earlier passes renamed `tdd → build` per the locked vision but did not
+carry the TDD cycle into the new build runtime. This pass restores it:
+
+- New iron law: **NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.**
+- `commit-helper.mjs` now requires `--phase=red|green|refactor`. Phases
+  are gated: GREEN without a prior RED is rejected, REFACTOR without
+  RED+GREEN is rejected, RED commits that touch `src/` / `lib/` / `app/`
+  are rejected. `--phase=refactor --skipped` is accepted only with an
+  explicit `skipped: <reason>` message.
+- `flow-state.json` AC entries gain a `phases: { red, green, refactor }`
+  map. AC stays `pending` until all three phases are recorded; the
+  combined `commit` now points at the GREEN SHA.
+- `BUILD_TEMPLATE` now carries a six-column TDD log
+  (Discovery / RED proof / GREEN evidence / REFACTOR notes / commits)
+  plus dedicated Watched-RED proofs and Suite-evidence sections.
+- Build runbook (`.cclaw/runbooks/build.md`) rewritten as a TDD
+  playbook with the full cycle, mandatory gates, and fix-only flow.
+- New auto-trigger skill `tdd-cycle.md` (always-on while stage=build,
+  also triggered by specialist=slice-builder).
+- `slice-builder` prompt rewritten end-to-end as TDD-aware:
+  discovery → RED → GREEN → REFACTOR per AC, with watched-RED proof
+  and full-suite GREEN evidence.
+- `/cc` Step 5 expanded with a full TDD walk-through and three example
+  commit-helper invocations.
+- Antipatterns added: A-13 (skipping RED), A-14 (single-test green),
+  A-15 (REFACTOR silently skipped), A-16 (`git add -A`),
+  A-17 (production code in RED commit).
+- New iron-law id `red-before-green` plus 9 new tests
+  (`tests/unit/tdd-cycle.test.ts` and the updated `iron-laws` test).
+
+Numbers: 167 → 176 tests; npm pack 98.8 KB → 109.3 KB; the runtime
+core stays under 6 KLOC.
+
+### Deep content layer (second pass)
+
 ### Deep content layer (second pass)
 
 The second pass expanded the harness-facing content to match the depth

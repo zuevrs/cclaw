@@ -69,7 +69,8 @@ console.error(\`[cclaw] stopping with \${pending.length} pending AC for \${state
 `;
 
 const COMMIT_HELPER_HOOK = `#!/usr/bin/env node
-// cclaw v8 commit-helper: atomic commit per AC + AC traceability check.
+// cclaw v8 commit-helper: TDD-aware atomic commit per AC phase
+// (RED -> GREEN -> REFACTOR) + AC traceability gate.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -83,11 +84,28 @@ function arg(name) {
   return found ? found.slice(prefix.length) : null;
 }
 
+function flag(name) {
+  return process.argv.includes(\`--\${name}\`);
+}
+
 const acId = arg("ac");
+const phase = arg("phase");
 const message = arg("message") ?? \`cclaw: progress on \${acId ?? "AC"}\`;
+const skipped = flag("skipped");
 
 if (!acId || !/^AC-\\d+$/.test(acId)) {
-  console.error("[commit-helper] usage: commit-helper.mjs --ac=AC-1 [--message='...']");
+  console.error("[commit-helper] usage: commit-helper.mjs --ac=AC-N --phase=red|green|refactor [--skipped] [--message='...']");
+  process.exit(2);
+}
+
+if (!phase || !["red", "green", "refactor"].includes(phase)) {
+  console.error("[commit-helper] --phase is required. Allowed: red, green, refactor.");
+  console.error("[commit-helper] cclaw v8 build is a TDD cycle: every AC needs RED -> GREEN -> REFACTOR.");
+  process.exit(2);
+}
+
+if (skipped && phase !== "refactor") {
+  console.error("[commit-helper] --skipped is only valid for --phase=refactor.");
   process.exit(2);
 }
 
@@ -110,6 +128,47 @@ if (!matching) {
   process.exit(2);
 }
 
+const profile = state.buildProfile ?? "default";
+const phases = matching.phases ?? {};
+
+if (phase === "green" && !phases.red && profile !== "bootstrap") {
+  console.error(\`[commit-helper] cannot record GREEN for \${acId}: no RED commit on record.\`);
+  console.error("[commit-helper] write a failing test first and commit it with --phase=red.");
+  console.error("[commit-helper] (override: set buildProfile to 'bootstrap' in flow-state for test-framework bootstrap slugs only.)");
+  process.exit(2);
+}
+if (phase === "refactor" && (!phases.red || !phases.green)) {
+  console.error(\`[commit-helper] cannot record REFACTOR for \${acId}: missing \${!phases.red ? "RED" : "GREEN"} commit.\`);
+  process.exit(2);
+}
+
+if (phase === "refactor" && skipped) {
+  if (!arg("message") || !arg("message").includes("skipped:")) {
+    console.error("[commit-helper] --phase=refactor --skipped requires --message=\\"refactor(AC-N) skipped: <reason>\\".");
+    process.exit(2);
+  }
+  const updated = {
+    ...state,
+    ac: state.ac.map((item) => {
+      if (item.id !== acId) return item;
+      const nextPhases = { ...(item.phases ?? {}), refactor: { skipped: true, reason: arg("message") } };
+      const allDone = nextPhases.red && nextPhases.green && nextPhases.refactor;
+      return {
+        ...item,
+        phases: nextPhases,
+        commit: allDone ? (nextPhases.green.sha ?? item.commit ?? null) : item.commit ?? null,
+        status: allDone ? "committed" : "pending"
+      };
+    })
+  };
+  await fs.writeFile(statePath, \`\${JSON.stringify(updated, null, 2)}\\n\`, "utf8");
+  console.log(\`[commit-helper] \${acId} phase=refactor skipped (recorded).\`);
+  if (updated.ac.find((item) => item.id === acId)?.status === "committed") {
+    console.log(\`[commit-helper] \${acId} cycle complete (red, green, refactor=skipped).\`);
+  }
+  process.exit(0);
+}
+
 let staged;
 try {
   staged = execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: root, encoding: "utf8" }).trim();
@@ -122,16 +181,40 @@ if (!staged) {
   process.exit(2);
 }
 
-const commitMessage = \`\${message}\\n\\nrefs: \${acId}\`;
+if (phase === "red") {
+  const stagedFiles = staged.split("\\n").filter(Boolean);
+  const looksLikeProduction = stagedFiles.find((file) => /^src\\//.test(file) || /^lib\\//.test(file) || /^app\\//.test(file));
+  if (looksLikeProduction) {
+    console.error(\`[commit-helper] RED phase rejects production files: \${looksLikeProduction}\`);
+    console.error("[commit-helper] RED commits must contain test files only. Write the failing test first; commit production code under --phase=green.");
+    process.exit(2);
+  }
+}
+
+const commitMessage = \`\${message}\\n\\nrefs: \${acId} (phase=\${phase})\`;
 execFileSync("git", ["commit", "-m", commitMessage], { cwd: root, stdio: "inherit" });
 
 const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
 const updated = {
   ...state,
-  ac: state.ac.map((item) => item.id === acId ? { ...item, commit: sha, status: "committed" } : item)
+  ac: state.ac.map((item) => {
+    if (item.id !== acId) return item;
+    const nextPhases = { ...(item.phases ?? {}), [phase]: { sha } };
+    const cycleDone = nextPhases.red && nextPhases.green && nextPhases.refactor;
+    return {
+      ...item,
+      phases: nextPhases,
+      commit: cycleDone ? (nextPhases.green.sha ?? sha) : item.commit ?? null,
+      status: cycleDone ? "committed" : "pending"
+    };
+  })
 };
 await fs.writeFile(statePath, \`\${JSON.stringify(updated, null, 2)}\\n\`, "utf8");
-console.log(\`[commit-helper] \${acId} committed as \${sha}\`);
+console.log(\`[commit-helper] \${acId} phase=\${phase} committed as \${sha}\`);
+const after = updated.ac.find((item) => item.id === acId);
+if (after && after.status === "committed") {
+  console.log(\`[commit-helper] \${acId} cycle complete (red, green, refactor).\`);
+}
 `;
 
 export const SESSION_START_HOOK_SPEC: NodeHookSpec = {
