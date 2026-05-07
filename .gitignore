@@ -13,6 +13,8 @@ docs/*
 !docs/agents-block.example.md
 !docs/scheme-of-work.md
 !docs/quality-gates.md
+!docs/v8-vision.md
+!docs/migration-v7-to-v8.md
 # cclaw generated artifacts
 .cclaw/
 .claude/commands/cc-*.md
