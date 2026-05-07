@@ -1,16 +1,37 @@
 export const IDEA_COMMAND_BODY = `# /cc-idea — capture an idea outside of any active flow
 
-This command does **not** participate in plan/build/review/ship. It exists so the user can drop a half-formed idea without spinning up a full flow.
+This command does **not** participate in plan/build/review/ship. Its only job is to drop a half-formed idea into the backlog without spinning up a full flow.
 
 ## Behaviour
 
-1. Append a one-paragraph entry to \`.cclaw/ideas.md\` (create the file if missing).
-2. Each entry begins with an ISO timestamp, then a single line summary, then the body in normal prose.
-3. Do **not** create a slug.
-4. Do **not** modify \`.cclaw/state/flow-state.json\`.
-5. Do **not** invoke specialists.
+1. Open \`.cclaw/ideas.md\`. If it does not exist, seed it from \`.cclaw/templates/ideas.md\`.
+2. Append a new entry with this shape:
 
-When the user is ready to act on an idea, they invoke \`/cc <task>\` describing it; ideas are not auto-converted to plans.
+   \`\`\`
+   ## YYYY-MM-DDTHH:MM:SSZ — <one-line summary>
+
+   <short paragraph or bullet list with the idea body>
+   \`\`\`
+
+3. Save the file. Do not slugify, do not create artifacts under \`.cclaw/plans/\`, do not modify \`flow-state.json\`, do not invoke specialists.
+
+## Hard rules
+
+- One entry per invocation. If the user pastes multiple ideas, ask whether to file them as one entry or several.
+- Never auto-promote an idea to a plan. Promotion happens only when the user explicitly invokes \`/cc <task>\`.
+- Never delete or edit prior ideas inside \`/cc-idea\`. Trimming the backlog is a separate manual step.
+
+## Suggested entry shape
+
+\`\`\`
+## 2026-05-07T19:30:12Z — switch knowledge.jsonl to ndjson
+
+Right now \`.cclaw/knowledge.jsonl\` is one JSON object per line, but tooling
+expects RFC 8259-compliant NDJSON. Worth verifying once the tooling adopts
+the standard formally.
+\`\`\`
+
+The orchestrator surfaces ideas back to the user only when an explicit \`/cc\` invocation references them; otherwise they stay quiet.
 `;
 
 export function renderIdeaCommand(): string {

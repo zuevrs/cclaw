@@ -3,11 +3,19 @@ import path from "node:path";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { ACTIVE_ARTIFACT_DIRS, type ArtifactStage } from "./artifact-paths.js";
 import { CORE_AGENTS, renderAgentMarkdown } from "./content/core-agents.js";
-import { COMMIT_HELPER_HOOK_SPEC, NODE_HOOKS, SESSION_START_HOOK_SPEC, STOP_HANDOFF_HOOK_SPEC, type NodeHookSpec } from "./content/node-hooks.js";
+import { ARTIFACT_TEMPLATES, planTemplateForSlug, templateBody } from "./content/artifact-templates.js";
+import { AUTO_TRIGGER_SKILLS } from "./content/skills.js";
+import {
+  COMMIT_HELPER_HOOK_SPEC,
+  NODE_HOOKS,
+  SESSION_START_HOOK_SPEC,
+  STOP_HANDOFF_HOOK_SPEC,
+  type NodeHookSpec
+} from "./content/node-hooks.js";
 import { renderStartCommand } from "./content/start-command.js";
 import { renderCancelCommand } from "./content/cancel-command.js";
 import { renderIdeaCommand } from "./content/idea-command.js";
-import { ensureDir, exists, writeFileSafe, removePath } from "./fs-utils.js";
+import { ensureDir, exists, removePath, writeFileSafe } from "./fs-utils.js";
 import { ensureRunSystem } from "./run-persistence.js";
 import { createDefaultConfig, readConfig, renderConfig, type CclawConfig } from "./config.js";
 import { HARNESS_IDS, type HarnessId } from "./types.js";
@@ -17,6 +25,7 @@ export interface HarnessLayout {
   id: HarnessId;
   commandsDir: string;
   agentsDir: string;
+  skillsDir: string;
   hooksConfig: { dir: string; fileName: string } | null;
 }
 
@@ -25,24 +34,28 @@ const HARNESS_LAYOUTS: Record<HarnessId, HarnessLayout> = {
     id: "claude",
     commandsDir: ".claude/commands",
     agentsDir: ".claude/agents",
+    skillsDir: ".claude/skills/cclaw",
     hooksConfig: { dir: ".claude/hooks", fileName: "hooks.json" }
   },
   cursor: {
     id: "cursor",
     commandsDir: ".cursor/commands",
     agentsDir: ".cursor/agents",
+    skillsDir: ".cursor/skills/cclaw",
     hooksConfig: { dir: ".cursor", fileName: "hooks.json" }
   },
   opencode: {
     id: "opencode",
     commandsDir: ".opencode/commands",
     agentsDir: ".opencode/agents",
+    skillsDir: ".opencode/skills/cclaw",
     hooksConfig: { dir: ".opencode/plugins", fileName: "cclaw-plugin.mjs" }
   },
   codex: {
     id: "codex",
     commandsDir: ".codex/commands",
     agentsDir: ".codex/agents",
+    skillsDir: ".codex/skills/cclaw",
     hooksConfig: { dir: ".codex", fileName: "hooks.json" }
   }
 };
@@ -50,6 +63,7 @@ const HARNESS_LAYOUTS: Record<HarnessId, HarnessLayout> = {
 export interface SyncOptions {
   cwd: string;
   harnesses?: HarnessId[];
+  generateAgentsBlock?: boolean;
 }
 
 export interface SyncResult {
@@ -57,11 +71,8 @@ export interface SyncResult {
   configPath: string;
 }
 
-const PLAN_TEMPLATE_BODY = `_Replace this paragraph with one or two sentences explaining what we are doing and why._\n\n## Context\n\n_(brainstormer fills this when invoked.)_\n\n## Acceptance Criteria\n\n- AC-1: _Describe a single observable outcome that closes one commit._\n\n## Plan\n\n- Step 1.\n\n## Traceability\n\n- AC-1 → commit pending\n`;
-
-function planTemplate(slug: string): string {
-  return `---\nslug: ${slug}\nstage: plan\nstatus: active\nac:\n  - id: AC-1\n    text: \"Replace with the first observable outcome.\"\n    status: pending\nlast_specialist: null\nrefines: null\nshipped_at: null\nship_commit: null\nreview_iterations: 0\nsecurity_flag: false\n---\n\n# ${slug}\n\n${PLAN_TEMPLATE_BODY}`;
-}
+const AGENTS_BLOCK_BEGIN = "<!-- cclaw-routing:start";
+const AGENTS_BLOCK_END = "<!-- cclaw-routing:end -->";
 
 export async function ensureRuntimeRoot(projectRoot: string): Promise<void> {
   const root = path.join(projectRoot, RUNTIME_ROOT);
@@ -69,8 +80,10 @@ export async function ensureRuntimeRoot(projectRoot: string): Promise<void> {
     "state",
     ...Object.values(ACTIVE_ARTIFACT_DIRS),
     "shipped",
+    "cancelled",
     "agents",
     "hooks",
+    "skills",
     "templates"
   ]) {
     await ensureDir(path.join(root, dir));
@@ -94,15 +107,28 @@ async function writeAgentFiles(projectRoot: string): Promise<void> {
   }
 }
 
+async function writeRuntimeSkills(projectRoot: string): Promise<void> {
+  for (const skill of AUTO_TRIGGER_SKILLS) {
+    const target = path.join(projectRoot, RUNTIME_ROOT, "skills", skill.fileName);
+    await writeFileSafe(target, skill.body);
+  }
+}
+
 async function writeTemplates(projectRoot: string): Promise<void> {
-  await writeFileSafe(
-    path.join(projectRoot, RUNTIME_ROOT, "templates", "plan.md"),
-    planTemplate("EXAMPLE-SLUG")
-  );
+  for (const template of ARTIFACT_TEMPLATES) {
+    const target = path.join(projectRoot, RUNTIME_ROOT, "templates", template.fileName);
+    await writeFileSafe(target, template.body);
+  }
   await writeFileSafe(
     path.join(projectRoot, RUNTIME_ROOT, "templates", "iron-laws.md"),
     ironLawsMarkdown()
   );
+}
+
+async function writeIdeasSeed(projectRoot: string): Promise<void> {
+  const target = path.join(projectRoot, RUNTIME_ROOT, "ideas.md");
+  if (await exists(target)) return;
+  await writeFileSafe(target, templateBody("ideas"));
 }
 
 async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): Promise<void> {
@@ -117,6 +143,11 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
       path.join(projectRoot, layout.agentsDir, `${agent.id}.md`),
       renderAgentMarkdown(agent)
     );
+  }
+
+  await ensureDir(path.join(projectRoot, layout.skillsDir));
+  for (const skill of AUTO_TRIGGER_SKILLS) {
+    await writeFileSafe(path.join(projectRoot, layout.skillsDir, skill.fileName), skill.body);
   }
 
   if (layout.hooksConfig) {
@@ -143,6 +174,25 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
   }
 }
 
+async function writeAgentsBlock(projectRoot: string): Promise<void> {
+  const targetPath = path.join(projectRoot, "AGENTS.md");
+  const block = templateBody("agents-block");
+  let next: string;
+  if (await exists(targetPath)) {
+    const current = await fs.readFile(targetPath, "utf8");
+    if (current.includes(AGENTS_BLOCK_BEGIN) && current.includes(AGENTS_BLOCK_END)) {
+      const start = current.indexOf(AGENTS_BLOCK_BEGIN);
+      const end = current.indexOf(AGENTS_BLOCK_END) + AGENTS_BLOCK_END.length;
+      next = `${current.slice(0, start)}${block.trim()}\n${current.slice(end).replace(/^\n+/u, "")}`;
+    } else {
+      next = `${current.replace(/\n+$/u, "")}\n\n${block}\n`;
+    }
+  } else {
+    next = block.endsWith("\n") ? block : `${block}\n`;
+  }
+  await writeFileSafe(targetPath, next);
+}
+
 async function writeConfig(projectRoot: string, config: CclawConfig): Promise<string> {
   const configPath = path.join(projectRoot, RUNTIME_ROOT, "config.yaml");
   await writeFileSafe(configPath, renderConfig(config));
@@ -159,15 +209,22 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
       throw new Error(`Unknown harness: ${harness}. Supported: ${HARNESS_IDS.join(", ")}`);
     }
   }
-  const config = existing ? { ...existing, version: CCLAW_VERSION, flowVersion: "8" as const, harnesses } : createDefaultConfig(harnesses);
+  const config = existing
+    ? { ...existing, version: CCLAW_VERSION, flowVersion: "8" as const, harnesses }
+    : createDefaultConfig(harnesses);
   await ensureRunSystem(projectRoot);
   await writeAgentFiles(projectRoot);
   for (const hook of NODE_HOOKS) {
     await writeHookFile(projectRoot, hook);
   }
+  await writeRuntimeSkills(projectRoot);
   await writeTemplates(projectRoot);
+  await writeIdeasSeed(projectRoot);
   for (const harness of harnesses) {
     await writeHarnessAssets(projectRoot, HARNESS_LAYOUTS[harness]);
+  }
+  if (options.generateAgentsBlock !== false) {
+    await writeAgentsBlock(projectRoot);
   }
   const configPath = await writeConfig(projectRoot, config);
   return { installedHarnesses: harnesses, configPath };
@@ -175,6 +232,21 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
 
 export async function initCclaw(options: SyncOptions): Promise<SyncResult> {
   return syncCclaw(options);
+}
+
+async function removeAgentsBlock(projectRoot: string): Promise<void> {
+  const target = path.join(projectRoot, "AGENTS.md");
+  if (!(await exists(target))) return;
+  const current = await fs.readFile(target, "utf8");
+  if (!current.includes(AGENTS_BLOCK_BEGIN) || !current.includes(AGENTS_BLOCK_END)) return;
+  const start = current.indexOf(AGENTS_BLOCK_BEGIN);
+  const end = current.indexOf(AGENTS_BLOCK_END) + AGENTS_BLOCK_END.length;
+  const next = `${current.slice(0, start)}${current.slice(end).replace(/^\n+/u, "")}`;
+  if (next.trim().length === 0) {
+    await removePath(target);
+  } else {
+    await writeFileSafe(target, next);
+  }
 }
 
 export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
@@ -190,6 +262,7 @@ export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
     for (const agent of CORE_AGENTS) {
       await removePath(path.join(projectRoot, layout.agentsDir, `${agent.id}.md`));
     }
+    await removePath(path.join(projectRoot, layout.skillsDir));
     if (layout.hooksConfig) {
       await removePath(path.join(projectRoot, layout.hooksConfig.dir, layout.hooksConfig.fileName));
     }
@@ -202,10 +275,15 @@ export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
       if (remaining.length === 0) await removePath(path.join(projectRoot, layout.agentsDir));
     }
   }
+  await removeAgentsBlock(projectRoot);
 }
 
 export async function upgradeCclaw(options: SyncOptions): Promise<SyncResult> {
   return syncCclaw(options);
+}
+
+export function planSeedForSlug(slug: string): string {
+  return planTemplateForSlug(slug);
 }
 
 export const HARNESS_LAYOUT_TABLE = HARNESS_LAYOUTS;

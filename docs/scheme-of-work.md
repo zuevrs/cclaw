@@ -14,33 +14,37 @@ cclaw v8 has one entry point (`/cc <task>`) and four stages (`plan`, `build`, `r
    │
    ▼
 [1] Sanity check (schemaVersion = 2; if 1, stop and offer choices)
-[2] Existing-plan detection (active + shipped)
+[2] Existing-plan detection (active + shipped + cancelled, frontmatter-aware)
 [3] Phase 0 calibration (targeted vs multi-component)
 [4] Routing class:
        trivial      → edit + commit per AC, no plan.md
        small/medium → plan.md inline → build → review → ship
        large/risky  → propose specialists, then inline
-[5] Build slices, commit per AC via .cclaw/hooks/commit-helper.mjs
-[6] Review (Five Failure Modes; hard cap 5 iterations)
-[7] Ship (writes ships/<slug>.md, asks before push/PR)
-[8] Compound (automatic; quality gate; learnings/<slug>.md when gated)
-[9] Active → shipped/<slug>/ move + manifest.md
+[5] Plan template seeded from .cclaw/templates/plan.md
+[6] Build slices, commit per AC via .cclaw/hooks/commit-helper.mjs
+[7] Review (Five Failure Modes; hard cap 5 iterations)
+[8] Ship (writes ships/<slug>.md from template; asks before push/PR)
+[9] Compound (automatic; quality gate; learnings/<slug>.md when gated)
+[10] Active → shipped/<slug>/ move + manifest.md
 ```
 
 ## Step-by-step
 
 ### 1. Sanity check
 
-`/cc` reads `.cclaw/state/flow-state.json` and verifies `schemaVersion: 2`. If it sees a 7.x file, it stops and asks the user to finish/abandon the old run, delete the file, or start fresh.
+`/cc` reads `.cclaw/state/flow-state.json` and verifies `schemaVersion: 2`. If it sees a 7.x file, it stops and asks the user to finish/abandon the old run, delete the file, or start fresh. There is no auto-migration.
 
-### 2. Existing-plan detection
+### 2. Existing-plan detection (frontmatter-aware)
 
-`/cc` globs `.cclaw/plans/*.md` and `.cclaw/shipped/*/plan.md`. If a slug or body fuzzy-matches the new task:
+`/cc` globs `.cclaw/plans/*.md`, `.cclaw/shipped/*/plan.md`, and `.cclaw/cancelled/*/plan.md`. For each match it parses the YAML frontmatter and surfaces:
 
-- active match → ask **amend / rewrite / new**.
-- shipped match → ask **refine shipped <slug> / new unrelated plan**.
+- slug, status (`active` | `shipped` | `cancelled`),
+- `last_specialist` — so you see "stopped at architect",
+- AC progress (`committed` / `pending` / `total`),
+- `security_flag`,
+- `refines` chain — so you can see if the prior slug refined an even earlier slug.
 
-There is no `/cc-amend`. Refinement is part of `/cc`.
+The user picks one of: **amend / rewrite / new** for active matches; **refine shipped / new unrelated** for shipped matches; **resume from cancelled / new** for cancelled matches. Refinement is part of `/cc`; there is no `/cc-amend`.
 
 ### 3. Phase 0 calibration
 
@@ -56,7 +60,16 @@ A single short question: "targeted change in one place, or multi-component featu
 
 For large/risky tasks the orchestrator proposes `brainstormer → architect → planner` in sequence. The user can stop after any checkpoint and continue with what is already in `plan.md`.
 
-### 5. Build
+### 5. Plan template
+
+If you are starting a new plan (no existing match), `/cc` seeds `plans/<slug>.md` from `.cclaw/templates/plan.md` with the slug substituted. The template includes:
+
+- mandatory YAML frontmatter (`slug`, `stage`, `status`, `ac[]`, `last_specialist`, `refines`, `shipped_at`, `ship_commit`, `review_iterations`, `security_flag`);
+- body sections: Context, Frame, Scope, (Alternatives considered), Architecture, Plan, Acceptance Criteria, Topology, Traceability block.
+
+Each AC must be observable (a user, test, or operator can verify it without reading the diff). Each AC has a one-line verification.
+
+### 6. Build
 
 `slice-builder` (or inline edit for small tasks) implements one AC at a time. Each AC closes with:
 
@@ -65,11 +78,13 @@ git add ...
 node .cclaw/hooks/commit-helper.mjs --ac=AC-1 --message="…"
 ```
 
-The hook validates that `AC-1` is declared in plan.md, runs `git commit`, and updates `flow-state.json` with the new SHA. The implementation log goes to `.cclaw/builds/<slug>.md`.
+The hook validates that `AC-1` is declared in plan.md, runs `git commit`, captures the SHA, and updates `flow-state.json`. The implementation log goes to `.cclaw/builds/<slug>.md`, seeded from `.cclaw/templates/build.md`.
 
-### 6. Review
+For `parallel-build` topology (planner-recommended only when ≥4 AC, disjoint file sets, no inter-AC deps), the orchestrator spawns one `slice-builder` per slice and a `reviewer` in `integration` mode after the wave finishes. The `parallel-build` auto-trigger skill at `.cclaw/skills/parallel-build.md` carries the playbook.
 
-`reviewer` runs in one or more modes (`code`, `text-review`, `integration`, `release`, `adversarial`). `security-reviewer` runs only when relevant. The Five Failure Modes checklist is mandatory:
+### 7. Review
+
+`reviewer` runs in one or more modes (`code`, `text-review`, `integration`, `release`, `adversarial`). `security-reviewer` runs only when relevant. Findings live in `.cclaw/reviews/<slug>.md`, seeded from `.cclaw/templates/review.md`. The Five Failure Modes pass is mandatory:
 
 1. Hallucinated actions
 2. Scope creep
@@ -77,26 +92,38 @@ The hook validates that `AC-1` is declared in plan.md, runs `git commit`, and up
 4. Context loss
 5. Tool misuse
 
-Hard cap: 5 review/fix iterations. After the 5th, stop and report what remains.
+Hard cap: 5 review/fix iterations. After the 5th, stop and report what remains. See [docs/quality-gates.md](quality-gates.md).
 
-### 7. Ship
+### 8. Ship
 
-Writes `.cclaw/ships/<slug>.md` with release notes and verified AC ↔ commit map. Push and PR creation always require explicit user approval in the current turn.
+Writes `.cclaw/ships/<slug>.md` from `.cclaw/templates/ship.md` with:
 
-### 8. Compound (automatic)
+- summary,
+- AC ↔ commit map,
+- push / PR refs (both `pending` until the user explicitly approves),
+- breaking changes / migration notes,
+- a one-paragraph release note suitable for `CHANGELOG.md`.
 
-Captures `learnings/<slug>.md` only when at least one signal is present:
+Push and PR creation always require explicit user approval in the current turn.
+
+### 9. Compound (automatic)
+
+Captures `learnings/<slug>.md` (from template) only when at least one signal is present:
 
 - non-trivial decision recorded by `architect` or `planner`,
 - review needed ≥3 iterations,
 - security review ran or `security_flag` is true,
 - the user explicitly asked.
 
-If the gate passes, one line is appended to `.cclaw/knowledge.jsonl` referencing the slug + ship_commit.
+If the gate passes, one line is appended to `.cclaw/knowledge.jsonl` referencing the slug, ship_commit, shipped_at, signals, and optional `refines` link.
 
-### 9. Active → shipped move
+### 10. Active → shipped move
 
-All `<slug>.md` files in `plans/ builds/ reviews/ ships/ decisions/ learnings/` move to `.cclaw/shipped/<slug>/` as `plan.md`, `build.md`, etc. A short `manifest.md` lists artifacts and AC. Then `flow-state.json` resets.
+All `<slug>.md` files in `plans/ builds/ reviews/ ships/ decisions/ learnings/` move to `.cclaw/shipped/<slug>/` as `plan.md`, `build.md`, etc. A `manifest.md` (from `.cclaw/templates/manifest.md`) lists artifacts, AC, and any `refines` chain. Then `flow-state.json` resets.
+
+## Cancellation path
+
+`/cc-cancel` moves every active `<slug>.md` into `.cclaw/cancelled/<slug>/`, writes a `manifest.md` with the cancel reason, and resets `flow-state.json`. The artifacts stay readable; resuming a cancelled run is a first-class option in existing-plan detection.
 
 ## Files written during a run
 
@@ -109,6 +136,7 @@ All `<slug>.md` files in `plans/ builds/ reviews/ ships/ decisions/ learnings/` 
 .cclaw/learnings/<slug>.md         (optional, when gated)
 .cclaw/ships/<slug>.md
 .cclaw/shipped/<slug>/manifest.md  (after ship)
+.cclaw/cancelled/<slug>/manifest.md (after /cc-cancel, if used)
 .cclaw/knowledge.jsonl             (append only when gated)
 ```
 

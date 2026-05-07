@@ -7,9 +7,10 @@ import {
   shippedArtifactDir,
   shippedArtifactPath
 } from "./artifact-paths.js";
-import { KNOWLEDGE_LOG_REL_PATH } from "./constants.js";
-import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
+import { exists, ensureDir, writeFileSafe } from "./fs-utils.js";
 import { readFlowState, resetFlowState, writeFlowState } from "./run-persistence.js";
+import { manifestTemplate, templateBody } from "./content/artifact-templates.js";
+import { appendKnowledgeEntry, type KnowledgeEntry } from "./knowledge-store.js";
 import type { AcceptanceCriterionState } from "./types.js";
 
 export interface CompoundQualitySignals {
@@ -22,6 +23,8 @@ export interface CompoundQualitySignals {
 export interface CompoundRunOptions {
   shipCommit: string;
   signals: CompoundQualitySignals;
+  refines?: string | null;
+  notes?: string;
 }
 
 export interface CompoundRunResult {
@@ -29,6 +32,7 @@ export interface CompoundRunResult {
   shippedDir: string;
   learningCaptured: boolean;
   movedArtifacts: ArtifactStage[];
+  knowledgeEntry?: KnowledgeEntry;
 }
 
 export class CompoundError extends Error {}
@@ -52,19 +56,34 @@ async function moveIfExists(source: string, destination: string): Promise<boolea
   return true;
 }
 
-function manifestBody(
+function renderManifest(
   slug: string,
   shipCommit: string,
+  shippedAt: string,
   ac: AcceptanceCriterionState[],
-  moved: ArtifactStage[]
+  moved: ArtifactStage[],
+  refines?: string | null
 ): string {
+  const base = manifestTemplate(slug, shipCommit, shippedAt);
   const acLines = ac
     .map((item) => `- ${item.id}: ${item.text}${item.commit ? ` (commit ${item.commit})` : ""}`)
     .join("\n");
-  const movedLines = moved
-    .map((stage) => `- ${stage}.md`)
-    .join("\n");
-  return `---\nslug: ${slug}\nstatus: shipped\nship_commit: ${shipCommit}\nshipped_at: ${new Date().toISOString()}\n---\n\n# ${slug} — shipped manifest\n\n## Acceptance Criteria\n\n${acLines}\n\n## Artifacts\n\n${movedLines}\n`;
+  const stageFiles: Record<ArtifactStage, string> = {
+    plan: "plan.md",
+    build: "build.md",
+    review: "review.md",
+    ship: "ship.md",
+    decisions: "decisions.md",
+    learnings: "learnings.md"
+  };
+  const movedLines = moved.map((stage) => `- ${stageFiles[stage]}`).join("\n");
+  const refinesBlock = refines
+    ? `## Refines\n\nThis run refines [${refines}](../${refines}/manifest.md).\n`
+    : "";
+  return base
+    .replace(/## Acceptance Criteria[\s\S]*?(?=\n## Artifacts)/u, `## Acceptance Criteria\n\n${acLines}\n\n`)
+    .replace(/## Artifacts[\s\S]*?(?=\n## Refines)/u, `## Artifacts\n\n${movedLines}\n\n`)
+    .replace(/## Refines[\s\S]*?(?=\n## Knowledge index)/u, refinesBlock || `## Refines\n\n_None._\n\n`);
 }
 
 export async function runCompoundAndShip(
@@ -82,33 +101,27 @@ export async function runCompoundAndShip(
     );
   }
 
+  const shippedAt = new Date().toISOString();
   const learningCaptured = shouldCaptureLearning(options.signals);
 
+  let knowledgeEntry: KnowledgeEntry | undefined;
   if (learningCaptured) {
     const learningPath = activeArtifactPath(projectRoot, "learnings", slug);
     if (!(await exists(learningPath))) {
-      const stub = `---\nslug: ${slug}\nstage: learnings\nstatus: active\n---\n\n# ${slug} — learnings\n\n_(orchestrator: replace with the lessons learned: decisions, trade-offs, surprises, follow-ups)._\n`;
-      await writeFileSafe(learningPath, stub);
+      await writeFileSafe(learningPath, templateBody("learnings", { "SLUG-PLACEHOLDER": slug }));
     }
-
-    const knowledgePath = path.join(projectRoot, KNOWLEDGE_LOG_REL_PATH);
-    const entry = JSON.stringify({
+    knowledgeEntry = {
       slug,
       ship_commit: options.shipCommit,
-      shipped_at: new Date().toISOString(),
-      signals: options.signals
-    });
-    if (!(await exists(knowledgePath))) {
-      await writeFileSafe(knowledgePath, `${entry}\n`);
-    } else {
-      await fs.appendFile(knowledgePath, `${entry}\n`, "utf8");
-    }
+      shipped_at: shippedAt,
+      signals: { ...options.signals },
+      refines: options.refines ?? null,
+      notes: options.notes
+    };
+    await appendKnowledgeEntry(projectRoot, knowledgeEntry);
   }
 
-  await writeFlowState(projectRoot, {
-    ...state,
-    currentStage: "ship"
-  });
+  await writeFlowState(projectRoot, { ...state, currentStage: "ship" });
 
   const shippedDir = shippedArtifactDir(projectRoot, slug);
   await ensureDir(shippedDir);
@@ -123,12 +136,12 @@ export async function runCompoundAndShip(
 
   await writeFileSafe(
     path.join(shippedDir, "manifest.md"),
-    manifestBody(slug, options.shipCommit, state.ac, moved)
+    renderManifest(slug, options.shipCommit, shippedAt, state.ac, moved, options.refines)
   );
 
   await resetFlowState(projectRoot);
 
-  return { slug, shippedDir, learningCaptured, movedArtifacts: moved };
+  return { slug, shippedDir, learningCaptured, movedArtifacts: moved, knowledgeEntry };
 }
 
 export async function defaultPathsToCheck(projectRoot: string): Promise<string[]> {

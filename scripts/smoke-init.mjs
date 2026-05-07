@@ -18,6 +18,19 @@ try {
   if (!existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command missing after init");
   }
+  for (const tpl of ["plan.md", "build.md", "review.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "templates", tpl))) {
+      throw new Error(`smoke check failed: template ${tpl} missing after init`);
+    }
+  }
+  for (const skill of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "skills", skill))) {
+      throw new Error(`smoke check failed: skill ${skill} missing after init`);
+    }
+  }
+  if (!existsSync(join(tempDir, "AGENTS.md"))) {
+    throw new Error("smoke check failed: AGENTS.md routing block missing after init");
+  }
   execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: "pipe" });
   execFileSync("node", [cli, "upgrade"], { cwd: tempDir, stdio: "pipe" });
   execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: "pipe" });

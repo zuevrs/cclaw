@@ -2,8 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { activeArtifactDir, slugifyArtifactTopic } from "./artifact-paths.js";
 import { exists, listMarkdownFiles, listSubdirs } from "./fs-utils.js";
-import { SHIPPED_DIR_REL_PATH } from "./constants.js";
-import type { RoutingClass } from "./types.js";
+import { SHIPPED_DIR_REL_PATH, RUNTIME_ROOT } from "./constants.js";
+import { parseArtifact, type ArtifactFrontmatter } from "./artifact-frontmatter.js";
+import type { AcceptanceCriterionState, RoutingClass } from "./types.js";
 
 const STOP_WORDS = new Set([
   "the", "a", "an", "to", "of", "in", "on", "for", "and", "or", "is", "are",
@@ -16,32 +17,44 @@ const LARGE_SIGNALS = /(?:refactor|migration|architecture|architectur(?:al|y)|mu
 
 export interface ExistingPlanMatch {
   slug: string;
-  origin: "active" | "shipped";
+  origin: "active" | "shipped" | "cancelled";
   filePath: string;
   score: number;
+  frontmatter?: ArtifactFrontmatter;
+  acProgress?: { committed: number; pending: number; total: number };
+  lastSpecialist?: ArtifactFrontmatter["last_specialist"];
+  refines?: string | null;
+  securityFlag?: boolean;
 }
 
 export interface RoutingClassification {
   class: RoutingClass;
   signals: string[];
+  notes: string[];
 }
 
 export function classifyRouting(task: string): RoutingClassification {
   const text = task.trim();
   const signals: string[] = [];
+  const notes: string[] = [];
 
   if (LARGE_SIGNALS.test(text)) signals.push("large-keyword");
   if (TRIVIAL_SIGNALS.test(text) && text.length < 200) signals.push("trivial-keyword");
   if (text.split(/\s+/u).length > 60) signals.push("long-prompt");
   if (/(\band\b.*){3,}/iu.test(text)) signals.push("multi-and");
 
+  if (signals.includes("large-keyword")) notes.push("matched architectural / sensitive keyword");
+  if (signals.includes("multi-and")) notes.push("multiple `and` connectors suggest >1 task");
+  if (signals.includes("long-prompt")) notes.push("prompt longer than 60 words");
+  if (signals.includes("trivial-keyword")) notes.push("matched trivial keyword");
+
   if (signals.includes("large-keyword") || signals.includes("multi-and") || signals.includes("long-prompt")) {
-    return { class: "large-risky", signals };
+    return { class: "large-risky", signals, notes };
   }
   if (signals.includes("trivial-keyword")) {
-    return { class: "trivial", signals };
+    return { class: "trivial", signals, notes };
   }
-  return { class: "small-medium", signals };
+  return { class: "small-medium", signals, notes };
 }
 
 function tokenize(value: string, limit = 4096): Set<string> {
@@ -72,6 +85,49 @@ async function readBody(filePath: string): Promise<string> {
   }
 }
 
+function summariseAc(ac?: AcceptanceCriterionState[]): { committed: number; pending: number; total: number } {
+  if (!Array.isArray(ac)) return { committed: 0, pending: 0, total: 0 };
+  const committed = ac.filter((item) => item.status === "committed").length;
+  return { committed, pending: ac.length - committed, total: ac.length };
+}
+
+async function tryParseFrontmatter(filePath: string): Promise<ArtifactFrontmatter | null> {
+  const raw = await readBody(filePath);
+  if (!raw) return null;
+  try {
+    return parseArtifact(raw, filePath).frontmatter;
+  } catch {
+    return null;
+  }
+}
+
+async function buildMatch(
+  filePath: string,
+  origin: ExistingPlanMatch["origin"],
+  taskSlugTokens: Set<string>,
+  taskWords: Set<string>
+): Promise<ExistingPlanMatch | null> {
+  const slug = origin === "active" ? path.basename(filePath, ".md") : path.basename(path.dirname(filePath));
+  const slugScore = jaccard(taskSlugTokens, new Set(slug.split("-")));
+  const body = await readBody(filePath);
+  const bodyScore = jaccard(taskWords, tokenize(body));
+  const score = Math.max(slugScore, bodyScore);
+  const threshold = origin === "active" ? 0.15 : 0.16;
+  if (score < threshold) return null;
+  const frontmatter = (await tryParseFrontmatter(filePath)) ?? undefined;
+  return {
+    slug,
+    origin,
+    filePath,
+    score,
+    frontmatter,
+    acProgress: frontmatter ? summariseAc(frontmatter.ac) : undefined,
+    lastSpecialist: frontmatter?.last_specialist ?? null,
+    refines: frontmatter?.refines ?? null,
+    securityFlag: frontmatter?.security_flag === true
+  };
+}
+
 export async function findMatchingPlans(projectRoot: string, task: string): Promise<ExistingPlanMatch[]> {
   const taskWords = tokenize(task);
   const slugFromTask = slugifyArtifactTopic(task);
@@ -81,11 +137,8 @@ export async function findMatchingPlans(projectRoot: string, task: string): Prom
 
   const activeDir = activeArtifactDir(projectRoot, "plan");
   for (const filePath of await listMarkdownFiles(activeDir)) {
-    const slug = path.basename(filePath, ".md");
-    const slugScore = jaccard(taskSlugTokens, new Set(slug.split("-")));
-    const bodyScore = jaccard(taskWords, tokenize(await readBody(filePath)));
-    const score = Math.max(slugScore, bodyScore);
-    if (score > 0.18) matches.push({ slug, origin: "active", filePath, score });
+    const match = await buildMatch(filePath, "active", taskSlugTokens, taskWords);
+    if (match) matches.push(match);
   }
 
   const shippedRoot = path.join(projectRoot, SHIPPED_DIR_REL_PATH);
@@ -93,13 +146,31 @@ export async function findMatchingPlans(projectRoot: string, task: string): Prom
     for (const dir of await listSubdirs(shippedRoot)) {
       const planPath = path.join(dir, "plan.md");
       if (!(await exists(planPath))) continue;
-      const slug = path.basename(dir);
-      const slugScore = jaccard(taskSlugTokens, new Set(slug.split("-")));
-      const bodyScore = jaccard(taskWords, tokenize(await readBody(planPath)));
-      const score = Math.max(slugScore, bodyScore);
-      if (score > 0.22) matches.push({ slug, origin: "shipped", filePath: planPath, score });
+      const match = await buildMatch(planPath, "shipped", taskSlugTokens, taskWords);
+      if (match) matches.push(match);
+    }
+  }
+
+  const cancelledRoot = path.join(projectRoot, RUNTIME_ROOT, "cancelled");
+  if (await exists(cancelledRoot)) {
+    for (const dir of await listSubdirs(cancelledRoot)) {
+      const planPath = path.join(dir, "plan.md");
+      if (!(await exists(planPath))) continue;
+      const match = await buildMatch(planPath, "cancelled", taskSlugTokens, taskWords);
+      if (match) matches.push(match);
     }
   }
 
   return matches.sort((a, b) => b.score - a.score);
+}
+
+export interface RoutingProposal {
+  classification: RoutingClassification;
+  matches: ExistingPlanMatch[];
+}
+
+export async function proposeRouting(projectRoot: string, task: string): Promise<RoutingProposal> {
+  const classification = classifyRouting(task);
+  const matches = await findMatchingPlans(projectRoot, task);
+  return { classification, matches };
 }

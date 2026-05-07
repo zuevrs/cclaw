@@ -3,7 +3,42 @@
 ## 8.0.0 — Lightweight harness-first redesign (breaking)
 
 cclaw 8.0 is a complete rewrite. The 7.x stage machine is gone. The new
-runtime is a thin harness installer plus generated `/cc` orchestration.
+runtime is a thin harness installer plus generated `/cc` orchestration
+with deep, harness-readable content (templates, specialist prompts,
+auto-trigger skills, AGENTS.md routing block).
+
+### Deep content layer (post-M8 expansion)
+
+- **Frontmatter parser** — `src/artifact-frontmatter.ts` parses the YAML
+  frontmatter on every artifact (`slug`, `stage`, `status`, `ac[]`,
+  `last_specialist`, `refines`, `shipped_at`, `ship_commit`,
+  `review_iterations`, `security_flag`) so the orchestrator can resume
+  refinements from active or shipped plans. Includes AC body extraction
+  and merge with frontmatter for re-sync.
+- **knowledge.jsonl typed appender** — `src/knowledge-store.ts` validates
+  every entry on read and exposes `findRefiningChain` so the orchestrator
+  can show the full slug lineage for a refinement.
+- **Cancel runtime** — `src/cancel.ts` moves active artifacts to
+  `.cclaw/cancelled/<slug>/` with a manifest, resets `flow-state.json`,
+  and supports resume-from-cancelled inside `/cc`.
+- **Ten artifact templates** — `plan`, `build`, `review`, `ship`,
+  `decisions`, `learnings`, `manifest`, `ideas`, `agents-block`,
+  `iron-laws` shipped to `.cclaw/templates/` and used by the orchestrator
+  to seed each artifact instead of placeholder paragraphs.
+- **Six deep specialist prompts** — `brainstormer`, `architect`,
+  `planner`, `reviewer`, `security-reviewer`, `slice-builder` rewritten
+  as 70-130 line prompts with explicit output schemas, edge cases, and
+  hard rules.
+- **Six auto-trigger skills** — `plan-authoring`, `ac-traceability`,
+  `refinement`, `parallel-build`, `security-review`, `review-loop`
+  shipped to `.cclaw/skills/` and mirrored to the harness skills folder.
+  Each skill is ≤2 KB and focuses on a single activity.
+- **AGENTS.md routing block** — `cclaw init` injects (or updates) a
+  cclaw-routing block in `AGENTS.md`; `cclaw uninstall` removes it
+  cleanly without touching surrounding content.
+- **Existing-plan detection now reads frontmatter** — surfaces
+  `last_specialist`, AC progress (committed/pending/total), `refines`,
+  and `security_flag` for every active / shipped / cancelled match.
 
 ### Highlights
 
