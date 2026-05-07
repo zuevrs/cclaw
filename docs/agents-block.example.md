@@ -1,26 +1,30 @@
-# Example AGENTS.md Managed Block
+# Example AGENTS.md routing block (v8)
 
-This is a compact example of the routing block cclaw writes into `AGENTS.md`
-during `npx cclaw-cli init` / `npx cclaw-cli sync`. The generated block in a real project is
-authoritative; this file exists so readers can see what the harness will read.
+`cclaw init` / `cclaw sync` writes the following routing block into the project's `AGENTS.md` (or harness equivalent). The generated block in a real project is authoritative; this file exists so readers can see what the harness will read.
 
-## Instruction Priority
+## Instruction priority
 
 1. User message in the current turn.
-2. Active stage skill and command contract.
-3. The `using-cclaw` meta-skill.
-4. Contextual utility skills.
-5. Training priors.
+2. Active `plan.md` for the current slug, including AC frontmatter.
+3. The `/cc` orchestrator markdown.
+4. Iron Laws (Karpathy four principles).
+5. Specialist markdown for whichever specialist is currently invoked.
+6. Training priors.
 
 ## Commands
 
 | Command | Purpose |
-|---|---|
-| `/cc` | Entry point. No args resumes current stage; with a prompt it classifies the task and starts the right flow. |
-| `/cc-idea` | Idea mode. Produces a ranked repo-improvement backlog. |
-| `/cc-view` | Read-only status/tree/diff visibility. |
+| --- | --- |
+| `/cc <task>` | Entry point. Routes trivial / small-medium / large-risky and runs plan / build / review / ship. |
+| `/cc-cancel` | Stop the active run. Moves active artifacts to `.cclaw/cancelled/<slug>/`. |
+| `/cc-idea` | Append a one-paragraph entry to `.cclaw/ideas.md`. Does **not** create a slug or modify flow-state. |
 
-Stage order is `brainstorm > scope > design > spec > plan > tdd > review > ship`,
-then closeout is `retro > compound > archive`. `/cc` loads the right
-stage skill automatically; gates and mandatory delegations must pass before
-handoff.
+## Stage order
+
+`plan → build → review → ship`. After ship, compound runs automatically and active artifacts move to `.cclaw/shipped/<slug>/`.
+
+The mandatory gate is **AC traceability**: ship is blocked unless every AC in flow-state has a real commit SHA. The orchestrator uses `.cclaw/hooks/commit-helper.mjs` to enforce this atomically per AC.
+
+## Specialists (on demand only)
+
+`brainstormer` / `architect` / `planner` for discovery; `reviewer` / `security-reviewer` for review; `slice-builder` for build and post-review fixes. The orchestrator proposes them only for large/risky tasks; small tasks run inline.

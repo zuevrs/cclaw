@@ -1,5 +1,102 @@
 # Changelog
 
+## 8.0.0 — Lightweight harness-first redesign (breaking)
+
+cclaw 8.0 is a complete rewrite. The 7.x stage machine is gone. The new
+runtime is a thin harness installer plus generated `/cc` orchestration.
+
+### Highlights
+
+- **Four stages** — `plan`, `build`, `review`, `ship`. The old
+  `brainstorm`, `scope`, `design`, `spec`, `tdd` stage gates are removed.
+- **Three slash commands** — `/cc <task>`, `/cc-cancel`, `/cc-idea`.
+  `/cc-amend` and `/cc-compound` are deleted; refinement and learning
+  capture happen automatically inside `/cc`.
+- **Six on-demand specialists** — `brainstormer`, `architect`, `planner`,
+  `reviewer` (multi-mode), `security-reviewer`, `slice-builder`. The
+  remaining 12 roles from 7.x collapse into these. `doc-updater` is no
+  longer a specialist; the orchestrator handles docs inline.
+- **Mandatory AC traceability** — the only mandatory hook is
+  `commit-helper.mjs`, which validates AC ids and updates flow-state
+  with the produced commit SHA.
+- **Karpathy iron laws** — Think Before Coding / Simplicity First /
+  Surgical Changes / Goal-Driven Execution are baked into
+  `src/content/iron-laws.ts` and surfaced in every `/cc` invocation.
+- **Five Failure Modes** — DAPLab review checklist baked into
+  `src/content/review-loop.ts`; hard cap at 5 review iterations.
+- **Automatic compound** — after ship, the orchestrator captures
+  `learnings/<slug>.md` only when the quality gate passes
+  (architect/planner decision, ≥3 review iterations, security flag, or
+  explicit user request). Active artifacts then move to
+  `.cclaw/shipped/<slug>/` with a short `manifest.md`.
+
+### Removed
+
+- `src/run-archive.ts`, `src/managed-resources.ts`,
+  `src/internal/compound-readiness.ts`,
+  `src/internal/flow-state-repair.ts`,
+  `src/internal/early-loop-status.ts`, `src/track-heuristics.ts`,
+  `src/early-loop.ts`, `src/internal/waiver-grant.ts`,
+  `src/tdd-cycle.ts`, all of `src/internal/advance-stage/`,
+  `src/artifact-linter/` and most of `src/content/`.
+- `state/delegation-events.jsonl`, `state/delegation-log.json`,
+  `state/managed-resources.json`, `state/early-loop.json`,
+  `state/early-loop-log.jsonl`, `state/subagents.json`,
+  `state/compound-readiness.json`, `state/tdd-cycle-log.jsonl`,
+  `state/iron-laws.json`, `.linter-findings.json`,
+  `.flow-state.guard.json`, `.waivers.json`.
+- The `archive/<date>-<slug>` directory layout (replaced by
+  `shipped/<slug>/` without state snapshots).
+- 14 of 18 specialists, ~700 of 1247 tests, ~83 KLOC of source.
+
+### Schema changes
+
+- `flow-state.json` `schemaVersion` is now `2`. The shape is:
+
+  ```ts
+  interface FlowStateV8 {
+    schemaVersion: 2;
+    currentSlug: string | null;
+    currentStage: "plan" | "build" | "review" | "ship" | null;
+    ac: Array<{ id: string; text: string; commit?: string;
+                status: "pending" | "committed" }>;
+    lastSpecialist: "brainstormer" | "architect" | "planner" | null;
+    startedAt: string;
+    reviewIterations: number;
+    securityFlag: boolean;
+  }
+  ```
+
+- `/cc` refuses to resume a `schemaVersion: 1` flow-state. See
+  `docs/migration-v7-to-v8.md` for the recommended manual path.
+
+### CLI
+
+- `cclaw init`, `cclaw sync`, `cclaw upgrade`, `cclaw uninstall`,
+  `cclaw version`, `cclaw help`. `cclaw plan / status / ship / migrate`
+  are explicitly rejected with exit code `2`.
+
+### Sizing target met
+
+| Metric | 7.7.1 | 8.0.0 |
+| --- | --- | --- |
+| LOC `src/` | ~46 583 | ~1 800 |
+| State files | 9 | 1 |
+| State size on disk | ~150 KB | ~500 B |
+| Specialists | 18 | 6 |
+| Slash commands | 4 (planned) | 3 |
+| Mandatory hooks | 5 | 1 |
+| Default hook profile | `standard` | `minimal` |
+| Stage gates | ~30 | 3 (AC traceability) |
+
+### Migration
+
+- No automatic migration from 7.x.
+- Maintainers must run `npm publish` and
+  `npm deprecate cclaw-cli@"<8.0.0" "8.0 is a breaking redesign. See
+  docs/migration-v7-to-v8.md."` after release.
+- See `docs/migration-v7-to-v8.md` for project-side steps.
+
 ## 7.7.1 — Inline-default for discovery-only waves
 
 7.7.1 calibrates the 7.7.0 Execution Topology Router so trivial markdown /
