@@ -5,6 +5,14 @@ import { ACTIVE_ARTIFACT_DIRS, type ArtifactStage } from "./artifact-paths.js";
 import { CORE_AGENTS, renderAgentMarkdown } from "./content/core-agents.js";
 import { ARTIFACT_TEMPLATES, planTemplateForSlug, templateBody } from "./content/artifact-templates.js";
 import { AUTO_TRIGGER_SKILLS } from "./content/skills.js";
+import { EXAMPLES, EXAMPLES_INDEX } from "./content/examples.js";
+import { REFERENCE_PATTERNS, REFERENCE_PATTERNS_INDEX } from "./content/reference-patterns.js";
+import { STAGE_PLAYBOOKS, STAGE_PLAYBOOKS_INDEX } from "./content/stage-playbooks.js";
+import { RESEARCH_PLAYBOOKS, RESEARCH_PLAYBOOKS_INDEX } from "./content/research-playbooks.js";
+import { RECOVERY_PLAYBOOKS, RECOVERY_INDEX } from "./content/recovery.js";
+import { ANTIPATTERNS } from "./content/antipatterns.js";
+import { DECISION_PROTOCOL } from "./content/decision-protocol.js";
+import { META_SKILL } from "./content/meta-skill.js";
 import {
   COMMIT_HELPER_HOOK_SPEC,
   NODE_HOOKS,
@@ -84,7 +92,12 @@ export async function ensureRuntimeRoot(projectRoot: string): Promise<void> {
     "agents",
     "hooks",
     "skills",
-    "templates"
+    "templates",
+    "runbooks",
+    "patterns",
+    "research",
+    "recovery",
+    "examples"
   ]) {
     await ensureDir(path.join(root, dir));
   }
@@ -129,6 +142,64 @@ async function writeIdeasSeed(projectRoot: string): Promise<void> {
   const target = path.join(projectRoot, RUNTIME_ROOT, "ideas.md");
   if (await exists(target)) return;
   await writeFileSafe(target, templateBody("ideas"));
+}
+
+async function writeStageRunbooks(projectRoot: string): Promise<void> {
+  const dir = path.join(projectRoot, RUNTIME_ROOT, "runbooks");
+  for (const playbook of STAGE_PLAYBOOKS) {
+    await writeFileSafe(path.join(dir, playbook.fileName), playbook.body);
+  }
+  await writeFileSafe(path.join(dir, "index.md"), STAGE_PLAYBOOKS_INDEX);
+}
+
+async function writeReferencePatterns(projectRoot: string): Promise<void> {
+  const dir = path.join(projectRoot, RUNTIME_ROOT, "patterns");
+  for (const pattern of REFERENCE_PATTERNS) {
+    await writeFileSafe(path.join(dir, pattern.fileName), pattern.body);
+  }
+  await writeFileSafe(path.join(dir, "index.md"), REFERENCE_PATTERNS_INDEX);
+}
+
+async function writeResearchPlaybooks(projectRoot: string): Promise<void> {
+  const dir = path.join(projectRoot, RUNTIME_ROOT, "research");
+  for (const playbook of RESEARCH_PLAYBOOKS) {
+    await writeFileSafe(path.join(dir, playbook.fileName), playbook.body);
+  }
+  await writeFileSafe(path.join(dir, "index.md"), RESEARCH_PLAYBOOKS_INDEX);
+}
+
+async function writeRecoveryPlaybooks(projectRoot: string): Promise<void> {
+  const dir = path.join(projectRoot, RUNTIME_ROOT, "recovery");
+  for (const playbook of RECOVERY_PLAYBOOKS) {
+    await writeFileSafe(path.join(dir, playbook.fileName), playbook.body);
+  }
+  await writeFileSafe(path.join(dir, "index.md"), RECOVERY_INDEX);
+}
+
+async function writeExamples(projectRoot: string): Promise<void> {
+  const dir = path.join(projectRoot, RUNTIME_ROOT, "examples");
+  for (const example of EXAMPLES) {
+    await writeFileSafe(path.join(dir, example.fileName), example.body);
+  }
+  await writeFileSafe(path.join(dir, "index.md"), EXAMPLES_INDEX);
+}
+
+async function writeAntipatterns(projectRoot: string): Promise<void> {
+  await writeFileSafe(path.join(projectRoot, RUNTIME_ROOT, "antipatterns.md"), ANTIPATTERNS);
+}
+
+async function writeDecisionProtocol(projectRoot: string): Promise<void> {
+  await writeFileSafe(
+    path.join(projectRoot, RUNTIME_ROOT, "decisions", "decision-protocol.md"),
+    DECISION_PROTOCOL
+  );
+}
+
+async function writeMetaSkill(projectRoot: string): Promise<void> {
+  await writeFileSafe(
+    path.join(projectRoot, RUNTIME_ROOT, "skills", "cclaw-meta.md"),
+    META_SKILL
+  );
 }
 
 async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): Promise<void> {
@@ -218,7 +289,15 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     await writeHookFile(projectRoot, hook);
   }
   await writeRuntimeSkills(projectRoot);
+  await writeMetaSkill(projectRoot);
   await writeTemplates(projectRoot);
+  await writeStageRunbooks(projectRoot);
+  await writeReferencePatterns(projectRoot);
+  await writeResearchPlaybooks(projectRoot);
+  await writeRecoveryPlaybooks(projectRoot);
+  await writeExamples(projectRoot);
+  await writeAntipatterns(projectRoot);
+  await writeDecisionProtocol(projectRoot);
   await writeIdeasSeed(projectRoot);
   for (const harness of harnesses) {
     await writeHarnessAssets(projectRoot, HARNESS_LAYOUTS[harness]);

@@ -5,9 +5,38 @@
 cclaw 8.0 is a complete rewrite. The 7.x stage machine is gone. The new
 runtime is a thin harness installer plus generated `/cc` orchestration
 with deep, harness-readable content (templates, specialist prompts,
-auto-trigger skills, AGENTS.md routing block).
+auto-trigger skills, runbooks, reference patterns, research playbooks,
+recovery playbooks, examples library, antipatterns, decision protocol,
+AGENTS.md routing block).
 
-### Deep content layer (post-M8 expansion)
+### Deep content layer (second pass)
+
+The second pass expanded the harness-facing content to match the depth
+users had in 7.x while keeping the lightweight runtime:
+
+- 6 specialist prompts: 70-130 lines → 150-280 lines each, with worked
+  examples, edge cases, common pitfalls, strict output schema.
+- 10 auto-trigger skills (was 6): added commit-message-quality,
+  ac-quality, refactor-safety, breaking-changes, plus a `cclaw-meta`
+  always-on skill that ties subsystems together.
+- 4 stage runbooks under `.cclaw/runbooks/{plan,build,review,ship}.md`.
+- 8 reference patterns under `.cclaw/patterns/`.
+- 5 research playbooks under `.cclaw/research/`.
+- 5 recovery playbooks under `.cclaw/recovery/`.
+- 13 worked examples under `.cclaw/examples/`.
+- antipatterns under `.cclaw/antipatterns.md` (12 named entries).
+- decision protocol under `.cclaw/decisions/decision-protocol.md`.
+
+Numbers (Cursor install):
+
+- src/ LOC: 3,187 → 5,393 (+69%)
+- content/ LOC: 1,714 → 3,841 (+124%)
+- installed files: ~37 → 97
+- installed bytes: ~58 KB → ~206 KB
+- npm pack: 54.7 KB → 98.8 KB
+- tests: 129 → 167
+
+### Deep content layer (initial)
 
 - **Frontmatter parser** — `src/artifact-frontmatter.ts` parses the YAML
   frontmatter on every artifact (`slug`, `stage`, `status`, `ac[]`,

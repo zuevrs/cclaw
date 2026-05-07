@@ -1,6 +1,6 @@
 # cclaw
 
-**cclaw is a lightweight harness-first flow toolkit for coding agents.** It installs three slash commands, six on-demand specialists, six auto-trigger skills, ten artifact templates, and a tiny runtime into your project so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, AC traceability, and almost no ceremony.
+**cclaw is a lightweight harness-first flow toolkit for coding agents.** It installs three slash commands, six on-demand specialists, ten auto-trigger skills, ten artifact templates, four stage runbooks, eight reference patterns, five research playbooks, five recovery playbooks, thirteen worked examples, an antipatterns library, a decision protocol, a meta-skill, and a tiny runtime — together a deep content layer (~206 KB on a Cursor install) wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, AC traceability, and almost no ceremony.
 
 ```text
         idea
@@ -25,7 +25,7 @@
                   active artifacts → shipped/<slug>/
 ```
 
-Three slash commands. Four stages. Six specialists. Six skills. Ten templates. One mandatory gate (AC traceability).
+Three slash commands. Four stages. Six specialists. Ten skills. Ten templates. Four runbooks. Eight reference patterns. Five research playbooks. Five recovery playbooks. Thirteen worked examples. One mandatory gate (AC traceability).
 
 ## What changed in v8
 
@@ -35,8 +35,15 @@ What we kept and made deeper:
 
 - plans with **acceptance criteria + YAML frontmatter** (`slug`, `stage`, `status`, `ac[]`, `last_specialist`, `refines`, `shipped_at`, `ship_commit`, `review_iterations`, `security_flag`);
 - **AC ↔ commit traceability** enforced by `commit-helper.mjs`;
-- **artifact templates** for every stage (`plan`, `build`, `review`, `ship`, `decisions`, `learnings`, `manifest`, `ideas`, `agents-block`);
-- **auto-trigger skills** for plan-authoring, AC traceability, refinement, parallel-build, security-review, review-loop;
+- **artifact templates** for every stage (`plan`, `build`, `review`, `ship`, `decisions`, `learnings`, `manifest`, `ideas`, `agents-block`, `iron-laws`);
+- **ten auto-trigger skills** — plan-authoring, AC traceability, refinement, parallel-build, security-review, review-loop, commit-message-quality, AC-quality, refactor-safety, breaking-changes, plus a meta-skill that ties them together;
+- **stage runbooks** (`.cclaw/runbooks/{plan,build,review,ship}.md`) — strict checklists per stage with common pitfalls;
+- **reference patterns** (`.cclaw/patterns/`) — eight task-type playbooks (api-endpoint, auth-flow, schema-migration, ui-component, perf-fix, refactor, security-hardening, doc-rewrite) the orchestrator opens before authoring AC;
+- **research playbooks** (`.cclaw/research/`) — read-before-write, reading tests, reading dependencies, time-boxing, using prior shipped slugs;
+- **recovery playbooks** (`.cclaw/recovery/`) — AC traceability break, review hard cap reached, parallel-build slice conflict, frontmatter corruption, schemaVersion mismatch;
+- **examples library** (`.cclaw/examples/`) — thirteen real-looking plan / build / review / ship / decision / learning / orchestrator-prompt artifacts;
+- **antipatterns** (`.cclaw/antipatterns.md`) — twelve known failure modes the reviewer cites as findings;
+- **decision protocol** (`.cclaw/decisions/decision-protocol.md`) — exact D-N record format with three worked examples;
 - **resumable refinement** via frontmatter on shipped slugs (`refines: <old-slug>`);
 - durable artifacts your team and graph tools (Graphify, GitNexus, etc.) can index.
 
@@ -71,7 +78,7 @@ There is no `cclaw plan`, `cclaw status`, `cclaw ship`, or `cclaw migrate` CLI c
 | `security-reviewer` | threat-model / sensitive-change | auth / secrets / supply chain / data exposure |
 | `slice-builder` | build / fix-only | implementing AC and applying scoped fixes |
 
-Specialists are proposed only when the task is large, abstract, risky, security-sensitive, or spans multiple components. Trivial and small/medium tasks run inline. Each prompt is 70-130 lines and includes an explicit output schema, edge cases, and hard rules. See [docs/skills.md](docs/skills.md) for the auto-trigger layer that wraps every invocation.
+Specialists are proposed only when the task is large, abstract, risky, security-sensitive, or spans multiple components. Trivial and small/medium tasks run inline. Each prompt is 150-280 lines and includes an explicit output schema, two or more worked examples, edge cases, common pitfalls, and hard rules (see `.cclaw/agents/*.md` after install). The orchestrator pulls additional context from runbooks, patterns, examples, and recovery playbooks as needed; see [docs/skills.md](docs/skills.md) for the auto-trigger layer that wraps every invocation.
 
 ## Plan artifact, by example
 

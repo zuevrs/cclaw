@@ -23,10 +23,36 @@ try {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }
   }
-  for (const skill of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md"]) {
+  for (const skill of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md", "commit-message-quality.md", "ac-quality.md", "refactor-safety.md", "breaking-changes.md", "cclaw-meta.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "skills", skill))) {
       throw new Error(`smoke check failed: skill ${skill} missing after init`);
     }
+  }
+  for (const runbook of ["plan.md", "build.md", "review.md", "ship.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "runbooks", runbook))) {
+      throw new Error(`smoke check failed: runbook ${runbook} missing after init`);
+    }
+  }
+  for (const pattern of ["api-endpoint.md", "auth-flow.md", "schema-migration.md", "ui-component.md", "perf-fix.md", "refactor.md", "security-hardening.md", "doc-rewrite.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "patterns", pattern))) {
+      throw new Error(`smoke check failed: pattern ${pattern} missing after init`);
+    }
+  }
+  for (const recovery of ["ac-traceability-break.md", "review-cap-reached.md", "parallel-build-conflict.md", "frontmatter-corruption.md", "schema-mismatch.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "recovery", recovery))) {
+      throw new Error(`smoke check failed: recovery ${recovery} missing after init`);
+    }
+  }
+  for (const example of ["plan-small.md", "plan-refinement.md", "plan-parallel-build.md", "build-log.md", "review-log.md", "ship-notes.md", "decision-record.md", "learning-record.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "examples", example))) {
+      throw new Error(`smoke check failed: example ${example} missing after init`);
+    }
+  }
+  if (!existsSync(join(tempDir, ".cclaw", "antipatterns.md"))) {
+    throw new Error("smoke check failed: antipatterns.md missing after init");
+  }
+  if (!existsSync(join(tempDir, ".cclaw", "decisions", "decision-protocol.md"))) {
+    throw new Error("smoke check failed: decision-protocol.md missing after init");
   }
   if (!existsSync(join(tempDir, "AGENTS.md"))) {
     throw new Error("smoke check failed: AGENTS.md routing block missing after init");

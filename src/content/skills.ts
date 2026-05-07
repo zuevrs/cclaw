@@ -182,6 +182,145 @@ For each, the reviewer answers yes/no with a citation when "yes". A "yes" withou
 - \`cap-reached\` — see hard cap above.
 `;
 
+const COMMIT_MESSAGE_QUALITY = `---
+name: commit-message-quality
+trigger: before every commit-helper.mjs invocation
+---
+
+# Skill: commit-message-quality
+
+\`commit-helper.mjs\` accepts any non-empty message, but the AC traceability chain only stays useful if the messages stay readable.
+
+## Rules
+
+1. **Imperative voice** — "Add StatusPill component", not "Added" or "Adding".
+2. **Subject ≤72 characters** — long subjects truncate in \`git log --oneline\` and CI signals.
+3. **Subject does not repeat the AC id** — the hook already appends \`refs: AC-N\`.
+4. **Body when needed** — second-line blank, then a short rationale paragraph and any non-obvious context. Use \`--message\` for the subject; if the message must be multi-line, write it to a file and pass \`--file\`.
+5. **Cite finding ids in fix commits** — \`fix: F-2 separate rejected token\`.
+
+## Anti-patterns
+
+- "WIP", "fixes", "stuff", "more". The reviewer rejects these as F-1 \`block\`.
+- Subject lines that paraphrase the diff. Diff is the diff; the message is the why.
+- Co-author trailers in solo commits.
+
+## When to amend
+
+Never amend a commit produced by \`commit-helper.mjs\` after the SHA is recorded in \`flow-state.json\`. Amend changes the SHA and breaks the AC chain. If the message is wrong, write a short note in \`builds/<slug>.md\` and move on; it is recoverable in review.
+`;
+
+const AC_QUALITY = `---
+name: ac-quality
+trigger: when authoring or reviewing AC entries
+---
+
+# Skill: ac-quality
+
+Three checks per AC:
+
+1. **Observable** — a user, test, or operator can tell whether it is satisfied without reading the diff.
+2. **Independently committable** — a single commit covering only this AC is meaningful.
+3. **Verifiable** — there is an explicit verification line (test name, manual step, or command).
+
+## Smell check
+
+| smell | example | rewrite |
+| --- | --- | --- |
+| sub-task | "implement the helper" | "search returns BM25-ranked results for queries with multiple terms" |
+| vague verification | "tests pass" | "verified by tests/unit/search.test.ts: 'returns BM25-ranked hits'" |
+| internal detail | "refactor the cache" | "cache hit rate >90% on the dashboard repaint scenario" |
+| compound AC | "build the page and add analytics" | split into two AC |
+
+## Numbering
+
+- AC ids start at \`AC-1\` and are sequential.
+- Refinement slugs restart at \`AC-1\` even when they refine a slug that had AC-1..AC-12.
+- Do not reuse an AC id within the same slug; if you delete an AC, the remaining ids stay sequential after compaction.
+
+## When to add an AC mid-flight
+
+You don't. Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it should be a follow-up (\`/cc-idea\`) or a fresh slug.
+`;
+
+const REFACTOR_SAFETY = `---
+name: refactor-safety
+trigger: when the slug is identified as a pure refactor
+---
+
+# Skill: refactor-safety
+
+Refactors must be **behaviour-preserving**. The harness enforces this with three structural rules.
+
+## Pin behaviour first
+
+Before any rewrite, identify the pin:
+
+- existing tests that should pass with the same expected output;
+- a snapshot or fixture set that should not change;
+- a manual repro the user accepts as the contract.
+
+If no pin exists, "add a pin" is AC-1 of the refactor.
+
+## One refactor at a time
+
+A refactor slug must contain refactor changes only. A bug fix that would have been "while we're here" is a separate slug. The pin from the refactor slug is then valid input for the fix slug.
+
+## Public API discipline
+
+If the refactor renames or restructures public exports:
+
+- add a deprecation alias so external consumers still compile;
+- mark the old name with a \`@deprecated\` JSDoc / equivalent;
+- record the deprecation deadline in \`ships/<slug>.md\`.
+
+If the project policy forbids deprecation aliases (some libraries), the refactor is breaking; \`security_flag\` does not apply but breaking-change handling does (see breaking-changes skill).
+
+## Verification
+
+Refactor AC verification is "no behavioural diff": tests pass, snapshots unchanged, fixtures unchanged. If anything changes, the refactor leaked behaviour and must be split.
+`;
+
+const BREAKING_CHANGES = `---
+name: breaking-changes
+trigger: when the diff modifies public API surface or persisted contracts
+---
+
+# Skill: breaking-changes
+
+A change is breaking when:
+
+- a public export is renamed, removed, or changes signature;
+- a CLI flag is renamed or removed;
+- a wire format (HTTP, RPC, queue payload) changes shape or required fields;
+- a persisted contract (DB schema, file format, env var) changes in a way that requires migration.
+
+## Rules
+
+1. **Plan must declare it.** Set \`breaking_change: true\` (or note it explicitly in the plan body).
+2. **Migration must exist.** \`ships/<slug>.md\` carries a migration section: who is affected, what they need to do, when the old path stops working.
+3. **Deprecation window.** Public libraries — at least one minor version. Internal services — at least one deploy cycle and one alert.
+4. **Release notes.** The CHANGELOG line must start with \`BREAKING:\` and link to the migration section.
+
+## Coexistence
+
+When possible, ship the new path alongside the old. Examples:
+
+- new endpoint path next to the old one;
+- new column added before the old one is dropped;
+- new env var name accepted along with the old (with a deprecation log line);
+- new function exported with the new name; old name aliased to it.
+
+Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to architect; the decision must be recorded in \`decisions/<slug>.md\`.
+
+## Common pitfalls
+
+- "Internal API, not breaking." If the change crosses a service boundary, treat it as breaking.
+- Renaming a CLI flag without an alias. Aliases for CLI flags are nearly always free; add them.
+- Skipping the CHANGELOG line because "everyone knows". They do not.
+- Forgetting the alert window for internal services. The deploy cycle is not enough; users need a heads-up.
+`;
+
 export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "plan-authoring",
@@ -224,5 +363,33 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     description: "Wraps every reviewer / security-reviewer invocation.",
     triggers: ["specialist:reviewer", "specialist:security-reviewer"],
     body: REVIEW_LOOP
+  },
+  {
+    id: "commit-message-quality",
+    fileName: "commit-message-quality.md",
+    description: "Enforces commit-message conventions for commit-helper.mjs.",
+    triggers: ["before:commit-helper"],
+    body: COMMIT_MESSAGE_QUALITY
+  },
+  {
+    id: "ac-quality",
+    fileName: "ac-quality.md",
+    description: "Three-check rubric for every AC entry; smell tests + numbering rules.",
+    triggers: ["edit:.cclaw/plans/*.md", "specialist:planner", "specialist:reviewer:text-review"],
+    body: AC_QUALITY
+  },
+  {
+    id: "refactor-safety",
+    fileName: "refactor-safety.md",
+    description: "Behaviour-preservation rules for pure-refactor slugs.",
+    triggers: ["task:refactor", "pattern:refactor"],
+    body: REFACTOR_SAFETY
+  },
+  {
+    id: "breaking-changes",
+    fileName: "breaking-changes.md",
+    description: "Detect and document breaking changes; coexistence rules and CHANGELOG template.",
+    triggers: ["diff:public-api", "frontmatter:breaking_change=true"],
+    body: BREAKING_CHANGES
   }
 ];

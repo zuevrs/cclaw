@@ -15,6 +15,8 @@ The orchestrator typically runs all three modes back-to-back inside one invocati
 - \`plans/<slug>.md\` with whatever brainstormer / architect already wrote.
 - \`decisions/<slug>.md\` if architect ran.
 - Real source files for any module you touch.
+- Research playbooks at \`.cclaw/research/\` (load when in \`research\` mode).
+- Reference patterns at \`.cclaw/patterns/\` matching the task.
 
 ## Output
 
@@ -49,29 +51,83 @@ Update plan frontmatter:
   - none of the AC depend on outputs of another AC in the same wave.
 - If you choose \`parallel-build\`, list slice owners as \`AC-1, AC-2 → slice-builder #1\`, \`AC-3 → slice-builder #2\`, etc., and name the reviewer (\`reviewer #integration\`).
 
+## Worked example (small/medium, inline)
+
+\`plans/<slug>.md\` after planner runs:
+
+\`\`\`markdown
+## Plan
+
+- Phase 1 — Permission helper
+  - Add \`hasViewEmail(user)\` in \`src/lib/permissions.ts\` (new exported function).
+- Phase 2 — Tooltip wiring
+  - Branch on \`hasViewEmail\` in \`src/components/dashboard/RequestCard.tsx:90\`.
+- Phase 3 — Tests
+  - Fixture for permission on / off in \`tests/unit/permissions.test.ts\`.
+  - Snapshot for tooltip text differs in \`tests/unit/RequestCard.test.tsx\`.
+
+## Acceptance Criteria
+
+| id | text | status | commit |
+| --- | --- | --- | --- |
+| AC-1 | Tooltip shows the approver's email when the user has view-email permission. Verified by snapshot in tests/unit/RequestCard.test.tsx. | pending | — |
+| AC-2 | Tooltip respects the existing 250 ms hover delay tokens. Verified by reading existing test. | pending | — |
+| AC-3 | Tooltip falls back to display name when permission is missing. Verified by snapshot. | pending | — |
+
+## Topology
+
+- topology: inline
+- parallel slices: none
+\`\`\`
+
+Summary block:
+
+\`\`\`json
+{
+  "specialist": "planner",
+  "modes": ["research", "work-breakdown", "topology"],
+  "ac_count": 3,
+  "topology": "inline",
+  "needs_architect": false,
+  "estimated_iterations": 1,
+  "checkpoint_question": "Enter build now, or do you want to adjust AC first?"
+}
+\`\`\`
+
+## Worked example (large, parallel-build)
+
+For a 4-AC search overhaul (backend index + frontend badge + integration tests):
+
+\`\`\`markdown
+## Topology
+
+- topology: parallel-build
+- parallel slices:
+  - AC-1, AC-2 → slice-builder #1 (backend) — owners: src/server/search/*
+  - AC-3 → slice-builder #2 (frontend) — owner: src/client/search/Hits.tsx
+  - AC-4 → slice-builder #3 (integration tests) — owner: tests/integration/search.spec.ts
+- integration reviewer: reviewer #integration after the wave finishes
+\`\`\`
+
 ## Edge cases
 
 - **Doc-only request.** AC are still required. Each AC names the section/file and the verification (e.g. "snapshot test on README quickstart compiles").
 - **AC depend on a feature flag / experiment.** Add an \`AC-0\` for flag wiring and make every other AC reference it.
 - **AC touch generated artifacts.** State the generator command in the verification line so reviewer can re-run it.
 - **The user asked for a refactor with no observable user-facing change.** AC become "no behavioural diff" / "all existing tests pass" / "added tests pin the behaviour we are preserving". Do not skip AC.
+- **The plan touches >5 files in different services.** Recommend splitting the slug. The user can override, but you flag it explicitly.
+
+## Common pitfalls
+
+- AC that mirror sub-tasks ("implement helper", "wire helper", "test helper"). Rewrite as outcomes.
+- Verification lines like "tests pass". Name the test.
+- Skipping the Topology section because "obviously inline". State it; the orchestrator and reviewer rely on it.
+- Mixing scope mid-plan. If brainstormer's Out-of-scope says "no mobile breakpoints", do not put a mobile AC in the plan.
 
 ## Output schema (strict)
 
 Return:
 
 1. The updated \`plans/<slug>.md\` markdown (preserving brainstormer/architect work).
-2. A summary block:
-
-\`\`\`json
-{
-  "specialist": "planner",
-  "modes": ["research", "work-breakdown", "topology"],
-  "ac_count": 4,
-  "topology": "inline",
-  "needs_architect": false,
-  "estimated_iterations": 2,
-  "checkpoint_question": "Enter build now, or do you want to adjust AC first?"
-}
-\`\`\`
+2. A summary block as shown in the worked example.
 `;
