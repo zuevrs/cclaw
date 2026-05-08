@@ -19,9 +19,11 @@ Commands:
 Harness selection:
   - If --harness=<id>[,<id>] is passed, install for those.
   - Otherwise, the existing .cclaw/config.yaml (if any) wins.
-  - Otherwise, cclaw auto-detects from project root markers (.claude/, .cursor/,
-    .opencode/, .codex/, .agents/skills/, CLAUDE.md, opencode.json).
-  - If nothing is detected and no flag is passed, init exits with an error.
+  - Otherwise, in an interactive TTY, cclaw shows a checkbox picker
+    (auto-detected harnesses pre-selected; Up/Down · Space · Enter).
+  - In non-TTY (CI, npx --yes, piped input), cclaw auto-detects from project
+    root markers (.claude/, .cursor/, .opencode/, .codex/, .agents/skills/,
+    CLAUDE.md, opencode.json) and exits with an error if nothing is found.
 
 Flow control (plan / build / review / ship) lives inside the harness via the /cc command, not in this CLI. There is no \`cclaw plan\`, \`cclaw status\`, \`cclaw ship\`, or \`cclaw migrate\` — by design.
 
@@ -62,17 +64,29 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
   const args = parseArgs(argv);
   switch (args.command) {
     case "init": {
-      const result = await initCclaw({ cwd: context.cwd, harnesses: args.harnesses });
+      const result = await initCclaw({
+        cwd: context.cwd,
+        harnesses: args.harnesses,
+        interactive: true
+      });
       info(`[cclaw] init complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
       return 0;
     }
     case "sync": {
-      const result = await syncCclaw({ cwd: context.cwd, harnesses: args.harnesses });
+      const result = await syncCclaw({
+        cwd: context.cwd,
+        harnesses: args.harnesses,
+        interactive: true
+      });
       info(`[cclaw] sync complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
       return 0;
     }
     case "upgrade": {
-      const result = await upgradeCclaw({ cwd: context.cwd, harnesses: args.harnesses });
+      const result = await upgradeCclaw({
+        cwd: context.cwd,
+        harnesses: args.harnesses,
+        interactive: true
+      });
       info(`[cclaw] upgrade complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
       return 0;
     }

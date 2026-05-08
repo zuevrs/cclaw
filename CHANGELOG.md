@@ -1,5 +1,59 @@
 # Changelog
 
+## 8.1.1 — Restore the interactive harness picker
+
+8.1.1 is a UX-only patch on top of 8.1.0. The harness auto-detection
+shipped in 8.1.0 was correct in CI / non-TTY paths, but it removed the
+interactive checkbox picker that operators rely on when they run
+`npx cclaw-cli init` in a fresh project. This release puts that picker
+back without giving up the auto-detect behaviour for non-TTY callers.
+
+### Interactive harness picker (TTY)
+
+- **`cclaw init` now opens a checkbox picker in any TTY.** Layout:
+  one row per harness (`Claude Code → .claude/`, `Cursor → .cursor/`,
+  `OpenCode → .opencode/`, `Codex → .codex/`), with auto-detected
+  harnesses pre-selected and tagged `(detected)`. Controls: Up/Down or
+  k/j to move, Space to toggle, `a` to select all, `n` to deselect all,
+  Enter to confirm, Esc/Ctrl-C to cancel. Implemented in
+  `src/harness-prompt.ts` (~190 LOC); the state machine
+  (`createPickerState`, `applyKey`, `selectionToList`) is pure and
+  unit-tested.
+- **Resolution order is now:** (1) `--harness=<id>[,<id>]` flag,
+  (2) existing `.cclaw/config.yaml`, (3) **interactive picker if
+  stdin/stdout are a TTY** (default for `init`/`sync`/`upgrade` from a
+  shell), (4) auto-detect from project markers, (5) hard error if
+  nothing found.
+- **Non-TTY callers (CI, piped input, `npm exec --yes`, programmatic
+  callers) keep the deterministic 8.1.0 behaviour.** `SyncOptions`
+  gains `interactive?: boolean` (default `false`); when omitted or
+  false, the picker is skipped and resolution falls through to
+  auto-detect or the existing `NO_HARNESS_DETECTED_MESSAGE` error.
+  Smoke (`scripts/smoke-init.mjs`) and unit tests stay deterministic
+  because they never set `interactive: true`.
+- **Cancellation.** Pressing Esc/Ctrl-C inside the picker rejects with
+  `Harness selection cancelled.` (exit code 1). The terminal is
+  restored to its previous raw-mode state on every code path.
+
+### Tests
+
+- New `tests/unit/harness-prompt.test.ts` (16 cases) covering the pure
+  state-machine: preselect normalization, cursor wrapping, toggle/all/
+  none keys, Enter on empty selection, unknown-key no-op,
+  `selectionToList` ordering, `isInteractive` TTY checks.
+- `tests/unit/install.test.ts` adds two cases proving that
+  programmatic callers (no `interactive` flag) and explicit
+  `interactive: true` in non-TTY (Vitest) both fall back to
+  auto-detect rather than hanging on stdin.
+
+### What this does NOT change
+
+- 8.1.0 deep content (composition footers, anti-slop, per-slug flow
+  layout, harness markers, `.gitignore` management, no `AGENTS.md`
+  generation) is untouched.
+- Specialist prompts, skills, templates, runbooks are byte-for-byte
+  identical to 8.1.0.
+
 ## 8.1.0 — Post-8.0 polish: composition discipline, anti-slop, lean cuts, per-slug flow layout
 
 8.1.0 consolidates four post-release polish passes (H4 → H7) on top of

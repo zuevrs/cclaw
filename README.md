@@ -1,6 +1,6 @@
 # cclaw
 
-**cclaw is a lightweight harness-first flow toolkit for coding agents.** It installs three slash commands, six on-demand specialists, twelve auto-trigger skills (including TDD cycle and conversation-language), ten artifact templates, four stage runbooks, eight reference patterns, five research playbooks, five recovery playbooks, thirteen worked examples, an antipatterns library, a decision protocol, a meta-skill, and a tiny runtime — together a deep content layer wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, AC traceability, TDD per AC, and almost no ceremony.
+**cclaw is a lightweight harness-first flow toolkit for coding agents.** It installs three slash commands, six on-demand specialists, twelve auto-trigger skills (including TDD cycle and conversation-language), ten artifact templates, four stage runbooks, eight reference patterns, five research playbooks, five recovery playbooks, thirteen worked examples, an antipatterns library, a decision protocol, a meta-skill, an interactive harness picker, and a tiny runtime — together a deep content layer wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, AC traceability, TDD per AC, and almost no ceremony.
 
 ```text
         idea
@@ -54,16 +54,17 @@ Requirements: Node.js 20+ and a git project.
 
 ```bash
 cd /path/to/your/repo
-npx cclaw-cli init                            # auto-detect harness from project root
-npx cclaw-cli init --harness=claude,cursor,opencode,codex   # explicit selection
+npx cclaw-cli init                            # interactive picker; auto-detected harness pre-selected
+npx cclaw-cli init --harness=claude,cursor,opencode,codex   # explicit, no picker
 ```
 
 `init` resolves harnesses in this order:
 
 1. `--harness=<id>[,<id>]` flag if passed.
 2. Existing `.cclaw/config.yaml` (so subsequent `init` / `sync` / `upgrade` are deterministic).
-3. Auto-detect from project root markers: `.claude/`, `.cursor/`, `.opencode/`, `.codex/`, `.agents/skills/`, `CLAUDE.md`, `opencode.json`, `opencode.jsonc`.
-4. If nothing detected and no flag passed → exit with an actionable error. cclaw never silently picks a harness for you.
+3. **Interactive picker** when stdin/stdout are a TTY: a checkbox over the four harnesses with auto-detected ones pre-selected and tagged `(detected)`. Up/Down or k/j to move, Space to toggle, `a` to select all, `n` to deselect all, Enter to confirm, Esc/Ctrl-C to cancel.
+4. Non-TTY (CI, piped input, `npm exec --yes`): auto-detect from project root markers: `.claude/`, `.cursor/`, `.opencode/`, `.codex/`, `.agents/skills/`, `CLAUDE.md`, `opencode.json`, `opencode.jsonc`.
+5. If nothing detected and no flag passed → exit with an actionable error. cclaw never silently picks a harness for you.
 
 Then work entirely inside your harness:
 
