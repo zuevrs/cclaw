@@ -59,6 +59,22 @@ export const AC_MODES = ["inline", "soft", "strict"] as const;
 export type AcMode = (typeof AC_MODES)[number];
 
 /**
+ * How aggressively the orchestrator advances through the flow.
+ *
+ * - `step` (default): pause after every stage. The orchestrator renders the
+ *   slim summary and waits for the user to type "continue". The original
+ *   v8.2 behaviour, recommended for `strict` and unfamiliar work.
+ * - `auto`: render the slim summary and immediately dispatch the next stage
+ *   without asking. Stops only on hard gates (block findings, security flag,
+ *   ship). Recommended for `inline` / `soft` work the user has already
+ *   scoped tightly.
+ *
+ * Selected at the triage gate; user can override per flow.
+ */
+export const RUN_MODES = ["step", "auto"] as const;
+export type RunMode = (typeof RUN_MODES)[number];
+
+/**
  * Decision recorded at the triage gate that opens every new flow.
  * Persisted in flow-state.json so resumes never re-trigger triage.
  */
@@ -73,6 +89,14 @@ export interface TriageDecision {
   decidedAt: string;
   /** Did the user override the orchestrator's recommendation? */
   userOverrode: boolean;
+  /**
+   * Step-by-step (default) or autopilot. Persisted across resumes so the
+   * user only picks once per flow.
+   *
+   * Optional in TypeScript so v8.2 state files (which lack `runMode`) still
+   * validate; readers MUST default to `step` on absent.
+   */
+  runMode?: RunMode;
 }
 
 export interface CliContext {

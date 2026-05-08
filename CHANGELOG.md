@@ -1,5 +1,68 @@
 # Changelog
 
+## 8.3.0 — Structured triage ask, run-mode (step / auto), explicit parallel-build, deeper TDD
+
+### Why
+
+Three concrete things broke or felt thin in 8.2:
+
+1. The triage block rendered as a code block in the harness instead of a structured "ask the user" interaction. Users saw four numbered options as plain text and had to scroll-and-type the number.
+2. There was no choice between "pause after every stage" and "run plan → build → review → ship without pausing". Every flow forced a pause, even on `inline` / `soft` work the user had already scoped.
+3. The orchestrator described build dispatch in one short bullet ("Parallel-build only if planner declared it AND `acMode == strict`") with no fan-out diagram, no envelope, and no merge sequence. Users could not tell whether large strict tasks would actually go to 5 worktrees.
+
+A second-tier reason: the `tdd-cycle` skill described RED → GREEN → REFACTOR but never warned against horizontal slicing, never told the slice-builder to stop the line on an unexpected failure, and never explained when not to mock. Three references — `addyosmani-skills`, `forrestchang-andrej-karpathy-skills`, `mattpocock-skills` — converge on those three rules. We adopt them.
+
+### What changed
+
+**Triage as a structured ask, not a code block.** The `triage-gate.md` skill now tells the orchestrator to use the harness's structured question tool first — `AskUserQuestion` (Claude Code), `AskQuestion` (Cursor), the "ask" content block (OpenCode), `prompt` (Codex). Two questions in order: pick the path (4 options), then pick the run mode (2 options). The first question's prompt embeds the four heuristic facts (complexity + confidence, recommended path, why, AC mode) so the user sees everything in one ask. The fenced-block form remains as a fallback for harnesses without a structured ask facility.
+
+**Run mode: `step` (default) vs `auto`.**
+
+- `step` — pause after every stage, render slim summary, wait for `continue`. Same as 8.2; recommended for `strict` and unfamiliar work.
+- `auto` — render slim summary and **immediately dispatch the next stage**. Stops only on hard gates: `block` finding, `cap-reached` (5 review iterations without convergence), security-reviewer finding, or about to run `ship`. The user types `auto` once during triage and means it; the orchestrator chains green stages from there.
+
+The new field is `triage.runMode: "step" | "auto"`. Existing `triage` blocks in `flow-state.json` (8.2 shape) without `runMode` are read as `step` for backward compatibility — same behaviour as 8.2.
+
+**Explicit parallel-build fan-out in Hop 3 build.** The `/cc` body now contains a full ASCII fan-out diagram for the strict-mode parallel-build path: `git worktree add` per slice, branch `cclaw/<slug>/s-N`, max 5 slices, one `slice-builder` sub-agent per slice with a sliced dispatch envelope (slug, slice id, AC ids it owns, working tree, branch, AC mode, touch surface), then a single `reviewer` mode=`integration`, then merge sequence. The skill `parallel-build.md` already documented this; the orchestrator now sees it at the dispatch site.
+
+Hard rules clarified at the orchestrator level:
+
+- More than 5 parallel slices is forbidden. If planner produced >5, planner merges thinner slices into fatter ones — never "wave 2".
+- Slice-builders never read each other's worktrees mid-flight; conflict-detection raises an integration finding, never a hand merge.
+- `auto` runMode does not skip the integration-reviewer ask on a block finding. Autopilot chains green stages, not decisions.
+
+**TDD cycle deepening.** The `tdd-cycle.md` skill grew four sections, each grounded in a reference:
+
+- *Vertical slicing — tracer bullets, never horizontal waves.* One test → one impl → repeat. The AC-2 test is shaped by what the AC-1 implementation revealed about the real interface. Horizontal RED-batch / GREEN-batch is now A-13 in the antipatterns library; `commit-helper.mjs --phase=red` for AC-2 already refuses if AC-1's chain isn't closed, but the rule is now explicit.
+- *Stop-the-line rule.* When anything unexpected happens, stop adding code. Preserve evidence, reproduce in isolation, root-cause to a concrete file:line, fix once, re-run the full suite, then resume. Three failed attempts → surface a blocker. Never weaken the assertion to "make it work".
+- *Prove-It pattern (bug fixes).* Reproduce the bug with a failing test FIRST. Confirm it fails for the right reason. Then fix. Then run the full suite. Then refactor.
+- *Writing good tests.* Test state, not interactions; DAMP over DRY in tests; prefer real implementations over mocks; respect the test pyramid.
+
+**Three new antipatterns.**
+
+- A-13 — Horizontal slicing.
+- A-14 — Pushing past a failing test.
+- A-15 — Mocking what should not be mocked.
+
+Citations land in `flows/<slug>/review.md` Concern Ledger findings; the strict-mode AC traceability gate already enforces the underlying TDD chain, the new entries make the why-it-failed copy explicit when the reviewer pushes back.
+
+### Schema
+
+`flow-state.json` stays at `schemaVersion: 3`. The new `triage.runMode` field is optional (TypeScript `runMode?: RunMode`) so 8.2 state files validate without rewriting. The `inferTriageFromLegacy` migration (v2 → v3) now sets `runMode: "step"` so the auto-migrated state matches the documented default. Idempotent.
+
+### Tests
+
+311 passing, including a new test file `tests/unit/v83-ask-runmode-deeper-tdd.test.ts` (33 cases) covering: `RunMode` type and `runModeOf` helper; flow-state schema accepting `runMode` and rejecting `autopilot`; v2 → v3 migration setting `runMode: step`; triage-gate skill referencing `AskUserQuestion` / `AskQuestion` and the run-mode question; orchestrator Hop 4 honoring both modes with the four hard gates; orchestrator Hop 3 fan-out diagram with worktrees + branches + 5-slice cap + integration reviewer; tdd-cycle skill containing vertical-slicing, stop-the-line, prove-it, and writing-good-tests sections; antipatterns library shipping A-13 / A-14 / A-15.
+
+`npm run release:check` is green; `npm pack --dry-run` produces `cclaw-cli-8.3.0.tgz`; `scripts/smoke-init.mjs` succeeds.
+
+### Compatibility
+
+- Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`) keep the same surface.
+- Schema 3 stays. The new `runMode` field is optional and defaults to `step` — 8.2 state files do not need to be rewritten.
+- Strict mode stays byte-for-byte identical to 8.2 (and therefore 8.1) when the user picks `step` (the default).
+- Interactive harness picker (8.1.1) and symlink-aware entry point (8.1.2) unchanged.
+
 ## 8.2.0 — Triage gate, sub-agent dispatch, graduated AC
 
 ### Why

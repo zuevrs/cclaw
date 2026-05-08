@@ -13,9 +13,7 @@ trigger: at the start of every new /cc invocation, before any specialist runs
 
 # Skill: triage-gate
 
-Every new flow opens with a **triage gate**. The orchestrator analyses the user's request, picks a complexity class, names an AC mode, proposes a path, and **asks the user to confirm**. Nothing else runs until the user has confirmed (or overridden) the triage.
-
-This skill exists because cclaw v8.1 used to silently pick a path and lock the user into it. v8.2 makes that decision explicit, audit-able, and overridable.
+Every new flow opens with a **triage gate**. The orchestrator analyses the user's request, picks a complexity class, names an AC mode, proposes a path, and **asks the user to confirm — twice**: once for the path, once for the run mode (autopilot or step-by-step). Nothing else runs until both questions are answered.
 
 ## When this skill applies
 
@@ -23,9 +21,37 @@ This skill exists because cclaw v8.1 used to silently pick a path and lock the u
 - Skipped on \`/cc\` (no argument) when an active flow is detected — see \`flow-resume.md\`.
 - Skipped on \`/cc-cancel\` and \`/cc-idea\` (these never open a flow).
 
-## Output format (mandatory)
+## How to render the question — STRUCTURED, not prose
 
-Reply with a single fenced block followed by an option list:
+If the harness exposes a structured question tool — \`AskUserQuestion\` (Claude Code), \`AskQuestion\` (Cursor), an "ask" content block (OpenCode), \`prompt\` (Codex) — **use it**. Two separate calls, in order. Do **not** print the triage as a code block and rely on the user reading numbered options. v8.2 shipped that way and the harness rendered prose; v8.3 fixes it.
+
+### Question 1 — path
+
+Render the analysis as the question prompt and the four choices as options:
+
+- prompt: \`Triage — Complexity: small/medium (high). Recommended: plan → build → review → ship. Why: 3 modules, ~150 LOC, no auth touch. AC mode: soft. Pick a path.\`
+- options:
+  - \`Proceed as recommended\`
+  - \`Switch to trivial (inline edit + commit, skip plan/review)\`
+  - \`Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)\`
+  - \`Custom (let me edit complexity / acMode / path)\`
+
+The prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, ac mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
+
+### Question 2 — run mode
+
+Right after the user picks a path, ask:
+
+- prompt: \`Run mode for this flow?\`
+- options:
+  - \`Step (default) — pause after every stage; I type "continue" to advance\`
+  - \`Auto — run plan → build → review → ship without pausing; stop only on block findings or security flag\`
+
+Default \`step\` if the user dismisses the question or the harness lacks a structured ask facility. Inline / trivial flows skip Question 2 (there are no stages to chain).
+
+## Fallback — when no structured ask tool exists
+
+Only when the harness has no structured ask facility (rare; legacy CLI mode), print the same content as a fenced block plus numbered options:
 
 \`\`\`
 Triage
@@ -35,14 +61,22 @@ Triage
 ─ AC mode: <inline | soft | strict>
 \`\`\`
 
-Then list the four options verbatim:
-
 \`\`\`
 [1] Proceed as recommended
 [2] Switch to trivial (inline edit + commit, skip plan/review)
 [3] Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)
 [4] Custom (let me edit complexity / acMode / path)
 \`\`\`
+
+Then a separate block for run mode:
+
+\`\`\`
+Run mode
+[s] Step — pause after every stage (default)
+[a] Auto — chain stages without pausing; stop only on block findings or security flag
+\`\`\`
+
+The fenced form is a fallback, not the primary path. Always try the structured tool first.
 
 ## Heuristics — how to pick
 
@@ -70,7 +104,7 @@ If the heuristic gives \`small/medium\` but the user said something like "featur
 
 ## What the orchestrator records
 
-After the user picks (1)/(2)/(3)/(4), patch \`.cclaw/state/flow-state.json\`:
+After both questions are answered, patch \`.cclaw/state/flow-state.json\`:
 
 \`\`\`json
 {
@@ -80,14 +114,15 @@ After the user picks (1)/(2)/(3)/(4), patch \`.cclaw/state/flow-state.json\`:
     "path": ["plan", "build", "review", "ship"],
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
-    "userOverrode": false
+    "userOverrode": false,
+    "runMode": "step"
   }
 }
 \`\`\`
 
-\`userOverrode\` is \`true\` only when the user picked (2), (3), or a (4) custom that disagrees with the recommendation.
+\`userOverrode\` is \`true\` only when the user picked (2), (3), or a (4) custom that disagrees with the recommendation. \`runMode\` is \`step\` by default; record \`auto\` only when the user explicitly opted into autopilot in Question 2.
 
-The triage block is **immutable for the lifetime of the flow**. If the user wants to escalate mid-flight (e.g. discovers it is bigger than thought), \`/cc-cancel\` and start a fresh flow with new triage.
+The triage block is **immutable for the lifetime of the flow**. If the user wants to escalate mid-flight (e.g. discovers it is bigger than thought), \`/cc-cancel\` and start a fresh flow with new triage. Switching from \`step\` to \`auto\` (or vice versa) is also a fresh-flow decision — the orchestrator does not flip mid-flight.
 
 ## Path semantics
 
@@ -168,11 +203,12 @@ The user is expected to clarify in (4) Custom or accept (1) Proceed; either way 
 
 ## Common pitfalls
 
-- Returning the triage as prose paragraphs instead of the fenced block. The orchestrator expects the structured form so it can parse \`acMode\` and \`path\` reliably.
+- **Rendering the triage as a code block when a structured ask tool is available.** v8.3 fixes this: try the harness's structured ask facility (\`AskUserQuestion\` / \`AskQuestion\` / \`prompt\` / "ask" content block) first; the fenced form is a fallback only.
 - Stating "I think this is medium-complexity" and then immediately invoking planner. That is the v8.1 bug. Wait for the user's pick.
 - Picking \`large-risky\` for a one-file rename "to be safe". Do not pad the heuristic; the user reads it and learns to ignore your triage.
+- Forgetting to ask Question 2 (run mode) after Question 1 (path). \`triage.runMode\` controls Hop 4 (pause); a missing value defaults to \`step\` — safe but wastes a click for users who wanted autopilot.
 - Forgetting to write \`triage\` into \`flow-state.json\`. The hook check \`commit-helper.mjs\` and the resume detector both read it; an absent triage breaks both.
-- Re-running the gate on resume. Resume reads the saved triage and continues from \`currentStage\`; it never re-prompts.
+- Re-running the gate on resume. Resume reads the saved triage (path + runMode) and continues from \`currentStage\`; it never re-prompts.
 `;
 
 const FLOW_RESUME = `---
@@ -730,6 +766,63 @@ Silence fails the gate.
 
 (a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited.\n(b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named.\n(c) **red_test_recorded** — failing test exists, watched-RED proof attached.\n(d) **red_fails_for_right_reason** — RED captured a real assertion failure.\n(e) **green_full_suite** — full relevant suite green after GREEN.\n(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran, or explicitly skipped with reason.\n(g) **traceable_to_plan** — commits reference plan AC ids and the plan's file set.\n(h) **commit_chain_intact** — RED + GREEN + REFACTOR SHAs (or skipped sentinel) recorded in flow-state.
 
+## Vertical slicing — tracer bullets, never horizontal waves
+
+**One test → one impl → repeat.** Even in strict mode, you do not write all RED tests for the slice and then all GREEN code. That horizontal pattern produces tests of *imagined* behaviour: the data shape you guessed, the function signature you guessed, the error message you guessed. The tests pass when behaviour breaks and fail when behaviour is fine.
+
+The correct pattern is a tracer bullet per AC:
+
+\`\`\`
+WRONG (horizontal):
+  RED:   AC-1 test, AC-2 test, AC-3 test
+  GREEN: AC-1 impl, AC-2 impl, AC-3 impl
+
+RIGHT (vertical / tracer bullet):
+  AC-1: RED → GREEN → REFACTOR  (commit chain closes here)
+  AC-2: RED → GREEN → REFACTOR  (next chain starts here, informed by what you learned in AC-1)
+  AC-3: RED → GREEN → REFACTOR
+\`\`\`
+
+Each cycle informs the next. The AC-2 test is shaped by what the AC-1 implementation revealed about the real interface. \`commit-helper.mjs --phase=red\` for AC-2 will refuse if AC-1's chain isn't closed yet — that's the rail.
+
+In soft mode the same principle applies at feature granularity: write 1–3 tests for the highest-priority condition, implement, then if more tests are needed for adjacent conditions, write them after you've seen the real shape of the GREEN code.
+
+## Stop-the-line rule
+
+When **anything** unexpected happens during build — a test fails for the wrong reason, the build breaks, a prior-green test starts failing, a hook rejects a commit — **stop adding code**. Do not push past the failure to "come back later". Errors compound: a wrong assumption in AC-1 makes AC-2 and AC-3 wrong.
+
+Procedure:
+
+1. Preserve evidence. Capture the failing command + 1–3 lines of output verbatim.
+2. Reproduce in isolation. Run only the failing test to confirm it fails reliably.
+3. Diagnose root cause. Trace the failing assertion back to a concrete cause (the actual cause, not the first plausible one). Cite the file:line in the build log.
+4. Fix. The fix is a refactor of the GREEN code, a correction of the RED test (if it tested the wrong thing), or a new RED that captures the missed behaviour — never silent.
+5. Re-run the **full relevant suite**. A passing single test is not GREEN if the suite is red elsewhere.
+6. Resume the cycle from where you stopped, with the chain intact.
+
+If the root cause cannot be identified in three attempts, surface a blocker to the orchestrator. Do not "make it work" by removing the test, weakening the assertion, or commenting out the failure.
+
+## Prove-It pattern (bug fixes)
+
+When the input is a bug fix, the order is non-negotiable:
+
+1. **Write a failing test that reproduces the bug.** This is the watched-RED proof. If you cannot reproduce the bug with a test, you cannot fix it with confidence — go gather more context.
+2. Confirm the test fails for the right reason — your test captured the bug, not a syntax / fixture / import error.
+3. Fix the bug. Smallest possible production diff that turns the new test green.
+4. Run the full relevant suite — the fix must not break adjacent behaviour.
+5. Refactor.
+
+Bug-fix RED commits use \`--phase=red\` like any other RED. The AC id is the user's bug-fix slug (e.g. \`AC-1: completing a task sets completedAt\`). In soft mode, the same five steps apply, just with one cycle for the whole fix and a plain \`git commit\`.
+
+## Writing good tests (state, not interactions; DAMP, not DRY)
+
+These rules apply equally to soft and strict modes. They make the difference between tests that survive a refactor and tests that have to be rewritten every time.
+
+- **Test state, not interactions.** Assert on the *outcome* of the operation — return value, persisted record, observable side effect — not on which methods were called internally. \`expect(result).toEqual(...)\` is good; \`expect(db.query).toHaveBeenCalledWith(...)\` couples the test to the implementation.
+- **DAMP over DRY in tests.** A test should read like a specification. Each test independently understandable beats a clever shared setup that reads well only after tracing helpers. Duplication in test code is acceptable when it makes each case independently readable.
+- **Prefer real implementations over mocks.** The more your tests use real code, the more confidence they provide. Mock only what is genuinely outside your control (third-party APIs, time, randomness). Real > Fake (in-memory) > Stub (canned data) > Mock (interaction). Reach for the simplest level that gets the job done.
+- **Test pyramid: small / medium / large.** Most tests should be small (single process, no I/O, milliseconds). A handful are medium (boundary tests, in-process integration, seconds). E2E / multi-machine tests stay reserved for critical paths only.
+
 ## Anti-patterns
 
 - "The implementation is obvious, skipping RED." A-13 — gate fails immediately.
@@ -738,6 +831,9 @@ Silence fails the gate.
 - "Stage everything with \`git add -A\`." A-16 — staged unrelated edits leak into the AC commit.
 - "Production code in the RED commit." A-17 — RED is test files only.
 - **"Test file named after the AC id" — \`AC-1.test.ts\`, \`tests/AC-2.spec.ts\`, etc.** The reviewer flags this as \`block\`. Mirror the unit under test in the filename; carry the AC id inside the test name and commit message only.
+- **Horizontal slicing.** A-18 — writing all RED tests first, then all GREEN code, produces tests of imagined behaviour. One test → one impl → repeat. See the Vertical Slicing section above.
+- **Pushing past a failing test.** A-19 — the next cycle is built on the previous cycle's invariants; if those invariants are broken you are debugging a stack of broken assumptions. Stop the line, root-cause, then resume.
+- **Mocking what you should not mock.** A-20 — mocking the database for a query test reads green and breaks in production. Use a fake or a real test DB; mock only what is genuinely outside your control.
 
 ## Fix-only flow
 

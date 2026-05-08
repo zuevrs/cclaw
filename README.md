@@ -35,6 +35,15 @@
 
 Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`). Four stages (`plan → build → review → ship`). Six specialists, all on-demand, all running as sub-agents. Fifteen skills including the always-on `triage-gate`, `flow-resume`, `tdd-cycle`, `conversation-language`, and `anti-slop`. Ten templates including `plan-soft.md` and `build-soft.md` for the soft-mode path. Four runbooks. Eight reference patterns. Three research playbooks. Five recovery playbooks. Eight worked examples. Two mandatory gates in strict mode (AC traceability + TDD phase chain); soft mode keeps both as advisory; inline mode skips both.
 
+## What changed in 8.3
+
+8.3 is a non-breaking content + UX patch on top of 8.2.
+
+- **Triage as a structured ask, not a code block.** The orchestrator now uses the harness's structured question tool (`AskUserQuestion` / `AskQuestion` / `prompt`) to render the triage. Two questions, in order: pick the path, then pick the run mode. The fenced form remains as a fallback only.
+- **Run mode: `step` (default) vs `auto`.** `step` pauses after every stage and waits for `continue` (8.2 behaviour). `auto` chains plan → build → review → ship without pausing; stops only on block findings, cap-reached, security findings, or before `ship`. New optional field `triage.runMode` in `flow-state.json`.
+- **Explicit parallel-build fan-out in Hop 3.** The `/cc` body now carries a full ASCII fan-out diagram for the strict-mode parallel-build path — `git worktree` per slice, max 5 slices, one `slice-builder` sub-agent per slice, integration reviewer, merge sequence. The skill `parallel-build.md` already had this; the orchestrator now sees it at the dispatch site.
+- **TDD cycle deepening.** Four new sections in `tdd-cycle.md`: vertical slicing / tracer bullets, stop-the-line rule, Prove-It pattern for bug fixes, writing-good-tests rules (state-not-interactions, DAMP over DRY, real-over-mock, test pyramid). Three new antipatterns: A-13 horizontal slicing, A-14 pushing past a failing test, A-15 mocking what should not be mocked.
+
 ## What changed in 8.2
 
 8.2 is a non-breaking redesign of the `/cc` orchestrator on top of 8.1.

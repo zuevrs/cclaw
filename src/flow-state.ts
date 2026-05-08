@@ -2,12 +2,14 @@ import {
   AC_MODES,
   FLOW_STAGES,
   ROUTING_CLASSES,
+  RUN_MODES,
   type AcMode,
   type AcceptanceCriterionState,
   type BuildProfile,
   type DiscoverySpecialistId,
   type FlowStage,
   type RoutingClass,
+  type RunMode,
   type TriageDecision
 } from "./types.js";
 
@@ -55,6 +57,10 @@ export function isRoutingClass(value: unknown): value is RoutingClass {
 
 export function isAcMode(value: unknown): value is AcMode {
   return typeof value === "string" && (AC_MODES as readonly string[]).includes(value);
+}
+
+export function isRunMode(value: unknown): value is RunMode {
+  return typeof value === "string" && (RUN_MODES as readonly string[]).includes(value);
 }
 
 export function isDiscoverySpecialist(value: unknown): value is DiscoverySpecialistId {
@@ -105,7 +111,8 @@ function inferTriageFromLegacy(state: {
     path: ["plan", "build", "review", "ship"],
     rationale: "Auto-migrated from cclaw 8.0/8.1 flow-state (no triage recorded; preserved as strict).",
     decidedAt: state.startedAt,
-    userOverrode: false
+    userOverrode: false,
+    runMode: "step"
   };
 }
 
@@ -154,6 +161,19 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   if (typeof triage.userOverrode !== "boolean") {
     throw new Error("triage.userOverrode must be a boolean");
   }
+  if (triage.runMode !== undefined && !isRunMode(triage.runMode)) {
+    throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
+  }
+}
+
+/**
+ * Read a triage decision's runMode with the documented default.
+ *
+ * v8.2 state files do not record runMode; treat them as `step` so existing
+ * flows keep their pause-between-stages behaviour byte-for-byte.
+ */
+export function runModeOf(triage: TriageDecision | null | undefined): RunMode {
+  return triage?.runMode ?? "step";
 }
 
 /**
