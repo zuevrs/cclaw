@@ -1,5 +1,80 @@
 # Changelog
 
+## 8.1.2 — Hotfix: CLI never executed when invoked through a symlink (npx, `npm install -g`, macOS /tmp)
+
+**Critical hotfix.** Versions 8.0.0, 8.1.0, and 8.1.1 silently exited 0
+without doing anything when invoked through any symlink. That includes
+the canonical entry point `npx cclaw-cli init`, because `npx` always
+runs the binary through a symlink at
+`~/.npm/_npx/<hash>/node_modules/.bin/cclaw-cli`. Users saw `Need to
+install the following packages: cclaw-cli@8.1.x  Ok to proceed? (y) y`,
+the package downloaded, and then nothing — no error, no picker, no
+artifacts, exit 0. The interactive harness picker shipped in 8.1.1 was
+never actually reached in real installs.
+
+### Root cause
+
+`src/cli.ts` was using the naive entry-point check
+`import.meta.url === \`file://${process.argv[1]}\``. That comparison fails
+in three real-world situations:
+
+- **npx**: `argv[1]` keeps the symlink path (`.../.bin/cclaw-cli`),
+  but `import.meta.url` resolves through to the real `dist/cli.js`.
+- **`npm install -g cclaw-cli`**: same shape — global symlink in the
+  bin dir, real file under `lib/node_modules/cclaw-cli/dist/cli.js`.
+- **macOS `/tmp`**: `/tmp` is a symlink to `/private/tmp`, so even a
+  direct invocation of a binary placed under `/tmp` shows
+  `argv[1] = /tmp/...` while `import.meta.url = file:///private/tmp/...`.
+
+When the comparison fails, the `if (isMain) { runCli(...) }` block is
+skipped, the module finishes loading, and Node exits 0 because there's
+nothing else to do.
+
+### Fix
+
+Restored the v7.x `isDirectExecution()` check that resolves both sides
+through `fs.realpathSync` before comparing:
+
+```ts
+function isDirectExecution(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    const entryPath = realpathSync(path.resolve(process.argv[1]));
+    const modulePath = realpathSync(fileURLToPath(import.meta.url));
+    return entryPath === modulePath;
+  } catch {
+    return false;
+  }
+}
+```
+
+Same logic the 7.x line shipped with for ten months without report.
+
+### Regression test
+
+New `tests/integration/cli-symlink.test.ts` (3 cases) executes the
+**built `dist/cli.js` through a real symlink** under `os.tmpdir()` —
+the exact shape `npx` produces — and asserts that:
+
+1. `cclaw-cli version` prints `8.1.2`.
+2. `cclaw-cli help` prints the help body with the harness-selection
+   section.
+3. `cclaw-cli init` actually creates `.cclaw/` and the harness
+   commands (i.e. is **not** a silent exit-0 no-op).
+
+Without this test the 8.0.0 / 8.1.0 / 8.1.1 bug is invisible: every
+unit test calls `runCli(...)` directly and bypasses the entry-point
+check; `scripts/smoke-init.mjs` calls
+`execFileSync("node", [<absolute-path-to-cli.js>, "init"])` with no
+symlink involved.
+
+### What this does NOT change
+
+- The interactive harness picker (8.1.1) and harness auto-detection
+  (8.1.0) are unchanged. They were correct — they just couldn't run.
+- All deep content (specialist prompts, skills, runbooks, templates)
+  is byte-identical to 8.1.1.
+
 ## 8.1.1 — Restore the interactive harness picker
 
 8.1.1 is a UX-only patch on top of 8.1.0. The harness auto-detection
