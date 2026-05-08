@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import path from "node:path";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { CCLAW_VERSION } from "./constants.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js";
 import { configureLogger, error as logError, info } from "./logger.js";
@@ -120,8 +123,35 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
   }
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
-if (isMain) {
+/**
+ * True when this module is the program entry point. Resolves both the
+ * argv[1] path and the import.meta.url to their realpath because:
+ *  - `npx cclaw-cli` invokes the CLI through a symlink under
+ *    `~/.npm/_npx/<hash>/node_modules/.bin/cclaw-cli` that points at the
+ *    real `dist/cli.js`. argv[1] keeps the symlink path, but
+ *    import.meta.url resolves through to the real file. The naive
+ *    `import.meta.url === \`file://${argv[1]}\`` check returns false in
+ *    this case and the CLI silently exits 0 without doing anything.
+ *  - On macOS `/tmp` is a symlink to `/private/tmp`, which produces the
+ *    same mismatch even when no user-level symlink is involved.
+ *  - `npm install -g cclaw-cli` creates a similar symlink in the global
+ *    bin directory.
+ *
+ * Mirrors the v7.x `isDirectExecution()` check that is known to work
+ * across npx, global installs, and macOS path normalisation.
+ */
+function isDirectExecution(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    const entryPath = realpathSync(path.resolve(process.argv[1]));
+    const modulePath = realpathSync(fileURLToPath(import.meta.url));
+    return entryPath === modulePath;
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectExecution()) {
   runCli(process.argv.slice(2), { cwd: process.cwd(), stdout: process.stdout, stderr: process.stderr })
     .then((code) => {
       process.exit(code);
