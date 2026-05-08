@@ -36,6 +36,7 @@ import { ensureRunSystem } from "./run-persistence.js";
 import { createDefaultConfig, readConfig, renderConfig, type CclawConfig } from "./config.js";
 import { detectHarnesses, NO_HARNESS_DETECTED_MESSAGE } from "./harness-detect.js";
 import { ensureGitignorePatterns, removeGitignorePatterns } from "./gitignore.js";
+import { isInteractive, runPicker } from "./harness-prompt.js";
 import { HARNESS_IDS, type HarnessId } from "./types.js";
 import { ironLawsMarkdown } from "./content/iron-laws.js";
 
@@ -81,6 +82,14 @@ const HARNESS_LAYOUTS: Record<HarnessId, HarnessLayout> = {
 export interface SyncOptions {
   cwd: string;
   harnesses?: HarnessId[];
+  /**
+   * When true (default for `init` from a real TTY), `cclaw` shows the
+   * interactive harness picker if no `--harness` flag and no existing
+   * `.cclaw/config.yaml` are available. Set to false in CI/non-TTY paths
+   * (smoke scripts, programmatic callers) to fall back to auto-detect or
+   * a hard error if nothing is found.
+   */
+  interactive?: boolean;
 }
 
 export interface SyncResult {
@@ -261,22 +270,29 @@ async function writeConfig(projectRoot: string, config: CclawConfig): Promise<st
 async function resolveHarnesses(
   projectRoot: string,
   fromOptions: HarnessId[] | undefined,
-  fromConfig: HarnessId[] | undefined
+  fromConfig: HarnessId[] | undefined,
+  interactive: boolean
 ): Promise<HarnessId[]> {
   if (fromOptions && fromOptions.length > 0) return fromOptions;
   if (fromConfig && fromConfig.length > 0) return fromConfig;
   const detected = await detectHarnesses(projectRoot);
-  if (detected.length === 0) {
-    throw new Error(NO_HARNESS_DETECTED_MESSAGE);
+  if (interactive && isInteractive()) {
+    return runPicker({ detected });
   }
-  return detected;
+  if (detected.length > 0) return detected;
+  throw new Error(NO_HARNESS_DETECTED_MESSAGE);
 }
 
 export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   const projectRoot = options.cwd;
   await ensureRuntimeRoot(projectRoot);
   const existing = await readConfig(projectRoot);
-  const harnesses = await resolveHarnesses(projectRoot, options.harnesses, existing?.harnesses);
+  const harnesses = await resolveHarnesses(
+    projectRoot,
+    options.harnesses,
+    existing?.harnesses,
+    options.interactive ?? false
+  );
   for (const harness of harnesses) {
     if (!HARNESS_IDS.includes(harness)) {
       throw new Error(`Unknown harness: ${harness}. Supported: ${HARNESS_IDS.join(", ")}`);

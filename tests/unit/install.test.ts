@@ -61,9 +61,21 @@ describe("install", () => {
     expect(result.installedHarnesses).toEqual(["claude"]);
   });
 
-  it("init throws if no harness marker is present and no --harness flag is given", async () => {
+  it("init throws if no harness marker is present and no --harness flag is given (non-TTY)", async () => {
     project = await createTempProject({ harnessMarkers: [] });
     await expect(initCclaw({ cwd: project })).rejects.toThrowError(/No harness detected/);
+  });
+
+  it("init does NOT invoke the interactive picker when interactive flag is omitted (programmatic callers stay deterministic)", async () => {
+    project = await createTempProject({ harnessMarkers: [".claude"] });
+    const result = await initCclaw({ cwd: project });
+    expect(result.installedHarnesses).toEqual(["claude"]);
+  });
+
+  it("init with explicit interactive: true still falls back to auto-detect when stdout is not a TTY (Vitest)", async () => {
+    project = await createTempProject({ harnessMarkers: [".cursor"] });
+    const result = await initCclaw({ cwd: project, interactive: true });
+    expect(result.installedHarnesses).toEqual(["cursor"]);
   });
 
   it("supports multiple harnesses on sync", async () => {
