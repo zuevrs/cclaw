@@ -209,6 +209,175 @@ The user is expected to clarify in (4) Custom or accept (1) Proceed; either way 
 - Forgetting to ask Question 2 (run mode) after Question 1 (path). \`triage.runMode\` controls Hop 4 (pause); a missing value defaults to \`step\` — safe but wastes a click for users who wanted autopilot.
 - Forgetting to write \`triage\` into \`flow-state.json\`. The hook check \`commit-helper.mjs\` and the resume detector both read it; an absent triage breaks both.
 - Re-running the gate on resume. Resume reads the saved triage (path + runMode) and continues from \`currentStage\`; it never re-prompts.
+
+## Next step
+
+After both triage questions are answered AND the path is **not** \`inline\`, the orchestrator runs the \`pre-flight-assumptions\` skill (Hop 2.5) before dispatching the first specialist. On the inline path, the orchestrator goes straight to the build dispatch — pre-flight is skipped (a one-line edit has no assumptions worth surfacing).
+`;
+
+const PRE_FLIGHT_ASSUMPTIONS = `---
+name: pre-flight-assumptions
+trigger: after triage-gate, before the first specialist dispatch — only when triage.path is NOT inline
+---
+
+# Skill: pre-flight-assumptions
+
+Triage answers "**how much** work is this?" and "**how should we run it?**". Pre-flight answers "**on what assumptions** are we doing it?". They are different questions; v8.4 adds this hop because silently-defaulted assumptions are the most common reason a small/medium build ships the wrong feature.
+
+The pre-flight skill runs **once** per flow, between the triage gate (Hop 2) and the first specialist dispatch (Hop 3). It does not run on the inline / trivial path — a single-file edit has no architectural assumptions worth surfacing.
+
+## What the orchestrator does
+
+1. Read \`triage.path\` from \`flow-state.json\`.
+2. If \`path == ["build"]\` (inline), skip this skill entirely. Go to dispatch.
+3. Otherwise:
+   1. Inspect the repo for stack inference. Read at most:
+      - \`package.json\` / \`pnpm-lock.yaml\` (Node, framework + version, test runner);
+      - \`pyproject.toml\` / \`requirements.txt\` (Python, framework + version);
+      - \`go.mod\` (Go);
+      - \`Cargo.toml\` (Rust);
+      - \`composer.json\` (PHP);
+      - \`Gemfile\` (Ruby);
+      - the top-level README or AGENTS.md if it exists.
+   2. Inspect the most recent shipped slug under \`.cclaw/flows/shipped/\` (if any) — its \`assumptions:\` block is your seed for what defaults the project already established.
+   3. Compose 3–7 short, numbered assumptions covering:
+      - **Stack** — language version, framework, runtime target, test runner.
+      - **Conventions** — where tests live (\`tests/\`, \`__tests__/\`, alongside source), filename pattern (\`*.test.ts\`, \`*.spec.ts\`, \`*_test.go\`).
+      - **Architecture defaults** that apply to this slug — CSS strategy, state strategy, auth strategy, persistence pattern. Skip items that are not relevant.
+      - **Out-of-scope defaults** — what we will NOT do unless asked (mobile breakpoints, i18n, telemetry hooks).
+   4. Surface them through the harness's structured ask tool. If the harness has none, fall back to a fenced block; same rule as the triage gate.
+   5. Persist the user's confirmed list to \`flow-state.json\`'s \`triage.assumptions\`.
+
+## Output shape — STRUCTURED ask
+
+Render the numbered list as the question prompt, plus four options:
+
+- prompt:
+
+  Pre-flight — I'm about to run with these assumptions:
+
+  1. Node 20.11; Next.js 14.1; React 19.0; Tailwind 3.4 (read from package.json).
+  2. Tests live in \`tests/\` mirroring the production module path (\`*.test.tsx\`).
+  3. CSS strategy: Tailwind utility classes + 1 \`tokens.css\` for color/space tokens (matches existing components).
+  4. Auth strategy: session-based cookies via \`next-auth\` (current pattern).
+  5. Out-of-scope: mobile breakpoints, i18n strings, telemetry events.
+
+  Correct me now or I proceed with these.
+
+- options:
+  - \`Proceed with these\`
+  - \`Edit one assumption\`
+  - \`Edit several assumptions\`
+  - \`Cancel — re-think the request\`
+
+If the user picks "Edit one" or "Edit several", follow up with a free-text ask (textarea / prompt-input) for the corrected list. Re-confirm once with the structured tool, then persist.
+
+If the user dismisses the question (timeout, harness limitation), default to "Proceed with these" — the user has at least seen them once, and the next message can amend if needed.
+
+## Output shape — FALLBACK (no structured ask)
+
+\`\`\`
+Pre-flight assumptions
+1. Node 20.11; Next.js 14.1; React 19.0; Tailwind 3.4 (from package.json).
+2. Tests live in tests/ mirroring production module path.
+3. CSS: Tailwind + tokens.css.
+4. Auth: session cookies via next-auth.
+5. Out of scope: mobile, i18n, telemetry.
+
+Correct me now or I proceed.
+[1] Proceed
+[2] Edit one assumption — say which number and the replacement
+[3] Edit several — paste the corrected list
+[4] Cancel
+\`\`\`
+
+## Persistence shape
+
+After the user accepts (with or without edits), patch \`flow-state.json\`:
+
+\`\`\`json
+{
+  "triage": {
+    "complexity": "small-medium",
+    "acMode": "soft",
+    "path": ["plan", "build", "review", "ship"],
+    "rationale": "...",
+    "decidedAt": "...",
+    "userOverrode": false,
+    "runMode": "step",
+    "assumptions": [
+      "Node 20.11, Next.js 14.1, React 19.0, Tailwind 3.4",
+      "Tests in tests/ mirroring module path",
+      "CSS: Tailwind + tokens.css",
+      "Auth: session cookies via next-auth",
+      "Out of scope: mobile, i18n, telemetry"
+    ]
+  }
+}
+\`\`\`
+
+The list is **immutable** for the lifetime of the flow. If during build a sub-agent finds an assumption was wrong, it stops and surfaces — the orchestrator either runs \`/cc-cancel\` and starts fresh, or accepts the violation as an explicit user decision and records it in the build log.
+
+## How sub-agents read assumptions
+
+Every dispatch envelope from Hop 3 onward includes a one-line note:
+
+\`\`\`
+Pre-flight assumptions: see triage.assumptions in flow-state.json
+\`\`\`
+
+Sub-agents (planner, slice-builder, reviewer, etc.) read \`flow-state.json > triage.assumptions\` before authoring their artifact. The list is appended verbatim (under \`## Assumptions\`) to:
+
+- \`flows/<slug>/plan.md\` — copy the list once after the Frame, so the plan stays self-contained for review.
+- \`flows/<slug>/decisions.md\` — when architect runs, the assumptions are the first input the architect must respect.
+
+A sub-agent that would need to break an assumption raises it as a finding (in slice-builder: stop and surface; in reviewer: \`block\`-severity finding) instead of silently overriding.
+
+## Sizing rules
+
+- **3–7 assumptions, no more.** A long list is noise; the user stops reading after item 5.
+- **One sentence per assumption, no half-paragraphs.** Pick the most relevant version / pattern / boundary.
+- **Cite where you got each one** when non-obvious — \`(from package.json)\`, \`(from latest shipped slug 'auth-cleanup')\`, \`(my default — confirm)\`. The citation tells the user what is observed vs. defaulted.
+- **Never invent specifics you have not read.** If you cannot cite a concrete version from a real file, say so: "(default; the project did not pin a Tailwind version)".
+
+## What the pre-flight is NOT
+
+- It is not a planning step. It does not write AC or design.
+- It is not the brainstormer's Frame. The Frame answers "what are we building?"; pre-flight answers "on what stack and conventions?".
+- It is not a security review. Sensitive surfaces still get \`security-reviewer\` later in the flow.
+- It is not optional in soft / strict modes. The whole point is to surface defaults; skipping it defeats the skill.
+
+## Worked example — Russian conversation
+
+User: "Сделай страницу настроек профиля."
+
+Pre-flight prompt (structured ask):
+
+\`\`\`
+Pre-flight — допущения, с которыми буду работать:
+
+1. Next.js 14.1, React 19.0, TypeScript 5.4 (из package.json).
+2. Тесты в tests/ рядом с компонентом, файлы *.test.tsx (как в существующих компонентах).
+3. CSS: Tailwind + общий tokens.css (как в components/ui/).
+4. Тёмная тема через CSS variables, не next-themes (текущая стратегия).
+5. Сохранение в БД через существующий route /api/profile (Prisma + Postgres). localStorage не используем.
+6. Server component для каркаса страницы, client component только для формы.
+
+Поправь сейчас или продолжаю с этим.
+\`\`\`
+
+Options: \`Иду с этим\` / \`Поправить одно\` / \`Поправить несколько\` / \`Отмена\`.
+
+Note: prompt is in Russian (matches user's language), but \`tokens.css\`, \`tests/\`, \`*.test.tsx\`, \`/api/profile\`, \`Prisma\`, \`Tailwind\` stay in their original form — they are mechanical tokens (see \`conversation-language.md\`).
+
+## Common pitfalls
+
+- **Listing 12+ assumptions.** That is a checklist, not an assumptions block. Keep it 3–7.
+- **Mixing assumptions with the plan.** The plan goes into \`plan.md\`. The assumptions are pre-plan context.
+- **Skipping pre-flight on \`small-medium\` because "the user knows the stack".** The user *does* know; pre-flight makes sure the orchestrator knows the same things.
+- **Re-running pre-flight on resume.** It runs once per flow. Resume reads the saved \`assumptions\` from \`flow-state.json\` and proceeds.
+- **Defaulting an assumption from training data instead of the repo.** If you cannot cite a file or shipped slug, mark the assumption with "(my default — confirm)" so the user knows it is a guess.
+- **Pre-flight on the inline path.** Skip. Trivial change, no assumptions to surface.
 `;
 
 const FLOW_RESUME = `---
@@ -530,71 +699,106 @@ Every \`reviews/<slug>.md\` carries an append-only ledger. Each row is a single 
 \`\`\`markdown
 ## Concern Ledger
 
-| ID | Opened in | Mode | Severity | Status | Closed in | Citation |
-| --- | --- | --- | --- | --- | --- | --- |
-| F-1 | 1 | code | block | closed | 2 | \`src/api/list.ts:14\` |
-| F-2 | 2 | code | warn | open | – | \`tests/integration/list.test.ts:31\` |
+| ID | Opened in | Mode | Axis | Severity | Status | Closed in | Citation |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| F-1 | 1 | code | correctness | required | closed | 2 | \`src/api/list.ts:14\` |
+| F-2 | 2 | code | readability | consider | open | – | \`tests/integration/list.test.ts:31\` |
+| F-3 | 1 | code | perf | nit | open | – | \`src/api/list.ts:88\` |
 \`\`\`
 
 Rules:
 
 - **F-N** ids are stable and global per slug — never renumber. If a finding is superseded, append \`F-K supersedes F-J\` instead.
-- **Severity** is \`block\` | \`warn\`. \`block\` rows must close before ship; \`warn\` rows may ship with a recorded note in \`ships/<slug>.md\`.
+- **Axis** is one of \`correctness\` | \`readability\` | \`architecture\` | \`security\` | \`perf\`. Pick the dimension the finding speaks to; never blank.
+- **Severity** is one of \`critical\` | \`required\` | \`consider\` | \`nit\` | \`fyi\`. Ship gate threshold depends on \`acMode\` (see below).
 - **Status** is \`open\` | \`closed\`. A closed row records the iteration that closed it.
 - **Citation** is a real \`file:line\` (or test id, or commit SHA). No prose-only findings — if you cannot cite, you do not have a finding yet.
 
 When iteration N+1 runs, the reviewer reads the ledger first, re-validates each open row (still open? closed by a fix? superseded?), then appends new findings as F-(max+1). Closing a row requires a citation to the fix evidence (commit SHA, test name, or new file:line).
 
-## Convergence detector
+> Severity legacy note: cclaw 8.0–8.3 used \`block\` / \`warn\` / \`info\`. v8.4 maps these to the new five-tier scale on read: \`block → critical | required\` (use \`critical\` only when ship-breaking, otherwise \`required\`), \`warn → consider\`, \`info → fyi\`. Mark migrated rows with \`(migrated from <old-severity>)\` in citation the first time you re-read them.
+
+## Five axes (mandatory walk per iteration)
+
+Walk every diff with the five axes in mind. Per-axis checklist:
+
+| axis | what to check | typical findings |
+| --- | --- | --- |
+| \`correctness\` | does the code match the AC verification line? edge cases? tests assert state, not interactions? | wrong branch, missing edge case, test passes for wrong reason, mocks-of-things-we-own |
+| \`readability\` | clear names, control flow, no dead code, no unnecessary cleverness | unclear name, long fn, hidden side effect |
+| \`architecture\` | pattern fit, coupling, abstraction level, diff size | new dep when stdlib works; cross-layer reach; \`>300 LOC\` for one logical change → split |
+| \`security\` | pre-screen for surfaces handled deeper by \`security-reviewer\` | unsanitised input, secrets in logs, missing authn/authz, encoding mismatch |
+| \`perf\` | hot-path quality | N+1, unbounded loop, sync-where-async, missing pagination |
+
+A reviewer that records zero findings on every axis must explicitly say so in the iteration block ("Five-axis pass: no findings on any axis"); silence is not the same as a clean review.
+
+## Severity ↔ acMode → ship gate
+
+| acMode | open severity → blocks ship |
+| --- | --- |
+| \`strict\` | \`critical\` OR \`required\` |
+| \`soft\` | \`critical\` only (\`required\` carries over) |
+| \`inline\` | reviewer not invoked |
+
+\`consider\` / \`nit\` / \`fyi\` never block ship. They carry over to \`ships/<slug>.md\` (and \`learnings/<slug>.md\` for \`consider\`) but do not delay ship.
+
+## Convergence detector (acMode-aware)
 
 The loop ends when ANY of these fires:
 
-1. **All ledger rows closed.** Decision: \`clear\`. Ship may proceed.
-2. **Two consecutive iterations append zero new \`block\` findings AND every open row is \`warn\`.** Decision: \`clear\` with warn carry-over recorded in \`ships/<slug>.md\` and \`learnings/<slug>.md\`.
-3. **Hard cap reached** (5 iterations) with at least one open \`block\` row remaining. Decision: \`cap-reached\`. Stop; surface to user.
+1. **All ledger rows closed.** Decision: \`clear\`.
+2. **Two consecutive iterations append zero new blocking findings AND every open row is non-blocking.** Decision: \`clear\` with non-blocking carry-over to \`ships/<slug>.md\` and \`learnings/<slug>.md\`. "Blocking" depends on acMode (see table above).
+3. **Hard cap reached** (5 iterations) with at least one open blocking row remaining. Decision: \`cap-reached\`. Stop; surface to user.
 
-Tie-breaker: if iteration 5 closes the last \`block\` row, return \`clear\` (signal #1) even though the cap was hit. The cap exists to bound runaway loops, not to punish a slug that converges on the last attempt.
+Tie-breaker: if iteration 5 closes the last blocking row, return \`clear\` (signal #1) even though the cap was hit. The cap exists to bound runaway loops, not to punish a slug that converges on the last attempt.
 
 ## Hard cap
 
 - 5 review iterations per slug. After the 5th, the reviewer writes \`status: cap-reached\` and stops.
-- The orchestrator surfaces every remaining open ledger row and recommends \`/cc-cancel\` (split into a fresh slug) or \`accept warns and ship\` (only valid if every remaining open row has severity=warn).
+- The orchestrator surfaces every remaining open ledger row and recommends \`/cc-cancel\` (split into a fresh slug) or \`accept-and-ship\` (only valid if every remaining open row is non-blocking under the active acMode).
 
 ## Decision values
 
-- \`block\` — at least one ledger row is severity=block + status=open. \`slice-builder\` (mode=fix-only) must run next; then re-review.
-- \`warn\` — open rows exist, all severity=warn, convergence detector signal #2 has fired. Ship may proceed; warns carry over.
-- \`clear\` — convergence detector signal #1 fired (all rows closed) OR signal #2 (warn-only convergence). Ready for ship.
-- \`cap-reached\` — signal #3 fired with at least one open block row remaining. Stop; surface to user.
+- \`block\` — at least one ledger row is blocking under the active acMode + open. \`slice-builder\` (mode=fix-only) must run next; then re-review.
+- \`warn\` — open rows exist, all non-blocking, convergence detector signal #2 has fired. Ship may proceed; carry-over.
+- \`clear\` — signal #1 (all closed) OR signal #2 (non-blocking convergence). Ready for ship.
+- \`cap-reached\` — signal #3 fired with at least one open blocking row remaining.
 
-## Worked example — three-iteration convergence
+## Worked example — three-iteration convergence (strict mode)
 
 \`\`\`markdown
 ## Iteration 1 — code — 2026-04-18T10:14Z
 
-Findings:
-- F-1 block — \`src/api/list.ts:14\` — missing pagination cursor.
-- F-2 warn — \`tests/integration/list.test.ts:31\` — no negative test for empty page.
+Five-axis pass:
+- correctness: F-1 (missing pagination cursor).
+- readability: no findings.
+- architecture: no findings.
+- security: no findings.
+- perf: F-2 (no negative test for empty page; potential N+1 if cursor regressed).
 
-Decision: block. slice-builder (mode=fix-only) invoked next.
+Findings:
+- F-1 correctness/required — \`src/api/list.ts:14\` — missing pagination cursor.
+- F-2 perf/consider — \`tests/integration/list.test.ts:31\` — no negative test for empty page.
+
+Decision: block (F-1 is required-severity in strict). slice-builder (mode=fix-only) invoked next.
 
 ## Iteration 2 — code — 2026-04-18T10:39Z
 
 Ledger reread:
 - F-1: closed — fix at \`src/api/list.ts:18\` (commit 7a91ab2). Citation matches.
-- F-2: open — no fix attempted (warn carry-over).
+- F-2: open — no fix attempted (consider carry-over).
 
-New findings: none.
+Five-axis pass: no new findings on any axis.
 
-Decision: warn. Convergence signal #2 needs another zero-block iteration.
+Decision: warn. Convergence signal #2 needs another zero-blocking iteration.
 
 ## Iteration 3 — code — 2026-04-18T11:02Z
 
 Ledger reread:
 - F-1: closed (sticky).
-- F-2: open (warn carry-over).
+- F-2: open (consider carry-over).
 
-New findings: none. Two consecutive zero-block iterations recorded.
+Five-axis pass: no findings. Two consecutive zero-blocking iterations recorded.
 
 Decision: clear (signal #2). F-2 carries to ships/<slug>.md and learnings/<slug>.md.
 \`\`\`
@@ -604,9 +808,12 @@ Decision: clear (signal #2). F-2 carries to ships/<slug>.md and learnings/<slug>
 - Adding "implicit" findings without citations because "the reviewer can see it". The reviewer cannot. Cite \`file:line\` or do not record the finding.
 - Renumbering F-N ids when an old finding is superseded. Append a new row \`F-K supersedes F-J\`; never rewrite history.
 - Closing a row without a fix citation. Closing is itself a claim — record the SHA / test name / file:line that proves the fix.
-- Treating "no new findings" as instant clear. The convergence detector requires *two* consecutive zero-block iterations; one is not enough.
+- Treating "no new findings" as instant clear. The convergence detector requires *two* consecutive zero-blocking iterations; one is not enough.
 - Skipping the convergence check and looping until cap. The detector exists so easy slugs ship fast; do not waste budget.
 - Mixing \`code\` and \`text-review\` modes within one iteration. Each iteration declares one mode in its header.
+- Recording a finding without an axis. Every row carries an axis (one of \`correctness\` / \`readability\` / \`architecture\` / \`security\` / \`perf\`). Pick the dimension the finding speaks to; never blank.
+- Marking everything as \`required\` because "it might matter". Severity is graduated: \`critical\` for ship-breaking, \`required\` for must-fix-before-ship, \`consider\` for suggestion, \`nit\` for minor, \`fyi\` for context only. Padding severity makes it useless.
+- Walking only one or two axes when the diff touches all five. The Five-axis pass is mandatory every iteration; record "no findings" for axes you walked but found clean. Silence is a smell — say what you walked.
 `;
 
 const COMMIT_MESSAGE_QUALITY = `---
@@ -741,14 +948,22 @@ The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests
 ### GREEN — minimal production change
 
 - Smallest possible production diff that turns RED into PASS.
-- Run the **full relevant suite**, not the single test. A passing single test with the suite broken elsewhere is a regression, not GREEN.
-- Capture the suite command + PASS/FAIL summary. This is the **GREEN evidence**.
+- Run the **affected-test suite first** (test impact analysis), not the full suite — fast feedback. The affected tests are: tests in the test directory mirroring the modified production module path PLUS tests that import the modified module directly. Tools: \`vitest related <file>\`, \`jest --findRelatedTests <file>\`, \`pytest --testmon\` if available, or a manual \`grep\` for imports + the mirrored test file.
+- After affected tests pass, run the **full relevant suite** as the safety net before commit. A passing single test with the suite broken elsewhere is a regression, not GREEN.
+- Capture both: the affected-tests command + PASS summary, AND the full-suite command + PASS summary. The two together are the **GREEN evidence** in \`build.md\`.
 - Touch only files declared in the plan. If a file outside the plan is required, **stop** and surface the conflict.
 - Commit: \`commit-helper.mjs --ac=AC-N --phase=green --message="green(AC-N): …"\`.
 
+Why two-stage: affected tests close the loop in seconds → fast iteration; full suite catches regressions impact analysis missed (test discovery is heuristic, not guaranteed). In tiny repos (<100 tests, <2s suite) the two stages collapse to one command — that is fine. In larger repos the difference is real wall-clock; affected-first matters.
+
 ### REFACTOR — mandatory pass
 
-REFACTOR is **not optional**. Even when the GREEN diff feels minimal, you must consider rename / extract / inline / type-narrow / dedup / dead-code-removal. Run the same suite again; it must pass with **identical** expected output.
+REFACTOR is **not optional**. Even when the GREEN diff feels minimal, you must consider rename / extract / inline / type-narrow / dedup / dead-code-removal.
+
+After the refactor edits:
+
+1. Run the **full relevant suite** (always, not just affected). REFACTOR is the safety net for "did my rename break a place I didn't expect"; affected-test analysis is by definition incomplete here because a renamed symbol may have changed which tests are affected.
+2. The suite must pass with **identical expected output** (no behaviour change). Snapshot diffs are a refactor leak; if a snapshot moved, your "refactor" is a behaviour change in disguise.
 
 If a refactor is warranted, apply it and commit:
 
@@ -764,7 +979,7 @@ Silence fails the gate.
 
 \`commit-helper\` enforces (a) ↔ (e) mechanically. The reviewer checks (b), (d), (f), (g) on iteration 1.
 
-(a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited.\n(b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named.\n(c) **red_test_recorded** — failing test exists, watched-RED proof attached.\n(d) **red_fails_for_right_reason** — RED captured a real assertion failure.\n(e) **green_full_suite** — full relevant suite green after GREEN.\n(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran, or explicitly skipped with reason.\n(g) **traceable_to_plan** — commits reference plan AC ids and the plan's file set.\n(h) **commit_chain_intact** — RED + GREEN + REFACTOR SHAs (or skipped sentinel) recorded in flow-state.
+(a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited.\n(b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named.\n(c) **red_test_recorded** — failing test exists, watched-RED proof attached.\n(d) **red_fails_for_right_reason** — RED captured a real assertion failure.\n(e) **green_two_stage_suite** — affected-tests pass AND full relevant suite passes after GREEN. Both commands captured in build.md.\n(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran (with FULL suite green afterward), or explicitly skipped with reason.\n(g) **traceable_to_plan** — commits reference plan AC ids and the plan's file set.\n(h) **commit_chain_intact** — RED + GREEN + REFACTOR SHAs (or skipped sentinel) recorded in flow-state.
 
 ## Vertical slicing — tracer bullets, never horizontal waves
 
@@ -1074,6 +1289,201 @@ In all four cases: stop, return the summary JSON, do **not** push code that "wor
 - Running \`tsc --noEmit\` after \`npm test\` — that is a different tool, not a re-run of the same one.
 `;
 
+const SOURCE_DRIVEN = `---
+name: source-driven
+trigger: when architect or planner is dispatched in strict mode AND the task is framework-specific
+---
+
+# Skill: source-driven
+
+Framework-specific code (React hooks, Django views, Next.js routing, Prisma migrations, Tailwind utilities, etc.) must be **grounded in official documentation, not memory**. Training data goes stale: APIs deprecate, signatures change, recommended patterns evolve. Source-driven means: detect the stack, fetch the relevant doc page, implement against it, cite the URL.
+
+## When this skill applies
+
+| Triage | Stack signal | Apply? |
+| --- | --- | --- |
+| \`strict\` (large-risky / security-flagged) | framework-specific code in scope | **always** — required for architect / planner |
+| \`soft\` (small-medium) | framework-specific code in scope | **opt-in** — enable when the user asks for "source-driven" or "verified" implementation |
+| \`inline\` (trivial) | any | **never** — single-line edits don't need citations |
+| any | pure logic (loops, data structures, internal helpers) | skip — correctness is version-independent |
+
+The orchestrator passes \`source_driven: true\` in the dispatch envelope when it applies. Specialists honour the flag.
+
+## The four-step process
+
+\`\`\`
+DETECT ──→ FETCH ──→ IMPLEMENT ──→ CITE
+   │          │           │           │
+   ▼          ▼           ▼           ▼
+What       Get the     Follow the   Show the
+stack +    relevant    documented   URL inline
+versions?  page, not   patterns     in code +
+           homepage                 in artifact
+\`\`\`
+
+### Step 1 — Detect stack and versions
+
+Read the project's dependency file. Cite the file you read.
+
+| Manifest | Versions to extract |
+| --- | --- |
+| \`package.json\` + lockfile | Node engines, framework dep version (React, Vue, Next.js, Express, etc.), test runner, linter |
+| \`composer.json\` | PHP version, framework version (Symfony, Laravel) |
+| \`pyproject.toml\` / \`requirements.txt\` | Python version, framework version (Django, Flask, FastAPI) |
+| \`go.mod\` | Go version, framework version (gin, echo, chi) |
+| \`Cargo.toml\` | Rust edition, crate version |
+| \`Gemfile\` | Ruby version, framework version (Rails, Sinatra) |
+
+Surface the result explicitly in the artifact:
+
+\`\`\`text
+STACK DETECTED:
+- React 19.1.0 (from package.json)
+- Vite 6.2.0 (from package.json)
+- Tailwind CSS 4.0.3 (from package.json)
+→ Fetching official docs for the patterns this slug needs.
+\`\`\`
+
+If a version is missing or ambiguous (e.g. \`"react": "^19.0.0"\`, lockfile pinned to a release-candidate), **ask the user once** before proceeding. Don't guess.
+
+### Step 2 — Fetch official documentation
+
+Fetch the **deep link** for the specific feature in scope. Not the homepage. Not the search result. Not "the React docs".
+
+| Bad | Good |
+| --- | --- |
+| \`react.dev\` | \`react.dev/reference/react/useActionState#usage\` |
+| "search Django auth" | \`docs.djangoproject.com/en/6.0/topics/auth/\` |
+| StackOverflow answer | \`react.dev/blog/2024/12/05/react-19#actions\` |
+
+**Source hierarchy** (in order of authority):
+
+1. Official documentation for the detected version (\`react.dev\`, \`docs.djangoproject.com\`, \`symfony.com/doc\`).
+2. Official blog / changelog (\`react.dev/blog\`, \`nextjs.org/blog\`).
+3. Web standards (\`MDN\`, \`web.dev\`, \`html.spec.whatwg.org\`).
+4. Browser/runtime compatibility (\`caniuse.com\`, \`node.green\`).
+
+**Not authoritative** — do not cite as primary:
+
+- Stack Overflow answers (community Q&A, not a spec).
+- Blog posts or tutorials, even popular ones.
+- AI-generated documentation summaries.
+- Your own training data — that is the whole point.
+
+If the detected version's docs disagree with an older blog post, the docs win. If two official sources conflict (e.g. migration guide vs. API reference), surface the conflict to the user; do not silently pick one.
+
+### Step 3 — Implement following documented patterns
+
+Match the API signatures and patterns in the doc page. If the docs deprecate a pattern, do not use the deprecated version.
+
+When existing project code conflicts with current docs:
+
+\`\`\`text
+CONFLICT DETECTED:
+The existing codebase uses \`useState\` for form loading state,
+but React 19 docs recommend \`useActionState\` for this pattern.
+(Source: https://react.dev/reference/react/useActionState)
+
+Options:
+A) Adopt the modern pattern (useActionState) — matches current docs.
+B) Match existing code (useState) — keeps codebase consistent.
+→ Which approach do you prefer?
+\`\`\`
+
+Do not silently adopt one. The user picks; the decision goes in \`decisions.md\` (architect mode) or in the plan body (planner mode).
+
+### Step 4 — Cite sources inline
+
+Every framework-specific decision gets a citation. The user must be able to verify every choice without trusting the agent's memory.
+
+In **plan.md** / **decisions.md**, include a \`sources:\` block under the relevant AC or decision:
+
+\`\`\`yaml
+sources:
+  - url: https://react.dev/reference/react/useActionState#usage
+    used_for: AC-1 (form submission state pattern)
+    fetched_at: 2026-05-08T22:45Z
+    version: react@19.1.0
+  - url: https://react.dev/blog/2024/12/05/react-19#actions
+    used_for: D-1 (rationale for picking useActionState over manual useState)
+    fetched_at: 2026-05-08T22:46Z
+    version: react@19.x
+\`\`\`
+
+In **code comments**, cite the doc URL near the pattern:
+
+\`\`\`typescript
+// React 19 form handling with useActionState.
+// Source: https://react.dev/reference/react/useActionState#usage
+const [state, formAction, isPending] = useActionState(submitOrder, initialState);
+\`\`\`
+
+Citation rules:
+
+- Full URLs, not shortened.
+- Prefer deep links with anchors (\`/useActionState#usage\` over \`/useActionState\`).
+- Quote the specific passage when it supports a non-obvious decision (e.g. "useTransition now supports async functions [...] to handle pending states automatically").
+- Include browser/runtime support data when recommending platform features.
+
+## UNVERIFIED marker (when docs are missing)
+
+If you cannot find official documentation for a pattern (cclaw's \`user-context7\` MCP returns nothing, the framework has no public docs for the feature, etc.):
+
+- Mark the AC / decision with \`unverified: true\` in frontmatter.
+- Add an inline marker in the artifact body:
+
+\`\`\`text
+UNVERIFIED: I could not find official documentation for this pattern.
+This is based on training data and may be outdated.
+Verify before using in production.
+\`\`\`
+
+- The reviewer treats \`unverified: true\` as a finding (axis: correctness, severity: required) on iteration 1. Ship blocks until the user either confirms the pattern is intentional or surfaces a doc URL the agent can cite.
+
+Honesty about what you couldn't verify is more valuable than confident guessing.
+
+## Specialist contracts
+
+- **planner** in \`source_driven\` envelope: every framework-specific AC carries a \`sources\` block (URL + which AC it supports + fetched timestamp + version). AC without a citation in framework code → reviewer F-N axis=correctness, severity=required.
+- **architect** in \`source_driven\` envelope: every \`D-N\` whose decision rests on framework behaviour (rendering model, state management strategy, persistence pattern, security posture) carries a \`sources\` block. Architects without a citation surface "I could not find current documentation; this decision is based on training data" — explicit, not silent.
+- **slice-builder** in \`source_driven\` envelope: pulls the URL from \`plan.md\` / \`decisions.md\` into the code comment when implementing the pattern. Does not independently re-fetch (architect/planner already did the work).
+- **reviewer** runs the citation check as part of the \`correctness\` axis pass. Open finding when:
+  - a framework-specific AC has no \`sources\` block;
+  - a citation URL is to a non-authoritative source (Stack Overflow, blog, training data);
+  - a citation is to a doc page for a different framework version than the one in the project.
+
+## MCP integration (when the harness has \`user-context7\`)
+
+cclaw recognises \`user-context7\` as the source-of-truth fetcher. When \`source_driven: true\` is in the envelope, the planner / architect SHOULD prefer:
+
+1. \`mcp_user-context7_resolve-library-id\` to map a package name to a Context7 library id.
+2. \`mcp_user-context7_get-library-docs\` to fetch the relevant docs at the detected version.
+
+If the harness does not have \`user-context7\` (or the user disabled it), the specialist falls back to the harness's web-fetch tool (browser tool, fetch, curl) against the official docs URL — same source-hierarchy rules apply.
+
+## Common pitfalls
+
+- "I'm confident about this API" — confidence is not evidence. Verify.
+- "Fetching docs wastes tokens" — hallucinating wastes more. One fetch prevents an hour of debugging the deprecated signature.
+- "The docs won't have what I need" — if they don't, that is itself information; the pattern may not be officially recommended.
+- "I'll just disclaim 'might be outdated'" — disclaimers don't help. Either verify and cite, or mark UNVERIFIED.
+- "This task is simple, no need to check" — simple tasks become templates. The user copies your useState pattern into ten components before realising useActionState exists.
+- Fetching the homepage instead of the deep link. Token waste with no signal.
+- Citing the docs once but using the pattern from memory. The point of source-driven is you wrote what the doc said, not what you remembered the doc said.
+
+## Verification checklist (reviewer uses this)
+
+After implementing under \`source_driven\`:
+
+- [ ] Stack and versions identified from a real manifest file (cited \`file:line\`).
+- [ ] Official docs fetched for each framework-specific pattern (deep link, not homepage).
+- [ ] No Stack Overflow / blog / training-data citations as primary sources.
+- [ ] Code follows current-version patterns (no deprecated APIs).
+- [ ] Non-trivial decisions include a \`sources\` block with full URL.
+- [ ] Conflicts between docs and existing project code surfaced to the user.
+- [ ] Anything unverifiable marked \`UNVERIFIED:\` explicitly.
+`;
+
 export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "triage-gate",
@@ -1088,6 +1498,13 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     description: "When /cc is invoked with no task or with an active flow, render a resume summary and let the user continue / show / cancel / start fresh.",
     triggers: ["start:/cc", "active-flow-detected"],
     body: FLOW_RESUME
+  },
+  {
+    id: "pre-flight-assumptions",
+    fileName: "pre-flight-assumptions.md",
+    description: "Surface 3-7 default assumptions (stack, conventions, architecture defaults, out-of-scope) for the user to confirm before any specialist runs. Skipped on the inline path.",
+    triggers: ["after:triage-gate", "before:first-dispatch"],
+    body: PRE_FLIGHT_ASSUMPTIONS
   },
   {
     id: "plan-authoring",
@@ -1179,5 +1596,12 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     description: "Always-on guard against redundant verification, env-specific shims, and silent skip-and-pass fixes.",
     triggers: ["always-on", "task:build", "task:fix-only", "task:recovery"],
     body: ANTI_SLOP
+  },
+  {
+    id: "source-driven",
+    fileName: "source-driven.md",
+    description: "Detect stack + versions from manifest, fetch official documentation deep-links, implement against documented patterns, cite URLs in plan/decisions/code. Default in strict mode for framework-specific work.",
+    triggers: ["ac_mode:strict", "specialist:planner", "specialist:architect", "framework-specific-code-detected"],
+    body: SOURCE_DRIVEN
   }
 ];

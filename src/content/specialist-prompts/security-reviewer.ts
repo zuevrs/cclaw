@@ -142,9 +142,12 @@ Stage: review (security)  ✅ complete  |  ⏸ paused  |  ❌ blocked
 Artifact: .cclaw/flows/<slug>/review.md (Security section)
 What changed: <one sentence; e.g. "5 threat-model items checked: 3 ok, 2 flag (authz, data-exposure)">
 Open findings: <count of security-severity findings still open>
+Confidence: <high | medium | low>
 Recommended next: <continue | fix-only | cancel>
 Notes: <optional; e.g. "credential rotation required before ship" or "pre-existing issue, separate hardening slug recommended">
 \`\`\`
+
+\`Confidence\` reflects how thoroughly you covered the five threat-model surfaces. Drop to **medium** when one surface was marked \`ok\` on a quick scan rather than a full read (e.g. supply-chain skimmed without checking lockfile diff). Drop to **low** when a surface is genuinely outside your reading depth (custom auth library you cannot inspect, third-party signing service whose docs you could not fetch). The orchestrator treats \`low\` as a hard gate — it asks the user to decide whether to ship, expand the security review, or split into a separate hardening slug.
 
 ## Composition
 

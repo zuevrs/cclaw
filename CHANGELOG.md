@@ -1,5 +1,70 @@
 # Changelog
 
+## 8.4.0 — Confidence calibration, pre-flight assumptions, five-axis review, source-driven mode, adversarial pre-mortem, cross-flow learning, test-impact GREEN
+
+### Why
+
+8.3 made cclaw nicer to live with day-to-day (structured triage, step/auto, fan-out diagram, deeper TDD vocabulary). But three references — `addyosmani-skills`, `forrestchang-andrej-karpathy-skills`, `mattpocock-skills` — still pointed at things cclaw was *not* doing:
+
+1. **Sub-agent slim summaries returned no confidence.** A clean `Stage: review ✅ complete` looked identical whether the reviewer walked the whole diff or skimmed it. The orchestrator had no signal to pause for human attention before chaining the next stage in `auto`.
+2. **Triage answers "how big is this work?" but never "on what assumptions are we doing it?"** Defaults around stack version, file conventions, architecture tier, and out-of-scope items were silently assumed by every specialist. The single most common reason a small/medium build shipped the wrong feature.
+3. **The reviewer found "issues" but didn't map them to axes.** A correctness bug and a nit-pick rendered with the same shape. Severity was a coarse `block | warn | info` triple — `addyosmani` carries five.
+4. **Framework-specific code shipped from the model's training memory, not from current docs.** React 18 patterns in a React 19 codebase, deprecated Next.js APIs, Prisma migrations against last year's CLI surface. addyosmani's source-driven skill solves this; cclaw didn't have an equivalent.
+5. **The ship gate was a single safety belt.** A reviewer who said "looks good" closed the loop. There was no second specialist actively looking for *failure modes* — data loss, races, regressions, blast radius.
+6. **Plans were written from scratch every flow.** The append-only `knowledge.jsonl` carried lessons from every shipped slug, and nobody read it. Same mistakes shipped twice.
+7. **TDD GREEN ran the full suite every cycle.** On a 50-AC project that meant a full multi-minute run between every micro-cycle; faster harnesses got abandoned.
+
+### What changed
+
+**D — Confidence calibration in slim summaries.** Every specialist (brainstormer, architect, planner, reviewer, security-reviewer, slice-builder) now emits `Confidence: <high | medium | low>` as a mandatory line in its slim summary. The specialist prompt explains *what each level means for that stage*: e.g. for the reviewer, `medium` = one axis was sampled, `low` = diff exceeded reviewability (>1000 lines or unrelated changes). The orchestrator's Hop 4 — *Pause* — treats `Confidence: low` as a **hard gate in both `step` and `auto` modes**: it renders the summary, refuses to chain the next stage, and offers `expand <stage>` (re-dispatch the same specialist with a richer envelope), `show`, `override` (resumes auto-chaining), or `cancel`.
+
+**A — Pre-flight assumptions (Hop 2.5).** A new orchestrator hop runs **after triage, before the first specialist dispatch**, only on fresh starts on non-inline paths. The `pre-flight-assumptions.md` skill instructs the orchestrator to surface 3-7 numbered assumptions (stack + version, repo conventions, architecture defaults, out-of-scope items) using the harness's structured ask tool with four options (`Proceed` / `Edit one` / `Edit several` / `Cancel`). The user-confirmed list is persisted to `flow-state.json` under `triage.assumptions` (string array), and is **immutable for the lifetime of the flow**. Both `planner` and `architect` now have a "## Assumptions (read first)" section in their prompts: copy verbatim into `plan.md` / `decisions.md`, treat as authoritative, surface a feasibility blocker if a decision would break an assumption.
+
+Resume semantics: skip Hop 2.5 entirely on resume (`triage.assumptions` already on disk). Skip on `inline` (no specialist dispatch happens, so there is nothing to ground).
+
+**C — Five-axis review with five-tier severity.** The reviewer's `code` mode now mandates explicit coverage of five axes — `correctness`, `readability`, `architecture`, `security`, `performance` — every iteration. Each finding carries an `axis: <one>` and a `severity: <critical | required | consider | nit | fyi>` tag (replacing the old `block | warn | info` triple). Ship-gate semantics are now `acMode`-aware:
+
+- `strict`: any open `critical` *or* `required` finding blocks ship.
+- `soft`: any open `critical` finding blocks ship; `required`/`consider`/`nit`/`fyi` carry over to `learnings.md`.
+
+The slim summary's `What changed` line gains an `axes:` breakdown (`c=N r=N a=N s=N p=N`) so the orchestrator and the user can see at a glance whether the review was lopsided. Legacy ledgers using `block | warn | info` are explicitly mapped to the new severities (block → critical | required, warn → consider | nit, info → fyi) in the reviewer prompt's "## Migration" section; pre-existing `flows/<slug>/review.md` files keep working.
+
+**B — Source-driven mode.** A new always-on skill `source-driven.md` instructs `architect` and `planner` (and, indirectly, `slice-builder`) to:
+
+1. **Detect** stack + versions from `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` etc. before writing anything.
+2. **Fetch** the relevant version-pinned official documentation page (deep-link, not the landing page).
+3. **Implement** against the patterns documented at that URL — never against training memory.
+4. **Cite** the URL inline, in `decisions.md` for D-N entries and in code comments where the API choice is non-obvious.
+
+Source-driven is **default in `strict` mode for framework-specific work** (React hooks, Next.js routing, Prisma migrations, Tailwind utilities, Django views, Spring Boot annotations, etc.) and **opt-in for `soft`**. When official docs are unreachable or do not cover the case, the specialist writes `UNVERIFIED — implementing against training memory; consider re-checking when docs available` next to the affected line. The skill integrates with the `user-context7` MCP tool when present and falls back to direct `WebFetch` of `developer.<framework>.dev/...` URLs otherwise.
+
+**E — Adversarial pre-mortem before ship (strict only).** Hop 5 — *Ship + Compound* — now dispatches `reviewer` mode=`adversarial` **in parallel** with `reviewer` mode=`release` (and, when `security_flag` is set, `security-reviewer` mode=`threat-model`). The adversarial reviewer is told to actively try to break the change: it picks the most pessimistic plausible reading of the diff and writes a `flows/<slug>/pre-mortem.md` artifact listing 3-7 likely failure modes (data-loss, race, regression, blast-radius, rollback-impossibility, accidental-scope, hidden-coupling). Uncovered risks become `required`/`critical` findings in `review.md`, escalating the ship gate. Soft mode skips this — it would be a false-positive factory.
+
+**G — Cross-flow learning in the planner.** The planner's prompt now reads `.cclaw/knowledge.jsonl` at the start of every plan dispatch and surfaces 1-3 relevant prior entries — the lessons captured by `compound` from past shipped slugs — in a new `## Prior lessons` section in `plan.md`, citing `learnings/<slug>.md`. Filtering is by surface area (path overlap with the new plan), tag overlap, and recency. The orchestrator's Hop 3 dispatch envelope for `plan` now lists `.cclaw/knowledge.jsonl` as a planner input.
+
+**F — Test-impact-aware GREEN.** The `tdd-cycle.md` skill's GREEN phase now distinguishes a fast inner loop from a safe outer loop:
+
+1. **Affected-test suite first** — narrow vitest/jest/pytest pattern matching the AC's touch surface. Confirms the new test went green.
+2. **Full relevant suite second** — the project's standard test command. Confirms nothing else regressed.
+
+REFACTOR still always runs the **full** suite; the speed-up is local to GREEN. The mandatory gate `green_two_stage_suite` is added to `commit-helper.mjs --phase=green` guidance.
+
+### Schema
+
+`flow-state.json` stays at `schemaVersion: 3`. The new `triage.assumptions` field is optional (`assumptions?: string[] | null`) and 8.3 state files without it validate as before. The 8.2 → 8.3 → 8.4 migration is silent: `assumptions` defaults to an empty array via the new `assumptionsOf(triage)` helper.
+
+The Concern Ledger gains `axis` and migrates `severity` from a 3-tier to a 5-tier vocabulary. The reviewer prompt documents the legacy mapping; existing review files are read-back-compatible.
+
+### Tests
+
+376 passing — 311 baseline plus a new `tests/unit/v84-confidence-assumptions-fiveaxis-pre-mortem.test.ts` (65 cases) covering: confidence in every specialist slim summary; orchestrator hard-gate on `Confidence: low` in both run modes; `triage.assumptions` schema and helper; pre-flight skill registration and orchestrator Hop 2.5 wiring (with skip rules for `inline` and resume); planner copying assumptions verbatim and surfacing prior lessons from `knowledge.jsonl`; architect respecting assumptions and surfacing feasibility blockers; reviewer five-axis enforcement and acMode-aware ship gates; legacy severity migration; source-driven skill registration with detect/fetch/implement/cite process and the `UNVERIFIED` marker; adversarial pre-mortem dispatched in parallel with release reviewer in strict ship; pre-mortem.md structure; tdd-cycle two-stage GREEN guidance; cross-flow learning end-to-end.
+
+`npm run release:check` is green; `npm pack --dry-run` produces `cclaw-cli-8.4.0.tgz`; `scripts/smoke-init.mjs` succeeds.
+
+### Compatibility
+
+Backward compatible. 8.3 flow-state files validate, 8.3 review.md ledgers are read with severity migration, no orchestrator-visible breaking change. New behaviour is gated on `acMode` and on the presence of fresh assumptions; existing flows resume without re-prompting for assumptions.
+
 ## 8.3.0 — Structured triage ask, run-mode (step / auto), explicit parallel-build, deeper TDD
 
 ### Why

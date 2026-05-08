@@ -175,9 +175,12 @@ Stage: discovery (brainstormer)  ✅ complete
 Artifact: .cclaw/flows/<slug>/plan.md
 What changed: <one sentence; e.g. "Frame + Selected Direction (binary mute toggle); 3 Approaches considered">
 Open findings: 0
+Confidence: <high | medium | low>
 Recommended next: architect-checkpoint  |  planner  |  cancel
 Notes: <optional; e.g. "user named 'mute' explicitly — skip Approaches" or "scope unclear, stop and re-triage">
 \`\`\`
+
+\`Confidence\` reflects how solid the Frame is. Drop to **medium** when one Approaches row was harder to defend than the others, or when "Not Doing" had to absorb a request you suspect the user actually wanted. Drop to **low** when the prompt left you guessing about the user / observable success criterion / non-goals (your three clarifying questions did not resolve the core ambiguity). The orchestrator treats \`low\` as a hard gate — it asks the user to confirm the Frame before architect/planner runs.
 
 ## Composition
 
