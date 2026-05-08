@@ -40,7 +40,40 @@ export interface AcceptanceCriterionState {
 
 export type BuildProfile = "default" | "bootstrap";
 
-export type RoutingClass = "trivial" | "small-medium" | "large-risky";
+export const ROUTING_CLASSES = ["trivial", "small-medium", "large-risky"] as const;
+export type RoutingClass = (typeof ROUTING_CLASSES)[number];
+
+/**
+ * AC traceability and TDD enforcement modes (v8.2+).
+ *
+ * - `inline`: trivial change. No AC table, no commit hook, optional tests.
+ * - `soft`: small/medium feature work. Bullet-list testable conditions in
+ *   `plan.md` (no AC IDs); commit-helper does not block; one TDD cycle per
+ *   feature is enough. Default for small/medium routing.
+ * - `strict`: large/risky / security-flagged. AC IDs with commit trace,
+ *   ship gate, RED → GREEN → REFACTOR per AC. Same as v8.1 behaviour.
+ *
+ * Selected at the triage gate; user can override.
+ */
+export const AC_MODES = ["inline", "soft", "strict"] as const;
+export type AcMode = (typeof AC_MODES)[number];
+
+/**
+ * Decision recorded at the triage gate that opens every new flow.
+ * Persisted in flow-state.json so resumes never re-trigger triage.
+ */
+export interface TriageDecision {
+  complexity: RoutingClass;
+  acMode: AcMode;
+  /** Stages the orchestrator promised to run, in order. Empty for trivial. */
+  path: FlowStage[];
+  /** Why this complexity was chosen. One short sentence. */
+  rationale: string;
+  /** ISO timestamp when triage was recorded. */
+  decidedAt: string;
+  /** Did the user override the orchestrator's recommendation? */
+  userOverrode: boolean;
+}
 
 export interface CliContext {
   cwd: string;

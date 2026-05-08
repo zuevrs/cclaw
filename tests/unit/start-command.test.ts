@@ -4,35 +4,56 @@ import { renderStartCommand } from "../../src/content/start-command.js";
 describe("start command (/cc) markdown", () => {
   const body = renderStartCommand();
 
-  it("explains the four-stage flow plan/build/review/ship", () => {
+  it("explains the four core stages plan/build/review/ship", () => {
     for (const stage of ["plan", "build", "review", "ship"]) {
       expect(body).toContain(stage);
     }
   });
 
-  it("describes existing-plan detection (active and shipped)", () => {
-    expect(body).toMatch(/existing[- ]plan/i);
-    expect(body).toMatch(/shipped/);
-    expect(body).toMatch(/amend.*rewrite.*new/i);
+  it("describes the v8.2 hop sequence: detect → triage → dispatch → pause → ship", () => {
+    expect(body).toMatch(/Hop 1 — Detect/);
+    expect(body).toMatch(/Hop 2 — Triage/);
+    expect(body).toMatch(/Hop 3 — Dispatch/);
+    expect(body).toMatch(/Hop 4 — Pause/);
+    expect(body).toMatch(/Hop 5 — Compound/);
   });
 
-  it("calls out Phase 0 calibration", () => {
-    expect(body).toMatch(/Phase 0/);
-    expect(body).toMatch(/targeted change/i);
+  it("requires the triage gate on every fresh /cc and persists the decision", () => {
+    expect(body).toMatch(/triage[- ]gate/i);
+    expect(body).toMatch(/triage decision is \*\*immutable\*\*/i);
+    expect(body).toMatch(/userOverrode/);
+  });
+
+  it("describes per-stage sub-agent dispatch with a slim summary contract", () => {
+    expect(body).toMatch(/Dispatch <specialist>/);
+    expect(body).toMatch(/Slim summary/i);
+    expect(body).toMatch(/inline-fallback/);
+  });
+
+  it("explains the resume path when an active flow is detected", () => {
+    expect(body).toMatch(/flow[- ]resume/i);
+    expect(body).toMatch(/r\] Resume/);
+    expect(body).toMatch(/c\] Cancel/);
+  });
+
+  it("documents the three AC modes (inline/soft/strict) at the build stage", () => {
+    expect(body).toMatch(/inline/);
+    expect(body).toMatch(/soft/);
+    expect(body).toMatch(/strict/);
   });
 
   it("requires explicit user approval for push and PR", () => {
-    expect(body).toMatch(/Push and PR/);
-    expect(body).toMatch(/explicit user approval/i);
+    expect(body).toMatch(/git push/i);
+    expect(body).toMatch(/explicit/i);
   });
 
-  it("describes the automatic compound + active->shipped move", () => {
+  it("describes the automatic compound + shipped move", () => {
     expect(body).toMatch(/Compound \(automatic\)/);
-    expect(body).toMatch(/Active . shipped move/u);
+    expect(body).toMatch(/shipped/);
   });
 
-  it("references the failure-mode checklist and the hard cap of 5", () => {
-    expect(body).toMatch(/Five Failure Modes/i);
-    expect(body).toMatch(/5/);
+  it("references the failure-mode loop and the hard cap of 5 review iterations", () => {
+    expect(body).toMatch(/Failure Modes/i);
+    expect(body).toMatch(/5 review/);
   });
 });

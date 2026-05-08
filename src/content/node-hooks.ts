@@ -29,9 +29,14 @@ if (!state) {
   process.exit(0);
 }
 
-if (state.schemaVersion !== 2) {
-  console.error("[cclaw] flow-state schema is from cclaw 7.x. cclaw v8 cannot resume it.");
-  console.error("[cclaw] options: 1) finish/abandon the run with cclaw 7.x; 2) delete .cclaw/state/flow-state.json; 3) start a new v8 plan.");
+if (state.schemaVersion === 1 || state.schemaVersion === undefined) {
+  console.error("[cclaw] flow-state predates cclaw v8 and cannot be auto-migrated.");
+  console.error("[cclaw] options: 1) finish/abandon the run with the older cclaw; 2) delete .cclaw/state/flow-state.json; 3) start a new flow.");
+  process.exit(0);
+}
+
+if (state.schemaVersion !== 3 && state.schemaVersion !== 2) {
+  console.error(\`[cclaw] unknown flow-state schemaVersion \${state.schemaVersion}.\`);
   process.exit(0);
 }
 
@@ -40,9 +45,14 @@ if (!state.currentSlug) {
   process.exit(0);
 }
 
-const pending = (state.ac || []).filter((item) => item.status !== "committed").length;
-const total = (state.ac || []).length;
-console.log(\`[cclaw] active: \${state.currentSlug} (stage=\${state.currentStage ?? "n/a"}); AC committed \${total - pending}/\${total}\`);
+const acMode = state.triage?.acMode ?? "strict";
+const ac = state.ac ?? [];
+if (acMode === "strict" && ac.length > 0) {
+  const pending = ac.filter((item) => item.status !== "committed").length;
+  console.log(\`[cclaw] active: \${state.currentSlug} (stage=\${state.currentStage ?? "n/a"}, mode=strict); AC committed \${ac.length - pending}/\${ac.length}\`);
+} else {
+  console.log(\`[cclaw] active: \${state.currentSlug} (stage=\${state.currentStage ?? "n/a"}, mode=\${acMode}).\`);
+}
 `;
 
 const STOP_HANDOFF_HOOK = `#!/usr/bin/env node
@@ -63,14 +73,31 @@ async function readState() {
 
 const state = await readState();
 if (!state || !state.currentSlug) process.exit(0);
-const pending = (state.ac || []).filter((item) => item.status !== "committed");
-if (pending.length === 0) process.exit(0);
-console.error(\`[cclaw] stopping with \${pending.length} pending AC for \${state.currentSlug}: \${pending.map((item) => item.id).join(", ")}\`);
+
+const acMode = state.triage?.acMode ?? "strict";
+if (acMode === "strict") {
+  const pending = (state.ac || []).filter((item) => item.status !== "committed");
+  if (pending.length === 0) process.exit(0);
+  console.error(\`[cclaw] stopping with \${pending.length} pending AC for \${state.currentSlug}: \${pending.map((item) => item.id).join(", ")}\`);
+  process.exit(0);
+}
+
+console.error(\`[cclaw] stopping mid-flow for \${state.currentSlug} (stage=\${state.currentStage ?? "n/a"}, mode=\${acMode}). Run /cc to resume.\`);
 `;
 
 const COMMIT_HELPER_HOOK = `#!/usr/bin/env node
-// cclaw commit-helper: TDD-aware atomic commit per AC phase
-// (RED -> GREEN -> REFACTOR) + AC traceability gate.
+// cclaw commit-helper: ac_mode-aware atomic commit hook.
+//
+// strict mode (large-risky / security-flagged):
+//   commit-helper.mjs --ac=AC-N --phase=red|green|refactor [--skipped] [--message="..."]
+//   enforces TDD cycle, AC trace, no production files in RED, full chain RED -> GREEN -> REFACTOR.
+//
+// soft / inline mode (small-medium / trivial):
+//   commit-helper.mjs --message="..."
+//   advisory only — proxies to git commit, prints a one-line note. --ac/--phase ignored.
+//
+// the mode is read from flow-state.json: state.triage.acMode. if no triage is recorded,
+// default to strict (preserves v8.0/v8.1 behaviour for migrated projects).
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -88,27 +115,6 @@ function flag(name) {
   return process.argv.includes(\`--\${name}\`);
 }
 
-const acId = arg("ac");
-const phase = arg("phase");
-const message = arg("message") ?? \`cclaw: progress on \${acId ?? "AC"}\`;
-const skipped = flag("skipped");
-
-if (!acId || !/^AC-\\d+$/.test(acId)) {
-  console.error("[commit-helper] usage: commit-helper.mjs --ac=AC-N --phase=red|green|refactor [--skipped] [--message='...']");
-  process.exit(2);
-}
-
-if (!phase || !["red", "green", "refactor"].includes(phase)) {
-  console.error("[commit-helper] --phase is required. Allowed: red, green, refactor.");
-  console.error("[commit-helper] build is a TDD cycle: every AC needs RED -> GREEN -> REFACTOR.");
-  process.exit(2);
-}
-
-if (skipped && phase !== "refactor") {
-  console.error("[commit-helper] --skipped is only valid for --phase=refactor.");
-  process.exit(2);
-}
-
 let state;
 try {
   state = JSON.parse(await fs.readFile(statePath, "utf8"));
@@ -117,8 +123,55 @@ try {
   process.exit(2);
 }
 
-if (state.schemaVersion !== 2) {
-  console.error("[commit-helper] flow-state schema is not v8.");
+if (state.schemaVersion !== 3 && state.schemaVersion !== 2) {
+  console.error(\`[commit-helper] unsupported flow-state schemaVersion \${state.schemaVersion}.\`);
+  process.exit(2);
+}
+
+const acMode = state.triage?.acMode ?? "strict";
+
+if (acMode !== "strict") {
+  // soft / inline mode: advisory passthrough.
+  const message = arg("message");
+  if (!message) {
+    console.error("[commit-helper] --message=\\"...\\" is required.");
+    process.exit(2);
+  }
+  let staged;
+  try {
+    staged = execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: root, encoding: "utf8" }).trim();
+  } catch (error) {
+    console.error(\`[commit-helper] git not available: \${error.message}\`);
+    process.exit(2);
+  }
+  if (!staged) {
+    console.error("[commit-helper] nothing staged. Stage your changes before invoking commit-helper.");
+    process.exit(2);
+  }
+  execFileSync("git", ["commit", "-m", message], { cwd: root, stdio: "inherit" });
+  console.log(\`[commit-helper] committed in \${acMode} mode (no AC trace recorded).\`);
+  process.exit(0);
+}
+
+// strict mode below.
+const acId = arg("ac");
+const phase = arg("phase");
+const message = arg("message") ?? \`cclaw: progress on \${acId ?? "AC"}\`;
+const skipped = flag("skipped");
+
+if (!acId || !/^AC-\\d+$/.test(acId)) {
+  console.error("[commit-helper] strict mode usage: commit-helper.mjs --ac=AC-N --phase=red|green|refactor [--skipped] [--message='...']");
+  process.exit(2);
+}
+
+if (!phase || !["red", "green", "refactor"].includes(phase)) {
+  console.error("[commit-helper] --phase is required in strict mode. Allowed: red, green, refactor.");
+  console.error("[commit-helper] strict-mode build is a TDD cycle: every AC needs RED -> GREEN -> REFACTOR.");
+  process.exit(2);
+}
+
+if (skipped && phase !== "refactor") {
+  console.error("[commit-helper] --skipped is only valid for --phase=refactor.");
   process.exit(2);
 }
 

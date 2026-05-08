@@ -1,7 +1,9 @@
 export interface ArtifactTemplate {
   id:
     | "plan"
+    | "plan-soft"
     | "build"
+    | "build-soft"
     | "review"
     | "ship"
     | "decisions"
@@ -108,6 +110,54 @@ _(Planner topology mode. Default: \`inline\`. \`parallel-build\` is opt-in; see 
 This block is rebuilt by \`commit-helper.mjs\` after every AC commit. Do not edit by hand once a commit is recorded.
 `;
 
+const PLAN_TEMPLATE_SOFT = `---
+slug: SLUG-PLACEHOLDER
+stage: plan
+status: active
+ac_mode: soft
+last_specialist: null
+refines: null
+shipped_at: null
+ship_commit: null
+review_iterations: 0
+security_flag: false
+---
+
+# SLUG-PLACEHOLDER
+
+> One short paragraph: what we are doing and why. If the goal does not fit in 4 lines, the request is probably too large — split it or re-triage to large-risky.
+
+## Plan
+
+_(Planner authors this. One short paragraph describing the change end-to-end. No phases, no AC IDs.)_
+
+## Testable conditions
+
+_(Bullet list. Each line is a behaviour the slice-builder's tests must verify. Conditions are observable; if you can't name a test or manual step that proves it, drop the bullet.)_
+
+- _Condition 1 — observable behaviour, e.g. "Pill renders the request status (Pending / Approved / Denied)."_
+- _Condition 2._
+- _Condition 3._
+
+## Verification
+
+_(One block per layer. Tests file paths, manual steps, runner command.)_
+
+- \`tests/unit/<module>.test.ts\` — covers all listed conditions in one test file.
+- Manual: _open <url>, perform <action>, observe <outcome>_.
+
+## Touch surface
+
+_(Files the slice-builder is allowed to modify. Used by reviewer to flag scope creep.)_
+
+- \`src/<module>/<file>.ts\`
+- \`tests/unit/<module>.test.ts\`
+
+## Notes
+
+_(Optional. Brainstormer / architect did NOT run for soft-mode flows; if you discover the work needs structural decisions or threat modelling mid-flight, surface back to the orchestrator and ask to re-triage as large-risky.)_
+`;
+
 const BUILD_TEMPLATE = `---
 slug: SLUG-PLACEHOLDER
 stage: build
@@ -177,6 +227,39 @@ _(Append one fix-iteration block per review iteration that returned \`block\`. S
 ## Notes
 
 _(Surprises, deviations from the plan, tests added, refactors that came up, paths considered and discarded, etc.)_
+`;
+
+const BUILD_TEMPLATE_SOFT = `---
+slug: SLUG-PLACEHOLDER
+stage: build
+status: active
+ac_mode: soft
+last_commit: null
+---
+
+# Build log — SLUG-PLACEHOLDER
+
+This is the soft-mode build log. One TDD cycle covers all listed conditions; commits are plain \`git commit\` (the commit-helper is advisory in soft mode).
+
+> **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
+
+## Plan summary
+
+_(One paragraph mirroring \`flows/SLUG-PLACEHOLDER/plan.md\` Plan section.)_
+
+## Build log
+
+- **Tests added**: _\`tests/unit/<module>.test.ts\` — N tests, mirroring the listed conditions._
+- **Discovery**: _\`src/<module>/<file>.ts:<line>\`, \`tests/unit/<existing>.test.ts:<line>\`._
+- **RED**: _\`<runner command>\` → N failing (expected). Cite the assertion that fails (≤3 lines)._
+- **GREEN**: _One sentence on the minimal change. \`<full-suite command>\` → all passing._
+- **REFACTOR**: _One-line shape change applied, or "skipped: <reason>"._
+- **Commit**: _\`<one-line message>\` (\`<SHA>\`)._
+- **Follow-ups**: _\`info\` items deferred to a separate slug, or "none"._
+
+## Notes
+
+_(Surprises, deviations from the plan, paths considered and discarded, etc.)_
 `;
 
 const REVIEW_TEMPLATE = `---
@@ -542,8 +625,10 @@ Each entry begins with an ISO timestamp, then a single-line summary, then the bo
 `;
 
 export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
-  { id: "plan", fileName: "plan.md", description: "Plan template with frontmatter, AC table, and traceability block.", body: PLAN_TEMPLATE },
-  { id: "build", fileName: "build.md", description: "Build log template with commit table and hook invocation log.", body: BUILD_TEMPLATE },
+  { id: "plan", fileName: "plan.md", description: "Strict-mode plan template (AC table, parallelSafe, touchSurface, traceability block).", body: PLAN_TEMPLATE },
+  { id: "plan-soft", fileName: "plan-soft.md", description: "Soft-mode plan template (bullet-list testable conditions, no AC IDs).", body: PLAN_TEMPLATE_SOFT },
+  { id: "build", fileName: "build.md", description: "Strict-mode build log (six-column TDD table, RED proofs, GREEN suite evidence).", body: BUILD_TEMPLATE },
+  { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
   { id: "decisions", fileName: "decisions.md", description: "Architect-style decision record template (D-N entries).", body: DECISIONS_TEMPLATE },

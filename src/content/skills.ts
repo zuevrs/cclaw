@@ -6,6 +6,265 @@ export interface AutoTriggerSkill {
   body: string;
 }
 
+const TRIAGE_GATE = `---
+name: triage-gate
+trigger: at the start of every new /cc invocation, before any specialist runs
+---
+
+# Skill: triage-gate
+
+Every new flow opens with a **triage gate**. The orchestrator analyses the user's request, picks a complexity class, names an AC mode, proposes a path, and **asks the user to confirm**. Nothing else runs until the user has confirmed (or overridden) the triage.
+
+This skill exists because cclaw v8.1 used to silently pick a path and lock the user into it. v8.2 makes that decision explicit, audit-able, and overridable.
+
+## When this skill applies
+
+- Always at the start of \`/cc <task>\` when no active flow exists.
+- Skipped on \`/cc\` (no argument) when an active flow is detected — see \`flow-resume.md\`.
+- Skipped on \`/cc-cancel\` and \`/cc-idea\` (these never open a flow).
+
+## Output format (mandatory)
+
+Reply with a single fenced block followed by an option list:
+
+\`\`\`
+Triage
+─ Complexity: <trivial | small/medium | large-risky>  (confidence: <high | medium | low>)
+─ Recommended path: <inline | plan → build → review → ship | discovery → plan → build → review → ship>
+─ Why: <one short sentence; cite file count, LOC estimate, sensitive-surface flag>
+─ AC mode: <inline | soft | strict>
+\`\`\`
+
+Then list the four options verbatim:
+
+\`\`\`
+[1] Proceed as recommended
+[2] Switch to trivial (inline edit + commit, skip plan/review)
+[3] Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)
+[4] Custom (let me edit complexity / acMode / path)
+\`\`\`
+
+## Heuristics — how to pick
+
+Rank the request against these signals. The orchestrator picks the **highest** complexity any signal triggers (escalation is one-way).
+
+| Signal | Pushes toward |
+| --- | --- |
+| typo, rename, comment, single-file format change, ≤30 lines, no test impact | trivial / inline |
+| 1-3 modules, ≤5 testable behaviours, no auth/payment/data-layer touch, no migration | small/medium / soft |
+| ≥4 modules touched OR ≥6 distinct behaviours OR architectural decision needed OR migration required OR auth/payment/data-layer touch OR explicit security flag | large-risky / strict |
+| user explicitly asked for "discuss first" / "design only" / "what do you think" | discovery → plan |
+| user explicitly asked for "just fix it" on a single file | trivial / inline (still confirm — they may underestimate) |
+
+The "highest wins" rule is intentional. Agents underestimate scope more often than they overestimate; if any signal says large-risky, surface large-risky.
+
+If the heuristic gives \`small/medium\` but the user said something like "feature spanning auth and billing", upgrade and explain why in the \`Why\` line.
+
+## Confidence levels
+
+- **high** — at least two signals agree on the same class, AND the user's prompt is concrete (named files, named behaviours, or named acceptance).
+- **medium** — only one signal triggered, OR the prompt is concrete but no scope cues.
+- **low** — prompt is vague ("make it better", "fix bugs", "add some auth"). Always escalate one class on \`low\` confidence and ask the user to clarify before locking.
+
+\`Recommended path\` for low confidence is always at least \`plan → …\` (never \`inline\`); the user explicitly opting into trivial after seeing the triage is fine.
+
+## What the orchestrator records
+
+After the user picks (1)/(2)/(3)/(4), patch \`.cclaw/state/flow-state.json\`:
+
+\`\`\`json
+{
+  "triage": {
+    "complexity": "small-medium",
+    "acMode": "soft",
+    "path": ["plan", "build", "review", "ship"],
+    "rationale": "3 modules, ~150 LOC, no auth touch.",
+    "decidedAt": "2026-05-08T12:34:56Z",
+    "userOverrode": false
+  }
+}
+\`\`\`
+
+\`userOverrode\` is \`true\` only when the user picked (2), (3), or a (4) custom that disagrees with the recommendation.
+
+The triage block is **immutable for the lifetime of the flow**. If the user wants to escalate mid-flight (e.g. discovers it is bigger than thought), \`/cc-cancel\` and start a fresh flow with new triage.
+
+## Path semantics
+
+| path value | what runs |
+| --- | --- |
+| \`["build"]\` (inline trivial) | direct edit + commit, no plan, no review |
+| \`["plan", "build", "review", "ship"]\` | sub-agent per stage, pause after each unless user said "go to ship" |
+| \`["discovery", "plan", "build", "review", "ship"]\` | brainstormer + architect run before plan; user confirms after each |
+
+\`discovery\` is a routing label, not a real flow stage. It expands at dispatch time into "brainstormer → checkpoint → architect → checkpoint → planner".
+
+## When to skip the gate
+
+The gate is **never skipped silently**. Three explicit forms of skip:
+
+1. User passed \`--triage=trivial\` (or \`--triage=small-medium\` / \`--triage=large-risky\`) on the \`/cc\` invocation — record \`userOverrode: true\`, skip the question, log the choice in the rationale: "user passed --triage=trivial".
+2. Active flow detected with a recorded triage — \`flow-resume.md\` resumes that triage; you do not re-prompt.
+3. User typed \`/cc <task> --no-triage\` — record \`complexity: small-medium, acMode: soft, path: plan→build→review→ship, userOverrode: true\`, rationale "user disabled triage". This is the documented escape hatch; surfacing it as a footnote on the help text is fine, but it should not be the default.
+
+## Worked examples
+
+### Trivial — high confidence
+
+User: "Rename \`getCwd\` to \`getCurrentWorkingDirectory\` across the repo."
+
+\`\`\`
+Triage
+─ Complexity: trivial  (confidence: high)
+─ Recommended path: inline
+─ Why: Mechanical rename, ~12 call sites in 5 files, no behavioural change.
+─ AC mode: inline
+\`\`\`
+
+\`\`\`
+[1] Proceed as recommended
+[2] Switch to trivial (inline edit + commit, skip plan/review)
+[3] Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)
+[4] Custom (let me edit complexity / acMode / path)
+\`\`\`
+
+### Small/medium — medium confidence
+
+User: "Add a status pill to the approvals dashboard."
+
+\`\`\`
+Triage
+─ Complexity: small/medium  (confidence: medium)
+─ Recommended path: plan → build → review → ship
+─ Why: 1 new component + 1 hook, ~120 LOC, no auth/payment touch.
+─ AC mode: soft
+\`\`\`
+
+### Large-risky — escalation triggered
+
+User: "Migrate the user store from Postgres to DynamoDB."
+
+\`\`\`
+Triage
+─ Complexity: large-risky  (confidence: high)
+─ Recommended path: discovery → plan → build → review → ship
+─ Why: data-layer migration, schema change, requires runbook + rollback plan.
+─ AC mode: strict
+\`\`\`
+
+### Low confidence — escalate one class
+
+User: "Make auth less broken."
+
+\`\`\`
+Triage
+─ Complexity: small/medium  (confidence: low — escalated from trivial because prompt is vague)
+─ Recommended path: plan → build → review → ship
+─ Why: "auth" touches sensitive surface; need a plan to scope concretely.
+─ AC mode: soft
+\`\`\`
+
+The user is expected to clarify in (4) Custom or accept (1) Proceed; either way the triage is now recorded.
+
+## Common pitfalls
+
+- Returning the triage as prose paragraphs instead of the fenced block. The orchestrator expects the structured form so it can parse \`acMode\` and \`path\` reliably.
+- Stating "I think this is medium-complexity" and then immediately invoking planner. That is the v8.1 bug. Wait for the user's pick.
+- Picking \`large-risky\` for a one-file rename "to be safe". Do not pad the heuristic; the user reads it and learns to ignore your triage.
+- Forgetting to write \`triage\` into \`flow-state.json\`. The hook check \`commit-helper.mjs\` and the resume detector both read it; an absent triage breaks both.
+- Re-running the gate on resume. Resume reads the saved triage and continues from \`currentStage\`; it never re-prompts.
+`;
+
+const FLOW_RESUME = `---
+name: flow-resume
+trigger: /cc invoked with no task argument, OR with an argument while flow-state.json has currentSlug != null
+---
+
+# Skill: flow-resume
+
+\`/cc\` without an argument means **"continue what we were doing"**. \`/cc <task>\` with an existing active flow means the user might either be resuming or starting a new branch — the orchestrator has to ask, never silently pick.
+
+## Detection
+
+Read \`.cclaw/state/flow-state.json\`:
+
+- \`currentSlug == null\` AND no \`/cc\` argument → ask user "What do you want to work on?". This is just an empty start, not a resume.
+- \`currentSlug == null\` AND \`/cc <task>\` argument → fresh start. Run \`triage-gate.md\`.
+- \`currentSlug != null\` AND no \`/cc\` argument → **resume**. Render the resume summary and proceed.
+- \`currentSlug != null\` AND \`/cc <task>\` argument → **collision**. Render the resume summary AND ask whether to resume the active flow or shelve it and start the new one.
+
+## Resume summary (mandatory format)
+
+\`\`\`
+Active flow: <slug>
+─ Stage: <plan | build | review | ship>  (last touched <relative-time>)
+─ Triage: <complexity> / acMode=<inline | soft | strict>
+─ Progress: <N committed / M total AC>  (or "<N conditions verified" in soft mode)
+─ Last specialist: <none | brainstormer | architect | planner | reviewer | security-reviewer | slice-builder>
+─ Open findings: <K>  (review only; 0 outside review)
+─ Next step: <inferred from stage and progress>
+\`\`\`
+
+Then ask:
+
+\`\`\`
+[r] Resume — continue from <stage>
+[s] Show — open the artifact for the current stage and pause
+[c] Cancel — /cc-cancel and free the slot
+[n] New — shelve this flow as cancelled and start fresh
+\`\`\`
+
+\`[n]\` is shown only when the user passed a new task argument; otherwise drop it.
+
+## Inferring next step
+
+| currentStage | progress condition | next step |
+| --- | --- | --- |
+| \`plan\` | not yet committed | "review the plan in \`flows/<slug>/plan.md\`, then say 'continue' to dispatch slice-builder" |
+| \`build\` | strict mode, AC committed > 0, AC pending > 0 | "continue with AC-<next pending>" |
+| \`build\` | soft mode, build.md exists | "review build evidence in \`flows/<slug>/build.md\`, then say 'continue' to enter review" |
+| \`build\` | strict mode, all AC committed | "ready for review; say 'continue' to dispatch reviewer" |
+| \`review\` | open block findings exist | "fix-only loop: dispatch slice-builder mode=fix-only against open ledger rows" |
+| \`review\` | clear / warn-only convergence | "ready for ship; say 'continue' to dispatch ship" |
+| \`ship\` | compound complete | "flow already shipped; new task or /cc-cancel" |
+
+## Resume rules
+
+1. **Triage is preserved.** A resumed flow keeps its \`acMode\`, \`complexity\`, and \`path\`. The user does not re-pick. If they want to change mode, the answer is "/cc-cancel and start fresh".
+2. **Last-specialist context is restored** by reading \`flows/<slug>/<stage>.md\` (and \`decisions/<slug>.md\` if architect ran). The orchestrator does not summarise from memory; it re-reads the artifact.
+3. **Time gate.** If the resume summary's "last touched" is >7 days ago, surface a warning ("flow is stale — verify scope still applies") but still allow resume.
+4. **Sub-agent dispatch resumes from the same stage.** A build that was paused mid-RED for AC-3 resumes by dispatching slice-builder for AC-3, not by restarting AC-1.
+
+## Common pitfalls
+
+- Ignoring \`flow-state.json\` and starting fresh on every \`/cc\` invocation. That is the v8.0 bug; v8.1 partially fixed it; v8.2 makes it explicit via this skill.
+- Re-running the triage gate on resume. The user already chose; respect the saved decision.
+- Re-prompting the user for the slug ("which task?") when \`currentSlug\` is set. Read it from state.
+- Treating \`/cc\` with no argument as an error. It is the canonical "continue" command.
+
+## Worked example
+
+\`\`\`
+> /cc
+
+Active flow: approval-page
+─ Stage: build  (last touched 2 hours ago)
+─ Triage: small/medium / acMode=soft
+─ Progress: 2 of 3 conditions verified
+─ Last specialist: slice-builder
+─ Open findings: 0
+─ Next step: continue with the third condition (tooltip on hover)
+
+[r] Resume — continue from build
+[s] Show — open flows/approval-page/build.md and pause
+[c] Cancel — /cc-cancel and free the slot
+\`\`\`
+
+User: r
+
+Orchestrator dispatches \`slice-builder\` against the third condition.
+`;
+
 const PLAN_AUTHORING = `---
 name: plan-authoring
 trigger: when writing or updating .cclaw/flows/<slug>/plan.md
@@ -38,28 +297,37 @@ Use this skill whenever you create or modify any \`.cclaw/flows/<slug>/plan.md\`
 
 const AC_TRACEABILITY = `---
 name: ac-traceability
-trigger: when committing changes for an active cclaw run
+trigger: when committing changes for an active cclaw run with ac_mode=strict
 ---
 
 # Skill: ac-traceability
 
-cclaw has one mandatory gate: every commit produced inside \`/cc\` references exactly one AC, and the AC ↔ commit chain is recorded in \`flow-state.json\`.
+This skill applies only when the active flow's \`ac_mode\` is \`strict\` (set at the triage gate for large-risky / security-flagged work). In \`inline\` and \`soft\` modes the commit-helper still runs but does not enforce the AC↔commit chain — see \`triage-gate.md\` for what each mode does.
 
-## Rules
+In \`strict\` mode, cclaw has one mandatory gate: every commit produced inside \`/cc\` references exactly one AC, and the AC ↔ commit chain is recorded in \`flow-state.json\`.
+
+## Rules (strict mode)
 
 1. Use \`node .cclaw/hooks/commit-helper.mjs --ac=AC-N --message="..."\` for every AC commit. Do not call \`git commit\` directly.
 2. Stage only AC-related changes before invoking the hook.
 3. The hook will refuse the commit if:
    - \`AC-N\` is not declared in the active plan;
-   - \`flow-state.json\` schemaVersion is not \`2\`;
+   - \`flow-state.json\` schemaVersion is not the current cclaw schema;
    - nothing is staged.
-4. After the commit succeeds, the hook records the SHA in \`flow-state.json\` under the matching AC and re-renders the traceability block in \`plans/<slug>.md\`.
-5. \`runCompoundAndShip\` refuses to ship a slug with any pending AC. There is no override.
+4. After the commit succeeds, the hook records the SHA in \`flow-state.json\` under the matching AC and re-renders the traceability block in \`flows/<slug>/plan.md\`.
+5. \`runCompoundAndShip\` refuses to ship a strict-mode slug with any pending AC. There is no override.
 
-## When you accidentally committed without the hook
+## In soft / inline modes
+
+- The commit-helper is **advisory**, not blocking. It is fine to run plain \`git commit\` for soft-mode flows.
+- A soft-mode plan has bullet-list testable conditions, not numbered AC IDs. There is no \`AC-N\` to reference.
+- A single TDD cycle covers the whole feature; you do not run RED → GREEN → REFACTOR per condition.
+- Ship gate is a single check ("all listed conditions verified"), not an AC-by-AC ledger.
+
+## When you accidentally committed without the hook (strict mode only)
 
 - \`flow-state.json\` is now out of sync with the working tree.
-- Run the hook manually for the affected AC: \`node .cclaw/hooks/commit-helper.mjs --ac=AC-N --message="resync"\` while staging an empty change is not allowed; instead, edit \`.cclaw/state/flow-state.json\` to add the SHA to the AC entry by hand and verify with the orchestrator before continuing.
+- Edit \`.cclaw/state/flow-state.json\` by hand to add the SHA to the matching AC entry and verify with the orchestrator before continuing. Do not run the hook with an empty stage to "patch" the state — the hook refuses empty stages by design.
 `;
 
 const REFINEMENT = `---
@@ -406,14 +674,22 @@ Refactor AC verification is "no behavioural diff": tests pass, snapshots unchang
 
 const TDD_CYCLE = `---
 name: tdd-cycle
-trigger: always-on whenever stage=build (mandatory; build IS the TDD stage)
+trigger: when stage=build (granularity depends on ac_mode — see below)
 ---
 
 # Skill: tdd-cycle (RED → GREEN → REFACTOR)
 
-build is a TDD stage. Every AC goes through the cycle. There is no other build mode.
+build is a TDD stage. **What changes between modes is the granularity, not whether to write tests.**
+
+| ac_mode | granularity | enforced by |
+| --- | --- | --- |
+| \`inline\` (trivial) | optional; one quick check is enough | nothing |
+| \`soft\` (small/medium) | one TDD cycle per feature: write 1–3 tests that exercise the listed conditions, then implement | reviewer at \`/cc-review\` |
+| \`strict\` (large-risky / security-flagged) | full RED → GREEN → REFACTOR per AC ID | \`commit-helper.mjs\` |
 
 > **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
+
+The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests entirely is never the answer; loosening the per-AC ceremony is.
 
 ## The three phases
 
@@ -704,6 +980,20 @@ In all four cases: stop, return the summary JSON, do **not** push code that "wor
 
 export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
+    id: "triage-gate",
+    fileName: "triage-gate.md",
+    description: "Mandatory first step of every new /cc flow: classify complexity, propose acMode/path, ask user to confirm, persist the decision.",
+    triggers: ["start:/cc"],
+    body: TRIAGE_GATE
+  },
+  {
+    id: "flow-resume",
+    fileName: "flow-resume.md",
+    description: "When /cc is invoked with no task or with an active flow, render a resume summary and let the user continue / show / cancel / start fresh.",
+    triggers: ["start:/cc", "active-flow-detected"],
+    body: FLOW_RESUME
+  },
+  {
     id: "plan-authoring",
     fileName: "plan-authoring.md",
     description: "Auto-applies whenever the agent edits .cclaw/flows/<slug>/plan.md.",
@@ -713,8 +1003,8 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "ac-traceability",
     fileName: "ac-traceability.md",
-    description: "Enforces commit-helper invocation and AC↔commit chain.",
-    triggers: ["before:git-commit", "before:git-push"],
+    description: "Enforces commit-helper invocation and AC↔commit chain. Active only when ac_mode=strict; advisory in soft / inline modes.",
+    triggers: ["before:git-commit", "before:git-push", "ac_mode:strict"],
     body: AC_TRACEABILITY
   },
   {
@@ -748,7 +1038,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "tdd-cycle",
     fileName: "tdd-cycle.md",
-    description: "Mandatory always-on skill while stage=build. Enforces RED → GREEN → REFACTOR per AC, with watched-RED proof and full-suite GREEN evidence.",
+    description: "Always-on whenever stage=build. Granularity scales with ac_mode: inline = optional, soft = one cycle per feature, strict = full RED → GREEN → REFACTOR per AC.",
     triggers: ["stage:build", "specialist:slice-builder"],
     body: TDD_CYCLE
   },
