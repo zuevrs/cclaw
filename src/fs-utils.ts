@@ -1,191 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { getActiveManagedResourceSession } from "./managed-resources.js";
-
-export async function ensureDir(dirPath: string): Promise<void> {
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
-/**
- * Strip a leading UTF-8 BOM (U+FEFF) if present. Many editors (VS Code on
- * Windows, Notepad, some CI tools) silently prepend a BOM when saving
- * UTF-8; when the file is then split on `\n` the first line keeps the
- * invisible BOM and `JSON.parse` rejects it, which caused the first
- * knowledge.jsonl entry to be silently dropped on load. Treat BOM as a
- * no-op at read time so the rest of the pipeline sees clean UTF-8.
- */
-export function stripBom(text: string): string {
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export interface DirectoryLockOptions {
-  retries?: number;
-  retryDelayMs?: number;
-  staleAfterMs?: number;
-}
-
-/**
- * Acquire a lightweight lock by creating a directory.
- * The lock is removed in a finally block.
- */
-export async function withDirectoryLock<T>(
-  lockPath: string,
-  fn: () => Promise<T>,
-  options: DirectoryLockOptions = {}
-): Promise<T> {
-  const retries = options.retries ?? 200;
-  const retryDelayMs = options.retryDelayMs ?? 20;
-  const staleAfterMs = options.staleAfterMs ?? 60_000;
-  await ensureDir(path.dirname(lockPath));
-
-  let acquired = false;
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < retries; attempt += 1) {
-    try {
-      await fs.mkdir(lockPath);
-      acquired = true;
-      break;
-    } catch (error) {
-      lastError = error;
-      const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      if (code !== "EEXIST") {
-        throw error;
-      }
-
-      try {
-        const stat = await fs.stat(lockPath);
-        if (!stat.isDirectory()) {
-          // A non-directory lives at the lock path (e.g. a stray file).
-          // Retrying mkdir() will keep returning EEXIST forever, and no
-          // other cclaw process is holding the lock - the path is simply
-          // unusable. Fail loudly rather than burning the full retry
-          // budget, so the caller sees a deterministic error.
-          throw new Error(
-            `Lock path exists but is not a directory: ${lockPath}`
-          );
-        }
-        if (Date.now() - stat.mtimeMs > staleAfterMs) {
-          await fs.rm(lockPath, { recursive: true, force: true });
-          continue;
-        }
-      } catch (statError) {
-        if (
-          statError instanceof Error &&
-          statError.message.startsWith("Lock path exists but is not a directory")
-        ) {
-          throw statError;
-        }
-        // Lock directory disappeared between retries.
-      }
-      await sleep(retryDelayMs);
-    }
-  }
-
-  if (!acquired) {
-    const details = lastError instanceof Error ? lastError.message : String(lastError);
-    throw new Error(
-      `Failed to acquire lock: ${lockPath} (attempts=${retries}, retryDelayMs=${retryDelayMs}, staleAfterMs=${staleAfterMs}, lastError=${details})`
-    );
-  }
-
-  try {
-    return await fn();
-  } finally {
-    await fs.rm(lockPath, { recursive: true, force: true }).catch((cleanupError) => {
-      // Lock cleanup failure should not shadow the original operation result,
-      // but keep a diagnostic breadcrumb for flaky FS environments.
-      const details = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
-      // eslint-disable-next-line no-console
-      console.warn(`cclaw lock cleanup failed for ${lockPath}: ${details}`);
-    });
-  }
-}
-
-export interface WriteFileSafeOptions {
-  mode?: number;
-}
-
-export async function writeFileSafe(
-  filePath: string,
-  content: string,
-  options: WriteFileSafeOptions = {}
-): Promise<void> {
-  const managedSession = getActiveManagedResourceSession();
-  if (managedSession?.shouldManage(filePath)) {
-    await managedSession.writeFileSafe(filePath, content, options);
-    return;
-  }
-  await ensureDir(path.dirname(filePath));
-  const tempPath = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  );
-  const targetMode = options.mode;
-  await fs.writeFile(tempPath, content, { encoding: "utf8", ...(targetMode !== undefined ? { mode: targetMode } : {}) });
-  // On Windows, `fs.rename` can fail transiently with EPERM / EBUSY / EACCES
-  // when the target file is briefly held open by another process (antivirus,
-  // search indexer, or a concurrent cclaw hook). Retry with small backoff
-  // before falling back to a non-atomic copy + unlink.
-  const renameRetryableCodes = new Set(["EPERM", "EBUSY", "EACCES"]);
-  let attempt = 0;
-  const maxAttempts = 6;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    try {
-      await fs.rename(tempPath, filePath);
-      if (targetMode !== undefined) {
-        await fs.chmod(filePath, targetMode).catch(() => undefined);
-      }
-      return;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      // `rename` fails with EXDEV when the temp file and target live on
-      // different filesystems (container bind mounts, tmpfs + rootfs,
-      // cross-volume setups). Fall back to copy + unlink so atomic writes
-      // still work — copyFile is not fully atomic but is the best we can
-      // do across devices, and we remove the temp even if copy fails.
-      if (code === "EXDEV") {
-        try {
-          await fs.copyFile(tempPath, filePath);
-          if (targetMode !== undefined) {
-            await fs.chmod(filePath, targetMode).catch(() => undefined);
-          }
-        } finally {
-          await fs.unlink(tempPath).catch(() => undefined);
-        }
-        return;
-      }
-      if (code !== undefined && renameRetryableCodes.has(code) && attempt < maxAttempts) {
-        attempt += 1;
-        const waitMs = 10 * attempt + Math.floor(Math.random() * 10);
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-        continue;
-      }
-      if (code !== undefined && renameRetryableCodes.has(code)) {
-        // Last-resort fallback on Windows: copy-then-unlink. Not atomic,
-        // but the caller is expected to have serialized via a directory
-        // lock so this only loses atomicity under extreme contention.
-        try {
-          await fs.copyFile(tempPath, filePath);
-          if (targetMode !== undefined) {
-            await fs.chmod(filePath, targetMode).catch(() => undefined);
-          }
-          return;
-        } finally {
-          await fs.unlink(tempPath).catch(() => undefined);
-        }
-      }
-      // Other errors: try to clean up the temp to avoid littering the
-      // directory with orphaned `.tmp-<pid>-*` files, then rethrow.
-      await fs.unlink(tempPath).catch(() => undefined);
-      throw error;
-    }
-  }
-}
 
 export async function exists(filePath: string): Promise<boolean> {
   try {
@@ -196,12 +10,36 @@ export async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-export async function removeIfExists(targetPath: string): Promise<void> {
-  if (await exists(targetPath)) {
-    await fs.rm(targetPath, { recursive: true, force: true });
-  }
+export async function ensureDir(dirPath: string): Promise<void> {
+  await fs.mkdir(dirPath, { recursive: true });
 }
 
-export function resolveProjectPath(cwd: string, relativePath: string): string {
-  return path.resolve(cwd, relativePath);
+export async function writeFileSafe(filePath: string, content: string): Promise<void> {
+  await ensureDir(path.dirname(filePath));
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  await fs.writeFile(tempPath, content, "utf8");
+  await fs.rename(tempPath, filePath);
+}
+
+export async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
+  if (!(await exists(filePath))) return null;
+  return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
+}
+
+export async function removePath(filePath: string): Promise<void> {
+  await fs.rm(filePath, { recursive: true, force: true });
+}
+
+export async function listMarkdownFiles(dir: string): Promise<string[]> {
+  if (!(await exists(dir))) return [];
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => path.join(dir, entry.name));
+}
+
+export async function listSubdirs(dir: string): Promise<string[]> {
+  if (!(await exists(dir))) return [];
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(dir, entry.name));
 }

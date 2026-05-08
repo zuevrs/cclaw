@@ -1,415 +1,279 @@
-import type { FlowStage } from "../types.js";
-
-export interface ReferencePatternContract {
-  stage: FlowStage;
-  guidance: string[];
-  artifactSections: string[];
-}
-
 export interface ReferencePattern {
   id: string;
+  fileName: string;
   title: string;
-  intent: string;
-  useWhen: string;
-  policyNeedles: string[];
-  contracts: ReferencePatternContract[];
+  triggers: string[];
+  body: string;
 }
+
+const API_ENDPOINT = `# Pattern — new HTTP API endpoint
+
+## When to use
+
+The user asks for "an endpoint", "a route", "an API for X", or wants to expose data that today is only reachable through internal code.
+
+## Pre-flight checklist
+
+1. Read \`src/server/router.ts\` (or your project's equivalent) and the closest existing endpoint of the same shape.
+2. Identify the AuthZ policy: who is allowed to call this? If the answer is "anyone", flag it back to the user explicitly. Anonymous endpoints are a deliberate decision.
+3. Identify the request and response schema. If the project uses Zod / TypeBox / pydantic / etc., the AC is "schema parses + rejects bad payloads".
+
+## AC shape
+
+- AC-1: \`POST/GET <path>\` accepts <schema> and returns <schema>; verified by an integration test that hits the route.
+- AC-2: AuthZ rejects unauthorized callers; verified by an integration test with no/forged credentials.
+- AC-3 (optional): rate limit / quota where applicable; verified by a smoke test or by reading \`<rate limiter>\` config.
+
+## Specialists to invoke
+
+- \`architect\` — if the endpoint touches a new resource type or changes a response schema that other endpoints depend on.
+- \`security-reviewer\` — always, when AuthZ is non-trivial or when the endpoint exposes user data.
+- \`reviewer\` mode=\`code\` after build; \`integration\` after slice-builder if multiple files.
+
+## Common pitfalls
+
+- "Allow only authenticated users" without saying which roles → ask which roles.
+- Adding the endpoint without updating the OpenAPI / TS client. Fold the regen into the same AC if the project has a generator.
+- Forgetting structured logs / metrics. If logging is enforced project-wide, mention it as an AC.
+`;
+
+const AUTH_FLOW = `# Pattern — authentication flow change
+
+## When to use
+
+The user asks for "login", "OAuth", "passkeys", "MFA", "SSO", "session lifetime", or anything that touches \`req.user\` derivation.
+
+## Pre-flight checklist
+
+1. Read the existing auth entry points (route handlers, middleware, session store).
+2. Identify which trust boundary changes (browser ↔ edge, edge ↔ service, service ↔ identity provider).
+3. Identify whether the change is additive (new flow) or replacing (rewriting an existing flow). Replacement is always large/risky.
+4. Pull threat-model assumptions from prior shipped slugs (\`grep refines: …\` on auth-related plans).
+
+## AC shape
+
+- AC-1: happy path — user successfully authenticates and \`req.user\` carries the expected claims.
+- AC-2: rejection paths — invalid credentials / expired tokens / replay attempts each return the documented error and do not leak information.
+- AC-3: session lifetime — sessions expire on the documented schedule and refresh tokens behave correctly.
+- AC-4: telemetry — auth events emit the configured audit logs with the correct fields.
+
+## Specialists to invoke
+
+- \`architect\` — always, even if the change feels additive.
+- \`security-reviewer\` mode=\`threat-model\` — always.
+- \`security-reviewer\` mode=\`sensitive-change\` — at code-review time on the diff.
+- \`reviewer\` mode=\`adversarial\` — at least once, looking for the case the author is biased to miss.
+
+## Common pitfalls
+
+- Implementing OAuth without state / PKCE.
+- Letting the new flow coexist with an old one indefinitely. Either schedule the deprecation or document why both are required.
+- Logging tokens or refresh tokens. Even partial prefixes are a security finding.
+- Skipping the rejection-path AC because "it follows from the framework". Write it.
+`;
+
+const SCHEMA_MIGRATION = `# Pattern — database schema migration
+
+## When to use
+
+The user asks to add / drop / rename a column, change a type, add an index, partition a table, or otherwise alter persisted state.
+
+## Pre-flight checklist
+
+1. Read the migration directory (Prisma / Alembic / Knex / Atlas / SQL files) and look at the most recent migration of the same shape.
+2. Decide forward-only vs. reversible. Production usually wants reversible until the rollout is locked.
+3. Decide downtime: zero-downtime (write-both-read-old → backfill → write-new-read-new) vs. allowed downtime (single migration).
+4. Identify whether ORMs / generated clients need to be regenerated. Add this to the AC if so.
+
+## AC shape
+
+- AC-1: migration applies to a fresh DB; verified by integration test booting against the new schema.
+- AC-2: migration applies to a non-empty DB; verified by a backfill smoke test on a fixture.
+- AC-3: rollback path; verified by re-running the down migration on the fixture and asserting equivalence.
+- AC-4: ORM / client regenerated; verified by a typecheck on the consumers.
+
+## Specialists to invoke
+
+- \`architect\` — when the migration changes a relationship, partition strategy, or index that other features rely on.
+- \`security-reviewer\` — when the migration touches columns holding user data, secrets, or audit history.
+
+## Common pitfalls
+
+- "Just add the column nullable" without the backfill plan. Always state when the column becomes \`NOT NULL\`.
+- Adding an index that is going to take >5 minutes on prod without coordinating. Surface the ops impact in the plan.
+- Forgetting downstream replicas / read replicas / DR replicas. Write a one-line note in ship notes.
+`;
+
+const UI_COMPONENT = `# Pattern — new or modified UI component
+
+## When to use
+
+The user asks for "a button", "a modal", "a chart", "a settings screen", or any visual surface change.
+
+## Pre-flight checklist
+
+1. Find the design source: Figma link, screenshot, prior component. If there is none, ask the user before authoring.
+2. Inspect the existing design system (\`tokens.css\` or equivalent) for colours, spacing, typography. New tokens require a separate decision.
+3. Identify state machines: hover, focus, disabled, error, loading, empty.
+4. Identify accessibility requirements: keyboard navigation, screen-reader labels, focus order, prefers-reduced-motion.
+
+## AC shape
+
+- AC-1: component renders all documented states with snapshot tests for each.
+- AC-2: keyboard navigation works (focus order verified by test).
+- AC-3 (when applicable): screen-reader names; verified by axe / similar snapshot.
+- AC-4: integration into the parent surface(s) named in the plan.
+
+## Specialists to invoke
+
+- \`reviewer\` mode=\`code\` always.
+- \`reviewer\` mode=\`text-review\` if the component carries user-facing copy that wasn't previously approved.
+
+## Common pitfalls
+
+- Writing the component without states the design covers but the user didn't mention.
+- Adding a new design token because the existing one is "almost right". Use the existing one or open a separate slug for token work.
+- Skipping the empty / error / loading states because they "rarely happen". They are AC.
+`;
+
+const PERF_FIX = `# Pattern — performance fix
+
+## When to use
+
+The user reports "slow page", "high CPU", "high memory", "p99 latency", "timeouts", or asks to "make X faster".
+
+## Pre-flight checklist
+
+1. Reproduce or accept a measurement. Performance fixes without a measurement are speculation. If no measurement exists, the first AC is "measurement reproducible in CI".
+2. Identify the slow path: which function, query, render, etc. Cite \`file:path:line\`.
+3. Identify the budget: what number constitutes "fast enough"?
+
+## AC shape
+
+- AC-1: measurement reproducible (test, microbenchmark, or profiling artifact under \`docs/perf/\`).
+- AC-2: budget achieved on the same measurement; verified by re-running the benchmark.
+- AC-3: regression guard — a CI check or alert that fails when the budget is exceeded again.
+
+## Specialists to invoke
+
+- \`architect\` mode=\`feasibility\` — if the fix changes data structure, query plan, or cache topology.
+- \`reviewer\` mode=\`adversarial\` — actively look for the case where the fix is faster on the benchmark but slower in production.
+
+## Common pitfalls
+
+- Optimising the wrong path. Always profile or trace before changing code.
+- Caching without a clear invalidation story. The invalidation rule itself is an AC.
+- Removing a guarded \`O(n)\` path because "it's never used" without a deprecation window.
+`;
+
+const REFACTOR = `# Pattern — pure refactor (no behaviour change)
+
+## When to use
+
+The user asks to "clean up", "simplify", "unify", "split", "extract", "rename", with no observable behaviour change.
+
+## Pre-flight checklist
+
+1. Confirm the refactor is truly behaviour-preserving. If any user-visible change sneaks in, the request is a refactor + behaviour change and must be split.
+2. Identify a behavioural pin: a test that passes before and after, or a snapshot that should not change.
+
+## AC shape
+
+- AC-1: behaviour pinned — explicit set of tests / snapshots / fixtures that pass with the same expected output before and after.
+- AC-2: refactor applied — file:line references for every renamed / moved / extracted symbol.
+- AC-3 (optional): metrics — file count, average function length, cyclomatic complexity — improving as recorded in the build log.
+
+## Specialists to invoke
+
+- \`reviewer\` mode=\`code\` always.
+- \`reviewer\` mode=\`text-review\` if the refactor renames public exports referenced in docs.
+
+## Common pitfalls
+
+- Slipping a fix into the refactor commit. Split it into a separate AC.
+- Renaming public APIs without a deprecation alias. Surface this back as breaking.
+- Refactoring across many directories at once. Slice by directory or by symbol family; one slug per slice.
+`;
+
+const SECURITY_HARDENING = `# Pattern — security hardening
+
+## When to use
+
+The user asks to "harden", "fix CVE", "rotate keys", "tighten CSP", "patch SSRF", "fix prototype pollution", or follows an incident.
+
+## Pre-flight checklist
+
+1. Identify the threat the hardening prevents. Citing the CVE / advisory / incident note is mandatory.
+2. Identify whether the change is reactive (close an open finding) or proactive (defence in depth). Tag the plan accordingly.
+3. Confirm the rollout cannot itself break the system: a hardening that fails closed in production is worse than a slower fix.
+
+## AC shape
+
+- AC-1: the threat path is blocked; verified by a regression test that exercises the threat.
+- AC-2: the regression guard runs in CI on every push.
+- AC-3: documentation / runbook updated to reflect the new posture.
+
+## Specialists to invoke
+
+- \`security-reviewer\` mode=\`threat-model\` always.
+- \`security-reviewer\` mode=\`sensitive-change\` on the diff.
+- \`reviewer\` mode=\`adversarial\` — second pair of eyes on the regression test (does it actually exercise the threat?).
+
+## Common pitfalls
+
+- Closing the finding without the regression guard. Without the guard, the next refactor reopens it.
+- Adding a deny-list when an allow-list would do.
+- Using a string-matching guard for a structural problem (e.g. blocking SSRF by checking the URL string instead of resolving DNS first).
+`;
+
+const DOC_REWRITE = `# Pattern — documentation rewrite
+
+## When to use
+
+The user asks to "rewrite the README", "update docs", "fix the quickstart", "polish the changelog".
+
+## Pre-flight checklist
+
+1. Identify the intended audience for the doc. The audience determines what stays and what is cut.
+2. Identify the constraints: tone of voice, length, must-include sections, what to drop.
+3. Pull the canonical source for any claim the doc will make. The doc must not invent flags / endpoints / commands.
+
+## AC shape
+
+- AC-1: doc passes a manual smoke read-through (a small checklist verified by the author).
+- AC-2: every code snippet in the doc compiles / runs against the current code (verified by a snapshot test or runnable example).
+- AC-3 (when applicable): cross-doc links remain valid.
+
+## Specialists to invoke
+
+- \`reviewer\` mode=\`text-review\` always.
+- \`reviewer\` mode=\`release\` if the doc is the user-facing release notes.
+
+## Common pitfalls
+
+- Mixing a doc rewrite with a code change. They are separate slugs.
+- Promoting the doc rewrite into a "while we're here" refactor. Refuse, surface as a follow-up.
+- Forgetting the changelog. If the rewrite changes any quickstart command, add a release-notes line.
+`;
 
 export const REFERENCE_PATTERNS: ReferencePattern[] = [
-  {
-    id: "socraticode_context_readiness",
-    title: "Context Readiness",
-    intent: "Do not draft from memory. Start once the agent can name upstream artifacts, discovered code patterns, template shape, and open blockers.",
-    useWhen: "Every stage before writing or validating an artifact.",
-    policyNeedles: ["Context Readiness", "upstream freshness", "template shape"],
-    contracts: [
-      {
-        stage: "brainstorm",
-        guidance: [
-          "Capture discovered project context before asking approval questions.",
-          "Separate observed facts from assumptions and open blockers."
-        ],
-        artifactSections: ["Context", "Discovered context"]
-      },
-      {
-        stage: "scope",
-        guidance: [
-          "Name which brainstorm decisions are fresh enough to carry forward.",
-          "If upstream decisions are stale or missing, stop for re-scope instead of inventing boundaries."
-        ],
-        artifactSections: ["Upstream Handoff", "Scope Contract"]
-      },
-      {
-        stage: "design",
-        guidance: [
-          "Read blast-radius code before locking architecture.",
-          "Use reference patterns as examples to adapt, not authority to copy."
-        ],
-        artifactSections: ["Codebase Investigation", "Reference-Grade Contracts"]
-      },
-      {
-        stage: "tdd",
-        guidance: [
-          "Discover tests and affected contracts before opening a RED vertical slice.",
-          "Map the slice to the active source item before editing production code."
-        ],
-        artifactSections: ["Test Discovery", "System-Wide Impact Check", "Acceptance & Failure Map"]
-      },
-      {
-        stage: "review",
-        guidance: [
-          "Review only after current diff, test evidence, and source-item coverage are known.",
-          "A no-finding verdict still needs inspected-surface evidence."
-        ],
-        artifactSections: ["Review Evidence Scope", "Completeness Snapshot"]
-      },
-      {
-        stage: "ship",
-        guidance: [
-          "Ship only after fresh preflight, rollback trigger, and finalization mode are explicit.",
-          "Treat stale review or missing rollback evidence as a blocker, not a concern."
-        ],
-        artifactSections: ["Preflight Results", "Rollback Plan", "Finalization"]
-      }
-    ]
-  },
-  {
-    id: "addy_reference_grade_contracts",
-    title: "Reference-Grade Contracts",
-    intent: "Promote good examples into explicit contracts: source, invariant, adaptation, rejection boundary, and verification signal.",
-    useWhen: "Brainstorm, scope, and design need reusable patterns without copying unrelated behavior.",
-    policyNeedles: ["Reference Pattern Registry", "Reference-Grade Contracts", "accepted/rejected reference ideas"],
-    contracts: [
-      {
-        stage: "brainstorm",
-        guidance: [
-          "Record which reference patterns informed each option and which were rejected.",
-          "A challenger must name the reference idea that makes it meaningfully higher-upside."
-        ],
-        artifactSections: ["Reference Pattern Candidates", "Approaches"]
-      },
-      {
-        stage: "scope",
-        guidance: [
-          "Lock accepted, rejected, and deferred reference ideas as scope boundaries.",
-          "Do not let a reference expand scope unless the user explicitly opts in."
-        ],
-        artifactSections: ["Reference Pattern Registry", "Scope Contract"]
-      },
-      {
-        stage: "design",
-        guidance: [
-          "For every mirrored pattern, name source, invariant, adaptation, and verification evidence.",
-          "If a reference conflicts with local architecture, reject it and document the revival signal."
-        ],
-        artifactSections: ["Reference-Grade Contracts", "Patterns to Mirror", "Rejected Alternatives"]
-      }
-    ]
-  },
-
-  {
-    id: "evanflow_coder_overseer",
-    title: "Coder / Overseer Split",
-    intent: "Keep implementation and validation context isolated: coders edit bounded slices, overseers read only, and integration overseers validate shared touchpoints.",
-    useWhen: "TDD, review, and parallel worker orchestration need safe independent implementation with fresh verification.",
-    policyNeedles: ["coder/overseer", "integration overseer", "non-overlap checks"],
-    contracts: [
-      {
-        stage: "plan",
-        guidance: [
-          "Executable packets name file ownership, shared interfaces, expected failing test, passing command, and stop conditions.",
-          "Parallel writers are allowed only after non-overlap checks for files, shared interfaces, migrations/config, and baseline cleanliness."
-        ],
-        artifactSections: ["Task List", "Dependency Batches", "Execution Posture"]
-      },
-      {
-        stage: "tdd",
-        guidance: [
-          "Coder edits only the assigned slice after RED evidence; read-only overseer validates spec fit and assertion quality.",
-          "When 3+ independent packets run, use an integration overseer for named touchpoints and integration tests."
-        ],
-        artifactSections: ["Execution Posture", "Per-Slice Review", "Verification Ladder"]
-      },
-      {
-        stage: "review",
-        guidance: [
-          "Layered reviewers reconcile findings by source tag, confidence, owner, and verification requirement.",
-          "Do not accept implementer self-review as overseer evidence."
-        ],
-        artifactSections: ["Review Evidence Scope", "Review Findings Contract"]
-      }
-    ]
-  },
-  {
-    id: "superpowers_executable_packet",
-    title: "Executable Packet",
-    intent: "Plan tasks as self-contained packets with acceptance mapping, expected RED failure, GREEN command, allowed files, and stop conditions.",
-    useWhen: "Plan and TDD need work items a fresh agent can execute without hidden parent context.",
-    policyNeedles: ["executable packet", "expected failing test", "stop condition"],
-    contracts: [
-      {
-        stage: "plan",
-        guidance: [
-          "Each task is copy-paste ready for a worker and includes acceptance criteria, file boundaries, expected failing test, passing command, and stop conditions.",
-          "Tasks that depend on shared interfaces or migration/config files are serialized unless an integration contract exists."
-        ],
-        artifactSections: ["Task List", "Dependency Batches", "Execution Posture"]
-      },
-      {
-        stage: "tdd",
-        guidance: [
-          "Open one packet as one vertical slice; do not mix unrelated packet evidence.",
-          "Close packet only when RED, GREEN, REFACTOR, and verification evidence align."
-        ],
-        artifactSections: ["Acceptance & Failure Map", "RED Evidence", "GREEN Evidence", "REFACTOR Notes"]
-      }
-    ]
-  },
-  {
-    id: "gstack_question_tuning",
-    title: "Question Tuning",
-    intent: "Ask only decision-changing questions, auto-assume low-risk two-way doors, and stop on one-way-door decisions.",
-    useWhen: "Brainstorm/scope/spec interactions could drift into broad interrogation instead of useful approval gates.",
-    policyNeedles: ["one decision-changing question", "two-way door", "one-way door"],
-    contracts: [
-      {
-        stage: "brainstorm",
-        guidance: [
-          "Ask one decision-changing question at a time and record impact only when it changes direction or blocks progress.",
-          "Continue on low-risk defaults; stop on scope, architecture, security, data loss, public API, migration, auth/pricing, or approval uncertainty."
-        ],
-        artifactSections: ["Sharpening Questions", "Selected Direction"]
-      },
-      {
-        stage: "scope",
-        guidance: [
-          "Present labeled scope moves with one recommendation; wait for user opt-in before treating a mode as selected.",
-          "Record what signal would change the recommendation."
-        ],
-        artifactSections: ["Scope Mode", "Scope Contract"]
-      },
-      {
-        stage: "spec",
-        guidance: [
-          "Chunk acceptance criteria for approval and stop on assumptions with irreversible impact.",
-          "Rewrite vague criteria before asking the user to approve."
-        ],
-        artifactSections: ["Acceptance Criteria", "Assumptions Before Finalization", "Approval"]
-      }
-    ]
-  },
-  {
-    id: "evanflow_vertical_slice_tdd",
-    title: "Vertical-Slice TDD",
-    intent: "Execute behavior end-to-end in one reviewable slice instead of collecting unrelated test or implementation fragments.",
-    useWhen: "TDD and review need to prove a source item moved from RED to GREEN with traceable behavior evidence.",
-    policyNeedles: ["vertical slice", "RED vertical slice", "slice victory detector"],
-    contracts: [
-      {
-        stage: "tdd",
-        guidance: [
-          "One vertical slice is one source item plus one or more ACs, tests, implementation, refactor notes, and verification evidence.",
-          "Do not open a second vertical slice while RED evidence or regression repair remains open for the current slice."
-        ],
-        artifactSections: ["Execution Posture", "RED Evidence", "GREEN Evidence", "Verification Ladder"]
-      },
-      {
-        stage: "review",
-        guidance: [
-          "Review source-item coverage by vertical slice, not by file count alone.",
-          "A slice is review-ready only when RED, GREEN, REFACTOR, and verification evidence all line up."
-        ],
-        artifactSections: ["Completeness Snapshot", "Coverage Check"]
-      }
-    ]
-  },
-  {
-    id: "superclaude_confidence_gates",
-    title: "Confidence Gates",
-    intent: "Require source verification before execution and a fresh self-check before completion claims.",
-    useWhen: "Stage work could proceed from memory, duplicate an existing implementation, or close with stale evidence.",
-    policyNeedles: ["pre-execution confidence", "post-implementation self-check", "source verification"],
-    contracts: [
-      {
-        stage: "design",
-        guidance: [
-          "Before locking architecture, verify duplicate implementation risk, architecture fit, docs/source truth, and root-cause confidence.",
-          "If confidence is low, stop for investigation instead of adding fallback layers."
-        ],
-        artifactSections: ["Codebase Investigation", "Architecture Confidence"]
-      },
-      {
-        stage: "review",
-        guidance: [
-          "Review requirements met, assumptions verified, tests passing, and evidence freshness before any PASS verdict.",
-          "Separate verified facts from implementer claims."
-        ],
-        artifactSections: ["Review Readiness Snapshot", "Final Verdict"]
-      }
-    ]
-  },
-  {
-    id: "oh_my_worker_lifecycle",
-    title: "Worker Lifecycle Evidence",
-    intent: "Make asynchronous or delegated work inspectable through state, dispatch, evidence refs, and stale-worker handling.",
-    useWhen: "Stages schedule subagents, role-switch work, or generic dispatch and need auditable completion evidence.",
-    policyNeedles: ["dispatch lifecycle", "stale worker", "strict worker JSON schema"],
-    contracts: [
-      {
-        stage: "plan",
-        guidance: [
-          "Plan only bounded worker packets with clear file ownership, stop conditions, and evidence expectations.",
-          "Name any dispatch or concurrency governor before workers start."
-        ],
-        artifactSections: ["Task List", "Dependency Batches", "Execution Posture"]
-      },
-      {
-        stage: "tdd",
-        guidance: [
-          "Every scheduled worker needs a terminal return with evidence refs or an explicit blocker route.",
-          "A stale worker blocks completion until resolved, failed, or structurally waived."
-        ],
-        artifactSections: ["Execution Posture", "Verification Ladder", "Per-Slice Review"]
-      },
-      {
-        stage: "review",
-        guidance: [
-          "Synthesize reviewer returns by status, source tag, evidence refs, and unresolved blockers.",
-          "Do not treat missing worker output as a clean review."
-        ],
-        artifactSections: ["Review Evidence Scope", "Review Findings Contract"]
-      }
-    ]
-  },
-  {
-    id: "gsd_hard_stop_routing",
-    title: "Hard-Stop Routing",
-    intent: "Advance only when unresolved checkpoints, stale handoffs, and verification debt are cleared or routed explicitly.",
-    useWhen: "A stage wants to continue despite missing gates, stale rewind markers, or uncertain next command state.",
-    policyNeedles: ["hard-stop next routing", "goal-backward verification", "operator line"],
-    contracts: [
-      {
-        stage: "tdd",
-        guidance: [
-          "Start from the outcome that must be true, then verify source, tests, artifact wiring, and gate evidence from that goal backward.",
-          "If source/test preflight blocks execution, route to the managed blocker taxonomy instead of fabricating RED evidence."
-        ],
-        artifactSections: ["TDD Blocker Taxonomy", "Verification Ladder"]
-      },
-      {
-        stage: "ship",
-        guidance: [
-          "Block ship on unresolved checkpoints, stale handoffs, or verification debt.",
-          "Report the compact operator line: stage, scope, validation issues, recovery state, and next action."
-        ],
-        artifactSections: ["Preflight Results", "Completion Status", "Handoff"]
-      }
-    ]
-  },
-  {
-    id: "everyinc_delegation_preflight",
-    title: "Delegation Preflight",
-    intent: "Use delegation only when support, consent, baseline, non-overlap, batch size, and fallback mode are known.",
-    useWhen: "A controller is about to fan out implementation or review work across multiple specialists.",
-    policyNeedles: ["delegation preflight", "non-overlapping files", "layered review synthesis"],
-    contracts: [
-      {
-        stage: "plan",
-        guidance: [
-          "Before parallel writers, verify support, user consent when needed, baseline cleanliness, non-overlapping files, batch size, and fallback mode.",
-          "Shared interfaces, migrations, config, and generated surfaces need an integration contract or serial execution."
-        ],
-        artifactSections: ["Dependency Batches", "Execution Posture"]
-      },
-      {
-        stage: "review",
-        guidance: [
-          "Dedupe layered reviewer findings with confidence, owner, and verification requirement.",
-          "Keep user-facing synthesis separate from raw worker returns."
-        ],
-        artifactSections: ["Layered Review Synthesis", "Review Findings Contract"]
-      }
-    ]
-  },
-  {
-    id: "ecc_worktree_control_plane",
-    title: "Worktree Control Plane",
-    intent: "Treat isolated worker state, handoff files, and orchestration snapshots as recoverable control-plane data rather than chat memory.",
-    useWhen: "Parallel or resumable work needs clear seed paths, state files, handoffs, and cleanup visibility.",
-    policyNeedles: ["worktree control plane", "handoff files", "orchestration snapshot"],
-    contracts: [
-      {
-        stage: "plan",
-        guidance: [
-          "Name seed paths, worker handoff expectations, and integration touchpoints before isolated work begins.",
-          "Cap ad-hoc teams and require agreement/conflict synthesis for any multi-agent result."
-        ],
-        artifactSections: ["Task List", "Dependency Batches", "Execution Posture"]
-      },
-      {
-        stage: "ship",
-        guidance: [
-          "Confirm handoffs, cleanup, and orchestration state are captured before archive or closeout.",
-          "Do not rely on chat transcript alone for recoverability."
-        ],
-        artifactSections: ["Handoff", "Completion Status"]
-      }
-    ]
-  },
-  {
-    id: "walkinglabs_victory_detector",
-    title: "Iterate / Victory Detector",
-    intent: "Iterate while evidence is missing; stop only when the stage-specific victory detector is satisfied or a real blocker is named.",
-    useWhen: "Content-only closeout wording for review and ship readiness.",
-    policyNeedles: ["Victory Detector", "iterate until evidence", "fresh evidence"],
-    contracts: [
-      {
-        stage: "review",
-        guidance: [
-          "Victory Detector: Layer 1, Layer 2, security sweep, structured findings, and acceptance/reproduction coverage evidence are complete with no unresolved criticals unless verdict is BLOCKED.",
-          "If the detector fails, iterate findings or route back to TDD; do not say LGTM."
-        ],
-        artifactSections: ["Review Readiness Snapshot", "Final Verdict"]
-      },
-      {
-        stage: "ship",
-        guidance: [
-          "Victory Detector: valid review verdict, fresh preflight, rollback trigger/steps, selected finalization enum, and execution result are present.",
-          "If any detector field is stale or missing, keep status BLOCKED."
-        ],
-        artifactSections: ["Preflight Results", "Rollback Plan", "Finalization", "Completion Status"]
-      }
-    ]
-  }
+  { id: "api-endpoint", fileName: "api-endpoint.md", title: "API endpoint", triggers: ["new endpoint", "route", "API", "REST", "GraphQL"], body: API_ENDPOINT },
+  { id: "auth-flow", fileName: "auth-flow.md", title: "Authentication flow", triggers: ["login", "OAuth", "SSO", "MFA", "passkey", "auth"], body: AUTH_FLOW },
+  { id: "schema-migration", fileName: "schema-migration.md", title: "Schema migration", triggers: ["migration", "schema", "alter table", "column"], body: SCHEMA_MIGRATION },
+  { id: "ui-component", fileName: "ui-component.md", title: "UI component", triggers: ["component", "button", "modal", "screen", "design"], body: UI_COMPONENT },
+  { id: "perf-fix", fileName: "perf-fix.md", title: "Performance fix", triggers: ["slow", "perf", "latency", "p99", "memory"], body: PERF_FIX },
+  { id: "refactor", fileName: "refactor.md", title: "Pure refactor", triggers: ["refactor", "cleanup", "rename", "extract"], body: REFACTOR },
+  { id: "security-hardening", fileName: "security-hardening.md", title: "Security hardening", triggers: ["CVE", "security", "harden", "patch", "SSRF", "XSS"], body: SECURITY_HARDENING },
+  { id: "doc-rewrite", fileName: "doc-rewrite.md", title: "Documentation rewrite", triggers: ["docs", "README", "quickstart", "changelog"], body: DOC_REWRITE }
 ];
 
-export function referencePatternsForStage(stage: FlowStage): ReferencePattern[] {
-  return REFERENCE_PATTERNS.filter((pattern) =>
-    pattern.contracts.some((contract) => contract.stage === stage)
-  );
-}
+export const REFERENCE_PATTERNS_INDEX = `# .cclaw/lib/patterns/
 
-export function referencePatternContractsForStage(stage: FlowStage): ReferencePatternContract[] {
-  return REFERENCE_PATTERNS.flatMap((pattern) =>
-    pattern.contracts
-      .filter((contract) => contract.stage === stage)
-      .map((contract) => ({
-        ...contract,
-        guidance: [...contract.guidance],
-        artifactSections: [...contract.artifactSections]
-      }))
-  );
-}
+Eight reference patterns the orchestrator pulls from before authoring a plan. Each pattern declares its trigger keywords, the pre-flight checklist, the AC shape, the specialists to invoke, and the common pitfalls.
 
-export function referencePatternPolicyNeedles(stage: FlowStage): string[] {
-  const needles: string[] = [];
-  const seen = new Set<string>();
-  for (const pattern of referencePatternsForStage(stage)) {
-    for (const needle of pattern.policyNeedles) {
-      if (seen.has(needle)) continue;
-      seen.add(needle);
-      needles.push(needle);
-    }
-  }
-  return needles;
-}
+| pattern | triggers |
+| --- | --- |
+${REFERENCE_PATTERNS.map((p) => `| [\`${p.fileName}\`](./${p.fileName}) | ${p.triggers.join(", ")} |`).join("\n")}
+
+When a task hits more than one pattern (e.g. an endpoint that is also security-sensitive), the orchestrator opens both files and merges their AC shape sections.
+`;

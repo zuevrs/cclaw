@@ -1,891 +1,797 @@
-import { RUNTIME_ROOT, STAGE_TO_SKILL_FOLDER } from "../constants.js";
-import { nextStage as nextStageForTrack } from "../flow-state.js";
-import { FLOW_STAGES, type FlowStage, type FlowTrack } from "../types.js";
-import { behaviorAnchorFor, stageExamples } from "./examples.js";
-import { INVESTIGATION_DISCIPLINE_BLOCK } from "./templates.js";
-import { reviewStackAwareRoutes, reviewStackAwareRoutingSummary, stageAutoSubagentDispatch, stageSchema, stageTrackRenderContext } from "./stage-schema.js";
-import { renderTrackTerminology } from "./track-render-context.js";
-import type { StageSchema } from "./stage-schema.js";
-import { referencePatternsForStage } from "./reference-patterns.js";
-import { harnessDelegationRecipes } from "../harness-adapters.js";
-import type {
-  ArtifactValidation,
-  CrossStageTrace,
-  ReviewSection,
-  StageExecutionModel,
-  StagePhilosophy,
-  StageReviewLoop
-} from "./stages/schema-types.js";
+export interface AutoTriggerSkill {
+  id: string;
+  fileName: string;
+  description: string;
+  triggers: string[];
+  body: string;
+}
 
-const VERIFICATION_STAGES: FlowStage[] = ["tdd", "review", "ship"];
-const STAGE_LANGUAGE_POLICY_POINTER =
-  "> Language policy: see `using-cclaw` section `Conversation Language Policy`.";
+const PLAN_AUTHORING = `---
+name: plan-authoring
+trigger: when writing or updating .cclaw/flows/<slug>/plan.md
+---
 
-// ---------- Cross-cutting universal mechanics (Layer 2 building blocks) ----------
-//
-// These are shared, structural blocks that get injected into every stage skill.
-// They check structural shape, not domain content. Each has a matching linter
-// rule in `src/artifact-linter.ts` so artifacts can fail when shape is missing.
+# Skill: plan-authoring
 
-export const FORBIDDEN_SYCOPHANCY_PHRASES = [
-  "you're absolutely right",
-  "great point",
-  "absolutely!",
-  "thanks for catching",
-  "thanks for the great",
-  "good catch",
-  "love this",
-  "nailed it"
+Use this skill whenever you create or modify any \`.cclaw/flows/<slug>/plan.md\`.
+
+## Rules
+
+1. **Frontmatter is mandatory.** Every plan starts with the YAML block from \`.cclaw/lib/templates/plan.md\`. Required keys: \`slug\`, \`stage\`, \`status\`, \`ac\`, \`last_specialist\`, \`refines\`, \`shipped_at\`, \`ship_commit\`, \`review_iterations\`, \`security_flag\`.
+2. **AC ids are sequential** starting at \`AC-1\`. They must match the AC table inside the body.
+3. **Each AC is observable.** Verification line is mandatory. If you cannot write the verification, the AC is not real.
+4. **The traceability block at the end** is rebuilt by \`commit-helper.mjs\`. Do not edit it by hand once a commit was recorded.
+5. **Out-of-scope items** stay in the body. Do not let them leak into AC.
+
+## When refining a shipped slug
+
+- Quote at most one paragraph from \`.cclaw/flows/shipped/<old-slug>/plan.md\`.
+- Set \`refines: <old-slug>\` in the new plan's frontmatter.
+- Do not copy the shipped AC verbatim — write fresh AC for the refinement.
+
+## What to refuse
+
+- Plans without AC.
+- Plans whose AC count exceeds 12 (split first).
+- Plans that change scope between brainstormer and planner without going back to brainstormer.
+`;
+
+const AC_TRACEABILITY = `---
+name: ac-traceability
+trigger: when committing changes for an active cclaw run
+---
+
+# Skill: ac-traceability
+
+cclaw has one mandatory gate: every commit produced inside \`/cc\` references exactly one AC, and the AC ↔ commit chain is recorded in \`flow-state.json\`.
+
+## Rules
+
+1. Use \`node .cclaw/hooks/commit-helper.mjs --ac=AC-N --message="..."\` for every AC commit. Do not call \`git commit\` directly.
+2. Stage only AC-related changes before invoking the hook.
+3. The hook will refuse the commit if:
+   - \`AC-N\` is not declared in the active plan;
+   - \`flow-state.json\` schemaVersion is not \`2\`;
+   - nothing is staged.
+4. After the commit succeeds, the hook records the SHA in \`flow-state.json\` under the matching AC and re-renders the traceability block in \`plans/<slug>.md\`.
+5. \`runCompoundAndShip\` refuses to ship a slug with any pending AC. There is no override.
+
+## When you accidentally committed without the hook
+
+- \`flow-state.json\` is now out of sync with the working tree.
+- Run the hook manually for the affected AC: \`node .cclaw/hooks/commit-helper.mjs --ac=AC-N --message="resync"\` while staging an empty change is not allowed; instead, edit \`.cclaw/state/flow-state.json\` to add the SHA to the AC entry by hand and verify with the orchestrator before continuing.
+`;
+
+const REFINEMENT = `---
+name: refinement
+trigger: when /cc detects an existing plan (active or shipped) for the new task
+---
+
+# Skill: refinement
+
+\`/cc\` performs existing-plan detection at the start of every invocation. When it finds a fuzzy match, the user is asked to choose one of:
+
+- **amend** — keep the active plan, add new AC, leave already-committed AC intact;
+- **rewrite** — replace the active plan body and AC entirely (commits remain in git, but AC ids restart);
+- **refine shipped** — create a new plan with \`refines: <old-slug>\` linking to the shipped slug;
+- **new** — start an unrelated plan.
+
+## Rules for refinement
+
+1. \`refines: <old-slug>\` is set in the new plan's frontmatter and must match a real shipped slug.
+2. Do not move artifacts out of \`.cclaw/flows/shipped/\`. The shipped slug stays read-only.
+3. The new plan can quote up to one paragraph from the shipped plan but must restate the full Context for the refinement.
+4. AC ids restart at AC-1 in the new plan. Do not number "AC-13" because the shipped slug had 12 AC.
+5. \`knowledge.jsonl\` will record the new entry with \`refines: <old-slug>\` so the index forms a chain.
+
+## What the orchestrator surfaces
+
+- last_specialist of the active plan, so the user can see "stopped at architect" or "review iteration 3 in progress".
+- The AC table with their statuses (\`pending\` / \`committed\`).
+- Whether \`security_flag\` was set.
+- A direct link to \`.cclaw/flows/shipped/<slug>/manifest.md\` if the match is a shipped slug.
+`;
+
+const PARALLEL_BUILD = `---
+name: parallel-build
+trigger: when planner topology = parallel-build
+---
+
+# Skill: parallel-build
+
+\`parallel-build\` is the only parallelism allowed during build. It is opt-in. The orchestrator never picks it without planner naming it explicitly in \`plans/<slug>.md\` Topology section.
+
+## Pre-conditions (all must hold)
+
+1. **≥4 AC** in the plan.
+2. **≥2 distinct touchSurface clusters** — there is at least one pair of AC whose \`touchSurface\` arrays are completely disjoint.
+3. Every AC in a parallel wave carries \`parallelSafe: true\`.
+4. No AC depends on outputs of another AC in the same wave.
+
+For ≤4 AC the orchestrator picks \`inline\` even when AC look "parallelSafe". The git-worktree + sub-agent dispatch overhead is not worth saving 1-2 AC of wall-clock.
+
+## Slice = 1+ AC with shared touchSurface
+
+A **slice** is one or more AC whose \`touchSurface\` arrays intersect. AC with disjoint touchSurfaces go into different slices; AC with overlapping touchSurfaces stay in the **same** slice (run sequentially inside it). Each slice is owned by exactly one slice-builder sub-agent.
+
+## Hard cap: 5 parallel slices per wave
+
+If the slug produces more than 5 slices, **merge the thinner slices into fatter ones** (group AC by adjacent files / shared module) until you have ≤5. **Do not generate "wave 2", "wave 3", etc.** If after merging you still have >5 slices, the slug is too large — split it into multiple slugs.
+
+This 5-slice cap is the v7-era constraint we kept on purpose:
+
+- orchestration cost grows non-linearly past 5 sub-agents (context shuffling, integration review, conflict surface);
+- 5 fits comfortably under the harness sub-agent quota everywhere we tested (Claude Code, Cursor, OpenCode, Codex);
+- larger fan-outs reliably produce more integration findings than wall-clock saved.
+
+## Execution
+
+1. Orchestrator reads \`plans/<slug>.md\` Topology section, extracts the slice list (max 5).
+2. For each slice, dispatch one \`slice-builder\` sub-agent. Pass:
+   - the slice id,
+   - the AC ids it owns,
+   - the slice's \`touchSurface\` (the only paths the slice may modify),
+   - the worktree path (see below).
+3. Each slice-builder runs the full TDD cycle (RED → GREEN → REFACTOR) for every AC it owns, sequentially inside the slice, in its own working tree.
+4. After all slice-builders return, the orchestrator invokes \`reviewer\` in mode \`integration\` (separate sub-agent if the harness supports it; inline otherwise). Integration reviewer checks path conflicts, double-edits, the AC↔commit chain across all slices, and integration tests covering the slice boundary.
+5. If integration finds problems, the orchestrator dispatches \`slice-builder\` in \`fix-only\` mode against the cited file:line refs.
+
+## Git-worktree pattern (when harness supports sub-agent dispatch)
+
+Each parallel slice runs in its own \`git worktree\` rooted at \`.cclaw/worktrees/<slug>-<slice-id>/\`:
+
+\`\`\`bash
+$ git worktree add .cclaw/worktrees/<slug>-slice-1 -b cclaw/<slug>/slice-1
+$ git worktree add .cclaw/worktrees/<slug>-slice-2 -b cclaw/<slug>/slice-2
+$ git worktree add .cclaw/worktrees/<slug>-slice-3 -b cclaw/<slug>/slice-3
+\`\`\`
+
+Each slice-builder sub-agent runs with its worktree path as cwd. After all slices finish:
+
+1. Integration reviewer reads from each worktree's branch.
+2. The orchestrator merges \`cclaw/<slug>/slice-N\` into the main branch one slice at a time (or fast-forward if the wave was clean).
+3. \`git worktree remove .cclaw/worktrees/<slug>-slice-N\` per slice; the cclaw branches stay until ship.
+
+## Fallback: inline-sequential when sub-agent dispatch is unavailable
+
+If the harness does not support sub-agent dispatch (or worktree creation fails — non-git repo, permission denied, etc.), \`parallel-build\` **degrades silently to \`inline\`** and runs all slices sequentially in the main working tree. The orchestrator records the fallback in \`builds/<slug>.md\`:
+
+\`\`\`markdown
+> Topology was \`parallel-build\` but the harness does not support sub-agent dispatch (or worktree creation failed). Slices ran sequentially in the main working tree.
+\`\`\`
+
+This degradation is not an error and does not reduce review depth.
+
+## Hard rules
+
+- \`integration\` mode reviewer is mandatory after every parallel wave. No shortcut.
+- Slice-builders never read each other's worktrees mid-flight.
+- A slice-builder that detects a conflict with another slice stops and raises an integration finding instead of hand-merging.
+- More than 5 parallel slices is forbidden. Merge or split.
+`;
+
+const SECURITY_REVIEW = `---
+name: security-review
+trigger: when the diff touches authn / authz / secrets / supply chain / data exposure
+---
+
+# Skill: security-review
+
+The orchestrator dispatches \`security-reviewer\` automatically when the active task or diff touches sensitive surfaces. You can also invoke it explicitly with \`/cc <task> --security-review\`.
+
+## Rules
+
+1. \`security-reviewer\` is a separate specialist from \`reviewer\`. They can run in parallel against the same diff.
+2. \`security-reviewer\` decisions of severity \`security\` are block-level: ship is blocked until they are resolved by slice-builder mode=fix-only and the security review reruns clear.
+3. \`security_flag: true\` in plan frontmatter triggers the compound learning gate even if no other quality signal is present.
+
+## Threat-model checklist (mandatory)
+
+For every \`threat-model\` invocation, write \`ok\` / \`flag\` / \`n/a\` for each:
+
+1. Authentication
+2. Authorization
+3. Secrets (committed credentials, env, signing keys)
+4. Supply chain (new third-party deps, version pinning, provenance)
+5. Data exposure (logging, transmission, storage of user data)
+
+## Pure UI / docs diffs
+
+State explicitly that all five items are \`n/a\` and write a one-line justification per item. Do not skip the checklist.
+`;
+
+const REVIEW_LOOP = `---
+name: review-loop
+trigger: when reviewer or security-reviewer is invoked
+---
+
+# Skill: review-loop
+
+Review is a producer ↔ critic loop, not a single pass. Iteration N proposes findings; \`slice-builder\` (in \`fix-only\` mode) closes them; iteration N+1 re-checks. The loop ends only when one of three convergence signals fires (see "Convergence detector" below). This is the cclaw analogue of the Karpathy "Ralph loop": short cycles, an explicit ledger, and hard rules for when to stop.
+
+Every iteration runs the **Five Failure Modes** checklist:
+
+1. Hallucinated actions
+2. Scope creep
+3. Cascading errors
+4. Context loss
+5. Tool misuse
+
+For each mode the reviewer answers yes/no with a citation when "yes". A "yes" without a citation is itself a finding (you cited nothing, that is the finding).
+
+## Concern Ledger
+
+Every \`reviews/<slug>.md\` carries an append-only ledger. Each row is a single finding; rows are never edited or deleted, only appended.
+
+\`\`\`markdown
+## Concern Ledger
+
+| ID | Opened in | Mode | Severity | Status | Closed in | Citation |
+| --- | --- | --- | --- | --- | --- | --- |
+| F-1 | 1 | code | block | closed | 2 | \`src/api/list.ts:14\` |
+| F-2 | 2 | code | warn | open | – | \`tests/integration/list.test.ts:31\` |
+\`\`\`
+
+Rules:
+
+- **F-N** ids are stable and global per slug — never renumber. If a finding is superseded, append \`F-K supersedes F-J\` instead.
+- **Severity** is \`block\` | \`warn\`. \`block\` rows must close before ship; \`warn\` rows may ship with a recorded note in \`ships/<slug>.md\`.
+- **Status** is \`open\` | \`closed\`. A closed row records the iteration that closed it.
+- **Citation** is a real \`file:line\` (or test id, or commit SHA). No prose-only findings — if you cannot cite, you do not have a finding yet.
+
+When iteration N+1 runs, the reviewer reads the ledger first, re-validates each open row (still open? closed by a fix? superseded?), then appends new findings as F-(max+1). Closing a row requires a citation to the fix evidence (commit SHA, test name, or new file:line).
+
+## Convergence detector
+
+The loop ends when ANY of these fires:
+
+1. **All ledger rows closed.** Decision: \`clear\`. Ship may proceed.
+2. **Two consecutive iterations append zero new \`block\` findings AND every open row is \`warn\`.** Decision: \`clear\` with warn carry-over recorded in \`ships/<slug>.md\` and \`learnings/<slug>.md\`.
+3. **Hard cap reached** (5 iterations) with at least one open \`block\` row remaining. Decision: \`cap-reached\`. Stop; surface to user.
+
+Tie-breaker: if iteration 5 closes the last \`block\` row, return \`clear\` (signal #1) even though the cap was hit. The cap exists to bound runaway loops, not to punish a slug that converges on the last attempt.
+
+## Hard cap
+
+- 5 review iterations per slug. After the 5th, the reviewer writes \`status: cap-reached\` and stops.
+- The orchestrator surfaces every remaining open ledger row and recommends \`/cc-cancel\` (split into a fresh slug) or \`accept warns and ship\` (only valid if every remaining open row has severity=warn).
+
+## Decision values
+
+- \`block\` — at least one ledger row is severity=block + status=open. \`slice-builder\` (mode=fix-only) must run next; then re-review.
+- \`warn\` — open rows exist, all severity=warn, convergence detector signal #2 has fired. Ship may proceed; warns carry over.
+- \`clear\` — convergence detector signal #1 fired (all rows closed) OR signal #2 (warn-only convergence). Ready for ship.
+- \`cap-reached\` — signal #3 fired with at least one open block row remaining. Stop; surface to user.
+
+## Worked example — three-iteration convergence
+
+\`\`\`markdown
+## Iteration 1 — code — 2026-04-18T10:14Z
+
+Findings:
+- F-1 block — \`src/api/list.ts:14\` — missing pagination cursor.
+- F-2 warn — \`tests/integration/list.test.ts:31\` — no negative test for empty page.
+
+Decision: block. slice-builder (mode=fix-only) invoked next.
+
+## Iteration 2 — code — 2026-04-18T10:39Z
+
+Ledger reread:
+- F-1: closed — fix at \`src/api/list.ts:18\` (commit 7a91ab2). Citation matches.
+- F-2: open — no fix attempted (warn carry-over).
+
+New findings: none.
+
+Decision: warn. Convergence signal #2 needs another zero-block iteration.
+
+## Iteration 3 — code — 2026-04-18T11:02Z
+
+Ledger reread:
+- F-1: closed (sticky).
+- F-2: open (warn carry-over).
+
+New findings: none. Two consecutive zero-block iterations recorded.
+
+Decision: clear (signal #2). F-2 carries to ships/<slug>.md and learnings/<slug>.md.
+\`\`\`
+
+## Common pitfalls
+
+- Adding "implicit" findings without citations because "the reviewer can see it". The reviewer cannot. Cite \`file:line\` or do not record the finding.
+- Renumbering F-N ids when an old finding is superseded. Append a new row \`F-K supersedes F-J\`; never rewrite history.
+- Closing a row without a fix citation. Closing is itself a claim — record the SHA / test name / file:line that proves the fix.
+- Treating "no new findings" as instant clear. The convergence detector requires *two* consecutive zero-block iterations; one is not enough.
+- Skipping the convergence check and looping until cap. The detector exists so easy slugs ship fast; do not waste budget.
+- Mixing \`code\` and \`text-review\` modes within one iteration. Each iteration declares one mode in its header.
+`;
+
+const COMMIT_MESSAGE_QUALITY = `---
+name: commit-message-quality
+trigger: before every commit-helper.mjs invocation
+---
+
+# Skill: commit-message-quality
+
+\`commit-helper.mjs\` accepts any non-empty message, but the AC traceability chain only stays useful if the messages stay readable.
+
+## Rules
+
+1. **Imperative voice** — "Add StatusPill component", not "Added" or "Adding".
+2. **Subject ≤72 characters** — long subjects truncate in \`git log --oneline\` and CI signals.
+3. **Subject does not repeat the AC id** — the hook already appends \`refs: AC-N\`.
+4. **Body when needed** — second-line blank, then a short rationale paragraph and any non-obvious context. Use \`--message\` for the subject; if the message must be multi-line, write it to a file and pass \`--file\`.
+5. **Cite finding ids in fix commits** — \`fix: F-2 separate rejected token\`.
+
+## Anti-patterns
+
+- "WIP", "fixes", "stuff", "more". The reviewer rejects these as F-1 \`block\`.
+- Subject lines that paraphrase the diff. Diff is the diff; the message is the why.
+- Co-author trailers in solo commits.
+
+## When to amend
+
+Never amend a commit produced by \`commit-helper.mjs\` after the SHA is recorded in \`flow-state.json\`. Amend changes the SHA and breaks the AC chain. If the message is wrong, write a short note in \`builds/<slug>.md\` and move on; it is recoverable in review.
+`;
+
+const AC_QUALITY = `---
+name: ac-quality
+trigger: when authoring or reviewing AC entries
+---
+
+# Skill: ac-quality
+
+Three checks per AC:
+
+1. **Observable** — a user, test, or operator can tell whether it is satisfied without reading the diff.
+2. **Independently committable** — a single commit covering only this AC is meaningful.
+3. **Verifiable** — there is an explicit verification line (test name, manual step, or command).
+
+## Smell check
+
+| smell | example | rewrite |
+| --- | --- | --- |
+| sub-task | "implement the helper" | "search returns BM25-ranked results for queries with multiple terms" |
+| vague verification | "tests pass" | "verified by tests/unit/search.test.ts: 'returns BM25-ranked hits'" |
+| internal detail | "refactor the cache" | "cache hit rate >90% on the dashboard repaint scenario" |
+| compound AC | "build the page and add analytics" | split into two AC |
+
+## Numbering
+
+- AC ids start at \`AC-1\` and are sequential.
+- Refinement slugs restart at \`AC-1\` even when they refine a slug that had AC-1..AC-12.
+- Do not reuse an AC id within the same slug; if you delete an AC, the remaining ids stay sequential after compaction.
+
+## When to add an AC mid-flight
+
+You don't. Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it should be a follow-up (\`/cc-idea\`) or a fresh slug.
+`;
+
+const REFACTOR_SAFETY = `---
+name: refactor-safety
+trigger: when the slug is identified as a pure refactor
+---
+
+# Skill: refactor-safety
+
+Refactors must be **behaviour-preserving**. The harness enforces this with three structural rules.
+
+## Pin behaviour first
+
+Before any rewrite, identify the pin:
+
+- existing tests that should pass with the same expected output;
+- a snapshot or fixture set that should not change;
+- a manual repro the user accepts as the contract.
+
+If no pin exists, "add a pin" is AC-1 of the refactor.
+
+## One refactor at a time
+
+A refactor slug must contain refactor changes only. A bug fix that would have been "while we're here" is a separate slug. The pin from the refactor slug is then valid input for the fix slug.
+
+## Public API discipline
+
+If the refactor renames or restructures public exports:
+
+- add a deprecation alias so external consumers still compile;
+- mark the old name with a \`@deprecated\` JSDoc / equivalent;
+- record the deprecation deadline in \`ships/<slug>.md\`.
+
+If the project policy forbids deprecation aliases (some libraries), the refactor is breaking; \`security_flag\` does not apply but breaking-change handling does (see breaking-changes skill).
+
+## Verification
+
+Refactor AC verification is "no behavioural diff": tests pass, snapshots unchanged, fixtures unchanged. If anything changes, the refactor leaked behaviour and must be split.
+`;
+
+const TDD_CYCLE = `---
+name: tdd-cycle
+trigger: always-on whenever stage=build (mandatory; build IS the TDD stage)
+---
+
+# Skill: tdd-cycle (RED → GREEN → REFACTOR)
+
+build is a TDD stage. Every AC goes through the cycle. There is no other build mode.
+
+> **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
+
+## The three phases
+
+### RED — write a failing test
+
+- Touch test files **only**. No production edits in the RED commit.
+- The test must encode the AC verification line authored by planner.
+- The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax / import / fixture error.
+- Capture the runner output that proves the failure (command + 1-3 line excerpt). This is the **watched-RED proof**.
+- **Test files are named by the unit under test, NOT by the AC id.** Mirror the production module path: \`src/lib/permissions.ts\` → \`tests/unit/permissions.test.ts\` (or whatever the project's convention is — \`*.spec.ts\`, \`__tests__/*.ts\`, \`*_test.go\`, \`test_*.py\`). \`AC-1.test.ts\`, \`tests/AC-2.test.ts\`, \`spec/ac3.spec.ts\` are anti-patterns. The AC id lives **inside** the test name (\`it('AC-1: tooltip shows email …', …)\`), in the commit message (\`red(AC-1): …\`), and in the build log — never in the filename.
+- Commit: \`commit-helper.mjs --ac=AC-N --phase=red --message="red(AC-N): …"\`.
+
+### GREEN — minimal production change
+
+- Smallest possible production diff that turns RED into PASS.
+- Run the **full relevant suite**, not the single test. A passing single test with the suite broken elsewhere is a regression, not GREEN.
+- Capture the suite command + PASS/FAIL summary. This is the **GREEN evidence**.
+- Touch only files declared in the plan. If a file outside the plan is required, **stop** and surface the conflict.
+- Commit: \`commit-helper.mjs --ac=AC-N --phase=green --message="green(AC-N): …"\`.
+
+### REFACTOR — mandatory pass
+
+REFACTOR is **not optional**. Even when the GREEN diff feels minimal, you must consider rename / extract / inline / type-narrow / dedup / dead-code-removal. Run the same suite again; it must pass with **identical** expected output.
+
+If a refactor is warranted, apply it and commit:
+
+\`commit-helper.mjs --ac=AC-N --phase=refactor --message="refactor(AC-N): …"\`.
+
+If no refactor is warranted, say so **explicitly**:
+
+\`commit-helper.mjs --ac=AC-N --phase=refactor --skipped --message="refactor(AC-N) skipped: <reason>"\`.
+
+Silence fails the gate.
+
+## Mandatory gates per AC
+
+\`commit-helper\` enforces (a) ↔ (e) mechanically. The reviewer checks (b), (d), (f), (g) on iteration 1.
+
+(a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited.\n(b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named.\n(c) **red_test_recorded** — failing test exists, watched-RED proof attached.\n(d) **red_fails_for_right_reason** — RED captured a real assertion failure.\n(e) **green_full_suite** — full relevant suite green after GREEN.\n(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran, or explicitly skipped with reason.\n(g) **traceable_to_plan** — commits reference plan AC ids and the plan's file set.\n(h) **commit_chain_intact** — RED + GREEN + REFACTOR SHAs (or skipped sentinel) recorded in flow-state.
+
+## Anti-patterns
+
+- "The implementation is obvious, skipping RED." A-13 — gate fails immediately.
+- "Single test green, didn't run the suite." A-14 — that's not GREEN; it's a regression.
+- "Nothing to refactor, skipping silently." A-15 — emit the explicit \`--skipped\` commit with reason.
+- "Stage everything with \`git add -A\`." A-16 — staged unrelated edits leak into the AC commit.
+- "Production code in the RED commit." A-17 — RED is test files only.
+- **"Test file named after the AC id" — \`AC-1.test.ts\`, \`tests/AC-2.spec.ts\`, etc.** The reviewer flags this as \`block\`. Mirror the unit under test in the filename; carry the AC id inside the test name and commit message only.
+
+## Fix-only flow
+
+When reviewer returns \`block\`, the same TDD cycle applies to the fix:
+
+- F-N changes observable behaviour → new RED test that encodes the corrected behaviour, then GREEN, then REFACTOR.
+- F-N is purely a refactor → commit under \`--phase=refactor\`.
+- F-N is a docs / log / config nit → commit under \`--phase=refactor\` or \`--phase=refactor --skipped\`.
+
+The AC id stays the same; commit messages cite \`F-N\`.
+
+## When TDD does not apply
+
+The single exception is **bootstrap of the test framework itself** — a slug whose AC-1 is "test framework installed and one passing example test exists". In that case the orchestrator must mark the slug as \`build_profile: bootstrap\` in plan frontmatter, and \`commit-helper\` accepts the GREEN commit without a prior RED for AC-1 only. Every subsequent AC and every other slug uses the full cycle.
+`;
+
+const BREAKING_CHANGES = `---
+name: breaking-changes
+trigger: when the diff modifies public API surface or persisted contracts
+---
+
+# Skill: breaking-changes
+
+A change is breaking when:
+
+- a public export is renamed, removed, or changes signature;
+- a CLI flag is renamed or removed;
+- a wire format (HTTP, RPC, queue payload) changes shape or required fields;
+- a persisted contract (DB schema, file format, env var) changes in a way that requires migration.
+
+## Rules
+
+1. **Plan must declare it.** Set \`breaking_change: true\` (or note it explicitly in the plan body).
+2. **Migration must exist.** \`ships/<slug>.md\` carries a migration section: who is affected, what they need to do, when the old path stops working.
+3. **Deprecation window.** Public libraries — at least one minor version. Internal services — at least one deploy cycle and one alert.
+4. **Release notes.** The CHANGELOG line must start with \`BREAKING:\` and link to the migration section.
+
+## Coexistence
+
+When possible, ship the new path alongside the old. Examples:
+
+- new endpoint path next to the old one;
+- new column added before the old one is dropped;
+- new env var name accepted along with the old (with a deprecation log line);
+- new function exported with the new name; old name aliased to it.
+
+Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to architect; the decision must be recorded in \`decisions/<slug>.md\`.
+
+## Common pitfalls
+
+- "Internal API, not breaking." If the change crosses a service boundary, treat it as breaking.
+- Renaming a CLI flag without an alias. Aliases for CLI flags are nearly always free; add them.
+- Skipping the CHANGELOG line because "everyone knows". They do not.
+- Forgetting the alert window for internal services. The deploy cycle is not enough; users need a heads-up.
+`;
+
+const CONVERSATION_LANGUAGE = `---
+name: conversation-language
+trigger: always-on
+---
+
+# Skill: conversation-language
+
+cclaw is a harness tool. The harness has one user; the user has one language. Your conversational output must be in that language. Detect it from the user's most recent message and stay in it for the remainder of the turn.
+
+## What MUST stay in the user's language
+
+Everything that the user reads as prose:
+
+- Status updates ("starting plan", "RED for AC-2 looks good").
+- Questions you ask the user.
+- Clarifications, recommendations, summaries, recaps.
+- Error explanations and recovery suggestions.
+- Diff explanations during review iterations.
+
+If the user wrote to you in Russian, your status updates are in Russian. If the user wrote in Ukrainian, your status updates are in Ukrainian. If the user mixed languages, follow their dominant language; if there is no dominant language, mirror the language of their final paragraph.
+
+Do NOT translate during the same conversation. The user has already chosen their language; restating the same point in English is noise.
+
+## What MUST NOT be translated
+
+Mechanical tokens stay in their original form regardless of conversation language:
+
+- File paths (\`.cclaw/flows/<slug>/plan.md\`).
+- AC ids (\`AC-1\`, \`AC-2\`).
+- Decision ids (\`D-1\`, \`D-2\`).
+- Slugs (\`add-approval-page\`, never "добавить-страницу-одобрения").
+- Commands and CLI flags (\`/cc\`, \`--phase=red\`, \`commit-helper.mjs\`).
+- Hook output and machine-readable JSON.
+- Specialist names (\`brainstormer\`, \`architect\`, \`planner\`, \`reviewer\`, \`security-reviewer\`, \`slice-builder\`).
+- Mode names (\`code\`, \`text-review\`, \`integration\`, \`release\`, \`adversarial\`, \`fix-only\`).
+- Frontmatter keys (\`slug\`, \`stage\`, \`status\`, \`ac\`, \`phases\`).
+- Stage names (\`plan\`, \`build\`, \`review\`, \`ship\`).
+- TDD phase names (\`red\`, \`green\`, \`refactor\`).
+
+These tokens are the wire protocol of cclaw. Translating them breaks tool calls, AC matching, frontmatter parsing, and the commit-helper hook. They are identifiers, not vocabulary.
+
+## What MAY be in either language
+
+Artifact bodies (the prose inside \`plans/<slug>.md\`, \`builds/<slug>.md\`, \`reviews/<slug>.md\`, \`ships/<slug>.md\`, \`decisions/<slug>.md\`, \`learnings/<slug>.md\`).
+
+Default rule: write the artifact body in the same language as the user's conversation, because the artifact is for them and for the next agent who reads their notes. The frontmatter stays English (it is the wire protocol).
+
+If the user explicitly asks for English-only artifacts ("write the plan in English so the rest of the team can read it"), honour the request. Otherwise stay in their language.
+
+Commit messages: the AC line stays English (\`AC-N: …\`); the rest of the message body may follow the artifact-body language.
+
+## Worked example — Russian conversation
+
+User: "сделай мне CLI клиент для нашего REST API"
+
+You (status): "Стартую план \`api-cli\`. Подтягиваю pattern \`api-endpoint.md\`. Пять AC: list, get, create, update, delete. Подтверждаешь?"
+
+You (artifact \`flows/api-cli/plan.md\`):
+
+\`\`\`markdown
+---
+slug: api-cli
+stage: plan
+status: active
+ac:
+  - id: AC-1
+    text: list команда вызывает GET /resources и печатает таблицу.
+    status: pending
+---
+
+# api-cli
+
+…
+\`\`\`
+
+Note: slug stays \`api-cli\` (English, kebab-case); AC ids stay \`AC-1\` (English); frontmatter keys stay English; the AC body is in Russian.
+
+You (commit message): \`AC-1: добавлен list-команд via fetch\`. The \`AC-1:\` prefix is English (commit-helper requires it); the message body is Russian.
+
+## Common pitfalls
+
+- Translating slugs ("добавить-cli" instead of "add-cli"). Slugs are filenames; keep them ASCII kebab-case.
+- Translating frontmatter keys (\`статус: активен\`). Frontmatter is parsed by code; keys must be English.
+- Restating the same status update twice ("Старт. — Starting."). Pick one. Match the user.
+- Switching to English when the answer is "complicated". The user's complexity tolerance is not your language tolerance.
+- Translating commit-helper output (\`[ошибка]\`). Hook output is read by the harness; leave it in English. Your own commentary on top of the hook output may be in the user's language.
+
+## How to detect language
+
+1. Read the user's last message. If it has at least one full sentence in language X, X is the language.
+2. If the user mixed languages within one message, count tokens; pick the language with the most non-stopword tokens.
+3. If still tied, default to the language of their previous-but-one message.
+4. If there is no usable history (first turn, terse prompt), default to English. Do not guess from one ambiguous word.
+`;
+
+const ANTI_SLOP = `---
+name: anti-slop
+trigger: always-on for any code-modifying step (slice-builder, fix-only, recovery)
+---
+
+# Skill: anti-slop
+
+cclaw takes its lean ethos seriously: **no busywork, no fake fixes, no fake progress.** This skill applies whenever you are writing code, modifying tests, debugging a build/lint/test failure, or running verification commands.
+
+## Two iron rules
+
+### 1. No redundant verification
+
+Do not re-run the same build, test, or lint command twice in a row without a code or input change in between. The result will not change. If a check failed, change something — or stop and report the failure as a finding.
+
+**What counts as a "change":**
+
+- modified production source
+- modified test file
+- modified config / fixture / lockfile
+- different argument set passed to the same tool (\`npm test\` → \`npm test -- --reporter=verbose --testNamePattern="AC-1"\` is OK; the same \`npm test\` twice is not)
+
+**Red flags (do NOT do these):**
+
+- "let me try the test again" without any edit
+- "let me re-build" without any edit
+- "let me re-lint" without any edit
+- "let me check if the issue is still there" without any edit
+
+If a tool succeeded once, do not run it a second time to "make sure". If it failed once, the second identical run will fail too.
+
+### 2. No environment shims, no fake fixes
+
+When a build / test / lint fails, **fix the root cause** or **surface the failure as a finding**. The following are anti-patterns; reviewer flags them as \`block\`:
+
+- wrapping a real failure in \`try / catch\` and ignoring the error
+- skipping a test (\`.skip\`, \`xit\`, \`@pytest.mark.skip\`, \`#[ignore]\`) "until later" without a follow-up issue or AC
+- adding \`process.env.NODE_ENV === "test"\` (or equivalent) branches just to make tests pass
+- adding \`// @ts-ignore\`, \`// eslint-disable\`, \`# noqa\`, \`# type: ignore\` to silence the failure rather than fix it
+- short-circuiting a function with a hardcoded fixture value when "in test"
+- mocking a function inline inside production code "just to get past this"
+- writing a fallback that hides a real error path (\`return data ?? STUB_DATA\` where STUB_DATA exists only to dodge an upstream failure)
+- copy-pasting a stack-trace into a try/catch as the "fix"
+
+If the real fix is out of scope for the current AC, **stop**. Surface the failure and let the orchestrator hand the slug back to planner. Do not "make it work" with a shim and commit. Reviewer will catch the shim, the slug will fail review, and you will redo the work properly. Save the round-trip.
+
+## When you are tempted to add a fallback
+
+Ask yourself: *"what real failure is this fallback hiding?"* If the answer is "I don't know" or "the test was flaky", the fallback is slop. Find the real failure first.
+
+## Worked example — slop vs root-cause
+
+❌ slop:
+
+\`\`\`ts
+function getUser(id: string) {
+  try {
+    return db.users.find(id);
+  } catch (e) {
+    if (process.env.NODE_ENV === "test") return { id, name: "test-user" }; // makes the test pass
+    throw e;
+  }
+}
+\`\`\`
+
+✅ root-cause:
+
+\`\`\`ts
+// (test fixture seeds a user before calling getUser; production code untouched)
+beforeEach(async () => { await db.users.insert({ id: "u-1", name: "Anna" }); });
+\`\`\`
+
+## What to surface as a finding (and stop)
+
+- **Root cause is in someone else's slug.** Surface as \`block\`: "AC-N depends on \`<file>\` which is owned by \`<other slug>\`. Cannot complete without the other slug shipping first."
+- **Test framework is broken.** Surface as \`block\`: "test runner exits with \`<exact-error>\` independent of the test under change."
+- **Plan is wrong.** Surface as \`info\`: "AC-N as written cannot be implemented without touching \`<file>\`, but the plan rules out that file."
+- **Dependency upgrade required.** Surface as \`info\`: "AC-N requires \`<lib>@>=X\`, current is \`<Y>\`. Recommend separate dep-bump slug."
+
+In all four cases: stop, return the summary JSON, do **not** push code that "works around it".
+
+## What this skill does NOT prevent
+
+- Re-running a build / test after you actually changed code. That is normal TDD GREEN-cycle behaviour.
+- Adding a real test fixture or mock library at the test boundary (\`vi.mock("./db")\` in the *test file*, not in production). The boundary matters.
+- Documented \`// eslint-disable\` lines with a one-line justification AND a follow-up issue id. The justification is what makes it not slop.
+- Running \`tsc --noEmit\` after \`npm test\` — that is a different tool, not a re-run of the same one.
+`;
+
+export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
+  {
+    id: "plan-authoring",
+    fileName: "plan-authoring.md",
+    description: "Auto-applies whenever the agent edits .cclaw/flows/<slug>/plan.md.",
+    triggers: ["edit:.cclaw/flows/*/plan.md", "create:.cclaw/flows/*/plan.md"],
+    body: PLAN_AUTHORING
+  },
+  {
+    id: "ac-traceability",
+    fileName: "ac-traceability.md",
+    description: "Enforces commit-helper invocation and AC↔commit chain.",
+    triggers: ["before:git-commit", "before:git-push"],
+    body: AC_TRACEABILITY
+  },
+  {
+    id: "refinement",
+    fileName: "refinement.md",
+    description: "Activates when /cc detects an existing plan match.",
+    triggers: ["existing-plan-detected"],
+    body: REFINEMENT
+  },
+  {
+    id: "parallel-build",
+    fileName: "parallel-build.md",
+    description: "Rules and execution playbook for the parallel-build topology.",
+    triggers: ["topology:parallel-build"],
+    body: PARALLEL_BUILD
+  },
+  {
+    id: "security-review",
+    fileName: "security-review.md",
+    description: "Activates when the diff touches sensitive surfaces.",
+    triggers: ["security-flag:true", "diff:auth|secrets|supply-chain|pii"],
+    body: SECURITY_REVIEW
+  },
+  {
+    id: "review-loop",
+    fileName: "review-loop.md",
+    description: "Wraps every reviewer / security-reviewer invocation.",
+    triggers: ["specialist:reviewer", "specialist:security-reviewer"],
+    body: REVIEW_LOOP
+  },
+  {
+    id: "tdd-cycle",
+    fileName: "tdd-cycle.md",
+    description: "Mandatory always-on skill while stage=build. Enforces RED → GREEN → REFACTOR per AC, with watched-RED proof and full-suite GREEN evidence.",
+    triggers: ["stage:build", "specialist:slice-builder"],
+    body: TDD_CYCLE
+  },
+  {
+    id: "commit-message-quality",
+    fileName: "commit-message-quality.md",
+    description: "Enforces commit-message conventions for commit-helper.mjs.",
+    triggers: ["before:commit-helper"],
+    body: COMMIT_MESSAGE_QUALITY
+  },
+  {
+    id: "ac-quality",
+    fileName: "ac-quality.md",
+    description: "Three-check rubric for every AC entry; smell tests + numbering rules.",
+    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:planner", "specialist:reviewer:text-review"],
+    body: AC_QUALITY
+  },
+  {
+    id: "refactor-safety",
+    fileName: "refactor-safety.md",
+    description: "Behaviour-preservation rules for pure-refactor slugs.",
+    triggers: ["task:refactor", "pattern:refactor"],
+    body: REFACTOR_SAFETY
+  },
+  {
+    id: "breaking-changes",
+    fileName: "breaking-changes.md",
+    description: "Detect and document breaking changes; coexistence rules and CHANGELOG template.",
+    triggers: ["diff:public-api", "frontmatter:breaking_change=true"],
+    body: BREAKING_CHANGES
+  },
+  {
+    id: "conversation-language",
+    fileName: "conversation-language.md",
+    description: "Always-on policy: reply in the user's language; never translate paths, AC ids, slugs, hook output, or frontmatter keys.",
+    triggers: ["always-on"],
+    body: CONVERSATION_LANGUAGE
+  },
+  {
+    id: "anti-slop",
+    fileName: "anti-slop.md",
+    description: "Always-on guard against redundant verification, env-specific shims, and silent skip-and-pass fixes.",
+    triggers: ["always-on", "task:build", "task:fix-only", "task:recovery"],
+    body: ANTI_SLOP
+  }
 ];
-
-export const FORBIDDEN_PLACEHOLDER_TOKENS = [
-  "TBD",
-  "TODO",
-  "FIXME",
-  "implement later",
-  "similar to Task",
-  "add appropriate error handling",
-  "add proper logging",
-  "fill this in",
-  "<placeholder>"
-];
-
-export const CONFIDENCE_FINDING_REGEX_SOURCE =
-  "\\[P[123]\\]\\s*\\(confidence:\\s*\\d{1,2}/10\\)\\s+[^\\s]+(?::\\d+)?\\s+—";
-
-export function stopPerIssueBlock(): string {
-  return `## STOP-per-issue Protocol
-
-After each critical section (premise / alternatives / mode pick / each review finding), STOP and record one decision marker before continuing:
-
-- \`Q<n>:\` — issue or open question
-- \`decision:\` — \`accept\` / \`reject\` / \`defer\` / \`skip — no issues\`
-- \`rationale:\` — one line, evidence-backed
-
-Do not batch decisions. Do not silently move on. The artifact MUST contain at least one \`decision:\` marker per critical section.
-`;
-}
-
-export function confidenceCalibrationBlock(): string {
-  return `## Confidence Calibration
-
-Findings, recommendations, and review notes use the calibrated finding format:
-
-\`[P1|P2|P3] (confidence: <n>/10) <repo-relative-path>[:<line>] — <one-line description>\`
-
-- \`P1\` blocks merge; \`P2\` should be addressed; \`P3\` is nice-to-have.
-- Confidence \`< 7\` — suppress unless severity is \`P1\`.
-- "What evidence would change this?" — every finding must answer it inline or in the next bullet.
-- Never assert "this is fine" without confidence; never assert confidence above \`8\` without a cited artifact, line, or test.
-`;
-}
-
-export function outsideVoiceSlotBlock(): string {
-  return `## Outside Voice Slot (optional)
-
-Reserve a section titled \`## Outside Voice\` (or \`## Outside Voice — <model/critic>\`) for a second-model or fresh-context critic perspective when used. Required shape when present:
-
-- \`source:\` — model id, critic agent name, or human reviewer handle
-- \`prompt:\` — exact frame sent (or reference to \`docs/quality-gates.md\` recipe)
-- \`tension:\` — at least one disagreement with the main draft, or \`none — converged\`
-- \`resolution:\` — accepted / rejected / merged / deferred + one-line rationale
-
-Empty when not used; do not fabricate an outside voice.
-`;
-}
-
-export function antiSycophancyBlock(): string {
-  const phrases = FORBIDDEN_SYCOPHANCY_PHRASES.map((p) => `\`${p}\``).join(", ");
-  return `## Anti-sycophancy
-
-Forbidden response openers when receiving review, critic output, or user feedback: ${phrases}.
-
-Replace agreement theater with one of:
-
-- \`Verified — <evidence>\` (you actually checked)
-- \`Disagree — <reason>\` (you push back with substance)
-- \`Investigating — <next step>\` (you do not yet know)
-
-Never agree before reading the cited evidence. Never apologize for asking a clarifying question.
-`;
-}
-
-export function noPlaceholdersBlock(): string {
-  const tokens = FORBIDDEN_PLACEHOLDER_TOKENS.map((p) => `\`${p}\``).join(", ");
-  return `## NO PLACEHOLDERS Rule
-
-Plans, specs, designs, and review artifacts MUST NOT contain placeholder tokens: ${tokens}. Use repo-relative paths and concrete commands; if a value is genuinely unknown, write the open question explicitly with a \`Q<n>:\` marker and a \`decision: defer — <reason>\` row instead of inserting a placeholder token.
-`;
-}
-
-export function watchedFailProofBlock(): string {
-  return `## Watched-fail Proof
-
-Any "the failure is real" claim (failing test, broken build, regression catch, deployment fail) MUST include a watched-fail proof line in the artifact:
-
-\`proof: <iso-ts> | <observed snippet — first 200 chars> | source: <command or log path>\`
-
-For TDD, watched-RED proof is mandatory before \`stage-complete\` accepts the slice. Dispatch \`slice-builder\` end-to-end: it owns RED/GREEN evidence rows, refactor coverage per the hook flags, \`<artifacts-dir>/tdd-slices/S-<id>.md\`, and (when wired) \`slice-completed\`. The linter mirrors phase history into auto-render markers in \`06-tdd.md\` — never hand-fill those fragments.
-`;
-}
-
-/**
- * Stages that perform real investigation work. The shared
- * `INVESTIGATION_DISCIPLINE_BLOCK` is rendered once per stage skill in this
- * set so the search → graph → narrow-read → draft ladder appears verbatim
- * across the elicitation/spec/plan/tdd/review pipeline. `ship` is excluded:
- * it consumes the upstream trace rather than producing one.
- */
-export const INVESTIGATION_DISCIPLINE_STAGES: ReadonlySet<FlowStage> = new Set<FlowStage>([
-  "brainstorm",
-  "scope",
-  "design",
-  "spec",
-  "plan",
-  "tdd",
-  "review"
-]);
-
-export function investigationDisciplineBlock(): string {
-  return INVESTIGATION_DISCIPLINE_BLOCK;
-}
-
-export function behaviorAnchorBlock(stage: FlowStage): string {
-  const anchor = behaviorAnchorFor(stage);
-  if (!anchor) return "";
-  const ruleHint = anchor.ruleHint && anchor.ruleHint.trim().length > 0
-    ? `\n\nRule hint: ${anchor.ruleHint.trim()}`
-    : "";
-  return `## Behavior anchor
-
-Anchored to artifact section: \`${anchor.section}\`.
-
-- Bad: ${anchor.bad}
-- Good: ${anchor.good}${ruleHint}
-`;
-}
-
-function crossCuttingMechanicsBlock(stage: FlowStage): string {
-  // All stages share the universal mechanics, but each stage's matching
-  // linter rules decide what is mandatory vs. structural-only.
-  const blocks: string[] = [
-    stopPerIssueBlock(),
-    confidenceCalibrationBlock(),
-    outsideVoiceSlotBlock(),
-    antiSycophancyBlock(),
-    noPlaceholdersBlock()
-  ];
-  if (stage === "tdd" || stage === "review" || stage === "ship") {
-    blocks.push(watchedFailProofBlock());
-  }
-  if (INVESTIGATION_DISCIPLINE_STAGES.has(stage)) {
-    blocks.push(investigationDisciplineBlock());
-  }
-  const anchor = behaviorAnchorBlock(stage);
-  if (anchor.length > 0) {
-    blocks.push(anchor);
-  }
-  return blocks.join("\n");
-}
-
-function whenNotToUseBlock(items: string[]): string {
-  if (items.length === 0) {
-    return "";
-  }
-  return `## When Not to Use
-${items.map((item) => `- ${item}`).join("\n")}
-
-`;
-}
-
-/**
- * TDD-only prelude after `<EXTREMELY-IMPORTANT>`: wave routing + canonical
- * `slice-builder` dispatch. Uses literal commands so pattern-matching on read
- * matches operator scripts.
- *
- * Empty for non-TDD stages.
- */
-export function tddTopOfSkillBlock(stage: FlowStage): string {
-  if (stage !== "tdd") return "";
-  return `## TDD orchestration primer
-
-**MANDATE — controller preserves TDD evidence.** In TDD the controller routes, dispatches when needed, and reconciles. Default topology is \`auto\` + \`balanced\`: feature-atomic units contain internal 2-5 minute RED/GREEN/REFACTOR steps. Inline execution is allowed only when \`wave-status\`/the plan selects \`inline\`; it still must satisfy RED-before-GREEN, AC traceability, path containment, verification, managed commit/worktree, lockfile twin, and orphan-change gates. \`single-builder\` and \`parallel-builders\` use \`slice-builder\`; \`strict-micro\` preserves one tiny task per schedulable slice for high-risk work.
-
-**Step 1 — Wave status (always first):**
-\`node .cclaw/cli.mjs internal wave-status --json\`
-
-The output names: \`waves[]\` (closed/open), \`nextDispatch.waveId\`, \`nextDispatch.mode\` (\`wave-fanout\`, \`single-slice\`, or \`blocked\`), \`nextDispatch.topology\` (\`inline\`, \`single-builder\`, \`parallel-builders\`, or \`strict-micro\`), \`nextDispatch.readyToDispatch\` (slice ids), and \`nextDispatch.pathConflicts\` (overlapping \`claimedPaths\` between members).
-
-**Step 2 — Decide automatically (no user question when paths disjoint):**
-
-| \`topology\`              | \`pathConflicts\` | Action                                                                                                                                     |
-|---------------------------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| \`parallel-builders\`     | \`[]\`            | **Fan out independent substantial units in one tool batch.** Emit one \`Task\` per routed ready builder in a single controller message. Do NOT ask. |
-| \`single-builder\`        | any/none          | Dispatch one \`slice-builder\` for the next feature-atomic unit; serialize remaining ready units.                                          |
-| \`inline\`                | \`[]\`            | Execute inline only for low-risk inline-safe units; record equivalent RED/GREEN/REFACTOR evidence before completion.                       |
-| \`strict-micro\`          | any/none          | Preserve micro-slice sequencing: one tiny task/slice at a time unless the strict plan explicitly proves safe fan-out.                      |
-| \`blocked\`/mode blocked  | non-empty         | Issue exactly one AskQuestion (resolve overlap, split/serialize, or adjust claimedPaths), then re-run \`wave-status\`.                     |
-
-**Step 3 — Dispatch protocol per delegated slice:** for \`single-builder\`, \`parallel-builders\`, and delegated \`strict-micro\`, in the SAME controller message that issues the \`Task\` call:
-
-1. Append \`delegation-record --status=scheduled\` for the \`slice-builder\` span (one row per slice; reuse the same \`spanId\` across the entire RED → GREEN → REFACTOR → DOC lifecycle).
-2. Append \`delegation-record --status=launched\` immediately after.
-3. Issue the harness Task call: \`Task(subagent_type=<harness slice-builder mapping>, description="slice-builder <slice-id>", prompt="<full slice context, claimedPaths, plan-row, AC ids, paths to source/tests, slice-card path>")\`.
-4. The slice-builder span ACKs locally (\`delegation-record --status=acknowledged\`) and runs the **complete** RED → GREEN → REFACTOR → DOC cycle inside the span — including writing \`tdd-slices/S-<id>.md\` and emitting \`--phase=red\`, \`--phase=green\`, \`--phase=refactor\` (or \`--phase=refactor-deferred\` with rationale), and \`--phase=doc\` rows on its own.
-5. The controller waits for ALL parallel spans to terminate before reconciling. Do not page back into the controller chat between spans.
-
-For \`inline\`, skip the Task call but do not skip evidence: write the same per-slice card/evidence refs, run RED before GREEN, verify before completion, and keep all path/commit/worktree gates satisfied.
-
-**Step 4 — Wave closeout:** after all in-flight slices report \`completed\`:
-
-1. Re-run \`wave-status --json\`. Confirm the wave is \`closed\` and the next dispatch is the following wave (or \`closeout\`).
-2. If \`integrationCheckRequired\` is true, dispatch \`integration-overseer\` (proactive) and append the \`cclaw_integration_overseer_skipped\` audit kind only when the contract waives it.
-3. If \`wave-status\` reports another \`wave-fanout\` next dispatch with disjoint paths, **immediately repeat Step 2 — do not pause for \"continue\"**.
-4. When all waves are closed and no more slices remain ready, run \`stage-complete tdd\`.
-
-**Step 5 — Auto-advance after stage-complete:** when \`stage-complete\` returns \`ok\` with a new \`currentStage\`, immediately load the next stage skill and continue. The user does NOT need to retype \`/cc\`. Announce \"Stage tdd complete → entering <next>. Continuing.\" and proceed.
-
-Wave resume: reuse \`wave-status\` outputs and parallelize unfinished members instead of restarting finished slices.
-
----
-`;
-}
-
-/**
- * Review-only prelude: mandates parallel reviewer / security-reviewer dispatch
- * via harness Task and forbids inline authoring of findings.
- *
- * Empty for non-review stages.
- */
-export function reviewTopOfSkillBlock(stage: FlowStage): string {
-  if (stage !== "review") return "";
-  return `## Review orchestration primer
-
-**MANDATE — controller never authors findings inline.** In review the controller orchestrates; \`reviewer\` (functional/spec/correctness/architecture/perf/observability) and \`security-reviewer\` (security sweep + dependency/version audit) are the **mandatory delegated workers** that produce findings, lens coverage, and the verdict input. Typing \`## Layer 1 Findings\`, \`## Layer 2 Findings\`, \`## Lens Coverage\`, or \`## Final Verdict\` content directly into \`07-review.md\` in the controller chat is a protocol violation. The controller writes ONLY the reconciled multi-specialist verdict block AFTER all reviewer Tasks return.
-
-**Step 1 — Diff scope (always first):**
-\`git diff --stat <base>...HEAD\` and \`git diff --name-only <base>...HEAD\`.
-If the diff is empty, exit early with APPROVED (no changes to review).
-
-**Step 2 — Dispatch the review army in PARALLEL (single controller message):**
-
-| Lens                     | Worker                | Mandatory? |
-|--------------------------|-----------------------|------------|
-| Spec compliance / Layer 1 | \`reviewer\`         | yes        |
-| Layer 2 cross-slice / correctness / observability | \`reviewer\` | yes |
-| Security sweep + dep/version audit | \`security-reviewer\` | yes (or \`NO_SECURITY_IMPACT\` attestation) |
-| Adversarial second opinion | \`reviewer\` (adversarial framing) | only if trust boundaries moved OR diff is large+high-risk |
-
-Emit ONE \`Task\` per lens in a single controller message. For each lens:
-
-1. Append \`delegation-record --status=scheduled\` for the lens span (one row per lens; reuse the same \`spanId\` for the lens lifecycle).
-2. Append \`delegation-record --status=launched\` immediately after.
-3. Issue the harness Task call: \`Task(subagent_type=<harness reviewer/security-reviewer mapping>, description="<lens> review", prompt="<diff range, files, AC ids, upstream artifacts (spec, design, tdd Per-Slice Reviews), expected output schema for 07-review-army.json>")\`.
-4. The reviewer span ACKs locally and writes its findings/lens coverage to \`07-review-army.json\` (and the structured findings table in \`07-review.md\`) on its own — including \`NO_SECURITY_IMPACT\` rationale if a security pass yields zero findings.
-5. The controller waits for ALL lens spans to return before reconciling.
-
-**Step 3 — Reconcile and verdict:** after all lens spans complete:
-
-1. Run \`validateReviewArmy\` (helper or linter) on \`07-review-army.json\`.
-2. Dedup by fingerprint, mark multi-specialist confirmations.
-3. Confirm acceptance criteria coverage and Pre-Critic / Lens Coverage / Anti-sycophancy fields are present (linter requires them).
-4. Compute the final verdict: APPROVED, APPROVED_WITH_CONCERNS, or BLOCKED.
-5. If BLOCKED, emit \`ROUTE_BACK_TO_TDD\` with the blocking finding ids and the managed \`npx cclaw-cli internal rewind tdd\` command. Do NOT silently stop.
-
-**Step 4 — Auto-advance after stage-complete:** when \`stage-complete review\` returns \`ok\` with a new \`currentStage\` (typically \`ship\`), immediately load the next stage skill and continue. Announce \"Stage review complete → entering <next>. Continuing.\" and proceed without waiting for the user to retype \`/cc\`.
-
----
-`;
-}
-
-
-function artifactTemplatePathForStage(stage: FlowStage): string {
-  const stageIndex = FLOW_STAGES.indexOf(stage) + 1;
-  const stageNumber = String(stageIndex).padStart(2, "0");
-  return `${RUNTIME_ROOT}/templates/${stageNumber}-${stage}.md`;
-}
-
-function contextLoadingBlock(
-  stage: FlowStage,
-  trace: CrossStageTrace,
-  executionModel: StageExecutionModel
-): string {
-  const readLines = trace.readsFrom.length > 0
-    ? trace.readsFrom.map((value) => `- \`${value}\``).join("\n")
-    : "- (first stage — no upstream artifacts)";
-  const inputs = executionModel.inputs.length > 0
-    ? executionModel.inputs.map((item) => `- ${item}`).join("\n")
-    : "- (first stage — no required inputs)";
-  const requiredContext = executionModel.requiredContext.length > 0
-    ? executionModel.requiredContext.map((item) => `- ${item}`).join("\n")
-    : "- None beyond this skill";
-  const artifactTemplatePath = artifactTemplatePathForStage(stage);
-
-  return `## Context Loading
-
-Before execution:
-1. Read \`.cclaw/state/flow-state.json\`.
-   - If the file is missing, do **not** invent an active run — this is normal for fresh init. Route to \`/cc <idea>\` first.
-2. Load active artifacts from \`.cclaw/artifacts/\`.
-3. Load upstream artifacts required by this stage:
-${readLines}
-4. Read the state contract from \`.cclaw/templates/state-contracts/<stage>.json\` for required fields, taxonomies, and derived markdown path.
-5. Read the canonical artifact template at \`${artifactTemplatePath}\` to preserve heading/per-row tables contracts (stable section names and column order) plus calibrated review block scaffolding. Preserve existing substantive bullets/rows already in the artifact; never overwrite the artifact wholesale from the template — patch only sections you author this turn.
-6. Extract upstream decisions, constraints, and open questions into the current artifact's \`Upstream Handoff\` section when present.
-7. Confirm context readiness: upstream artifact freshness, required context, canonical template shape, relevant in-repo/reference patterns, and unresolved blockers are known. If any item is missing, load it or stop before drafting.
-8. Before doing stage work, give a compact user-facing drift preamble: "Carrying forward: <1-3 bullets>. Drift since upstream: None / <specific drift>. Recommendation: continue / re-scope."
-9. If you change an upstream decision, record an explicit drift reason in the current artifact before continuing.
-10. Confirm stage inputs:
-${inputs}
-11. Confirm required context:
-${requiredContext}
-12. Use the injected knowledge digest; only fall back to full \`.cclaw/knowledge.jsonl\` when insufficient.
-`;
-}
-
-function autoSubagentDispatchBlock(stage: FlowStage, track: FlowTrack): string {
-  const rules = stageAutoSubagentDispatch(stage);
-  if (rules.length === 0) return "";
-
-  const schema = stageSchema(stage, track);
-  const rows = rules
-    .map((rule) => {
-      const userGate = rule.requiresUserGate ? "required" : "not required";
-      const dispatchClass = rule.dispatchClass ?? "stage-specialist";
-      const returnSchema = rule.returnSchema ?? "agent-default";
-      const runPhase = rule.runPhase ?? "any";
-      return `| ${rule.agent} | ${rule.mode} | ${runPhase} | ${dispatchClass} | ${returnSchema} | ${userGate} | ${rule.when} | ${rule.purpose} |`;
-    })
-    .join("\n");
-  const mandatory = schema.mandatoryDelegations;
-  const mandatoryList = mandatory.length > 0 ? mandatory.map((a) => `\`${a}\``).join(", ") : "none";
-  const delegationLogRel = `${RUNTIME_ROOT}/state/delegation-log.json`;
-  const delegationEventsRel = `${RUNTIME_ROOT}/state/delegation-events.jsonl`;
-  const hasPostElicitation = rules.some((rule) => rule.runPhase === "post-elicitation");
-  const runPhaseLegend = hasPostElicitation
-    ? `\nRun Phase legend: \`post-elicitation\` = run only AFTER the adaptive elicitation Q&A loop converges (forcing questions answered/skipped/waived OR user stop-signal recorded). \`pre-elicitation\` = run before any user dialogue (rare). \`any\` = no ordering constraint.`
-    : "";
-  return `## Automatic Subagent Dispatch
-| Agent | Mode | Run Phase | Class | Return Schema | User Gate | Trigger | Purpose |
-|---|---|---|---|---|---|---|---|
-${rows}
-Mandatory: ${mandatoryList}. Record lifecycle rows in \`${delegationLogRel}\` and append-only \`${delegationEventsRel}\` before completion.${runPhaseLegend}
-### Harness Dispatch Contract — use true harness dispatch: Claude Task, Cursor generic dispatch, OpenCode \`.opencode/agents/<agent>.md\` via Task/@agent, Codex \`.codex/agents/<agent>.toml\`. Do not collapse OpenCode or Codex to role-switch by default. Worker ACK Contract: ACK must include \`spanId\`, \`dispatchId\`, \`dispatchSurface\`, \`agentDefinitionPath\`, and \`ackTs\`; never claim \`fulfillmentMode: "isolated"\` without matching lifecycle proof. Canonical helper (same flags as \`delegation-record.mjs --help\`): \`node .cclaw/hooks/delegation-record.mjs --stage=<stage> --agent=<agent> --mode=<mandatory|proactive> --status=<scheduled|launched|acknowledged|completed|...> --span-id=<id> --dispatch-id=<id> --dispatch-surface=<surface> --agent-definition-path=<path> [--ack-ts=<iso>] [--evidence-ref=<ref>] --json\`. Lifecycle order: \`scheduled → launched → acknowledged → completed\` on one span (reuse the same span id); completed isolated/generic rows require a prior ACK event for that span or \`--ack-ts=<iso>\`. For a partial audit trail, \`--repair --span-id=<id> --repair-reason="<why>"\` appends missing phases (see \`--help\`) instead of inventing shortcuts.
-
-If you must re-dispatch the same agent in the same stage before the previous span has a terminal row, pass \`--supersede=<prevSpanId>\` (closes the previous span as \`stale\` with \`supersededBy=<newSpanId>\`) or \`--allow-parallel\` (records both spans as concurrently active and tags the new row with \`allowParallel: true\`). Without one of those flags, a duplicate scheduled write on the same \`(stage, agent)\` pair fails with \`exit 2\` and \`{ ok: false, error: "dispatch_duplicate" }\`. Lifecycle timestamps are also validated: \`startTs ≤ launchedTs ≤ ackTs ≤ completedTs\` and per-span \`ts\` is non-decreasing — non-monotonic values fail with \`exit 2\` and \`{ ok: false, error: "delegation_timestamp_non_monotonic" }\`.
-
-${perHarnessLifecycleRecipeBlock()}`;
-}
-
-function perHarnessLifecycleRecipeBlock(): string {
-  const recipes = harnessDelegationRecipes();
-  const rows = recipes
-    .map((recipe) => `| \`${recipe.harnessId}\` | \`${recipe.dispatchSurface}\` | \`${recipe.agentDefinitionExample}\` | \`${recipe.fulfillmentMode}\` |`)
-    .join("\n");
-  return `### Per-Harness Lifecycle Recipe — placeholders only
-Reuse the same \`<span-id>\` and \`<dispatch-id>\` across scheduled -> launched -> acknowledged -> completed; substitute neutral tokens \`<agent-name>\`, \`<stage>\`, \`<iso-ts>\`, \`<artifact-anchor>\`. Full command sequences live in \`docs/harnesses.md\`.
-| Harness | Dispatch surface | Agent definition path | fulfillmentMode |
-|---|---|---|---|
-${rows}
-`;
-}
-
-function researchPlaybooksBlock(playbooks: string[]): string {
-  if (playbooks.length === 0) return "";
-  const rows = playbooks
-    .map((playbook) => `\`${RUNTIME_ROOT}/skills/${playbook}\``)
-    .join("; ");
-  return `## Research Playbooks
-Execute in primary agent context before locking the stage; record outcomes in the artifact when relevant: ${rows}.
-`;
-}
-function referencePatternsBlock(stage: FlowStage): string {
-  const patterns = referencePatternsForStage(stage);
-  if (patterns.length === 0) return "";
-  const summaries = patterns
-    .map((pattern) => {
-      const contract = pattern.contracts.find((item) => item.stage === stage);
-      const sections = contract ? contract.artifactSections.join(", ") : "n/a";
-      return `${pattern.title} (sections: ${sections})`;
-    })
-    .join("; ");
-  return `## Reference Patterns
-Prompt-only; no runtime/delegation changes. These compact pattern titles come from the internal registry; use the behavior and artifact sections, not the source project history. Use: ${summaries}.
-`;
-}
-
-
-function reviewSectionsBlock(sectionsInput: ReviewSection[]): string {
-  if (sectionsInput.length === 0) return "";
-  const sections = sectionsInput
-    .map((sec) => {
-      const points = sec.evaluationPoints.map((p) => `- ${p}`).join("\n");
-      const title = sec.stopGate ? `${sec.title} (STOP gate)` : sec.title;
-      return `### ${title}\n${points}`;
-    })
-    .join("\n\n");
-
-  return `## Review Sections
-
-${sections}
-`;
-}
-
-function stackAwareReviewRoutingBlock(stage: FlowStage): string {
-  if (stage !== "review") return "";
-  const routes = reviewStackAwareRoutes()
-    .map((route) => `- ${route.stack}: ${route.signals.map((signal) => `\`${signal}\``).join(", ")} -> ${route.agent} lens for ${route.focus}.`)
-    .join("\n");
-  return `## Stack-Aware Review Routing
-${reviewStackAwareRoutingSummary()}
-
-Default general review still runs. Add only the matching stack lens when repo signals or changed files justify it.
-
-${routes}
-`;
-}
-
-function reviewLoopBlock(reviewLoop?: StageReviewLoop): string {
-  if (!reviewLoop) return "";
-  const checklist = reviewLoop.checklist.map((item) => `- \`${item}\``).join("\n");
-  return `## Outside Voice Review Loop
-- Stage: \`${reviewLoop.stage}\`
-- Target score: \`${reviewLoop.targetScore}\`
-- Max iterations: \`${reviewLoop.maxIterations}\`
-- Checklist dimensions:
-${checklist}
-`;
-}
-
-function verificationBlock(stage: FlowStage): string {
-  if (!VERIFICATION_STAGES.includes(stage)) return "";
-  return `## Verification Before Completion
-
-This is the gate function for completion claims. No "done", "all good", or
-"tests pass" unless fresh evidence from this turn proves it.
-
-- Run verification commands (tests/build/lint/type-check) for the changed scope.
-- Before \`tdd -> review\` and \`review -> ship\`, discover the real test command
-  from repo config (package scripts, pytest/go/cargo/maven/gradle signals) and
-  cite that exact command in the gate evidence.
-- Confirm output directly; do not infer success from prior runs or green memories.
-- If this is a bug fix, capture RED -> GREEN evidence for the regression path.
-- If a command fails, report the failure as diagnostic evidence and stop before completion.
-- If you only inspected files or reasoned about the change, say so; that is not verification.
-
-Keep this verification evidence in the artifact before completion.
-`;
-}
-
-function batchExecutionModeBlock(stage: FlowStage, track: FlowTrack): string {
-  const schema = stageSchema(stage, track);
-  if (!schema.batchExecutionAllowed) return "";
-  const orderingGuidance = track === "quick"
-    ? "Use spec acceptance items / bug reproduction slices for ordering."
-    : "Use plan slices for ordering.";
-
-  return `## Batch Execution Mode
-
-Execute the current dependency batch task-by-task (RED -> GREEN -> REFACTOR).
-Stop on BLOCKED status or when user input is required.
-Apply concise turn announces: one announce per batch boundary (or when risk/source
-changes materially), then execute tasks without repetitive boilerplate.
-
-Detailed walkthrough:
-${orderingGuidance} Keep RED -> GREEN -> REFACTOR evidence in the TDD artifact.
-`;
-}
-
-function crossStageTraceBlock(trace: CrossStageTrace): string {
-  const reads = trace.readsFrom.length > 0
-    ? trace.readsFrom.map((r) => `- ${r}`).join("\n")
-    : "- (first stage — no upstream artifacts)";
-  const writes = trace.writesTo.length > 0
-    ? trace.writesTo.map((w) => `- ${w}`).join("\n")
-    : "- (terminal stage)";
-
-  return `## Cross-Stage Traceability
-
-Reads from:
-${reads}
-
-Writes to:
-${writes}
-
-Rule: ${trace.traceabilityRule}
-`;
-}
-
-function artifactValidationBlock(validations: ArtifactValidation[]): string {
-  if (validations.length === 0) return "";
-  const rows = validations
-    .map((v) => {
-      const req = v.required ? "REQUIRED" : "recommended";
-      return `| ${v.section} | ${req} | ${v.validationRule} |`;
-    })
-    .join("\n");
-  return `## Artifact Validation
-
-| Section | Tier | Validation rule |
-|---|---|---|
-${rows}
-`;
-}
-
-function mergedAntiPatterns(philosophy: StagePhilosophy, execution: StageExecutionModel): string {
-  const merged: string[] = [];
-  const seen = new Set<string>();
-  for (const item of [...philosophy.commonRationalizations, ...execution.blockers]) {
-    const key = item.trim().toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(item);
-  }
-  return merged.map((item) => `- ${item}`).join("\n");
-}
-
-function completionParametersBlock(schema: StageSchema, track: FlowTrack): string {
-  const gateList = schema.executionModel.requiredGates.map((g) => `\`${g.id}\``).join(", ");
-  // Mandatory agents are dropped on `quick` track. Surface
-  // the empty list so the rendered SKILL.md doesn't tell quick-track runs to
-  // dispatch agents the linter is going to skip.
-  const trackAwareMandatoryAgents = track === "quick" ? [] : schema.reviewLens.mandatoryDelegations;
-  const mandatoryAgents = trackAwareMandatoryAgents;
-  const mandatory = trackAwareMandatoryAgents.length > 0
-    ? trackAwareMandatoryAgents.map((a) => `\`${a}\``).join(", ")
-    : track === "quick" && schema.reviewLens.mandatoryDelegations.length > 0
-      ? "none (skipped: quick track)"
-      : "none";
-  const resolvedNextStage = nextStageForTrack(schema.stage, track);
-  const nextStage = resolvedNextStage ?? "done";
-  const nextDescription = nextStage === "done"
-    ? "flow complete"
-    : stageSchema(nextStage, track).skillDescription;
-
-  return `### Completion Parameters
-
-- \`stage\`: \`${schema.stage}\`
-- \`next\`: \`${nextStage}\` (${nextDescription})
-- \`gates\`: ${gateList}
-- \`artifact\`: \`${RUNTIME_ROOT}/artifacts/${schema.artifactRules.artifactFile}\`
-- \`mandatory delegations\`: ${mandatory}
-- \`completion helper\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage}\`
-- \`completion helper with evidence\`: \`node .cclaw/hooks/stage-complete.mjs ${schema.stage} --evidence-json '{"<gate_id>":"<evidence note>"}' --passed=<gate_id>[,<gate_id>]\`
-- \`completion helper JSON diagnostics\`: append \`--json\` to receive a machine-readable validation failure summary.
-- \`delegation lifecycle proof\`: use the delegation helper recipe in this section with explicit lifecycle rows: \`--status=scheduled\` -> \`--status=launched\` -> \`--status=acknowledged\` -> \`--status=completed\` (completed isolated/generic requires prior ACK for the same span or \`--ack-ts=<iso>\`).
-- Fill \`## Learnings\` before closeout: either \`- None this stage.\` or JSON bullets with required keys \`type\`, \`trigger\`, \`action\`, \`confidence\` (knowledge-schema compatible).
-- If you edit any completed-stage artifact after it shipped (\`completedStageMeta\` timestamps exist), append a short \`## Amendments\` section with dated bullets (timestamp + reason) instead of overwriting the archived narrative silently — advisory linter rule \`stage_artifact_post_closure_mutation\` enforces visibility when this trail is missing.
-- Record mandatory delegation lifecycle in \`${RUNTIME_ROOT}/state/delegation-log.json\` and append proof events to \`${RUNTIME_ROOT}/state/delegation-events.jsonl\`; the ledger is current state, the event log is audit proof.${mandatoryAgents.length > 0 ? ` If a mandatory delegation cannot run in this harness, use \`--waive-delegation=${mandatoryAgents.join(",")} --waiver-reason="<why safe>"\` on the completion helper.` : ""} If proactive delegations were intentionally skipped, first issue a short-lived waiver token with \`cclaw-cli internal waiver-grant --stage <stage> --reason "<short-slug>"\`, then rerun the completion helper with \`--accept-proactive-waiver=<token> --accept-proactive-waiver-reason="<why safe>"\` after explicit user approval. Tokens expire in 30 minutes and are single-use; bare \`--accept-proactive-waiver\` is no longer accepted.
-- Never edit raw \`flow-state.json\` to complete a stage, even in advisory mode; that bypasses validation, gate evidence, and Learnings harvest. If a helper fails, report a one-line human-readable failure plus fenced JSON diagnostics; never echo the invoking command line or apply a manual state workaround.
-- Stage completion claim requires \`stage-complete\` exit 0 in the current turn. Quote the single-line success JSON exactly as printed to stdout (for example \`{"ok":true,"command":"stage-complete",...}\` including \`completedStages\` / \`currentStage\` / \`runId\`); do not paraphrase. Do not infer success from empty stdout or from skipped retries (quiet mode always emits one JSON line on success).
-- Completion protocol: verify required gates, update the artifact, then use the completion helper with \`--evidence-json\` and \`--passed\` for every satisfied gate.
-`;
-}
-
-function delegationAndCompletionBlock(schema: StageSchema, track: FlowTrack): string {
-  const dispatchBlock = autoSubagentDispatchBlock(schema.stage, track).trim();
-  const completionBlock = completionParametersBlock(schema, track).trim();
-  const normalizedDispatch = dispatchBlock.length > 0
-    ? dispatchBlock.replace(/^## Automatic Subagent Dispatch/mu, "### Automatic Subagent Dispatch")
-    : "### Automatic Subagent Dispatch\nNo automatic subagent dispatch rules for this stage.";
-
-  return `## Delegation & Completion
-
-${normalizedDispatch}
-
-${completionBlock}
-
-### Stage Closure (harness-only UX)
-
-- **NEVER paste the \`stage-complete.mjs\` command line into chat.** The user does not run cclaw manually; seeing \`node .cclaw/hooks/stage-complete.mjs ... --evidence-json '{...}' --waive-delegation=...\` is noise. Run the helper via the tool layer; report only the resulting summary.
-- **NEVER paste the \`--evidence-json\` payload into chat.** It is structured data for the helper, not for the user. The same evidence already lives in the artifact section.
-- On failure, report a compact human-readable summary based on the helper's JSON \`findings\` array — list failing section names only (one line each), include the full helper JSON in a single fenced \`json\` block. Do not echo the invoking command.
-- **NEVER run shell hash commands** (\`shasum\`, \`sha256sum\`, \`md5sum\`, \`Get-FileHash\`, \`certutil\`, etc.) for hash compute. If the linter ever asks for a hash, that is a linter bug — report failure and stop, do not auto-fix in bash.
-- The helper defaults to quiet (\`CCLAW_STAGE_COMPLETE_QUIET=1\`): no pretty-printed chatter, but **stdout still prints exactly one line** of machine-readable success JSON (same contract as \`start-flow\` in quiet mode).
-`;
-}
-
-function quickStartBlock(stage: FlowStage, track: FlowTrack): string {
-  const schema = stageSchema(stage, track);
-  const gatePreview = schema.executionModel.requiredGates.slice(0, 3).map((g) => `\`${g.id}\``).join(", ");
-  return `## Quick Start
-
-1. Announce at start: "Using \`${schema.skillName}\` to ${schema.philosophy.purpose}".
-2. Obey HARD-GATE and Iron Law.
-3. Execute checklist in order and persist \`${RUNTIME_ROOT}/artifacts/${schema.artifactRules.artifactFile}\`.
-4. Satisfy gates (${gatePreview}${schema.executionModel.requiredGates.length > 3 ? ` +${schema.executionModel.requiredGates.length - 3}` : ""}).
-`;
-}
-
-export function stageSkillFolder(stage: FlowStage): string {
-  return STAGE_TO_SKILL_FOLDER[stage];
-}
-
-function normalizedGuidanceKey(value: string): string {
-  return value
-    .replace(/`[^`]+`/gu, " ")
-    .replace(/[*_]/gu, " ")
-    .replace(/[^a-z0-9]+/giu, " ")
-    .replace(/\s+/gu, " ")
-    .trim()
-    .toLowerCase();
-}
-
-function mermaidNodeLabel(raw: string, index: number): string {
-  const stripped = raw
-    .replace(/`[^`]+`/gu, "")
-    .replace(/\*\*/gu, "")
-    .replace(/[*_]/gu, "")
-    .replace(/\[[^\]]*\]\([^)]*\)/gu, "")
-    .split(/[—:.;]/u)[0]
-    ?.trim() ?? "";
-  const words = stripped.split(/\s+/u).filter((word) => word.length > 0);
-  const short = words.slice(0, 4).join(" ");
-  const label = short.length === 0
-    ? `Step ${index + 1}`
-    : short.replace(/["`]/gu, "");
-  return label.length > 48 ? `${label.slice(0, 45)}...` : label;
-}
-
-const MERMAID_PROCESS_MAX_NODES = 10;
-
-function renderProcessFlowMermaid(executionModel: StageExecutionModel): string {
-  if (executionModel.processFlow && executionModel.processFlow.trim().length > 0) {
-    return `\`\`\`mermaid\n${executionModel.processFlow.trim()}\n\`\`\``;
-  }
-  const source = executionModel.process.length > 0
-    ? executionModel.process
-    : executionModel.checklist;
-  if (source.length === 0) {
-    return "";
-  }
-  const limited = source.slice(0, MERMAID_PROCESS_MAX_NODES);
-  const nodes = limited.map((item, index) => ({
-    id: `S${index + 1}`,
-    label: mermaidNodeLabel(item, index)
-  }));
-  const lines = ["flowchart TD"];
-  for (const node of nodes) {
-    lines.push(`  ${node.id}["${node.label}"]`);
-  }
-  for (let i = 0; i < nodes.length - 1; i += 1) {
-    lines.push(`  ${nodes[i]!.id} --> ${nodes[i + 1]!.id}`);
-  }
-  if (source.length > MERMAID_PROCESS_MAX_NODES) {
-    lines.push(`  S${nodes.length} --> More["...see full Checklist"]`);
-  }
-  return `\`\`\`mermaid\n${lines.join("\n")}\n\`\`\``;
-}
-
-function renderPlatformNotesBlock(notes: string[] | undefined): string {
-  if (!notes || notes.length === 0) {
-    return "";
-  }
-  const body = notes.map((item) => `- ${item}`).join("\n");
-  return `## Platform Notes
-${body}
-
-`;
-}
-
-function dedupeGuidance(
-  items: string[],
-  blockedBy: string[]
-): string[] {
-  const blocked = new Set(
-    blockedBy
-      .map((item) => normalizedGuidanceKey(item))
-      .filter((item) => item.length > 0)
-  );
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const item of items) {
-    const key = normalizedGuidanceKey(item);
-    if (key.length === 0) continue;
-    if (blocked.has(key)) continue;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(item);
-  }
-  return result;
-}
-
-export function stageSkillMarkdown(
-  stage: FlowStage,
-  track: FlowTrack = "standard",
-  _packageVersion?: string | null
-): string {
-  const schema = stageSchema(stage, track);
-  const trackContext = stageTrackRenderContext(track);
-  const philosophy = schema.philosophy;
-  const executionModel = schema.executionModel;
-  const artifactRules = schema.artifactRules;
-  const reviewLens = schema.reviewLens;
-  const mandatoryDelegations = reviewLens.mandatoryDelegations;
-  const gateList = executionModel.requiredGates
-    .map((g) => `- \`${g.id}\` — ${g.description}`)
-    .join("\n");
-  const evidenceList = executionModel.requiredEvidence
-    .map((e) => `- [ ] ${e}`)
-    .join("\n");
-  const checklistItems = executionModel.checklist
-    .map((item, i) => `${i + 1}. ${item}`)
-    .join("\n");
-  const interactionFocus = dedupeGuidance(
-    executionModel.interactionProtocol,
-    [...executionModel.checklist, ...executionModel.process]
-  ).slice(0, 5);
-  const processFlowMermaid = renderProcessFlowMermaid(executionModel);
-  const platformNotesBlock = renderPlatformNotesBlock(executionModel.platformNotes);
-  const reviewLoopSection = reviewLoopBlock(reviewLens.reviewLoop);
-  const mandatoryDelegationSummary = mandatoryDelegations.length > 0
-    ? mandatoryDelegations.map((name) => `\`${name}\``).join(", ")
-    : "none";
-
-  return `---
-name: ${schema.skillName}
-description: "${schema.skillDescription}"
----
-
-# ${schema.skillName}
-
-<EXTREMELY-IMPORTANT>
-
-**IRON LAW — ${stage.toUpperCase()}:** ${philosophy.ironLaw}
-
-If you are about to violate the Iron Law, STOP. No amount of urgency, partial progress, or clever reinterpretation overrides it. Escalate via the Decision Protocol or abandon the stage.
-
-</EXTREMELY-IMPORTANT>
-
-${renderTrackTerminology(tddTopOfSkillBlock(stage) + reviewTopOfSkillBlock(stage), trackContext)}${quickStartBlock(stage, track)}
-
-${STAGE_LANGUAGE_POLICY_POINTER}
-## Philosophy
-${philosophy.purpose}
-
-## Complexity Tier
-- Active tier: \`${schema.complexityTier}\`; mandatory delegations: ${mandatoryDelegationSummary}
-- Scale-to-complexity: execute required gates/sections; keep optional/deep sections compact unless risk, novelty, or config triggers them.
-- Track render context: \`${trackContext.track}\` (${trackContext.usesPlanTerminology ? "plan-first wording" : "acceptance-first wording"})
-
-## When to Use
-${philosophy.whenToUse.map((item) => `- ${item}`).join("\n")}
-
-${whenNotToUseBlock(philosophy.whenNotToUse)}
-## HARD-GATE
-${philosophy.hardGate}
-
-## Anti-Patterns & Red Flags
-${mergedAntiPatterns(philosophy, executionModel)}
-
-## Process
-
-Stage state machine (map only; Checklist is authoritative):
-${processFlowMermaid.length > 0 ? processFlowMermaid : "```mermaid\nflowchart TD\n  S1[\"Execute Checklist\"] --> S2[\"Satisfy required gates\"] --> S3[\"Verify before closeout\"]\n```"}
-
-${platformNotesBlock}${contextLoadingBlock(stage, artifactRules.crossStageTrace, executionModel)}
-${delegationAndCompletionBlock(schema, track)}
-${stackAwareReviewRoutingBlock(stage)}
-${researchPlaybooksBlock(executionModel.researchPlaybooks ?? [])}
-${referencePatternsBlock(stage)}
-
-## Checklist
-
-You MUST complete these steps in order:
-
-${checklistItems}
-
-${stageExamples(stage)}
-
-## Interaction Protocol
-
-These are **rules for HOW you interact with the user** during this stage — tone, question shape, decision gating. Ordered steps of *what to do* live in the Checklist; do not treat these as an alternative sequence.
-
-${interactionFocus.length > 0 ? interactionFocus.map((item, i) => `${i + 1}. ${item}`).join("\n") : "- Keep communication concise and decision-focused; rely on the Checklist for execution order."}
-
-Decision protocol: ask only decision-changing questions, record the chosen option, rationale, risk, and rollback when the stage makes a non-trivial call.
-
-${batchExecutionModeBlock(stage, track)}
-${crossCuttingMechanicsBlock(stage)}
-## Required Gates
-${gateList}
-
-## Required Evidence
-${evidenceList}
-
-${verificationBlock(stage)}
-
-## Exit Criteria
-${executionModel.exitCriteria.map((item) => `- [ ] ${item}`).join("\n")}
-
-## Artifact Rules
-- Artifact target: \`${RUNTIME_ROOT}/artifacts/${artifactRules.artifactFile}\`
-
-${crossStageTraceBlock(artifactRules.crossStageTrace)}
-${artifactValidationBlock(artifactRules.artifactValidation)}
-
-## Review Lens
-${reviewLoopSection ? `${reviewLoopSection}\n` : ""}## Outputs
-${reviewLens.outputs.map((item) => `- ${item}`).join("\n")}
-
-${reviewSectionsBlock(reviewLens.reviewSections)}
-
-## Shared Stage Guidance
-- At STOP/closeout points, offer the shared handoff choices only when a user decision is needed.
-- Carry upstream decisions forward explicitly; record drift instead of silently changing direction.
-- Before closeout, fill \`## Learnings\` with \`- None this stage.\` or 1-3 strict JSON bullets.
-- Keep decisions explicit: context, options, chosen option, rationale, risk, and rollback.
-`;
-}
-
-export function executingWavesSkillMarkdown(): string {
-  return `---
-name: executing-waves
-description: "Execute multi-wave work using existing cclaw run resume + verify-current-state — no new CLI needed."
----
-
-# Executing Waves (Persistent Multi-Wave Work)
-
-## Overview
-
-Long-form work (large refactors, multi-stage uplifts) often spans many waves.
-This skill documents how the controller persists work across waves WITHOUT new
-CLI commands, using existing \`cclaw run resume\` and \`internal verify-current-state\`.
-
-## When to Use
-
-- Work spans 2+ commits / waves with cohesion concerns between waves.
-- Each wave has its own stage cycle (brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship).
-- User wants explicit per-wave verification before the next wave starts.
-- Risk of cross-wave drift exists.
-
-## Anti-Pattern
-
-- Running many waves linearly without verification between them, accumulating drift.
-- Treating a wave as only a commit boundary without re-verifying upstream decisions.
-
-## Process
-
-1. **Wave Start**: author wave plan as \`.cclaw/wave-plans/<wave-n>.md\` referencing previous wave's ship artifact.
-2. **Carry-forward Audit**: at brainstorm of the next wave, re-read previous wave ship artifact and explicitly record in the existing \`## Wave Carry-forward\` section:
-   - Carrying forward: <scope D-XX decision references still valid>
-   - Drift detected: <decisions no longer valid + reason>
-   - Re-scope needed: <yes/no>
-   - Never create a second \`## Locked Decisions\` heading in brainstorm; reference prior D-XX IDs inline.
-3. **Resume Path**: if a wave was interrupted mid-stage, \`cclaw run resume\` restores state. Run \`internal verify-current-state\` before continuing.
-4. **Wave End**: at ship, architect cross-stage verification runs from dispatch matrix. If \`DRIFT_DETECTED\`, fix before ship.
-5. **Next Wave Trigger**: launch new \`/cc <topic>\` for next wave and reference previous wave ship artifact in upstream handoff.
-
-## Status Markers
-
-- \`wave-status: in-progress\` — current stage incomplete.
-- \`wave-status: blocked-by-prev\` — waiting on previous wave verification.
-- \`wave-status: shipped\` — wave shipped, next wave can start.
-- \`wave-status: rolled-back\` — previous wave invalidated, current wave needs rebase.
-
-## Linter Hooks
-
-- If multi-wave work is detected (>1 wave-plan files in \`.cclaw/wave-plans/\`), current brainstorm artifact MUST contain \`## Wave Carry-forward\` section with drift audit.
-- If carry-forward drift is missing in multi-wave context, emit \`[P1] wave.drift_unaddressed\`.
-`;
-}

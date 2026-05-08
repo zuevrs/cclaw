@@ -1,5 +1,489 @@
 # Changelog
 
+## 8.1.0 — Post-8.0 polish: composition discipline, anti-slop, lean cuts, per-slug flow layout
+
+8.1.0 consolidates four post-release polish passes (H4 → H7) on top of
+the v8 architectural rewrite shipped in 8.0.0. The runtime API is
+unchanged; the changes are concentrated in the deep content layer
+(specialist prompts, skills, templates, runbooks) and in the install
+behaviour (harness auto-detection, no more `AGENTS.md` injection,
+`.gitignore` management, per-slug flow directory). Earlier H1-H3 polish
+remains under the 8.0.0 entry below.
+
+### Composition footers, anti-slop, harness auto-detect, no AGENTS.md (seventh pass, H7)
+
+This pass focuses on **specialist scope discipline**, **anti-slop guard
+rails**, **honest harness selection**, and **keeping the project root
+clean**.
+
+- **Per-specialist Composition footer.** Every specialist prompt
+  (`brainstormer`, `architect`, `planner`, `reviewer`, `security-reviewer`,
+  `slice-builder`) now ends with a `## Composition` section that locks
+  the specialist into its lane: who invokes them, which runbook/skill
+  wraps them, what they may NOT spawn, what files they may NOT touch,
+  and a hard stop condition. Adopted from addyosmani-skills'
+  agent persona pattern. Eliminates the "specialist orchestrates other
+  specialists" drift seen in v7 escalation chains. Contract test:
+  `tests/unit/specialist-prompts.test.ts`.
+- **Anti-slop skill (always-on).** New `lib/skills/anti-slop.md` —
+  bans (a) re-running the same build/test/lint twice without a code
+  change, and (b) environment-specific shims (`process.env.NODE_ENV`
+  branches, `.skip`-ed tests, `@ts-ignore` / `eslint-disable` to
+  silence real failures, hardcoded fixture-fallbacks in production
+  code). Replaces these with two operating modes: **fix the root
+  cause** or **surface as a `block` finding and stop**. Adopted from
+  addyosmani-skills (anti-redundant-verification) and oh-my-claudecode
+  (`generateSlopWarning` in `pre-tool-enforcer.mjs`). Triggers:
+  `always-on, task:build, task:fix-only, task:recovery`.
+- **Slice-builder hard rules updated.** Hard rules 10 and 11 now
+  explicitly forbid redundant verification and env shims; the prompt
+  references `anti-slop.md` from its inputs list.
+- **Harness auto-detection on `cclaw init`.** `init` no longer silently
+  defaults to `cursor`. Resolution order: (1) `--harness=<id>[,<id>]`
+  flag if passed, (2) existing `.cclaw/config.yaml` if present,
+  (3) auto-detect from project markers (`.claude/`, `.cursor/`,
+  `.opencode/`, `.codex/`, `.agents/skills/`, `CLAUDE.md`,
+  `opencode.json`, `opencode.jsonc`), (4) error with an actionable
+  message if nothing found. New module: `src/harness-detect.ts` (~40
+  LOC). Contract: `tests/unit/install.test.ts` covers each branch.
+- **AGENTS.md / CLAUDE.md generation removed.** cclaw v8 no longer
+  writes a routing block into `AGENTS.md`. Skills installed under
+  `.{harness}/skills/cclaw/` (auto-triggered by `cclaw-meta.md`)
+  carry the same routing information without polluting the project
+  root. The `agents-block` artifact template, `writeAgentsBlock`,
+  `removeAgentsBlock`, and `docs/agents-block.example.md` are removed.
+  Pre-existing user-authored `AGENTS.md` is left untouched on init
+  and uninstall.
+- **`.gitignore` management for transient state.** `init` now
+  appends `.cclaw/state/` and `.cclaw/worktrees/` to `.gitignore`
+  (with a `# cclaw transient state` header). The artifact tree
+  (`.cclaw/flows/`, `.cclaw/lib/`, `.cclaw/config.yaml`,
+  `.cclaw/ideas.md`, `.cclaw/knowledge.jsonl`, `.cclaw/hooks/`) is
+  intentionally NOT ignored — it must be committed for graphify
+  indexing and team review. New module: `src/gitignore.ts`
+  (~60 LOC). `uninstall` removes the cclaw lines but preserves
+  user-authored gitignore entries; if cclaw was the only content,
+  `.gitignore` is removed entirely.
+- **CLI help text updated.** `cclaw help` now documents the harness
+  resolution order explicitly, plus the marker list, plus the
+  no-default behaviour.
+
+### Per-slug flow layout + lib trims (sixth pass, H6)
+
+The active flow tree no longer scatters one slug across six per-stage
+directories. All artifacts for one slug live in a single folder:
+`flows/<slug>/{plan,build,review,ship,decisions,learnings}.md`. Shipped
+and cancelled slugs continue to use `flows/shipped/<slug>/...` and
+`flows/cancelled/<slug>/...` (unchanged, that shape was already
+per-slug). The library content was also trimmed.
+
+- **`flows/` is per-slug, not per-stage.** `flows/plans/`, `flows/builds/`,
+  `flows/reviews/`, `flows/ships/`, `flows/decisions/`, and
+  `flows/learnings/` are gone. The active dir for slug `demo` is now
+  `flows/demo/` and contains `plan.md`, `build.md`, etc. Existing-plan
+  detection globs `flows/*/plan.md` (skipping `shipped/` and `cancelled/`).
+  `findMatchingPlans` walks `flows/<dir>/plan.md` instead of one flat
+  per-stage directory.
+- **`PLAN_DIR` / `BUILD_DIR` / ... constants removed.** A single
+  `ARTIFACT_FILE_NAMES` map drives both active and shipped paths.
+  `ACTIVE_ARTIFACT_DIRS` and `SHIPPED_ARTIFACT_FILES` collapsed into
+  one. `cancel.ts`, `compound.ts`, `install.ts`, `orchestrator-routing.ts`,
+  and every content file with a literal path were updated.
+- **Decision protocol short-form (B1).** `lib/decision-protocol.md`
+  collapsed from 78 lines to ~25 lines covering only the "is this even
+  a decision?" question. The full schema (FMT, pre-mortem, refs) is
+  now owned by `lib/agents/architect.md`. The three worked decisions
+  moved to `lib/examples/decision-permission-cache.md` (which already
+  existed under another name).
+- **Failure Mode Table conditional (B2).** FMT is now mandatory only
+  when the decision touches a user-visible failure path (rendering,
+  request/response, persisted data, payment/auth, third-party calls).
+  Purely internal decisions write the explicit single line
+  `Failure Mode Table: not applicable — no user-visible failure path`
+  instead of forcing a table. Pre-mortem stays mandatory for
+  product-grade and ideal tiers; minimum-viable may skip.
+- **Antipatterns 17 → 12 (B3).** Merged `A-2`/`A-13`/`A-15`/`A-17`
+  (TDD-phase failures) into `A-2 — TDD phase integrity broken`. Merged
+  `A-3`/`A-16` (silent scope expansion + `git add -A`) into
+  `A-3 — Work outside the AC`. Removed the standalone `A-12 — Architect
+  with one option` since the new short-form decision-protocol covers it.
+- **Examples 13 → 8 (B4).** Removed `plan-refinement`, `decision-record`
+  (renamed to `decision-permission-cache`), `knowledge-line`,
+  `refinement-detection`, `parallel-build-dispatch`, `review-cap-reached`.
+  All were either covered by skill bodies and prompt transcripts or
+  too thin to warrant a file.
+- **Research playbooks 5 → 3 (B5).** Merged `read-before-write`,
+  `reading-tests`, and `reading-dependencies` into a single
+  `reading-codebase.md` (covers what to read, how to read tests, and
+  how to read integration boundaries). `time-boxing.md` and
+  `prior-slugs.md` are unchanged.
+
+192 tests pass (up from 189). `release:check` (build, lint, tests,
+smoke-init) is green. The on-disk layout is the visible shape of a
+slug now: open `.cclaw/flows/demo/` and you see everything for `demo`.
+
+### Lean cut + parallel-build cap (fifth pass, H5)
+
+The fourth pass (H4) over-corrected by re-importing v7-era ceremony — a
+forced Q&A loop with topic tags, an 8-field Problem Decision Record, a
+"2-5 minute TDD step" rule, and an Acceptance Mapping table. This pass
+deletes that ceremony and adds back the v7 "max 5 parallel slices with
+git worktree" rule, which is the part of v7 that was actually load-
+bearing.
+
+- **Brainstormer trimmed.** Q&A Ralph loop with four forcing topics
+  (`pain` / `direct-path` / `operator` / `no-go`), the 8-field PDR,
+  How Might We, Embedded Grill, and Self-Review Notes are gone. The
+  brainstormer now writes a `## Frame` paragraph (what is broken /
+  who feels it / success looks like / out of scope), an optional
+  `## Approaches` table (`baseline` + `challenger`, no Upside column),
+  a `## Selected Direction` paragraph, and a `## Not Doing` list. It
+  may ask **at most three** clarifying questions and only when the
+  prompt has genuine ambiguity that wasn't pre-answered. 248 → 176
+  lines.
+- **Planner trimmed.** "2-5 minute TDD steps" is gone (caused
+  hundred-slice plans). "Feature-atomic" jargon is gone. The
+  Acceptance Mapping table, Constraints + Assumptions table, and
+  Reproduction contract are gone. The planner now writes Plan +
+  Acceptance Criteria (with `parallelSafe` + `touchSurface`) +
+  Edge cases (one bullet per AC) + Topology. AC = one observable
+  outcome; the TDD cycle lives **inside** the AC, not above it.
+- **Plan template trimmed.** Q&A Log, Problem Decision Record, Premise
+  check, How Might We, Embedded Grill, Acceptance Mapping, Constraints
+  and Assumptions, Reproduction contract, Self-Review Notes are gone.
+  The frontmatter loses `discovery_posture`, `frame_type`, and
+  `qa_topics_covered`. 192 → 93 lines.
+- **Test-file naming rule (was missing).** `slice-builder`,
+  `tdd-cycle` skill, build runbook, and `/cc` Step 5 now state
+  explicitly: **test files are named after the unit under test
+  (`tests/unit/permissions.test.ts`), never after the AC id
+  (`AC-1.test.ts`).** AC ids live inside `it('AC-1: …', …)` test names,
+  in commit messages, and in the build log — not in the filename.
+  This was a real failure mode in the wild.
+- **Parallel-build cap restored to 5 slices + git worktree dispatch.**
+  The v7 constraint that "all work fits in max 5 parallel sub-agents
+  with git worktree" is back. A **slice = 1+ AC sharing a
+  touchSurface**. If planner produces more than 5 slices, planner is
+  required to merge thinner slices into fatter ones — never generate
+  "wave 2", "wave 3". Each parallel slice runs in its own
+  `.cclaw/worktrees/<slug>-<slice-id>` worktree on a
+  `cclaw/<slug>/<slice-id>` branch when the harness supports
+  sub-agent dispatch. Otherwise parallel-build degrades silently to
+  inline-sequential. Below 4 AC the orchestrator picks `inline` even
+  if AC look "parallelSafe" — dispatch overhead is not worth saving
+  1-2 AC of wall-clock.
+- **Sub-agent guidance added to `/cc`.** The orchestrator instruction
+  now states explicitly when sub-agents help (parallel slice dispatch
+  capped at 5; specialist context isolation for `architect`,
+  `security-reviewer`, integration `reviewer`) and when they don't
+  (trivial / small / medium slugs ≤4 AC; sequential work; routine
+  work the orchestrator finishes in 1-2 turns).
+
+The `lib/skills/review-loop.md` (Concern Ledger + convergence
+detector), `lib/skills/conversation-language.md` (always-on user-
+language policy), `lib/templates/decisions.md` (Architecture tier +
+Failure Mode Table + Pre-mortem + Escape Hatch + Blast-radius Diff),
+and `lib/templates/ship.md` (Preflight + Rollback triplet +
+Finalization mode + Victory Detector) are kept untouched — they are
+gated by specialist invocation, not paid on every slug.
+
+### Grouped layout + recovered v7 depth (fourth pass, H4)
+
+The flat `.cclaw/` layout (24 children at the root) is replaced with a
+grouped layout. Every active artifact lives under `.cclaw/flows/`,
+every reference document lives under `.cclaw/lib/`, and runtime stays
+top-level:
+
+```
+.cclaw/
+├── config.yaml
+├── ideas.md
+├── knowledge.jsonl       (after first ship)
+├── state/                # flow-state.json
+├── hooks/                # session-start, stop-handoff, commit-helper
+├── flows/
+│   ├── plans/<slug>.md
+│   ├── builds/<slug>.md
+│   ├── reviews/<slug>.md
+│   ├── ships/<slug>.md
+│   ├── decisions/<slug>.md
+│   ├── learnings/<slug>.md
+│   ├── shipped/<slug>/   (archived completed runs)
+│   └── cancelled/<slug>/
+└── lib/
+    ├── agents/           # 6 specialist prompts
+    ├── skills/           # 12 auto-trigger skills
+    ├── templates/        # 10 templates
+    ├── runbooks/         # 4 stage runbooks
+    ├── patterns/         # 8 reference patterns
+    ├── research/         # 5 research playbooks
+    ├── recovery/         # 5 recovery playbooks
+    ├── examples/         # 13 worked examples
+    ├── antipatterns.md
+    └── decision-protocol.md
+```
+
+This pass also recovers depth from the 7.x `spec`, `plan`, `brainstorm`,
+`scope`, `design`, and `ship` stages that earlier v8 passes had skipped:
+
+- **Conversation language policy.** New always-on skill
+  `conversation-language.md`. The agent replies in the user's language
+  but never translates `AC-N`, `D-N`, slugs, frontmatter keys, hook
+  output, or specialist names — those are wire-protocol identifiers.
+- **Review concern ledger + convergence detector.** Every
+  `flows/reviews/<slug>.md` carries an append-only F-N ledger.
+  Iteration N+1 must reread every open row, mark it
+  `closed | open | superseded by F-K`, and append new findings as
+  F-(max+1). The loop ends when (1) all rows closed, or (2) two
+  consecutive iterations record zero new `block` findings AND every
+  open row is `warn`, or (3) the 5-iteration hard cap fires with at
+  least one open block row. This is the cclaw analogue of the
+  Karpathy "Ralph loop" — short cycles, explicit ledger, hard stop.
+- **Brainstormer Q&A Ralph loop + PDR + Approaches table.**
+  Adaptive elicitation runs FIRST, one question at a time, with rows
+  appended to a `Q&A Log` table tagged with
+  `[topic:pain]`, `[topic:direct-path]`, `[topic:operator]`,
+  `[topic:no-go]`. The artifact now also carries a Problem Decision
+  Record, a Premise check, a "How Might We" reframe, an Approaches
+  table with stable Role (`baseline | challenger | wild-card`) and
+  Upside (`low | modest | high | higher`), a "Not Doing" list,
+  optional Embedded Grill in `deep` posture, and Self-Review Notes.
+- **Planner Acceptance Mapping + Edge cases per AC + Reproduction
+  contract.** Every AC is now mapped: upstream signal (PDR field or
+  D-N) → observable evidence → verification method → likely test
+  level. Each AC gets at least one boundary AND one error edge case;
+  the slice-builder's RED test for that AC must encode at least one.
+  Bug-fix slugs add a Reproduction contract (symptom, repro steps,
+  expected RED test, tied AC). AC frontmatter gains `parallelSafe`
+  and `touchSurface` (path list) so `parallel-build` waves can verify
+  disjoint surface before dispatch. Plan template now includes a
+  Constraints + Assumptions Before Finalisation block with
+  source/confidence/validation/disposition rows.
+- **Architect tier + Failure Mode Table + Pre-mortem + Trivial
+  Escape Hatch + Blast-radius Diff.** Architect picks one of three
+  architecture tiers per slug — `minimum-viable`, `product-grade`
+  (default), `ideal` — recorded in the decisions frontmatter. Every
+  D-N now carries a Failure Mode Table
+  (`Method | Exception | Rescue | UserSees`, with `UserSees`
+  mandatory; silent-failure path is itself a row) and a three-bullet
+  Pre-mortem. Trivial slugs (≤3 files, no new interfaces, no
+  cross-module data flow) fill the Escape Hatch and skip the full
+  D-N machinery. Architect diffs only the slug's blast radius
+  against the baseline SHA, never re-audits the whole repo.
+- **Ship preflight + rollback triplet + finalization enum + Victory
+  Detector.** `flows/ships/<slug>.md` now requires fresh preflight
+  output (tests / build / lint / typecheck / clean tree) recorded
+  in this turn, repo-mode detection (`git` / `no-vcs`), git
+  merge-base detection, the AC↔commit map with red/green/refactor
+  SHAs from `flow-state.ac[].phases`, a rollback plan triplet
+  (trigger / steps / verification — all three or it does not count),
+  a monitoring checklist, and exactly one
+  `finalization_mode ∈ { FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR,
+  FINALIZE_KEEP_BRANCH, FINALIZE_DISCARD_BRANCH, FINALIZE_NO_VCS }`.
+  The Victory Detector blocks ship until every condition is met —
+  including refusing `FINALIZE_MERGE_LOCAL` in a `no-vcs` repo.
+- **Tests, smoke, docs.** 9 new tests covering the H4 content depth
+  (185 total). `smoke-init.mjs` updated for the grouped layout and
+  the new `conversation-language` skill. CHANGELOG and README record
+  the migration.
+
+## 8.0.0 — Lightweight harness-first redesign (breaking)
+
+cclaw 8.0 is a complete rewrite. The 7.x stage machine is gone. The new
+runtime is a thin harness installer plus generated `/cc` orchestration
+with deep, harness-readable content (templates, specialist prompts,
+auto-trigger skills, runbooks, reference patterns, research playbooks,
+recovery playbooks, examples library, antipatterns, decision protocol).
+
+### Build is the TDD stage (third pass)
+
+Earlier passes renamed `tdd → build` per the locked vision but did not
+carry the TDD cycle into the new build runtime. This pass restores it:
+
+- New iron law: **NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.**
+- `commit-helper.mjs` now requires `--phase=red|green|refactor`. Phases
+  are gated: GREEN without a prior RED is rejected, REFACTOR without
+  RED+GREEN is rejected, RED commits that touch `src/` / `lib/` / `app/`
+  are rejected. `--phase=refactor --skipped` is accepted only with an
+  explicit `skipped: <reason>` message.
+- `flow-state.json` AC entries gain a `phases: { red, green, refactor }`
+  map. AC stays `pending` until all three phases are recorded; the
+  combined `commit` now points at the GREEN SHA.
+- `BUILD_TEMPLATE` now carries a six-column TDD log
+  (Discovery / RED proof / GREEN evidence / REFACTOR notes / commits)
+  plus dedicated Watched-RED proofs and Suite-evidence sections.
+- Build runbook (`.cclaw/runbooks/build.md`) rewritten as a TDD
+  playbook with the full cycle, mandatory gates, and fix-only flow.
+- New auto-trigger skill `tdd-cycle.md` (always-on while stage=build,
+  also triggered by specialist=slice-builder).
+- `slice-builder` prompt rewritten end-to-end as TDD-aware:
+  discovery → RED → GREEN → REFACTOR per AC, with watched-RED proof
+  and full-suite GREEN evidence.
+- `/cc` Step 5 expanded with a full TDD walk-through and three example
+  commit-helper invocations.
+- Antipatterns added: A-13 (skipping RED), A-14 (single-test green),
+  A-15 (REFACTOR silently skipped), A-16 (`git add -A`),
+  A-17 (production code in RED commit).
+- New iron-law id `red-before-green` plus 9 new tests
+  (`tests/unit/tdd-cycle.test.ts` and the updated `iron-laws` test).
+
+Numbers: 167 → 176 tests; npm pack 98.8 KB → 109.3 KB; the runtime
+core stays under 6 KLOC.
+
+### Deep content layer (second pass)
+
+### Deep content layer (second pass)
+
+The second pass expanded the harness-facing content to match the depth
+users had in 7.x while keeping the lightweight runtime:
+
+- 6 specialist prompts: 70-130 lines → 150-280 lines each, with worked
+  examples, edge cases, common pitfalls, strict output schema.
+- 10 auto-trigger skills (was 6): added commit-message-quality,
+  ac-quality, refactor-safety, breaking-changes, plus a `cclaw-meta`
+  always-on skill that ties subsystems together.
+- 4 stage runbooks under `.cclaw/runbooks/{plan,build,review,ship}.md`.
+- 8 reference patterns under `.cclaw/patterns/`.
+- 5 research playbooks under `.cclaw/research/`.
+- 5 recovery playbooks under `.cclaw/recovery/`.
+- 13 worked examples under `.cclaw/examples/`.
+- antipatterns under `.cclaw/antipatterns.md` (12 named entries).
+- decision protocol under `.cclaw/decisions/decision-protocol.md`.
+
+Numbers (Cursor install):
+
+- src/ LOC: 3,187 → 5,393 (+69%)
+- content/ LOC: 1,714 → 3,841 (+124%)
+- installed files: ~37 → 97
+- installed bytes: ~58 KB → ~206 KB
+- npm pack: 54.7 KB → 98.8 KB
+- tests: 129 → 167
+
+### Deep content layer (initial)
+
+- **Frontmatter parser** — `src/artifact-frontmatter.ts` parses the YAML
+  frontmatter on every artifact (`slug`, `stage`, `status`, `ac[]`,
+  `last_specialist`, `refines`, `shipped_at`, `ship_commit`,
+  `review_iterations`, `security_flag`) so the orchestrator can resume
+  refinements from active or shipped plans. Includes AC body extraction
+  and merge with frontmatter for re-sync.
+- **knowledge.jsonl typed appender** — `src/knowledge-store.ts` validates
+  every entry on read and exposes `findRefiningChain` so the orchestrator
+  can show the full slug lineage for a refinement.
+- **Cancel runtime** — `src/cancel.ts` moves active artifacts to
+  `.cclaw/cancelled/<slug>/` with a manifest, resets `flow-state.json`,
+  and supports resume-from-cancelled inside `/cc`.
+- **Ten artifact templates** — `plan`, `build`, `review`, `ship`,
+  `decisions`, `learnings`, `manifest`, `ideas`, `agents-block`,
+  `iron-laws` shipped to `.cclaw/templates/` and used by the orchestrator
+  to seed each artifact instead of placeholder paragraphs.
+- **Six deep specialist prompts** — `brainstormer`, `architect`,
+  `planner`, `reviewer`, `security-reviewer`, `slice-builder` rewritten
+  as 70-130 line prompts with explicit output schemas, edge cases, and
+  hard rules.
+- **Six auto-trigger skills** — `plan-authoring`, `ac-traceability`,
+  `refinement`, `parallel-build`, `security-review`, `review-loop`
+  shipped to `.cclaw/skills/` and mirrored to the harness skills folder.
+  Each skill is ≤2 KB and focuses on a single activity.
+- **AGENTS.md routing block** — `cclaw init` injects (or updates) a
+  cclaw-routing block in `AGENTS.md`; `cclaw uninstall` removes it
+  cleanly without touching surrounding content.
+- **Existing-plan detection now reads frontmatter** — surfaces
+  `last_specialist`, AC progress (committed/pending/total), `refines`,
+  and `security_flag` for every active / shipped / cancelled match.
+
+### Highlights
+
+- **Four stages** — `plan`, `build`, `review`, `ship`. The old
+  `brainstorm`, `scope`, `design`, `spec`, `tdd` stage gates are removed.
+- **Three slash commands** — `/cc <task>`, `/cc-cancel`, `/cc-idea`.
+  `/cc-amend` and `/cc-compound` are deleted; refinement and learning
+  capture happen automatically inside `/cc`.
+- **Six on-demand specialists** — `brainstormer`, `architect`, `planner`,
+  `reviewer` (multi-mode), `security-reviewer`, `slice-builder`. The
+  remaining 12 roles from 7.x collapse into these. `doc-updater` is no
+  longer a specialist; the orchestrator handles docs inline.
+- **Mandatory AC traceability** — the only mandatory hook is
+  `commit-helper.mjs`, which validates AC ids and updates flow-state
+  with the produced commit SHA.
+- **Karpathy iron laws** — Think Before Coding / Simplicity First /
+  Surgical Changes / Goal-Driven Execution are baked into
+  `src/content/iron-laws.ts` and surfaced in every `/cc` invocation.
+- **Five Failure Modes** — DAPLab review checklist baked into
+  `src/content/review-loop.ts`; hard cap at 5 review iterations.
+- **Automatic compound** — after ship, the orchestrator captures
+  `learnings/<slug>.md` only when the quality gate passes
+  (architect/planner decision, ≥3 review iterations, security flag, or
+  explicit user request). Active artifacts then move to
+  `.cclaw/shipped/<slug>/` with a short `manifest.md`.
+
+### Removed
+
+- `src/run-archive.ts`, `src/managed-resources.ts`,
+  `src/internal/compound-readiness.ts`,
+  `src/internal/flow-state-repair.ts`,
+  `src/internal/early-loop-status.ts`, `src/track-heuristics.ts`,
+  `src/early-loop.ts`, `src/internal/waiver-grant.ts`,
+  `src/tdd-cycle.ts`, all of `src/internal/advance-stage/`,
+  `src/artifact-linter/` and most of `src/content/`.
+- `state/delegation-events.jsonl`, `state/delegation-log.json`,
+  `state/managed-resources.json`, `state/early-loop.json`,
+  `state/early-loop-log.jsonl`, `state/subagents.json`,
+  `state/compound-readiness.json`, `state/tdd-cycle-log.jsonl`,
+  `state/iron-laws.json`, `.linter-findings.json`,
+  `.flow-state.guard.json`, `.waivers.json`.
+- The `archive/<date>-<slug>` directory layout (replaced by
+  `shipped/<slug>/` without state snapshots).
+- 14 of 18 specialists, ~700 of 1247 tests, ~83 KLOC of source.
+
+### Schema changes
+
+- `flow-state.json` `schemaVersion` is now `2`. The shape is:
+
+  ```ts
+  interface FlowStateV8 {
+    schemaVersion: 2;
+    currentSlug: string | null;
+    currentStage: "plan" | "build" | "review" | "ship" | null;
+    ac: Array<{ id: string; text: string; commit?: string;
+                status: "pending" | "committed" }>;
+    lastSpecialist: "brainstormer" | "architect" | "planner" | null;
+    startedAt: string;
+    reviewIterations: number;
+    securityFlag: boolean;
+  }
+  ```
+
+- `/cc` refuses to resume a `schemaVersion: 1` flow-state. See
+  `docs/migration-v7-to-v8.md` for the recommended manual path.
+
+### CLI
+
+- `cclaw init`, `cclaw sync`, `cclaw upgrade`, `cclaw uninstall`,
+  `cclaw version`, `cclaw help`. `cclaw plan / status / ship / migrate`
+  are explicitly rejected with exit code `2`.
+
+### Sizing target met
+
+| Metric | 7.7.1 | 8.0.0 |
+| --- | --- | --- |
+| LOC `src/` | ~46 583 | ~1 800 |
+| State files | 9 | 1 |
+| State size on disk | ~150 KB | ~500 B |
+| Specialists | 18 | 6 |
+| Slash commands | 4 (planned) | 3 |
+| Mandatory hooks | 5 | 1 |
+| Default hook profile | `standard` | `minimal` |
+| Stage gates | ~30 | 3 (AC traceability) |
+
+### Migration
+
+- No automatic migration from 7.x.
+- Maintainers must run `npm publish` and
+  `npm deprecate cclaw-cli@"<8.0.0" "8.0 is a breaking redesign. See
+  docs/migration-v7-to-v8.md."` after release.
+- See `docs/migration-v7-to-v8.md` for project-side steps.
+
 ## 7.7.1 — Inline-default for discovery-only waves
 
 7.7.1 calibrates the 7.7.0 Execution Topology Router so trivial markdown /

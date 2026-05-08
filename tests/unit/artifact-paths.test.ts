@@ -1,72 +1,61 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  legacyArtifactFileName,
-  resolveArtifactPath,
+  ARTIFACT_FILE_NAMES,
+  activeArtifactDir,
+  activeArtifactPath,
+  shippedArtifactDir,
+  shippedArtifactPath,
   slugifyArtifactTopic
 } from "../../src/artifact-paths.js";
-import { createTempProject } from "../helpers/index.js";
 
-async function ensureArtifactsDir(root: string): Promise<string> {
-  const artifactsDir = path.join(root, ".cclaw/artifacts");
-  await fs.mkdir(artifactsDir, { recursive: true });
-  return artifactsDir;
-}
-
-describe("artifact path resolver", () => {
-  it("slugifies topics into stable artifact-safe names", () => {
-    expect(slugifyArtifactTopic("  Billing Sync: Retry + Backoff!  ")).toBe("billing-sync-retry-backoff");
-    expect(slugifyArtifactTopic("!!!")).toBe("topic");
-  });
-
-  it("derives legacy file name from slug pattern", () => {
-    expect(legacyArtifactFileName("01-brainstorm-<slug>.md")).toBe("01-brainstorm.md");
-    expect(legacyArtifactFileName("04-spec.md")).toBe("04-spec.md");
-  });
-
-  it("resolves latest slugged artifact when legacy and new files coexist", async () => {
-    const root = await createTempProject("artifact-paths-read-prefers-slug");
-    const artifactsDir = await ensureArtifactsDir(root);
-    await fs.writeFile(path.join(artifactsDir, "02-scope.md"), "# legacy\n", "utf8");
-    await fs.writeFile(path.join(artifactsDir, "02-scope-billing-sync.md"), "# slugged\n", "utf8");
-
-    const resolved = await resolveArtifactPath("scope", {
-      projectRoot: root,
-      intent: "read"
+describe("artifact paths", () => {
+  it("uses singular file names for every artifact stage", () => {
+    expect(ARTIFACT_FILE_NAMES).toEqual({
+      plan: "plan.md",
+      build: "build.md",
+      review: "review.md",
+      ship: "ship.md",
+      decisions: "decisions.md",
+      learnings: "learnings.md"
     });
-    expect(resolved.fileName).toBe("02-scope-billing-sync.md");
-    expect(resolved.source).toBe("existing");
-    expect(resolved.legacy).toBe(false);
   });
 
-  it("falls back to legacy artifact during slug migration grace period", async () => {
-    const root = await createTempProject("artifact-paths-read-legacy");
-    const artifactsDir = await ensureArtifactsDir(root);
-    await fs.writeFile(path.join(artifactsDir, "01-brainstorm.md"), "# legacy brainstorm\n", "utf8");
-
-    const resolved = await resolveArtifactPath("brainstorm", {
-      projectRoot: root,
-      intent: "read"
-    });
-    expect(resolved.fileName).toBe("01-brainstorm.md");
-    expect(resolved.source).toBe("existing");
-    expect(resolved.legacy).toBe(true);
+  it("computes active path under .cclaw/flows/<slug>/<stage>.md", () => {
+    const project = "/tmp/proj";
+    expect(activeArtifactDir(project, "demo")).toBe(path.join(project, ".cclaw", "flows", "demo"));
+    expect(activeArtifactPath(project, "plan", "demo")).toBe(path.join(project, ".cclaw", "flows", "demo", "plan.md"));
+    expect(activeArtifactPath(project, "build", "demo")).toBe(
+      path.join(project, ".cclaw", "flows", "demo", "build.md")
+    );
+    expect(activeArtifactPath(project, "review", "demo")).toBe(
+      path.join(project, ".cclaw", "flows", "demo", "review.md")
+    );
+    expect(activeArtifactPath(project, "ship", "demo")).toBe(
+      path.join(project, ".cclaw", "flows", "demo", "ship.md")
+    );
+    expect(activeArtifactPath(project, "decisions", "demo")).toBe(
+      path.join(project, ".cclaw", "flows", "demo", "decisions.md")
+    );
+    expect(activeArtifactPath(project, "learnings", "demo")).toBe(
+      path.join(project, ".cclaw", "flows", "demo", "learnings.md")
+    );
   });
 
-  it("adds numeric suffix when two topics collide on the same slug", async () => {
-    const root = await createTempProject("artifact-paths-collision");
-    const artifactsDir = await ensureArtifactsDir(root);
-    await fs.writeFile(path.join(artifactsDir, "01-brainstorm-release-flow.md"), "# first\n", "utf8");
-    await fs.writeFile(path.join(artifactsDir, "01-brainstorm-release-flow-2.md"), "# second\n", "utf8");
+  it("uses identical naming inside shipped/<slug>/", () => {
+    const project = "/tmp/proj";
+    expect(shippedArtifactDir(project, "demo")).toBe(path.join(project, ".cclaw", "flows", "shipped", "demo"));
+    expect(shippedArtifactPath(project, "demo", "plan")).toBe(
+      path.join(project, ".cclaw", "flows", "shipped", "demo", "plan.md")
+    );
+    expect(shippedArtifactPath(project, "demo", "learnings")).toBe(
+      path.join(project, ".cclaw", "flows", "shipped", "demo", "learnings.md")
+    );
+  });
 
-    const resolved = await resolveArtifactPath("brainstorm", {
-      projectRoot: root,
-      topic: "Release flow",
-      intent: "write"
-    });
-    expect(resolved.fileName).toBe("01-brainstorm-release-flow-3.md");
-    expect(resolved.source).toBe("generated");
-    expect(resolved.legacy).toBe(false);
+  it("slugifies into kebab-case truncated to 64 chars", () => {
+    expect(slugifyArtifactTopic("Add Approval Page!")).toBe("add-approval-page");
+    expect(slugifyArtifactTopic("a".repeat(80))).toHaveLength(64);
+    expect(slugifyArtifactTopic("   ")).toBe("task");
   });
 });

@@ -1,26 +1,34 @@
-export function cancelCommandContract(): string {
-  return `# /cc-cancel command contract
+export const CANCEL_COMMAND_BODY = `# /cc-cancel — cancel the active cclaw run
 
-Use this command when the user wants to stop the active run without claiming completion.
+Stop the current flow without finishing it. Artifacts are preserved.
 
-## Protocol
+## Behaviour
 
-1. Ask for a concise cancellation reason if the user has not already provided one.
-2. Run \`node .cclaw/hooks/cancel-run.mjs --reason="<reason>"\` from the project root. Use \`--disposition=abandoned\` only when the user explicitly frames the run as abandoned rather than cancelled.
-3. Report the archive path and reset run id. Make clear that the archived run is not a completed ship.
+1. Read \`.cclaw/state/flow-state.json\`.
+2. If \`currentSlug\` is null → tell the user there is nothing to cancel and stop.
+3. Otherwise, perform the cancel runtime:
+   - For every active stage (\`plan\`, \`build\`, \`review\`, \`ship\`, \`decisions\`, \`learnings\`), move \`<slug>.md\` into \`.cclaw/flows/cancelled/<slug>/\` as \`<stage>.md\`.
+   - Write \`.cclaw/flows/cancelled/<slug>/manifest.md\` recording the cancel time, the user's reason (if provided), and the artifacts that were moved.
+   - Update each moved artifact's frontmatter so \`status: cancelled\` and \`stage: cancelled\` (best-effort — invalid frontmatter is preserved as-is).
+   - Reset \`flow-state.json\` to fresh: \`currentSlug=null, currentStage=null, ac=[], reviewIterations=0, securityFlag=false\`.
+   - Leave the working tree alone. Do not auto-commit, do not stash, do not revert.
+4. Confirm the cancellation in one line and list the destination directory.
 
-Cancelled and abandoned archives are allowed from any stage, but they require a required reason so future readers know why the run ended.
+## Recovery
+
+The artifacts under \`.cclaw/flows/cancelled/<slug>/\` are read-only references for future runs. To resume the work:
+
+1. Invoke \`/cc <task>\` describing the same goal.
+2. Existing-plan detection will surface the cancelled match.
+3. Choose **resume from cancelled** to move the artifacts from \`.cclaw/flows/cancelled/<slug>/\` back into \`.cclaw/flows/<slug>/\`, reset \`status: active\`, and continue.
+
+## Hard rules
+
+- \`/cc-cancel\` never deletes artifacts. The orchestrator must refuse explicit deletion requests.
+- \`/cc-cancel\` never pushes to git or rewrites history.
+- \`/cc-cancel\` is idempotent: invoking it without an active slug prints "no active run" and stops.
 `;
-}
 
-export function cancelCommandSkillMarkdown(): string {
-  return `---
-name: flow-cancel
-description: Cancel or abandon the active cclaw run with a required reason. Use when the user types /cc-cancel or asks to cancel, abandon, stop, discard, or reset an unfinished run.
----
-
-# Cancel cclaw Run
-
-Load and follow \`.cclaw/commands/cancel.md\`. This is a non-completion path: require a reason, run the generated cancel helper, and archive with cancelled or abandoned disposition.
-`;
+export function renderCancelCommand(): string {
+  return CANCEL_COMMAND_BODY;
 }

@@ -1,41 +1,27 @@
-/**
- * Shared wording blocks for Decision Protocol + structured ask fallback.
- *
- * Keep stage/utility prompt surfaces consistent and reduce wording drift.
- */
+export const DECISION_PROTOCOL = `# Decision protocol (short form)
 
-export const STRUCTURED_ASK_TOOL_LIST_GENERIC =
-  "\`AskUserQuestion\` / \`AskQuestion\` / \`question\` / \`request_user_input\`";
+A decision exists only when there is a real choice between at least two options. The full schema, FMT, and pre-mortem rules live in \`lib/agents/architect.md\`. This page covers only the question "is this a decision at all?"
 
-export const STRUCTURED_ASK_TOOL_LIST_REVIEW =
-  "\`AskUserQuestion\` on Claude, \`AskQuestion\` on Cursor, \`question\` on OpenCode with \`permission.question: \"allow\"\`, \`request_user_input\` on Codex in Plan/Collaboration mode";
+## What is not a decision
 
-export const STRUCTURED_ASK_TOOL_LIST_IDEATE =
-  "\`AskUserQuestion\` on Claude, \`AskQuestion\` on Cursor, \`question\` on OpenCode when \`permission.question: \"allow\"\` is set, \`request_user_input\` on Codex in Plan / Collaboration mode";
+- "Use the library that is already in the project."
+- "Match the existing pattern" (unless two competing patterns exist).
+- "Pick what the user asked for."
 
-export function structuredAskFallbackSentence(
-  toolList: string = STRUCTURED_ASK_TOOL_LIST_GENERIC
-): string {
-  return `If the harness's native structured-ask tool is available (${toolList}), send exactly ONE question per call, validate fields against the runtime schema, and on schema error immediately fall back to a plain-text lettered list instead of retrying guessed payloads.`;
-}
+If you find yourself writing one of these, do not open a \`D-N\`. Capture the choice as a one-line note in \`flows/<slug>/plan.md\` if it is worth remembering at all.
 
-export function decisionProtocolInstruction(
-  subject: string,
-  optionsClause: string,
-  recommendationClause: string,
-  toolList: string = STRUCTURED_ASK_TOOL_LIST_GENERIC
-): string {
-  return `For ${subject}: use the Decision Protocol — ${optionsClause}. Do NOT use a numeric Completeness rubric; ${recommendationClause}. ${structuredAskFallbackSentence(toolList)}`;
-}
+## What every D-N must carry
 
-export function structuredAskSingleChoiceInstruction(
-  subject: string,
-  choicesClause: string,
-  toolList: string = STRUCTURED_ASK_TOOL_LIST_GENERIC
-): string {
-  return `For ${subject}: use the native structured-ask tool (${toolList}) only if runtime schema is confirmed; otherwise collect ${choicesClause} with a plain-text single-choice prompt.`;
-}
+\`Context · Considered options (>= 2) · Selected · Rationale · Rejected because · Consequences · Refs\`. Add **Failure Mode Table** + **Pre-mortem** for every product-grade or ideal tier decision (see architect.md).
 
-export function ideaStructuredAskToolsWithFallback(): string {
-  return `${STRUCTURED_ASK_TOOL_LIST_IDEATE}; fall back to a plain-text lettered list when the tool is hidden or errors`;
-}
+## Worked examples
+
+See \`lib/examples/decision-bm25-search.md\`, \`lib/examples/decision-permission-cache.md\`, \`lib/examples/decision-forward-only-migration.md\`.
+
+## Refactoring decisions
+
+Decisions are immutable once shipped. To revisit:
+
+- in the active run, edit the existing \`D-N\` and append a "Revised:" subsection;
+- after ship, write a new \`D-N\` in the refining slug and reference the prior \`D-N\` in its Refs section.
+`;

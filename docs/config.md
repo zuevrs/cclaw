@@ -1,64 +1,40 @@
+---
+title: "cclaw v8 configuration"
+status: locked
+---
+
 # `.cclaw/config.yaml`
 
-Config is mostly managed by cclaw. Users normally edit harnesses and, when needed, the TDD execution policy.
-
-## What users can set
-
-User-facing keys:
-
-- `harnesses`: which harness shims/hooks cclaw materializes.
-- `execution.topology`: `auto` (default), `inline`, `single-builder`, `parallel-builders`, or `strict-micro`.
-- `execution.strictness`: `fast`, `balanced` (default), or `strict`.
-- `execution.maxBuilders`: maximum simultaneous slice-builder workers when topology is `parallel-builders` (default `5`).
-- `plan.sliceGranularity`: `feature-atomic` (default) or `strict-micro`.
-- `plan.microTaskPolicy`: `advisory` (default) or `strict`.
-- `tdd.lockfileTwinPolicy`: `auto-include` (default), `auto-revert`, or `strict-fence`.
-
-## What cclaw manages automatically
-
-- `version`: CLI version that wrote the config.
-- `flowVersion`: flow-contract version.
-
-`cclaw init` / `sync` / `upgrade` always keep this minimal shape:
+`cclaw init` and `cclaw sync` write `.cclaw/config.yaml`. This is the only configuration cclaw reads.
 
 ```yaml
-version: 3.0.0
-flowVersion: 1.0.0
+version: 8.0.0
+flowVersion: "8"
 harnesses:
-  - claude
   - cursor
-  - opencode
-  - codex
-tdd:
-  commitMode: managed-per-slice
-  isolationMode: worktree
-  worktreeRoot: .cclaw/worktrees
-  lockfileTwinPolicy: auto-include
-execution:
-  topology: auto
-  strictness: balanced
-  maxBuilders: 5
-plan:
-  sliceGranularity: feature-atomic
-  microTaskPolicy: advisory
+hooks:
+  profile: minimal
 ```
 
-`execution.topology: auto` + `execution.strictness: balanced` means cclaw treats feature-atomic implementation units as the schedulable surface, with internal 2-5 minute TDD steps. Use `execution.topology: strict-micro`, `execution.strictness: strict`, or `plan.microTaskPolicy: strict` when high-risk work should preserve the older one-tiny-task-per-slice discipline.
+## Fields
 
-Since 7.7.1 the auto router is also lane-aware: when every ready member of the active wave is in a non-high-risk `scaffold` or `docs` lane and `claimedPaths` are disjoint, the wave is collapsed to `inline` (small batch ≤ 3 ready slices) or `single-builder` (larger batch). `inline` mode surfaces in `wave-status --json` as `nextDispatch.mode: controller-inline` plus a `nextDispatch.controllerHint`; the controller fulfils the ready slices itself with `delegation-record --dispatch-surface=role-switch --agent-definition-path=.cclaw/skills/tdd/SKILL.md` lifecycle rows instead of dispatching a slice-builder per file.
+| Field | Type | Notes |
+| --- | --- | --- |
+| `version` | string | npm version of the cclaw-cli that wrote the file |
+| `flowVersion` | `"8"` | Locked. v7 configs are not migrated automatically |
+| `harnesses` | array | Subset of `claude`, `cursor`, `opencode`, `codex` |
+| `hooks.profile` | `"minimal"` \| `"strict"` | `minimal` is the default; `strict` is reserved for teams that want stricter local enforcement and is currently behaviour-equivalent to `minimal`. |
 
-## Removed in 3.0.0
+The config has **no** flags for stage skipping, track selection, discovery mode, parallel-builder counts, or specialist enablement. Those concerns are removed in v8 — orchestration is decided per `/cc` invocation, not per project.
 
-These keys are no longer supported at top level: `strictness`, `hookProfile`, `disabledHooks`, `gitHookGuards`, `vcs`, `tddTestGlobs`, `compound`, `earlyLoop`, `defaultTrack`, `languageRulePacks`, `trackHeuristics`, `sliceReview`, `ironLaws`, `optInAudits`, `reviewLoop`.
+## Changing harnesses
 
-If any removed key is present, config parsing fails with:
+```bash
+cclaw sync --harness=claude,cursor
+```
 
-`key X is no longer supported in cclaw 3.0.0; see CHANGELOG.md`
+Re-running `sync` rewrites the config and adds/removes harness-specific assets (`.claude/commands/cc.md`, `.cursor/commands/cc.md`, etc.).
 
-## After editing harnesses
+## Changing hook profile
 
-Run:
-
-`npx cclaw-cli sync`
-
-so generated hook documents and harness shims match the new harness set.
+For the current release, only `minimal` is functionally distinct; `strict` is accepted for forward-compatibility. To set a profile manually, edit `.cclaw/config.yaml` and re-run `cclaw sync`.

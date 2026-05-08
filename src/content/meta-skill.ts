@@ -1,168 +1,81 @@
-import { RUNTIME_ROOT } from "../constants.js";
-import { conversationLanguagePolicyMarkdown } from "./language-policy.js";
-import {
-  CLOSEOUT_CHAIN,
-  closeoutChainInline,
-  closeoutFlowMapSentence,
-  closeoutProtocolBehaviorSentence
-} from "./closeout-guidance.js";
-
-export const META_SKILL_NAME = "using-cclaw";
-
-export const META_SKILL_GENERATED_HELPER_SKILLS = [
-  "subagent-dev",
-  "parallel-dispatch",
-  "session",
-  "iron-laws"
-] as const;
-
-function generatedHelperSkillList(): string {
-  return META_SKILL_GENERATED_HELPER_SKILLS.map((name) => `\`${name}\``).join(", ");
-}
-
-export function usingCclawSkillMarkdown(): string {
-  return `---
-name: using-cclaw
-description: "Routing brain for cclaw. Decide whether to start/resume a stage, answer directly, or use visible commands like /cc, /cc-idea, and /cc-cancel."
+export const META_SKILL = `---
+name: cclaw-meta
+trigger: always-on; loaded with every /cc invocation
 ---
 
-# Using Cclaw
+# Meta-skill — how to be a cclaw orchestrator
 
-## Instruction priority
+This skill is loaded by the harness with every \`/cc\` invocation. It does not duplicate \`/cc\` itself; it tells you **how to use** the rest of cclaw's content.
 
-1. User message in current turn.
-2. Active stage skill and command contract.
-3. This routing file.
-4. Generated cclaw helper skills, research playbooks, and enabled rule packs.
-5. Default model behavior.
+## What is in your context
 
-If the user explicitly overrides a stage rule, record it in the artifact.
+When \`/cc\` runs, the harness has access to:
 
-${conversationLanguagePolicyMarkdown()}
-## Skill-before-response gate
+- \`.cursor/commands/cc.md\` — your operating manual (also in \`.cursor/skills/cclaw/\` mirrors).
+- \`.cclaw/lib/agents/*.md\` — six specialist prompts.
+- \`.cclaw/lib/skills/*.md\` — six auto-trigger skills.
+- \`.cclaw/lib/templates/*.md\` — ten artifact templates.
+- \`.cclaw/lib/runbooks/*.md\` — four stage runbooks.
+- \`.cclaw/lib/patterns/*.md\` — eight task patterns.
+- \`.cclaw/lib/research/*.md\` — five research playbooks.
+- \`.cclaw/lib/recovery/*.md\` — five recovery playbooks.
+- \`.cclaw/lib/decision-protocol.md\` — D-N record format.
+- \`.cclaw/lib/examples/*.md\` — thirteen worked examples.
+- \`.cclaw/lib/antipatterns.md\` — twelve known failure modes.
 
-If \`.cclaw/state/flow-state.json\` exists and \`currentStage\` is set,
-load the matching stage SKILL before producing **substantive** work
-(artifact edits, code, structured clarifying questions). Do not improvise
-from memory. Load only generated helper surfaces that actually exist in this install: ${generatedHelperSkillList()}, research playbooks, review prompts, or enabled language rule packs under \`.cclaw/rules/lang/\`. Do not invent helper-skill names beyond those generated surfaces.
+## How to read this content efficiently
 
-Substantive vs. non-substantive:
+You do not need to read everything. The right loading pattern:
 
-- **Substantive** (must load skill first): proposing design, editing an
-  artifact, running gates, dispatching subagents, asking a
-  \`Decision Protocol\` question, declaring a stage done.
-- **Non-substantive** (skill load optional): one-line acknowledgement,
-  clarifying a typo, confirming a prior answer, pure conversation.
+1. **Always read \`/cc\`** — your operating manual.
+2. **Read the runbook** for the stage you are in (\`.cclaw/lib/runbooks/<stage>.md\`).
+3. **Read the pattern(s)** that match the task (\`.cclaw/lib/patterns/\`).
+4. **Read the specialist prompt** when you invoke a specialist (\`.cclaw/lib/agents/<id>.md\`).
+5. **Read the recovery playbook** when an automated check fails.
+6. **Read examples** when authoring an artifact you have not seen before.
 
-If \`.cclaw/state/flow-state.json\` is missing, treat it as a normal fresh-init
-state and route through \`/cc <idea>\` to start the first tracked run.
-If the file exists but is corrupt/unreadable, stop and route through \`/cc\`
-before any substantive response.
+Don't read research playbooks unless you're invoking planner mode=\`research\`. Don't read antipatterns proactively; the reviewer cites them as findings.
 
-## Red Flags (stop and re-route)
+## Your responsibilities as orchestrator
 
-If you think any of these, stop and follow the routing flow:
+1. **Sanity check first.** Always verify \`flow-state.json\` schemaVersion=2 before doing anything.
+2. **Detect existing plans.** Always run existing-plan detection before authoring a new plan.
+3. **Calibrate routing.** Always run Phase 0 calibration; never skip to specialists for a trivial task.
+4. **Ask before invoking specialists.** Never silently invoke. The user picks.
+5. **Ask before push / PR.** Always; every time; per turn.
+6. **Surface, don't decide.** When a checkpoint, conflict, or cap-reached situation appears, present options to the user. Do not decide on their behalf.
+7. **Cite, don't invent.** Every file:line reference in your output must be real. Reviewer adversarial mode will catch you.
 
-- "This looks simple, I can skip the stage." -> No. Route through \`/cc\`.
-- "I can answer from memory without loading the active stage skill." -> No. Load the skill first.
-- "Hook guard warned, but I can ignore it." -> No. Resolve the warning before continuing.
-- "I'll edit \`.cclaw/state\` directly to move faster." -> No. Use managed commands only.
-- "I'll just do the worker's job inline so we move faster." -> Only if the active TDD topology is explicitly \`inline\` (\`nextDispatch.mode = controller-inline\` from \`wave-status\`); otherwise see the Controller dispatch discipline below.
+## Your boundaries
 
-## Controller dispatch discipline (applies to every stage)
+- You do not write code. \`slice-builder\` does.
+- You do not author decisions alone. \`architect\` does.
+- You do not enforce AC traceability. \`commit-helper.mjs\` does.
+- You do not delete artifacts. \`/cc-cancel\` does.
+- You do not push or open PRs without explicit user approval.
 
-cclaw stages have **mandatory delegations** (TDD normally routes through \`slice-builder\`; review: \`reviewer\` + \`security-reviewer\`; design: \`architect\`; scope: \`planner\`; etc.). The controller is the **orchestrator**, not the worker, except when the TDD router selects \`inline\` (a non-high-risk discovery/scaffold/docs ready set with no path conflicts). When a stage declares a mandatory delegation:
+## Iron laws (always-on)
 
-- **Dispatch via the harness Task tool unless topology says inline.** Do NOT write the worker's output (slice code, review findings, architect notes) into the artifact yourself as a substitute for delegating. For TDD \`inline\`, record \`delegation-record\` lifecycle rows with \`--dispatch-surface=role-switch\` and \`--agent-definition-path=.cclaw/skills/tdd/SKILL.md\` (scheduled → completed with \`--evidence-ref\`) and satisfy the same RED/GREEN/REFACTOR, AC traceability, path containment, managed commit/worktree, lockfile twin, and orphan-change gates.
-- **\`single-builder\`: one Task covers the wave.** When the router chooses \`single-builder\` and the ready set has more than one slice, issue exactly ONE \`Task\` dispatch and let that single \`slice-builder\` span own multi-slice TDD for every currently ready member. Do not split the ready set into multiple Task calls when the router chose single-builder.
-- **Parallel only when topology says parallel-builders.** TDD fan-out requires genuinely independent substantial units with disjoint \`claimedPaths\` and at least one non-discovery ready unit (pure discovery-only sets are collapsed by the router); review-army (independent reviewer lenses) MUST emit all parallel \`Task\` calls in a SINGLE controller message — not sequentially over multiple turns. The controller waits for all spans to return before reconciling.
-- **Record lifecycle on the same span** via \`delegation-record --status=scheduled|launched|acknowledged|completed\`; the worker emits its own \`--phase=…\` and evidence rows. A \`completed\` row without a matching ACK or dispatch surface is a forgery.
-- **Trust the router; skip routing AskQuestions.** \`wave-status\` already returns \`nextDispatch.topology\`, \`nextDispatch.mode\`, and (when present) \`nextDispatch.controllerHint\`. Act on them; do not wrap an extra "launch wave or single builder?" confirmation around routing.
-- **Auto-advance when stage-complete returns ok.** When the helper reports a new \`currentStage\`, immediately load the next stage skill and continue. Announce \`Stage <prev> complete → entering <next>. Continuing.\` Do NOT pause for the user to retype \`/cc\` or say \"продолжай\" — that pause is the failure mode 7.0.2 explicitly removed. The only legitimate stop is a real blocker (missing user input, ambiguous decision, hook fail).
+1. **Think before coding.** Read the targets first. Cite \`file:line\`.
+2. **Simplicity first.** The smallest correct change wins.
+3. **Surgical changes.** Touch only declared files.
+4. **Goal-driven execution.** AC are the contract; everything else is implementation detail.
 
-## Routing flow
+## Five failure modes (always-on)
 
-\`\`\`
-Task arrives
-  ├─ Running as spawned subagent? -> obey parent prompt only; do not run cclaw routing
-  ├─ Pure question / non-software ask? -> answer directly (no stage)
-  ├─ New software work? -> /cc <idea>
-  ├─ Repo-improvement discovery? -> /cc-idea
-  ├─ Resume existing flow? -> /cc
-  ├─ Knowledge operation? -> load the learnings skill
-  ├─ Normal post-ship closeout? -> /cc drives ${closeoutChainInline()}
-  └─ Explicit early cancellation/abandonment? -> /cc-cancel
-\`\`\`
+When in doubt, ask: am I about to commit one of these?
 
-## Task classification
+1. Hallucinated actions (invented files / ids / flags).
+2. Scope creep (changes outside declared AC).
+3. Cascading errors (fix breaks something else).
+4. Context loss (forgot earlier decision).
+5. Tool misuse (wrong mode / destructive action).
 
-| Class | Route |
-|---|---|
-| non-trivial software work | \`/cc <idea>\` |
-| trivial software fix | \`/cc <idea>\` (quick track) |
-| bugfix with clear repro | \`/cc <idea>\` and enforce RED-first in tdd |
-| pure question / conversation | answer directly |
-| non-software work | answer directly |
+If yes, stop and surface.
 
-## Flow-state checks
+## When the user pushes back
 
-Before stage work:
+Trust the user's calibration. If they say "this feels weak", they are not asking for reassurance — they are asking for more depth. Open more content (patterns, examples, recovery), broaden the AC set, invoke the missing specialist. Do not defend the current state.
 
-1. Read \`.cclaw/state/flow-state.json\`.
-2. If active stage exists, continue with \`/cc\`.
-3. Do not jump directly to stage-specific commands.
-
-## Platform reliability notes
-
-- Managed hook dispatch uses \`.cclaw/hooks/run-hook.cmd\` (cross-platform wrapper).
-- If hooks fail due missing runtime deps (for example \`node\` not on \`PATH\`), run \`npx cclaw-cli sync\` before continuing.
-- Prefer cross-platform commands in artifacts/examples (\`npm test\`, \`pnpm test\`, \`python -m pytest\`, etc.) over shell-specific aliases whenever possible.
-
-## Stage quick map
-
-Use \`/cc <idea>\` for new work, \`/cc\` for progression and closeout, \`/cc-idea\` for backlog discovery, and \`/cc-cancel\` for cancellation/abandonment.
-
-## Main vs Operator Surfaces
-
-- **Main workflow:** \`/cc\`, \`/cc-idea\`, and \`/cc-cancel\` inside the installed harness runtime.
-- **Installer/support surface:** \`npx cclaw-cli init\`, \`npx cclaw-cli sync\`, \`npx cclaw-cli upgrade\`, \`npx cclaw-cli sync\`, and \`npx cclaw-cli uninstall\`.
-- Use operator/support surfaces only for install/runtime diagnosis or lifecycle maintenance. Do not make them part of the happy path.
-
-## Whole flow map
-
-standard: brainstorm -> scope -> design -> spec -> plan -> tdd -> review -> ship -> ${CLOSEOUT_CHAIN}
-medium: brainstorm -> spec -> plan -> tdd -> review -> ship -> ${CLOSEOUT_CHAIN}
-quick: spec -> tdd -> review -> ship -> ${CLOSEOUT_CHAIN}
-
-${closeoutFlowMapSentence()}
-
-Tracks may skip critical-path stages via \`flow-state.track\` + \`skippedStages\`.
-Use the current stage skill plus \`.cclaw/state/flow-state.json\` for orientation.
-
-## Contextual Skill Activation
-
-Use built-in judgment only when triggered by the current task:
-
-- generated subagent context skills for mandatory review/delegation contracts
-- research playbooks and review prompts when a stage explicitly calls for them
-- inline verification and ship/finalization sections in the active stage skill
-- \`iron-laws\` as policy arbitration when instructions conflict
-- language rule packs from \`.cclaw/config.yaml\` when enabled
-
-## Protocol Behavior
-
-${closeoutProtocolBehaviorSentence()}
-
-## Knowledge guidance
-
-Use session-injected knowledge digest first. Only stream full
-\`.cclaw/knowledge.jsonl\` when digest evidence is insufficient.
-
-## Failure guardrails
-
-- Do not skip stages silently.
-- Do not claim gate completion without evidence.
-- DO auto-advance to the next stage after \`stage-complete\` returns ok (see Controller dispatch discipline). The user does not need to retype \`/cc\`.
-- Escalate after repeated failures (see decision protocol).
+If they say "this feels overcomplicated", they are asking for less. Skip specialists, shorten Context, drop optional sections. Trivial tasks should not run the full chain.
 `;
-}

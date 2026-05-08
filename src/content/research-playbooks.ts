@@ -1,174 +1,169 @@
-/**
- * In-thread research playbooks.
- *
- * These files intentionally have no YAML frontmatter and are not standalone
- * delegated personas. The primary agent loads and executes them directly.
- */
+export interface ResearchPlaybook {
+  id: string;
+  fileName: string;
+  title: string;
+  body: string;
+}
 
-export const RESEARCH_PLAYBOOKS: Record<string, string> = {
-  "repo-scan.md": `# Repo Scan Playbook
+const READING_CODEBASE = `# Research — reading the codebase
 
-## Purpose
+Planner mode \`research\` exists because writing a plan against a codebase you have not read produces speculation. This playbook scopes "read enough" without becoming a stall. It covers three reading targets: implementation files, existing tests, and integration boundaries.
 
-Build a grounded map of existing modules and reuse candidates before design lock.
+## 1. What you must read
 
-## Steps
+| signal | read |
+| --- | --- |
+| AC mentions a file | the file (or the relevant function within it) |
+| AC mentions a test | the test file |
+| AC implies a public API change | the export site + at least one consumer |
+| AC implies a schema change | the migration directory + the ORM model |
+| AC implies a config change | the config file + every place it is read |
+| AC implies a CI change | the workflow file + the policy doc, if any |
 
-1. Identify 3-8 task keywords (feature nouns + action verbs).
-2. Search for likely modules with \`rg\` and \`Glob\` patterns.
-3. List existing implementations or close analogs with file citations.
-4. Flag duplication risk and obvious extension points.
+## 2. What you may skim
 
-## Output Contract
+| signal | skim |
+| --- | --- |
+| README mentions the area | the relevant README section |
+| Prior shipped slug for the same area exists | \`.cclaw/flows/shipped/<slug>/manifest.md\` |
+| Prior decisions in the area | \`.cclaw/flows/shipped/<slug>/decisions.md\` |
 
-- Relevant modules: \`path - purpose\`
-- Reuse candidates: \`file:line - why reusable\`
-- Gaps: capabilities not currently present
+## 3. What you may ignore
 
-## Guardrails
+- The whole codebase. You are not writing a survey paper.
+- Files outside the AC's declared file set.
+- Library source unless the AC depends on a private library detail.
 
-- Read-only procedure.
-- Never invent paths or ownership.
-- If scope is too broad, return bounded partial coverage explicitly.
-`,
-  "learnings-lookup.md": `# Learnings Lookup Playbook
+## 4. Reading existing tests effectively
 
-## Purpose
+When the task is to add or modify behaviour, the existing test suite is the fastest way to understand the contract.
 
-Reuse prior project knowledge before choosing a direction.
+**Where to look first:**
 
-## Steps
+1. The test file with the same name as the module (\`src/foo.ts\` → \`tests/unit/foo.test.ts\` or \`src/foo.test.ts\`). Read the highest-fidelity tests there: integration > unit, behavioural > snapshot.
+2. The most recent test file in the same directory. It usually reflects the current style, fixture conventions, and mocking choices.
+3. The shared fixtures (\`tests/helpers/\` or equivalent). They carry the project's idea of "a normal record"; reuse instead of inventing.
 
-1. Use the session-injected knowledge digest first.
-2. Read \`.cclaw/knowledge.jsonl\` only if the digest is missing or too thin.
-3. Match by stage/domain keywords from the current task.
-4. Rank matches by confidence and recency.
-5. Return the top entries verbatim.
+**What to extract:**
 
-## Output Contract
+- The contract the module advertises. Tests are the contract.
+- The runner conventions (\`describe\` / \`it\` / \`test\`, async style, mock library).
+- The "doesn't crash on edge X" tests — these often map directly to AC verification lines.
 
-- Matched rules
-- Matched patterns
-- Matched lessons
-- Matched compounds
-- Explicit no-match note when empty
+**What to ignore:**
 
-## Guardrails
+- Snapshot tests for unrelated parts of the file.
+- Coverage gaps in adjacent modules.
+- Tests skipped with \`.skip\` / \`xit\` / \`@pytest.mark.skip\` — usually intentional or stale.
 
-- Append-only store: do not rewrite history entries.
-- Prefer exact quote over paraphrase.
-`,
-  "framework-docs-lookup.md": `# Framework Docs Lookup Playbook
+Findings flow back to the plan as either AC verification lines that reference an existing test ("AC-2 verified by \`tests/unit/foo.test.ts: handles empty input\`") or a new AC ("AC-3: pin the empty-input case in a test").
 
-## Purpose
+## 5. Reading integration boundaries
 
-Anchor design decisions to version-accurate framework/library docs.
+When the task crosses a module boundary or depends on a library upgrade, read both sides.
 
-## Steps
+**Internal boundaries:**
 
-1. Resolve the actual dependency version from lockfiles/manifests.
-2. Fetch official docs for that version (context7 when available).
-3. Extract APIs used by the task and any migration or deprecation notes.
+- The exported surface (\`index.ts\` / \`__init__.py\` / \`mod.rs\`) and the consumers.
+- Any DI registration or factory wiring.
+- The integration test that covers the boundary, if it exists.
 
-## Output Contract
+If no integration test exists, "add one" is often a valid AC.
 
-- Library + version
-- APIs/signatures touched
-- Relevant breaking changes or gotchas
-- Source links/references
+**External boundaries (third-party libraries):**
 
-## Guardrails
+- The library's documented API for the version pinned in the project (not the latest version).
+- Any compatibility shims the project added (look for files with \`compat\` / \`shim\` / \`adapter\` in the name).
+- The version constraint in \`package.json\` / \`pyproject.toml\` / \`Cargo.toml\` / equivalent.
 
-- No speculative APIs.
-- If docs conflict or are unclear, mark UNKNOWN and escalate.
-`,
-  "best-practices-lookup.md": `# Best Practices Lookup Playbook
+If the project uses a feature the pinned version does not have, escalate back to architect.
 
-## Purpose
+A boundary inventory then enters the Plan phases (e.g. "Phase 1 — extend boundary at \`src/server/api/index.ts\` to expose the new route"). If the boundary is across a trust boundary (network, IPC, eval), set \`security_flag: true\` in plan frontmatter.
 
-Summarize citable domain practices for a narrow design decision.
+## 6. Where the output lands
 
-## Steps
+Research mode does not produce its own artifact. It feeds two sections of \`flows/<slug>/plan.md\`:
 
-1. Narrow the domain to one concrete sub-problem.
-2. Gather 3-5 authoritative sources.
-3. Produce short practice and anti-pattern lists tied to sources.
+- the **Context** paragraph, citing what you read;
+- the **Plan** phases, with file:line references.
 
-## Output Contract
+## 7. Stop conditions
 
-- Recommended practices (\`practice - rationale - source\`)
-- Common traps (\`trap - why it fails - source\`)
-- Decision hooks (1-3 questions to resolve before proceeding)
+Stop reading when you can answer:
 
-## Guardrails
+1. Where will the change land? (file:line)
+2. Who calls / depends on the changed code?
+3. What is the verification (test, command, manual step)?
+4. What is the smallest commit that satisfies AC-1?
 
-- Cite authoritative sources (official docs/standards).
-- State uncertainty explicitly when consensus is weak.
-`,
-  "research-fleet.md": `# Parallel Research Fleet Playbook
+If you can answer all four, stop reading and start authoring AC.
+`;
 
-## Purpose
+const HOW_TO_TIME_BOX = `# Research — time-boxing
 
-Run a tiered investigation before design lock so architecture choices are grounded
-in current ecosystem data, not intuition.
+Research can dominate a slug if you let it. Time-box.
 
-## Dispatch Lenses (tiered)
+## Default budget
 
-Choose the smallest tier that matches the change; use parallel threads only when the
-harness supports it and the lenses are independent:
+- 5-10 minutes of reading per AC.
+- 15-30 minutes total for medium tasks.
+- Up to 60 minutes for large/risky tasks; if you exceed 60 minutes, the task is too large and should be split.
 
-- **Lightweight:** pitfalls-researcher only — known failure modes, CVEs, and operational traps.
-- **Standard:** architecture-researcher + pitfalls-researcher.
-- **Deep:** stack-researcher + features-researcher + architecture-researcher + pitfalls-researcher.
+## Signals that you are over-reading
 
-## Output Contract
+- You re-read the same file twice without finding new information.
+- You start reading "interesting" code outside the AC scope.
+- You start drafting unrelated refactors mentally.
 
-Write findings to \`.cclaw/artifacts/02a-research.md\` with these sections:
+When any of these triggers, stop reading. Author the plan with what you have. The reviewer will catch holes; you do not need to be exhaustive at plan-stage.
 
-- \`## Stack Analysis\`
-- \`## Features & Patterns\`
-- \`## Architecture Options\`
-- \`## Pitfalls & Risks\`
-- \`## Synthesis\`
+## Signals that you are under-reading
 
-Each section that was run must contain concrete notes and at least one evidence reference
-(source URL, file path, or command output anchor). Sections skipped by tier should say \`Not run for this tier\`.
+- You cannot cite a single \`file:path:line\` reference.
+- You cannot name the verification step for an AC.
+- You are speculating about library behaviour rather than reading the call site.
 
-## Guardrails
+In all three cases, read more before authoring.
+`;
 
-- Investigate first; no production code edits in this playbook.
-- Keep lenses independent during fan-out; merge only in synthesis.
-- If any lens is incomplete, record it explicitly in \`## Synthesis\` as a blocker.
-`,
-  "git-history.md": `# Git History Playbook
+const HOW_TO_USE_PRIOR_SLUGS = `# Research — using prior shipped slugs
 
-## Purpose
+Refinement is the cheapest path to a high-quality plan. Use it.
 
-Detect churn, regressions, and ownership signals before locking scope/design.
+## When to look at prior slugs
 
-## Steps
+- Existing-plan detection found a match (slug or body overlap).
+- The user said "remember when we did X" / "like the previous one" / "fix the thing we shipped last week".
+- The task touches an area that has been shipped within the past month.
 
-1. For impacted paths, inspect recent history and themes:
-   - \`git log --follow -n 20 -- <path>\`
-2. Check ownership hotspots:
-   - \`git blame <path>\`
-   - \`git log --since="<window>" --format="%an" -- <path>\`
-3. Search for regression signals:
-   - \`git log --since="<window>" --grep="revert|regression" -- <path>\`
+## What to extract from a prior shipped slug
 
-## Output Contract
+| from | extract |
+| --- | --- |
+| \`shipped/<slug>/manifest.md\` | AC ↔ commit map; ship_commit |
+| \`shipped/<slug>/plan.md\` | Context, Frame, Out-of-scope items (still useful) |
+| \`shipped/<slug>/decisions.md\` | architectural decisions and their consequences |
+| \`shipped/<slug>/learnings.md\` | what we got wrong; what to keep doing |
+| \`shipped/<slug>/review.md\` | findings from the last review (some may still apply) |
 
-- Recent themes
-- Revert/regression signals (with SHAs)
-- Ownership hints
-- Collision risks with ongoing refactors
+## What not to do
 
-## Guardrails
+- Do not copy AC verbatim into the new plan. AC restart at AC-1 in a refinement.
+- Do not assume the architecture is unchanged. Re-validate; the refinement may invalidate prior assumptions.
+- Do not treat the prior \`learnings.md\` as ground truth. It captures what we learned at the time; new evidence may overrule it.
+`;
 
-- Read-only git usage.
-- If there is no history, say so explicitly.
-`
-};
+export const RESEARCH_PLAYBOOKS: ResearchPlaybook[] = [
+  { id: "reading-codebase", fileName: "reading-codebase.md", title: "Research — reading the codebase", body: READING_CODEBASE },
+  { id: "time-boxing", fileName: "time-boxing.md", title: "Research — time-boxing", body: HOW_TO_TIME_BOX },
+  { id: "prior-slugs", fileName: "prior-slugs.md", title: "Research — using prior shipped slugs", body: HOW_TO_USE_PRIOR_SLUGS }
+];
 
-export const RESEARCH_PLAYBOOK_FILES = Object.keys(RESEARCH_PLAYBOOKS).sort();
+export const RESEARCH_PLAYBOOKS_INDEX = `# .cclaw/lib/research/
 
+Research playbooks loaded by \`planner\` mode=\`research\`. Each playbook is a small, focused checklist; they compose with each other.
+
+| playbook | when |
+| --- | --- |
+${RESEARCH_PLAYBOOKS.map((p) => `| [\`${p.fileName}\`](./${p.fileName}) | ${p.title.replace(/^Research — /u, "")} |`).join("\n")}
+`;
