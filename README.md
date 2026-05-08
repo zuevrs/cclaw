@@ -1,35 +1,53 @@
 # cclaw
 
-**cclaw is a lightweight harness-first flow toolkit for coding agents.** It installs three slash commands, six on-demand specialists, twelve auto-trigger skills (including TDD cycle and conversation-language), ten artifact templates, four stage runbooks, eight reference patterns, five research playbooks, five recovery playbooks, thirteen worked examples, an antipatterns library, a decision protocol, a meta-skill, an interactive harness picker, and a tiny runtime — together a deep content layer wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, AC traceability, TDD per AC, and almost no ceremony.
+**cclaw is a lightweight harness-first flow toolkit for coding agents.** Three slash commands. Five hops (`Detect → Triage → Dispatch → Pause → Compound/Ship`). Four stages (`plan → build → review → ship`, where **build IS a TDD cycle**: RED → GREEN → REFACTOR). Six on-demand specialists, all running as isolated sub-agents. Three Acceptance-Criteria modes (`inline` / `soft` / `strict`) so trivial edits do not pay the price of risky migrations. A deep content layer of skills, templates, runbooks, patterns, examples, and recovery playbooks wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, the right amount of ceremony, and almost no orchestrator bloat.
 
 ```text
-        idea
-         │
-         ▼
-     /cc <task>
-         │
-   ┌─────┴─────────────────────────────────────┐
-   │ Phase 0 calibration:                      │
-   │ targeted change or multi-component?       │
-   └─────┬─────────────────┬───────────────────┘
-         │trivial          │small/medium       │large/risky
-         ▼                 ▼                   ▼
-    edit + commit     plan → build       brainstormer →
-    per AC            → review → ship    architect → planner
-                                         (each is optional)
-                              │
-                              ▼
-                     compound (auto, gated)
-                              │
-                              ▼
-                  active artifacts → shipped/<slug>/
+            idea
+             │
+             ▼
+         /cc <task>
+             │
+   ┌─────────┴──────────────────────────────────────────┐
+   │ Hop 1: Detect — fresh start? or resume active flow? │
+   └─────────┬──────────────────────────────────────────┘
+             │ fresh
+             ▼
+   ┌────────────────────────────────────────────────────┐
+   │ Hop 2: Triage — auto-classify task,                │
+   │ recommend path + acMode, user accepts or overrides │
+   └─────────┬──────────────────────────────────────────┘
+             │
+   trivial   │   small-medium       │   large-risky
+   acMode    │   acMode soft        │   acMode strict
+   inline    │                      │
+             ▼                      ▼                      ▼
+        edit + commit        plan → build → review → ship   brainstorm? → architect? → plan → build → review → ship
+        (no plan)            each stage in a fresh sub-agent  each stage in a fresh sub-agent, parallel-build allowed
+                                     │                      │
+                                     └─────────┬────────────┘
+                                               ▼
+                                  compound (auto, gated by quality)
+                                               │
+                                               ▼
+                                   active flows → shipped/<slug>/
 ```
 
-Three slash commands. Four stages (`plan → build → review → ship`, where **build IS a TDD cycle**: RED → GREEN → REFACTOR per AC). Six specialists. Eleven skills (including a TDD-cycle skill that's always-on while building). Ten templates. Four runbooks. Eight reference patterns. Five research playbooks. Five recovery playbooks. Thirteen worked examples. Two mandatory gates (AC traceability + TDD phase chain).
+Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`). Four stages (`plan → build → review → ship`). Six specialists, all on-demand, all running as sub-agents. Fifteen skills including the always-on `triage-gate`, `flow-resume`, `tdd-cycle`, `conversation-language`, and `anti-slop`. Ten templates including `plan-soft.md` and `build-soft.md` for the soft-mode path. Four runbooks. Eight reference patterns. Three research playbooks. Five recovery playbooks. Eight worked examples. Two mandatory gates in strict mode (AC traceability + TDD phase chain); soft mode keeps both as advisory; inline mode skips both.
+
+## What changed in 8.2
+
+8.2 is a non-breaking redesign of the `/cc` orchestrator on top of 8.1.
+
+- **Triage gate.** Every fresh flow runs the `triage-gate` skill, which classifies the task as `trivial` / `small-medium` / `large-risky` from six heuristics, recommends a path and an `acMode`, and asks the user to accept or override. The decision is persisted into `flow-state.json` so resumes never re-prompt.
+- **Graduated AC.** Acceptance Criteria are no longer one-size-fits-all. `inline` (trivial) skips them entirely. `soft` (small-medium) uses a bullet list of testable conditions with no AC IDs and an advisory commit-helper. `strict` (large-risky) is the 8.1 behaviour byte-for-byte: AC IDs, mandatory `commit-helper.mjs --ac-id=AC-N --phase=red|green|refactor`, per-AC TDD chain.
+- **Sub-agent dispatch.** `plan`, `build`, `review`, and `ship` each run in a fresh sub-agent invocation. The orchestrator hands a slim envelope (slug / stage / acMode / artifact paths) and gets back a fixed 5-to-7-line summary plus the artifact on disk. No specialist reasoning leaks into the orchestrator context.
+- **Resume.** Invoking `/cc` while a flow is active triggers the `flow-resume` skill: 4-line summary plus `r` resume / `s` show / `c` cancel / `n` start new. The triage decision is preserved across sessions.
+- **Schema bump.** `flow-state.json` is now `schemaVersion: 3` with a `triage` field. Existing v2 files are auto-migrated on first read with `acMode: strict` so existing flows behave exactly as in 8.1.
 
 ## What changed in v8
 
-cclaw v8.0 is a breaking redesign. We dropped the 7.x stage machine: no more `brainstorm` / `scope` / `design` / `spec` / `tdd` mandatory stages, no more 18 specialists, no more 9 state files, no more 30 stage gates. v7.x runs are not migrated; see [docs/migration-v7-to-v8.md](docs/migration-v7-to-v8.md).
+cclaw v8.0 was a breaking redesign of the v7 stage machine. We dropped the 7.x stage machine: no more `brainstorm` / `scope` / `design` / `spec` / `tdd` mandatory stages, no more 18 specialists, no more 9 state files, no more 30 stage gates. v7.x runs are not migrated; see [docs/migration-v7-to-v8.md](docs/migration-v7-to-v8.md).
 
 What we kept and made deeper:
 

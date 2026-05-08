@@ -36,14 +36,15 @@ describe("compound", () => {
   it("blocks ship if AC are not committed", async () => {
     project = await createTempProject();
     await writeFlowState(project, {
-      schemaVersion: 2,
+      schemaVersion: 3,
       currentSlug: "demo",
       currentStage: "ship",
       ac: [{ id: "AC-1", text: "outcome", status: "pending" }],
       lastSpecialist: null,
       startedAt: "2026-05-07T00:00:00Z",
       reviewIterations: 0,
-      securityFlag: false
+      securityFlag: false,
+      triage: null
     });
     await expect(
       runCompoundAndShip(project, {
@@ -56,14 +57,15 @@ describe("compound", () => {
   it("moves active artifacts to shipped/<slug>/ when AC are committed", async () => {
     project = await createTempProject();
     await writeFlowState(project, {
-      schemaVersion: 2,
+      schemaVersion: 3,
       currentSlug: "demo",
       currentStage: "ship",
       ac: [{ id: "AC-1", text: "outcome", status: "committed", commit: "abc123" }],
       lastSpecialist: null,
       startedAt: "2026-05-07T00:00:00Z",
       reviewIterations: 0,
-      securityFlag: false
+      securityFlag: false,
+      triage: null
     });
     await writeFileSafe(activeArtifactPath(project, "plan", "demo"), "plan body");
     await writeFileSafe(activeArtifactPath(project, "build", "demo"), "build body");
@@ -84,14 +86,15 @@ describe("compound", () => {
   it("writes a learning artifact when quality gate passes", async () => {
     project = await createTempProject();
     await writeFlowState(project, {
-      schemaVersion: 2,
+      schemaVersion: 3,
       currentSlug: "demo",
       currentStage: "ship",
       ac: [{ id: "AC-1", text: "outcome", status: "committed", commit: "abc" }],
       lastSpecialist: "architect",
       startedAt: "2026-05-07T00:00:00Z",
       reviewIterations: 0,
-      securityFlag: false
+      securityFlag: false,
+      triage: null
     });
     await writeFileSafe(activeArtifactPath(project, "plan", "demo"), "plan");
     await writeFileSafe(activeArtifactPath(project, "ship", "demo"), "ship");

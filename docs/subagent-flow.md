@@ -1,11 +1,11 @@
 ---
-title: "cclaw v8 specialist invocation"
+title: "cclaw specialist invocation"
 status: locked
 ---
 
-# Specialist invocation — v8
+# Specialist invocation
 
-cclaw v8 has six specialists, all activation: on-demand. There is **no automatic dispatch**, **no four-event lifecycle**, and **no delegation ledger**. The orchestrator (`/cc`) proposes specialists; the user picks; specialists run sequentially with a checkpoint between each.
+cclaw has six specialists, all activation: on-demand. There is **no automatic dispatch**, **no four-event lifecycle**, and **no delegation ledger**. The orchestrator (`/cc`) proposes specialists or dispatches them automatically per stage; specialists run as **isolated sub-agent invocations** and return a fixed slim summary back to the orchestrator.
 
 ## Specialists
 
@@ -20,44 +20,64 @@ cclaw v8 has six specialists, all activation: on-demand. There is **no automatic
 
 Specialist markdown files live in `<harness>/agents/<id>.md` and `.cclaw/agents/<id>.md`. They are regenerated on every `cclaw sync`.
 
-## When are specialists proposed?
+## When are specialists invoked?
 
-`/cc` only proposes specialists for **large/risky** classification: > 5 AC, ambiguous request, architectural decision, security-sensitive, or multi-component. Trivial and small/medium tasks run inline.
+The triage gate (`triage-gate.md`) classifies the task at the start of every fresh flow:
 
-## Sequential discovery
+| Class           | `acMode`  | Specialist invocations                                                                                  |
+| --------------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| `trivial`       | `inline`  | none — orchestrator edits inline and commits with plain `git commit`                                    |
+| `small-medium`  | `soft`    | `planner` → `slice-builder` → `reviewer` (and `ship` step) — each as a sub-agent                        |
+| `large-risky`   | `strict`  | optional `brainstormer` / `architect`, then mandatory `planner` → `slice-builder` → `reviewer` → `ship` |
 
-When the user accepts the proposal, specialists run in order with a checkpoint after each:
+Discovery specialists (`brainstormer`, `architect`) and review specialists (`reviewer`, `security-reviewer`) are still proposed at the orchestrator level for `large-risky` tasks; the user accepts or skips. For `small-medium` tasks the path is fixed at `plan → build → review → ship` with no upstream proposals.
+
+## Sub-agent dispatch
+
+Each stage runs in a fresh sub-agent invocation. The orchestrator hands the sub-agent a slim envelope and gets back a fixed summary plus the artifact on disk:
 
 ```
-brainstormer  →  user reads plan.md  →  continue with architect?
-architect     →  user reads decisions.md + plan.md  →  continue with planner?
-planner       →  user reads plan.md (Plan/Phases/AC)  →  enter build
+Dispatch envelope (orchestrator → sub-agent)
+- slug
+- stage (plan / build / review / ship)
+- acMode (inline / soft / strict)
+- inputArtifacts (e.g. .cclaw/flows/<slug>/plan.md)
+- outputArtifact (e.g. .cclaw/flows/<slug>/build.md)
+
+Slim summary (sub-agent → orchestrator, 5–7 lines)
+- stage
+- status (done / blocked)
+- artifactPath
+- key counts (e.g. AC done / total, findings open / closed)
+- blockers (or "none")
 ```
 
-The user can stop after any checkpoint and proceed with what is already in `plan.md`.
+The orchestrator never sees the specialist's reasoning trace — only the summary. Resume across sessions works because everything is on disk: `flow-state.json` carries the triage decision and current stage, `flows/<slug>/*.md` carries the artifacts.
 
 ## Build and review specialists
 
-- `slice-builder` implements one AC at a time; each AC closes with `commit-helper.mjs --ac=AC-N`.
+- `slice-builder` in `strict` mode implements one AC at a time and commits each phase through `commit-helper.mjs --ac-id=AC-N --phase=red|green|refactor`.
+- `slice-builder` in `soft` mode runs one RED → GREEN → REFACTOR cycle for the whole feature and uses plain `git commit`.
 - `reviewer` runs in one of five modes; mode is picked by the orchestrator based on what is being reviewed.
 - `security-reviewer` is invoked only when the change touches authentication, authorization, secrets, supply chain, or data exposure.
 - `slice-builder` mode `fix-only` is used post-review to apply scoped fixes without touching unrelated files.
 
 ## Parallelism
 
-The only parallelism allowed in v8 is:
+The only parallelism allowed is:
 
 - **review phase** — `code` + `security` + `adversarial` reviewers can run on the same diff.
-- **parallel-build** — `slice-builder × N` followed by `reviewer` in `integration` mode.
+- **parallel-build** — `slice-builder × N` followed by `reviewer` in `integration` mode. Available only when `acMode == strict` and the planner explicitly declared `parallelSafe: true`. Cap is 5 worktrees.
 
 Discovery (`brainstormer → architect → planner`) is always sequential.
 
-## What is **not** there any more
+## What is **not** there
 
-- No `delegation-events.jsonl`, no `delegation-log.json`, no `subagents.json` — all removed in v8.
+- No `delegation-events.jsonl`, no `delegation-log.json`, no `subagents.json`.
 - No `mandatory` / `proactive` specialist activations — all six are `on-demand`.
 - No `doc-updater` specialist — the orchestrator handles docs inline.
 - No "role-switch" fallback for harnesses without native dispatch — every harness gets the same six markdown files.
+- No nested specialist dispatch — sub-agents must not invoke further sub-agents. Composition is the orchestrator's job.
 
 ## Relation to `docs/harnesses.md`
 

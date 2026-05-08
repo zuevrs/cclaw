@@ -1,5 +1,80 @@
 # Changelog
 
+## 8.2.0 — Triage gate, sub-agent dispatch, graduated AC
+
+### Why
+
+Three problems with 8.1:
+
+1. The orchestrator did not classify the task — it assumed every flow needed a full `plan → build → review → ship` ceremony with hard-gated Acceptance Criteria. Trivial edits paid the same overhead as risky migrations.
+2. The user did not get a say in the path. There was no recommendation, no confirmation, no override.
+3. The orchestrator wrote the plan, ran the build, and reviewed itself — all in the same context window. Specialists existed but they were not actually isolated; the orchestrator carried their reasoning back into its own thread, which leaked context and made resumes brittle.
+
+8.2 fixes all three without adding new commands. The CLI surface stays at three slash commands: `/cc`, `/cc-cancel`, `/cc-idea`. Everything new happens inside `/cc`.
+
+### What changed
+
+**Triage gate (Hop 2 inside `/cc`).** A new always-on skill, `triage-gate.md`, runs at the start of every fresh flow. It scores the task on six heuristics — file count, surface (config / production / migration / security), reversibility, test coverage, ambiguity, presence of risk signals — and emits a structured block:
+
+```
+## Triage
+- Complexity: small-medium
+- Recommended path: plan → build → review → ship
+- AC mode: soft
+- Rationale: 2 source files, fully reversible, existing tests cover the surface.
+```
+
+The user replies with `accept`, `override <class>`, or `inline`. The decision is persisted into `flow-state.json` under `triage` and never re-asked for the same flow.
+
+**Graduated AC modes.** Acceptance Criteria are no longer one-size-fits-all.
+
+| Class           | `acMode`  | Plan body                         | Commit path                                              | TDD granularity                  |
+| --------------- | --------- | --------------------------------- | -------------------------------------------------------- | -------------------------------- |
+| `trivial`       | `inline`  | none                              | plain `git commit`                                       | optional                         |
+| `small-medium`  | `soft`    | `plan-soft.md` — bullet list of testable conditions, no AC IDs | `git commit` (commit-helper acts as advisory passthrough) | one RED → GREEN → REFACTOR per feature |
+| `large-risky`   | `strict`  | `plan.md` — full Acceptance Criteria table with IDs and topology | `commit-helper.mjs` — mandatory, blocks if AC ID / phase / chain wrong | per-AC RED → GREEN → REFACTOR    |
+
+The strict mode is the same gate that shipped in 8.1. Soft and inline modes are new.
+
+**Sub-agent dispatch (Hop 3 inside `/cc`).** Specialists now run as isolated sub-agent invocations. The orchestrator hands a sub-agent the slug, the stage, the `acMode`, the path to the input artifact, and the path to write the output artifact. The sub-agent writes the artifact to disk and returns a fixed 5-to-7-line *slim summary* (stage, status, artifact path, key counts, blockers). The orchestrator never sees the specialist's reasoning trace — it only sees the summary and the artifact on disk.
+
+This means:
+
+- The orchestrator context stays small no matter how deep the plan or how long the build log.
+- Resume across sessions works by reading `flow-state.json + flows/<slug>/*.md`. No in-memory state is required.
+- Parallel-build (max 5 worktrees) is still available, but only when `acMode == strict` and the planner explicitly declared `parallelSafe: true`.
+
+**Resume (Hop 1 inside `/cc`).** A new always-on skill, `flow-resume.md`, fires when `/cc` is invoked while `flow-state.json` shows an active flow. It prints a 4-line summary (slug, stage, last commit, ACs done/total) and offers `r` resume / `s` show / `c` cancel / `n` start new. The `triage` decision survives across resumes — the user is not re-asked.
+
+**Schema bump: flow-state.json v3.** The new `triage` field is the only addition. Existing v2 files (8.0 / 8.1) are auto-migrated on first read; the inferred `acMode` is `strict` so existing flows keep their old behaviour. Migrations are written back to disk so subsequent reads are fast.
+
+**Specialist prompts.** All six specialists (`planner`, `slice-builder`, `reviewer`, `brainstormer`, `architect`, `security-reviewer`) gained:
+
+- a *Sub-agent context* preamble describing the dispatch envelope they receive;
+- an *acMode awareness* table where soft and strict diverge;
+- a fixed *Slim summary* output contract;
+- an updated *Composition* footer pointing at "cclaw orchestrator Hop 3 — Dispatch" so they know they are not allowed to spawn further specialists themselves.
+
+**Templates.** New `plan-soft.md` and `build-soft.md` templates ship alongside the strict ones. `planTemplateForSlug` keeps returning the strict template when no `acMode` is wired through, so existing callers do not change behaviour.
+
+**`/cc` body rewrite.** The orchestrator command body is now organized as five labelled hops — *Detect → Triage → Dispatch → Pause → Compound/Ship* — instead of an open-ended prose flow. Each hop has an explicit input, output, and stop condition.
+
+### Migration
+
+Automatic. Existing `.cclaw/state/flow-state.json` files written by 8.0 or 8.1 are read, migrated to schemaVersion 3 (with `triage: { acMode: "strict", ... }` synthesised from the existing slug + stage), and rewritten in place. No user action.
+
+`commit-helper.mjs`, `session-start.mjs`, and `stop-handoff.mjs` all handle both schemaVersion 2 and 3 transparently. The migration is idempotent.
+
+### Compatibility
+
+- All three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`) keep the exact same surface.
+- `cclaw init` / `sync` / `upgrade` keep the interactive harness picker shipped in 8.1.1 and the symlink-aware entry point shipped in 8.1.2.
+- Strict mode behaves byte-for-byte the same as 8.1, including parallel-build, AC traceability gate, and per-AC TDD enforcement.
+
+### Tests
+
+278 unit tests, all passing. New test file `tests/unit/v82-orchestrator-redesign.test.ts` (52 cases) covers triage skill registration, resume skill triggers, the 5-hop body, soft / strict template divergence, sub-agent context preambles in every specialist prompt, slim summary contracts, schema v2 → v3 migration, and `commit-helper.mjs` advisory-vs-strict branching.
+
 ## 8.1.2 — Hotfix: CLI never executed when invoked through a symlink (npx, `npm install -g`, macOS /tmp)
 
 **Critical hotfix.** Versions 8.0.0, 8.1.0, and 8.1.1 silently exited 0

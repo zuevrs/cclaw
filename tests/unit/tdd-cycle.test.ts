@@ -81,13 +81,13 @@ describe("TDD cycle wiring", () => {
     expect(ANTIPATTERNS).toContain("git add -A");
   });
 
-  it("/cc command (start-command) describes build as a TDD cycle with all three phases", async () => {
+  it("/cc command (start-command) wires build as a TDD cycle with mode-aware granularity", async () => {
     const { START_COMMAND_BODY } = await import("../../src/content/start-command.js");
-    expect(START_COMMAND_BODY).toContain("Step 5 — Build (TDD cycle)");
-    expect(START_COMMAND_BODY).toMatch(/RED.*GREEN.*REFACTOR/u);
-    expect(START_COMMAND_BODY).toContain("--phase=red");
-    expect(START_COMMAND_BODY).toContain("--phase=green");
-    expect(START_COMMAND_BODY).toContain("--phase=refactor");
+    expect(START_COMMAND_BODY).toMatch(/build/);
+    expect(START_COMMAND_BODY).toMatch(/tdd-cycle/);
+    expect(START_COMMAND_BODY).toMatch(/RED → GREEN → REFACTOR/u);
+    expect(START_COMMAND_BODY).toContain("commit-helper.mjs");
+    expect(START_COMMAND_BODY).toMatch(/strict mode/i);
     expect(START_COMMAND_BODY).toContain("Iron Law");
   });
 });
