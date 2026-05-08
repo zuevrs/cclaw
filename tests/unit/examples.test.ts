@@ -3,25 +3,25 @@ import { EXAMPLES, EXAMPLES_INDEX } from "../../src/content/examples.js";
 import { parseArtifact } from "../../src/artifact-frontmatter.js";
 
 describe("examples library", () => {
-  it("ships at least 13 worked examples covering plan/build/review/ship/decision/learning/transcripts", () => {
-    expect(EXAMPLES.length).toBeGreaterThanOrEqual(13);
+  it("ships exactly 8 distinct worked examples covering plan/build/review/ship/decision/learning/commit-helper", () => {
+    expect(EXAMPLES.length).toBe(8);
     const ids = EXAMPLES.map((entry) => entry.id);
     for (const expected of [
       "plan-small",
-      "plan-refinement",
       "plan-parallel-build",
       "build-log",
       "review-log",
       "ship-notes",
-      "decision-record",
-      "learning-record"
+      "decision-permission-cache",
+      "learning-record",
+      "commit-helper-session"
     ]) {
       expect(ids).toContain(expected);
     }
   });
 
   it("plan examples carry valid frontmatter", () => {
-    for (const id of ["plan-small", "plan-refinement", "plan-parallel-build"]) {
+    for (const id of ["plan-small", "plan-parallel-build"]) {
       const example = EXAMPLES.find((entry) => entry.id === id);
       expect(example).toBeDefined();
       const parsed = parseArtifact(example!.body);
@@ -30,11 +30,12 @@ describe("examples library", () => {
     }
   });
 
-  it("refinement example points at a parent slug", () => {
-    const refinement = EXAMPLES.find((entry) => entry.id === "plan-refinement");
-    const parsed = parseArtifact(refinement!.body);
-    expect(parsed.frontmatter.refines).toBe("approval-pill");
-    expect(parsed.frontmatter.security_flag).toBe(true);
+  it("decision example carries the canonical D-N fields", () => {
+    const example = EXAMPLES.find((entry) => entry.id === "decision-permission-cache");
+    expect(example).toBeDefined();
+    for (const section of ["Context", "Considered options", "Selected", "Rationale", "Rejected because", "Consequences", "Refs"]) {
+      expect(example!.body).toContain(section);
+    }
   });
 
   it("parallel-build example declares a topology with slice owners", () => {

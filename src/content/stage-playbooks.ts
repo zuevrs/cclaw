@@ -22,13 +22,13 @@ For anything else, continue with this runbook.
 
 ## 1. Read or seed the plan template
 
-\`.cclaw/templates/plan.md\` is the canonical seed. The orchestrator copies it to \`.cclaw/plans/<slug>.md\` and replaces \`SLUG-PLACEHOLDER\` with the real slug.
+\`.cclaw/lib/templates/plan.md\` is the canonical seed. The orchestrator copies it to \`.cclaw/flows/<slug>/plan.md\` and replaces \`SLUG-PLACEHOLDER\` with the real slug.
 
-If the slug already exists (active or shipped), the orchestrator must instead read the existing artifact and let the user pick **amend / rewrite / refine shipped / resume cancelled / new**. See \`.cclaw/skills/refinement.md\`.
+If the slug already exists (active or shipped), the orchestrator must instead read the existing artifact and let the user pick **amend / rewrite / refine shipped / resume cancelled / new**. See \`.cclaw/lib/skills/refinement.md\`.
 
 ## 2. Apply pre-flight checks from reference patterns
 
-If the task matches a pattern in \`.cclaw/patterns/\`, open the pattern file and use its pre-flight checklist verbatim. Multiple patterns can apply (e.g. an endpoint that is also security-sensitive); merge their AC shape sections. Do not pull AC from a pattern that does not match the task.
+If the task matches a pattern in \`.cclaw/lib/patterns/\`, open the pattern file and use its pre-flight checklist verbatim. Multiple patterns can apply (e.g. an endpoint that is also security-sensitive); merge their AC shape sections. Do not pull AC from a pattern that does not match the task.
 
 ## 3. Decide which discovery specialists to propose
 
@@ -54,11 +54,12 @@ AC that fail any of the three checks are not real AC. Reject them or rewrite the
 
 \`inline\` is the default. The orchestrator only proposes \`parallel-build\` when:
 
-1. ≥4 AC.
-2. AC touch disjoint file sets.
+1. ≥4 AC AND ≥2 distinct touchSurface clusters.
+2. Every AC in a parallel wave has \`parallelSafe: true\`.
 3. No AC depends on the output of another AC in the same wave.
+4. The slug fits in **≤5 parallel slices** (slice = 1+ AC sharing a touchSurface). If planner produces more than 5 slices, merge thinner slices into fatter ones — never generate "wave 2".
 
-The orchestrator must not silently choose \`parallel-build\`. Always surface the topology and ask the user to confirm.
+The orchestrator must not silently choose \`parallel-build\`. Always surface the topology and ask the user to confirm. See \`.cclaw/lib/skills/parallel-build.md\` for the worktree dispatch pattern and the silent fallback to \`inline\` when the harness does not support sub-agent dispatch.
 
 ## 6. Hand-off
 
@@ -81,7 +82,7 @@ Then the orchestrator transitions to build-stage.
 
 const BUILD_PLAYBOOK = `# Stage runbook — build (TDD cycle)
 
-**Build is a TDD cycle.** Every AC goes through RED → GREEN → REFACTOR. There is no other build mode in cclaw v8. The orchestrator opens this file before invoking \`slice-builder\` or implementing inline; \`slice-builder\` opens it on every AC.
+**Build is a TDD cycle.** Every AC goes through RED → GREEN → REFACTOR. There is no other build mode. The orchestrator opens this file before invoking \`slice-builder\` or implementing inline; \`slice-builder\` opens it on every AC.
 
 ## Iron Law
 
@@ -114,6 +115,7 @@ Rules for the RED phase:
 - The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax error or import error.
 - Capture the test runner output that proves the failure. The captured output is the **watched-RED proof**.
 - One AC = one RED commit. If the AC needs more than one test to be observable, stage them all and commit together.
+- **Test files are named after the unit under test, never after the AC id.** \`tests/unit/permissions.test.ts\` is correct; \`AC-1.test.ts\` / \`tests/AC-2.test.ts\` is wrong. The AC id lives in the test name (\`it('AC-1: …', …)\`), the commit message, and the build log — not in the filename.
 
 Stage and commit:
 
@@ -164,7 +166,7 @@ Otherwise call \`commit-helper.mjs --ac=AC-N --phase=refactor --skipped\` so the
 
 ## 6. Append the AC row to builds/<slug>.md
 
-After REFACTOR, the AC row in \`.cclaw/builds/<slug>.md\` carries:
+After REFACTOR, the AC row in \`.cclaw/flows/<slug>/build.md\` carries:
 
 | AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
 | --- | --- | --- | --- | --- | --- |
@@ -229,7 +231,7 @@ The orchestrator opens this file before invoking \`reviewer\` (and \`security-re
 
 ## 2. Iterate
 
-Each iteration appends a block to \`.cclaw/reviews/<slug>.md\`:
+Each iteration appends a block to \`.cclaw/flows/<slug>/review.md\`:
 
 - iteration number, mode, reviewer (id),
 - findings table (id F-N, severity, AC ref, file:path:line, finding, fix),
@@ -278,25 +280,77 @@ const SHIP_PLAYBOOK = `# Stage runbook — ship
 
 The orchestrator opens this file before invoking \`runCompoundAndShip()\` (or its harness equivalent).
 
+> **Iron Law:** NO MERGE WITHOUT GREEN PREFLIGHT, A WRITTEN ROLLBACK, AND EXACTLY ONE SELECTED FINALIZATION MODE. No exceptions for urgency. If no VCS is available, use \`FINALIZE_NO_VCS\` explicitly instead of inventing git steps.
+
 ## 1. AC traceability gate
 
 Before anything else, verify every AC in flow-state.json is \`status: committed\` with a real SHA. If any AC is pending, the gate refuses ship. Stop and either complete the AC or open a fresh slug for the rest.
 
 The gate is enforced inside the runtime; you cannot bypass it. If you think you must, you don't.
 
-## 2. Author ships/<slug>.md
+## 2. Run preflight checks (fresh output)
 
-Seed from \`.cclaw/templates/ship.md\`. Required sections:
+Every check below must produce fresh output in this turn. Pasting "tests passed yesterday" does not count.
+
+\\\`\\\`\\\`bash
+$ npm test
+$ npm run build
+$ npm run lint
+$ npm run typecheck
+$ git status --porcelain
+\\\`\\\`\\\`
+
+Record each result in \`flows/<slug>/ship.md > Preflight checks\` (table). Set frontmatter \`preflight_passed: true\` only when every row is pass/empty. Any failure blocks ship; you do not move on until preflight is fully green.
+
+## 3. Detect repository mode
+
+\\\`\\\`\\\`bash
+$ test -d .git && echo git || echo no-vcs
+\\\`\\\`\\\`
+
+If no-vcs, the only valid finalization mode is \`FINALIZE_NO_VCS\`. Document the manual handoff target and rollback owner; skip the merge-base step.
+
+## 4. Merge-base detection (git mode only)
+
+\\\`\\\`\\\`bash
+$ git merge-base HEAD <base-branch>
+$ git rev-list --count <merge-base>..<base-branch>
+\\\`\\\`\\\`
+
+If the count is non-zero AND any of those upstream commits touch this slug's \`touchSurface\`, rebase first. After the rebase, re-run preflight from step 2; do not trust the prior preflight result.
+
+## 5. Author ships/<slug>.md
+
+Seed from \`.cclaw/lib/templates/ship.md\`. Required sections (every one must be filled, no placeholders):
 
 - summary (2-4 lines),
-- AC ↔ commit map (table mirroring frontmatter),
-- push / PR (\`pending\` until the user explicitly approves both),
+- preflight checks (table with command + fresh output),
+- repo mode (\`git\` / \`no-vcs\`),
+- merge-base detection (git mode only),
+- AC ↔ commit map with red/green/refactor SHAs from \`flow-state.ac[].phases\`,
+- rollback plan triplet (trigger / steps / verification — all three or it does not count),
+- monitoring checklist (error rates, latency budgets, business metrics),
+- finalization_mode (exactly one of FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, FINALIZE_DISCARD_BRANCH, FINALIZE_NO_VCS),
 - breaking changes / migration ("none" is a valid value),
-- release notes (one paragraph suitable for CHANGELOG.md).
+- release notes (one paragraph suitable for CHANGELOG.md),
+- risks carried over (warn-severity ledger rows, open assumptions),
+- victory detector check.
 
-## 3. Run compound
+## 6. Victory Detector
 
-\`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/shipped/<slug>/\`, writes a \`manifest.md\`, appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state.
+Ship is allowed only when ALL of these are true:
+
+- review verdict = \`clear\` or \`warn\` (with convergence signal #2 fired),
+- preflight_passed = true with fresh output recorded in this turn,
+- rollback_recorded = true with all three fields filled,
+- finalization_mode set to exactly one enum value,
+- repo_mode matches the chosen finalization mode (\`no-vcs\` cannot pick \`FINALIZE_MERGE_LOCAL\`).
+
+If any condition fails, keep \`status: blocked\` and iterate. Do NOT advance with red preflight or a missing rollback.
+
+## 7. Run compound
+
+\`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/flows/shipped/<slug>/\`, writes a \`manifest.md\`, appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state.
 
 The compound quality gate captures \`learnings/<slug>.md\` only when at least one of:
 
@@ -307,30 +361,40 @@ The compound quality gate captures \`learnings/<slug>.md\` only when at least on
 
 When the gate fails, the run still ships — only the learning capture is skipped.
 
-## 4. Push and PR
+## 8. Execute finalization
 
-**Always ask before pushing.** Always ask before opening a PR.
+Run the action implied by \`finalization_mode\` and record the result back into \`ships/<slug>.md\`:
 
-If the user approves push: do that one action and stop. Do not proactively open a PR after pushing unless the user asked for it. Do not run \`git push --force\` ever — if the user requests it explicitly, surface the warning and require a second confirmation.
+- **FINALIZE_MERGE_LOCAL** — merge into the base branch locally; verify clean merge; record the merged SHA.
+- **FINALIZE_OPEN_PR** — \`gh pr create\` with a structured body (summary, AC↔commit map, rollback plan). Record the PR URL.
+- **FINALIZE_KEEP_BRANCH** — \`git push -u origin HEAD\`. Record the upstream branch.
+- **FINALIZE_DISCARD_BRANCH** — list what will be deleted, require typed confirmation in this turn (\`yes, discard <slug>\`), then delete. Record the deletion.
+- **FINALIZE_NO_VCS** — record handoff target, artifact bundle path, and manual rollback owner. No git commands.
 
-If the user approves PR creation: use \`gh pr create\` with a body summarising the slug. The PR description must reference the AC ids.
+**Always ask before pushing.** Always ask before opening a PR. Do not run \`git push --force\` ever — if the user requests it explicitly, surface the warning and require a second confirmation.
 
-## 5. Hand-off
+## 9. Hand-off
 
 Ship-stage ends when:
 
-- \`shipped/<slug>/manifest.md\` exists,
+- \`flows/shipped/<slug>/manifest.md\` exists,
 - flow-state is reset,
-- the user is told push/PR status (whether approved or skipped).
+- the user is told push/PR status (whether approved or skipped),
+- the rollback plan is sticky in \`ships/<slug>.md\` (the future operator opens this if anything goes wrong).
 
 The next \`/cc\` invocation can be a brand-new request or a refinement of this slug.
 
-## 6. Common pitfalls
+## 10. Common pitfalls
 
+- Skipping preflight because "tests passed during build". Preflight is the post-merge sanity check; build-stage tests are pre-merge.
+- Skipping the rollback plan because "it's a small change". Small changes break production too. The triplet is mandatory.
+- Selecting multiple finalization modes. Pick exactly one.
+- Picking \`FINALIZE_MERGE_LOCAL\` in a repo with no \`.git/\`. The Victory Detector will refuse; use \`FINALIZE_NO_VCS\` and record the manual target.
 - Pushing without asking. Always ask, always wait, every time.
 - Opening a PR with stale release notes. Re-read \`ships/<slug>.md\` before opening the PR.
 - Skipping the manifest because "the slug is small". The manifest is the entry point future agents use to understand the slug; skipping it makes refinement harder later.
-- Editing artifacts after they're moved to \`.cclaw/shipped/\`. Shipped slugs are read-only. Refinement creates a new slug.
+- Editing artifacts after they're moved to \`.cclaw/flows/shipped/\`. Shipped slugs are read-only. Refinement creates a new slug.
+- Using \`git push --force\` to "fix" the ship_commit. Never. Open a follow-up slug instead.
 `;
 
 export const STAGE_PLAYBOOKS: StagePlaybook[] = [
@@ -340,7 +404,7 @@ export const STAGE_PLAYBOOKS: StagePlaybook[] = [
   { id: "ship", fileName: "ship.md", title: "Stage runbook — ship", body: SHIP_PLAYBOOK }
 ];
 
-export const STAGE_PLAYBOOKS_INDEX = `# .cclaw/runbooks/
+export const STAGE_PLAYBOOKS_INDEX = `# .cclaw/lib/runbooks/
 
 Per-stage runbooks the orchestrator opens before transitioning into a stage. Each runbook is a strict checklist plus the common pitfalls collected from prior runs.
 

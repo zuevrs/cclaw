@@ -267,7 +267,7 @@ export const REFERENCE_PATTERNS: ReferencePattern[] = [
   { id: "doc-rewrite", fileName: "doc-rewrite.md", title: "Documentation rewrite", triggers: ["docs", "README", "quickstart", "changelog"], body: DOC_REWRITE }
 ];
 
-export const REFERENCE_PATTERNS_INDEX = `# .cclaw/patterns/
+export const REFERENCE_PATTERNS_INDEX = `# .cclaw/lib/patterns/
 
 Eight reference patterns the orchestrator pulls from before authoring a plan. Each pattern declares its trigger keywords, the pre-flight checklist, the AC shape, the specialists to invoke, and the common pitfalls.
 

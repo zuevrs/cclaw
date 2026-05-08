@@ -1,28 +1,10 @@
 import path from "node:path";
-import {
-  BUILD_DIR,
-  DECISION_DIR,
-  LEARNING_DIR,
-  PLAN_DIR,
-  REVIEW_DIR,
-  RUNTIME_ROOT,
-  SHIPPED_DIR_REL_PATH,
-  SHIP_DIR
-} from "./constants.js";
+import { FLOWS_ROOT, SHIPPED_DIR_REL_PATH } from "./constants.js";
 import type { FlowStage } from "./types.js";
 
 export type ArtifactStage = FlowStage | "decisions" | "learnings";
 
-export const ACTIVE_ARTIFACT_DIRS: Record<ArtifactStage, string> = {
-  plan: PLAN_DIR,
-  build: BUILD_DIR,
-  review: REVIEW_DIR,
-  ship: SHIP_DIR,
-  decisions: DECISION_DIR,
-  learnings: LEARNING_DIR
-};
-
-export const SHIPPED_ARTIFACT_FILES: Record<ArtifactStage, string> = {
+export const ARTIFACT_FILE_NAMES: Record<ArtifactStage, string> = {
   plan: "plan.md",
   build: "build.md",
   review: "review.md",
@@ -42,12 +24,12 @@ export function slugifyArtifactTopic(topic: string): string {
   return (slug || "task").slice(0, 64);
 }
 
-export function activeArtifactDir(projectRoot: string, stage: ArtifactStage): string {
-  return path.join(projectRoot, RUNTIME_ROOT, ACTIVE_ARTIFACT_DIRS[stage]);
+export function activeArtifactDir(projectRoot: string, slug: string): string {
+  return path.join(projectRoot, FLOWS_ROOT, slug);
 }
 
 export function activeArtifactPath(projectRoot: string, stage: ArtifactStage, slug: string): string {
-  return path.join(activeArtifactDir(projectRoot, stage), `${slug}.md`);
+  return path.join(activeArtifactDir(projectRoot, slug), ARTIFACT_FILE_NAMES[stage]);
 }
 
 export function shippedArtifactDir(projectRoot: string, slug: string): string {
@@ -55,5 +37,5 @@ export function shippedArtifactDir(projectRoot: string, slug: string): string {
 }
 
 export function shippedArtifactPath(projectRoot: string, slug: string, stage: ArtifactStage): string {
-  return path.join(shippedArtifactDir(projectRoot, slug), SHIPPED_ARTIFACT_FILES[stage]);
+  return path.join(shippedArtifactDir(projectRoot, slug), ARTIFACT_FILE_NAMES[stage]);
 }

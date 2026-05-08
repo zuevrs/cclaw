@@ -28,14 +28,14 @@ describe("cli", () => {
     const ctx = mkContext("/tmp");
     const code = await runCli(["version"], ctx);
     expect(code).toBe(0);
-    expect(ctx.out.data.trim()).toBe("8.0.0");
+    expect(ctx.out.data.trim()).toBe("8.1.0");
   });
 
   it("prints help when no command provided", async () => {
     const ctx = mkContext("/tmp");
     const code = await runCli([], ctx);
     expect(code).toBe(0);
-    expect(ctx.out.data).toContain("cclaw v8.0.0");
+    expect(ctx.out.data).toContain("cclaw v8.1.0");
     expect(ctx.out.data).toContain("Flow control");
   });
 

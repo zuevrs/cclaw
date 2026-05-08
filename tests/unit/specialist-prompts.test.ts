@@ -35,6 +35,28 @@ describe("specialist prompts", () => {
     }
   });
 
+  it("every specialist prompt ends with a Composition footer that forbids nested orchestration", () => {
+    for (const id of SPECIALISTS) {
+      const prompt = SPECIALIST_PROMPTS[id];
+      expect(prompt).toMatch(/##\s+Composition/u);
+      expect(prompt).toContain("on-demand specialist");
+      expect(prompt).toContain("Do not spawn");
+      expect(prompt).toMatch(/Stop condition/u);
+    }
+  });
+
+  it("slice-builder Composition footer mentions parallel-build dispatch contract", () => {
+    expect(SPECIALIST_PROMPTS["slice-builder"]).toContain("Parallel-dispatch contract");
+    expect(SPECIALIST_PROMPTS["slice-builder"]).toContain("touchSurface");
+  });
+
+  it("slice-builder hard rules forbid env shims and redundant verification", () => {
+    const prompt = SPECIALIST_PROMPTS["slice-builder"];
+    expect(prompt).toContain("No redundant verification");
+    expect(prompt).toContain("No environment shims");
+    expect(prompt).toContain(".cclaw/lib/skills/anti-slop.md");
+  });
+
   it("renderAgentMarkdown emits a frontmatter with name + activation", () => {
     const md = renderAgentMarkdown(CORE_AGENTS[0]);
     expect(md.startsWith("---\n")).toBe(true);

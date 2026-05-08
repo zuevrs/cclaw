@@ -51,11 +51,11 @@ Pick one of:
 1. \`/cc-cancel reason="cap reached on <slug>"\`.
 2. Read the cap-reached block to identify the still-broken AC.
 3. \`/cc <task>\` with a tighter scope. Often the cap was reached because the slug bundled two changes; split them.
-4. The cancelled artifacts under \`.cclaw/cancelled/<slug>/\` can be referenced from the new plan via the Refs section.
+4. The cancelled artifacts under \`.cclaw/flows/cancelled/<slug>/\` can be referenced from the new plan via the Refs section.
 
 ### Option B — fold remaining findings into a fresh slug
 
-1. Manually move \`.cclaw/plans/<slug>.md\` and friends out of the active directory (e.g. into \`.cclaw/cancelled/\` for archive).
+1. Manually move \`.cclaw/flows/<slug>/plan.md\` and friends out of the active directory (e.g. into \`.cclaw/flows/cancelled/\` for archive).
 2. Reset flow-state.
 3. \`/cc <new task>\` for the leftovers.
 
@@ -115,7 +115,7 @@ A YAML parser error appears when the orchestrator tries to read \`plans/<slug>.m
 ## Recovery steps
 
 1. Open the artifact in your editor.
-2. Compare against the canonical template in \`.cclaw/templates/<stage>.md\`.
+2. Compare against the canonical template in \`.cclaw/lib/templates/<stage>.md\`.
 3. Fix the YAML — the most common errors are:
    - missing closing \`---\`;
    - tabs inside the YAML block (use spaces);
@@ -154,7 +154,7 @@ If you have an in-flight 7.x run and want to ship it, do that first. After ship,
 
 ### (b) Delete \`.cclaw/state/flow-state.json\` and start fresh
 
-For projects that are not mid-run, this is the right answer. The artifacts under \`.cclaw/plans/\`, \`.cclaw/builds/\`, etc. are not deleted; only the state file is.
+For projects that are not mid-run, this is the right answer. The artifacts under \`.cclaw/flows/<slug>/\` are not deleted; only the state file is.
 
 \`\`\`bash
 rm .cclaw/state/flow-state.json
@@ -170,7 +170,7 @@ If you want to continue using cclaw 7.x for now, do not run any v8 \`/cc\` comma
 ## What not to do
 
 - Do not edit the \`schemaVersion\` field by hand. Version 2 has different fields than version 1; mismatched fields fail validation downstream.
-- Do not delete the artifacts under \`.cclaw/plans/\` etc. — they survive the version transition; only the state file does not.
+- Do not delete the artifacts under \`.cclaw/flows/<slug>/\` — they survive the version transition; only the state file does not.
 - Do not run \`cclaw-cli upgrade\` while a 7.x run is mid-flight. Finish the run first.
 `;
 
@@ -182,7 +182,7 @@ export const RECOVERY_PLAYBOOKS: RecoveryPlaybook[] = [
   { id: "schema-mismatch", fileName: "schema-mismatch.md", title: "Recovery — flow-state schemaVersion mismatch", body: SCHEMA_MISMATCH }
 ];
 
-export const RECOVERY_INDEX = `# .cclaw/recovery/
+export const RECOVERY_INDEX = `# .cclaw/lib/recovery/
 
 Recovery playbooks for the most common failure modes. The orchestrator opens these when an automated check fails or when a specialist asks for guidance.
 

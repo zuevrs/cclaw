@@ -1,6 +1,6 @@
 # cclaw
 
-**cclaw is a lightweight harness-first flow toolkit for coding agents.** It installs three slash commands, six on-demand specialists, ten auto-trigger skills, ten artifact templates, four stage runbooks, eight reference patterns, five research playbooks, five recovery playbooks, thirteen worked examples, an antipatterns library, a decision protocol, a meta-skill, and a tiny runtime — together a deep content layer (~206 KB on a Cursor install) wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, AC traceability, and almost no ceremony.
+**cclaw is a lightweight harness-first flow toolkit for coding agents.** It installs three slash commands, six on-demand specialists, twelve auto-trigger skills (including TDD cycle and conversation-language), ten artifact templates, four stage runbooks, eight reference patterns, five research playbooks, five recovery playbooks, thirteen worked examples, an antipatterns library, a decision protocol, a meta-skill, and a tiny runtime — together a deep content layer wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, AC traceability, TDD per AC, and almost no ceremony.
 
 ```text
         idea
@@ -36,15 +36,15 @@ What we kept and made deeper:
 - plans with **acceptance criteria + YAML frontmatter** (`slug`, `stage`, `status`, `ac[]`, `last_specialist`, `refines`, `shipped_at`, `ship_commit`, `review_iterations`, `security_flag`);
 - **build is a TDD stage** — every AC goes through RED → GREEN → REFACTOR; `commit-helper.mjs --phase=red|green|refactor` enforces the cycle (production files in RED are rejected, GREEN without prior RED is rejected, REFACTOR is mandatory);
 - **AC ↔ commit traceability** enforced by `commit-helper.mjs`;
-- **artifact templates** for every stage (`plan`, `build`, `review`, `ship`, `decisions`, `learnings`, `manifest`, `ideas`, `agents-block`, `iron-laws`);
-- **ten auto-trigger skills** — plan-authoring, AC traceability, refinement, parallel-build, security-review, review-loop, commit-message-quality, AC-quality, refactor-safety, breaking-changes, plus a meta-skill that ties them together;
-- **stage runbooks** (`.cclaw/runbooks/{plan,build,review,ship}.md`) — strict checklists per stage with common pitfalls;
-- **reference patterns** (`.cclaw/patterns/`) — eight task-type playbooks (api-endpoint, auth-flow, schema-migration, ui-component, perf-fix, refactor, security-hardening, doc-rewrite) the orchestrator opens before authoring AC;
-- **research playbooks** (`.cclaw/research/`) — read-before-write, reading tests, reading dependencies, time-boxing, using prior shipped slugs;
-- **recovery playbooks** (`.cclaw/recovery/`) — AC traceability break, review hard cap reached, parallel-build slice conflict, frontmatter corruption, schemaVersion mismatch;
-- **examples library** (`.cclaw/examples/`) — thirteen real-looking plan / build / review / ship / decision / learning / orchestrator-prompt artifacts;
-- **antipatterns** (`.cclaw/antipatterns.md`) — twelve known failure modes the reviewer cites as findings;
-- **decision protocol** (`.cclaw/decisions/decision-protocol.md`) — exact D-N record format with three worked examples;
+- **artifact templates** for every stage (`plan`, `build`, `review`, `ship`, `decisions`, `learnings`, `manifest`, `ideas`, `iron-laws`);
+- **twelve auto-trigger skills** — plan-authoring, AC traceability, refinement, parallel-build, security-review, review-loop, commit-message-quality, AC-quality, refactor-safety, breaking-changes, conversation-language (always-on), anti-slop (always-on), plus a meta-skill that ties them together;
+- **stage runbooks** (`.cclaw/lib/runbooks/{plan,build,review,ship}.md`) — strict checklists per stage with common pitfalls;
+- **reference patterns** (`.cclaw/lib/patterns/`) — eight task-type playbooks (api-endpoint, auth-flow, schema-migration, ui-component, perf-fix, refactor, security-hardening, doc-rewrite) the orchestrator opens before authoring AC;
+- **research playbooks** (`.cclaw/lib/research/`) — reading the codebase (files + tests + integration boundaries), time-boxing, using prior shipped slugs;
+- **recovery playbooks** (`.cclaw/lib/recovery/`) — AC traceability break, review hard cap reached, parallel-build slice conflict, frontmatter corruption, schemaVersion mismatch;
+- **examples library** (`.cclaw/lib/examples/`) — eight real-looking plan / build / review / ship / decision / learning / commit-helper artifacts;
+- **antipatterns** (`.cclaw/lib/antipatterns.md`) — twelve known failure modes the reviewer cites as findings;
+- **decision protocol** (`.cclaw/lib/decision-protocol.md`) — short-form digest of "is this even a decision?"; full D-N schema lives in `lib/agents/architect.md`, worked decisions in `lib/examples/`;
 - **resumable refinement** via frontmatter on shipped slugs (`refines: <old-slug>`);
 - durable artifacts your team and graph tools (Graphify, GitNexus, etc.) can index.
 
@@ -54,15 +54,22 @@ Requirements: Node.js 20+ and a git project.
 
 ```bash
 cd /path/to/your/repo
-npx cclaw-cli init                # default harness: cursor
-npx cclaw-cli init --harness=claude,cursor,opencode,codex
+npx cclaw-cli init                            # auto-detect harness from project root
+npx cclaw-cli init --harness=claude,cursor,opencode,codex   # explicit selection
 ```
+
+`init` resolves harnesses in this order:
+
+1. `--harness=<id>[,<id>]` flag if passed.
+2. Existing `.cclaw/config.yaml` (so subsequent `init` / `sync` / `upgrade` are deterministic).
+3. Auto-detect from project root markers: `.claude/`, `.cursor/`, `.opencode/`, `.codex/`, `.agents/skills/`, `CLAUDE.md`, `opencode.json`, `opencode.jsonc`.
+4. If nothing detected and no flag passed → exit with an actionable error. cclaw never silently picks a harness for you.
 
 Then work entirely inside your harness:
 
 ```text
 /cc <task>          plan / build / review / ship — orchestrator routes everything
-/cc-cancel          stop the active run cleanly (artifacts kept under .cclaw/cancelled/)
+/cc-cancel          stop the active run cleanly (artifacts move to .cclaw/flows/cancelled/<slug>/)
 /cc-idea            drop a half-formed idea into .cclaw/ideas.md (no flow started)
 ```
 
@@ -79,7 +86,7 @@ There is no `cclaw plan`, `cclaw status`, `cclaw ship`, or `cclaw migrate` CLI c
 | `security-reviewer` | threat-model / sensitive-change | auth / secrets / supply chain / data exposure |
 | `slice-builder` | build / fix-only | implementing AC and applying scoped fixes |
 
-Specialists are proposed only when the task is large, abstract, risky, security-sensitive, or spans multiple components. Trivial and small/medium tasks run inline. Each prompt is 150-280 lines and includes an explicit output schema, two or more worked examples, edge cases, common pitfalls, and hard rules (see `.cclaw/agents/*.md` after install). The orchestrator pulls additional context from runbooks, patterns, examples, and recovery playbooks as needed; see [docs/skills.md](docs/skills.md) for the auto-trigger layer that wraps every invocation.
+Specialists are proposed only when the task is large, abstract, risky, security-sensitive, or spans multiple components. Trivial and small/medium tasks run inline. Each prompt is 150-280 lines and includes an explicit output schema, two or more worked examples, edge cases, common pitfalls, and hard rules (see `.cclaw/lib/agents/*.md` after install). The orchestrator pulls additional context from runbooks, patterns, examples, and recovery playbooks as needed; see [docs/skills.md](docs/skills.md) for the auto-trigger layer that wraps every invocation.
 
 ## Plan artifact, by example
 
@@ -115,29 +122,51 @@ security_flag: false
 | AC-2 | Pending approvals show a tooltip with the approver's name. | pending | — |
 ```
 
-The same shape applies to `build.md` (commit log), `review.md` (findings + Five Failure Modes pass), `ship.md` (release notes + push/PR refs), `decisions.md` (architect output), `learnings.md` (compound output). Templates live in `.cclaw/templates/`.
+The same shape applies to `build.md` (commit log), `review.md` (findings + Five Failure Modes pass), `ship.md` (release notes + push/PR refs), `decisions.md` (architect output), `learnings.md` (compound output). Templates live in `.cclaw/lib/templates/`.
 
 ## Artifact tree
 
 ```
 .cclaw/
-  plans/<slug>.md           current work + AC + traceability block
-  builds/<slug>.md          implementation log
-  reviews/<slug>.md         findings, iterations, Five Failure Modes pass
-  ships/<slug>.md           release notes, push/PR refs
-  decisions/<slug>.md       architect output (D-N entries)
-  learnings/<slug>.md       compound output (only when gated)
-  state/flow-state.json     ~500 bytes, schemaVersion: 2
-  shipped/<slug>/           plan.md, build.md, review.md, ship.md,
-                            decisions.md, learnings.md, manifest.md
-  cancelled/<slug>/         when /cc-cancel is invoked
-  templates/                10 templates, copied at install
-  agents/                   6 specialist prompts, copied at install
-  skills/                   6 auto-trigger skills, copied at install
-  hooks/                    3 node hooks (session-start, stop-handoff, commit-helper)
-  ideas.md                  append-only idea backlog
+  config.yaml               cclaw config (harness, flow defaults)
+  ideas.md                  append-only idea backlog (/cc-idea)
   knowledge.jsonl           cross-feature learnings index, append-only
+  state/
+    flow-state.json         ~500 bytes, schemaVersion: 2
+  hooks/
+    session-start.mjs       rehydrates flow state on harness boot
+    stop-handoff.mjs        short reminder when stopping mid-flow
+    commit-helper.mjs       atomic commit per AC + traceability + TDD phase gate
+  flows/                    everything that comes out of a /cc run
+    <slug>/                 one folder per active flow
+      plan.md               current work + AC
+      build.md              implementation log + TDD evidence
+      review.md             Concern Ledger + iteration logs
+      ship.md               preflight + AC↔commit map + rollback + finalization
+      decisions.md          architect output (optional; only when architect ran)
+      learnings.md          compound output (optional; only when gated)
+    shipped/<slug>/         plan.md, build.md, review.md, ship.md,
+                            decisions.md, learnings.md, manifest.md
+    cancelled/<slug>/       when /cc-cancel is invoked
+  lib/                      reference content shipped by the installer
+    agents/                 6 specialist prompts (each ends with a Composition footer
+                            locking it to its lane — no nested orchestration)
+    skills/                 12 auto-trigger skills (2 always-on: conversation-language,
+                            anti-slop; 10 stage- or event-gated)
+    templates/              9 templates (plan, build, review, ship, decisions,
+                            learnings, manifest, ideas, iron-laws)
+    runbooks/               4 stage runbooks (plan, build, review, ship)
+    patterns/               8 task-type playbooks
+    research/               3 research playbooks
+    recovery/               5 recovery playbooks
+    examples/               8 worked examples
+    antipatterns.md         12 named failure modes
+    decision-protocol.md    short-form digest; full schema in lib/agents/architect.md
 ```
+
+`.cclaw/state/` and `.cclaw/worktrees/` are appended to `.gitignore` on init (transient per-session data). The rest of `.cclaw/` is committable; graphify, team review, and the next agent all need it.
+
+The split is deliberate. Active and archived flow artifacts go under `flows/` so the orchestrator never confuses them with the read-only library under `lib/`. Runtime (`state/`, `hooks/`) stays at the top so harness hooks can find it without traversal. Active flows are grouped by slug — open `flows/<slug>/` and every artifact for that flow is right there, instead of scattered across six per-stage subdirectories.
 
 ## AC traceability gate (mandatory)
 
@@ -159,11 +188,54 @@ After ship, cclaw automatically checks whether the run produced something worth 
 - a security review ran or `security_flag` is true, **or**
 - the user explicitly asked to capture (`/cc <task> --capture-learnings`).
 
-If yes → `learnings/<slug>.md` is written from the template, and one line is appended to `knowledge.jsonl` recording the slug, ship_commit, signals, and `refines` chain. If no → silently skipped, so the index stays signal-rich. Then everything moves to `.cclaw/shipped/<slug>/` with a `manifest.md`.
+If yes → `flows/<slug>/learnings.md` is written from the template, and one line is appended to `knowledge.jsonl` recording the slug, ship_commit, signals, and `refines` chain. If no → silently skipped, so the index stays signal-rich. Then everything moves to `flows/shipped/<slug>/` with a `manifest.md`.
 
-## Five Failure Modes
+## Parallel-build (cap: 5 slices, git worktree)
 
-Reviews always check for: hallucinated actions, scope creep, cascading errors, context loss, tool misuse. Hard cap is 5 review/fix iterations — then stop and report. The check is wrapped by the `review-loop` auto-trigger skill so the agent cannot skip it.
+Inline is the default. Parallel-build is opt-in and only when planner declares it. Pre-conditions: ≥4 AC, ≥2 distinct touchSurface clusters, every AC `parallelSafe: true`, no AC depends on outputs of another AC in the same wave.
+
+A **slice = 1+ AC with a shared touchSurface**. If planner produces more than 5 slices, planner must merge thinner slices into fatter ones — never generate "wave 2", "wave 3". The 5-slice cap is the v7-era constraint kept on purpose: orchestration cost grows non-linearly past 5 sub-agents, and 5 fits comfortably under every harness's sub-agent quota.
+
+When the harness supports sub-agent dispatch, each parallel slice runs in its own worktree:
+
+```bash
+git worktree add .cclaw/worktrees/<slug>-slice-1 -b cclaw/<slug>/slice-1
+git worktree add .cclaw/worktrees/<slug>-slice-2 -b cclaw/<slug>/slice-2
+git worktree add .cclaw/worktrees/<slug>-slice-3 -b cclaw/<slug>/slice-3
+```
+
+Each slice-builder runs RED → GREEN → REFACTOR for every AC it owns sequentially inside its worktree. After the wave, `reviewer` in `integration` mode reads from each worktree's branch and the orchestrator merges them in. If the harness does not support sub-agent dispatch (or worktree creation fails), parallel-build degrades silently to inline-sequential — recorded but not an error.
+
+For ≤4 AC the orchestrator picks `inline` even when AC look "parallelSafe". Dispatch overhead is not worth saving 1-2 AC of wall-clock.
+
+## When sub-agents help (and when they don't)
+
+Use a sub-agent for:
+
+- **Parallel slice dispatch** during `parallel-build` (cap: 5).
+- **Specialist context isolation** for `architect`, `security-reviewer`, integration `reviewer` when the harness supports it. A fresh sub-agent reads a small focused filebag instead of the orchestrator's full history.
+
+Don't use a sub-agent for:
+
+- Trivial / small / medium slugs (≤4 AC). Run inline.
+- Sequential work that doesn't actually parallelize.
+- Routine work the orchestrator can finish in 1-2 turns.
+
+## Five Failure Modes + review Ralph loop
+
+Reviews check the Five Failure Modes — hallucinated actions, scope creep, cascading errors, context loss, tool misuse — every iteration. The Five Failure Modes pass is wrapped by the `review-loop` auto-trigger skill so the agent cannot skip it.
+
+Reviews are not single-shot. They are a Ralph loop with an explicit ledger:
+
+1. Iteration 1 lists every finding as F-1, F-2, … in an append-only **Concern Ledger** at the top of `flows/<slug>/review.md`. Each row carries severity (`block` / `warn`), status (`open` / `closed` / `superseded`), and a `file:line` citation.
+2. Iteration N+1 must reread every open row, mark it `closed | open | superseded by F-K`, and append new findings as F-(max+1). It cannot delete or rewrite earlier rows.
+3. The loop ends when (a) every row is `closed`, (b) two consecutive iterations record zero new `block` findings AND every open row is `warn`, or (c) the 5-iteration hard cap fires with at least one open block row — at which point `/cc` stops and reports instead of looping forever.
+
+A typical run converges in 1-3 iterations. The hard cap is a circuit breaker, not a target.
+
+## Conversation language
+
+cclaw replies in the user's language for prose. It NEVER translates wire-protocol identifiers — slugs, `AC-N`, `D-N`, `F-N`, frontmatter keys, file paths, hook output, specialist names, or commit tags. This is enforced by the always-on `conversation-language` skill so a Russian-speaking user, for example, gets Russian explanations but still sees `flow-state.json` and `AC-1` verbatim.
 
 ## Hooks (default profile: minimal)
 

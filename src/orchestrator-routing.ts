@@ -1,8 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { activeArtifactDir, slugifyArtifactTopic } from "./artifact-paths.js";
-import { exists, listMarkdownFiles, listSubdirs } from "./fs-utils.js";
-import { SHIPPED_DIR_REL_PATH, RUNTIME_ROOT } from "./constants.js";
+import { slugifyArtifactTopic } from "./artifact-paths.js";
+import { exists, listSubdirs } from "./fs-utils.js";
+import {
+  CANCELLED_DIR_REL_PATH,
+  FLOWS_ROOT,
+  SHIPPED_DIR_REL_PATH
+} from "./constants.js";
 import { parseArtifact, type ArtifactFrontmatter } from "./artifact-frontmatter.js";
 import type { AcceptanceCriterionState, RoutingClass } from "./types.js";
 
@@ -107,7 +111,7 @@ async function buildMatch(
   taskSlugTokens: Set<string>,
   taskWords: Set<string>
 ): Promise<ExistingPlanMatch | null> {
-  const slug = origin === "active" ? path.basename(filePath, ".md") : path.basename(path.dirname(filePath));
+  const slug = path.basename(path.dirname(filePath));
   const slugScore = jaccard(taskSlugTokens, new Set(slug.split("-")));
   const body = await readBody(filePath);
   const bodyScore = jaccard(taskWords, tokenize(body));
@@ -128,6 +132,8 @@ async function buildMatch(
   };
 }
 
+const RESERVED_FLOW_DIRS = new Set(["shipped", "cancelled"]);
+
 export async function findMatchingPlans(projectRoot: string, task: string): Promise<ExistingPlanMatch[]> {
   const taskWords = tokenize(task);
   const slugFromTask = slugifyArtifactTopic(task);
@@ -135,10 +141,16 @@ export async function findMatchingPlans(projectRoot: string, task: string): Prom
 
   const matches: ExistingPlanMatch[] = [];
 
-  const activeDir = activeArtifactDir(projectRoot, "plan");
-  for (const filePath of await listMarkdownFiles(activeDir)) {
-    const match = await buildMatch(filePath, "active", taskSlugTokens, taskWords);
-    if (match) matches.push(match);
+  const flowsRoot = path.join(projectRoot, FLOWS_ROOT);
+  if (await exists(flowsRoot)) {
+    for (const dir of await listSubdirs(flowsRoot)) {
+      const dirName = path.basename(dir);
+      if (RESERVED_FLOW_DIRS.has(dirName)) continue;
+      const planPath = path.join(dir, "plan.md");
+      if (!(await exists(planPath))) continue;
+      const match = await buildMatch(planPath, "active", taskSlugTokens, taskWords);
+      if (match) matches.push(match);
+    }
   }
 
   const shippedRoot = path.join(projectRoot, SHIPPED_DIR_REL_PATH);
@@ -151,7 +163,7 @@ export async function findMatchingPlans(projectRoot: string, task: string): Prom
     }
   }
 
-  const cancelledRoot = path.join(projectRoot, RUNTIME_ROOT, "cancelled");
+  const cancelledRoot = path.join(projectRoot, CANCELLED_DIR_REL_PATH);
   if (await exists(cancelledRoot)) {
     for (const dir of await listSubdirs(cancelledRoot)) {
       const planPath = path.join(dir, "plan.md");

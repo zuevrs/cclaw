@@ -1,5 +1,3 @@
-import { CCLAW_VERSION } from "../constants.js";
-
 export interface ArtifactTemplate {
   id:
     | "plan"
@@ -9,8 +7,7 @@ export interface ArtifactTemplate {
     | "decisions"
     | "learnings"
     | "manifest"
-    | "ideas"
-    | "agents-block";
+    | "ideas";
   fileName: string;
   description: string;
   body: string;
@@ -24,9 +21,13 @@ ac:
   - id: AC-1
     text: "Replace with the first observable outcome (something a user or test can verify)."
     status: pending
+    parallelSafe: true
+    touchSurface: []
   - id: AC-2
     text: "Replace with the second observable outcome, or delete this entry if one AC is enough."
     status: pending
+    parallelSafe: true
+    touchSurface: []
 last_specialist: null
 refines: null
 shipped_at: null
@@ -37,54 +38,67 @@ security_flag: false
 
 # SLUG-PLACEHOLDER
 
-> One paragraph: what we are doing and why. This is the elevator pitch. Avoid jargon. If you cannot fit the goal in 4 lines, the request is probably too large — split it before continuing.
-
-## Context
-
-_(Brainstormer fills this when invoked: current state, user intent, constraints. If the orchestrator runs inline without brainstormer, leave a one-line summary here.)_
+> One short paragraph: what we are doing and why. If the goal does not fit in 4 lines, the request is probably too large — split it.
 
 ## Frame
 
-_(Brainstormer / orchestrator: what we believe is true, what we are not sure of, what is intentionally out of scope.)_
+_(Brainstormer-authored when invoked. 2-5 sentences: what is broken or missing today, who feels it, what success looks like a user or test can verify, what is explicitly out of scope. Cite real evidence — \`file:path:line\`, ticket id, conversation excerpt — when you have it. If the orchestrator runs inline without brainstormer, leave a one-line summary here.)_
 
-## Scope
+## Approaches
 
-- **In scope:**
-  - _Listed items the change must produce._
-- **Out of scope:**
-  - _Listed items the change must not touch in this slug._
+_(Optional. Brainstormer fills this in \`guided\` or \`deep\` posture. Drop dead options before showing the table; do not pad to 3 rows for symmetry.)_
 
-## Alternatives considered
+| Role | Approach | Trade-off | Reuse / reference |
+| --- | --- | --- | --- |
+| baseline | _approach_ | _trade-off_ | _reference_ |
+| challenger | _approach_ | _trade-off_ | _reference_ |
 
-_(Optional. Brainstormer alternatives mode or architect feasibility mode. Drop this section if there is no real choice.)_
+## Selected Direction
+
+_(One paragraph when Approaches exists; cites the picked row and why.)_
+
+## Not Doing
+
+_(3-5 bullets the brainstorm explicitly is NOT committing to. Protects scope from silent enlargement.)_
+
+- _explicit non-commitment_
+- _explicit non-commitment_
 
 ## Architecture
 
-_(Architect, when invoked. Link to .cclaw/decisions/SLUG-PLACEHOLDER.md. Keep this section short — full rationale lives in decisions.md.)_
+_(Architect, when invoked. Link to \`flows/SLUG-PLACEHOLDER/decisions.md\`. Keep this section short — full rationale lives in decisions.md.)_
 
 ## Plan
 
-- **Phase 1 — Foundation.**
+_(Planner authors this. AC-aligned, not horizontal-layer. Each unit ships an end-to-end vertical slice for one AC.)_
+
+- **Phase 1 — Foundation (AC-1).**
   - Concrete change with file:path:line reference.
+- **Phase 2 — Wiring (AC-2, AC-3).**
   - Concrete change with file:path:line reference.
-- **Phase 2 — Wiring.**
-  - …
 
 ## Acceptance Criteria
 
-| id | text | status | commit |
-| --- | --- | --- | --- |
-| AC-1 | _Replace with the first observable outcome._ | pending | — |
-| AC-2 | _Replace or delete._ | pending | — |
+| id | text | status | parallelSafe | touchSurface | commit |
+| --- | --- | --- | --- | --- | --- |
+| AC-1 | _Replace with the first observable outcome._ | pending | true | _list of repo paths_ | — |
+| AC-2 | _Replace or delete._ | pending | true | _list of repo paths_ | — |
 
-The AC block is the source of truth. Every commit produced by \`commit-helper.mjs\` must reference exactly one AC id.
+The AC block is the source of truth. Every commit produced by \`commit-helper.mjs\` references exactly one AC id. \`parallelSafe: false\` opts the AC out of parallel-build dispatch; \`touchSurface\` is the list of repo-relative paths the AC is allowed to modify. Each AC must point at a real \`file:line\` or destination path.
+
+## Edge cases
+
+_(Planner-authored. One bullet per AC naming the non-happy-path the slice-builder's RED test must encode.)_
+
+- **AC-1** — _empty input / boundary / error response_.
+- **AC-2** — _hover under 100ms / missing fixture / etc_.
 
 ## Topology
 
-_(Planner topology mode, when invoked. Default: \`inline\`. For \`parallel-build\` declare slice owners and the integration reviewer.)_
+_(Planner topology mode. Default: \`inline\`. \`parallel-build\` is opt-in; see lib/skills/parallel-build.md for rules.)_
 
 - topology: inline
-- parallel slices: _none_
+- slices: _none_
 
 ## Traceability block
 
@@ -173,43 +187,73 @@ review_iterations: 0
 modes_run:
   - code
 findings_block: []
+ledger_open: 0
+ledger_closed: 0
+zero_block_streak: 0
 ---
 
 # Review — SLUG-PLACEHOLDER
 
-This is the review log. \`reviewer\` (and \`security-reviewer\`, when relevant) append findings here.
+This is the review log. \`reviewer\` (and \`security-reviewer\`, when relevant) append findings here. The loop is producer ↔ critic: iteration N proposes findings, \`slice-builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-loop skill).
 
 ## Run summary
 
-| iteration | mode | reviewer | result |
-| --- | --- | --- | --- |
-| 1 | code | reviewer | _pending_ |
-
-Hard cap: 5 iterations. After the 5th, stop and surface what remains.
-
-## Findings
-
-_(Each finding has: id F-N, severity \`block\` / \`warn\` / \`info\`, AC ref, file:path:line, short description, proposed fix.)_
-
-| id | severity | AC | location | finding | fix |
+| iteration | mode | reviewer | result | new_block | closed_block |
 | --- | --- | --- | --- | --- | --- |
-| F-1 | _info_ | AC-1 | _path:line_ | _description_ | _proposed change_ |
+| 1 | code | reviewer | _pending_ | _N_ | _N_ |
 
-## Five Failure Modes pass
+Hard cap: 5 iterations. After the 5th, stop and surface what remains in the ledger.
 
-For every iteration the reviewer must explicitly answer yes/no:
+## Concern Ledger (append-only)
 
-- **Hallucinated actions** — any invented files, ids, env vars, function names? _no / yes (cite)_
-- **Scope creep** — changes outside declared AC? _no / yes (cite)_
-- **Cascading errors** — does any fix introduce new failures? _no / yes (cite)_
-- **Context loss** — earlier decisions / AC text forgotten? _no / yes (cite)_
-- **Tool misuse** — destructive or wrong-mode tool calls? _no / yes (cite)_
+Stable global ids per slug. Rows are never edited or deleted, only appended. Closing a row requires a citation to the fix evidence (commit SHA, test name, or new file:line).
 
-## Decision
+| ID | Opened in | Mode | Severity | Status | Closed in | Citation |
+| --- | --- | --- | --- | --- | --- | --- |
+| F-1 | 1 | code | _block / warn_ | _open / closed_ | _N or –_ | \`path:line\` or commit SHA |
 
-- **block** _\u2192 slice-builder mode=fix-only addresses listed block findings, then re-review._
-- **warn** _\u2192 record warnings, but ship proceeds._
-- **clear** _\u2192 ready for ship._
+Severity rules:
+
+- \`block\` — must close before ship.
+- \`warn\` — may ship; carries to \`ships/<slug>.md\` and \`learnings/<slug>.md\`.
+
+## Iteration logs
+
+\`\`\`markdown
+## Iteration N — <mode> — <ISO timestamp>
+
+Ledger reread:
+- F-K: <closed | open | superseded by F-L> — <citation>
+
+New findings:
+- F-M <severity> — \`<path:line>\` — <description> → <proposed fix>
+
+Five Failure Modes:
+- Hallucinated actions: no / yes (cite)
+- Scope creep: no / yes (cite)
+- Cascading errors: no / yes (cite)
+- Context loss: no / yes (cite)
+- Tool misuse: no / yes (cite)
+
+Decision: <block | warn | clear | cap-reached>
+\`\`\`
+
+## Convergence detector
+
+The loop ends when ANY signal fires:
+
+1. All ledger rows closed → \`clear\`.
+2. Two consecutive iterations with zero new \`block\` findings AND every open row is \`warn\` → \`clear\` (warn carry-over).
+3. Hard cap reached with at least one open \`block\` row → \`cap-reached\`.
+
+Tie-breaker: if iteration 5 closes the last block row, return \`clear\` (signal #1) regardless of cap.
+
+## Decision values
+
+- **block** — at least one open block row. slice-builder (fix-only) addresses them; re-review next iteration.
+- **warn** — convergence signal #2 fired. Open warns carry over. Ship may proceed.
+- **clear** — signal #1 (all closed) or signal #2 (warn-only convergence). Ready for ship.
+- **cap-reached** — signal #3. Stop; orchestrator surfaces remaining open rows to the user; user picks \`/cc-cancel\` or \`accept warns and ship\` (only valid if every open row is severity=warn).
 `;
 
 const SHIP_TEMPLATE = `---
@@ -219,23 +263,80 @@ status: active
 ship_commit: null
 push_approved: false
 pr_url: null
+finalization_mode: null
+preflight_passed: false
+rollback_recorded: false
+repo_mode: git
 ---
 
 # Ship notes — SLUG-PLACEHOLDER
 
 This artifact is written just before \`runCompoundAndShip()\` archives the run. It must contain enough information for downstream operators to understand what shipped without opening every other artifact.
 
+> **Iron Law:** NO MERGE WITHOUT GREEN PREFLIGHT, A WRITTEN ROLLBACK, AND EXACTLY ONE SELECTED FINALIZATION MODE. No exceptions for urgency. If no VCS is available, use \`FINALIZE_NO_VCS\` explicitly instead of inventing git steps.
+
 ## Summary
 
 _(2-4 lines: what changed, who needs to know.)_
 
+## Preflight checks (mandatory; fresh output in this artifact)
+
+Every check below must produce fresh output in this section. Pasting "tests passed yesterday" does not count.
+
+| Check | Command | Result | Notes |
+| --- | --- | --- | --- |
+| tests | _e.g._ \`npm test\` | _pass / fail_ | _file paths or test names_ |
+| build | _e.g._ \`npm run build\` | _pass / fail_ | _output stderr lines_ |
+| linter | _e.g._ \`npm run lint\` | _pass / fail_ | _file paths_ |
+| type-check | _e.g._ \`npm run typecheck\` or \`tsc --noEmit\` | _pass / fail_ | _error count_ |
+| clean tree | \`git status --porcelain\` | _empty / non-empty_ | _file paths_ |
+
+Set \`preflight_passed: true\` in the frontmatter only when every row is pass/empty.
+
+## Repository mode detection
+
+Run \`test -d .git && echo git || echo no-vcs\`. Result: _git / no-vcs_.
+
+If no-vcs, the only valid finalization mode is \`FINALIZE_NO_VCS\`; document the manual handoff target and rollback owner in the relevant sections.
+
+## Merge-base detection (git mode only)
+
+Run \`git merge-base HEAD <base-branch>\`. If the base has diverged significantly, flag for rebase-first BEFORE proceeding to finalization.
+
+\`\`\`bash
+$ git merge-base HEAD main
+<sha>
+
+$ git rev-list --count <sha>..main
+N commits behind main
+\`\`\`
+
+If \`N > 0\` and any of those commits touch this slug's \`touchSurface\`, rebase first. Re-run preflight after the rebase; do not trust the prior preflight result.
+
 ## AC ↔ commit map
 
-| AC | commit | description |
-| --- | --- | --- |
-| AC-1 | _sha_ | _short description_ |
+| AC | text (one line) | red SHA | green SHA | refactor SHA | description |
+| --- | --- | --- | --- | --- | --- |
+| AC-1 | _AC text_ | _sha_ | _sha_ | _sha or skipped_ | _short description_ |
 
-This table mirrors \`plans/SLUG-PLACEHOLDER.md\` Acceptance Criteria with the final SHAs. The orchestrator refuses to run \`runCompoundAndShip()\` if any AC still shows \`status: pending\`.
+This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > Acceptance Criteria\` with the final SHAs from \`flow-state.ac[].phases\`. The orchestrator refuses to run \`runCompoundAndShip()\` if any AC still shows \`status: pending\`.
+
+## Rollback plan (mandatory)
+
+The rollback plan has three explicit fields; missing any one blocks ship:
+
+- **Trigger conditions (what tells you it is broken):** _e.g._ error rate on /api/list > 1% over 5 min; latency p95 > 800ms over 10 min; user-visible 5xx in dashboard.
+- **Rollback steps (exact commands or git operations):** _e.g._ \`git revert <ship_commit>; git push origin main\`. For non-git: \`scp release/<slug>-prev.tar.gz <host>:/srv/app && systemctl restart app\`.
+- **Verification (how to confirm rollback worked):** _e.g._ /healthz returns 200; error rate back to baseline within 5 min; smoke test \`curl /api/list | jq '.items | length'\` returns N.
+
+Set \`rollback_recorded: true\` in the frontmatter only when all three fields are filled with concrete content.
+
+## Monitoring checklist
+
+- Error rate on _/path_: baseline _N_/min, alert above _M_/min for _T_ min.
+- Latency p95 on _/path_: baseline _Nms_, alert above _Mms_ for _T_ min.
+- Business metric: _e.g._ search_quality_score (rolling 1h average should not drop > 5%).
+- If no monitoring exists for the affected surface, flag in Risks section below.
 
 ## Push / PR
 
@@ -244,6 +345,19 @@ This table mirrors \`plans/SLUG-PLACEHOLDER.md\` Acceptance Criteria with the fi
 
 When push is approved, record the upstream branch + PR URL above.
 
+## Finalization mode (exactly ONE)
+
+Pick exactly one. Setting \`finalization_mode\` to anything other than these five values is rejected:
+
+- **FINALIZE_MERGE_LOCAL** — merge into the base branch locally; no PR.
+- **FINALIZE_OPEN_PR** — push and open a PR with this artifact's Summary + AC↔commit map as the body.
+- **FINALIZE_KEEP_BRANCH** — push the branch but leave the merge to a downstream operator.
+- **FINALIZE_DISCARD_BRANCH** — delete the branch entirely (requires typed confirmation in the orchestrator turn).
+- **FINALIZE_NO_VCS** — no VCS available; record manual handoff target and rollback owner.
+
+Selected: _<one mode>_
+Rationale: _<one sentence>_
+
 ## Breaking changes / migration
 
 _(If none, write "none". If any, link to migration notes — typically docs/migration-… or a release-notes file.)_
@@ -251,6 +365,24 @@ _(If none, write "none". If any, link to migration notes — typically docs/migr
 ## Release notes (one paragraph)
 
 _(Suitable for CHANGELOG.md. Avoid TODOs and references that won't make sense to readers without internal context.)_
+
+## Risks carried over
+
+_(List any \`warn\`-severity ledger rows from \`flows/SLUG-PLACEHOLDER/review.md\` and any \`open\` assumptions from the plan. Each line says: id, source, why we are shipping anyway.)_
+
+- _e.g._ F-2 (warn) — \`tests/integration/list.test.ts:31\` — no negative test for empty page; tracked in \`flows/SLUG-PLACEHOLDER/learnings.md\`.
+
+## Victory Detector
+
+Ship is allowed only when ALL of these are true:
+
+- valid review verdict (\`clear\` or \`warn\` with convergence signal #2)
+- preflight_passed=true with fresh output
+- rollback_recorded=true with all three fields filled
+- finalization_mode set to exactly one enum value
+- repo_mode matches the chosen finalization (\`no-vcs\` repo cannot pick \`FINALIZE_MERGE_LOCAL\`)
+
+If any field is stale or missing, keep \`status: blocked\` and iterate.
 `;
 
 const DECISIONS_TEMPLATE = `---
@@ -258,11 +390,37 @@ slug: SLUG-PLACEHOLDER
 stage: plan
 status: active
 decision_count: 0
+architecture_tier: null
 ---
 
 # Decisions — SLUG-PLACEHOLDER
 
 \`architect\` (and any reviewer in \`text-review\` mode) records decisions here. Each decision is independently citable.
+
+## Architecture tier
+
+_(Architect picks one tier per slug, recorded once at the top of this file. Tier sets the depth bar for the whole D-N set.)_
+
+- **minimum-viable** — solve only the immediate failure mode; ignore future-proofing. Use for hot-fixes, small enhancements, doc-only.
+- **product-grade** — production-ready quality bar; includes failure modes, monitoring hooks, rollback plan. Default for most slugs.
+- **ideal** — invest in long-term shape (clean abstractions, full failure-mode coverage, perf budgets, security review). Use only when explicitly requested or when the change is foundational.
+
+Selected tier: _<minimum-viable | product-grade | ideal>_
+Rationale: _<one sentence>_
+
+## Trivial-Change Escape Hatch
+
+_(If the change is ≤3 files, no new interfaces, no cross-module data flow, write a one-paragraph mini-decision here and skip the full D-N machinery. Otherwise write \`Not applicable.\`.)_
+
+## Blast-radius Diff
+
+_(Only the paths this slug touches, not the whole repo. Cite \`git diff\` against the slug's baseline SHA. Skip for trivial changes.)_
+
+\`\`\`text
+$ git diff <baseline-sha>..HEAD --stat
+src/api/list.ts        | 12 +
+tests/unit/list.test.ts |  6 +
+\`\`\`
 
 ## D-1 — _decision title_
 
@@ -277,7 +435,21 @@ decision_count: 0
 - **Consequences:** _what becomes easier; what becomes harder; what we will revisit._
 - **Refs:** _file:path:line, AC-N, related external link._
 
-> If the decision is small enough that all of the above can be written in one paragraph, do that — but still keep the D-N id, otherwise refinement and compound cannot reference it.
+### Failure Mode Table
+
+_(Only when this decision touches a user-visible failure path — rendering, request/response, persisted data, payment/auth, third-party calls. If the decision is purely internal, replace this section with the single line \`Failure Mode Table: not applicable — no user-visible failure path\`. When present, \`UserSees\` is mandatory in every row; silent failure paths must show "UserSees=nothing — recorded in <metric>".)_
+
+| # | Method | Exception | Rescue | UserSees |
+| --- | --- | --- | --- | --- |
+| 1 | \`scoring.bm25\` | doc length missing in index | fallback to plain TF | warning toast: "Search ranking degraded" |
+
+### Pre-mortem
+
+_(Imagine this decision shipped and failed. What did it look like in the failure scenario? Three bullets max. Mandatory at product-grade and ideal tiers; minimum-viable may skip.)_
+
+- _Failure scenario 1_
+- _Failure scenario 2_
+- _Failure scenario 3_
 `;
 
 const LEARNINGS_TEMPLATE = `---
@@ -369,36 +541,6 @@ This file is a free-form idea backlog. Entries are appended by \`/cc-idea\` and 
 Each entry begins with an ISO timestamp, then a single-line summary, then the body.
 `;
 
-const AGENTS_BLOCK_TEMPLATE = `<!-- cclaw-routing:start v${CCLAW_VERSION} -->
-
-# cclaw routing
-
-cclaw is installed in this project. This block tells your harness how to route requests.
-
-## Slash commands
-
-- \`/cc <task>\` — entry point. Routes the task and runs plan/build/review/ship.
-- \`/cc-cancel\` — cancel the active run; artifacts move to \`.cclaw/cancelled/<slug>/\`.
-- \`/cc-idea\` — append an idea to \`.cclaw/ideas.md\`. No flow is started.
-
-## Active artifacts
-
-- \`.cclaw/plans/<slug>.md\` — current plan with AC.
-- \`.cclaw/builds/<slug>.md\` — implementation log.
-- \`.cclaw/reviews/<slug>.md\` — review findings.
-- \`.cclaw/ships/<slug>.md\` — release notes.
-- \`.cclaw/decisions/<slug>.md\` — architectural decisions (optional).
-- \`.cclaw/learnings/<slug>.md\` — captured learnings (only when quality gate passes).
-
-## Mandatory rules
-
-1. AC traceability is mandatory. Every commit produced inside \`/cc\` must reference exactly one \`AC-N\` id and use \`.cclaw/hooks/commit-helper.mjs\`.
-2. \`git push\` and PR creation always require explicit user approval in the current turn.
-3. Refuse to resume \`flow-state.json\` with \`schemaVersion: 1\` (cclaw 7.x). Surface operator choices instead.
-
-<!-- cclaw-routing:end -->
-`;
-
 export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "plan", fileName: "plan.md", description: "Plan template with frontmatter, AC table, and traceability block.", body: PLAN_TEMPLATE },
   { id: "build", fileName: "build.md", description: "Build log template with commit table and hook invocation log.", body: BUILD_TEMPLATE },
@@ -407,8 +549,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "decisions", fileName: "decisions.md", description: "Architect-style decision record template (D-N entries).", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },
   { id: "manifest", fileName: "manifest.md", description: "Shipped manifest template; lists AC, artifacts, refines link.", body: MANIFEST_TEMPLATE },
-  { id: "ideas", fileName: "ideas.md", description: "Append-only idea backlog seed.", body: IDEAS_TEMPLATE },
-  { id: "agents-block", fileName: "agents-block.md", description: "AGENTS.md routing block written into harness root.", body: AGENTS_BLOCK_TEMPLATE }
+  { id: "ideas", fileName: "ideas.md", description: "Append-only idea backlog seed.", body: IDEAS_TEMPLATE }
 ];
 
 export function templateBody(id: ArtifactTemplate["id"], replacements: Record<string, string> = {}): string {

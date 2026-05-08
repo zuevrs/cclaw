@@ -10,9 +10,14 @@ import { parseArtifact } from "../../src/artifact-frontmatter.js";
 describe("artifact-templates", () => {
   it("ships templates for every artifact stage", () => {
     const ids = ARTIFACT_TEMPLATES.map((template) => template.id);
-    for (const expected of ["plan", "build", "review", "ship", "decisions", "learnings", "manifest", "ideas", "agents-block"]) {
+    for (const expected of ["plan", "build", "review", "ship", "decisions", "learnings", "manifest", "ideas"]) {
       expect(ids).toContain(expected);
     }
+  });
+
+  it("does NOT ship an agents-block template (cclaw v8 keeps project root clean)", () => {
+    const ids = ARTIFACT_TEMPLATES.map((template) => template.id);
+    expect(ids).not.toContain("agents-block");
   });
 
   it("plan template parses as valid frontmatter once slug is replaced", () => {
@@ -34,11 +39,13 @@ describe("artifact-templates", () => {
     expect(parsed.frontmatter.shipped_at).toBe("2026-05-07T00:00:00Z");
   });
 
-  it("review template includes Five Failure Modes pass section", () => {
+  it("review template includes Five Failure Modes block and Concern Ledger", () => {
     const body = templateBody("review", { "SLUG-PLACEHOLDER": "alpha" });
-    expect(body).toContain("Five Failure Modes pass");
+    expect(body).toContain("Five Failure Modes");
     expect(body).toContain("Hallucinated actions");
     expect(body).toContain("Tool misuse");
+    expect(body).toContain("Concern Ledger");
+    expect(body).toContain("Convergence detector");
   });
 
   it("ship template includes AC ↔ commit map", () => {
@@ -48,9 +55,4 @@ describe("artifact-templates", () => {
     expect(body).toContain("PR: _pending");
   });
 
-  it("agents-block template carries cclaw-routing markers", () => {
-    const body = templateBody("agents-block");
-    expect(body).toContain("<!-- cclaw-routing:start");
-    expect(body).toContain("<!-- cclaw-routing:end -->");
-  });
 });

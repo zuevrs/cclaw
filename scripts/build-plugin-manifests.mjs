@@ -30,7 +30,7 @@ function hooksJson(harness) {
   ) + "\n";
 }
 
-const opencodePlugin = `// cclaw v8.0.0 opencode plugin (minimal). Wires session-start and stop-handoff hooks.
+const opencodePlugin = `// cclaw opencode plugin (minimal). Wires session-start and stop-handoff hooks.
 import { spawn } from "node:child_process";
 import path from "node:path";
 function run(filePath) {
@@ -59,7 +59,7 @@ const indexPayload = {
   version: 1,
   generatedAt: new Date().toISOString(),
   optional: true,
-  description: "Optional cclaw v8 harness plugin manifests (use cclaw sync for real installs).",
+  description: "Optional cclaw harness plugin manifests (use cclaw sync for real installs).",
   files: files.map(([name]) => name)
 };
 writeFileSync(join(outputDir, "index.json"), `${JSON.stringify(indexPayload, null, 2)}\n`, "utf8");

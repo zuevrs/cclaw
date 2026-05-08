@@ -1,4 +1,4 @@
-// cclaw v8 hook runtime entry point.
+// cclaw hook runtime entry point.
 // Hooks are written as standalone .mjs files under .cclaw/hooks/ at install time.
 // This module is a thin loader for ad-hoc programmatic invocation; it is
 // intentionally tiny because hook bodies are owned by the generated content

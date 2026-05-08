@@ -4,7 +4,7 @@ This command does **not** participate in plan/build/review/ship. Its only job is
 
 ## Behaviour
 
-1. Open \`.cclaw/ideas.md\`. If it does not exist, seed it from \`.cclaw/templates/ideas.md\`.
+1. Open \`.cclaw/ideas.md\`. If it does not exist, seed it from \`.cclaw/lib/templates/ideas.md\`.
 2. Append a new entry with this shape:
 
    \`\`\`
@@ -13,7 +13,7 @@ This command does **not** participate in plan/build/review/ship. Its only job is
    <short paragraph or bullet list with the idea body>
    \`\`\`
 
-3. Save the file. Do not slugify, do not create artifacts under \`.cclaw/plans/\`, do not modify \`flow-state.json\`, do not invoke specialists.
+3. Save the file. Do not slugify, do not create artifacts under \`.cclaw/flows/<slug>/\`, do not modify \`flow-state.json\`, do not invoke specialists.
 
 ## Hard rules
 

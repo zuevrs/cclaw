@@ -44,7 +44,7 @@ describe("orchestrator routing", () => {
 
   it("finds shipped plan when text overlaps strongly", async () => {
     project = await createTempProject();
-    const shippedPlan = path.join(project, ".cclaw", "shipped", "billing-rewrite", "plan.md");
+    const shippedPlan = path.join(project, ".cclaw", "flows", "shipped", "billing-rewrite", "plan.md");
     await writeFileSafe(
       shippedPlan,
       "---\nslug: billing-rewrite\nstage: shipped\nstatus: shipped\nac: []\n---\n\n# billing rewrite\n\nMigrate billing rewrite to the new ledger module across services.\n"

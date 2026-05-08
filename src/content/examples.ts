@@ -71,81 +71,6 @@ The dashboard currently lists pending and approved requests in two flat tables. 
 - AC-2 → commit pending
 `;
 
-const PLAN_LARGE_REFINEMENT = `---
-slug: approval-pill-tooltips
-stage: plan
-status: active
-ac:
-  - id: AC-1
-    text: "Tooltip shows the approver's email when the user has \`view-email\` permission."
-    status: pending
-  - id: AC-2
-    text: "Tooltip respects the existing 250 ms hover delay tokens."
-    status: pending
-  - id: AC-3
-    text: "Tooltip falls back to display name when permission is missing."
-    status: pending
-last_specialist: architect
-refines: approval-pill
-shipped_at: null
-ship_commit: null
-review_iterations: 0
-security_flag: true
----
-
-# approval-pill-tooltips
-
-Refine the previously shipped \`approval-pill\` slug so the tooltip can include the approver's email for users with the \`view-email\` permission. The original slug intentionally stopped at display name.
-
-## Context
-
-\`approval-pill\` shipped on 2026-04-18 with display name only. Compliance now wants email visibility for SOC2 auditors, but we cannot show it to all users. We need a permission-gated path without rewriting the pill.
-
-## Frame
-
-- Already true: \`view-email\` permission exists on the IAM side; \`useCurrentUser\` already hydrates permission claims.
-- Not sure: whether permissions should be re-checked on render or read from the cached claim. We default to cached, with a 60 s TTL.
-- Out of scope: changing the IAM model; backfilling permissions; admin UI for granting the permission.
-
-## Scope
-
-- **In scope:** tooltip text in \`src/components/dashboard/RequestCard.tsx:90\`, new helper \`src/lib/permissions.ts\` (or extension), test fixture for permission off.
-- **Out of scope:** dashboard tables; modal; everything outside the pill.
-
-## Architecture
-
-Selected option B (read-from-cached-claim) per \`decisions/approval-pill-tooltips.md#D-1\`. Cached claim path is consistent with how \`view-billing\` works elsewhere; re-checking on render adds 8 ms p99 to the dashboard render budget.
-
-## Plan
-
-- Phase 1 — Permission check helper
-  - \`hasViewEmail(user)\` in \`src/lib/permissions.ts\`.
-- Phase 2 — Tooltip wiring
-  - Branch on \`hasViewEmail\` in \`src/components/dashboard/RequestCard.tsx:90\`.
-- Phase 3 — Tests
-  - Add fixtures for permission on and off.
-  - Smoke-test that the tooltip text differs.
-
-## Acceptance Criteria
-
-| id | text | status | commit |
-| --- | --- | --- | --- |
-| AC-1 | Tooltip shows the approver's email when the user has view-email permission. | pending | — |
-| AC-2 | Tooltip respects the existing 250 ms hover delay tokens. | pending | — |
-| AC-3 | Tooltip falls back to display name when permission is missing. | pending | — |
-
-## Topology
-
-- topology: inline
-- parallel slices: none
-
-## Traceability block
-
-- AC-1 → commit pending
-- AC-2 → commit pending
-- AC-3 → commit pending
-`;
-
 const PLAN_PARALLEL_BUILD = `---
 slug: search-overhaul
 stage: plan
@@ -394,10 +319,6 @@ The simple thing is to call IAM on render whenever the dashboard wants to know w
 - Consider an \`assertPermission\` helper for non-render paths so the rules are obvious.
 `;
 
-const KNOWLEDGE_LINE = `\`\`\`json
-{"slug":"approval-pill-tooltips","ship_commit":"deadbee","shipped_at":"2026-04-22T11:14:00Z","signals":{"hasArchitectDecision":true,"reviewIterations":2,"securityFlag":true,"userRequestedCapture":false},"refines":"approval-pill","notes":"Cached claim path reused for permission gates."}
-\`\`\``;
-
 const COMMIT_HELPER_SESSION = `\`\`\`bash
 $ git status --short
  M src/components/dashboard/StatusPill.tsx
@@ -414,68 +335,18 @@ $ node .cclaw/hooks/commit-helper.mjs --ac=AC-1 \\
 [commit-helper] AC-1 committed as a1b2c3d
 \`\`\``;
 
-const REFINEMENT_DETECTION_PROMPT = `\`\`\`
-/cc Add an email-aware tooltip on the approval pill for compliance auditors.
-
-[orchestrator] Existing-plan detection found:
-  - shipped: approval-pill (last_specialist=planner, ac 2/2 committed,
-    security_flag=false). https://.cclaw/shipped/approval-pill/manifest.md
-  - active:  none
-
-  Pick one:
-    (1) refine shipped approval-pill (creates a new slug with
-        refines: approval-pill);
-    (2) start a new unrelated plan;
-    (3) cancel and rephrase.
-
-> 1
-\`\`\``;
-
-const PARALLEL_BUILD_DISPATCH = `\`\`\`
-[orchestrator] planner topology=parallel-build with 4 AC across 3 slices.
-  Pre-conditions: 4 AC, disjoint files, no AC depends on another in this wave.
-
-  Slice #1: backend (AC-1, AC-2)  — slice-builder
-  Slice #2: frontend (AC-3)       — slice-builder
-  Slice #3: tests (AC-4)          — slice-builder
-
-  After all slices finish: reviewer mode=integration.
-
-  Confirm? (y / change topology / stop)
-
-> y
-\`\`\``;
-
-const REVIEW_CAP_REACHED = `\`\`\`
-[orchestrator] reviewer mode=code reached iteration 5 with 2 outstanding
-  block-level findings:
-    - F-3 (AC-2): tooltip text leaks email into the analytics event.
-    - F-7 (AC-3): fallback path throws when displayName is null.
-
-  cap-reached. Recommendation: /cc-cancel and re-plan F-3 + F-7 as a
-  fresh slug with stricter scope, OR fold F-3 into a security-flagged
-  amendment of the current slug.
-
-> /cc-cancel reason="re-plan with tighter scope"
-\`\`\``;
-
 export const EXAMPLES: ExampleArtifact[] = [
   { id: "plan-small", fileName: "plan-small.md", title: "Plan — small slug", description: "Two AC, inline topology, no specialists invoked.", body: PLAN_SMALL },
-  { id: "plan-refinement", fileName: "plan-refinement.md", title: "Plan — refinement of a shipped slug", description: "refines pointer + security_flag + architect decision link.", body: PLAN_LARGE_REFINEMENT },
   { id: "plan-parallel-build", fileName: "plan-parallel-build.md", title: "Plan — parallel-build topology", description: "Four AC across three slice owners + integration reviewer.", body: PLAN_PARALLEL_BUILD },
   { id: "build-log", fileName: "build-log.md", title: "Build log — two AC committed", description: "Commit table with file:line refs and hook invocations.", body: BUILD_LOG },
   { id: "review-log", fileName: "review-log.md", title: "Review — two iterations to clear", description: "Iteration table, findings, Five Failure Modes pass.", body: REVIEW_LOG },
   { id: "ship-notes", fileName: "ship-notes.md", title: "Ship notes — approved push + PR", description: "Summary, AC↔commit map, push/PR, release notes.", body: SHIP_NOTES },
-  { id: "decision-record", fileName: "decision-record.md", title: "Decision — D-1 record", description: "Considered options, selection, rationale, consequences, refs.", body: DECISION_RECORD },
+  { id: "decision-permission-cache", fileName: "decision-permission-cache.md", title: "Decision — cached permission claim (D-1)", description: "Considered options, selection, rationale, consequences, refs.", body: DECISION_RECORD },
   { id: "learning-record", fileName: "learning-record.md", title: "Learnings — gated capture", description: "Belief / outcomes / patterns / antipatterns / follow-ups.", body: LEARNING_RECORD },
-  { id: "knowledge-line", fileName: "knowledge-line.md", title: "knowledge.jsonl — single line", description: "Shape of one ndjson entry with refines pointer.", body: `# knowledge.jsonl entry\n\n${KNOWLEDGE_LINE}\n` },
-  { id: "commit-helper-session", fileName: "commit-helper-session.md", title: "Commit-helper session", description: "Shell transcript for one AC commit via the hook.", body: `# commit-helper.mjs session\n\n${COMMIT_HELPER_SESSION}\n` },
-  { id: "refinement-detection", fileName: "refinement-detection.md", title: "Existing-plan detection prompt", description: "Sample orchestrator prompt with shipped match and user choice.", body: `# /cc existing-plan detection\n\n${REFINEMENT_DETECTION_PROMPT}\n` },
-  { id: "parallel-build-dispatch", fileName: "parallel-build-dispatch.md", title: "Parallel-build dispatch prompt", description: "Sample orchestrator prompt before dispatching slices.", body: `# /cc parallel-build dispatch\n\n${PARALLEL_BUILD_DISPATCH}\n` },
-  { id: "review-cap-reached", fileName: "review-cap-reached.md", title: "Review hard-cap example", description: "Iteration 5 cap-reached with /cc-cancel recommendation.", body: `# review-loop cap-reached\n\n${REVIEW_CAP_REACHED}\n` }
+  { id: "commit-helper-session", fileName: "commit-helper-session.md", title: "Commit-helper session", description: "Shell transcript for one AC commit via the hook.", body: `# commit-helper.mjs session\n\n${COMMIT_HELPER_SESSION}\n` }
 ];
 
-export const EXAMPLES_INDEX = `# .cclaw/examples/
+export const EXAMPLES_INDEX = `# .cclaw/lib/examples/
 
 Worked artifacts the orchestrator and specialists can study before producing their own. Each file is a real-looking plan / build / review / ship / decision / learning artifact, plus a few orchestrator-prompt transcripts.
 

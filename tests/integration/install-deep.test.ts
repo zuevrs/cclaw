@@ -10,20 +10,20 @@ describe("install — deep content", () => {
     if (project) await removeProject(project);
   });
 
-  it("populates .cclaw/templates with every artifact template", async () => {
+  it("populates .cclaw/lib/templates with every artifact template", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const fileName of ["plan.md", "build.md", "review.md", "ship.md", "decisions.md", "learnings.md", "manifest.md", "ideas.md", "agents-block.md", "iron-laws.md"]) {
-      const stat = await fs.stat(path.join(project, ".cclaw", "templates", fileName));
+    for (const fileName of ["plan.md", "build.md", "review.md", "ship.md", "decisions.md", "learnings.md", "manifest.md", "ideas.md", "iron-laws.md"]) {
+      const stat = await fs.stat(path.join(project, ".cclaw", "lib", "templates", fileName));
       expect(stat.isFile()).toBe(true);
     }
   });
 
-  it("populates .cclaw/skills with every auto-trigger skill", async () => {
+  it("populates .cclaw/lib/skills with every auto-trigger skill", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
     for (const fileName of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md"]) {
-      const stat = await fs.stat(path.join(project, ".cclaw", "skills", fileName));
+      const stat = await fs.stat(path.join(project, ".cclaw", "lib", "skills", fileName));
       expect(stat.isFile()).toBe(true);
     }
   });
@@ -38,27 +38,22 @@ describe("install — deep content", () => {
     expect(body).toContain("sentinel");
   });
 
-  it("writes a cclaw-routing block into AGENTS.md and removes it on uninstall", async () => {
+  it("does NOT generate AGENTS.md or CLAUDE.md (cclaw v8 keeps the project root clean)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    const agentsPath = path.join(project, "AGENTS.md");
-    const body = await fs.readFile(agentsPath, "utf8");
-    expect(body).toContain("<!-- cclaw-routing:start");
-    expect(body).toContain("<!-- cclaw-routing:end -->");
-
-    await uninstallCclaw({ cwd: project });
-    await expect(fs.access(agentsPath)).rejects.toBeTruthy();
+    await expect(fs.access(path.join(project, "AGENTS.md"))).rejects.toBeTruthy();
+    await expect(fs.access(path.join(project, "CLAUDE.md"))).rejects.toBeTruthy();
   });
 
-  it("preserves existing AGENTS.md content outside the cclaw-routing block on uninstall", async () => {
+  it("preserves a pre-existing AGENTS.md untouched on init / uninstall", async () => {
     project = await createTempProject();
     const agentsPath = path.join(project, "AGENTS.md");
     await fs.writeFile(agentsPath, "# Project\n\nKeep me.\n", "utf8");
     await initCclaw({ cwd: project });
+    const after = await fs.readFile(agentsPath, "utf8");
+    expect(after).toBe("# Project\n\nKeep me.\n");
     await uninstallCclaw({ cwd: project });
-    const body = await fs.readFile(agentsPath, "utf8");
-    expect(body).toContain("Keep me.");
-    expect(body).not.toContain("cclaw-routing");
+    expect(await fs.readFile(agentsPath, "utf8")).toBe("# Project\n\nKeep me.\n");
   });
 
   it("ships agent files with frontmatter and modes for every harness", async () => {

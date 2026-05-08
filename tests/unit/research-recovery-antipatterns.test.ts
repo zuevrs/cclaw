@@ -6,13 +6,21 @@ import { DECISION_PROTOCOL } from "../../src/content/decision-protocol.js";
 import { META_SKILL } from "../../src/content/meta-skill.js";
 
 describe("research playbooks", () => {
-  it("ships at least five research playbooks", () => {
-    expect(RESEARCH_PLAYBOOKS.length).toBeGreaterThanOrEqual(5);
+  it("ships exactly three research playbooks (codebase reading, time-boxing, prior slugs)", () => {
+    expect(RESEARCH_PLAYBOOKS.length).toBe(3);
+    const ids = RESEARCH_PLAYBOOKS.map((entry) => entry.id).sort();
+    expect(ids).toEqual(["prior-slugs", "reading-codebase", "time-boxing"]);
   });
 
-  it("read-before-write playbook lists stop conditions", () => {
-    const playbook = RESEARCH_PLAYBOOKS.find((entry) => entry.id === "read-before-write");
+  it("reading-codebase playbook lists stop conditions", () => {
+    const playbook = RESEARCH_PLAYBOOKS.find((entry) => entry.id === "reading-codebase");
     expect(playbook?.body).toContain("Stop conditions");
+  });
+
+  it("reading-codebase playbook covers test-reading and integration-boundary guidance", () => {
+    const playbook = RESEARCH_PLAYBOOKS.find((entry) => entry.id === "reading-codebase");
+    expect(playbook?.body).toMatch(/Reading existing tests/iu);
+    expect(playbook?.body).toMatch(/integration boundaries/iu);
   });
 
   it("time-boxing playbook gives concrete budgets", () => {
@@ -59,15 +67,25 @@ describe("antipatterns", () => {
 });
 
 describe("decision protocol", () => {
-  it("includes at least three worked examples", () => {
-    const matches = DECISION_PROTOCOL.match(/^### D-\d+/gmu) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(3);
+  it("is a short principles digest, not a full schema", () => {
+    expect(DECISION_PROTOCOL.length).toBeLessThan(2000);
+    expect(DECISION_PROTOCOL).toContain("short form");
   });
 
-  it("documents the seven required sections of a decision record", () => {
-    for (const section of ["Title", "Context", "Considered options", "Selected", "Rationale", "Rejected because", "Consequences", "Refs"]) {
-      expect(DECISION_PROTOCOL).toContain(section);
+  it("delegates the full schema to architect.md and the worked examples", () => {
+    expect(DECISION_PROTOCOL).toContain("architect.md");
+    expect(DECISION_PROTOCOL).toContain("decision-permission-cache");
+  });
+
+  it("lists the seven mandatory D-N fields by name", () => {
+    for (const field of ["Context", "Considered options", "Selected", "Rationale", "Rejected because", "Consequences", "Refs"]) {
+      expect(DECISION_PROTOCOL).toContain(field);
     }
+  });
+
+  it("flags 'this is not a decision' patterns to suppress D-N noise", () => {
+    expect(DECISION_PROTOCOL).toContain("not a decision");
+    expect(DECISION_PROTOCOL).toContain("Use the library that is already in the project");
   });
 });
 
@@ -77,7 +95,7 @@ describe("meta skill", () => {
   });
 
   it("references runbooks, patterns, recovery, examples, antipatterns", () => {
-    for (const ref of [".cclaw/runbooks/", ".cclaw/patterns/", ".cclaw/recovery/", ".cclaw/examples/", ".cclaw/antipatterns.md"]) {
+    for (const ref of [".cclaw/lib/runbooks/", ".cclaw/lib/patterns/", ".cclaw/lib/recovery/", ".cclaw/lib/examples/", ".cclaw/lib/antipatterns.md"]) {
       expect(META_SKILL).toContain(ref);
     }
   });

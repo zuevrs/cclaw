@@ -28,4 +28,22 @@ describe("auto-trigger skills", () => {
       expect(skill?.body).toContain(mode);
     }
   });
+
+  it("anti-slop skill is shipped, always-on, and bans redundant verification + env shims", () => {
+    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "anti-slop");
+    expect(skill).toBeDefined();
+    expect(skill?.triggers).toContain("always-on");
+    expect(skill?.body).toContain("No redundant verification");
+    expect(skill?.body).toContain("No environment shims");
+    expect(skill?.body).toContain("@ts-ignore");
+    expect(skill?.body).toContain("eslint-disable");
+    expect(skill?.body).toContain("process.env.NODE_ENV");
+    expect(skill?.body).toContain("What this skill does NOT prevent");
+  });
+
+  it("conversation-language and anti-slop are both always-on", () => {
+    const alwaysOn = AUTO_TRIGGER_SKILLS.filter((entry) => entry.triggers.includes("always-on")).map((entry) => entry.id);
+    expect(alwaysOn).toContain("conversation-language");
+    expect(alwaysOn).toContain("anti-slop");
+  });
 });

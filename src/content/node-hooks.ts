@@ -8,7 +8,7 @@ export interface NodeHookSpec {
 }
 
 const SESSION_START_HOOK = `#!/usr/bin/env node
-// cclaw v8 session-start: rehydrate flow state and surface active slug.
+// cclaw session-start: rehydrate flow state and surface active slug.
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -46,7 +46,7 @@ console.log(\`[cclaw] active: \${state.currentSlug} (stage=\${state.currentStage
 `;
 
 const STOP_HANDOFF_HOOK = `#!/usr/bin/env node
-// cclaw v8 stop-handoff: short reminder when the agent stops mid-flow.
+// cclaw stop-handoff: short reminder when the agent stops mid-flow.
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -69,7 +69,7 @@ console.error(\`[cclaw] stopping with \${pending.length} pending AC for \${state
 `;
 
 const COMMIT_HELPER_HOOK = `#!/usr/bin/env node
-// cclaw v8 commit-helper: TDD-aware atomic commit per AC phase
+// cclaw commit-helper: TDD-aware atomic commit per AC phase
 // (RED -> GREEN -> REFACTOR) + AC traceability gate.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
@@ -100,7 +100,7 @@ if (!acId || !/^AC-\\d+$/.test(acId)) {
 
 if (!phase || !["red", "green", "refactor"].includes(phase)) {
   console.error("[commit-helper] --phase is required. Allowed: red, green, refactor.");
-  console.error("[commit-helper] cclaw v8 build is a TDD cycle: every AC needs RED -> GREEN -> REFACTOR.");
+  console.error("[commit-helper] build is a TDD cycle: every AC needs RED -> GREEN -> REFACTOR.");
   process.exit(2);
 }
 

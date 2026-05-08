@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Smoke test: init -> sync -> upgrade -> sync -> uninstall must leave the
-// project clean. Verifies that init writes the v8 cursor command file and
-// that uninstall removes both .cclaw and the harness slash command.
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+// project clean. Verifies the grouped layout: state/, hooks/, flows/*, lib/*.
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -11,6 +10,20 @@ const tempDir = mkdtempSync(join(tmpdir(), "cclaw-smoke-"));
 
 try {
   const cli = join(process.cwd(), "dist/cli.js");
+
+  // Verify auto-detect error path: no harness markers + no --harness flag should fail.
+  let detected = false;
+  try {
+    execFileSync("node", [cli, "init"], { cwd: tempDir, stdio: "pipe" });
+  } catch (err) {
+    detected = String(err?.stderr ?? err?.message ?? "").includes("No harness detected");
+  }
+  if (!detected) {
+    throw new Error("smoke check failed: init should error when no harness marker is present and no --harness flag is given");
+  }
+
+  // Seed a Cursor marker; auto-detect should now pick it up.
+  mkdirSync(join(tempDir, ".cursor"), { recursive: true });
   execFileSync("node", [cli, "init"], { cwd: tempDir, stdio: "pipe" });
   if (!existsSync(join(tempDir, ".cclaw"))) {
     throw new Error("smoke check failed: .cclaw missing after init");
@@ -18,44 +31,81 @@ try {
   if (!existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command missing after init");
   }
+  for (const dir of ["state", "hooks", "flows"]) {
+    if (!existsSync(join(tempDir, ".cclaw", dir))) {
+      throw new Error(`smoke check failed: top-level .cclaw/${dir}/ missing after init`);
+    }
+  }
+  for (const dir of ["shipped", "cancelled"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "flows", dir))) {
+      throw new Error(`smoke check failed: .cclaw/flows/${dir}/ missing after init`);
+    }
+  }
+  for (const stale of ["plans", "builds", "reviews", "ships", "decisions", "learnings"]) {
+    if (existsSync(join(tempDir, ".cclaw", "flows", stale))) {
+      throw new Error(`smoke check failed: stale per-stage flow dir .cclaw/flows/${stale}/ should not exist after init`);
+    }
+  }
+  for (const dir of ["agents", "skills", "templates", "runbooks", "patterns", "research", "recovery", "examples"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", dir))) {
+      throw new Error(`smoke check failed: .cclaw/lib/${dir}/ missing after init`);
+    }
+  }
   for (const tpl of ["plan.md", "build.md", "review.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "templates", tpl))) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "templates", tpl))) {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }
   }
-  for (const skill of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md", "commit-message-quality.md", "ac-quality.md", "refactor-safety.md", "breaking-changes.md", "cclaw-meta.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "skills", skill))) {
+  for (const skill of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md", "commit-message-quality.md", "ac-quality.md", "refactor-safety.md", "breaking-changes.md", "cclaw-meta.md", "tdd-cycle.md", "conversation-language.md", "anti-slop.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "skills", skill))) {
       throw new Error(`smoke check failed: skill ${skill} missing after init`);
     }
   }
   for (const runbook of ["plan.md", "build.md", "review.md", "ship.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "runbooks", runbook))) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", runbook))) {
       throw new Error(`smoke check failed: runbook ${runbook} missing after init`);
     }
   }
   for (const pattern of ["api-endpoint.md", "auth-flow.md", "schema-migration.md", "ui-component.md", "perf-fix.md", "refactor.md", "security-hardening.md", "doc-rewrite.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "patterns", pattern))) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "patterns", pattern))) {
       throw new Error(`smoke check failed: pattern ${pattern} missing after init`);
     }
   }
   for (const recovery of ["ac-traceability-break.md", "review-cap-reached.md", "parallel-build-conflict.md", "frontmatter-corruption.md", "schema-mismatch.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "recovery", recovery))) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "recovery", recovery))) {
       throw new Error(`smoke check failed: recovery ${recovery} missing after init`);
     }
   }
-  for (const example of ["plan-small.md", "plan-refinement.md", "plan-parallel-build.md", "build-log.md", "review-log.md", "ship-notes.md", "decision-record.md", "learning-record.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "examples", example))) {
+  for (const example of ["plan-small.md", "plan-parallel-build.md", "build-log.md", "review-log.md", "ship-notes.md", "decision-permission-cache.md", "learning-record.md", "commit-helper-session.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "examples", example))) {
       throw new Error(`smoke check failed: example ${example} missing after init`);
     }
   }
-  if (!existsSync(join(tempDir, ".cclaw", "antipatterns.md"))) {
-    throw new Error("smoke check failed: antipatterns.md missing after init");
+  for (const research of ["reading-codebase.md", "time-boxing.md", "prior-slugs.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "research", research))) {
+      throw new Error(`smoke check failed: research ${research} missing after init`);
+    }
   }
-  if (!existsSync(join(tempDir, ".cclaw", "decisions", "decision-protocol.md"))) {
-    throw new Error("smoke check failed: decision-protocol.md missing after init");
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "antipatterns.md"))) {
+    throw new Error("smoke check failed: lib/antipatterns.md missing after init");
   }
-  if (!existsSync(join(tempDir, "AGENTS.md"))) {
-    throw new Error("smoke check failed: AGENTS.md routing block missing after init");
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "decision-protocol.md"))) {
+    throw new Error("smoke check failed: lib/decision-protocol.md missing after init");
+  }
+  if (existsSync(join(tempDir, "AGENTS.md"))) {
+    throw new Error("smoke check failed: AGENTS.md should NOT be created by cclaw init");
+  }
+  if (existsSync(join(tempDir, "CLAUDE.md"))) {
+    throw new Error("smoke check failed: CLAUDE.md should NOT be created by cclaw init");
+  }
+  if (!existsSync(join(tempDir, ".gitignore"))) {
+    throw new Error("smoke check failed: .gitignore not created by init");
+  }
+  const gitignoreBody = readFileSync(join(tempDir, ".gitignore"), "utf8");
+  for (const expected of [".cclaw/state/", ".cclaw/worktrees/"]) {
+    if (!gitignoreBody.includes(expected)) {
+      throw new Error(`smoke check failed: .gitignore missing pattern ${expected}`);
+    }
   }
   execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: "pipe" });
   execFileSync("node", [cli, "upgrade"], { cwd: tempDir, stdio: "pipe" });

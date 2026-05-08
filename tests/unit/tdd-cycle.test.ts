@@ -71,14 +71,14 @@ describe("TDD cycle wiring", () => {
     expect(COMMIT_HELPER_HOOK_SPEC.body).toContain("--skipped");
   });
 
-  it("antipatterns library catalogues the five TDD failure modes (A-13..A-17)", () => {
-    for (const entry of ["A-13", "A-14", "A-15", "A-16", "A-17"]) {
-      expect(ANTIPATTERNS).toContain(entry);
-    }
-    expect(ANTIPATTERNS).toContain("Implementation is obvious, skipping RED");
+  it("antipatterns library covers TDD phase integrity, scope-bleed, and full-suite GREEN", () => {
+    expect(ANTIPATTERNS).toContain("TDD phase integrity broken");
+    expect(ANTIPATTERNS).toContain("--phase=red");
+    expect(ANTIPATTERNS).toContain("--phase=green");
+    expect(ANTIPATTERNS).toContain("--phase=refactor");
     expect(ANTIPATTERNS).toContain("Single test green, didn't run the suite");
-    expect(ANTIPATTERNS).toContain("REFACTOR phase silently skipped");
-    expect(ANTIPATTERNS).toContain("Production code in the RED commit");
+    expect(ANTIPATTERNS).toContain("Work outside the AC");
+    expect(ANTIPATTERNS).toContain("git add -A");
   });
 
   it("/cc command (start-command) describes build as a TDD cycle with all three phases", async () => {

@@ -153,7 +153,7 @@ export async function syncFrontmatter(
 ): Promise<ParsedArtifact> {
   const filePath = activeArtifactPath(projectRoot, stage, slug);
   if (!(await exists(filePath))) {
-    throw new FrontmatterError(`Artifact ${stage}/<${slug}>.md not found.`, filePath);
+    throw new FrontmatterError(`Artifact flows/${slug}/${stage}.md not found.`, filePath);
   }
   const parsed = await readArtifact(filePath);
   const next: ArtifactFrontmatter = { ...parsed.frontmatter };

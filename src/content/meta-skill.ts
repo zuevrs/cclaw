@@ -3,7 +3,7 @@ name: cclaw-meta
 trigger: always-on; loaded with every /cc invocation
 ---
 
-# Meta-skill — how to be a cclaw v8 orchestrator
+# Meta-skill — how to be a cclaw orchestrator
 
 This skill is loaded by the harness with every \`/cc\` invocation. It does not duplicate \`/cc\` itself; it tells you **how to use** the rest of cclaw's content.
 
@@ -12,25 +12,25 @@ This skill is loaded by the harness with every \`/cc\` invocation. It does not d
 When \`/cc\` runs, the harness has access to:
 
 - \`.cursor/commands/cc.md\` — your operating manual (also in \`.cursor/skills/cclaw/\` mirrors).
-- \`.cclaw/agents/*.md\` — six specialist prompts.
-- \`.cclaw/skills/*.md\` — six auto-trigger skills.
-- \`.cclaw/templates/*.md\` — ten artifact templates.
-- \`.cclaw/runbooks/*.md\` — four stage runbooks.
-- \`.cclaw/patterns/*.md\` — eight task patterns.
-- \`.cclaw/research/*.md\` — five research playbooks.
-- \`.cclaw/recovery/*.md\` — five recovery playbooks.
-- \`.cclaw/decisions/decision-protocol.md\` — D-N record format.
-- \`.cclaw/examples/*.md\` — thirteen worked examples.
-- \`.cclaw/antipatterns.md\` — twelve known failure modes.
+- \`.cclaw/lib/agents/*.md\` — six specialist prompts.
+- \`.cclaw/lib/skills/*.md\` — six auto-trigger skills.
+- \`.cclaw/lib/templates/*.md\` — ten artifact templates.
+- \`.cclaw/lib/runbooks/*.md\` — four stage runbooks.
+- \`.cclaw/lib/patterns/*.md\` — eight task patterns.
+- \`.cclaw/lib/research/*.md\` — five research playbooks.
+- \`.cclaw/lib/recovery/*.md\` — five recovery playbooks.
+- \`.cclaw/lib/decision-protocol.md\` — D-N record format.
+- \`.cclaw/lib/examples/*.md\` — thirteen worked examples.
+- \`.cclaw/lib/antipatterns.md\` — twelve known failure modes.
 
 ## How to read this content efficiently
 
 You do not need to read everything. The right loading pattern:
 
 1. **Always read \`/cc\`** — your operating manual.
-2. **Read the runbook** for the stage you are in (\`.cclaw/runbooks/<stage>.md\`).
-3. **Read the pattern(s)** that match the task (\`.cclaw/patterns/\`).
-4. **Read the specialist prompt** when you invoke a specialist (\`.cclaw/agents/<id>.md\`).
+2. **Read the runbook** for the stage you are in (\`.cclaw/lib/runbooks/<stage>.md\`).
+3. **Read the pattern(s)** that match the task (\`.cclaw/lib/patterns/\`).
+4. **Read the specialist prompt** when you invoke a specialist (\`.cclaw/lib/agents/<id>.md\`).
 5. **Read the recovery playbook** when an automated check fails.
 6. **Read examples** when authoring an artifact you have not seen before.
 

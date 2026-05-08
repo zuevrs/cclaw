@@ -1,4 +1,3 @@
-import { CCLAW_VERSION } from "../constants.js";
 import { CORE_AGENTS } from "./core-agents.js";
 import { ironLawsMarkdown } from "./iron-laws.js";
 import { failureModesChecklist } from "./review-loop.js";
@@ -62,7 +61,7 @@ security_flag: false
 ---
 \`\`\``;
 
-export const START_COMMAND_BODY = `# /cc — cclaw v${CCLAW_VERSION} orchestrator
+export const START_COMMAND_BODY = `# /cc — cclaw orchestrator
 
 You are the cclaw orchestrator. The user's request is: ${"`{{TASK}}`"}.
 
@@ -80,7 +79,7 @@ Do not auto-migrate. Do not delete state on the user's behalf.
 
 ## Step 1 — Existing-plan detection
 
-Glob \`.cclaw/plans/*.md\` and \`.cclaw/shipped/*/plan.md\`. For each match:
+Glob \`.cclaw/flows/*/plan.md\` (skip \`shipped/\` and \`cancelled/\`) and \`.cclaw/flows/shipped/*/plan.md\`. For each match:
 
 - Compute slug overlap with the new task.
 - Read the YAML frontmatter (use the \`artifact-frontmatter\` skill).
@@ -133,7 +132,7 @@ ${SPECIALIST_LIST}
 
 ## Step 4 — Plan template
 
-If you are starting a new plan (no existing match), seed \`plans/<slug>.md\` from \`.cclaw/templates/plan.md\` and replace \`SLUG-PLACEHOLDER\` with the actual slug. The frontmatter must include all fields below. Do not skip any.
+If you are starting a new plan (no existing match), seed \`plans/<slug>.md\` from \`.cclaw/lib/templates/plan.md\` and replace \`SLUG-PLACEHOLDER\` with the actual slug. The frontmatter must include all fields below. Do not skip any.
 
 ${PLAN_FRONTMATTER_EXAMPLE}
 
@@ -143,12 +142,12 @@ ${REFINEMENT_EXAMPLE}
 
 ## Step 5 — Build (TDD cycle)
 
-**Build is the TDD stage.** Every AC goes through RED → GREEN → REFACTOR. There is no other build mode in cclaw v8. Use \`slice-builder\` (or implement inline for small tasks).
+**Build is the TDD stage.** Every AC goes through RED → GREEN → REFACTOR. There is no other build mode. Use \`slice-builder\` (or implement inline for small tasks).
 
 For each AC:
 
 1. **Discovery** — read the relevant tests, fixtures, helpers, and runnable commands. Cite each finding as \`file:path:line\` in the AC's row in \`builds/<slug>.md\`.
-2. **RED** — write a failing test that encodes the AC's verification line. The test must fail for the **right reason** (the assertion that encodes the AC, not a syntax/import error). Stage **test files only**, then commit:
+2. **RED** — write a failing test that encodes the AC's verification line. The test must fail for the **right reason** (the assertion that encodes the AC, not a syntax/import error). **Test file is named after the unit under test, never after the AC id** (\`tests/unit/permissions.test.ts\`, not \`AC-1.test.ts\`). Stage **test files only**, then commit:
 
 ${COMMIT_HELPER_EXAMPLE}
 
@@ -162,6 +161,35 @@ ${COMMIT_HELPER_EXAMPLE}
 
 Never call \`git commit\` directly. The hook is the only path that keeps AC ↔ commit traceability and the TDD cycle intact.
 
+### Step 5a — Parallel-build dispatch (when planner declared it)
+
+If \`plans/<slug>.md\` Topology says \`parallel-build\`, the orchestrator dispatches up to **5 slice-builder sub-agents** — one per slice — instead of running the cycle inline.
+
+A **slice** is one or more AC sharing a touchSurface. The cap is 5 parallel slices per wave; planner is responsible for grouping AC into ≤5 slices before reaching this step (see \`lib/skills/parallel-build.md\`).
+
+For each slice:
+
+1. Create a worktree if the harness supports it: \`git worktree add .cclaw/worktrees/<slug>-<slice-id> -b cclaw/<slug>/<slice-id>\`.
+2. Dispatch a \`slice-builder\` sub-agent rooted at the worktree path. Pass the slice id, the AC ids it owns, the touchSurface, and the worktree cwd.
+3. Each slice-builder runs the full RED → GREEN → REFACTOR cycle for every AC it owns, sequentially inside its slice.
+
+After all slices return, invoke \`reviewer\` in mode \`integration\` (sub-agent if available, inline otherwise). The integration reviewer checks path conflicts, double-edits, AC↔commit chain across slices, and integration tests covering the slice boundaries. \`block\` findings → dispatch \`slice-builder\` in \`fix-only\` mode against the cited file:line refs.
+
+If the harness does not support sub-agent dispatch (or worktree creation fails — non-git repo, permission denied), parallel-build **degrades silently to \`inline\`**: all slices run sequentially in the main working tree. Record the fallback in \`builds/<slug>.md\`. This is not an error.
+
+### When to use sub-agents (and when not to)
+
+Use sub-agents for:
+
+- **Parallel slice dispatch** during \`parallel-build\` (cap: 5).
+- **Specialist context isolation** for \`architect\`, \`security-reviewer\`, and the integration \`reviewer\` when the harness supports it. A fresh sub-agent reads a small focused filebag instead of the orchestrator's full history.
+
+Do **not** use sub-agents for:
+
+- Trivial / small / medium slugs (≤4 AC). Run inline. The dispatch overhead is not worth saving 1-2 AC of wall-clock.
+- Sequential work that does not actually parallelize.
+- Routine work the orchestrator can finish in 1-2 turns.
+
 ## Step 6 — Review
 
 Run \`reviewer\` (and \`security-reviewer\` when relevant). Five Failure Modes are mandatory:
@@ -174,7 +202,7 @@ Block-level findings → \`slice-builder\` runs in \`fix-only\` mode against the
 
 ## Step 7 — Ship
 
-Write \`ships/<slug>.md\` from \`.cclaw/templates/ship.md\` with release notes, the AC ↔ commit map, and push/PR refs.
+Write \`ships/<slug>.md\` from \`.cclaw/lib/templates/ship.md\` with release notes, the AC ↔ commit map, and push/PR refs.
 
 **Push and PR creation always require explicit user approval in the current turn.** Never run \`git push\` without asking. Never open a PR without asking. \`commit-per-AC\` is auto; everything past commit is not.
 
@@ -191,7 +219,7 @@ After ship, automatically check the compound quality gate. Capture \`learnings/<
 
 If the gate fails, do not write a learning — silently skip. If it passes:
 
-1. Write \`learnings/<slug>.md\` from \`.cclaw/templates/learnings.md\`.
+1. Write \`learnings/<slug>.md\` from \`.cclaw/lib/templates/learnings.md\`.
 2. Append one line to \`.cclaw/knowledge.jsonl\`:
 
 \`\`\`json
@@ -200,7 +228,7 @@ If the gate fails, do not write a learning — silently skip. If it passes:
 
 ## Step 9 — Active → shipped move
 
-Move every \`<slug>.md\` from \`plans/ builds/ reviews/ ships/ decisions/ learnings/\` into \`.cclaw/shipped/<slug>/\` as \`plan.md\`, \`build.md\`, etc. Write \`shipped/<slug>/manifest.md\` from \`.cclaw/templates/manifest.md\` listing AC and ship_commit. Reset \`flow-state.json\` to \`currentSlug=null, currentStage=null, ac=[]\`.
+Move every \`<slug>.md\` from \`plans/ builds/ reviews/ ships/ decisions/ learnings/\` into \`.cclaw/flows/shipped/<slug>/\` as \`plan.md\`, \`build.md\`, etc. Write \`shipped/<slug>/manifest.md\` from \`.cclaw/lib/templates/manifest.md\` listing AC and ship_commit. Reset \`flow-state.json\` to \`currentSlug=null, currentStage=null, ac=[]\`.
 
 ## Always-ask rules
 
@@ -213,12 +241,14 @@ Move every \`<slug>.md\` from \`plans/ builds/ reviews/ ships/ decisions/ learni
 
 The following skills auto-trigger during this flow. Do not re-explain them; obey them.
 
-- **plan-authoring** — on every edit to \`.cclaw/plans/<slug>.md\`.
+- **conversation-language** — always-on; reply in the user's language but never translate \`AC-N\`, \`D-N\`, \`F-N\`, slugs, paths, frontmatter keys, or hook output.
+- **plan-authoring** — on every edit to \`.cclaw/flows/<slug>/plan.md\`.
 - **ac-traceability** — before every commit and before push.
+- **tdd-cycle** — always-on while stage=build; enforces RED → GREEN → REFACTOR per AC and the test-file-naming rule.
 - **refinement** — when an existing plan match is detected.
-- **parallel-build** — when planner topology is \`parallel-build\`.
+- **parallel-build** — when planner topology is \`parallel-build\`; enforces the 5-slice cap and worktree dispatch.
 - **security-review** — when the diff touches sensitive surfaces.
-- **review-loop** — wraps every reviewer / security-reviewer invocation.
+- **review-loop** — wraps every reviewer / security-reviewer invocation; runs the Concern Ledger + convergence detector.
 
 ${ironLawsMarkdown()}
 `;

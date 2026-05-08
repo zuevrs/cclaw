@@ -21,7 +21,7 @@ const rows = harnesses.map((layout) => {
   return `| ${layout.id} | ${layout.commandsDir} | ${layout.agentsDir} | ${hooks} |`;
 });
 
-const body = `# cclaw v8 — supported harnesses\n\nGenerated from src/install.ts. Run \`npm run build:harness-docs\` to regenerate.\n\n${tableHeader}\n${rows.join("\n")}\n\nEach harness receives:\n- \`cc.md\`, \`cc-cancel.md\`, \`cc-idea.md\` slash command files\n- one markdown file per specialist in \`<agents-dir>/\` (brainstormer / architect / planner / reviewer / security-reviewer / slice-builder)\n- a hooks config (claude/cursor/codex) or a plugin module (opencode) wiring \`session.start\` and \`session.stop\` to \`.cclaw/hooks/*.mjs\`.\n\nThe runtime hooks themselves (\`session-start.mjs\`, \`stop-handoff.mjs\`, \`commit-helper.mjs\`) live under \`.cclaw/hooks/\` and are shared across harnesses.\n`;
+const body = `# cclaw — supported harnesses\n\nGenerated from src/install.ts. Run \`npm run build:harness-docs\` to regenerate.\n\n${tableHeader}\n${rows.join("\n")}\n\nEach harness receives:\n- \`cc.md\`, \`cc-cancel.md\`, \`cc-idea.md\` slash command files\n- one markdown file per specialist in \`<agents-dir>/\` (brainstormer / architect / planner / reviewer / security-reviewer / slice-builder)\n- a hooks config (claude/cursor/codex) or a plugin module (opencode) wiring \`session.start\` and \`session.stop\` to \`.cclaw/hooks/*.mjs\`.\n\nThe runtime hooks themselves (\`session-start.mjs\`, \`stop-handoff.mjs\`, \`commit-helper.mjs\`) live under \`.cclaw/hooks/\` and are shared across harnesses.\n`;
 
 const out = path.join(root, "docs", "harnesses.md");
 await fs.writeFile(out, body, "utf8");

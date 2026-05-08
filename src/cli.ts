@@ -9,12 +9,19 @@ const HELP_BODY = `cclaw v${CCLAW_VERSION} — harness installer / sync.
 Usage: cclaw <command> [options]
 
 Commands:
-  init                Install cclaw assets in the current project (default harness: cursor).
+  init                Install cclaw assets in the current project.
   sync                Reapply cclaw assets to match the current code (idempotent).
   upgrade             Sync after upgrading the cclaw-cli npm package.
   uninstall           Remove cclaw assets from the current project.
   help                Show this help.
   version             Print the version.
+
+Harness selection:
+  - If --harness=<id>[,<id>] is passed, install for those.
+  - Otherwise, the existing .cclaw/config.yaml (if any) wins.
+  - Otherwise, cclaw auto-detects from project root markers (.claude/, .cursor/,
+    .opencode/, .codex/, .agents/skills/, CLAUDE.md, opencode.json).
+  - If nothing is detected and no flag is passed, init exits with an error.
 
 Flow control (plan / build / review / ship) lives inside the harness via the /cc command, not in this CLI. There is no \`cclaw plan\`, \`cclaw status\`, \`cclaw ship\`, or \`cclaw migrate\` — by design.
 

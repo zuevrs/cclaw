@@ -1,8 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ACTIVE_ARTIFACT_DIRS, type ArtifactStage, activeArtifactPath } from "./artifact-paths.js";
-import { RUNTIME_ROOT } from "./constants.js";
-import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
+import {
+  ARTIFACT_FILE_NAMES,
+  type ArtifactStage,
+  activeArtifactDir,
+  activeArtifactPath
+} from "./artifact-paths.js";
+import { CANCELLED_DIR_REL_PATH } from "./constants.js";
+import { ensureDir, exists, removePath, writeFileSafe } from "./fs-utils.js";
 import { syncFrontmatter } from "./artifact-frontmatter.js";
 import { readFlowState, resetFlowState } from "./run-persistence.js";
 import type { FlowStage } from "./types.js";
@@ -22,7 +27,7 @@ export interface CancelResult {
 export class CancelError extends Error {}
 
 export function cancelledArtifactDir(projectRoot: string, slug: string): string {
-  return path.join(projectRoot, RUNTIME_ROOT, "cancelled", slug);
+  return path.join(projectRoot, CANCELLED_DIR_REL_PATH, slug);
 }
 
 async function moveIfExists(source: string, destination: string): Promise<boolean> {
@@ -33,15 +38,6 @@ async function moveIfExists(source: string, destination: string): Promise<boolea
 }
 
 const ALL_STAGES: ArtifactStage[] = ["plan", "build", "review", "ship", "decisions", "learnings"];
-
-const STAGE_FILE_NAMES: Record<ArtifactStage, string> = {
-  plan: "plan.md",
-  build: "build.md",
-  review: "review.md",
-  ship: "ship.md",
-  decisions: "decisions.md",
-  learnings: "learnings.md"
-};
 
 export async function cancelActiveRun(
   projectRoot: string,
@@ -72,12 +68,18 @@ export async function cancelActiveRun(
   const moved: ArtifactStage[] = [];
   for (const stage of ALL_STAGES) {
     const source = activeArtifactPath(projectRoot, stage, slug);
-    const destination = path.join(target, STAGE_FILE_NAMES[stage]);
+    const destination = path.join(target, ARTIFACT_FILE_NAMES[stage]);
     if (await moveIfExists(source, destination)) moved.push(stage);
   }
 
-  const manifest = `---\nslug: ${slug}\nstage: cancelled\nstatus: cancelled\ncancelled_at: ${cancelledAt}\nreason: ${JSON.stringify(reason)}\n---\n\n# ${slug} — cancelled\n\n${reason}\n\n## Artifacts\n\n${moved.map((stage) => `- ${STAGE_FILE_NAMES[stage]}`).join("\n") || "_No artifacts were active at cancel time._"}\n`;
+  const manifest = `---\nslug: ${slug}\nstage: cancelled\nstatus: cancelled\ncancelled_at: ${cancelledAt}\nreason: ${JSON.stringify(reason)}\n---\n\n# ${slug} — cancelled\n\n${reason}\n\n## Artifacts\n\n${moved.map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`).join("\n") || "_No artifacts were active at cancel time._"}\n`;
   await writeFileSafe(path.join(target, "manifest.md"), manifest);
+
+  const activeDir = activeArtifactDir(projectRoot, slug);
+  if (await exists(activeDir)) {
+    const remaining = await fs.readdir(activeDir);
+    if (remaining.length === 0) await removePath(activeDir);
+  }
 
   await resetFlowState(projectRoot);
 
@@ -85,11 +87,8 @@ export async function cancelActiveRun(
 }
 
 export async function listCancelled(projectRoot: string): Promise<string[]> {
-  const dir = path.join(projectRoot, RUNTIME_ROOT, "cancelled");
+  const dir = path.join(projectRoot, CANCELLED_DIR_REL_PATH);
   if (!(await exists(dir))) return [];
   const entries = await fs.readdir(dir, { withFileTypes: true });
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 }
-
-const ACTIVE_DIRS_FOR_GUARD = Object.values(ACTIVE_ARTIFACT_DIRS);
-export const CANCEL_TARGET_DIRS = ACTIVE_DIRS_FOR_GUARD;

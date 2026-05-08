@@ -1,13 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
-  ACTIVE_ARTIFACT_DIRS,
+  ARTIFACT_FILE_NAMES,
   type ArtifactStage,
+  activeArtifactDir,
   activeArtifactPath,
   shippedArtifactDir,
   shippedArtifactPath
 } from "./artifact-paths.js";
-import { exists, ensureDir, writeFileSafe } from "./fs-utils.js";
+import { FLOWS_ROOT } from "./constants.js";
+import { exists, ensureDir, removePath, writeFileSafe } from "./fs-utils.js";
 import { readFlowState, resetFlowState, writeFlowState } from "./run-persistence.js";
 import { manifestTemplate, templateBody } from "./content/artifact-templates.js";
 import { appendKnowledgeEntry, type KnowledgeEntry } from "./knowledge-store.js";
@@ -68,15 +70,7 @@ function renderManifest(
   const acLines = ac
     .map((item) => `- ${item.id}: ${item.text}${item.commit ? ` (commit ${item.commit})` : ""}`)
     .join("\n");
-  const stageFiles: Record<ArtifactStage, string> = {
-    plan: "plan.md",
-    build: "build.md",
-    review: "review.md",
-    ship: "ship.md",
-    decisions: "decisions.md",
-    learnings: "learnings.md"
-  };
-  const movedLines = moved.map((stage) => `- ${stageFiles[stage]}`).join("\n");
+  const movedLines = moved.map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`).join("\n");
   const refinesBlock = refines
     ? `## Refines\n\nThis run refines [${refines}](../${refines}/manifest.md).\n`
     : "";
@@ -139,15 +133,17 @@ export async function runCompoundAndShip(
     renderManifest(slug, options.shipCommit, shippedAt, state.ac, moved, options.refines)
   );
 
+  const activeDir = activeArtifactDir(projectRoot, slug);
+  if (await exists(activeDir)) {
+    const remaining = await fs.readdir(activeDir);
+    if (remaining.length === 0) await removePath(activeDir);
+  }
+
   await resetFlowState(projectRoot);
 
   return { slug, shippedDir, learningCaptured, movedArtifacts: moved, knowledgeEntry };
 }
 
 export async function defaultPathsToCheck(projectRoot: string): Promise<string[]> {
-  const out: string[] = [];
-  for (const stage of Object.keys(ACTIVE_ARTIFACT_DIRS) as ArtifactStage[]) {
-    out.push(path.join(projectRoot, ".cclaw", ACTIVE_ARTIFACT_DIRS[stage]));
-  }
-  return out;
+  return [path.join(projectRoot, FLOWS_ROOT)];
 }

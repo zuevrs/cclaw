@@ -1,4 +1,4 @@
-export const ANTIPATTERNS = `# .cclaw/antipatterns.md
+export const ANTIPATTERNS = `# .cclaw/lib/antipatterns.md
 
 Patterns we have seen fail. Each entry is a short symptom, the underlying mistake, and the corrective action. The orchestrator and specialists open this file when a smell is detected; the reviewer cites entries as findings when applicable.
 
@@ -10,21 +10,30 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 **Correction.** When build encounters new work, surface it as a follow-up in \`.cclaw/ideas.md\` or a fresh slug. If the new work is genuinely required to satisfy an existing AC, that AC was wrong; cancel the slug and re-plan with a tighter AC set.
 
-## A-2 — Tests in a follow-up commit
+## A-2 — TDD phase integrity broken
 
-**Symptom.** Build commits land for AC-N; tests for AC-N appear in a separate commit a few minutes later.
+**Symptom (any of):**
 
-**Underlying mistake.** Tests are not part of the AC's verification; the verification is left implicit.
+- Build commits land for AC-N with \`--phase=green\` but no \`--phase=red\` recorded earlier.
+- AC has RED + GREEN commits but no \`--phase=refactor\` (skipped or applied) entry in flow-state.
+- A \`--phase=red\` commit touches \`src/\`, \`lib/\`, or \`app/\` — production code slipped into RED.
+- Tests for AC-N appear in a separate commit a few minutes after the AC-N implementation lands.
 
-**Correction.** AC verification is part of the AC. The test for AC-N lives in the AC-N commit unless the plan explicitly separates them with a justification.
+**Underlying mistake.** The TDD cycle was treated as ceremony, not as the contract. The cycle exists so the failing test encodes the AC; skipping or scrambling phases produces an audit trail that nobody can trust.
 
-## A-3 — "While we're here" refactor
+**Correction.** \`commit-helper.mjs\` enforces RED → GREEN → REFACTOR per AC. Write a failing test first and commit under \`--phase=red\` (test files only). Implement the smallest production change that turns it green; commit under \`--phase=green\`. Either commit a refactor under \`--phase=refactor\` or skip it explicitly with \`--phase=refactor --skipped --message="refactor(AC-N) skipped: <reason>"\`. The reviewer cites this entry whenever the chain is incomplete.
 
-**Symptom.** A small AC commit also restructures an unrelated module.
+## A-3 — Work outside the AC
 
-**Underlying mistake.** Slice-builder is silently expanding scope.
+**Symptom (any of):**
 
-**Correction.** Refusal is the right answer. Capture the refactor as a follow-up; if it really must happen, cancel the slug and re-plan as a refactor + behaviour-change pair of slugs.
+- A small AC commit also restructures an unrelated module.
+- A commit produced by \`commit-helper.mjs\` contains files that are unrelated to the AC.
+- \`git add -A\` appears in shell history inside \`/cc\`.
+
+**Underlying mistake.** Slice-builder absorbed unrelated edits or silently expanded scope. The AC commit no longer maps cleanly to the AC.
+
+**Correction.** Stage AC-related files explicitly: \`git add <path>\` per file, or \`git add -p\` to pick hunks. Never \`git add -A\` inside \`/cc\`. If a refactor really must happen, capture it as a follow-up; if it really blocks the AC, cancel the slug and re-plan as a refactor + behaviour-change pair.
 
 ## A-4 — AC that mirror sub-tasks
 
@@ -60,7 +69,7 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 ## A-8 — Re-creating a shipped slug instead of refining
 
-**Symptom.** A new \`/cc\` invocation produces a slug whose plan is 80% identical to a slug already in \`.cclaw/shipped/\`.
+**Symptom.** A new \`/cc\` invocation produces a slug whose plan is 80% identical to a slug already in \`.cclaw/flows/shipped/\`.
 
 **Underlying mistake.** Existing-plan detection was skipped or its output was ignored.
 
@@ -90,51 +99,11 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 **Correction.** \`security_flag\` is set whenever the diff touches authn / authz / secrets / supply chain / data exposure, even when the change feels small. The cost of a spurious security flag is a few minutes; the cost of a missed one is a CVE.
 
-## A-13 — "Implementation is obvious, skipping RED"
+## A-12 — Single test green, didn't run the suite
 
-**Symptom.** Build commits land for AC-N with \`--phase=green\` but no \`--phase=red\` recorded earlier.
-
-**Underlying mistake.** The TDD cycle was treated as a formality and skipped because the implementation looked obvious.
-
-**Correction.** \`commit-helper.mjs\` rejects GREEN without a prior RED. Write the failing test first; commit it; then write the smallest implementation that turns it green. The cycle is the contract; obvious code still gets a test.
-
-## A-14 — Single test green, didn't run the suite
-
-**Symptom.** \`builds/<slug>.md\` GREEN evidence column shows \`npm test path/to/single.test\` only; full-suite run is missing.
+**Symptom.** \`flows/<slug>/build.md\` GREEN evidence column shows \`npm test path/to/single.test\` only; full-suite run is missing.
 
 **Underlying mistake.** A passing single test is not GREEN. Production change can break adjacent tests; without running the suite, the AC is shipped on a regression.
 
 **Correction.** GREEN evidence must be the **full relevant suite** for the affected module(s), not the single test. The reviewer cites this as a block finding.
-
-## A-15 — REFACTOR phase silently skipped
-
-**Symptom.** AC has RED + GREEN commits but no \`--phase=refactor\` (skipped or applied) entry in flow-state.
-
-**Underlying mistake.** REFACTOR was skipped without an explicit decision; the gate question was avoided.
-
-**Correction.** REFACTOR is mandatory. Either commit a refactor or explicitly skip it with \`commit-helper.mjs --ac=AC-N --phase=refactor --skipped --message="refactor(AC-N) skipped: <reason>"\`. Silence fails the gate.
-
-## A-16 — \`git add -A\` inside build
-
-**Symptom.** A commit produced by \`commit-helper.mjs\` contains files that are unrelated to the AC.
-
-**Underlying mistake.** \`git add -A\` was used to stage; the AC commit absorbed unrelated edits sitting in the working tree.
-
-**Correction.** Stage AC-related files explicitly. Use \`git add path/to/file\` per file, or \`git add -p\` to pick hunks. Never \`git add -A\` inside \`/cc\`.
-
-## A-17 — Production code in the RED commit
-
-**Symptom.** A \`--phase=red\` commit touches \`src/\`, \`lib/\`, or \`app/\`. \`commit-helper.mjs\` should have rejected it; if it slipped through (e.g. via a non-standard root), the reviewer cites it.
-
-**Underlying mistake.** RED is test-files-only. Including production code under RED breaks the "failing test is the spec" contract — the test only fails because the as-yet-unfinished implementation doesn't compile, not because the assertion encoded the AC.
-
-**Correction.** Stage only test files for RED. Implementation lives in the GREEN commit, after RED is recorded.
-
-## A-12 — Architect with one option
-
-**Symptom.** \`decisions/<slug>.md\` lists exactly one option; the "Considered" section reads "we did the thing".
-
-**Underlying mistake.** A one-option decision is not a decision; it is execution narrated as a decision.
-
-**Correction.** If you cannot articulate a real alternative with a real trade-off, drop the decision record entirely and capture the choice as a one-line note in the plan body. Reserve \`D-N\` entries for actual choices.
 `;
