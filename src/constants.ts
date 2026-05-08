@@ -1,4 +1,4 @@
-export const CCLAW_VERSION = "8.2.0";
+export const CCLAW_VERSION = "8.3.0";
 export const RUNTIME_ROOT = ".cclaw";
 
 export const STATE_REL_PATH = `${RUNTIME_ROOT}/state`;

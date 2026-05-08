@@ -5,7 +5,31 @@ const SPECIALIST_LIST = CORE_AGENTS.map(
   (agent) => `- **${agent.id}** (${agent.modes.join(" / ")}) — ${agent.description}`
 ).join("\n");
 
-const TRIAGE_BLOCK_EXAMPLE = `\`\`\`
+const TRIAGE_ASK_EXAMPLE = `\`\`\`
+askUserQuestion(
+  prompt: "Triage — Complexity: small/medium (high). Recommended: plan → build → review → ship. Why: 3 modules, ~150 LOC, no auth touch. AC mode: soft. Pick a path.",
+  options: [
+    "Proceed as recommended",
+    "Switch to trivial (inline edit + commit, skip plan/review)",
+    "Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)",
+    "Custom (let me edit complexity / acMode / path)"
+  ],
+  multiSelect: false
+)
+
+# After the user picks, ask the second question:
+
+askUserQuestion(
+  prompt: "Run mode for this flow?",
+  options: [
+    "Step (default) — pause after every stage; I type \\"continue\\" to advance",
+    "Auto — chain plan → build → review → ship; stop only on block findings or security flag"
+  ],
+  multiSelect: false
+)
+\`\`\``;
+
+const TRIAGE_FALLBACK_EXAMPLE = `\`\`\`
 Triage
 ─ Complexity: small/medium  (confidence: high)
 ─ Recommended path: plan → build → review → ship
@@ -16,6 +40,12 @@ Triage
 [2] Switch to trivial (inline edit + commit, skip plan/review)
 [3] Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)
 [4] Custom (let me edit complexity / acMode / path)
+\`\`\`
+
+\`\`\`
+Run mode
+[s] Step — pause after every stage (default)
+[a] Auto — chain stages; stop only on block findings or security flag
 \`\`\``;
 
 const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
@@ -26,7 +56,8 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
     "path": ["plan", "build", "review", "ship"],
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
-    "userOverrode": false
+    "userOverrode": false,
+    "runMode": "step"
   }
 }
 \`\`\``;
@@ -110,17 +141,25 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 ## Hop 2 — Triage (fresh starts only)
 
-Run the \`triage-gate.md\` skill. The output is a single fenced block followed by four numbered options:
+Run the \`triage-gate.md\` skill. **Use the harness's structured question tool** (\`AskUserQuestion\` in Claude Code, \`AskQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Two questions, in order:
 
-${TRIAGE_BLOCK_EXAMPLE}
+${TRIAGE_ASK_EXAMPLE}
 
-Wait for the user's pick. Then patch \`flow-state.json\`:
+The first question's prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, AC mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
+
+The second question is skipped on the trivial / inline path (no stages to chain). Default \`runMode\` is \`step\` if the user dismisses the question.
+
+If the harness lacks a structured ask facility, fall back to the legacy form:
+
+${TRIAGE_FALLBACK_EXAMPLE}
+
+Once both answers are in, patch \`flow-state.json\`:
 
 ${TRIAGE_PERSIST_EXAMPLE}
 
-The triage decision is **immutable** for the lifetime of the flow. If the user wants a different acMode mid-flight, the path is \`/cc-cancel\` and a fresh \`/cc\` invocation.
+The triage decision is **immutable** for the lifetime of the flow. If the user wants a different acMode or runMode mid-flight, the path is \`/cc-cancel\` and a fresh \`/cc\` invocation.
 
-After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order, pausing between each.
+After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Hop 4.
 
 ### Trivial path (acMode: inline)
 
@@ -195,10 +234,77 @@ The orchestrator reads only this. The full artifact stays in \`.cclaw/flows/<slu
 - Specialist: \`slice-builder\`.
 - Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/lib/templates/build.md\`, \`.cclaw/lib/skills/tdd-cycle.md\`.
 - Output: \`.cclaw/flows/<slug>/build.md\` with TDD evidence at the granularity dictated by \`acMode\`.
-- Strict mode: full RED → GREEN → REFACTOR per AC, every commit through \`commit-helper.mjs\`. Parallel-build only if planner declared it AND \`acMode == strict\`.
-- Soft mode: one TDD cycle for the whole feature; tests under \`tests/\` mirroring the production module path; plain \`git commit\`.
+- Soft mode: one TDD cycle for the whole feature; tests under \`tests/\` mirroring the production module path; plain \`git commit\`. Sequential, single dispatch, no worktrees.
+- Strict mode, sequential: full RED → GREEN → REFACTOR per AC, every commit through \`commit-helper.mjs\`. Single \`slice-builder\` dispatch in the main working tree.
+- Strict mode, parallel: see "Parallel-build fan-out" below — only when planner declared \`topology: parallel-build\` AND ≥4 AC AND ≥2 disjoint touchSurface clusters.
 - Inline mode: not dispatched here — handled in the trivial path of Hop 2.
 - Slim summary: AC committed (strict) or conditions verified (soft), suite-status (passed / failed), open follow-ups.
+
+##### Parallel-build fan-out (strict mode + planner topology=parallel-build only)
+
+When the planner artifact declares \`topology: parallel-build\` with ≥2 slices and \`acMode == strict\`, the orchestrator fans out one \`slice-builder\` sub-agent per slice, **capped at 5**, each in its own \`git worktree\`. This is the only fan-out cclaw uses outside of \`ship\`.
+
+\`\`\`text
+                                  flows/<slug>/plan.md
+                                  topology: parallel-build
+                                  slices: [s-1, s-2, s-3]   (max 5)
+                                              │
+                                              ▼
+                            git worktree add .cclaw/worktrees/<slug>-s-1 -b cclaw/<slug>/s-1
+                            git worktree add .cclaw/worktrees/<slug>-s-2 -b cclaw/<slug>/s-2
+                            git worktree add .cclaw/worktrees/<slug>-s-3 -b cclaw/<slug>/s-3
+                                              │
+                          ┌───────────────────┼───────────────────┐
+                          ▼                   ▼                   ▼
+                   slice-builder         slice-builder         slice-builder
+                   (s-1; AC-1, AC-2)     (s-2; AC-3)           (s-3; AC-4, AC-5)
+                   cwd: …/<slug>-s-1      cwd: …/<slug>-s-2     cwd: …/<slug>-s-3
+                   RED→GREEN→REFACTOR     RED→GREEN→REFACTOR    RED→GREEN→REFACTOR
+                   per AC, in slice       per AC, in slice      per AC, in slice
+                          │                   │                   │
+                          └───────────────────┼───────────────────┘
+                                              ▼
+                                  reviewer (mode=integration)
+                                  reads each branch, checks
+                                  cross-slice conflicts, AC↔commit
+                                  chain across the wave
+                                              │
+                                              ▼
+                          merge cclaw/<slug>/s-1 → main, then s-2, then s-3
+                          (fast-forward when wave was clean; otherwise stop and ask)
+                                              │
+                                              ▼
+                          git worktree remove .cclaw/worktrees/<slug>-s-N (per slice)
+\`\`\`
+
+Dispatch envelope per slice:
+
+\`\`\`
+Dispatch slice-builder
+─ Stage: build
+─ Slug: <slug>
+─ Slice: s-N  (acIds: [AC-N, AC-N+1])
+─ Working tree: .cclaw/worktrees/<slug>-s-N
+─ Branch: cclaw/<slug>/s-N
+─ AC mode: strict
+─ Touch surface (only paths this slice may modify): [<paths from plan>]
+─ Output: .cclaw/flows/<slug>/build.md (append, marked with slice id)
+─ Forbidden: read or modify any path outside touch surface; read another slice's worktree mid-flight; merge or rebase
+\`\`\`
+
+After every slice-builder returns:
+
+1. Patch \`flow-state.json\` with the per-slice progress.
+2. When **every** slice has reported, dispatch \`reviewer\` mode=\`integration\` (one sub-agent, reads from each branch).
+3. On clear integration review, merge slices into main one at a time. On block, dispatch \`slice-builder\` mode=\`fix-only\` against the cited file:line refs, then re-run the integration reviewer.
+4. Worktree cleanup happens after merge; the cclaw branches stay until ship.
+
+Hard rules:
+
+- **More than 5 parallel slices is forbidden.** If planner produced >5, the planner must merge thinner slices into fatter ones before build; do not generate "wave 2".
+- Slice-builders never read each other's worktrees mid-flight. A slice that detects a conflict with another stops and raises an integration finding.
+- If the harness lacks sub-agent dispatch or worktree creation fails (non-git repo, permissions), parallel-build degrades silently to inline-sequential. Record the fallback in \`flows/<slug>/build.md\` frontmatter (\`subAgentDispatch: inline-fallback\`) — not an error.
+- \`auto\` runMode does **not** affect the integration-reviewer ask: a parallel wave that produces a block finding always asks the user before fix-only.
 
 #### review
 
@@ -229,6 +335,10 @@ Each step is a separate dispatch + pause + slim summary. The user can stop after
 
 ## Hop 4 — Pause and resume
 
+Pause behaviour depends on \`triage.runMode\` (default \`step\`).
+
+### \`step\` mode (default; safer; recommended for \`strict\` work)
+
 After every dispatch returns:
 
 1. Render the slim summary back to the user.
@@ -236,7 +346,25 @@ After every dispatch returns:
 3. Wait. Do **not** auto-advance. The user types \`continue\`, \`show\`, \`fix-only\`, or \`cancel\`.
 4. On \`continue\` → next stage in \`triage.path\`. On \`show\` → open the artifact and stop. On \`fix-only\` → re-dispatch slice-builder with mode=fix-only and the cited findings. On \`cancel\` → \`/cc-cancel\`.
 
-Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentStage\` and \`triage\`, \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters Hop 1 → detect → resume summary → continue from \`currentStage\`.
+### \`auto\` mode (autopilot; faster; recommended for \`inline\` / \`soft\` work)
+
+After every dispatch returns:
+
+1. Render the slim summary back to the user (one block, no prompt).
+2. **Immediately** dispatch the next stage in \`triage.path\` — no waiting, no question.
+3. Stop unconditionally only on these hard gates (autopilot **always** asks here):
+   - \`reviewer\` returned \`block\` decision (open findings) → render the findings, ask \`continue with fix-only\` / \`cancel\`.
+   - \`security-reviewer\` raised any finding → ask before proceeding.
+   - \`reviewer\` returned \`cap-reached\` (5 iterations without convergence) → ask.
+   - About to run \`ship\` (last stage in \`triage.path\`) → ask \`ship now?\` once, then proceed on confirmation. Ship is the only stage that always confirms in autopilot.
+
+Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green stages. The user typed \`auto\` once during triage and meant it.
+
+### Common rules for both modes
+
+Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentStage\`, \`triage\` (with \`runMode\`), \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters Hop 1 → detect → resume summary → continue from \`currentStage\` with the saved runMode.
+
+Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused \`step\` flow renders the slim summary again and waits for \`continue\`.
 
 ## Hop 5 — Compound (automatic)
 
@@ -253,8 +381,9 @@ After ship + compound, move every \`<stage>.md\` from \`flows/<slug>/\` into \`.
 
 ## Always-ask rules
 
-- Always run the triage gate on a fresh \`/cc\`. Never silently pick a path.
-- Always pause after every stage. Never auto-advance through plan → build → review without asking.
+- Always run the triage gate on a fresh \`/cc\`. Never silently pick a path. Use the harness's structured question tool, not a printed code block.
+- In \`step\` mode, always pause after every stage. Never auto-advance.
+- In \`auto\` mode, never auto-advance past a hard gate (block / cap-reached / security finding / ship). The user opted into chaining green stages, not chaining decisions.
 - Always ask before \`git push\` or PR creation. Commit-helper auto-commits in strict mode; everything past commit is opt-in.
 - Always ask before deleting active artifacts (\`/cc-cancel\` is the supported way; do not \`rm\` artifacts directly).
 - Always show the slim summary back to the user; do not summarise from your own memory of the dispatch.

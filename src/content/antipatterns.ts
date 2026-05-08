@@ -106,4 +106,28 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 **Underlying mistake.** A passing single test is not GREEN. Production change can break adjacent tests; without running the suite, the AC is shipped on a regression.
 
 **Correction.** GREEN evidence must be the **full relevant suite** for the affected module(s), not the single test. The reviewer cites this as a block finding.
+
+## A-13 — Horizontal slicing (RED-batch then GREEN-batch)
+
+**Symptom.** \`flows/<slug>/build.md\` shows AC-1 RED, AC-2 RED, AC-3 RED committed in a row, then AC-1 GREEN, AC-2 GREEN, AC-3 GREEN. Or the slice-builder describes the build as "tests written, now I'll implement".
+
+**Underlying mistake.** Writing all RED tests before any GREEN code means the tests describe the behaviour you *guessed* before you saw the real interface. Tests written this way pass when behaviour breaks (because they test the imagined shape) and fail when behaviour is fine (because the real shape diverged from the imagination). They get rewritten during the next refactor.
+
+**Correction.** One test → one implementation → repeat. Each cycle informs the next. The AC-2 test is shaped by what the AC-1 implementation revealed about the real interface. \`commit-helper.mjs --phase=red\` for AC-2 will refuse if AC-1's chain isn't closed yet — that is the rail. See the Vertical Slicing section in \`tdd-cycle.md\`.
+
+## A-14 — Pushing past a failing test
+
+**Symptom.** Build log shows a flaky or unexpected failure on AC-2, then continues into AC-3 with "I'll come back to AC-2 later". Or a hook rejection silently retried with a slightly different commit message.
+
+**Underlying mistake.** Errors compound. AC-3 is built on the invariants AC-2 was supposed to establish. If AC-2's RED failed for the wrong reason, you are debugging a stack of broken assumptions, and every cycle past that point makes the diagnosis harder.
+
+**Correction.** Stop the line. Preserve the failure (command + 1–3 lines of output verbatim), reproduce in isolation, root-cause to a concrete file:line, fix once, re-run the full relevant suite, then resume the cycle. If the root cause cannot be identified in three attempts, surface a blocker to the orchestrator — do not "make it work" by removing the test or weakening the assertion.
+
+## A-15 — Mocking what should not be mocked
+
+**Symptom.** A database query test mocks the driver and asserts on \`db.query\` call shape; the test is green and the actual query never runs in production. Or a service test mocks every collaborator and only verifies which methods were called, in which order.
+
+**Underlying mistake.** Mocking a dependency you control couples the test to the implementation. The test reads green even when the SQL is wrong, the migration is missing, the column is misspelled. Real bugs live in those gaps. Interaction-based assertions (\`expect(x).toHaveBeenCalledWith(...)\`) break on every refactor and provide weaker confidence than state-based assertions on the outcome.
+
+**Correction.** Use a real test database (or an in-memory fake of the same shape) and assert on the **outcome** — the row that was inserted, the response from the query, the observable side effect — not on the call. Reach for mocks only for things genuinely outside your control: third-party APIs, time, randomness, the network. Real > Fake (in-memory) > Stub (canned data) > Mock (interaction).
 `;
