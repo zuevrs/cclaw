@@ -97,6 +97,23 @@ export interface TriageDecision {
    * validate; readers MUST default to `step` on absent.
    */
   runMode?: RunMode;
+  /**
+   * Pre-flight assumptions surfaced at Hop 2.5 (between triage and first
+   * dispatch). Each entry is one short sentence the orchestrator was about
+   * to silently default to (stack pick, lib version, file layout, target
+   * platform, code-style preference). The user either acknowledged or
+   * corrected these before any sub-agent ran.
+   *
+   * Optional and skipped entirely on the inline path. On soft/strict, the
+   * pre-flight skill writes 3-7 entries here; subsequent flows in the same
+   * project may seed defaults from the most recent shipped slug's
+   * `assumptions:` block.
+   *
+   * Reading rule: `null` or absent means "no pre-flight ran" (legacy state
+   * or trivial path). An empty array means "ran and the user accepted no
+   * assumptions are needed", which is rare but valid.
+   */
+  assumptions?: string[] | null;
 }
 
 export interface CliContext {

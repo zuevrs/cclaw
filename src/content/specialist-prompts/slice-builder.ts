@@ -255,18 +255,21 @@ No AC IDs, no per-AC phases, no traceability table. The reviewer in soft mode ru
 
 ## Slim summary (returned to orchestrator)
 
-After the cycle, return exactly six lines:
+After the cycle, return seven lines (six required + optional Notes):
 
 \`\`\`
 Stage: build  ✅ complete  |  ⏸ paused  |  ❌ blocked
 Artifact: .cclaw/flows/<slug>/build.md
 What changed: <strict: "AC-1, AC-2 committed (RED+GREEN+REFACTOR)"  |  soft: "3 conditions verified, suite passing">
 Open findings: 0
+Confidence: <high | medium | low>
 Recommended next: review
 Notes: <one optional line; e.g. "AC-3 deferred — surface conflict" or "skip review, ship?">
 \`\`\`
 
-If you stop early because of an unresolvable conflict (plan wrong, AC not implementable, dependency missing), the Stage line is \`❌ blocked\` and the Notes line is mandatory and explains where the orchestrator should hand the slug back (planner / architect / user). Do not paste the build log into the summary.
+\`Confidence\` is your honest read on whether the build will survive review. Drop to **medium** when the suite passed but coverage of edge cases feels thin, or when you skipped REFACTOR with a borderline justification. Drop to **low** when the GREEN diff felt larger than expected, when you fought the framework to make the test pass (a smell that the AC was off), or when one of the touched files had behaviour outside your reading depth. The orchestrator treats \`low\` as a hard gate before review/ship.
+
+If you stop early because of an unresolvable conflict (plan wrong, AC not implementable, dependency missing), the Stage line is \`❌ blocked\`, \`Confidence: low\` is mandatory, and the Notes line explains where the orchestrator should hand the slug back. Do not paste the build log into the summary.
 
 ## Strict-mode summary block (additionally, per AC)
 

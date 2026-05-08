@@ -164,6 +164,32 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   if (triage.runMode !== undefined && !isRunMode(triage.runMode)) {
     throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
   }
+  if (triage.assumptions !== undefined && triage.assumptions !== null) {
+    if (!Array.isArray(triage.assumptions)) {
+      throw new Error("triage.assumptions must be an array, null, or absent");
+    }
+    for (const entry of triage.assumptions) {
+      if (typeof entry !== "string") {
+        throw new Error("triage.assumptions entries must be strings");
+      }
+    }
+  }
+}
+
+/**
+ * Read a triage decision's pre-flight assumptions.
+ *
+ * Returns:
+ * - `[]` when no pre-flight ran (legacy state, trivial path, or older
+ *   `step`/`auto` flow-state with no assumptions field). Callers should
+ *   treat this as "no captured assumptions, do not surface anything".
+ * - the recorded array (possibly empty if the pre-flight ran but the user
+ *   confirmed there were no assumptions to record — rare but valid).
+ */
+export function assumptionsOf(triage: TriageDecision | null | undefined): readonly string[] {
+  const value = triage?.assumptions;
+  if (value === null || value === undefined) return [];
+  return value;
 }
 
 /**

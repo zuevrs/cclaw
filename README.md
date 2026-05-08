@@ -1,6 +1,6 @@
 # cclaw
 
-**cclaw is a lightweight harness-first flow toolkit for coding agents.** Three slash commands. Five hops (`Detect → Triage → Dispatch → Pause → Compound/Ship`). Four stages (`plan → build → review → ship`, where **build IS a TDD cycle**: RED → GREEN → REFACTOR). Six on-demand specialists, all running as isolated sub-agents. Three Acceptance-Criteria modes (`inline` / `soft` / `strict`) so trivial edits do not pay the price of risky migrations. A deep content layer of skills, templates, runbooks, patterns, examples, and recovery playbooks wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, the right amount of ceremony, and almost no orchestrator bloat.
+**cclaw is a lightweight harness-first flow toolkit for coding agents.** Three slash commands. Six hops (`Detect → Triage → Pre-flight → Dispatch → Pause → Compound/Ship`). Four stages (`plan → build → review → ship`, where **build IS a TDD cycle**: RED → GREEN → REFACTOR). Six on-demand specialists, all running as isolated sub-agents and emitting a calibrated `Confidence: high | medium | low` signal. Three Acceptance-Criteria modes (`inline` / `soft` / `strict`) so trivial edits do not pay the price of risky migrations. A five-axis review (`correctness · readability · architecture · security · performance`) with a five-tier severity vocabulary, a strict-mode adversarial pre-mortem before ship, and a source-driven mode that grounds framework code in current docs. A deep content layer of skills, templates, runbooks, patterns, examples, and recovery playbooks wrapped around a runtime under 1 KLOC — so Claude Code, Cursor, OpenCode, or Codex can move from idea to shipped change with a clear plan, the right amount of ceremony, and almost no orchestrator bloat.
 
 ```text
             idea
@@ -15,7 +15,15 @@
              ▼
    ┌────────────────────────────────────────────────────┐
    │ Hop 2: Triage — auto-classify task,                │
-   │ recommend path + acMode, user accepts or overrides │
+   │ recommend path + acMode, runMode (step/auto)       │
+   └─────────┬──────────────────────────────────────────┘
+             │
+             ▼
+   ┌────────────────────────────────────────────────────┐
+   │ Hop 2.5: Pre-flight — surface 3-7 assumptions      │
+   │ (stack, conventions, defaults, out-of-scope);      │
+   │ user confirms; persisted to triage.assumptions.    │
+   │ skipped on inline + on resume                      │
    └─────────┬──────────────────────────────────────────┘
              │
    trivial   │   small-medium       │   large-risky
@@ -24,7 +32,7 @@
              ▼                      ▼                      ▼
         edit + commit        plan → build → review → ship   brainstorm? → architect? → plan → build → review → ship
         (no plan)            each stage in a fresh sub-agent  each stage in a fresh sub-agent, parallel-build allowed
-                                     │                      │
+                                     │                      │       five-axis review · adversarial pre-mortem
                                      └─────────┬────────────┘
                                                ▼
                                   compound (auto, gated by quality)
@@ -33,7 +41,19 @@
                                    active flows → shipped/<slug>/
 ```
 
-Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`). Four stages (`plan → build → review → ship`). Six specialists, all on-demand, all running as sub-agents. Fifteen skills including the always-on `triage-gate`, `flow-resume`, `tdd-cycle`, `conversation-language`, and `anti-slop`. Ten templates including `plan-soft.md` and `build-soft.md` for the soft-mode path. Four runbooks. Eight reference patterns. Three research playbooks. Five recovery playbooks. Eight worked examples. Two mandatory gates in strict mode (AC traceability + TDD phase chain); soft mode keeps both as advisory; inline mode skips both.
+Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`). Four stages (`plan → build → review → ship`). Six specialists, all on-demand, all running as sub-agents, all emitting `Confidence: high | medium | low`. Seventeen skills including the always-on `triage-gate`, `flow-resume`, `pre-flight-assumptions`, `tdd-cycle`, `conversation-language`, `anti-slop`, and the strict-mode-default `source-driven`. Ten templates including `plan-soft.md` and `build-soft.md` for the soft-mode path. Four runbooks. Eight reference patterns. Three research playbooks. Five recovery playbooks. Eight worked examples. Two mandatory gates in strict mode (AC traceability + TDD phase chain); soft mode keeps both as advisory; inline mode skips both.
+
+## What changed in 8.4
+
+8.4 is a non-breaking content + behaviour patch on top of 8.3, picking up seven things three reference skill libraries do that cclaw 8.3 didn't.
+
+- **Confidence calibration in slim summaries.** Every specialist emits `Confidence: high | medium | low`. The orchestrator's Hop 4 — *Pause* — treats `Confidence: low` as a **hard gate in both `step` and `auto` modes**: it pauses, refuses to chain, and offers `expand <stage>` (re-dispatch with a richer envelope), `show`, `override`, or `cancel`.
+- **Pre-flight assumptions (Hop 2.5).** A new orchestrator hop runs after triage, before the first specialist dispatch, on every fresh non-inline flow. It surfaces 3-7 numbered assumptions (stack + version, repo conventions, architecture defaults, out-of-scope items) using the harness's structured ask, persists them to `triage.assumptions` (string array), and makes them immutable for the lifetime of the flow. Both `planner` and `architect` read them verbatim before authoring; a decision that would break an assumption surfaces as a feasibility blocker, not a silent override.
+- **Five-axis review.** The reviewer's `code` mode now mandates five axes — `correctness`, `readability`, `architecture`, `security`, `performance` — every iteration. Findings carry `axis` and a five-tier `severity: critical | required | consider | nit | fyi`. Ship gates: `strict` blocks on any open `critical` or `required`; `soft` blocks only on `critical`. Legacy `block | warn | info` ledgers are migrated forward by the reviewer prompt.
+- **Source-driven mode.** A new always-on skill `source-driven.md` instructs `architect` and `planner` (and indirectly `slice-builder`) to detect stack + versions, fetch the version-pinned official doc page, implement against documented patterns, and cite URLs in `decisions.md` and code comments. Default in **strict mode for framework-specific work**, opt-in for `soft`. Integrates with the `user-context7` MCP tool when available, falls back to `WebFetch`. When docs are unreachable: write `UNVERIFIED — implementing against training memory` next to the affected line.
+- **Adversarial pre-mortem before ship (strict only).** Hop 5 — *Ship + Compound* — now dispatches `reviewer` mode=`adversarial` **in parallel** with `reviewer` mode=`release`. The adversarial reviewer picks the most pessimistic plausible reading and writes `flows/<slug>/pre-mortem.md` listing 3-7 likely failure modes (data-loss, race, regression, blast-radius, rollback-impossibility, accidental-scope, hidden-coupling). Uncovered risks become `required`/`critical` findings, escalating the ship gate.
+- **Cross-flow learning in the planner.** The planner reads `.cclaw/knowledge.jsonl` at every dispatch and surfaces 1-3 relevant prior entries — lessons captured by `compound` from past shipped slugs — in a new `## Prior lessons` section in `plan.md`, citing `learnings/<slug>.md`. Filtering: surface-area overlap, tag overlap, recency.
+- **Test-impact-aware GREEN.** The `tdd-cycle.md` skill's GREEN phase now distinguishes a fast inner loop (affected-test pattern) from a safe outer loop (full project suite). REFACTOR still always runs the full suite. Mandatory gate `green_two_stage_suite` is added to `commit-helper.mjs --phase=green` guidance.
 
 ## What changed in 8.3
 
