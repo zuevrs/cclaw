@@ -4,12 +4,18 @@ import {
   LEGACY_V8_FLOW_STATE_SCHEMA_VERSION,
   LegacyFlowStateError,
   assertFlowStateV82,
+  assumptionsOf,
   createInitialFlowState,
+  interpretationForksOf,
   isAcMode,
   isFlowStage,
   isRoutingClass,
-  migrateFlowState
+  isRunMode,
+  isSpecialist,
+  migrateFlowState,
+  runModeOf
 } from "../../src/flow-state.js";
+import { RUN_MODES, type TriageDecision } from "../../src/types.js";
 
 describe("flow-state", () => {
   it("uses schema version 3 (cclaw 8.2)", () => {
@@ -111,6 +117,160 @@ describe("flow-state", () => {
     expect(isRoutingClass("small-medium")).toBe(true);
     expect(isRoutingClass("large-risky")).toBe(true);
     expect(isRoutingClass("micro")).toBe(false);
+  });
+
+  it("isRunMode matches step / auto and rejects garbage", () => {
+    expect(RUN_MODES).toEqual(["step", "auto"]);
+    expect(isRunMode("step")).toBe(true);
+    expect(isRunMode("auto")).toBe(true);
+    expect(isRunMode("autopilot")).toBe(false);
+    expect(isRunMode(undefined)).toBe(false);
+  });
+
+  it("isSpecialist accepts the six specialists and rejects research helpers", () => {
+    expect(isSpecialist("brainstormer")).toBe(true);
+    expect(isSpecialist("architect")).toBe(true);
+    expect(isSpecialist("planner")).toBe(true);
+    expect(isSpecialist("reviewer")).toBe(true);
+    expect(isSpecialist("security-reviewer")).toBe(true);
+    expect(isSpecialist("slice-builder")).toBe(true);
+    expect(isSpecialist("repo-research")).toBe(false);
+    expect(isSpecialist("learnings-research")).toBe(false);
+    expect(isSpecialist("orchestrator")).toBe(false);
+    expect(isSpecialist(undefined)).toBe(false);
+  });
+
+  it("runModeOf defaults to step on null / undefined / triage-without-runMode", () => {
+    expect(runModeOf(null)).toBe("step");
+    expect(runModeOf(undefined)).toBe("step");
+    const triageWithoutRunMode: TriageDecision = {
+      complexity: "small-medium",
+      acMode: "soft",
+      path: ["plan", "build", "review", "ship"],
+      rationale: "x",
+      decidedAt: "2026-05-07T00:00:00Z",
+      userOverrode: false
+    };
+    expect(runModeOf(triageWithoutRunMode)).toBe("step");
+    expect(runModeOf({ ...triageWithoutRunMode, runMode: "auto" })).toBe("auto");
+  });
+
+  it("assumptionsOf returns [] for null / undefined / missing field; otherwise the verbatim list", () => {
+    expect(assumptionsOf(null)).toEqual([]);
+    expect(assumptionsOf(undefined)).toEqual([]);
+    const triage: TriageDecision = {
+      complexity: "small-medium",
+      acMode: "soft",
+      path: ["plan", "build", "review", "ship"],
+      rationale: "x",
+      decidedAt: "2026-05-07T00:00:00Z",
+      userOverrode: false
+    };
+    expect(assumptionsOf(triage)).toEqual([]);
+    expect(assumptionsOf({ ...triage, assumptions: null })).toEqual([]);
+    expect(assumptionsOf({ ...triage, assumptions: ["Node 20", "Tailwind only"] })).toEqual([
+      "Node 20",
+      "Tailwind only"
+    ]);
+  });
+
+  it("interpretationForksOf returns [] for null / undefined / absent; otherwise the chosen reading(s)", () => {
+    expect(interpretationForksOf(null)).toEqual([]);
+    expect(interpretationForksOf(undefined)).toEqual([]);
+    const triage: TriageDecision = {
+      complexity: "small-medium",
+      acMode: "soft",
+      path: ["plan", "build", "review", "ship"],
+      rationale: "x",
+      decidedAt: "2026-05-07T00:00:00Z",
+      userOverrode: false
+    };
+    expect(interpretationForksOf(triage)).toEqual([]);
+    expect(interpretationForksOf({ ...triage, interpretationForks: null })).toEqual([]);
+    expect(
+      interpretationForksOf({
+        ...triage,
+        interpretationForks: ["Make search faster via response caching, not vector search."]
+      })
+    ).toEqual(["Make search faster via response caching, not vector search."]);
+  });
+
+  it("validates triage.assumptions is array-of-strings or null", () => {
+    const base = {
+      schemaVersion: 3 as const,
+      currentSlug: "x",
+      currentStage: null,
+      ac: [],
+      lastSpecialist: null,
+      startedAt: "2026-05-07T00:00:00Z",
+      reviewIterations: 0,
+      securityFlag: false
+    };
+    const validTriage: TriageDecision = {
+      complexity: "small-medium",
+      acMode: "soft",
+      path: ["plan", "build", "review", "ship"],
+      rationale: "x",
+      decidedAt: "2026-05-07T00:00:00Z",
+      userOverrode: false
+    };
+    expect(() =>
+      assertFlowStateV82({ ...base, triage: { ...validTriage, assumptions: ["a", "b"] } })
+    ).not.toThrow();
+    expect(() =>
+      assertFlowStateV82({ ...base, triage: { ...validTriage, assumptions: null } })
+    ).not.toThrow();
+    expect(() =>
+      assertFlowStateV82({ ...base, triage: { ...validTriage, assumptions: "single string" as never } })
+    ).toThrow(/triage\.assumptions must be an array/);
+    expect(() =>
+      assertFlowStateV82({
+        ...base,
+        triage: { ...validTriage, assumptions: ["ok", 42 as never] }
+      })
+    ).toThrow(/triage\.assumptions entries must be strings/);
+  });
+
+  it("validates triage.interpretationForks is array-of-strings or null", () => {
+    const base = {
+      schemaVersion: 3 as const,
+      currentSlug: "x",
+      currentStage: null,
+      ac: [],
+      lastSpecialist: null,
+      startedAt: "2026-05-07T00:00:00Z",
+      reviewIterations: 0,
+      securityFlag: false
+    };
+    const validTriage: TriageDecision = {
+      complexity: "small-medium",
+      acMode: "soft",
+      path: ["plan", "build", "review", "ship"],
+      rationale: "x",
+      decidedAt: "2026-05-07T00:00:00Z",
+      userOverrode: false
+    };
+    expect(() =>
+      assertFlowStateV82({
+        ...base,
+        triage: { ...validTriage, interpretationForks: ["ship caching, not vector search"] }
+      })
+    ).not.toThrow();
+    expect(() =>
+      assertFlowStateV82({ ...base, triage: { ...validTriage, interpretationForks: null } })
+    ).not.toThrow();
+    expect(() =>
+      assertFlowStateV82({
+        ...base,
+        triage: { ...validTriage, interpretationForks: "single string" as never }
+      })
+    ).toThrow(/triage\.interpretationForks must be an array/);
+    expect(() =>
+      assertFlowStateV82({
+        ...base,
+        triage: { ...validTriage, interpretationForks: ["ok", 42 as never] }
+      })
+    ).toThrow(/triage\.interpretationForks entries must be strings/);
   });
 });
 

@@ -134,7 +134,7 @@ export interface TriageDecision {
   assumptions?: string[] | null;
   /**
    * Interpretation forks recorded at Hop 2.5 (sub-step before the
-   * assumptions question, v8.7+). When the user's prompt is ambiguous —
+   * assumptions question). When the user's prompt is ambiguous —
    * "make search faster", "improve the UI", "fix the auth bug" — the
    * orchestrator surfaces 2-4 distinct interpretations with tradeoffs and
    * effort estimates and lets the user pick the one they meant **before**
@@ -147,7 +147,8 @@ export interface TriageDecision {
    * paraphrase). When the prompt was unambiguous and forks were not
    * surfaced, the field is `null` or absent.
    *
-   * Optional for backward compat: pre-v8.7 state files validate without it.
+   * Optional for backward compat: state files written before this field
+   * existed validate without it.
    */
   interpretationForks?: string[] | null;
 }

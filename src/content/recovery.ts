@@ -9,21 +9,21 @@ const AC_TRACEABILITY_BREAK = `# Recovery — AC traceability broken
 
 The orchestrator detects a broken AC ↔ commit chain when:
 
-- \`flow-state.json\` has an AC with \`status: pending\` but \`builds/<slug>.md\` already has a row for that AC;
+- \`flow-state.json\` has an AC with \`status: pending\` but \`flows/<slug>/build.md\` already has a row for that AC;
 - the commit-helper hook was bypassed (a plain \`git commit\` produced a SHA that flow-state does not know about);
 - a force-push rewrote SHAs that flow-state had recorded.
 
 ## Symptoms
 
 - \`runCompoundAndShip()\` refuses to run with: \`Cannot ship <slug>: AC traceability gate failed. Pending AC: ...\`
-- a review iteration finds an AC labelled \`pending\` with a commit cited in \`builds/<slug>.md\`.
+- a review iteration finds an AC labelled \`pending\` with a commit cited in \`flows/<slug>/build.md\`.
 
 ## Recovery steps
 
 1. Identify the affected AC ids and the actual commit SHAs from \`git log\`.
 2. Open \`.cclaw/state/flow-state.json\` and locate the matching AC entry.
 3. Set \`commit\` to the verified SHA and \`status\` to \`committed\`.
-4. Re-render the traceability block in \`plans/<slug>.md\`: every AC gets a single line \`AC-N → commit <short-sha>\`.
+4. Re-render the traceability block in \`flows/<slug>/plan.md\`: every AC gets a single line \`AC-N → commit <short-sha>\`.
 5. Re-run review-stage for the affected AC. The reviewer must see the correct chain before ship proceeds.
 
 ## What not to do
@@ -39,7 +39,7 @@ The reviewer reached iteration 5 with outstanding block-level findings.
 
 ## Symptoms
 
-- \`reviews/<slug>.md\` has 5 iteration blocks; the last one carries \`status: cap-reached\`.
+- \`flows/<slug>/review.md\` has 5 iteration blocks; the last one carries \`status: cap-reached\`.
 - The orchestrator surfaces remaining findings and recommends \`/cc-cancel\` or splitting.
 
 ## Recovery steps
@@ -83,7 +83,7 @@ Two slice-builders touch the same file or write conflicting changes during a \`p
 ## Recovery steps
 
 1. Pause the wave. Stop dispatching new slice-builders.
-2. Read \`builds/<slug>.md\` to understand which AC each commit closes.
+2. Read \`flows/<slug>/build.md\` to understand which AC each commit closes.
 3. Decide ownership:
    - if the file legitimately needs both changes, integration reviewer reconciles them and creates a single fix-only commit referencing both AC;
    - if one slice should not have touched the file, slice-builder mode=\`fix-only\` reverts the offending hunk and re-implements the AC inside its declared file set.
@@ -104,7 +104,7 @@ Two slice-builders touch the same file or write conflicting changes during a \`p
 
 const FRONTMATTER_CORRUPTION = `# Recovery — frontmatter corruption
 
-A YAML parser error appears when the orchestrator tries to read \`plans/<slug>.md\` or another active artifact.
+A YAML parser error appears when the orchestrator tries to read \`flows/<slug>/plan.md\` or another active artifact.
 
 ## Symptoms
 

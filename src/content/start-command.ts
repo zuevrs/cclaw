@@ -243,7 +243,7 @@ When you announce a dispatch in your message to the user, use exactly this shape
 
 ${SUB_AGENT_DISPATCH_EXAMPLE}
 
-The first two reads are non-negotiable. A sub-agent that skips its contract file will hallucinate its own role definition (we observed this in v8.4 — brainstormer ran with a 30-line summary instead of its 194-line contract). If the harness has a sub-agent system message, the orchestrator places those two reads as the sub-agent's first instructions; if the harness dispatches via plain "spawn a fresh context", the orchestrator puts them at the top of the inline prompt. Either way, the sub-agent opens \`.cclaw/lib/agents/<specialist>.md\` before doing anything else.
+The first two reads are non-negotiable. A sub-agent that skips its contract file will hallucinate its own role definition (we observed this in production — brainstormer ran with a 30-line summary instead of its full contract). If the harness has a sub-agent system message, the orchestrator places those two reads as the sub-agent's first instructions; if the harness dispatches via plain "spawn a fresh context", the orchestrator puts them at the top of the inline prompt. Either way, the sub-agent opens \`.cclaw/lib/agents/<specialist>.md\` before doing anything else.
 
 The sub-agent reads the listed inputs, writes the listed output, and returns the slim summary block. It does **not**:
 
@@ -554,7 +554,7 @@ If any signal fires, dispatch the learnings sub-agent (small one-shot): write \`
 
 ## Hop 6 — Finalize (ship-finalize: move active artifacts to shipped/)
 
-After Hop 5 (compound) the orchestrator finalises the slug's directory layout. The previous behaviour (sub-agent writing "Copy …" to its own artifact) duplicated the flow into both \`flows/<slug>/\` and \`flows/shipped/<slug>/\`; that is forbidden in v8.5+.
+After Hop 5 (compound) the orchestrator finalises the slug's directory layout. The orchestrator MUST move (not copy) \`flows/<slug>/\` to \`flows/shipped/<slug>/\`; duplicating into both directories is forbidden.
 
 This is the orchestrator's job, never a sub-agent's. Run these steps in order, in your own context, after the ship summary returned and the compound learning gate (Hop 5) has either written or skipped \`learnings.md\`:
 

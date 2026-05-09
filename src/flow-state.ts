@@ -184,6 +184,16 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
       }
     }
   }
+  if (triage.interpretationForks !== undefined && triage.interpretationForks !== null) {
+    if (!Array.isArray(triage.interpretationForks)) {
+      throw new Error("triage.interpretationForks must be an array, null, or absent");
+    }
+    for (const entry of triage.interpretationForks) {
+      if (typeof entry !== "string") {
+        throw new Error("triage.interpretationForks entries must be strings");
+      }
+    }
+  }
 }
 
 /**
@@ -198,6 +208,23 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
  */
 export function assumptionsOf(triage: TriageDecision | null | undefined): readonly string[] {
   const value = triage?.assumptions;
+  if (value === null || value === undefined) return [];
+  return value;
+}
+
+/**
+ * Read a triage decision's interpretation forks (chosen reading sentence(s)
+ * from the ambiguity-fork sub-step at Hop 2.5).
+ *
+ * Returns:
+ * - `[]` when no fork sub-step ran (unambiguous prompt, trivial path, or
+ *   legacy state). Callers treat this as "no surfaced ambiguity".
+ * - the recorded array (typically a single sentence — the user's chosen
+ *   interpretation; multi-element only when the user explicitly picked a
+ *   compound reading).
+ */
+export function interpretationForksOf(triage: TriageDecision | null | undefined): readonly string[] {
+  const value = triage?.interpretationForks;
   if (value === null || value === undefined) return [];
   return value;
 }
