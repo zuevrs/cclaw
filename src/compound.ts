@@ -121,7 +121,15 @@ export async function runCompoundAndShip(
   await ensureDir(shippedDir);
 
   const moved: ArtifactStage[] = [];
-  const allStages: ArtifactStage[] = ["plan", "build", "review", "ship", "decisions", "learnings"];
+  const allStages: ArtifactStage[] = [
+    "plan",
+    "build",
+    "review",
+    "ship",
+    "decisions",
+    "learnings",
+    "pre-mortem"
+  ];
   for (const stage of allStages) {
     const source = activeArtifactPath(projectRoot, stage, slug);
     const destination = shippedArtifactPath(projectRoot, slug, stage);

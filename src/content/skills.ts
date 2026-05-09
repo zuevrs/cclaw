@@ -56,7 +56,7 @@ Only when the harness has no structured ask facility (rare; legacy CLI mode), pr
 \`\`\`
 Triage
 ─ Complexity: <trivial | small/medium | large-risky>  (confidence: <high | medium | low>)
-─ Recommended path: <inline | plan → build → review → ship | discovery → plan → build → review → ship>
+─ Recommended path: <inline | plan → build → review → ship>  (large-risky uses the same four-stage path; the discovery sub-phase is an expansion of \`plan\`, not a separate path entry)
 ─ Why: <one short sentence; cite file count, LOC estimate, sensitive-surface flag>
 ─ AC mode: <inline | soft | strict>
 \`\`\`
@@ -86,8 +86,8 @@ Rank the request against these signals. The orchestrator picks the **highest** c
 | --- | --- |
 | typo, rename, comment, single-file format change, ≤30 lines, no test impact | trivial / inline |
 | 1-3 modules, ≤5 testable behaviours, no auth/payment/data-layer touch, no migration | small/medium / soft |
-| ≥4 modules touched OR ≥6 distinct behaviours OR architectural decision needed OR migration required OR auth/payment/data-layer touch OR explicit security flag | large-risky / strict |
-| user explicitly asked for "discuss first" / "design only" / "what do you think" | discovery → plan |
+| ≥4 modules touched OR ≥6 distinct behaviours OR architectural decision needed OR migration required OR auth/payment/data-layer touch OR explicit security flag | large-risky / strict (plan stage expands into discovery sub-phase) |
+| user explicitly asked for "discuss first" / "design only" / "what do you think" | large-risky (forces discovery sub-phase under plan) |
 | user explicitly asked for "just fix it" on a single file | trivial / inline (still confirm — they may underestimate) |
 
 The "highest wins" rule is intentional. Agents underestimate scope more often than they overestimate; if any signal says large-risky, surface large-risky.
@@ -126,13 +126,15 @@ The triage block is **immutable for the lifetime of the flow**. If the user want
 
 ## Path semantics
 
-| path value | what runs |
-| --- | --- |
-| \`["build"]\` (inline trivial) | direct edit + commit, no plan, no review |
-| \`["plan", "build", "review", "ship"]\` | sub-agent per stage, pause after each unless user said "go to ship" |
-| \`["discovery", "plan", "build", "review", "ship"]\` | brainstormer + architect run before plan; user confirms after each |
+| path value | what runs | when |
+| --- | --- | --- |
+| \`["build"]\` (inline trivial) | direct edit + commit, no plan, no review | \`complexity == "trivial"\` |
+| \`["plan", "build", "review", "ship"]\` (small/medium) | one planner sub-agent for plan; one slice-builder for build; one reviewer for review; ship fan-out | \`complexity == "small-medium"\` |
+| \`["plan", "build", "review", "ship"]\` (large-risky) | **plan stage expands** into brainstormer → checkpoint → architect → checkpoint → planner; build/review/ship behave as small/medium plus parallel-build fan-out and adversarial pre-mortem when applicable | \`complexity == "large-risky"\` |
 
-\`discovery\` is a routing label, not a real flow stage. It expands at dispatch time into "brainstormer → checkpoint → architect → checkpoint → planner".
+\`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never an entry in \`path\`.** When the orchestrator promises a "discovery sub-phase" it means the \`plan\` stage runs three specialists with checkpoints between each (brainstormer → architect → planner) — see \`/cc.md\` "Plan stage on large-risky" for the dispatch contract.
+
+The orchestrator's path-validation rule is single-stage: \`triage.path\` ⊆ \`{plan, build, review, ship}\`. Any state file that contains a \`"discovery"\` entry is an artefact of a pre-v8.5 orchestrator and must be normalised — strip the \`"discovery"\` entry and continue with the remaining stages.
 
 ## When to skip the gate
 
@@ -182,7 +184,7 @@ User: "Migrate the user store from Postgres to DynamoDB."
 \`\`\`
 Triage
 ─ Complexity: large-risky  (confidence: high)
-─ Recommended path: discovery → plan → build → review → ship
+─ Recommended path: plan → build → review → ship  (plan stage expands: brainstormer → architect → planner)
 ─ Why: data-layer migration, schema change, requires runbook + rollback plan.
 ─ AC mode: strict
 \`\`\`

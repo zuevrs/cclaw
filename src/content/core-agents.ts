@@ -1,8 +1,11 @@
-import type { SpecialistId } from "../types.js";
+import type { InstallableAgentId, ResearchAgentId, SpecialistId } from "../types.js";
+import { LEARNINGS_RESEARCH_PROMPT } from "./research-prompts/learnings-research.js";
+import { REPO_RESEARCH_PROMPT } from "./research-prompts/repo-research.js";
 import { SPECIALIST_PROMPTS } from "./specialist-prompts/index.js";
 
 export interface CoreAgent {
-  id: SpecialistId;
+  id: InstallableAgentId;
+  kind: "specialist" | "research";
   title: string;
   activation: "on-demand";
   modes: string[];
@@ -10,9 +13,20 @@ export interface CoreAgent {
   prompt: string;
 }
 
-export const CORE_AGENTS: CoreAgent[] = [
+export interface SpecialistAgent extends CoreAgent {
+  id: SpecialistId;
+  kind: "specialist";
+}
+
+export interface ResearchAgent extends CoreAgent {
+  id: ResearchAgentId;
+  kind: "research";
+}
+
+export const SPECIALIST_AGENTS: SpecialistAgent[] = [
   {
     id: "brainstormer",
+    kind: "specialist",
     title: "Brainstormer",
     activation: "on-demand",
     modes: ["frame", "scope", "alternatives"],
@@ -21,6 +35,7 @@ export const CORE_AGENTS: CoreAgent[] = [
   },
   {
     id: "architect",
+    kind: "specialist",
     title: "Architect",
     activation: "on-demand",
     modes: ["architecture", "feasibility"],
@@ -29,6 +44,7 @@ export const CORE_AGENTS: CoreAgent[] = [
   },
   {
     id: "planner",
+    kind: "specialist",
     title: "Planner",
     activation: "on-demand",
     modes: ["research", "work-breakdown", "topology"],
@@ -37,6 +53,7 @@ export const CORE_AGENTS: CoreAgent[] = [
   },
   {
     id: "reviewer",
+    kind: "specialist",
     title: "Reviewer",
     activation: "on-demand",
     modes: ["code", "text-review", "integration", "release", "adversarial"],
@@ -45,6 +62,7 @@ export const CORE_AGENTS: CoreAgent[] = [
   },
   {
     id: "security-reviewer",
+    kind: "specialist",
     title: "Security reviewer",
     activation: "on-demand",
     modes: ["threat-model", "sensitive-change"],
@@ -53,6 +71,7 @@ export const CORE_AGENTS: CoreAgent[] = [
   },
   {
     id: "slice-builder",
+    kind: "specialist",
     title: "Slice builder",
     activation: "on-demand",
     modes: ["build", "fix-only"],
@@ -61,7 +80,36 @@ export const CORE_AGENTS: CoreAgent[] = [
   }
 ];
 
+export const RESEARCH_AGENTS: ResearchAgent[] = [
+  {
+    id: "repo-research",
+    kind: "research",
+    title: "Repo research",
+    activation: "on-demand",
+    modes: ["scan"],
+    description: "Read-only repo scan: stack, focus-surface patterns, test conventions, risk areas. Dispatched by planner/architect before authoring on brownfield.",
+    prompt: REPO_RESEARCH_PROMPT
+  },
+  {
+    id: "learnings-research",
+    kind: "research",
+    title: "Learnings research",
+    activation: "on-demand",
+    modes: ["scan"],
+    description: "Read-only knowledge.jsonl scan: surface 1-3 prior shipped lessons that overlap with the current task's surface and failure modes. Dispatched by planner before authoring.",
+    prompt: LEARNINGS_RESEARCH_PROMPT
+  }
+];
+
+/**
+ * Backward-compatible flat list of every installable agent. Install paths
+ * (\`writeAgentFiles\`, harness asset writers, \`uninstall\`) iterate this
+ * list. Specialist-only logic should use {@link SPECIALIST_AGENTS}.
+ */
+export const CORE_AGENTS: CoreAgent[] = [...SPECIALIST_AGENTS, ...RESEARCH_AGENTS];
+
 export function renderAgentMarkdown(agent: CoreAgent): string {
   const modes = agent.modes.map((mode) => `- ${mode}`).join("\n");
-  return `---\nname: ${agent.id}\ntitle: ${agent.title}\nactivation: ${agent.activation}\n---\n\n# ${agent.title}\n\n${agent.description}\n\n## Modes\n\n${modes}\n\n## Prompt\n\n${agent.prompt}\n`;
+  const kindLine = agent.kind === "research" ? "kind: research-helper\n" : "";
+  return `---\nname: ${agent.id}\ntitle: ${agent.title}\nactivation: ${agent.activation}\n${kindLine}---\n\n# ${agent.title}\n\n${agent.description}\n\n## Modes\n\n${modes}\n\n## Prompt\n\n${agent.prompt}\n`;
 }

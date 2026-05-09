@@ -17,8 +17,19 @@ describe("artifact paths", () => {
       review: "review.md",
       ship: "ship.md",
       decisions: "decisions.md",
-      learnings: "learnings.md"
+      learnings: "learnings.md",
+      "pre-mortem": "pre-mortem.md"
     });
+  });
+
+  it("supports pre-mortem as a first-class artifact stage", () => {
+    const project = "/tmp/proj";
+    expect(activeArtifactPath(project, "pre-mortem", "demo")).toBe(
+      path.join(project, ".cclaw", "flows", "demo", "pre-mortem.md")
+    );
+    expect(shippedArtifactPath(project, "demo", "pre-mortem")).toBe(
+      path.join(project, ".cclaw", "flows", "shipped", "demo", "pre-mortem.md")
+    );
   });
 
   it("computes active path under .cclaw/flows/<slug>/<stage>.md", () => {
