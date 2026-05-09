@@ -132,6 +132,24 @@ export interface TriageDecision {
    * assumptions are needed", which is rare but valid.
    */
   assumptions?: string[] | null;
+  /**
+   * Interpretation forks recorded at Hop 2.5 (sub-step before the
+   * assumptions question, v8.7+). When the user's prompt is ambiguous —
+   * "make search faster", "improve the UI", "fix the auth bug" — the
+   * orchestrator surfaces 2-4 distinct interpretations with tradeoffs and
+   * effort estimates and lets the user pick the one they meant **before**
+   * any assumption is written. Skipping this step is the most common reason
+   * a flow ships the wrong feature even when triage and assumptions look
+   * clean.
+   *
+   * Each entry is the verbatim chosen-interpretation sentence (so
+   * downstream specialists see the user's framing, not the orchestrator's
+   * paraphrase). When the prompt was unambiguous and forks were not
+   * surfaced, the field is `null` or absent.
+   *
+   * Optional for backward compat: pre-v8.7 state files validate without it.
+   */
+  interpretationForks?: string[] | null;
 }
 
 export interface CliContext {

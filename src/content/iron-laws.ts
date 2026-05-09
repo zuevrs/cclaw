@@ -9,7 +9,7 @@ export const IRON_LAWS: IronLaw[] = [
     id: "think-before-coding",
     title: "Think Before Coding",
     description:
-      "Read enough of the codebase to write the change correctly the first time. Skipping the read step is the most common cause of cascading errors and hallucinated actions."
+      "Read enough of the codebase to write the change correctly the first time. State your assumptions; if uncertain, **ask** before you act. If multiple interpretations exist, **present them — do not pick silently**. If a simpler approach exists, **say so**. If something is unclear, **stop, name the confusion, ask**. Skipping the read step or rushing past ambiguity is the most common cause of cascading errors and hallucinated actions."
   },
   {
     id: "simplicity-first",

@@ -13,8 +13,8 @@ import {
 } from "../../src/constants.js";
 
 describe("constants", () => {
-  it("locks the 8.6.0 release name", () => {
-    expect(CCLAW_VERSION).toBe("8.6.0");
+  it("locks the 8.7.0 release name", () => {
+    expect(CCLAW_VERSION).toBe("8.7.0");
   });
 
   it("uses .cclaw as runtime root with grouped layout", () => {
