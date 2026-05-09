@@ -378,9 +378,36 @@ Hard rules:
 - Specialist: \`reviewer\` (mode = \`code\` for sequential build, \`integration\` for parallel-build).
 - Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/flows/<slug>/build.md\`, the diff since plan.
 - Output: \`.cclaw/flows/<slug>/review.md\` with the **Concern Ledger** (always; same shape regardless of acMode).
-- The five Failure Modes checklist runs every iteration.
+- The five Failure Modes checklist runs every iteration. Every iteration block also includes \`What's done well\` (≥1 evidence-backed item, anti-sycophancy gate) and a \`Verification story\` table (tests run / build run / security checked, each with evidence). See \`.cclaw/lib/agents/reviewer.md\`.
 - Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user.
 - Slim summary: decision (clear / warn / block / cap-reached), open findings count, recommended next (continue / fix-only / cancel).
+
+##### Self-review gate (mandatory before reviewer dispatch)
+
+slice-builder's strict-mode JSON summary returns a \`self_review\` array with four rule attestations per AC: \`tests-fail-then-pass\`, \`build-clean\`, \`no-shims\`, \`touch-surface-respected\`. (Soft mode: one block per rule with \`ac: "feature"\`.) Each entry carries \`verified: true|false\` and a non-empty \`evidence\` string.
+
+Before you dispatch the reviewer, **inspect \`self_review\`** in your own context. The reviewer never sees this field; it is your gate.
+
+Decision rule:
+
+- **All entries \`verified: true\` AND \`evidence\` non-empty** → dispatch reviewer normally.
+- **Any \`verified: false\`** OR **any empty/missing \`evidence\`** OR **\`self_review\` array missing entirely** → **bounce the slice straight back to slice-builder with mode=fix-only**, citing the failed rule(s) and the slice-builder's own evidence string in the dispatch envelope. Do NOT dispatch reviewer.
+
+The fix-only bounce envelope reuses the slice-builder dispatch envelope shape; the "Inputs" line names the failed rules instead of a Concern Ledger fix list:
+
+\`\`\`
+Dispatch slice-builder
+─ Stage: build (self-review fix-only)
+─ Slug: <slug>
+─ AC: <AC-N> (the AC whose self_review failed)
+─ Failed rules: <one line per failed rule, copying the slice-builder's own evidence>
+─ Output: .cclaw/flows/<slug>/build.md (append a "Self-review fix" iteration block above the existing Summary)
+─ Then: re-emit the strict-mode JSON summary with self_review[] re-attested
+\`\`\`
+
+This gate is cheap to run (you already have the JSON in context) and saves one full reviewer cycle per failed attestation. Repeated self-review failures (third bounce) escalate to user: render the failed evidence and ask whether to continue or split the AC.
+
+In parallel-build the gate runs **per slice**: a slice whose self-review fails bounces back; **healthy slices proceed** to integration review independently. Do not block a clean slice waiting on a sibling's fix-only loop.
 
 #### ship
 
@@ -545,8 +572,9 @@ This is the orchestrator's job, never a sub-agent's. Run these steps in order, i
    The word "copy" must not appear in the dispatch envelope or in your own actions. \`cp\` is forbidden here. The active directory must end up empty after the moves.
 4. **Write the shipped manifest.** Author \`.cclaw/flows/shipped/<slug>/manifest.md\` from \`.cclaw/lib/templates/manifest.md\`. Frontmatter mirrors the final \`flow-state.json\` (slug, shippedAt, acMode, complexity, securityFlag, reviewIterations, AC count). Body lists the artifacts that ended up in the shipped dir (one bullet per file) and a one-line "Last status" copied from the ship summary.
 5. **Post-condition check (mandatory).** \`flows/<slug>/\` (the active directory) must be empty. If it is not, you have made a mistake — list the residue, surface it to the user, do NOT continue. The most common cause is mistakenly using \`cp\` instead of \`git mv\`/\`mv\`. Once the active dir is empty, \`rmdir flows/<slug>\` to remove the now-empty directory.
-6. **Reset flow-state.** Write \`createInitialFlowState\` defaults to \`.cclaw/state/flow-state.json\` (\`currentSlug: null\`, \`currentStage: null\`, \`triage: null\`, \`ac: []\`, \`reviewIterations: 0\`, \`securityFlag: false\`, \`lastSpecialist: null\`). The shipped manifest is the durable record; flow-state is now a clean slot ready for the next \`/cc\`.
-7. **Render the final summary** to the user: one block citing \`shipped/<slug>/manifest.md\`, the AC count, and any captured learnings.
+6. **Promote ADRs (PROPOSED → ACCEPTED).** Scan \`flows/shipped/<slug>/decisions.md\` (just moved in step 3) for any \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` line. For each found ADR file, edit the frontmatter in place: \`status: PROPOSED\` → \`status: ACCEPTED\`; add \`accepted_at: <iso>\`; add \`accepted_in_slug: <slug>\`; add \`accepted_at_commit: <ship-commit-sha>\`. Commit each promotion with \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. Skip the entire step when no PROPOSED ADR was found. Do NOT promote ADRs the architect did not propose for this slug. See \`.cclaw/lib/skills/documentation-and-adrs.md\` for the full lifecycle (including supersession bookkeeping for ADRs that supersede an earlier ACCEPTED one).
+7. **Reset flow-state.** Write \`createInitialFlowState\` defaults to \`.cclaw/state/flow-state.json\` (\`currentSlug: null\`, \`currentStage: null\`, \`triage: null\`, \`ac: []\`, \`reviewIterations: 0\`, \`securityFlag: false\`, \`lastSpecialist: null\`). The shipped manifest is the durable record; flow-state is now a clean slot ready for the next \`/cc\`.
+8. **Render the final summary** to the user: one block citing \`shipped/<slug>/manifest.md\`, the AC count, any captured learnings, and any ADR ids promoted to \`ACCEPTED\` in step 6.
 
 Hard rules for Hop 6:
 
@@ -596,7 +624,8 @@ These skills auto-trigger during \`/cc\`. Do not re-explain them; obey them.
 - **parallel-build** — strict mode + planner topology=parallel-build; enforces 5-slice cap and worktree dispatch.
 - **security-review** — when the diff touches sensitive surfaces.
 - **review-loop** — wraps every reviewer / security-reviewer invocation; runs the Concern Ledger + Five-axis pass + convergence detector.
-- **source-driven** — strict mode only (opt-in for soft); architect/planner detect stack version, fetch official doc deep-links, cite URLs, mark UNVERIFIED when docs are missing.
+- **source-driven** — strict mode only (opt-in for soft); architect/planner detect stack version, fetch official doc deep-links, cite URLs, mark UNVERIFIED when docs are missing. Per-project fetch cache lives at \`.cclaw/cache/sdd/\` (gitignored).
+- **documentation-and-adrs** — repo-wide ADR catalogue at \`docs/decisions/ADR-NNNN-<slug>.md\`. Architect proposes (\`PROPOSED\`) when tier=product-grade or ideal AND a D-N matches the trigger table; orchestrator promotes to \`ACCEPTED\` at Hop 6 step 6 after ship; \`/cc-cancel\` marks them \`REJECTED\`; supersession is in-place.
 
 ${ironLawsMarkdown()}
 `;

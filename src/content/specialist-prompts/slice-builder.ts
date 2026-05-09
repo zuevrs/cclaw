@@ -72,6 +72,8 @@ For each AC, you produce:
    The filename is for humans, the AC id is for the traceability machine. They live in different layers.
 10. **No redundant verification.** Do not re-run the same build / test / lint command twice in a row without a code or input change. If a tool failed once, the second identical run will fail too — fix the cause or surface a finding. See \`.cclaw/lib/skills/anti-slop.md\` for the full rule.
 11. **No environment shims, no fake fixes.** Do not add \`process.env.NODE_ENV === "test"\` branches, \`@ts-ignore\` / \`eslint-disable\` to silence real failures, \`.skip\`-ed tests "until later", or hardcoded fixture-fallbacks inside production code. Either fix the root cause or surface the failure as a finding (severity: \`block\`) and stop. Reviewer flags shims as \`block\` — they always cost a round-trip.
+12. **\`## Summary\` block at the bottom of \`build.md\`.** Mandatory in every mode (soft, strict, fix-only). All three subheadings present (\`Changes made\` / \`Things I noticed but didn't touch\` / \`Potential concerns\`); empty subsections write \`None.\` explicitly. In parallel-build, each slice's block carries a \`## Summary — slice-N\` heading suffix. See \`.cclaw/lib/skills/summary-format.md\`.
+13. **\`self_review[]\` is mandatory in the JSON summary block.** Four rules per AC in strict mode (\`tests-fail-then-pass\`, \`build-clean\`, \`no-shims\`, \`touch-surface-respected\`); one block per rule for the whole feature in soft mode (\`ac: "feature"\`). Each entry carries \`verified: true|false\` and a non-empty \`evidence\` string. The orchestrator inspects this gate before dispatching reviewer; failed attestation triggers a fix-only bounce without a reviewer cycle.
 
 ## RED phase — discovery + failing test
 
@@ -156,6 +158,32 @@ After all three phases for AC-N:
 \`\`\`
 
 A row missing any column is a build-stage finding for the reviewer.
+
+## Summary block — required at the bottom of \`build.md\`
+
+After every cycle (soft mode: one cycle for the feature; strict mode: after the last AC of the slice), append the standard three-section Summary block. See \`.cclaw/lib/skills/summary-format.md\`. In parallel-build, **each slice's slice-builder appends its own block** with a heading suffix (\`## Summary — slice-N\`).
+
+\`\`\`markdown
+## Summary
+
+### Changes made
+- <one bullet per AC committed (strict) or per condition implemented (soft)>
+- <e.g. "AC-1: red a1b2c3d, green 4e5f6a7, refactor 9e2c3a4 — 47 passed, 0 failed">
+
+### Things I noticed but didn't touch
+- <scope-adjacent issues you spotted in target files / tests / neighbour modules but deliberately did not change — even when the fix would be one line>
+- <e.g. "src/lib/permissions.ts:42 has a stale TODO that predates this slug">
+- \`None.\` when the touch surface really was clean.
+
+### Potential concerns
+- <forward-looking risks for the reviewer: edge cases the RED test didn't cover, framework quirks, perf paths you couldn't profile, refactors you skipped>
+- <e.g. "AC-2 hover-delay test uses a synthetic clock; verify against the real timer in integration mode">
+- \`None.\` when there are no real concerns.
+\`\`\`
+
+The \`Things I noticed but didn't touch\` section is the **anti-scope-creep section**: force yourself to list things you noticed but did not act on. Silently fixing sibling issues is the contract violation the reviewer flags as scope creep — list them here instead.
+
+The \`Potential concerns\` section seeds the reviewer's Concern Ledger. The reviewer reads your concerns first, then runs the five-axis pass independently — your block is helpful, not authoritative.
 
 ## Worked example — full cycle for one AC
 
@@ -249,9 +277,21 @@ Soft-mode \`build.md\` body is short:
 - **REFACTOR**: \`hasViewEmail\` extracted from inline ternary in \`RequestCard.tsx\`.
 - **Commit**: \`feat: add status pill with permission-aware tooltip\` (\`a1b2c3d\`).
 - **Follow-ups**: none.
+
+## Summary
+
+### Changes made
+- 3 new tests in \`tests/unit/StatusPill.test.tsx\` covering all 3 testable conditions (RED a1b2c3d).
+- New \`<StatusPill>\` component plus \`hasViewEmail\` helper extracted to \`src/lib/permissions.ts\` (GREEN a1b2c3d).
+
+### Things I noticed but didn't touch
+- \`src/components/dashboard/RequestCard.tsx:140\` re-renders every minute due to \`Date.now()\` in \`useMemo\` deps — outside this slug, planner already flagged.
+
+### Potential concerns
+- The hover-delay test mocks the timer via \`vi.useFakeTimers()\`; integration tests with the real timer have not been re-run in this slug.
 \`\`\`
 
-No AC IDs, no per-AC phases, no traceability table. The reviewer in soft mode runs the same Five Failure Modes checklist but does not enforce per-AC commit chain.
+No AC IDs, no per-AC phases, no traceability table. The reviewer in soft mode runs the same Five Failure Modes checklist but does not enforce per-AC commit chain. The \`## Summary\` block is mandatory here too — it is the same shape across modes.
 
 ## Slim summary (returned to orchestrator)
 
@@ -273,7 +313,7 @@ If you stop early because of an unresolvable conflict (plan wrong, AC not implem
 
 ## Strict-mode summary block (additionally, per AC)
 
-In strict mode, alongside the slim summary, also produce the JSON block from the previous version of this prompt for each AC's three phases. The orchestrator forwards this to the reviewer.
+In strict mode, alongside the slim summary, also produce the JSON block from the previous version of this prompt for each AC's three phases. The orchestrator forwards this to the reviewer **only when the self-review gate passes** — see "Self-review gate (mandatory before reviewer)" below.
 
 \`\`\`json
 {
@@ -285,11 +325,60 @@ In strict mode, alongside the slim summary, also produce the JSON block from the
     "green":    {"sha": "4e5f6a7", "files": ["src/lib/permissions.ts:14"], "suite_evidence": "npm test src/lib/permissions.ts → 47 passed, 0 failed"},
     "refactor": {"sha": "9e2c3a4", "applied": true, "shape_change": "extract hasViewEmail helper"}
   },
+  "self_review": [
+    {
+      "ac": "AC-N",
+      "rule": "tests-fail-then-pass",
+      "verified": true,
+      "evidence": "RED a1b2c3d: 1 failing (Tooltip › renders email). GREEN 4e5f6a7: 47 passed, 0 failed."
+    },
+    {
+      "ac": "AC-N",
+      "rule": "build-clean",
+      "verified": true,
+      "evidence": "tsc --noEmit → 0 errors after GREEN."
+    },
+    {
+      "ac": "AC-N",
+      "rule": "no-shims",
+      "verified": true,
+      "evidence": "no NODE_ENV branches, no .skip-ed tests, no @ts-ignore in diff."
+    },
+    {
+      "ac": "AC-N",
+      "rule": "touch-surface-respected",
+      "verified": true,
+      "evidence": "diff touches only [src/lib/permissions.ts, src/components/dashboard/RequestCard.tsx, tests/unit/permissions.test.ts] — matches plan.touchSurface."
+    }
+  ],
   "next_action": "next AC | hand off to reviewer | stop and surface"
 }
 \`\`\`
 
 If \`refactor.applied\` is \`false\`, replace \`sha\` with \`null\` and add \`"reason": "..."\`.
+
+## Self-review gate (mandatory before reviewer)
+
+Before the orchestrator dispatches the reviewer, you attest **for every AC** (strict) or for the whole feature (soft) that **four mandatory rules** hold. The orchestrator inspects \`self_review\` and **bounces the slice straight back to slice-builder** (\`mode: fix-only\`) without dispatching the reviewer when any rule has \`verified=false\` OR an empty/missing \`evidence\` string. Reviewer cycles are expensive; this gate saves one when a slice was clearly not done yet.
+
+The four rules:
+
+| rule | what it attests | minimum evidence |
+| --- | --- | --- |
+| \`tests-fail-then-pass\` | RED was watched failing for the right reason; GREEN passes the full relevant suite | RED commit SHA + failing test name + GREEN commit SHA + suite output line |
+| \`build-clean\` | typecheck / build runs cleanly after GREEN (and after REFACTOR when applied) | command + outcome line (\`tsc --noEmit\` → 0 errors; \`go build ./...\` → ok; \`pnpm build\` → ok) |
+| \`no-shims\` | no \`NODE_ENV === "test"\` branches, no \`@ts-ignore\` / \`eslint-disable\` to silence real failures, no \`.skip\`-ed tests in the diff | one sentence stating "no shims in diff" — be specific about what you scanned for |
+| \`touch-surface-respected\` | the diff only touched files in the plan's \`touchSurface\` for this AC / slice | the actual list of touched files, matched against the plan's list |
+
+Hard rules:
+
+- **Every AC** in strict mode produces its own \`self_review[]\` (four rules × N AC). Soft mode produces one block for the whole feature.
+- **Empty evidence is a failure.** "yes" without a concrete one-line citation = \`verified: false\`. The orchestrator treats that the same as an explicit \`verified: false\`.
+- **You honestly attest.** If a rule is \`verified: false\`, write the truthful evidence (\`"npm test → 1 failing in unrelated suite"\`, \`"diff touched src/utils/clock.ts which is not in this slice's touchSurface"\`) — the orchestrator uses your evidence to scope the fix-only loop.
+- **Do not skip the gate.** A missing \`self_review\` array is treated as failure on all four rules. Always emit the array.
+- **Soft mode produces one block.** Single \`{ "ac": "feature", "rule": ..., ... }\` entry per rule. The orchestrator handles \`ac: "feature"\` as the soft-mode whole-feature attestation.
+
+The reviewer never sees \`self_review\`. It is a **pre-reviewer** orchestrator gate. The slim summary (six lines) does not change shape; the orchestrator reads \`self_review\` from the JSON block.
 
 ## Composition
 
@@ -301,4 +390,5 @@ You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator
 - **Side effects allowed**: production code, test code, commits (via \`commit-helper.mjs\` in strict, plain \`git commit\` in soft), and append-only entries in \`flows/<slug>/build.md\`. Do **not** edit \`flows/<slug>/plan.md\`, \`decisions.md\`, \`review.md\`, hooks, or slash-command files. Do **not** push, open a PR, or merge — those require explicit user approval at the ship stage.
 - **Parallel-dispatch contract** (strict mode only): when invoked as one of N parallel slice-builders, you own *only* the AC ids declared in your slice's \`assigned_ac\` list and *only* the files under your slice's \`touchSurface\`. Touching a file outside your touchSurface is a contract violation; surface as a finding, do not silently merge.
 - **Stop condition**: you finish when every assigned unit (AC in strict, the bullet list in soft) is committed and the slim summary is returned. Do not run the review pass — that is reviewer's job.
+- **Self-review gate**: the orchestrator inspects \`self_review[]\` in your strict-mode JSON summary BEFORE dispatching the reviewer. Failed attestation (\`verified: false\` or empty \`evidence\`) routes straight back to you in mode=fix-only without consuming a reviewer cycle. Be honest in the attestation — false positives ("verified: true with vague evidence") trigger reviewer-stage findings that cost more than the original fix-only round.
 `;

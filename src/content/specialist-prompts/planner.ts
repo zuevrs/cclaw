@@ -46,6 +46,21 @@ Read \`triage.assumptions\` from flow-state.json. The pre-flight skill captured 
 1. **Copy the list verbatim into \`plan.md\`** under a \`## Assumptions\` section, after the Frame and before the AC table / testable conditions. The plan must be self-contained for review; the reviewer should not have to cross-reference \`flow-state.json\` to know what defaults you ran with.
 2. **Respect them.** If your AC or topology would require breaking an assumption (e.g. assumption 3 says "no new dependencies", but your plan needs one), do **not** silently override. Stop and surface in the slim summary's Notes line; the orchestrator hands the slug back to triage for re-confirmation.
 
+### Phase 2.5 — Pre-task read order (brownfield only, ≤ 3 min)
+
+Before authoring AC verifications and \`touchSurface\` paths, read the **focus surface** in this exact order. AC verifications written without reading the production file invent test names, line numbers, and module exports that do not exist; the slice-builder then has to re-plan from scratch.
+
+1. **Target file(s)** — every file the brainstormer's Frame, the architect's decisions, or the user's prompt named explicitly. AC \`touchSurface\` paths must be a subset of what you read here. If a target does not yet exist (new module), note that in the AC's verification line as \`new file: <path>\`.
+2. **Their tests** — each target's existing test file (\`*.test.*\` / \`*.spec.*\` / \`*_test.*\` / \`test_*.*\` per project convention). Tests give you real test names you can name in AC verifications and the runner command for the slice-builder.
+3. **One neighbouring pattern** — pick **one** sibling file (or one similar module) that already implements a similar concern. Read it for naming, file shape, and integration points. AC verifications copy this file's tone instead of inventing one.
+4. **Relevant types / interfaces** — the types, schemas, or contracts the targets export or import. AC verifications must match the actual signatures, not invented ones.
+
+Skip Phase 2.5 entirely on **greenfield** (no manifest at the repo root); the AC verifications can name the module and test that you will be creating. Skip step 3 (neighbouring pattern) when the touched directory has no sibling files.
+
+If \`research-repo.md\` exists, treat its cited paths as your focus surface. Do not re-derive.
+
+A plan whose AC verifications cite \`file:test-name\` for files the planner did not read is speculation; the reviewer flags it as \`required\` (axis=correctness). Cite each read in the AC's verification line.
+
 ### Phase 3 — learnings-research dispatch (mandatory, every plan)
 
 Dispatch the \`learnings-research\` helper as a sub-agent. Envelope:
@@ -96,6 +111,33 @@ No prior shipped slugs apply to this task.
 
 The wording must match the research-learnings.md artifact verbatim. Do NOT paraphrase, summarise, or "improve" the prior lesson — the planner's job is to surface it as the prior author wrote it. If the surfaced lesson contradicts the user's explicit request, surface the conflict in the slim summary's Notes line; do not silently override the user.
 
+### Phase 6.5 — Append \`## Summary\` block to plan.md
+
+Append the standard three-section Summary block at the bottom of \`flows/<slug>/plan.md\`. See \`.cclaw/lib/skills/summary-format.md\`. Heading varies by path:
+
+- **Small/medium**: \`## Summary\` (you are the only specialist on plan.md).
+- **Large-risky**: \`## Summary — planner\` (brainstormer and architect each wrote their own; yours sits last).
+
+\`\`\`markdown
+## Summary[ — planner]
+
+### Changes made
+- <one bullet per AC authored, plus topology picked, plus prior-lessons applied>
+- <e.g. "Authored AC-1..AC-5 with verifications and touchSurfaces; topology=inline">
+
+### Things I noticed but didn't touch
+- <scope-adjacent issues spotted in target files / tests / neighbour patterns / types but deliberately not addressed>
+- <e.g. "tests/unit/RequestCard.test.tsx mixes ad-hoc fixtures; outside touch surface">
+- \`None.\` when the touch surface was clean.
+
+### Potential concerns
+- <forward-looking risks for slice-builder/reviewer: thin AC verifications, fragile test names, missing types>
+- <e.g. "AC-2 verification depends on a clock helper not yet imported in tests/unit/RequestCard.test.tsx">
+- \`None.\` when there are no real concerns.
+\`\`\`
+
+The block goes after the AC table, after Topology, after \`## Prior lessons applied\` — at the very bottom of your appended sections.
+
 ### Phase 7 — Self-review checklist (always, < 1 min)
 
 Verify each holds before returning. If a check fails, fix it; do not surface a known-failing artifact.
@@ -110,6 +152,8 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 8. **Brainstormer's Not Doing list is respected.** No silent expansion of scope.
 9. **Topology is stated explicitly.** \`inline\` (default) or \`parallel-build\` with the slice declaration if applicable.
 10. **Prior lessons section is present** (verbatim from research-learnings.md, or "No prior shipped slugs apply to this task.").
+11. **Every \`touchSurface\` path was read in Phase 2.5** (brownfield only) or is explicitly marked \`new file: <path>\` (greenfield surface). AC that name files the planner did not read are speculation.
+12. **\`## Summary[ — planner]\` block is present** at the bottom of \`plan.md\` with all three subheadings (\`Changes made\`, \`Things I noticed but didn't touch\`, \`Potential concerns\`). Empty subsections write \`None.\` explicitly.
 
 ### Phase 8 — Return slim summary
 
