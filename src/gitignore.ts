@@ -14,12 +14,16 @@ import { exists, writeFileSafe } from "./fs-utils.js";
  * - `.cclaw/worktrees/` — transient git worktrees created by the
  *   parallel-build pattern. These already contain regular checked-out trees;
  *   never commit them as nested data.
+ * - `.cclaw/cache/` — local-only fetch cache for the source-driven skill
+ *   (HTML bodies, ETag, Last-Modified). Re-derivable from the original URLs;
+ *   never useful to commit.
  */
 const SECTION_HEADER = "# cclaw transient state";
 export const REQUIRED_GITIGNORE_PATTERNS = [
   SECTION_HEADER,
   ".cclaw/state/",
-  ".cclaw/worktrees/"
+  ".cclaw/worktrees/",
+  ".cclaw/cache/"
 ] as const;
 
 function gitignorePath(projectRoot: string): string {

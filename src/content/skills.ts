@@ -1352,13 +1352,56 @@ If a version is missing or ambiguous (e.g. \`"react": "^19.0.0"\`, lockfile pinn
 
 Fetch the **deep link** for the specific feature in scope. Not the homepage. Not the search result. Not "the React docs".
 
+#### Cache lookup before fetch (mandatory)
+
+cclaw keeps a local fetch cache at \`.cclaw/cache/sdd/<host>/<url-path>.{html,etag,last-modified}\`. The cache is gitignored and per-project. Behaviour:
+
+\`\`\`
+url = https://react.dev/reference/react/useActionState
+
+cache key  = .cclaw/cache/sdd/react.dev/reference/react/useActionState
+
+files:
+  .cclaw/cache/sdd/react.dev/reference/react/useActionState.html
+  .cclaw/cache/sdd/react.dev/reference/react/useActionState.etag           (optional)
+  .cclaw/cache/sdd/react.dev/reference/react/useActionState.last-modified  (optional)
+\`\`\`
+
+For every URL you would fetch:
+
+1. **Compute the cache key** from the URL host and path. Drop the query string only when it is purely tracking (utm_*, gclid, fbclid). Keep documentation-meaningful query like \`?v=18\` or \`#useActionState-with-form\` (anchors are part of the URL but never affect cache key — they are page-internal).
+2. **Cache hit, no validators on disk:** if the \`.html\` file exists and is < 24h old, **use it directly**. No network. Do not refetch.
+3. **Cache hit, validators present (any age):** issue a conditional GET with \`If-None-Match: <etag>\` and/or \`If-Modified-Since: <last-modified>\`. On \`304 Not Modified\`, use the cached body. On \`200\`, replace the cached body and validators atomically.
+4. **Cache miss:** fetch normally. Save the response body to \`<key>.html\` and the validator headers to \`<key>.etag\` / \`<key>.last-modified\` if the response provided them. Set the file mtime to now (treated as the cache's "fetched_at").
+5. **Network unavailable / 4xx / 5xx:** if a cached body exists, use it and add a \`stale-cache\` line to the artifact's \`sources:\` block. If no cached body, mark the citation \`UNVERIFIED\` and continue (see "UNVERIFIED marker" below).
+
+The cache is a **per-project** courtesy, not a global mirror. Every project that uses cclaw has its own cache; the cache is also gitignored (a duplicate fetch from a teammate is a few hundred kB, not a real cost).
+
+The harness's web-fetch tool (or \`user-context7\` MCP) is the network layer; cclaw layers the cache on top. When the harness has \`user-context7\`, the resolved doc URL is the cache key (Context7 returns canonical URLs).
+
+Cite the cached file alongside the URL in the \`sources:\` block:
+
+\`\`\`yaml
+sources:
+  - url: https://react.dev/reference/react/useActionState#usage
+    used_for: AC-1 (form submission state pattern)
+    fetched_at: 2026-05-08T22:45Z
+    cache_path: .cclaw/cache/sdd/react.dev/reference/react/useActionState.html
+    cache_status: hit-fresh   # one of: hit-fresh | hit-revalidated | miss-fetched | stale-cache
+    version: react@19.1.0
+\`\`\`
+
+The reviewer treats \`cache_status: stale-cache\` as a finding (axis=correctness, severity=consider) — the user should confirm the doc is still current.
+
+#### Source hierarchy
+
 | Bad | Good |
 | --- | --- |
 | \`react.dev\` | \`react.dev/reference/react/useActionState#usage\` |
 | "search Django auth" | \`docs.djangoproject.com/en/6.0/topics/auth/\` |
 | StackOverflow answer | \`react.dev/blog/2024/12/05/react-19#actions\` |
 
-**Source hierarchy** (in order of authority):
+#### Source hierarchy (in order of authority)
 
 1. Official documentation for the detected version (\`react.dev\`, \`docs.djangoproject.com\`, \`symfony.com/doc\`).
 2. Official blog / changelog (\`react.dev/blog\`, \`nextjs.org/blog\`).
@@ -1398,17 +1441,21 @@ Do not silently adopt one. The user picks; the decision goes in \`decisions.md\`
 
 Every framework-specific decision gets a citation. The user must be able to verify every choice without trusting the agent's memory.
 
-In **plan.md** / **decisions.md**, include a \`sources:\` block under the relevant AC or decision:
+In **plan.md** / **decisions.md**, include a \`sources:\` block under the relevant AC or decision. Each entry includes the cache fields from Step 2 — they make the source-driven trail reproducible offline:
 
 \`\`\`yaml
 sources:
   - url: https://react.dev/reference/react/useActionState#usage
     used_for: AC-1 (form submission state pattern)
     fetched_at: 2026-05-08T22:45Z
+    cache_path: .cclaw/cache/sdd/react.dev/reference/react/useActionState.html
+    cache_status: miss-fetched
     version: react@19.1.0
   - url: https://react.dev/blog/2024/12/05/react-19#actions
     used_for: D-1 (rationale for picking useActionState over manual useState)
     fetched_at: 2026-05-08T22:46Z
+    cache_path: .cclaw/cache/sdd/react.dev/blog/2024/12/05/react-19.html
+    cache_status: hit-fresh
     version: react@19.x
 \`\`\`
 
@@ -1484,6 +1531,325 @@ After implementing under \`source_driven\`:
 - [ ] Non-trivial decisions include a \`sources\` block with full URL.
 - [ ] Conflicts between docs and existing project code surfaced to the user.
 - [ ] Anything unverifiable marked \`UNVERIFIED:\` explicitly.
+`;
+
+const SUMMARY_FORMAT = `---
+name: summary-format
+trigger: every authored cclaw artifact (plan.md, decisions.md, build.md, review.md, ship.md, learnings.md). Always-on for any specialist that writes one of those files.
+---
+
+# Skill: summary-format
+
+Every cclaw artifact ends with a **standardised three-section Summary block**. The slim summary the specialist returns to the orchestrator stays terse (≤6 lines); the Summary block in the artifact is the **durable record** of what changed and what didn't.
+
+The three-section shape is taken directly from the addyosmani-skills git-workflow standard: it surfaces scope creep and uncertainty *to the next reader*, instead of relying on memory or clean-up passes that never happen.
+
+## Format
+
+Append exactly this block to the bottom of the artifact you authored. Do not rename the headings, do not add other sections inside it, do not reorder them.
+
+\`\`\`markdown
+## Summary
+
+### Changes made
+- <one bullet per concrete change you committed to this artifact, in plain past tense>
+- <e.g. "Added AC-3 covering the empty-permission fallback path">
+- <e.g. "Recorded D-2 selecting in-process BM25; rejected vector store as out of scope">
+
+### Things I noticed but didn't touch
+- <one bullet per scope-adjacent issue you spotted but deliberately did NOT change>
+- <e.g. "src/lib/permissions.ts:42 has a stale TODO that predates this slug">
+- <e.g. "tests/unit/RequestCard.test.tsx mixes fixture data; outside touch surface">
+- if there is nothing, write \`None.\` — explicit empty is correct, blank is wrong.
+
+### Potential concerns
+- <one bullet per uncertainty, missing input, or risk the next stage / next reader should weigh>
+- <e.g. "AC-2 verification depends on a clock helper not yet imported in the test file">
+- <e.g. "Migration step in D-1 may interact with the seed script — flagged for security-reviewer">
+- if there is nothing, write \`None.\`.
+\`\`\`
+
+The block goes at the very bottom of the artifact, after the body, after any worked examples, after any prior-iteration material. One block per artifact write. Multi-author files (plan.md on large-risky) get **one Summary per author**, with a heading suffix:
+
+\`\`\`markdown
+## Summary — brainstormer
+### Changes made
+...
+## Summary — architect
+### Changes made
+...
+## Summary — planner
+### Changes made
+...
+\`\`\`
+
+This way the next reader sees who wrote what and can attribute the "Things I noticed" / "Potential concerns" to the right specialist.
+
+## What goes in each section
+
+### \`Changes made\`
+
+Plain past-tense bullets. **Concrete**, not "implemented the plan". Each bullet is a thing a reviewer can verify in the diff or in the artifact. AC ids, D-N ids, F-N ids, file paths, commit shas — citations welcome.
+
+### \`Things I noticed but didn't touch\`
+
+This is the **anti-scope-creep section**. Force yourself to list the things you *chose not to fix while you were nearby*. Stale TODOs, unrelated bugs, sibling-file issues, tests that pass but feel wrong, dead code, mismatched naming.
+
+The point is to **resist the urge to fix everything** — surface it here so the next slug owner can decide. A specialist that silently fixed sibling issues is a specialist that broke scope discipline; the reviewer flags that.
+
+If the touch surface really was clean, write \`None.\` (one word + period). Do not invent items to fill the section.
+
+### \`Potential concerns\`
+
+Forward-looking. What might bite the **next stage** or **the user**? Uncertainties, partial coverage, untested edges, decisions you made under low confidence, dependencies on external systems, migration footguns.
+
+Drop \`Confidence: low\` items here verbatim with a one-line cause. The reviewer can use this section to seed the Concern Ledger.
+
+If there are no real concerns, write \`None.\` and own it.
+
+## Hard rules
+
+- **All three subheadings present.** Even when one is empty, the H3 heading + \`None.\` line stays. Skipping a subheading is a finding (reviewer axis=readability, severity=consider).
+- **No prose paragraphs in the block.** Bullets only. The block is read fast; paragraphs are read slow.
+- **No new findings here.** If you have a finding, surface it in the slim summary and (if reviewer) in the Concern Ledger. The Summary block is reflective, not active.
+- **No fabrication.** \`Things I noticed but didn't touch\` is not the place to invent improvements you didn't actually consider; it is the place to record the ones you did.
+- **No copy-paste between artifacts.** Each artifact's Summary block is unique to that artifact's authorship.
+
+## Specialist contracts
+
+| Specialist | Block goes in |
+| --- | --- |
+| \`brainstormer\` | \`flows/<slug>/plan.md\` (heading: \`## Summary — brainstormer\`) |
+| \`architect\` | \`flows/<slug>/decisions.md\` (heading: \`## Summary\`); also \`flows/<slug>/plan.md\` Architecture subsection if you wrote one (heading: \`## Summary — architect\`) |
+| \`planner\` | \`flows/<slug>/plan.md\` (heading: \`## Summary — planner\` on large-risky; \`## Summary\` on small/medium) |
+| \`slice-builder\` | \`flows/<slug>/build.md\` (heading: \`## Summary\` per cycle in soft mode; per fix-iteration in fix-only mode; per slice in parallel-build) |
+| \`reviewer\` | \`flows/<slug>/review.md\` per iteration (heading: \`## Summary — iteration N\`) — sits right above the next iteration block |
+| \`security-reviewer\` | \`flows/<slug>/review.md\` security section (heading: \`## Summary — security\`) |
+| ship synthesis | \`flows/<slug>/ship.md\` (heading: \`## Summary\`) |
+
+## Common pitfalls
+
+- Filling \`Changes made\` with implementation details copied from the body. The body is the body; the Summary is the executive view.
+- Skipping \`Things I noticed but didn't touch\` because "I did everything that needed doing". This is the section that catches scope drift before it ships.
+- Using \`Potential concerns\` as a TODO list. It is a risk register, not a backlog. Concrete, future-tense risks only.
+- Multi-author plan.md getting one combined Summary at the end. Each author writes their own.
+
+## Worked example — planner Summary on small/medium
+
+\`\`\`markdown
+## Summary
+
+### Changes made
+- Authored 3 AC covering the dashboard tooltip behaviour: AC-1 (renders email when permitted), AC-2 (250ms hover), AC-3 (display-name fallback).
+- Pinned touch surface to 3 files: \`src/lib/permissions.ts\`, \`src/components/dashboard/RequestCard.tsx\`, \`tests/unit/RequestCard.test.tsx\`.
+- Recorded prior lesson from \`shipped/dashboard-status-pill\` (verbatim quote in \`## Prior lessons applied\`).
+
+### Things I noticed but didn't touch
+- \`src/components/dashboard/RequestCard.tsx:140\` has a \`useMemo\` whose deps include \`Date.now()\` — re-renders every minute. Outside this slug's AC; flagging in case slice-builder or reviewer wants to surface as a follow-up.
+- \`tests/unit/RequestCard.test.tsx\` uses ad-hoc fixtures instead of \`makeUserFixture()\`; same pattern as a prior shipped slug. Not in scope here.
+
+### Potential concerns
+- AC-1 verification depends on the \`hasViewEmail\` helper not yet existing; slice-builder will create it. RED test must fail because the export is missing, not because of an import error.
+- The 250ms token in AC-2 lives in \`src/styles/tokens.css\`, not in JS. If slice-builder reads the value from JS state instead of the CSS token, AC-2 is a flake risk.
+\`\`\`
+`;
+
+const DOCUMENTATION_AND_ADRS = `---
+name: documentation-and-adrs
+trigger: when architect picks tier=product-grade or tier=ideal AND a D-N introduces a public interface, persistence shape, security boundary, or new dependency; on ship, when an ADR with status=PROPOSED exists for the slug
+---
+
+# Skill: documentation-and-adrs
+
+A repo-wide **Architecture Decision Record (ADR) catalogue** lives at \`docs/decisions/\`. ADRs outlive flows: \`decisions.md\` is per-slug and gets archived to \`shipped/<slug>/decisions.md\` after Hop 6, but ADRs are durable, repo-scoped, and indexed by sequential numbers. The catalogue is what new contributors and future agents read to understand **why** the codebase looks the way it does.
+
+ADRs are NOT a replacement for per-slug \`decisions.md\` — they are the **promoted subset** that has cross-flow durability. Architect writes both: full \`D-N\` records in the slug's \`decisions.md\` (rationale, options, pre-mortem, refs); a thinner ADR pointing back to the slug for the long-term catalogue.
+
+## When to write an ADR (not every D-N becomes one)
+
+Write an ADR when **any** of these hold:
+
+| Trigger | Why this needs durable record |
+| --- | --- |
+| New public interface (exported function, REST endpoint, schema, queue contract) | Future maintainers need to know why the shape was chosen |
+| Persistence shape change (column type, index strategy, NoSQL doc layout) | Migrations and forks depend on this being explicit |
+| Security boundary (authn/authz model, data classification, secret rotation) | Audits will ask "why" and the per-slug doc is gone in 6 months |
+| New runtime dependency (npm/pip/go module added beyond test/build tooling) | Cost/maintenance trade-off was made; record it |
+| Architectural pattern adopted or rejected (CQRS, event sourcing, monolith vs split) | Repeats every two years if not pinned |
+| User-explicit \`/cc <task> --adr\` flag | The user wants a durable record |
+
+Do **not** write an ADR for:
+
+- Internal refactors with no public surface change.
+- Bug fixes that preserve the public contract.
+- Per-feature implementation choices that any other team could trivially redo (e.g. "which CSS class names to use for this badge").
+- One-off scripts and benchmarks.
+
+If in doubt: per-slug \`decisions.md\` is enough.
+
+## File layout
+
+\`\`\`
+docs/
+  decisions/
+    README.md                        ← optional index; auto-generated or hand-curated
+    ADR-0001-bm25-search-ranking.md
+    ADR-0002-feature-flag-rollout-strategy.md
+    ADR-0003-postgres-jsonb-vs-separate-table.md
+    ...
+\`\`\`
+
+Numbering is **sequential**, zero-padded to 4 digits, and starts at 1. Numbers are never reused (even if an ADR is superseded). The slug in the filename mirrors the cclaw flow slug when there is one — that is how ADR ↔ slug ↔ \`decisions.md\` cross-reference each other.
+
+## Lifecycle
+
+\`\`\`
+PROPOSED  ──→  ACCEPTED  ──→  (sometimes)  SUPERSEDED
+   │                                          ▲
+   │                                          │
+   └─→ REJECTED (closed without action) ──────┘ (rarely)
+\`\`\`
+
+| Status | Who sets it | When |
+| --- | --- | --- |
+| \`PROPOSED\` | architect | At decision time, when the D-N triggers an ADR. The ADR ships with \`status: PROPOSED\` so reviewers can see the proposed-not-yet-accepted state. |
+| \`ACCEPTED\` | orchestrator (Hop 6 finalize) | After the slug ships successfully (\`flows/<slug>/ship.md\` had \`status: shipped\`). The ADR is updated in place: \`status: ACCEPTED\`, plus an \`accepted_at: <iso>\` and the shipping \`commit:\` SHA. |
+| \`SUPERSEDED\` | a future architect | When a later slug introduces a new ADR that replaces this one. The new ADR's \`Supersedes\` field cites the old ADR id; the old ADR is updated in place to \`SUPERSEDED\` with a \`superseded_by: ADR-NNNN\` line. |
+| \`REJECTED\` | architect or user | When the slug is cancelled with \`/cc-cancel\` after the ADR was already proposed, or when the user explicitly says "we're not doing this". The ADR is kept (numbers don't get reused) with \`status: REJECTED\` and a one-line \`rejected_because\`. |
+
+ADRs are never **deleted**. The whole point of the catalogue is that even abandoned decisions remain searchable.
+
+## ADR template (architect writes this)
+
+\`\`\`markdown
+---
+adr: ADR-NNNN
+title: <short title in present tense, e.g. "Use BM25 for in-process search ranking">
+status: PROPOSED
+proposed_at: <iso-timestamp>
+proposed_by_slug: <cclaw-slug-or-empty>
+supersedes: <ADR-XXXX or empty>
+superseded_by: <empty until superseded>
+tags: [search, ranking, performance]
+---
+
+# ADR-NNNN — <title>
+
+## Status
+
+PROPOSED — proposed by cclaw slug \`<slug>\` on <date>. Will be promoted to ACCEPTED on successful ship; otherwise REJECTED.
+
+## Context
+
+<2-4 sentences. What forced this decision? Cite the slug's plan.md / decisions.md for the long form. Do not duplicate the rationale here.>
+
+## Decision
+
+<One paragraph. The chosen option, in present tense ("We use BM25..."). No rationale; the rationale lives in the slug's decisions.md.>
+
+## Consequences
+
+- **What becomes easier**: <one bullet>
+- **What becomes harder**: <one bullet>
+- **What we will revisit**: <one bullet, with a trigger condition>
+
+## References
+
+- cclaw slug: \`flows/<slug>/decisions.md#D-N\` (full rationale)
+- Code: \`src/server/search/scoring.ts\` (primary touch site)
+- External: <official docs URL if the decision rests on framework behaviour>
+\`\`\`
+
+The ADR is **deliberately thinner** than \`decisions.md\`. It is the executive summary — Status, Context, Decision, Consequences, References. Anyone who needs more reads the linked \`decisions.md\` (which lives in \`flows/shipped/<slug>/\` after Hop 6).
+
+## Architect's contract
+
+When architect picks tier=\`product-grade\` or \`ideal\` AND any \`D-N\` matches a "When to write an ADR" trigger:
+
+1. Pick the next sequential ADR number. Read \`docs/decisions/\` to find the highest existing number.
+2. Write \`docs/decisions/ADR-NNNN-<slug>.md\` from the template, status \`PROPOSED\`.
+3. Add a line to the \`D-N\` Refs in the slug's \`decisions.md\`: \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\`.
+4. Mention the ADR id in the slim summary's \`What changed\` line.
+
+Architect does **not** mark the ADR \`ACCEPTED\` themselves — that is the orchestrator's job after a successful ship.
+
+## Orchestrator's contract — promotion at Hop 6
+
+After Hop 5 (compound) and before / during Hop 6 (finalize):
+
+1. Scan \`flows/<slug>/decisions.md\` for any \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` line.
+2. For each found ADR file, edit in place:
+   - \`status: PROPOSED\` → \`status: ACCEPTED\`
+   - Add \`accepted_at: <iso-timestamp>\` after \`proposed_at\`
+   - Add \`accepted_in_slug: <slug>\` (same as proposed_by_slug; explicit for grep)
+   - Add \`accepted_at_commit: <ship-commit-sha>\` (the merge SHA the orchestrator just produced)
+3. Commit the ADR promotion with message \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. This commit is **part of Hop 6**, alongside the \`git mv\` of flow artifacts to \`shipped/\`.
+
+If the slug is cancelled (\`/cc-cancel\`) instead of shipped:
+
+1. For each PROPOSED ADR tied to the slug, edit \`status: PROPOSED\` → \`status: REJECTED\`, add \`rejected_at: <iso>\`, add \`rejected_because: cancelled (no ship)\`.
+2. Commit the ADR rejection with \`docs(adr-NNNN): mark REJECTED — slug <slug> cancelled\`.
+
+## Supersession
+
+When a later architect's decision **replaces** an earlier ADR's choice:
+
+1. The new ADR is written normally, with \`supersedes: ADR-XXXX\` in its frontmatter.
+2. After the new ADR's slug ships, Hop 6 also edits the **old** ADR in place: \`status: ACCEPTED\` → \`status: SUPERSEDED\`, add \`superseded_by: ADR-NNNN\`, add \`superseded_at: <iso>\`. The old ADR's body is **not** rewritten; the catalogue keeps history.
+
+The reviewer (in \`text-review\` mode) flags any new ADR that proposes a decision contradicting an active ACCEPTED ADR but does not declare \`supersedes:\` — that is a logic gap, not an oversight.
+
+## Reviewer's contract
+
+In \`text-review\` mode (when ship.md is being reviewed pre-finalize), the reviewer:
+
+- Verifies that every D-N in the slug's \`decisions.md\` that matches an "ADR trigger" has a corresponding \`docs/decisions/ADR-NNNN-<slug>.md\` file with status \`PROPOSED\`.
+- Verifies that no ADR status was set to \`ACCEPTED\` by the architect (only orchestrator may do that).
+- Flags missing ADRs as axis=architecture, severity=\`required\` in strict mode (\`consider\` in soft).
+
+## Worked example
+
+Slug \`bm25-ranking\` (large-risky, strict, tier=product-grade) ships with one D-N about BM25.
+
+Architect writes \`flows/bm25-ranking/decisions.md\`:
+
+\`\`\`markdown
+## D-1 — Pick BM25 over plain TF for search ranking
+- ...
+- **Refs:** src/server/search/scoring.ts:1, AC-2, ADR: docs/decisions/ADR-0017-bm25-search-ranking.md (PROPOSED)
+\`\`\`
+
+Architect writes \`docs/decisions/ADR-0017-bm25-search-ranking.md\` with \`status: PROPOSED\`.
+
+Slug ships successfully. Hop 6 runs:
+
+1. \`git mv flows/bm25-ranking/* flows/shipped/bm25-ranking/\` (existing v8.5 behaviour).
+2. Edit \`docs/decisions/ADR-0017-bm25-search-ranking.md\`: \`status: ACCEPTED\`, add \`accepted_at\`, \`accepted_at_commit\`.
+3. \`git commit -m "docs(adr-0017): promote to ACCEPTED via bm25-ranking"\`.
+
+Six months later, slug \`vector-search\` introduces ADR-0042 with \`supersedes: ADR-0017\`. After \`vector-search\` ships, Hop 6 also edits ADR-0017: \`status: ACCEPTED\` → \`status: SUPERSEDED\`, \`superseded_by: ADR-0042\`.
+
+## Common pitfalls
+
+- Writing an ADR for every \`D-N\`. The catalogue swamps the \`decisions/\` folder with internal trade-offs nobody else will care about. Use the trigger table.
+- Putting full rationale in the ADR. The rationale lives in \`decisions.md\` (which is archived). The ADR is the executive summary.
+- Architect setting \`status: ACCEPTED\` directly. Only the orchestrator does that, and only after a successful ship. Architect always proposes.
+- Renumbering ADRs. Numbers are forever; even REJECTED ADRs keep their number (the gap is a feature: it tells you a decision was considered and dropped).
+- Writing one ADR per file in the change. One ADR captures **the decision**, not the changes the decision implies.
+- Forgetting to cite the slug. The ADR's \`References\` block must point to the slug's archived \`decisions.md\`. Without that link, the ADR is decontextualised in three months.
+
+## Catalogue index (optional, useful)
+
+If \`docs/decisions/README.md\` exists, the orchestrator appends one row per promoted/superseded ADR after Hop 6:
+
+\`\`\`markdown
+| ADR | Title | Status | Slug | Last update |
+| --- | --- | --- | --- | --- |
+| 0017 | Use BM25 for in-process search ranking | SUPERSEDED | bm25-ranking | 2026-11-12 |
+| 0042 | Switch to vector search via pgvector | ACCEPTED | vector-search | 2026-11-12 |
+\`\`\`
+
+If the index does not exist, do not create it. The catalogue works fine as a flat folder; an index is a courtesy, not a requirement.
 `;
 
 export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
@@ -1605,5 +1971,36 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     description: "Detect stack + versions from manifest, fetch official documentation deep-links, implement against documented patterns, cite URLs in plan/decisions/code. Default in strict mode for framework-specific work.",
     triggers: ["ac_mode:strict", "specialist:planner", "specialist:architect", "framework-specific-code-detected"],
     body: SOURCE_DRIVEN
+  },
+  {
+    id: "summary-format",
+    fileName: "summary-format.md",
+    description: "Standard three-section ## Summary block (Changes made / Things I noticed but didn't touch / Potential concerns) appended to every authored artifact. Forces specialists to surface scope-creep candidates and forward-looking risks instead of silently fixing-while-nearby.",
+    triggers: [
+      "always-on",
+      "edit:.cclaw/flows/*/plan.md",
+      "edit:.cclaw/flows/*/decisions.md",
+      "edit:.cclaw/flows/*/build.md",
+      "edit:.cclaw/flows/*/review.md",
+      "edit:.cclaw/flows/*/ship.md",
+      "edit:.cclaw/flows/*/learnings.md"
+    ],
+    body: SUMMARY_FORMAT
+  },
+  {
+    id: "documentation-and-adrs",
+    fileName: "documentation-and-adrs.md",
+    description: "Repo-wide ADR catalogue at docs/decisions/ADR-NNNN-<slug>.md. Architect proposes (PROPOSED); orchestrator promotes to ACCEPTED at Hop 6 after ship; supersession is in-place. Triggers on tier=product-grade or ideal when a D-N introduces a public interface, persistence shape, security boundary, or new dependency.",
+    triggers: [
+      "specialist:architect",
+      "tier:product-grade",
+      "tier:ideal",
+      "stage:ship",
+      "decision:public-interface",
+      "decision:persistence-shape",
+      "decision:security-boundary",
+      "decision:new-dependency"
+    ],
+    body: DOCUMENTATION_AND_ADRS
   }
 ];

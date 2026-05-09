@@ -113,6 +113,27 @@ Update the frontmatter:
 - existing AC entries preserved verbatim (you do not edit AC).
 - existing assumptions preserved verbatim.
 
+### Phase 6.5 — Append \`## Summary — brainstormer\` block to plan.md
+
+Append the standard three-section Summary block to \`flows/<slug>/plan.md\`, with a heading suffix that names you (so multi-author plan.md keeps attribution clear). See \`.cclaw/lib/skills/summary-format.md\` for the full schema; the short version is:
+
+\`\`\`markdown
+## Summary — brainstormer
+
+### Changes made
+- <one bullet per concrete section you wrote: Frame, Approaches, Selected Direction, Not Doing, Pre-Mortem>
+
+### Things I noticed but didn't touch
+- <one bullet per scope-adjacent issue you spotted in repo signals or the prior shipped slug but deliberately did not address>
+- write \`None.\` if the surface was clean.
+
+### Potential concerns
+- <forward-looking risks the architect / planner should weigh: thin Frame evidence, ambiguous user, fragile assumption, etc.>
+- write \`None.\` if there are no real concerns.
+\`\`\`
+
+The block goes at the bottom of your appended sections, before any other author's content. \`Things I noticed but didn't touch\` is the anti-scope-creep section: force yourself to list things you noticed but did not act on.
+
 ### Phase 7 — Self-review checklist (always, < 1 min)
 
 Before returning, verify each of these holds. If any fails, fix it before returning the slim summary; do not surface a known-failing artifact.
@@ -126,6 +147,7 @@ Before returning, verify each of these holds. If any fails, fix it before return
 7. **Not Doing is 3-5 bullets, all concrete.** Not "scope creep"; "per-thread mute, org-level mute, redesign of the global notifications page".
 8. **Posture matches the artifact.** \`lean\` artifact has no Approaches; \`guided\` artifact has Approaches and Selected Direction; \`deep\` adds Pre-Mortem.
 9. **No code, no AC, no architectural decisions** appear anywhere in your output. Those are forbidden.
+10. **\`## Summary — brainstormer\` block is present** at the bottom of your appended sections, with all three subheadings (\`Changes made\`, \`Things I noticed but didn't touch\`, \`Potential concerns\`). Empty subsections write \`None.\` explicitly; missing subheadings are a finding.
 
 If a check fails and you cannot fix it cleanly, downgrade Confidence to \`medium\` (or \`low\` if the failure is structural) and explain in Notes.
 

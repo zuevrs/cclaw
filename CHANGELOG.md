@@ -1,5 +1,107 @@
 # Changelog
 
+## 8.6.0 — Three-section summary, anti-sycophancy reviewer, self-review gate, ADR catalogue, SDD doc cache, mandatory pre-task read order
+
+### Why
+
+Two reference libraries — `addyosmani-skills` and `chachamaru127-claude-code-harness` — pointed at six concrete weaknesses 8.5 still carried even after the Hop 6 / contract-first / discovery cleanup:
+
+1. **Specialist artifacts had no standard "I'm done" footer.** Each plan, build, review, and decisions file ended differently. Hand-offs lost track of "what was actually changed in this artifact, what was noticed-but-skipped, and what the author is still uncertain about". `addyosmani-skills`'s "Summary" block carries those three sections in one place.
+2. **The reviewer found bugs but never said what was good.** Iteration outputs were a wall of findings; a clean diff and an axed-up diff rendered with the same shape. There was no anti-sycophancy contract — a real pass got the same template as a barely-passing one.
+3. **The reviewer never attested to "I actually ran the tests".** Verification was implicit: the prompt said "run tests / build / security pre-screen", but the artifact didn't have to surface a yes/no plus evidence. Skipped checks were invisible.
+4. **Slice-builder returns went straight to the reviewer even when work was incomplete.** A "tests passed but I didn't run the build" build still cost a full reviewer dispatch to bounce back. There was no pre-review gate where the slice-builder attests to its own work.
+5. **Architectural decisions died inside flows.** `decisions.md` lived in `flows/<slug>/` and was archived to `flows/shipped/<slug>/decisions.md` after ship. There was no repo-wide catalogue. Anyone wanting "what's the canonical reason we use Postgres + pgvector for embeddings" had to hunt through shipped slugs.
+6. **Source-driven mode re-fetched the same docs every flow.** A 12-flow project hitting React 19 docs paid the network cost 12 times. There was no cache, no etag/last-modified handling, no freshness rule.
+7. **Architects and planners authored without a forced "look at the code first" step.** Phase 2.5 in 8.5 said "consider repo-research"; nothing said "before you propose a change to `src/auth/session.ts`, you MUST have read the file, its tests, the neighbour pattern, and the types".
+
+### What changed
+
+**A2 — Three-section Summary block in every primary artifact.** A new always-on skill `summary-format.md` defines the canonical block. Every specialist that authors a primary artifact (`plan.md`, `decisions.md`, `build.md`, `review.md`) now ends it with:
+
+```
+## Summary — <specialist>[ — iteration N]
+### Changes made
+- <one bullet per concrete change committed to this artifact, in past tense>
+### Noticed but didn't touch
+- <one bullet per finding/observation outside the artifact's scope>
+### Potential concerns
+- <one bullet per uncertainty, assumption-at-risk, or follow-up worth surfacing>
+```
+
+The skill is wired into the always-on autoload set and triggered by edits to plan / build / review / decisions files. Brainstormer, architect, planner, slice-builder, and reviewer all gained a phase that authors this block before returning, plus a self-review check that the block is present and non-empty. Reviewer adds one block per iteration (`## Summary — iteration 1`, `## Summary — iteration 2`, etc.). Closes weakness #1.
+
+**A3 — Anti-sycophancy reviewer + verification story (mandatory).** Reviewer's iteration output now carries two new sections in addition to findings:
+
+- `### What's done well` — at least one evidence-backed item per iteration. Format: `- <claim> — Evidence: <file:line | diff hunk | test name | manifest path>`. The reviewer prompt explicitly forbids generic praise ("looks clean", "well-structured", "good naming"); every item must cite a specific path:line or hunk and explain *why* it's done well in one sentence. Iterations with zero `What's done well` bullets are treated as a contract violation.
+- `### Verification story` — three explicit yes/no rows the reviewer must answer before any finding is recorded:
+  - `- Tests run: <yes | no> — <which suite, exit code or pass count, evidence>`
+  - `- Build/typecheck run: <yes | no> — <which command, evidence>`
+  - `- Security pre-screen run: <yes | no> — <which checks, evidence>`
+
+`no` is a valid answer when a category truly doesn't apply (e.g. docs-only diff has no test suite to run); the reviewer must still write the row and justify the `no` in the evidence column. Hard rule: an iteration without all three rows is a contract violation. Closes weakness #2 + #3.
+
+**A4 — Self-review gate before reviewer dispatch.** Slice-builder's strict-mode summary block now carries a `self_review[]` array with four mandatory rules:
+
+- `tests-fail-then-pass` — verified that the new test went RED before implementation and GREEN after.
+- `build-clean` — verified `tsc --noEmit` / `npm run build` / equivalent ran clean.
+- `no-shims` — verified no temporary stubs, mocks-of-the-real-thing, or `// TODO unmock me` slipped in.
+- `touch-surface-respected` — verified the diff did not touch files outside the planner-declared `touchSurface`.
+
+Each rule has shape `{ rule, verified: <true | false>, evidence: "<concrete cite or short justification>" }`. Orchestrator's Hop 4 — Pause — gains a pre-reviewer gate: if any rule has `verified: false` OR `evidence` is empty, the orchestrator **bounces the slice back to the slice-builder in `fix-only` mode without dispatching the reviewer**. The bounce envelope tells the slice-builder which rule(s) failed, so the loop is `slice-builder → bounce → slice-builder → reviewer` rather than `slice-builder → reviewer (cheap finding) → slice-builder → reviewer`. Closes weakness #4 and saves a full reviewer round-trip per incomplete slice.
+
+**B2 — Repo-wide ADR catalogue.** A new skill `documentation-and-adrs.md` describes a project-level Architectural Decision Record set living at `docs/decisions/ADR-NNNN-<slug>.md`. Lifecycle is three-state:
+
+- `PROPOSED` — written by the architect during a `large-risky` flow when a decision deserves long-term durability (a stack pick, an architectural seam, a build-system convention, a security posture). The architect writes the ADR with `status: PROPOSED` next to authoring `decisions.md`. The ADR cites the originating flow slug.
+- `ACCEPTED` — promoted by the orchestrator during Hop 6 — Finalize. After the slug ships, the orchestrator rewrites every PROPOSED ADR linked to that slug to `ACCEPTED`, commits, and includes the change in the ship commit. ADRs are NEVER promoted by a sub-agent.
+- `SUPERSEDED` — set when a later ADR replaces this one. The superseding ADR adds a `supersedes: ADR-NNNN` field; the superseded ADR is updated to `status: SUPERSEDED`, with a `superseded-by: ADR-NNNN` back-link. Both edits happen in the same flow.
+
+The orchestrator's `cancel` command is updated: cancelling a flow rewrites every PROPOSED ADR linked to that slug to `REJECTED` (status, not deletion). Closes weakness #5: ADRs survive flow cancellation as a record of "we considered X, decided not to do it for reason Y".
+
+**B5 — SDD doc cache for source-driven mode.** The `source-driven.md` skill grew a "Cache lookup before fetch" section. Cache lives at `.cclaw/cache/sdd/<host>/<url-path>.{html,etag,last-modified}` (per-project, never shared across projects). Lookup rules:
+
+- **Fresh hit** (`< 24h` since `last-modified` write): use cached content, write `cache_status: fresh-cache` next to the `cache_path` in the `## Sources` block.
+- **Stale hit** (`> 24h` but file present): issue a conditional GET with `If-None-Match: <etag>` / `If-Modified-Since: <last-modified>`. On `304 Not Modified` the cache stays as-is and `cache_status: revalidated-cache` is written. On `200 OK` the cache is overwritten and `cache_status: refetched` is written. Network failure with stale cache writes `cache_status: stale-cache`; the reviewer treats `cache_status: stale-cache` as a finding (severity `consider`) so the user knows the docs may be out of date.
+- **Miss**: fetch fresh, write `cache_status: fetched`.
+
+`.cclaw/cache/` is added to `REQUIRED_GITIGNORE_PATTERNS`. The `## Sources` block in `decisions.md` and `plan.md` now carries `cache_path: <relative path>` and `cache_status: <one of fresh-cache | revalidated-cache | refetched | stale-cache | fetched>` per source. Closes weakness #6.
+
+**B6 — Mandatory pre-task read order in architect and planner (brownfield).** Both prompts gained a `Phase 2.5 — Pre-task read order` step that runs before any authoring on brownfield repos. The order is non-negotiable:
+
+1. **Target file(s)** — the file(s) the change will touch (the focus surface).
+2. **Tests** — the test file(s) covering the focus surface, or the nearest analogous tests if none exist for the surface itself.
+3. **Neighbour pattern** — the most analogous existing implementation in the same module / package.
+4. **Types** — the type definitions the focus surface depends on (when the surface uses statically-typed code).
+
+Architect's self-review checklist now requires every `D-N` decision to cite which read produced the supporting evidence. Planner's self-review checklist now requires every AC's `touchSurface` path to have been physically read as part of step 1, NOT picked from `repo-research.md`'s summary. Greenfield work writes "no existing files — N/A" against each step and continues. Closes weakness #7.
+
+### Schema
+
+`flow-state.json` stays at `schemaVersion: 3`. No flow-state field added.
+
+`REQUIRED_GITIGNORE_PATTERNS` adds `.cclaw/cache/`. New installs and `cclaw upgrade` write the line; existing repos are unaffected by a single missing line until the next gitignore reconcile.
+
+ADR files live outside `flow-state.json` at `docs/decisions/ADR-NNNN-<slug>.md`. The orchestrator scans for `status: PROPOSED` ADRs at ship time and at cancel time using a simple frontmatter parser; no schema field beyond the file convention.
+
+The slice-builder's JSON summary block gains the `self_review` array. Old slim summaries without it are read as "self_review failed" and bounced — this is intentional, since 8.5 slice-builders should not return on 8.6 orchestrators (the upgrade path is to re-dispatch the slice). The summary block field stays optional in the validator for forward-compat.
+
+### Tests
+
+491 passing — 429 baseline plus a new `tests/unit/v86-summary-adr-cache-readorder.test.ts` (62 cases) covering: `summary-format` skill registration as always-on with edit triggers; brainstormer / architect / planner / slice-builder / reviewer authoring the three-section summary block; reviewer's `What's done well` evidence-backed format and forbid on generic praise; reviewer's three-row Verification story (tests / build / security with yes-no plus evidence); slice-builder's `self_review[]` array carrying all four rules with `verified` and `evidence`; orchestrator's pre-reviewer gate bouncing on any failed rule or empty evidence; orchestrator's bounce-envelope shape (`fix-only` mode, list of failed rules); `documentation-and-adrs` skill describing the three-state ADR lifecycle; orchestrator's Hop 6 promoting PROPOSED → ACCEPTED at ship; orchestrator's cancel rewriting PROPOSED → REJECTED; ADRs never deleted; supersede chain (`supersedes`/`superseded-by`); `source-driven` skill's cache section enumerating cache_status values, conditional GET semantics, 24h freshness rule; `.cclaw/cache/` in `REQUIRED_GITIGNORE_PATTERNS`; reviewer treating `cache_status: stale-cache` as a `consider` finding; architect's Phase 2.5 mandatory four-read order; planner's Phase 2.5 mandatory four-read order with AC `touchSurface` gating; greenfield N-A bypass for both prompts.
+
+`npm run release:check` is green. `npm pack --dry-run` produces `cclaw-cli-8.6.0.tgz`.
+
+### Compatibility
+
+Backward compatible at the wire level. Existing 8.5 state files validate without changes. Existing in-flight slugs continue with the saved `triage` and `lastSpecialist` semantics; resume re-dispatches the next specialist with the new contracts (so the next plan / build / review will carry the new summary block, the next slice will carry `self_review[]`, the next architect dispatch will run Phase 2.5).
+
+Existing shipped slugs are not retroactively migrated; their `decisions.md` / `plan.md` / `review.md` files keep their pre-8.6 endings.
+
+Existing repos with no `.cclaw/cache/` directory are unaffected until the next source-driven dispatch creates the directory (and the next gitignore reconcile adds the ignore line).
+
+### Acknowledgements
+
+The three-section summary block draws inspiration from `addyosmani-skills`'s standard summary footer. The anti-sycophancy reviewer + verification story patterns are inspired by `chachamaru127-claude-code-harness`'s explicit "what was tested" + "what's good" review template. The repo-wide ADR catalogue is the canonical Michael Nygard ADR pattern, adapted to the `PROPOSED → ACCEPTED → SUPERSEDED` lifecycle with orchestrator-managed promotion. The pre-task read order draws from `chachamaru127`'s "look at the code before you propose changes to it" workflow.
+
 ## 8.5.0 — Hop 6 finalize, contract-first dispatch, deeper specialists, research helpers, discovery as plan sub-phase
 
 ### Why

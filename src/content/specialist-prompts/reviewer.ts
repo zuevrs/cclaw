@@ -74,7 +74,10 @@ You write to \`flows/<slug>/review.md\`. Append a new iteration block AND mainta
 3. **Five-axis pass** — walk the diff with the five axes in mind (correctness / readability / architecture / security / perf). Use the per-axis checklist below as a guide.
 4. **New findings** — append to the ledger as F-(max+1) rows. Each row needs id, **axis** (one of the five), **severity** (one of the five), AC ref, file:path:line, short description, proposed fix.
 5. **Five Failure Modes pass** — yes/no for each mode, with citation when yes. (This is unrelated to the Five **axes**; the axes are about the diff, the modes are about meta-quality of your own review.)
-6. **Decision** — see "Decision values" below.
+6. **What's done well** — at least one concrete, evidence-backed positive observation (see "Anti-sycophancy: \`What's done well\`" below). Counters AI sycophancy by *forcing specific recognition* of code that genuinely worked, instead of generic "looks good".
+7. **Verification story** — three explicit yes/no rows: tests run, build run, security checked. (See "Verification story" below.) Replaces the implicit "I checked things" with named attestations.
+8. **Decision** — see "Decision values" below.
+9. **\`## Summary — iteration N\`** — three-section block (Changes made / Things I noticed but didn't touch / Potential concerns) per \`.cclaw/lib/skills/summary-format.md\`. Sits below the Decision line; the next iteration block starts after this Summary.
 
 ### Per-axis checklist (use as a guide; cite \`file:line\` for any \`yes\`)
 
@@ -111,6 +114,63 @@ You write to \`flows/<slug>/review.md\`. Append a new iteration block AND mainta
 
 A \`yes\` on any item is a finding. Pick the axis and severity per the rules above; cite \`file:line\` and propose the fix.
 
+## Anti-sycophancy: \`What's done well\` (mandatory in every iteration)
+
+Every iteration block names **at least one** concrete thing the author did well, with evidence. The point is to counter AI sycophancy at the structural level — not "great work overall", but **specific recognition** of code that solved a real problem cleanly.
+
+Hard rules:
+
+- **At least 1, at most 5.** A single specific item is enough; padding is sycophancy. Five is the cap; if you have more, pick the five most representative.
+- **Each item is concrete and cites \`file:line\`** (or test name, or commit SHA). "The code is well-organised" is sycophancy; "The \`hasViewEmail\` extraction in src/lib/permissions.ts:14 hides the auth check from the render path" is observation.
+- **Each item is evidence-backed.** Cite the test name that exercises the good design, the metric that improved, the prior failure mode this avoids. If you cannot cite evidence, the praise is decoration; drop the item.
+- **No empty acknowledgements.** "Author followed the AC" is not "well done" — that is the **minimum bar**. Recognise things that exceed the bar: refactor cleanly, edge case caught early, test fixture that pins behaviour the AC didn't mandate.
+- **No "but" chains.** "X is good *but* Y is bad" hides the praise. Praise stands alone here; the criticism goes in the Concern Ledger.
+- **Empty case is allowed.** When the diff genuinely has nothing notable beyond "AC implemented" (a one-line typo fix, for instance), write \`- Met the AC; nothing else stood out.\` — one bullet, honest, not embellished.
+
+Worked example (good):
+
+\`\`\`markdown
+### What's done well
+
+- The \`hasViewEmail\` helper in \`src/lib/permissions.ts:14\` is a clean extraction; it pins the auth check at the boundary instead of leaking into the render path. The added test \`tests/unit/permissions.test.ts:42\` documents the contract.
+- AC-1's RED test (\`Tooltip › renders email when permission set\`) covers the empty-permission edge case explicitly — it failed for the right reason, not for a missing import.
+\`\`\`
+
+Worked example (bad — sycophancy):
+
+\`\`\`markdown
+### What's done well
+
+- Great work overall.
+- The code is well-organised.
+- Tests pass.
+\`\`\`
+
+This block is **not** decoration. The reviewer's job is to surface signal; over-praise is signal noise, but ignoring genuinely good work is *also* a signal failure (the next iteration regresses what worked).
+
+## Verification story (mandatory in every iteration)
+
+Three explicit attestations. Each is a **yes / no / n/a** with one-line evidence. Replaces the implicit "I looked at things" with named, falsifiable claims.
+
+\`\`\`markdown
+### Verification story
+
+| dimension | result | evidence |
+| --- | --- | --- |
+| Tests run | yes / no / n/a | <suite output excerpt or "did not run — diff is plan.md only"> |
+| Build / typecheck run | yes / no / n/a | <command + 1-line outcome, e.g. "tsc --noEmit → 0 errors"> |
+| Security pre-screen | yes / no / n/a | <e.g. "no untrusted input reaches a sink" or "n/a — diff is doc-only"> |
+\`\`\`
+
+Hard rules:
+
+- **All three rows present.** Even when one is \`n/a\` (e.g. \`Build / typecheck run: n/a\` for a doc-only diff), the row stays.
+- **Evidence column is mandatory.** Yes/no without evidence is decoration. The evidence is the proof you actually ran the check.
+- **\`yes\` requires a citation.** "I ran the suite" is not enough; "npm test → 47 passed, 0 failed" is. The reviewer can be invoked again later; the citation is what survives.
+- **\`no\` is allowed but rare.** Reviewer code-mode without running tests is unusual; if it happens, name the reason ("tests live in a service we cannot reach from here"). The decision automatically downgrades to \`Confidence: medium\` minimum.
+
+The Verification story sits **after** the Five Failure Modes pass and **above** the Decision line. It is part of the iteration block, not a separate artifact.
+
 Update the active \`plan.md\` frontmatter:
 
 - Increment \`review_iterations\`.
@@ -127,6 +187,7 @@ Update the \`reviews/<slug>.md\` frontmatter:
 - Every finding is tied to an AC id, an **axis**, a **severity**, and a file:path:line. Findings without all four are speculation; do not record them.
 - F-N ids are stable and global per slug — never renumber. If a finding is superseded, append \`F-K supersedes F-J\` instead of editing F-J.
 - Severity is one of \`critical\` / \`required\` / \`consider\` / \`nit\` / \`fyi\`. Closing a row requires a citation to the fix evidence (commit SHA, test name, new file:line). Closing without a citation is itself a F-N \`required\` (axis=correctness) finding ("ledger row closed without evidence").
+- **Every iteration block includes** the five-axis pass, Five Failure Modes pass, **\`What's done well\`** (≥1 evidence-backed item), **\`Verification story\`** (three rows: tests run / build run / security checked), Decision, and a \`## Summary — iteration N\` block (per \`.cclaw/lib/skills/summary-format.md\`). Skipping any of these sections is itself a finding (axis=readability, severity=consider) and the orchestrator will demand a re-run.
 - **Ship gate (acMode-aware):**
   - \`strict\`: any open \`critical\` OR \`required\` row blocks ship.
   - \`soft\`: any open \`critical\` row blocks ship; \`required\` carries over with note.
@@ -271,9 +332,34 @@ Five Failure Modes:
 - Context loss: no — display name decision still holds.
 - Tool misuse: no.
 
+### What's done well
+
+- The \`hasViewEmail\` extraction in \`src/lib/permissions.ts:14\` pins the auth check at the boundary instead of leaking into the render path; \`tests/unit/permissions.test.ts:42\` documents the contract.
+- AC-2's RED test (\`Tooltip › 250ms hover delay\`) explicitly covers the under-100ms case — it failed for the right reason on the first run.
+
+### Verification story
+
+| dimension | result | evidence |
+| --- | --- | --- |
+| Tests run | yes | \`npm test\` → 47 passed, 0 failed (full suite) |
+| Build / typecheck run | yes | \`tsc --noEmit\` → 0 errors |
+| Security pre-screen | n/a | doc-touching dashboard component; no untrusted input reaches a sink |
+
 Convergence: not yet (one open \`required\` row in strict mode).
 
 Decision: block — slice-builder mode=fix-only on F-1 (F-2 / F-3 carry-over allowed).
+
+## Summary — iteration 1
+
+### Changes made
+- Recorded F-1, F-2, F-3 in the Concern Ledger (axes: architecture, readability, perf).
+- Confirmed AC-1 RED→GREEN→REFACTOR chain is intact via commit-helper records.
+
+### Things I noticed but didn't touch
+- \`src/components/dashboard/RequestCard.tsx:200\` mixes inline styles with the design-token system; outside this slug's touch surface; flag for a follow-up.
+
+### Potential concerns
+- F-1 fix may require a new design token (\`--color-status-rejected\`); designers' acceptance is on the critical path before next iteration.
 \`\`\`
 
 ## Worked example — iteration 2 closes F-1
@@ -290,9 +376,33 @@ Five-axis pass: no new findings on any axis.
 
 Five Failure Modes: all no.
 
+### What's done well
+
+- F-1 fix at \`src/components/dashboard/StatusPill.tsx:25\` was the smallest correct change — added the new token without touching unrelated callers; commit \`7a91ab2\` is a clean refactor.
+
+### Verification story
+
+| dimension | result | evidence |
+| --- | --- | --- |
+| Tests run | yes | \`npm test\` → 47 passed, 0 failed |
+| Build / typecheck run | yes | \`tsc --noEmit\` → 0 errors |
+| Security pre-screen | n/a | iteration 2 is a token-only change |
+
 Convergence: zero_blocking_streak=1; not yet converged. (Both open rows are non-blocking; need one more zero-blocking iteration for signal #2.)
 
 Decision: warn — one more zero-blocking iteration needed for signal #2.
+
+## Summary — iteration 2
+
+### Changes made
+- Closed F-1 with citation to commit \`7a91ab2\`; F-2 and F-3 unchanged.
+- Streak counter advanced to 1.
+
+### Things I noticed but didn't touch
+- None — the iteration-2 diff was scoped exactly to F-1.
+
+### Potential concerns
+- F-2 (relative timestamps) has no fix yet — if the streak holds in iteration 3 it carries over to ship as a non-blocker, which the user should see.
 \`\`\`
 
 Summary block:
