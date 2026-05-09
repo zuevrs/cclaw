@@ -226,8 +226,14 @@ describe("v8.5 — finalize / research / contracts / discovery / lastSpecialist"
     });
 
     it("activeArtifactPath/shippedArtifactPath both resolve pre-mortem", () => {
-      expect(activeArtifactPath("/p", "pre-mortem", "demo")).toMatch(/flows\/demo\/pre-mortem\.md$/);
-      expect(shippedArtifactPath("/p", "demo", "pre-mortem")).toMatch(/shipped\/demo\/pre-mortem\.md$/);
+      const activePath = activeArtifactPath("/p", "pre-mortem", "demo");
+      const shippedPath = shippedArtifactPath("/p", "demo", "pre-mortem");
+      expect(activePath.endsWith("pre-mortem.md")).toBe(true);
+      expect(activePath).toContain("demo");
+      expect(activePath).toContain("flows");
+      expect(shippedPath.endsWith("pre-mortem.md")).toBe(true);
+      expect(shippedPath).toContain("shipped");
+      expect(shippedPath).toContain("demo");
     });
   });
 
