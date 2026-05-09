@@ -1,5 +1,78 @@
 # Changelog
 
+## 8.5.0 — Hop 6 finalize, contract-first dispatch, deeper specialists, research helpers, discovery as plan sub-phase
+
+### Why
+
+A real test run on `/Users/zuevrs/Projects/test/` after the 8.4 release surfaced a small set of high-impact problems that v8.4's confidence/pre-mortem/five-axis additions didn't touch:
+
+1. **Ship duplicated the flow.** After `ship`, both `flows/<slug>/` and `flows/shipped/<slug>/` existed. The orchestrator was instructing the sub-agent to "Copy (not move)" artifacts, leaving the active dir intact and creating a parallel copy in `shipped/`.
+2. **Specialists ran shallow.** `brainstormer`, `architect`, `planner` were dispatched with ~30-line inline summaries instead of the 194-line / 256-line / 297-line contracts under `.cclaw/lib/agents/`. The detailed phase-by-phase workflows and self-review checklists were never loaded; sub-agents single-shot a response.
+3. **`discovery` was contradictory.** The triage gate sometimes wrote `path: ["plan", "build", "review", "ship"]` and the README said `["discovery", "plan", "build", "review", "ship"]`. Both shapes appeared in the wild; the orchestrator handled both quietly, but the spec was self-contradicting.
+4. **`pre-mortem.md` wasn't archived.** Adversarial pre-mortem (added in 8.4) wrote `pre-mortem.md` into `flows/<slug>/`, but `compound.runCompoundAndShip`'s `allStages` list didn't include it — so on ship-finalize the pre-mortem stayed in the active dir as residue.
+5. **`lastSpecialist` wasn't updated mid-discovery.** After `architect` ran, `flow-state.lastSpecialist` was still `null` or `brainstormer`. Resume after a discovery checkpoint had no way to know which sub-step to skip.
+6. **No mechanism for context gathering.** Greenfield tasks went straight to planner with zero repo grounding. Brownfield tasks crawled `knowledge.jsonl` inside the planner's context, eating tokens and re-implementing the same scoring heuristic from prompt-memory.
+
+### What changed
+
+**1. Hop 6 — Finalize (orchestrator-only, `git mv` semantics).** A new explicit hop replaces the one-line "After ship + compound, move every \`<stage>.md\` …" instruction. The orchestrator (NOT a sub-agent) runs `git mv` (or `mv` when files aren't tracked) on every artifact in the slug dir, asserts the active dir ends up empty, removes the empty dir, and resets `flow-state.json` to fresh defaults. The word **"copy" is forbidden** anywhere in the finalize step or in dispatch envelopes leading to it. Re-entrant finalize on resume detects an already-shipped slug (`shipped/<slug>/manifest.md` exists, active dir empty) and stops. The specifically-listed artifact set covers `plan.md`, `build.md`, `review.md`, `ship.md`, `decisions.md`, `learnings.md`, `pre-mortem.md`, `research-repo.md`, `research-learnings.md`. Fix #1 + #4 + closes the duplicate-flow regression.
+
+**2. Mandatory contract reads in every dispatch envelope.** Every dispatch from the orchestrator now starts with two non-negotiable reads as the sub-agent's first lines:
+
+```
+Required first read: .cclaw/lib/agents/<specialist>.md  (your contract — modes, hard rules, output schema, worked examples; do NOT skip)
+Required second read: .cclaw/lib/skills/<wrapper>.md  (your wrapping skill)
+```
+
+The orchestrator's "Always-ask rules" gain a hard rule: *"A sub-agent that skips either of those reads is acting on a hallucinated contract."* The brainstormer / architect / planner prompts also explicitly instruct themselves to read their contract file as Phase 1, so even harnesses that don't render the envelope verbatim still get the right behaviour. Fix #2.
+
+**3. Brainstormer rewritten as an explicit 8-phase workflow.** The brainstormer prompt is now a literal multi-step recipe: Bootstrap → Posture pick → Repo signals scan → (optional) repo-research dispatch → Clarifying questions (one at a time, max 3) → Author Frame + Approaches + Selected + Not Doing + (Pre-Mortem) → 9-item self-review checklist → Return slim summary + JSON. The Phase 5 Q&A rules forbid batches and `[topic:…]` tags (re-affirming the v8 anti-pattern); Phase 7 self-review enumerates "Frame names a user", "verifiable success criterion", "Approaches rows are defensible", and 6 more concrete checks. The `deep` posture explicitly dispatches `repo-research` before authoring, the only specialist-initiated dispatch in the prompt. Fix #3.
+
+**4. Two new read-only research helpers — `repo-research` and `learnings-research`.** Two lightweight on-demand sub-agents (under 250 lines of prompt each) that the planner / architect / brainstormer dispatch *before* authoring. They are NOT specialists: they never become `lastSpecialist`, never appear in `triage.path`, and the orchestrator never dispatches them directly. They write a single short markdown file (`flows/<slug>/research-repo.md` and `flows/<slug>/research-learnings.md`) and return a slim summary with confidence calibration.
+
+- **`repo-research`** scans the project root manifest, `AGENTS.md` / `CLAUDE.md`, focus-surface dirs, and test conventions. Time-boxed to ~3 minutes. Returns "stack + 3-5 cited patterns + test conventions + risk areas + what I did NOT investigate". Cited path:line everywhere; no proposals; no code rewrites. Brownfield only — greenfield writes "no existing patterns" and stops.
+- **`learnings-research`** scans `.cclaw/knowledge.jsonl`, scores entries on surface overlap + failure-mode hint + acmode parity, picks the top 1-3 with score ≥ 4, opens each candidate's `learnings.md`, and returns verbatim quotes the planner pastes into `plan.md`. Cap is 3; "no prior slugs apply" is a valid result. The whole "should the planner read knowledge.jsonl in-prompt?" pattern from 8.4 is replaced with a sub-agent dispatch — planner gets focused context without paying the search-and-rank token cost.
+
+The planner's prompt now mandates the `learnings-research` dispatch in Phase 3 (every plan dispatch, greenfield + brownfield) and the `repo-research` dispatch in Phase 4 (only on brownfield). The architect may dispatch `repo-research` in Phase 3 when brainstormer didn't and the focus surface needs grounding; the brainstormer may dispatch it in Phase 4 only on `deep` posture. Fix #6.
+
+**5. `discovery` is a sub-phase of `plan`, never a `triage.path` entry.** `triage.path` only ever holds the four canonical stages: `["plan", "build", "review", "ship"]` — full stop. On `large-risky`, the **plan stage expands** into `brainstormer → checkpoint → architect → checkpoint → planner` instead of dispatching `planner` directly. `currentStage` stays `"plan"` for all three; `lastSpecialist` rotates through `"brainstormer"` → `"architect"` → `"planner"`. The triage gate skill no longer offers `discovery → plan → build → review → ship` as a path option (that wording was the source of the contradiction). The "Available stage entries" path-validation rule is now single-stage: `triage.path ⊆ {plan, build, review, ship}`. Pre-v8.5 state files containing `"discovery"` in the path are normalised on read (the entry is stripped). Fix #3.
+
+**6. `pre-mortem.md` is a first-class artifact stage.** `ArtifactStage` widens to include `"pre-mortem"`, `ARTIFACT_FILE_NAMES` adds `pre-mortem: "pre-mortem.md"`, `compound.runCompoundAndShip`'s `allStages` array gains `"pre-mortem"`. The Hop 6 finalize move list explicitly includes `pre-mortem.md`. Fix #4.
+
+**7. `lastSpecialist` widened from `DiscoverySpecialistId | null` to `SpecialistId | null`, updated after every dispatch.** The flow-state validator now accepts `"reviewer"`, `"security-reviewer"`, and `"slice-builder"` as `lastSpecialist` values (in addition to the three discovery specialists). The orchestrator's dispatch loop step 5 spells out: "Patch `flow-state.json` after every dispatch (not only at end-of-stage): `lastSpecialist` = the id of the specialist that just returned." Resume from a discovery checkpoint reads `lastSpecialist == "architect"` and skips straight to the planner dispatch instead of restarting from brainstormer. The Composition footer of every specialist mentions that the orchestrator updates `lastSpecialist` after the slim summary returns; specialists do NOT mutate `flow-state.json` themselves. Fix #5.
+
+### Specialist prompts deepened
+
+**Brainstormer (194 → 280+ lines):** explicit 8-phase workflow, Phase 7 self-review checklist, Phase 4 deep-posture repo-research dispatch, two worked examples (full guided flow + compressed lean flow).
+
+**Architect (256 → 320+ lines):** Phase 1 bootstrap (mandatory contract reads), Phase 2 assumptions cross-check, Phase 3 conditional repo-research dispatch, Phase 7 self-review checklist (8 concrete checks). The "## Assumptions (read first)" section is renamed to "Phase 2 — Assumptions cross-check" but keeps the same body.
+
+**Planner (297 → 360+ lines):** explicit 8-phase workflow, Phase 3 mandatory `learnings-research` dispatch (replacing the in-prompt "read knowledge.jsonl yourself" pattern), Phase 4 conditional `repo-research` dispatch on brownfield only, Phase 6 verbatim copy of surfaced lessons from `research-learnings.md`, Phase 7 self-review checklist (10 concrete checks). The Composition footer enumerates which research helpers the planner may dispatch (`learnings-research` always; `repo-research` conditional) and which it may not (any specialist).
+
+### Schema
+
+`flow-state.json` stays at `schemaVersion: 3`. `lastSpecialist` widens but the on-disk shape is unchanged — old states with `lastSpecialist: "brainstormer" | "architect" | "planner" | null` validate as before, and new states with `"reviewer" | "security-reviewer" | "slice-builder"` validate as new valid values.
+
+`ArtifactStage` adds `"pre-mortem"`. `ARTIFACT_FILE_NAMES["pre-mortem"]` = `"pre-mortem.md"`. `RESEARCH_AGENT_IDS` is a new exported constant: `["repo-research", "learnings-research"]`. `CORE_AGENTS` now includes both specialists (`SPECIALIST_AGENTS`) and research helpers (`RESEARCH_AGENTS`); install paths iterate the combined list.
+
+### Tests
+
+429 passing — 383 baseline plus a new `tests/unit/v85-finalize-research-contracts.test.ts` (46 cases) covering: Hop 6 finalize semantics (`git mv` mandate, "no copy" rule, post-condition empty-dir check, idempotent re-entrant finalize); contract-first dispatch envelopes (Required first read + Required second read in every envelope); brainstormer's 8-phase workflow with Phase 5 Q&A rules and Phase 7 self-review; research helper registration (`RESEARCH_AGENT_IDS`, `RESEARCH_AGENTS`, `SPECIALIST_AGENTS` separation); `repo-research` and `learnings-research` prompts being read-only with single-artifact output; planner Phase 3 `learnings-research` dispatch; planner Phase 4 brownfield-only `repo-research` dispatch; architect Phase 3 conditional `repo-research` dispatch; architect's "learnings-research is the planner's tool" forbid; orchestrator's "discovery is never a stage" rule; `pre-mortem.md` as a first-class `ArtifactStage`; `lastSpecialist` widening (every specialist id validates); orchestrator dispatch loop's "patch lastSpecialist after every dispatch" semantics; stage → wrapper-skill mapping in the orchestrator.
+
+The pre-existing `v84-confidence-assumptions-fiveaxis-pre-mortem.test.ts` was lightly updated to match the new "Phase N" wording in planner / architect (the assumptions section moved into Phase 2; the prior-lessons section now references `research-learnings.md` instead of the in-prompt knowledge.jsonl scan).
+
+### Migration
+
+Existing v8.4 (and earlier v8.x) state files validate without changes. Existing in-flight slugs continue with the saved `lastSpecialist` and `currentStage` semantics; resume dispatches the next specialist as before. Existing shipped slugs are not retroactively migrated; the next ship invokes the new Hop 6 finalize semantics.
+
+Pre-v8.5 state files that contain `"discovery"` in `triage.path` are normalised on read — the orchestrator strips the entry and continues with the remaining stages. No code runs on the entry, so the result is identical to the new "discovery as sub-phase" semantics.
+
+The `RESEARCH_AGENTS` install adds two new files under `.cclaw/lib/agents/`: `repo-research.md` and `learnings-research.md`. Existing installs pick them up on the next `cclaw upgrade`.
+
+### Acknowledgements
+
+The 8-phase brainstormer workflow draws inspiration from `obra-superpowers/skills/brainstorming/SKILL.md` (9-step checklist, one-question-at-a-time, no batched questions). The research-helper pattern draws inspiration from `everyinc-compound/plugins/compound-engineering/skills/ce-plan/SKILL.md` (sub-phase dispatch of `repo-research-analyst` and `learnings-researcher` before planning) and `gstack/SKILL.md` (lightweight read-only context-gatherers). The "discovery as sub-phase, not a path entry" cleanup mirrors `addyosmani-skills`'s philosophy of keeping the orchestrator's vocabulary minimal.
+
 ## 8.4.0 — Confidence calibration, pre-flight assumptions, five-axis review, source-driven mode, adversarial pre-mortem, cross-flow learning, test-impact GREEN
 
 ### Why

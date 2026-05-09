@@ -2,7 +2,7 @@ import path from "node:path";
 import { FLOWS_ROOT, SHIPPED_DIR_REL_PATH } from "./constants.js";
 import type { FlowStage } from "./types.js";
 
-export type ArtifactStage = FlowStage | "decisions" | "learnings";
+export type ArtifactStage = FlowStage | "decisions" | "learnings" | "pre-mortem";
 
 export const ARTIFACT_FILE_NAMES: Record<ArtifactStage, string> = {
   plan: "plan.md",
@@ -10,7 +10,8 @@ export const ARTIFACT_FILE_NAMES: Record<ArtifactStage, string> = {
   review: "review.md",
   ship: "ship.md",
   decisions: "decisions.md",
-  learnings: "learnings.md"
+  learnings: "learnings.md",
+  "pre-mortem": "pre-mortem.md"
 };
 
 export function slugifyArtifactTopic(topic: string): string {

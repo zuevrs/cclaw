@@ -3,13 +3,14 @@ import {
   FLOW_STAGES,
   ROUTING_CLASSES,
   RUN_MODES,
+  SPECIALISTS,
   type AcMode,
   type AcceptanceCriterionState,
   type BuildProfile,
-  type DiscoverySpecialistId,
   type FlowStage,
   type RoutingClass,
   type RunMode,
+  type SpecialistId,
   type TriageDecision
 } from "./types.js";
 
@@ -23,7 +24,7 @@ export interface FlowStateV82 {
   currentSlug: string | null;
   currentStage: FlowStage | null;
   ac: AcceptanceCriterionState[];
-  lastSpecialist: DiscoverySpecialistId | null;
+  lastSpecialist: SpecialistId | null;
   startedAt: string;
   reviewIterations: number;
   securityFlag: boolean;
@@ -63,8 +64,17 @@ export function isRunMode(value: unknown): value is RunMode {
   return typeof value === "string" && (RUN_MODES as readonly string[]).includes(value);
 }
 
-export function isDiscoverySpecialist(value: unknown): value is DiscoverySpecialistId {
+/**
+ * Narrow check for the three discovery specialists. Kept for backward
+ * compatibility with callers that only care about discovery sub-phase
+ * routing; new state-validation paths should use {@link isSpecialist}.
+ */
+export function isDiscoverySpecialist(value: unknown): value is "brainstormer" | "architect" | "planner" {
   return value === "brainstormer" || value === "architect" || value === "planner";
+}
+
+export function isSpecialist(value: unknown): value is SpecialistId {
+  return typeof value === "string" && (SPECIALISTS as readonly string[]).includes(value);
 }
 
 export function createInitialFlowState(nowIso = new Date().toISOString()): FlowStateV82 {
@@ -225,7 +235,7 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     throw new Error(`Invalid currentStage: ${String(state.currentStage)}`);
   }
   assertAcArray(state.ac);
-  if (state.lastSpecialist !== null && state.lastSpecialist !== undefined && !isDiscoverySpecialist(state.lastSpecialist)) {
+  if (state.lastSpecialist !== null && state.lastSpecialist !== undefined && !isSpecialist(state.lastSpecialist)) {
     throw new Error(`Invalid lastSpecialist: ${String(state.lastSpecialist)}`);
   }
   if (typeof state.startedAt !== "string") throw new Error("flow-state.startedAt must be a string");
@@ -284,7 +294,7 @@ function migrateFromV2(raw: Record<string, unknown>): FlowStateV82 {
     currentSlug: (raw.currentSlug as string | null) ?? null,
     currentStage: (raw.currentStage as FlowStage | null) ?? null,
     ac,
-    lastSpecialist: (raw.lastSpecialist as DiscoverySpecialistId | null) ?? null,
+    lastSpecialist: (raw.lastSpecialist as SpecialistId | null) ?? null,
     startedAt,
     reviewIterations: typeof raw.reviewIterations === "number" ? raw.reviewIterations : 0,
     securityFlag,

@@ -15,6 +15,24 @@ export const SPECIALISTS = [
 ] as const;
 export type SpecialistId = (typeof SPECIALISTS)[number];
 
+/**
+ * Lightweight read-only research helpers, dispatched by planner / architect /
+ * brainstormer (deep posture) BEFORE they author their artifacts. They
+ * exist to gather context (live repo signals; prior cclaw lessons) so the
+ * dispatcher does not have to crawl the codebase or knowledge log itself.
+ *
+ * Research helpers are not in {@link SpecialistId} on purpose:
+ *
+ * - they never become \`lastSpecialist\` (no checkpoint between them);
+ * - they are not a stage in any \`triage.path\`;
+ * - they cannot be dispatched by the orchestrator directly — only by a
+ *   specialist who needs their output.
+ */
+export const RESEARCH_AGENT_IDS = ["repo-research", "learnings-research"] as const;
+export type ResearchAgentId = (typeof RESEARCH_AGENT_IDS)[number];
+
+export type InstallableAgentId = SpecialistId | ResearchAgentId;
+
 export type ReviewerMode = "code" | "text-review" | "integration" | "release" | "adversarial";
 export type SecurityReviewerMode = "threat-model" | "sensitive-change";
 export type SliceBuilderMode = "build" | "fix-only";

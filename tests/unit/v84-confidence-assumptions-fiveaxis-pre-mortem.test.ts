@@ -195,7 +195,7 @@ describe("v8.4 — Confidence + Assumptions + Five-axis + Pre-mortem", () => {
 
     it("orchestrator describes Hop 2.5 between Triage and Dispatch", () => {
       expect(START_COMMAND_BODY).toMatch(/Hop 2\.5 — Pre-flight/);
-      expect(START_COMMAND_BODY).toMatch(/six hops, in order/i);
+      expect(START_COMMAND_BODY).toMatch(/seven hops, in order/i);
     });
 
     it("orchestrator instructs Hop 2.5 to skip on inline and on resume", () => {
@@ -204,12 +204,12 @@ describe("v8.4 — Confidence + Assumptions + Five-axis + Pre-mortem", () => {
     });
 
     it("planner prompt requires copying assumptions verbatim into plan.md", () => {
-      expect(PLANNER_PROMPT).toMatch(/## Assumptions \(read first/);
+      expect(PLANNER_PROMPT).toMatch(/Phase 2 — Assumptions cross-check/);
       expect(PLANNER_PROMPT).toMatch(/Copy the list verbatim into.{0,5}plan\.md/);
     });
 
     it("architect prompt instructs reading triage.assumptions before composing decisions", () => {
-      expect(ARCHITECT_PROMPT).toMatch(/## Assumptions \(read first\)/);
+      expect(ARCHITECT_PROMPT).toMatch(/Phase 2 — Assumptions cross-check/);
       expect(ARCHITECT_PROMPT).toMatch(/triage\.assumptions/);
       expect(ARCHITECT_PROMPT).toMatch(/D-N[^\n]*you write must be \*\*compatible\*\*/);
     });
@@ -291,13 +291,12 @@ describe("v8.4 — Confidence + Assumptions + Five-axis + Pre-mortem", () => {
     });
 
     it("planner prompt limits surfaced lessons to 3", () => {
-      expect(PLANNER_PROMPT).toMatch(/at most 3/i);
       expect(PLANNER_PROMPT).toMatch(/Do not list more than 3 prior lessons/i);
     });
 
     it("planner prompt explains how to surface lessons in plan.md", () => {
       expect(PLANNER_PROMPT).toMatch(/## Prior lessons applied/);
-      expect(PLANNER_PROMPT).toMatch(/ref: shipped\/<slug>\/learnings\.md/);
+      expect(PLANNER_PROMPT).toMatch(/research-learnings\.md/);
     });
 
     it("planner prompt forbids fabricating lessons and respects user request", () => {
@@ -307,7 +306,11 @@ describe("v8.4 — Confidence + Assumptions + Five-axis + Pre-mortem", () => {
 
     it("orchestrator plan-stage envelope mentions knowledge.jsonl", () => {
       expect(START_COMMAND_BODY).toMatch(/knowledge\.jsonl/);
-      expect(START_COMMAND_BODY).toMatch(/up to 3 relevant prior entries/i);
+    });
+
+    it("planner dispatches learnings-research as a sub-agent in Phase 3", () => {
+      expect(PLANNER_PROMPT).toMatch(/Phase 3 — learnings-research dispatch/);
+      expect(PLANNER_PROMPT).toMatch(/Dispatch the .learnings-research. helper/i);
     });
   });
 

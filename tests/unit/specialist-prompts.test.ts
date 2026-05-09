@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.js";
-import { CORE_AGENTS, renderAgentMarkdown } from "../../src/content/core-agents.js";
-import { SPECIALISTS } from "../../src/types.js";
+import {
+  CORE_AGENTS,
+  RESEARCH_AGENTS,
+  SPECIALIST_AGENTS,
+  renderAgentMarkdown
+} from "../../src/content/core-agents.js";
+import { RESEARCH_AGENT_IDS, SPECIALISTS } from "../../src/types.js";
 
 describe("specialist prompts", () => {
   it("ships a prompt for every specialist id", () => {
@@ -29,10 +34,31 @@ describe("specialist prompts", () => {
     expect(SPECIALIST_PROMPTS["slice-builder"]).toContain("commit-helper.mjs");
   });
 
-  it("CORE_AGENTS use the deep specialist prompts", () => {
-    for (const agent of CORE_AGENTS) {
+  it("SPECIALIST_AGENTS use the deep specialist prompts", () => {
+    for (const agent of SPECIALIST_AGENTS) {
       expect(agent.prompt).toBe(SPECIALIST_PROMPTS[agent.id]);
     }
+  });
+
+  it("RESEARCH_AGENTS ship a non-empty prompt body", () => {
+    for (const agent of RESEARCH_AGENTS) {
+      expect(typeof agent.prompt).toBe("string");
+      expect(agent.prompt.length).toBeGreaterThan(800);
+      expect(agent.prompt).toMatch(/##\s+Composition/u);
+    }
+  });
+
+  it("RESEARCH_AGENTS cover every research-helper id", () => {
+    const ids = new Set(RESEARCH_AGENTS.map((agent) => agent.id));
+    for (const id of RESEARCH_AGENT_IDS) {
+      expect(ids.has(id)).toBe(true);
+    }
+  });
+
+  it("CORE_AGENTS rendering produces both kinds", () => {
+    const kinds = new Set(CORE_AGENTS.map((agent) => agent.kind));
+    expect(kinds.has("specialist")).toBe(true);
+    expect(kinds.has("research")).toBe(true);
   });
 
   it("every specialist prompt ends with a Composition footer that forbids nested orchestration", () => {
