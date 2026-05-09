@@ -47,8 +47,6 @@ Every finding you record carries TWO labels: an **axis** (which dimension of qua
 
 Every Concern Ledger row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N r=N a=N s=N p=N\`) by counting open + new-this-iteration findings per axis, regardless of severity.
 
-> Severity legacy note: cclaw 8.0–8.3 ledgers used \`block\` / \`warn\` / \`info\`. v8.4 maps these to the five-tier scale on read: \`block → critical | required\` (use the higher tier when the row is open against ship; lower otherwise), \`warn → consider\`, \`info → fyi\`. Do not silently rewrite legacy rows; mark migrated rows with \`(migrated from <old-severity>)\` in the citation column the first time you reread them.
-
 ## Modes
 
 - \`code\` — review the diff produced by slice-builder. Validate the AC ↔ commit chain is intact.
@@ -60,8 +58,8 @@ Every Concern Ledger row records both \`axis\` and \`severity\`. Compute the sli
 ## Inputs
 
 - The active artifact for the chosen mode (\`plan.md\` for text-review, the latest commit range for code, etc.).
-- \`plans/<slug>.md\` AC list — this is the contract you are checking against.
-- \`decisions/<slug>.md\` if architect ran.
+- \`flows/<slug>/plan.md\` AC list — this is the contract you are checking against.
+- \`flows/<slug>/decisions.md\` if architect ran.
 - The Five Failure Modes block (always part of your output).
 - \`.cclaw/lib/antipatterns.md\` — cite entries when they apply.
 
@@ -176,7 +174,7 @@ Update the active \`plan.md\` frontmatter:
 - Increment \`review_iterations\`.
 - Set \`last_specialist: null\` (review does not count as a discovery specialist).
 
-Update the \`reviews/<slug>.md\` frontmatter:
+Update the \`flows/<slug>/review.md\` frontmatter:
 
 - \`ledger_open\` — count of severity=block + status=open + severity=warn + status=open.
 - \`ledger_closed\` — count of status=closed rows.
@@ -204,7 +202,7 @@ Update the \`reviews/<slug>.md\` frontmatter:
 End the loop when ANY signal fires:
 
 1. **All ledger rows closed** → \`clear\`.
-2. **Two consecutive iterations with zero new blocking findings AND every open row is non-blocking** → \`clear\` with non-blocking carry-over to \`ships/<slug>.md\` and \`learnings/<slug>.md\`. "Blocking" here means \`critical\` in any acMode plus \`required\` in \`strict\`.
+2. **Two consecutive iterations with zero new blocking findings AND every open row is non-blocking** → \`clear\` with non-blocking carry-over to \`flows/<slug>/ship.md\` and \`flows/<slug>/learnings.md\`. "Blocking" here means \`critical\` in any acMode plus \`required\` in \`strict\`.
 3. **Hard cap reached with at least one open blocking row** → \`cap-reached\`.
 
 You decide which signal fires; the orchestrator does not infer it. Be explicit in the iteration block: "Convergence: signal #2 fired (zero_blocking_streak=2; open rows: 1 consider, 2 nit, 1 fyi)."
@@ -301,7 +299,7 @@ You **do not** re-run after a fix-only loop. The orchestrator will re-run the re
 
 ## Worked example — \`code\` mode, iteration 1
 
-\`reviews/<slug>.md\` block:
+\`flows/<slug>/review.md\` block:
 
 \`\`\`markdown
 ## Concern Ledger

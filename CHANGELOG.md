@@ -1,5 +1,46 @@
 # Changelog
 
+## 8.8.0 — Cleanup release: bug fixes, test pruning, version-marker strip
+
+### Why
+
+8.7.0 shipped fast and accumulated debt: prompts kept references to the v7 path layout (`plans/<slug>.md`) that no longer exists, the `tdd-cycle` Anti-patterns section cited A-numbers that didn't match `antipatterns.ts` (phantom A-18 / A-19 / A-20), `interpretationForks` was added to the schema in 8.7 but never wired into specialist prompts (so it was a no-op), the slice-builder had a contradiction between the soft-mode commit table and hard-rule 6, severity terminology was a mix of `block` / `warn` / `info` / `critical` / `required` across files, the architect prompt had two consecutive bullets numbered "6.", and the TDD gate was named `red_test_recorded` in one place and `red_test_written` in another. The test suite had ballooned to 569 tests with ~287 of them being prose-locks against version strings (e.g. `expect(skill.body).toMatch(/v8\.7\+/)`) — they froze the wording of skill bodies without protecting any behaviour. Skill bodies and specialist prompts were also cluttered with `(v8.4+)` / `(v8.7+)` / `since v8.5` / `Severity legacy note` / `v7-era constraint` / `the v7 mistake` / `the v8.X bug` markers — useful at the moment of writing, noise to the agent reading the prompt at runtime.
+
+### What changed
+
+**B1 — `interpretationForks` is wired (no longer a no-op).** `flow-state.ts` `assertTriageOrNull` now validates `triage.interpretationForks` as `Array<string> | null | undefined`; new helper `interpretationForksOf(triage)` mirrors `assumptionsOf`. `brainstormer`, `planner`, `architect`, and `slice-builder` all read `triage.interpretationForks` from their dispatch envelopes and respect the chosen reading: brainstormer frames its output around it, planner copies it verbatim into `plan.md` next to assumptions and surfaces conflicts as feasibility blockers, architect copies it into `decisions.md` and surfaces conflicts as decision blockers, slice-builder uses it as an AC-interpretation constraint.
+
+**B2 — TDD anti-patterns rebuilt against `antipatterns.ts`.** The `## Anti-patterns` section in the `tdd-cycle` skill now cites real A-numbers (A-2 phase integrity, A-3 `git add -A`, A-12 single-test green, A-13 horizontal slicing, A-14 pushing past failing test, A-15 mocking-what-should-not-be-mocked) — the phantom A-18 / A-19 / A-20 references are removed (those numbers either don't exist in `antipatterns.ts` or exist with completely different meanings since 8.7's renumbering). The "test file named after the AC id" rule is now a severity=`required` finding with the correct citation. New `v88-cleanup.test.ts` adds an A-N parity guard that scans every skill body, every specialist prompt, the start-command, every stage playbook, and the recovery playbook for `A-N` references and asserts each one exists in `antipatterns.ts`.
+
+**B3 — Slice-builder commit-helper rule scoped to strict mode.** Hard rule 6 used to read "use `commit-helper`, never `git commit` directly" unconditionally, which contradicted the soft-mode commit table earlier in the same prompt that explicitly allowed plain `git commit`. Rule 6 now reads "In strict mode: use `commit-helper`. In soft mode: plain `git commit` is fine." — matching the table.
+
+**B4 — Severity scale aligned with the reviewer's 5-tier vocabulary.** All three places that still spoke `block` / `warn` / `info` / `security-block` are migrated to the canonical `critical` / `required` / `consider` / `nit` / `fyi` scale: slice-builder hard rule 11 (env shims) now cites severity=`critical`; planner edge-case finding now cites severity=`required` (axis=correctness); security-reviewer's Output section, worked example, and JSON summary all use the 5-tier scale (`by_axis` + `by_severity` instead of legacy `block/warn/info` counts).
+
+**B5 — v7 paths replaced everywhere.** 47 occurrences of `plans/<slug>.md` / `decisions/<slug>.md` / `builds/<slug>.md` / `reviews/<slug>.md` / `ships/<slug>.md` / `learnings/<slug>.md` across `skills.ts`, `reviewer.ts`, `security-reviewer.ts`, `slice-builder.ts`, `recovery.ts`, and `stage-playbooks.ts` are normalised to the current `flows/<slug>/<artifact>.md` layout. The active flow lives at `flows/<slug>/`; shipped flows live at `flows/shipped/<slug>/`. The legacy `plans/`, `decisions/`, `builds/`, `reviews/`, `ships/`, `learnings/` directory layout is gone — pre-v8 state files were already migrated by `start-command`'s normaliser, so there's no behaviour change, just text alignment.
+
+**B6 — Architect `Sub-agent context` numbering is sequential 1-7.** The architect prompt had two consecutive bullets numbered "6." in the `Sub-agent context` section. Renumbered to 6 / 7.
+
+**B7 — TDD gate name unified to `red_test_written`.** The `tdd-cycle` skill said `red_test_recorded` while `stage-playbooks.ts` said `red_test_written`. Picked `red_test_written` (more accurate — the gate verifies the RED commit exists, not just that the test was "recorded" somewhere). Test added to lock the choice.
+
+**Tier 2 — Test pruning (569 → 298).** Six version-snapshot regression files (`v82-orchestrator-redesign.test.ts`, `v83-ask-runmode-deeper-tdd.test.ts`, `v84-confidence-assumptions-fiveaxis-pre-mortem.test.ts`, `v85-finalize-research-contracts.test.ts`, `v86-summary-adr-cache-readorder.test.ts`, `v87-surgical-debug-browser-forks.test.ts`) were almost entirely prose-locks ("the skill body contains the string `(v8.7+)`", "the prompt contains the substring `Severity legacy note`") and froze wording without protecting behaviour. Removed wholesale. The handful of tests in those files that *did* protect behaviour — `isRunMode` / `runModeOf` / `isSpecialist` / `assumptionsOf` / `interpretationForksOf` discriminator narrowing, `triage.assumptions` and `triage.interpretationForks` schema validation — were extracted and consolidated into `flow-state.test.ts`. Net: 287 tests removed, 7 critical behaviour tests preserved, 42 new `v88-cleanup.test.ts` tests added (B1-B7 verification + version-marker absence + A-N parity + path-normalisation guards). Final count: 298 tests across 37 files, all green.
+
+**Tier 3 — Version-marker strip from skill bodies and specialist prompts.** All `(v8.X+)` / `(NEW sub-step, v8.X+)` / `since v8.X` / `Severity legacy note` / `v8.X maps these` / `v7-era` / `the v7 mistake` / `the v8.X bug` / `cclaw v8.X+ replaces` / `Cclaw v8 explicitly` markers stripped from `tdd-cycle`, `surgical-edit-hygiene`, `debug-loop`, `browser-verification`, `pre-flight-assumptions`, `iron-laws`, `api-and-interface-design`, `refactor-safety`, `breaking-changes`, `summary-format`, `documentation-and-adrs`, `source-driven`, every specialist prompt, and `start-command`. Engineering compatibility comments inside TS source (e.g. JSDoc explaining a field's migration shape, `start-command`'s pre-v8 hard-stop message, `assertTriageOrNull` migration validation) are preserved — those are read by humans editing the source, not by the agent at runtime. Version history exclusively lives in `CHANGELOG.md` from now on.
+
+### What did not change
+
+- Public CLI surface (`/cc`, `/cc-cancel`, `/cc-idea`, all flags).
+- Hop sequence (`Detect → Triage → Pre-flight → Dispatch → Pause → Compound → Finalize`).
+- Stage layout (`plan → build → review → ship`).
+- Specialist roster (brainstormer, architect, planner, slice-builder, reviewer, security-reviewer, repo-research, learnings-research).
+- `flow-state.json` schema — still `schemaVersion: 3` with `triage.assumptions` and `triage.interpretationForks`.
+- `antipatterns.ts` content (A-1 through A-33).
+- Five-axis review and 5-tier severity scale (this release just finished aligning the *speakers*).
+- Behaviour of any specialist or skill — every change is a text alignment, naming unification, or schema validation tightening.
+
+### Migration
+
+Drop-in upgrade. No state migration needed; `triage.interpretationForks` is optional (string array or `null` or absent), so flows from 8.7 continue working.
+
 ## 8.7.0 — Surgical edit hygiene, debug-loop discipline, browser verification, ambiguity forks, iron-law deepening, API & interface design, simplification catalog, test-design checklist, deprecation patterns
 
 ### Why

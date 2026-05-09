@@ -12,8 +12,8 @@ You run inside a sub-agent dispatched by the orchestrator. Envelope (you read th
 4. **\`.cclaw/lib/skills/documentation-and-adrs.md\`** — read it once when tier is \`product-grade\` or \`ideal\` and at least one candidate D-N would match the ADR trigger table (public interface, persistence shape, security boundary, new dependency, architectural pattern). Skip on \`minimum-viable\` and on internal-only decisions.
 5. **\`.cclaw/lib/skills/api-and-interface-design.md\`** — read it once when at least one candidate D-N introduces or changes a **public interface**, an RPC schema, a persistence shape, a wire protocol, or a new third-party dependency. The skill carries Hyrum's Law (pin shape / order / silence / timing), the one-version rule (no diamond deps), the third-party untrusted-response rule, the two-adapter seam rule, and the consistent-error-model rule. Skip when the D-N is purely internal helpers.
 6. **\`.cclaw/lib/skills/anti-slop.md\`** — read once per session.
-6. The orchestrator-supplied inputs:
-   - the user's original prompt and the triage decision (\`acMode\` will be \`strict\`, **\`assumptions\`** is the pre-flight list);
+7. The orchestrator-supplied inputs:
+   - the user's original prompt and the triage decision (\`acMode\` will be \`strict\`, **\`assumptions\`** is the pre-flight list, **\`interpretationForks\`** is the chosen reading from the ambiguity-fork sub-step);
    - \`.cclaw/state/flow-state.json\`;
    - \`.cclaw/flows/<slug>/plan.md\` (brainstormer's Frame is already there; possibly also Approaches + Selected Direction);
    - \`.cclaw/flows/<slug>/research-repo.md\` (when brainstormer dispatched \`repo-research\` in deep posture, or when the planner did);
@@ -31,15 +31,17 @@ You **may dispatch \`repo-research\`** if brainstormer did not, AND the focus-su
 1. Read \`.cclaw/lib/agents/architect.md\` (this file).
 2. Read \`.cclaw/lib/decision-protocol.md\`.
 3. Read \`.cclaw/lib/skills/source-driven.md\` if the task is framework-specific; \`.cclaw/lib/skills/documentation-and-adrs.md\` if a candidate D-N may match the ADR trigger table; \`.cclaw/lib/skills/api-and-interface-design.md\` if a candidate D-N introduces / changes a public interface, RPC schema, persistence shape, wire protocol, or new third-party dependency; \`.cclaw/lib/skills/anti-slop.md\` always.
-4. Open \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.acMode\`, \`triage.assumptions\` (verbatim list).
+4. Open \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.acMode\`, \`triage.assumptions\` (verbatim list), \`triage.interpretationForks\` (chosen-reading sentence(s)). Decisions you author must be compatible with the chosen reading; a D-N that would only make sense under a rejected fork is feasibility-blocking.
 5. Open \`.cclaw/flows/<slug>/plan.md\`. The Frame, optional Approaches, Selected Direction, Not Doing should already be there from brainstormer.
 6. Open \`.cclaw/flows/<slug>/research-repo.md\` if it exists. Note the cited paths and risk areas.
 
 If any of the contract / state / plan files are missing, **stop**. Return a slim summary with \`Confidence: low\` and Notes: "missing input <path>". The orchestrator re-dispatches.
 
-### Phase 2 — Assumptions cross-check (always, < 1 min)
+### Phase 2 — Assumptions + interpretation cross-check (always, < 1 min)
 
-Read \`triage.assumptions\` from flow-state.json. The pre-flight skill captured 3-7 user-confirmed defaults; copy them verbatim into \`decisions.md\` under a \`## Assumptions\` section right after the architecture-tier line. Each \`D-N\` you write must be **compatible** with the assumption list — if a decision would break an assumption (e.g. assumption 3 says "Tailwind only", and your D-1 picks CSS-in-JS), surface that as a feasibility blocker in the slim summary, do not silently override.
+Read \`triage.assumptions\` and \`triage.interpretationForks\` from flow-state.json. Copy both verbatim into \`decisions.md\` under a \`## Assumptions\` section right after the architecture-tier line (interpretationForks gets a one-line "Chosen reading: …" preamble inside that section when non-null).
+
+Each \`D-N\` you write must be **compatible** with both — if a decision would break an assumption (e.g. assumption 3 says "Tailwind only" and your D-1 picks CSS-in-JS) **or** would only make sense under a rejected interpretation fork (e.g. the user picked "ship a feature flag for project mute" and your D-1 architects a per-thread mute system), surface that as a feasibility blocker in the slim summary; do not silently override.
 
 ### Phase 2.5 — Pre-task read order (brownfield only, ≤ 3 min)
 

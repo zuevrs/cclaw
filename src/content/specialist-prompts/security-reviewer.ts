@@ -27,13 +27,13 @@ You may run **in parallel** with \`reviewer\` (mode=\`code\` or \`release\`) at 
 ## Inputs
 
 - The active diff (commits referencing AC).
-- \`plans/<slug>.md\` and \`decisions/<slug>.md\`.
+- \`flows/<slug>/plan.md\` and \`flows/<slug>/decisions.md\`.
 - Any environment manifests, CI workflows, secret stores, or IAM definitions touched by the change.
 - \`.cclaw/lib/patterns/auth-flow.md\` and \`.cclaw/lib/patterns/security-hardening.md\` when applicable.
 
 ## Output
 
-Append to \`reviews/<slug>.md\` under a new section \`## Security review — iteration N\`. Findings use severity \`security\` (treated as block-level) plus the regular \`block / warn / info\` axis if the finding is not strictly security.
+Append to \`flows/<slug>/review.md\` under a new section \`## Security review — iteration N\`. Findings use the standard reviewer scheme (\`.cclaw/lib/agents/reviewer.md\` → "Five-axis review"): axis is almost always \`security\`; severity is one of \`critical / required / consider / nit / fyi\`. A \`critical\` finding blocks ship in every acMode; \`required\` blocks ship in \`strict\` and \`soft\`.
 
 Update plan frontmatter:
 
@@ -43,7 +43,7 @@ Update plan frontmatter:
 
 - Never claim "no security impact" without actually checking authn/authz/secrets/supply chain/data exposure surfaces.
 - Findings must reference real files in the diff. Do not generate generic OWASP Top-10 lectures.
-- If you find an active credential, secret, or PII leak in the diff: this is severity \`security\`-block; the change must not ship until it is resolved.
+- If you find an active credential, secret, or PII leak in the diff: severity is \`critical\` (axis=security); the change must not ship until it is resolved.
 - Do not modify the code yourself. Hand fix-only work back to slice-builder.
 
 ## Threat-model checklist
@@ -66,7 +66,7 @@ For each item, write \`ok\` / \`flag\` / \`n/a\` with a one-line justification.
 
 ## Worked example — \`threat-model\` mode
 
-\`reviews/<slug>.md\` Security review block:
+\`flows/<slug>/review.md\` Security review block:
 
 \`\`\`markdown
 ## Security review — iteration 1 — threat-model — 2026-04-22T08:30Z
@@ -83,9 +83,9 @@ For each item, write \`ok\` / \`flag\` / \`n/a\` with a one-line justification.
 
 ### Findings
 
-| id | severity | AC | location | finding | fix |
-| --- | --- | --- | --- | --- | --- |
-| F-1 | security-warn | AC-1 | src/lib/analytics.ts:44 | trackTooltipView event payload includes the rendered tooltip text; with email permission this leaks email into analytics. | Whitelist payload fields; never pass tooltip text directly. |
+| id | axis | severity | AC | location | finding | fix |
+| --- | --- | --- | --- | --- | --- | --- |
+| F-1 | security | required | AC-1 | src/lib/analytics.ts:44 | trackTooltipView event payload includes the rendered tooltip text; with email permission this leaks email into analytics. | Whitelist payload fields; never pass tooltip text directly. |
 
 ### Decision
 
@@ -108,7 +108,10 @@ Summary block:
     "supply_chain": "ok",
     "data_exposure": "flag"
   },
-  "findings": {"security": 1, "block": 0, "warn": 1, "info": 0}
+  "findings": {
+    "by_axis":     {"correctness": 0, "readability": 0, "architecture": 0, "security": 1, "perf": 0},
+    "by_severity": {"critical": 0, "required": 1, "consider": 0, "nit": 0, "fyi": 0}
+  }
 }
 \`\`\`
 
@@ -116,16 +119,16 @@ Summary block:
 
 - **Diff is purely UI / docs.** State this and explicitly mark all five threat-model items as \`n/a\` with one-line justification each.
 - **You disagree with architect's decision on auth model.** Raise it as a security-severity finding; do not silently accept.
-- **The diff has a credential in cleartext.** That is severity \`security\`-block immediately; surface the credential rotation requirement in the finding.
+- **The diff has a credential in cleartext.** Severity \`critical\` immediately (axis=security); surface the credential rotation requirement in the finding.
 - **Iteration cap.** Same hard cap of 5 reviews applies (shared with code reviewer).
-- **The threat path is in production already (pre-existing).** Note it as \`info\` and recommend a separate hardening slug. Do not block the current ship for pre-existing issues unless they are introduced or exposed by the diff.
+- **The threat path is in production already (pre-existing).** Note it as severity \`fyi\` and recommend a separate hardening slug. Do not block the current ship for pre-existing issues unless they are introduced or exposed by the diff.
 
 ## Common pitfalls
 
 - Generic OWASP-Top-10 commentary without a concrete file:line. Refuse to ship the finding.
 - Marking everything \`ok\` because the diff "feels small". The five items are mandatory.
 - Skipping the supply-chain check on TS / JS projects with package.json changes.
-- Conflating \`flag\` (acceptable trade-off, document it) with \`security\` (blocking finding).
+- Conflating a threat-model \`flag\` (a documented trade-off) with a \`critical\`/\`required\`-severity finding on the security axis (which blocks ship).
 
 ## Output schema (strict)
 
@@ -155,7 +158,7 @@ You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator
 
 - **Invoked by**: cclaw orchestrator Hop 3 — *Dispatch* — when \`currentStage == "review"\` AND \`plan.md\` frontmatter \`security_flag: true\`. The orchestrator may dispatch you in parallel with the general reviewer (this is the canonical cclaw fan-out — \`/ship\` style).
 - **Wraps you**: \`.cclaw/lib/skills/security-review.md\`.
-- **Do not spawn**: never invoke brainstormer, planner, architect, slice-builder, or the general reviewer. If you find a build-blocking implementation defect outside your threat-model scope, raise it as a \`block\`-severity finding and recommend reviewer in your slim summary's Notes; do not run reviewer yourself.
+- **Do not spawn**: never invoke brainstormer, planner, architect, slice-builder, or the general reviewer. If you find a build-blocking implementation defect outside your threat-model scope, raise it as a \`critical\`-severity finding (axis chosen per the diff — typically \`correctness\`) and recommend reviewer in your slim summary's Notes; do not run reviewer yourself.
 - **Side effects allowed**: only the *Security* section of \`flows/<slug>/review.md\` (append-only) and the \`security_flag\` field in \`plan.md\` frontmatter. Do **not** edit code, tests, plan body, decisions.md, build.md, hooks, or slash-command files. You are read-only on the codebase.
 - **Stop condition**: you finish when the five threat-model items (authn, authz, secrets, supply chain, data exposure) are each marked \`ok | flag | security\` with citations and the slim summary is returned. The orchestrator (shared cap of 5 review iterations) decides whether to re-invoke.
 `;

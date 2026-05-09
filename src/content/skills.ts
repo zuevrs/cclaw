@@ -23,7 +23,7 @@ Every new flow opens with a **triage gate**. The orchestrator analyses the user'
 
 ## How to render the question — STRUCTURED, not prose
 
-If the harness exposes a structured question tool — \`AskUserQuestion\` (Claude Code), \`AskQuestion\` (Cursor), an "ask" content block (OpenCode), \`prompt\` (Codex) — **use it**. Two separate calls, in order. Do **not** print the triage as a code block and rely on the user reading numbered options. v8.2 shipped that way and the harness rendered prose; v8.3 fixes it.
+If the harness exposes a structured question tool — \`AskUserQuestion\` (Claude Code), \`AskQuestion\` (Cursor), an "ask" content block (OpenCode), \`prompt\` (Codex) — **use it**. Two separate calls, in order. Do **not** print the triage as a code block and rely on the user reading numbered options; the harness frequently renders fenced text as prose and the user never sees the choice as a real interactive prompt.
 
 ### Question 1 — path
 
@@ -134,7 +134,7 @@ The triage block is **immutable for the lifetime of the flow**. If the user want
 
 \`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never an entry in \`path\`.** When the orchestrator promises a "discovery sub-phase" it means the \`plan\` stage runs three specialists with checkpoints between each (brainstormer → architect → planner) — see \`/cc.md\` "Plan stage on large-risky" for the dispatch contract.
 
-The orchestrator's path-validation rule is single-stage: \`triage.path\` ⊆ \`{plan, build, review, ship}\`. Any state file that contains a \`"discovery"\` entry is an artefact of a pre-v8.5 orchestrator and must be normalised — strip the \`"discovery"\` entry and continue with the remaining stages.
+The orchestrator's path-validation rule is single-stage: \`triage.path\` ⊆ \`{plan, build, review, ship}\`. Any state file that contains a \`"discovery"\` entry is from an older schema and must be normalised — strip the \`"discovery"\` entry and continue with the remaining stages.
 
 ## When to skip the gate
 
@@ -205,8 +205,8 @@ The user is expected to clarify in (4) Custom or accept (1) Proceed; either way 
 
 ## Common pitfalls
 
-- **Rendering the triage as a code block when a structured ask tool is available.** v8.3 fixes this: try the harness's structured ask facility (\`AskUserQuestion\` / \`AskQuestion\` / \`prompt\` / "ask" content block) first; the fenced form is a fallback only.
-- Stating "I think this is medium-complexity" and then immediately invoking planner. That is the v8.1 bug. Wait for the user's pick.
+- **Rendering the triage as a code block when a structured ask tool is available.** Try the harness's structured ask facility (\`AskUserQuestion\` / \`AskQuestion\` / \`prompt\` / "ask" content block) first; the fenced form is a fallback only.
+- Stating "I think this is medium-complexity" and then immediately invoking planner. Wait for the user's pick — orchestrator-decided routing without an explicit user confirmation is the most common cause of mis-scoped flows.
 - Picking \`large-risky\` for a one-file rename "to be safe". Do not pad the heuristic; the user reads it and learns to ignore your triage.
 - Forgetting to ask Question 2 (run mode) after Question 1 (path). \`triage.runMode\` controls Hop 4 (pause); a missing value defaults to \`step\` — safe but wastes a click for users who wanted autopilot.
 - Forgetting to write \`triage\` into \`flow-state.json\`. The hook check \`commit-helper.mjs\` and the resume detector both read it; an absent triage breaks both.
@@ -224,7 +224,7 @@ trigger: after triage-gate, before the first specialist dispatch — only when t
 
 # Skill: pre-flight-assumptions
 
-Triage answers "**how much** work is this?" and "**how should we run it?**". Pre-flight answers "**on what assumptions** are we doing it?". They are different questions; v8.4 adds this hop because silently-defaulted assumptions are the most common reason a small/medium build ships the wrong feature.
+Triage answers "**how much** work is this?" and "**how should we run it?**". Pre-flight answers "**on what assumptions** are we doing it?". They are different questions; this hop exists because silently-defaulted assumptions are the most common reason a small/medium build ships the wrong feature.
 
 The pre-flight skill runs **once** per flow, between the triage gate (Hop 2) and the first specialist dispatch (Hop 3). It does not run on the inline / trivial path — a single-file edit has no architectural assumptions worth surfacing.
 
@@ -232,7 +232,7 @@ The pre-flight skill runs **once** per flow, between the triage gate (Hop 2) and
 
 1. Read \`triage.path\` from \`flow-state.json\`.
 2. If \`path == ["build"]\` (inline), skip this skill entirely. Go to dispatch.
-3. **Ambiguity check (NEW sub-step, v8.7+).** Before composing assumptions, decide whether the user's request has more than one defensible reading. If yes, run the **interpretation-forks** sub-step (below) FIRST, persist the chosen fork to \`triage.interpretationForks\`, then continue with assumptions composition keyed off the chosen fork. If no, write \`triage.interpretationForks: null\` and proceed.
+3. **Ambiguity check.** Before composing assumptions, decide whether the user's request has more than one defensible reading. If yes, run the **interpretation-forks** sub-step (below) FIRST, persist the chosen fork to \`triage.interpretationForks\`, then continue with assumptions composition keyed off the chosen fork. If no, write \`triage.interpretationForks: null\` and proceed.
 4. Otherwise (after step 3 resolves):
    1. Inspect the repo for stack inference. Read at most:
       - \`package.json\` / \`pnpm-lock.yaml\` (Node, framework + version, test runner);
@@ -336,7 +336,7 @@ Sub-agents (planner, slice-builder, reviewer, etc.) read \`flow-state.json > tri
 
 A sub-agent that would need to break an assumption raises it as a finding (in slice-builder: stop and surface; in reviewer: \`block\`-severity finding) instead of silently overriding.
 
-## Interpretation forks (NEW sub-step, v8.7+)
+## Interpretation forks
 
 Triage answers "how big is this work?". Pre-flight assumptions answer "on what stack defaults?". **Interpretation forks** answer the more-fundamental question: **"are we even building the same thing the user meant?"**
 
@@ -519,13 +519,13 @@ Then ask:
 ## Resume rules
 
 1. **Triage is preserved.** A resumed flow keeps its \`acMode\`, \`complexity\`, and \`path\`. The user does not re-pick. If they want to change mode, the answer is "/cc-cancel and start fresh".
-2. **Last-specialist context is restored** by reading \`flows/<slug>/<stage>.md\` (and \`decisions/<slug>.md\` if architect ran). The orchestrator does not summarise from memory; it re-reads the artifact.
+2. **Last-specialist context is restored** by reading \`flows/<slug>/<stage>.md\` (and \`flows/<slug>/decisions.md\` if architect ran). The orchestrator does not summarise from memory; it re-reads the artifact.
 3. **Time gate.** If the resume summary's "last touched" is >7 days ago, surface a warning ("flow is stale — verify scope still applies") but still allow resume.
 4. **Sub-agent dispatch resumes from the same stage.** A build that was paused mid-RED for AC-3 resumes by dispatching slice-builder for AC-3, not by restarting AC-1.
 
 ## Common pitfalls
 
-- Ignoring \`flow-state.json\` and starting fresh on every \`/cc\` invocation. That is the v8.0 bug; v8.1 partially fixed it; v8.2 makes it explicit via this skill.
+- Ignoring \`flow-state.json\` and starting fresh on every \`/cc\` invocation. The state file IS the resume point — re-prompting the user when a flow is already in progress is a contract violation.
 - Re-running the triage gate on resume. The user already chose; respect the saved decision.
 - Re-prompting the user for the slug ("which task?") when \`currentSlug\` is set. Read it from state.
 - Treating \`/cc\` with no argument as an error. It is the canonical "continue" command.
@@ -655,7 +655,7 @@ trigger: when planner topology = parallel-build
 
 # Skill: parallel-build
 
-\`parallel-build\` is the only parallelism allowed during build. It is opt-in. The orchestrator never picks it without planner naming it explicitly in \`plans/<slug>.md\` Topology section.
+\`parallel-build\` is the only parallelism allowed during build. It is opt-in. The orchestrator never picks it without planner naming it explicitly in \`flows/<slug>/plan.md\` Topology section.
 
 ## Pre-conditions (all must hold)
 
@@ -674,7 +674,7 @@ A **slice** is one or more AC whose \`touchSurface\` arrays intersect. AC with d
 
 If the slug produces more than 5 slices, **merge the thinner slices into fatter ones** (group AC by adjacent files / shared module) until you have ≤5. **Do not generate "wave 2", "wave 3", etc.** If after merging you still have >5 slices, the slug is too large — split it into multiple slugs.
 
-This 5-slice cap is the v7-era constraint we kept on purpose:
+This 5-slice cap is intentional:
 
 - orchestration cost grows non-linearly past 5 sub-agents (context shuffling, integration review, conflict surface);
 - 5 fits comfortably under the harness sub-agent quota everywhere we tested (Claude Code, Cursor, OpenCode, Codex);
@@ -682,7 +682,7 @@ This 5-slice cap is the v7-era constraint we kept on purpose:
 
 ## Execution
 
-1. Orchestrator reads \`plans/<slug>.md\` Topology section, extracts the slice list (max 5).
+1. Orchestrator reads \`flows/<slug>/plan.md\` Topology section, extracts the slice list (max 5).
 2. For each slice, dispatch one \`slice-builder\` sub-agent. Pass:
    - the slice id,
    - the AC ids it owns,
@@ -710,7 +710,7 @@ Each slice-builder sub-agent runs with its worktree path as cwd. After all slice
 
 ## Fallback: inline-sequential when sub-agent dispatch is unavailable
 
-If the harness does not support sub-agent dispatch (or worktree creation fails — non-git repo, permission denied, etc.), \`parallel-build\` **degrades silently to \`inline\`** and runs all slices sequentially in the main working tree. The orchestrator records the fallback in \`builds/<slug>.md\`:
+If the harness does not support sub-agent dispatch (or worktree creation fails — non-git repo, permission denied, etc.), \`parallel-build\` **degrades silently to \`inline\`** and runs all slices sequentially in the main working tree. The orchestrator records the fallback in \`flows/<slug>/build.md\`:
 
 \`\`\`markdown
 > Topology was \`parallel-build\` but the harness does not support sub-agent dispatch (or worktree creation failed). Slices ran sequentially in the main working tree.
@@ -777,7 +777,7 @@ For each mode the reviewer answers yes/no with a citation when "yes". A "yes" wi
 
 ## Concern Ledger
 
-Every \`reviews/<slug>.md\` carries an append-only ledger. Each row is a single finding; rows are never edited or deleted, only appended.
+Every \`flows/<slug>/review.md\` carries an append-only ledger. Each row is a single finding; rows are never edited or deleted, only appended.
 
 \`\`\`markdown
 ## Concern Ledger
@@ -798,8 +798,6 @@ Rules:
 - **Citation** is a real \`file:line\` (or test id, or commit SHA). No prose-only findings — if you cannot cite, you do not have a finding yet.
 
 When iteration N+1 runs, the reviewer reads the ledger first, re-validates each open row (still open? closed by a fix? superseded?), then appends new findings as F-(max+1). Closing a row requires a citation to the fix evidence (commit SHA, test name, or new file:line).
-
-> Severity legacy note: cclaw 8.0–8.3 used \`block\` / \`warn\` / \`info\`. v8.4 maps these to the new five-tier scale on read: \`block → critical | required\` (use \`critical\` only when ship-breaking, otherwise \`required\`), \`warn → consider\`, \`info → fyi\`. Mark migrated rows with \`(migrated from <old-severity>)\` in citation the first time you re-read them.
 
 ## Five axes (mandatory walk per iteration)
 
@@ -823,14 +821,14 @@ A reviewer that records zero findings on every axis must explicitly say so in th
 | \`soft\` | \`critical\` only (\`required\` carries over) |
 | \`inline\` | reviewer not invoked |
 
-\`consider\` / \`nit\` / \`fyi\` never block ship. They carry over to \`ships/<slug>.md\` (and \`learnings/<slug>.md\` for \`consider\`) but do not delay ship.
+\`consider\` / \`nit\` / \`fyi\` never block ship. They carry over to \`flows/<slug>/ship.md\` (and \`flows/<slug>/learnings.md\` for \`consider\`) but do not delay ship.
 
 ## Convergence detector (acMode-aware)
 
 The loop ends when ANY of these fires:
 
 1. **All ledger rows closed.** Decision: \`clear\`.
-2. **Two consecutive iterations append zero new blocking findings AND every open row is non-blocking.** Decision: \`clear\` with non-blocking carry-over to \`ships/<slug>.md\` and \`learnings/<slug>.md\`. "Blocking" depends on acMode (see table above).
+2. **Two consecutive iterations append zero new blocking findings AND every open row is non-blocking.** Decision: \`clear\` with non-blocking carry-over to \`flows/<slug>/ship.md\` and \`flows/<slug>/learnings.md\`. "Blocking" depends on acMode (see table above).
 3. **Hard cap reached** (5 iterations) with at least one open blocking row remaining. Decision: \`cap-reached\`. Stop; surface to user.
 
 Tie-breaker: if iteration 5 closes the last blocking row, return \`clear\` (signal #1) even though the cap was hit. The cap exists to bound runaway loops, not to punish a slug that converges on the last attempt.
@@ -924,7 +922,7 @@ trigger: before every commit-helper.mjs invocation
 
 ## When to amend
 
-Never amend a commit produced by \`commit-helper.mjs\` after the SHA is recorded in \`flow-state.json\`. Amend changes the SHA and breaks the AC chain. If the message is wrong, write a short note in \`builds/<slug>.md\` and move on; it is recoverable in review.
+Never amend a commit produced by \`commit-helper.mjs\` after the SHA is recorded in \`flow-state.json\`. Amend changes the SHA and breaks the AC chain. If the message is wrong, write a short note in \`flows/<slug>/build.md\` and move on; it is recoverable in review.
 `;
 
 const AC_QUALITY = `---
@@ -989,7 +987,7 @@ If the refactor renames or restructures public exports:
 
 - add a deprecation alias so external consumers still compile;
 - mark the old name with a \`@deprecated\` JSDoc / equivalent;
-- record the deprecation deadline in \`ships/<slug>.md\`.
+- record the deprecation deadline in \`flows/<slug>/ship.md\`.
 
 If the project policy forbids deprecation aliases (some libraries), the refactor is breaking; \`security_flag\` does not apply but breaking-change handling does (see breaking-changes skill).
 
@@ -997,7 +995,7 @@ If the project policy forbids deprecation aliases (some libraries), the refactor
 
 Refactor AC verification is "no behavioural diff": tests pass, snapshots unchanged, fixtures unchanged. If anything changes, the refactor leaked behaviour and must be split.
 
-## Code-simplification catalog (v8.7+)
+## Code-simplification catalog
 
 Three rules that turn "make it simpler" from a feeling into mechanical, reviewer-checkable behaviour.
 
@@ -1120,7 +1118,7 @@ Silence fails the gate.
 
 \`commit-helper\` enforces (a) ↔ (e) mechanically. The reviewer checks (b), (d), (f), (g) on iteration 1.
 
-(a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited.\n(b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named.\n(c) **red_test_recorded** — failing test exists, watched-RED proof attached.\n(d) **red_fails_for_right_reason** — RED captured a real assertion failure.\n(e) **green_two_stage_suite** — affected-tests pass AND full relevant suite passes after GREEN. Both commands captured in build.md.\n(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran (with FULL suite green afterward), or explicitly skipped with reason.\n(g) **traceable_to_plan** — commits reference plan AC ids and the plan's file set.\n(h) **commit_chain_intact** — RED + GREEN + REFACTOR SHAs (or skipped sentinel) recorded in flow-state.
+(a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited.\n(b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named.\n(c) **red_test_written** — failing test exists, watched-RED proof attached.\n(d) **red_fails_for_right_reason** — RED captured a real assertion failure.\n(e) **green_two_stage_suite** — affected-tests pass AND full relevant suite passes after GREEN. Both commands captured in build.md.\n(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran (with FULL suite green afterward), or explicitly skipped with reason.\n(g) **traceable_to_plan** — commits reference plan AC ids and the plan's file set.\n(h) **commit_chain_intact** — RED + GREEN + REFACTOR SHAs (or skipped sentinel) recorded in flow-state.
 
 ## Vertical slicing — tracer bullets, never horizontal waves
 
@@ -1179,7 +1177,7 @@ These rules apply equally to soft and strict modes. They make the difference bet
 - **Prefer real implementations over mocks.** The more your tests use real code, the more confidence they provide. Mock only what is genuinely outside your control (third-party APIs, time, randomness). Real > Fake (in-memory) > Stub (canned data) > Mock (interaction). Reach for the simplest level that gets the job done.
 - **Test pyramid: small / medium / large.** Most tests should be small (single process, no I/O, milliseconds). A handful are medium (boundary tests, in-process integration, seconds). E2E / multi-machine tests stay reserved for critical paths only.
 
-## Test-design checklist (v8.7+)
+## Test-design checklist
 
 Three rules that target the most common test-quality regressions in AI-coded suites.
 
@@ -1245,15 +1243,15 @@ These are surfaced under the build summary's \`### Noticed but didn't touch\` (p
 
 ## Anti-patterns
 
-- "The implementation is obvious, skipping RED." A-13 — gate fails immediately.
-- "Single test green, didn't run the suite." A-14 — that's not GREEN; it's a regression.
-- "Nothing to refactor, skipping silently." A-15 — emit the explicit \`--skipped\` commit with reason.
-- "Stage everything with \`git add -A\`." A-16 — staged unrelated edits leak into the AC commit.
-- "Production code in the RED commit." A-17 — RED is test files only.
-- **"Test file named after the AC id" — \`AC-1.test.ts\`, \`tests/AC-2.spec.ts\`, etc.** The reviewer flags this as \`block\`. Mirror the unit under test in the filename; carry the AC id inside the test name and commit message only.
-- **Horizontal slicing.** A-18 — writing all RED tests first, then all GREEN code, produces tests of imagined behaviour. One test → one impl → repeat. See the Vertical Slicing section above.
-- **Pushing past a failing test.** A-19 — the next cycle is built on the previous cycle's invariants; if those invariants are broken you are debugging a stack of broken assumptions. Stop the line, root-cause, then resume.
-- **Mocking what you should not mock.** A-20 — mocking the database for a query test reads green and breaks in production. Use a fake or a real test DB; mock only what is genuinely outside your control.
+The TDD cycle has a small number of well-known failure modes, all catalogued in \`antipatterns.md\`. The reviewer cites the antipattern entry directly; this list is a lookup.
+
+- **Skipping RED, scrambling phases, missing REFACTOR, production code in the RED commit.** A-2 — TDD phase integrity broken. The cycle is the contract; an audit trail with reordered phases is unverifiable.
+- **Single test green, didn't run the suite.** A-12 — that is a regression, not GREEN. Run the full relevant suite after every implementation change.
+- **Stage everything with \`git add -A\`.** A-3 — work outside the AC. Stage AC-related files explicitly (\`git add <path>\` per file, or \`git add -p\`).
+- **Horizontal slicing (RED-batch then GREEN-batch).** A-13 — writing all RED tests first, then all GREEN code produces tests of imagined behaviour. One test → one impl → repeat. See the Vertical Slicing section above.
+- **Pushing past a failing test.** A-14 — the next cycle is built on the previous cycle's invariants; if those are broken, you are debugging a stack of broken assumptions. Stop the line, root-cause, then resume.
+- **Mocking what should not be mocked.** A-15 — mocking a database driver for a query test reads green and breaks in production. Use a real test DB or an in-memory fake; mock only what is genuinely outside your control.
+- **Test file named after the AC id** (\`AC-1.test.ts\`, \`tests/AC-2.spec.ts\`). The reviewer cites this as severity=\`required\`. Mirror the unit under test in the filename; carry the AC id inside the test name and commit message only.
 
 ## Fix-only flow
 
@@ -1287,7 +1285,7 @@ A change is breaking when:
 ## Rules
 
 1. **Plan must declare it.** Set \`breaking_change: true\` (or note it explicitly in the plan body).
-2. **Migration must exist.** \`ships/<slug>.md\` carries a migration section: who is affected, what they need to do, when the old path stops working.
+2. **Migration must exist.** \`flows/<slug>/ship.md\` carries a migration section: who is affected, what they need to do, when the old path stops working.
 3. **Deprecation window.** Public libraries — at least one minor version. Internal services — at least one deploy cycle and one alert.
 4. **Release notes.** The CHANGELOG line must start with \`BREAKING:\` and link to the migration section.
 
@@ -1300,7 +1298,7 @@ When possible, ship the new path alongside the old. Examples:
 - new env var name accepted along with the old (with a deprecation log line);
 - new function exported with the new name; old name aliased to it.
 
-Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to architect; the decision must be recorded in \`decisions/<slug>.md\`.
+Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to architect; the decision must be recorded in \`flows/<slug>/decisions.md\`.
 
 ## Common pitfalls
 
@@ -1309,7 +1307,7 @@ Coexistence is not always possible (e.g. wire-format changes for older clients y
 - Skipping the CHANGELOG line because "everyone knows". They do not.
 - Forgetting the alert window for internal services. The deploy cycle is not enough; users need a heads-up.
 
-## Deprecation & migration patterns (v8.7+)
+## Deprecation & migration patterns
 
 Three patterns that cover the lifecycle of an API or contract from "still works, please move" to "removed".
 
@@ -1402,7 +1400,7 @@ These tokens are the wire protocol of cclaw. Translating them breaks tool calls,
 
 ## What MAY be in either language
 
-Artifact bodies (the prose inside \`plans/<slug>.md\`, \`builds/<slug>.md\`, \`reviews/<slug>.md\`, \`ships/<slug>.md\`, \`decisions/<slug>.md\`, \`learnings/<slug>.md\`).
+Artifact bodies (the prose inside \`flows/<slug>/plan.md\`, \`flows/<slug>/build.md\`, \`flows/<slug>/review.md\`, \`flows/<slug>/ship.md\`, \`flows/<slug>/decisions.md\`, \`flows/<slug>/learnings.md\`).
 
 Default rule: write the artifact body in the same language as the user's conversation, because the artifact is for them and for the next agent who reads their notes. The frontmatter stays English (it is the wire protocol).
 
@@ -1959,11 +1957,11 @@ When you spot pre-existing dead code, list it under your build artifact's \`## S
 - Noticed pre-existing dead code: \`src/legacy/foo.ts\` exports \`oldHelper()\` with no callers (verified via grep). Did NOT delete; outside AC scope. Recommend a follow-up cleanup slug.
 \`\`\`
 
-Be specific: cite the file, the symbol, and the evidence (grep output, IDE reference count, etc.). A bare "there's dead code somewhere" bullet is worthless and the reviewer treats it as A-18 (\`fyi\`).
+Be specific: cite the file, the symbol, and the evidence (grep output, IDE reference count, etc.). A bare "there's dead code somewhere" bullet is worthless and the reviewer downgrades it to severity \`fyi\` (no actionable signal).
 
 ## How the rules cascade with summary-format
 
-The three rules above run **alongside** the v8.6 \`## Summary\` block. The block's three sections map naturally:
+The three rules above run **alongside** the \`## Summary\` block. The block's three sections map naturally:
 
 - \`### Changes made\` — the AC-aligned diff (test files + minimal production diff + your-orphan cleanup; nothing else).
 - \`### Noticed but didn't touch\` — pre-existing dead code, drive-by-fix temptations you resisted, formatting noise you saw, code smells outside the AC surface.
@@ -2630,7 +2628,7 @@ Architect writes \`docs/decisions/ADR-0017-bm25-search-ranking.md\` with \`statu
 
 Slug ships successfully. Hop 6 runs:
 
-1. \`git mv flows/bm25-ranking/* flows/shipped/bm25-ranking/\` (existing v8.5 behaviour).
+1. \`git mv flows/bm25-ranking/* flows/shipped/bm25-ranking/\`.
 2. Edit \`docs/decisions/ADR-0017-bm25-search-ranking.md\`: \`status: ACCEPTED\`, add \`accepted_at\`, \`accepted_at_commit\`.
 3. \`git commit -m "docs(adr-0017): promote to ACCEPTED via bm25-ranking"\`.
 

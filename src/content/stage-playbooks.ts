@@ -7,7 +7,7 @@ export interface StagePlaybook {
 
 const PLAN_PLAYBOOK = `# Stage runbook — plan
 
-The orchestrator opens this file before authoring or amending \`plans/<slug>.md\`. The runbook is a checklist; obey it in order.
+The orchestrator opens this file before authoring or amending \`flows/<slug>/plan.md\`. The runbook is a checklist; obey it in order.
 
 ## 0. Decide whether this is plan-stage or trivial-edit
 
@@ -105,7 +105,7 @@ Before writing the failing test, **read** the affected surface:
 
 Cite each citation as \`file:path:line\`. No invented paths. If the planner cited a file that does not exist, **stop** and surface it back as a planner-stage finding.
 
-The discovery output goes into \`builds/<slug>.md\` under the AC's row, in the **Discovery** column. Skipping discovery is one of the five mandatory gate failures.
+The discovery output goes into \`flows/<slug>/build.md\` under the AC's row, in the **Discovery** column. Skipping discovery is one of the five mandatory gate failures.
 
 ## 3. RED — write a failing test that encodes the AC verification
 
@@ -125,7 +125,7 @@ node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=red \\
   --message="red(AC-N): assert <observable behaviour>"
 \`\`\`
 
-Append the watched-RED proof to \`builds/<slug>.md\` under the AC row, in the **RED proof** column (test name + 1-2 line failure excerpt).
+Append the watched-RED proof to \`flows/<slug>/build.md\` under the AC row, in the **RED proof** column (test name + 1-2 line failure excerpt).
 
 ## 4. GREEN — minimal production change to make RED pass
 
@@ -144,7 +144,7 @@ node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=green \\
   --message="green(AC-N): minimal impl that satisfies RED"
 \`\`\`
 
-Append the GREEN evidence to \`builds/<slug>.md\` under the AC row, in the **GREEN evidence** column.
+Append the GREEN evidence to \`flows/<slug>/build.md\` under the AC row, in the **GREEN evidence** column.
 
 ## 5. REFACTOR — keep behaviour, improve shape (mandatory)
 
@@ -185,7 +185,7 @@ When \`reviewer\` returns \`block\`, the slice-builder is dispatched in \`fix-on
 - if the fix changes observable behaviour, write a new RED test that encodes the corrected behaviour, then GREEN, then REFACTOR;
 - if the fix is purely a refactor of existing code (no behaviour change), commit it under \`--phase=refactor\` with a citation of the F-N finding;
 - the AC id stays the same (\`commit-helper.mjs --ac=AC-N --phase=… --message="fix: F-N …"\`);
-- a separate set of rows in \`builds/<slug>.md\` records F-N → phase → commit.
+- a separate set of rows in \`flows/<slug>/build.md\` records F-N → phase → commit.
 
 ## 9. Mandatory gates (every AC)
 
@@ -250,7 +250,7 @@ A \`block\` decision dispatches \`slice-builder\` in \`fix-only\` mode bound to 
 
 ## 5. Warn findings
 
-A \`warn\` does not block ship, but the warning must be recorded in \`reviews/<slug>.md\` and surfaced in \`ships/<slug>.md\`. The user can decide to fix it inline or capture it as a follow-up.
+A \`warn\` does not block ship, but the warning must be recorded in \`flows/<slug>/review.md\` and surfaced in \`flows/<slug>/ship.md\`. The user can decide to fix it inline or capture it as a follow-up.
 
 ## 6. Five Failure Modes pass (mandatory)
 
@@ -352,7 +352,7 @@ If any condition fails, keep \`status: blocked\` and iterate. Do NOT advance wit
 
 \`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/flows/shipped/<slug>/\`, writes a \`manifest.md\`, appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state.
 
-The compound quality gate captures \`learnings/<slug>.md\` only when at least one of:
+The compound quality gate captures \`flows/<slug>/learnings.md\` only when at least one of:
 
 - \`architect\` or \`planner\` recorded a non-trivial decision,
 - review needed ≥3 iterations,
@@ -363,7 +363,7 @@ When the gate fails, the run still ships — only the learning capture is skippe
 
 ## 8. Execute finalization
 
-Run the action implied by \`finalization_mode\` and record the result back into \`ships/<slug>.md\`:
+Run the action implied by \`finalization_mode\` and record the result back into \`flows/<slug>/ship.md\`:
 
 - **FINALIZE_MERGE_LOCAL** — merge into the base branch locally; verify clean merge; record the merged SHA.
 - **FINALIZE_OPEN_PR** — \`gh pr create\` with a structured body (summary, AC↔commit map, rollback plan). Record the PR URL.
@@ -380,7 +380,7 @@ Ship-stage ends when:
 - \`flows/shipped/<slug>/manifest.md\` exists,
 - flow-state is reset,
 - the user is told push/PR status (whether approved or skipped),
-- the rollback plan is sticky in \`ships/<slug>.md\` (the future operator opens this if anything goes wrong).
+- the rollback plan is sticky in \`flows/<slug>/ship.md\` (the future operator opens this if anything goes wrong).
 
 The next \`/cc\` invocation can be a brand-new request or a refinement of this slug.
 
@@ -391,7 +391,7 @@ The next \`/cc\` invocation can be a brand-new request or a refinement of this s
 - Selecting multiple finalization modes. Pick exactly one.
 - Picking \`FINALIZE_MERGE_LOCAL\` in a repo with no \`.git/\`. The Victory Detector will refuse; use \`FINALIZE_NO_VCS\` and record the manual target.
 - Pushing without asking. Always ask, always wait, every time.
-- Opening a PR with stale release notes. Re-read \`ships/<slug>.md\` before opening the PR.
+- Opening a PR with stale release notes. Re-read \`flows/<slug>/ship.md\` before opening the PR.
 - Skipping the manifest because "the slug is small". The manifest is the entry point future agents use to understand the slug; skipping it makes refinement harder later.
 - Editing artifacts after they're moved to \`.cclaw/flows/shipped/\`. Shipped slugs are read-only. Refinement creates a new slug.
 - Using \`git push --force\` to "fix" the ship_commit. Never. Open a follow-up slug instead.
