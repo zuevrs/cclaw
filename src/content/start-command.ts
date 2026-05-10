@@ -10,27 +10,39 @@ const RESEARCH_HELPER_LIST = RESEARCH_AGENTS.map(
 ).join("\n");
 
 const TRIAGE_ASK_EXAMPLE = `\`\`\`
-askUserQuestion(
-  prompt: <one sentence in the user's language stating: complexity + confidence, recommended path, why (cite file count / LOC / sensitive surface), AC mode, and "pick a path">,
-  options: [
-    <option label conveying: proceed with the recommended path>,
-    <option label conveying: switch to trivial — inline edit + commit, skip plan/review>,
-    <option label conveying: escalate to large-risky — adds brainstormer + architect, strict AC, parallel slices when applicable>,
-    <option label conveying: customise — user edits complexity / acMode / path>
-  ],
-  multiSelect: false
-)
-
-# After the user picks, ask the second question:
+# Single tool call, two questions in one form when the harness supports it
+# (Cursor's askUserQuestion, Claude Code's AskUserQuestion both accept a
+# questions[] array of length ≥1; OpenCode and Codex collapse to sequential
+# blocks if multi-question is unsupported). Combining saves one round-trip.
 
 askUserQuestion(
-  prompt: <one sentence in the user's language asking which run mode to use>,
-  options: [
-    <option label conveying: step mode — pause after each stage; next /cc advances (the default)>,
-    <option label conveying: auto mode — chain plan → build → review → ship; stop only on hard gates>
-  ],
-  multiSelect: false
+  questions: [
+    {
+      id: "path",
+      prompt: <one sentence in the user's language stating: complexity + confidence, recommended path, why (cite file count / LOC / sensitive surface), AC mode, and "pick a path">,
+      options: [
+        <option label conveying: proceed with the recommended path>,
+        <option label conveying: switch to trivial — inline edit + commit, skip plan/review>,
+        <option label conveying: escalate to large-risky — adds brainstormer + architect, strict AC, parallel slices when applicable>,
+        <option label conveying: customise — user edits complexity / acMode / path>
+      ],
+      allow_multiple: false
+    },
+    {
+      id: "run-mode",
+      # Skip this entry entirely when the recommended path is inline; only ONE question is rendered.
+      prompt: <one sentence in the user's language asking which run mode to use>,
+      options: [
+        <option label conveying: step mode — pause after each stage; next /cc advances (the default)>,
+        <option label conveying: auto mode — chain plan → build → review → ship; stop only on hard gates>
+      ],
+      allow_multiple: false
+    }
+  ]
 )
+
+# Harness fallback (no multi-question support): two sequential askUserQuestion
+# calls in the order shown. Skip the second on the inline path.
 \`\`\`
 
 The slots above (\`<...>\`) are intent descriptors, not literal strings. Render the prompt and every option label in the user's conversation language; do not copy the descriptor text. Mechanical tokens — \`/cc\`, \`/cc-cancel\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`auto\`, \`step\`, \`AC-N\`, slugs, file paths, JSON keys — remain in their original form regardless of language. See \`conversation-language.md\`.`;
@@ -167,13 +179,13 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 ## Hop 2 — Triage (fresh starts only)
 
-Run the \`triage-gate.md\` skill. **Use the harness's structured question tool** (\`AskUserQuestion\` in Claude Code, \`AskQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Two questions, in order:
+Run the \`triage-gate.md\` skill. **Use the harness's structured question tool** (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code do); fall back to two sequential calls only when the harness does not. Combining saves one user round-trip on every non-inline flow start.
 
 ${TRIAGE_ASK_EXAMPLE}
 
 The first question's prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, AC mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
 
-The second question is skipped on the trivial / inline path (no stages to chain). Default \`runMode\` is \`step\` if the user dismisses the question.
+The second question (run-mode) is **omitted entirely** on the trivial / inline path (no stages to chain) — render only the first question, never both. Default \`runMode\` is \`step\` if the user dismisses the question or the harness can only show one.
 
 If the harness lacks a structured ask facility, fall back to the legacy form:
 
@@ -308,7 +320,25 @@ The orchestrator reads only this. The full artifact stays in \`.cclaw/flows/<slu
 
 ##### Plan stage on large-risky (discovery sub-phase)
 
-When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the orchestrator does **not** dispatch \`planner\` directly. It runs a three-step discovery sub-phase, with a **mandatory pause and end-of-turn after each specialist** — regardless of \`triage.runMode\`. \`currentStage\` stays \`"plan"\` for all three; \`lastSpecialist\` rotates.
+When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the orchestrator runs a three-step discovery sub-phase by default: brainstormer → architect → planner, with a **mandatory pause and end-of-turn after each of the first two specialists** — regardless of \`triage.runMode\`. \`currentStage\` stays \`"plan"\` for all three; \`lastSpecialist\` rotates.
+
+###### Discovery auto-skip (low-ambiguity fast path)
+
+Before dispatching brainstormer, run the **discovery-needed heuristic** against the triage and pre-flight state. Skip directly to \`planner\` (single dispatch, no brainstormer or architect) when **all** of the following hold:
+
+1. \`triage.confidence\` is \`high\` (the heuristic produced an unambiguous large-risky classification).
+2. \`triage.assumptions\` is non-empty AND the user accepted them in pre-flight without edits (\`pre_flight_edits == 0\`).
+3. \`triage.interpretationForks\` is null OR a single fork was chosen explicitly.
+4. The user's \`/cc <task>\` prompt names ≥1 concrete file path or module (i.e. the focus surface is already given, not yet to be discovered).
+5. There is no security-sensitive keyword (\`auth\`, \`token\`, \`secret\`, \`oauth\`, \`saml\`, \`encryption\`, \`pii\`, \`gdpr\`, \`pci\`, \`hipaa\`, \`soc2\`) in the prompt **AND** \`security_flag\` is not preset by triage.
+
+When all five hold, the orchestrator surfaces a one-sentence skip notice in the user's language ("Discovery skipped: triage is high-confidence and the surface is named — going straight to planner. Reply with \`/cc-cancel\` if you want a brainstorm pass instead.") and dispatches \`planner\` directly with the same envelope as small/medium plus \`fast_path: skipped-discovery\` in flow-state. \`lastSpecialist\` stays \`null\` until planner returns.
+
+When **any** of the five fails, run the full three-step discovery as below.
+
+The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=force\` (always run the full discovery) or \`/cc <task> --discovery=skip\` (always skip, even if the heuristic would not have skipped — they take responsibility).
+
+###### Full three-step discovery (default; auto-skip declined or its conditions failed)
 
 > **Discovery never auto-chains.** Each specialist's slim summary is a high-stakes decision (selected direction, architectural option, AC table) that the user MUST see before the next specialist runs. The orchestrator renders the slim summary, ends the turn, and waits for the next \`/cc\` invocation to continue. \`auto\` runMode applies to the plan→build→review→ship transitions only, **not** to brainstormer→architect→planner inside the plan stage.
 
@@ -447,6 +477,7 @@ In parallel-build the gate runs **per slice**: a slice whose self-review fails b
   - \`security-reviewer\` mode=\`threat-model\` — when \`security_flag\` is true.
 - Pattern: **parallel fan-out + merge** (the canonical cclaw fan-out). Dispatch all specialists in the same message; merge their summaries in your context.
 - Inputs: \`.cclaw/flows/<slug>/plan.md\`, build.md, review.md.
+- **Shared diff context (single parse pass).** Before the parallel dispatch, run \`git diff --stat <plan-base>..HEAD\` and \`git diff --name-only <plan-base>..HEAD\` once in the orchestrator's context. Pass the parsed shape (touched files list, additions/deletions per file, total LOC delta) to **every** parallel reviewer in the dispatch envelope under a \`Shared diff:\` block. Each reviewer reads its own filtered subset (release-mode reads everything; adversarial-mode skims for hot paths; security-reviewer prioritises files matching sensitive patterns). This avoids three independent \`git diff\` calls and three independent file-list parses — savings: 1-2 seconds per ship + ~1-2K tokens × 3 (diff parse boilerplate). The reviewers still independently \`git show <SHA>\` per finding to read commit-level context; only the aggregated diff shape is shared.
 - Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan. As of v8.12 the adversarial reviewer's pre-mortem section is appended to \`review.md\` (no separate \`pre-mortem.md\` file unless \`legacy-artifacts: true\`).
 - After ship, run the compound learning gate (Hop 6).
 

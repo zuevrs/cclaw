@@ -21,7 +21,7 @@ You run inside a sub-agent dispatched by the cclaw orchestrator. You read inputs
    - relevant source files for the slug (read-only);
    - reference patterns at \`.cclaw/lib/patterns/\` matching the task.
 
-You **must dispatch \`learnings-research\`** at the start of every plan dispatch (Phase 3 below). You **must dispatch \`repo-research\`** when the project is brownfield AND no \`research-repo.md\` already exists (Phase 4 below). These dispatches offload context-gathering to small read-only sub-agents so your prompt stays focused on planning, not crawling.
+You **must dispatch \`learnings-research\`** at the start of every plan dispatch and, when the project is brownfield AND no \`research-repo.md\` already exists, you **also dispatch \`repo-research\` in the same batch** so the two run in parallel (Phase 3 below). These dispatches offload context-gathering to small read-only sub-agents so your prompt stays focused on planning, not crawling.
 
 You **write only** \`.cclaw/flows/<slug>/plan.md\`. You return a slim summary (≤6 lines) so the orchestrator can pause and ask the user. The orchestrator updates \`flow-state.json\` after your slim summary returns; you do not touch \`flow-state.json\` yourself.
 
@@ -61,32 +61,36 @@ If \`research-repo.md\` exists, treat its cited paths as your focus surface. Do 
 
 A plan whose AC verifications cite \`file:test-name\` for files the planner did not read is speculation; the reviewer flags it as \`required\` (axis=correctness). Cite each read in the AC's verification line.
 
-### Phase 3 — learnings-research dispatch (mandatory, every plan)
+### Phase 3 — research dispatch (parallel; one always, one conditional)
 
-Dispatch the \`learnings-research\` helper as a sub-agent. Envelope:
+You dispatch up to **two read-only research helpers in the same tool-call batch** — do NOT serialise them. Both are independent: \`learnings-research\` reads \`.cclaw/knowledge.jsonl\`; \`repo-research\` reads the project tree. Neither produces input the other consumes. Issuing them serially adds a full LLM round-trip you do not need.
+
+**Always dispatch \`learnings-research\`** in the batch:
 
 - Required first read: \`.cclaw/lib/agents/learnings-research.md\`
 - Slug, focus surface (paths the upcoming AC will touch — derive from the Frame and decisions), failure-mode hint (one of: \`auth\`, \`schema-migration\`, \`concurrency\`, \`rendering\`, \`integration\`, or \`none\`).
 
-Wait for the slim summary. As of v8.12 the helper returns the lessons **inline in its slim-summary's \`Notes\` field** (\`Notes: lessons={...}\`) and does NOT write a separate \`research-learnings.md\` file. The blob carries 0-3 prior lessons with verbatim quotes from \`shipped/<prior-slug>/learnings.md\` and a "Why this applies here" line for each.
-
-(On \`legacy-artifacts: true\`, the helper also writes \`flows/<slug>/research-learnings.md\` for downstream tooling. The blob in Notes is still authoritative; the file is a back-compat dupe.)
-
-In Phase 6 you copy the surfaced lessons into \`plan.md\` under a \`## Prior lessons applied\` section. If the blob is empty (\`lessons={}\`) or \`Notes\` is omitted, write "No prior shipped slugs apply to this task." verbatim — the explicit nothing-found is more useful than a missing section, because the reviewer can confirm you actually checked.
-
-If \`learnings-research\` returns \`Confidence: low\`, downgrade your own confidence to \`medium\` (you are working without grounded prior context) and note it in the slim summary.
-
-### Phase 4 — repo-research dispatch (conditional, brownfield only)
-
-Dispatch \`repo-research\` ONLY when ALL of the following hold:
+**Also dispatch \`repo-research\` in the same batch** ONLY when ALL of the following hold:
 
 - \`.cclaw/flows/<slug>/research-repo.md\` does NOT already exist (neither brainstormer nor architect produced one), AND
 - a manifest exists at the repo root (\`package.json\` / \`pyproject.toml\` / \`go.mod\` / \`Cargo.toml\` / \`Gemfile\` / \`composer.json\` / \`pom.xml\`), AND
 - a source root exists (\`src/\` or equivalent for the language).
 
-Greenfield (no manifest OR no source root) skips this phase.
+Greenfield (no manifest OR no source root) skips repo-research; you still dispatch learnings-research alone in that case.
 
-If you dispatch it, the envelope mirrors learnings-research: required first read of \`agents/repo-research.md\`, slug, focus surface (≤3 paths), triage assumptions. Wait for the slim summary, read \`research-repo.md\`. Use it to confirm test conventions, file naming, and existing patterns when you author the AC verifications and touch surfaces.
+Envelope for repo-research mirrors learnings-research: required first read of \`agents/repo-research.md\`, slug, focus surface (≤3 paths), triage assumptions.
+
+**Wait for both slim summaries** (in a parallel dispatch the orchestrator returns when the slower of the two completes; this is still one round-trip, not two).
+
+#### How to consume the results
+
+- **learnings-research** — As of v8.12 the helper returns the lessons **inline in its slim-summary's \`Notes\` field** (\`Notes: lessons={...}\`) and does NOT write a separate \`research-learnings.md\` file. The blob carries 0-3 prior lessons with verbatim quotes from \`shipped/<prior-slug>/learnings.md\` and a "Why this applies here" line for each. (On \`legacy-artifacts: true\`, the helper also writes \`flows/<slug>/research-learnings.md\` for downstream tooling. The blob in Notes is still authoritative; the file is a back-compat dupe.) In Phase 6 you copy the surfaced lessons into \`plan.md\` under a \`## Prior lessons applied\` section. If the blob is empty (\`lessons={}\`) or \`Notes\` is omitted, write "No prior shipped slugs apply to this task." verbatim — the explicit nothing-found is more useful than a missing section, because the reviewer can confirm you actually checked. If learnings-research returns \`Confidence: low\`, downgrade your own confidence to \`medium\` (you are working without grounded prior context) and note it in the slim summary.
+
+- **repo-research** — Read \`flows/<slug>/research-repo.md\` (it writes a file even though learnings-research went inline). Use it to confirm test conventions, file naming, and existing patterns when you author the AC verifications and touch surfaces. If repo-research returns \`Confidence: low\`, the focus surface was ambiguous; surface it in the planner's slim-summary Notes and decide whether to ask the user for a sharper hint.
+
+#### When NOT to parallelise
+
+Only sequence the two helpers if one's result must shape the other's envelope — and that does not happen in normal planner flow. The planner sees both as parallel reads; the dispatcher does not.
 
 ### Phase 5 — Author plan body (always)
 
