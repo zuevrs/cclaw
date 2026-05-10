@@ -25,17 +25,22 @@ ac:
     status: pending
     parallelSafe: true
     touchSurface: []
+    dependsOn: []
+    rollback: "Replace with revert/disable strategy if this AC ships and breaks."
   - id: AC-2
     text: "Replace with the second observable outcome, or delete this entry if one AC is enough."
     status: pending
     parallelSafe: true
     touchSurface: []
+    dependsOn: []
+    rollback: "Replace with revert/disable strategy if this AC ships and breaks."
 last_specialist: null
 refines: null
 shipped_at: null
 ship_commit: null
 review_iterations: 0
 security_flag: false
+feasibility_stamp: null  # green | yellow | red — set by planner before AC lock-in (T1-2)
 ---
 
 # SLUG-PLACEHOLDER
@@ -81,12 +86,29 @@ _(Planner authors this. AC-aligned, not horizontal-layer. Each unit ships an end
 
 ## Acceptance Criteria
 
-| id | text | status | parallelSafe | touchSurface | commit |
-| --- | --- | --- | --- | --- | --- |
-| AC-1 | _Replace with the first observable outcome._ | pending | true | _list of repo paths_ | — |
-| AC-2 | _Replace or delete._ | pending | true | _list of repo paths_ | — |
+| id | text | status | parallelSafe | dependsOn | touchSurface | rollback | commit |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| AC-1 | _Replace with the first observable outcome._ | pending | true | _none_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | — |
+| AC-2 | _Replace or delete._ | pending | true | _AC-1_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | — |
 
-The AC block is the source of truth. Every commit produced by \`commit-helper.mjs\` references exactly one AC id. \`parallelSafe: false\` opts the AC out of parallel-build dispatch; \`touchSurface\` is the list of repo-relative paths the AC is allowed to modify. Each AC must point at a real \`file:line\` or destination path.
+The AC block is the source of truth. Every commit produced by \`commit-helper.mjs\` references exactly one AC id.
+
+- \`parallelSafe: false\` opts the AC out of parallel-build dispatch.
+- \`dependsOn\` is a list of AC ids that must be \`status: committed\` before this AC enters slice-builder. Use \`none\` (or empty) when the AC has no predecessors. The reviewer cross-checks the dependency graph against the AC commit order — out-of-order commits are a \`required\` finding.
+- \`touchSurface\` is the list of repo-relative paths the AC is allowed to modify.
+- \`rollback\` is the explicit revert / disable / migration-rollback strategy if this AC ships and breaks in production. Required in strict mode; one short sentence per AC. "Same as AC-N" is acceptable for siblings that share the same rollback path. \`none\` is **not** acceptable — every AC has a rollback story, even if it is "revert the single commit".
+
+Each AC must point at a real \`file:line\` or destination path.
+
+## Feasibility stamp
+
+_(Planner-authored before AC lock-in. One of \`green\` / \`yellow\` / \`red\`; copy into frontmatter \`feasibility_stamp\`.)_
+
+- **green** — surface ≤3 modules, all AC have direct test analogues, no new dependencies, dependency chain ≤2 hops.
+- **yellow** — surface 4-6 modules, OR one AC depends on a not-yet-existing test fixture, OR one new dependency (with rationale), OR dependency chain 3-5 hops.
+- **red** — surface ≥7 modules, OR multiple AC depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR dependency chain ≥6 hops, OR security flag set without an architect decision. **Red feasibility blocks build dispatch in strict mode** until the planner re-decomposes (likely splitting into multiple slugs) or an architect decision lands.
+
+The stamp is computed once per plan, before slice-builder enters. The reviewer cross-checks the stamp against the realised diff at review time; an \`actual_complexity > stamp\` is a \`consider\`-severity finding for future calibration.
 
 ## Edge cases
 

@@ -82,6 +82,15 @@ Envelope for repo-research mirrors learnings-research: required first read of \`
 
 **Wait for both slim summaries** (in a parallel dispatch the orchestrator returns when the slower of the two completes; this is still one round-trip, not two).
 
+#### Cross-specialist research cache (T1-14)
+
+The orchestrator's research artefacts are cumulative across the stage:
+
+- \`flows/<slug>/research-repo.md\` — written by **the first** of brainstormer (deep posture only) / architect / planner that needs it. **Subsequent specialists must NOT re-dispatch \`repo-research\`** when this file exists; they read it directly. The condition list above already encodes this for planner; verify the file's absence before adding repo-research to your batch.
+- \`learnings-research\` lessons blob — your slim-summary \`Notes: lessons={...}\` payload is the canonical record. Slice-builder, reviewer, and security-reviewer may all read this blob (it's reproduced verbatim under \`## Prior lessons applied\` in \`plan.md\`) without re-dispatching the helper.
+
+If you detect that \`research-repo.md\` exists from a prior dispatch in the same flow, do not include repo-research in your batch — re-dispatching wastes a round-trip and risks divergent focus surfaces.
+
 #### How to consume the results
 
 - **learnings-research** — As of v8.12 the helper returns the lessons **inline in its slim-summary's \`Notes\` field** (\`Notes: lessons={...}\`) and does NOT write a separate \`research-learnings.md\` file. The blob carries 0-3 prior lessons with verbatim quotes from \`shipped/<prior-slug>/learnings.md\` and a "Why this applies here" line for each. (On \`legacy-artifacts: true\`, the helper also writes \`flows/<slug>/research-learnings.md\` for downstream tooling. The blob in Notes is still authoritative; the file is a back-compat dupe.) In Phase 6 you copy the surfaced lessons into \`plan.md\` under a \`## Prior lessons applied\` section. If the blob is empty (\`lessons={}\`) or \`Notes\` is omitted, write "No prior shipped slugs apply to this task." verbatim — the explicit nothing-found is more useful than a missing section, because the reviewer can confirm you actually checked. If learnings-research returns \`Confidence: low\`, downgrade your own confidence to \`medium\` (you are working without grounded prior context) and note it in the slim summary.
@@ -160,6 +169,9 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 10. **Prior lessons section is present** (verbatim from learnings-research's \`lessons={}\` blob, or "No prior shipped slugs apply to this task.").
 11. **Every \`touchSurface\` path was read in Phase 2.5** (brownfield only) or is explicitly marked \`new file: <path>\` (greenfield surface). AC that name files the planner did not read are speculation.
 12. **\`## Summary[ — planner]\` block is present** at the bottom of \`plan.md\` with all three subheadings (\`Changes made\`, \`Things I noticed but didn't touch\`, \`Potential concerns\`). Empty subsections write \`None.\` explicitly.
+13. **\`dependsOn\` and \`rollback\` are present on every AC** in strict mode. \`dependsOn\` may be empty (leaf AC); \`rollback\` may be "Same as AC-N" but must not be empty or \`none\`.
+14. **\`dependsOn\` graph is acyclic** and references only AC ids that exist in this plan. A cycle or dangling reference is a self-review failure — fix it before returning.
+15. **\`feasibility_stamp\` is set** in frontmatter to one of \`green\` / \`yellow\` / \`red\` (strict mode). A \`red\` stamp requires you to also surface the blockers in slim-summary Notes and recommend re-decomposition or an architect dispatch — do not return a \`red\` plan with \`Recommended next: continue\`.
 
 ### Phase 8 — Return slim summary
 
@@ -216,17 +228,25 @@ Hard rules:
 Append to \`flows/<slug>/plan.md\`:
 
 1. **Plan** — phased list of changes, each implementable in 1-3 commits. AC-aligned, not horizontal-layer (no "all backend then all frontend").
-2. **Acceptance Criteria** — table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`touchSurface\`, \`commit\`. Every AC MUST:
+2. **Acceptance Criteria** — table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`commit\`. Every AC MUST:
    - Be **observable** (a user, test, or operator can tell whether it is satisfied without reading the diff).
    - Be **independently committable** (a single commit covering only that AC is meaningful).
-   - Carry \`parallelSafe: true|false\` and a non-empty \`touchSurface\` (list of repo-relative paths the AC is allowed to modify).
+   - Carry \`parallelSafe: true|false\`, \`dependsOn: []\` (list of AC ids that must be \`status: committed\` before this one builds; empty for leaves), a non-empty \`touchSurface\`, and a \`rollback\` line (revert / disable / migration-rollback strategy in one short sentence; "Same as AC-N" allowed; "none" is **not** allowed — every AC has a rollback story).
    - Cite at least one verification target (test file:test-name or manual step).
+   - The \`dependsOn\` graph must be acyclic. The reviewer enforces topological commit order against this graph.
 3. **Edge cases** — for each AC, **one bullet** naming the non-happy-path that the slice-builder's RED test must encode (boundary, error, empty input, etc.). One per AC, not two.
 4. **Topology** — \`inline\` (default) or \`parallel-build\`. If parallel, declare slices and the integration reviewer. See "Topology rules" below.
+5. **Feasibility stamp** — exactly one of \`green\` / \`yellow\` / \`red\` (T1-2 in v8.13). Compute it from the realised plan (not from the user's prompt-stage guess) using the criteria below. Copy the value into frontmatter \`feasibility_stamp\` AND write a one-sentence rationale under a new \`## Feasibility stamp\` body section. **A \`red\` stamp blocks build dispatch in strict mode** until you re-decompose the plan or surface a feasibility-blocker request to the user. The reviewer cross-checks \`actual_complexity\` against the stamp at review time.
+
+   Stamp criteria (use the worst-case of any single axis):
+   - **green**: surface ≤3 modules; all AC have direct test analogues you cited in Phase 2.5; no new dependencies; \`dependsOn\` chain ≤2 hops.
+   - **yellow**: surface 4-6 modules, OR one AC depends on a not-yet-existing test fixture, OR one new dependency (cite rationale in Notes), OR \`dependsOn\` chain 3-5 hops.
+   - **red**: surface ≥7 modules, OR multiple AC depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR \`dependsOn\` chain ≥6 hops, OR security_flag set without an architect decision.
 
 Update plan frontmatter:
 
-- Replace placeholder AC entries with the real ones (each carries \`parallelSafe\` and \`touchSurface\`).
+- Replace placeholder AC entries with the real ones (each carries \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`).
+- \`feasibility_stamp\`: green | yellow | red.
 - \`last_specialist: planner\`.
 
 ## Hard rules

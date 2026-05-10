@@ -430,7 +430,10 @@ Hard rules:
 
 - **More than 5 parallel slices is forbidden.** If planner produced >5, the planner must merge thinner slices into fatter ones before build; do not generate "wave 2".
 - Slice-builders never read each other's worktrees mid-flight. A slice that detects a conflict with another stops and raises an integration finding.
-- If the harness lacks sub-agent dispatch or worktree creation fails (non-git repo, permissions), parallel-build degrades silently to inline-sequential. Record the fallback in \`flows/<slug>/build.md\` frontmatter (\`subAgentDispatch: inline-fallback\`) — not an error.
+- **Parallel-build fallback (T1-5)** — when the harness lacks sub-agent dispatch or worktree creation fails (non-git repo, permissions, dirty working tree, harness limit reached), parallel-build degrades to inline-sequential. The fallback is **not silent**:
+  - Render an explicit warning to the user in their language naming the cause (e.g., "harness does not support parallel sub-agents — falling back to sequential build, will run AC-1..AC-N one after another"), AND
+  - Use the harness's structured ask to surface a single \`accept-fallback\` option (and inform the user they may invoke \`/cc-cancel\` themselves if the loss of parallelism makes the work not worth doing under sequential timing) — the orchestrator must wait for the user's explicit \`accept-fallback\` reply before dispatching the sequential slice-builder. The parallel→sequential decision changes wall-clock substantially; the user gets to make the call.
+  - Record the fallback in \`flows/<slug>/build.md\` frontmatter (\`subAgentDispatch: inline-fallback\`, \`fallback_reason: <one-line>\`, \`fallback_accepted_at: <iso>\`) so the reviewer sees it. The fallback is not an error, but it is a visible event with a recorded user-acknowledgement.
 - \`auto\` runMode does **not** affect the integration-reviewer ask: a parallel wave that produces a block finding always asks the user before fix-only.
 
 #### review
@@ -439,8 +442,42 @@ Hard rules:
 - Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/flows/<slug>/build.md\`, the diff since plan.
 - Output: \`.cclaw/flows/<slug>/review.md\` with the **Concern Ledger** (always; same shape regardless of acMode).
 - The five Failure Modes checklist runs every iteration. Every iteration block also includes \`What's done well\` (≥1 evidence-backed item, anti-sycophancy gate) and a \`Verification story\` table (tests run / build run / security checked, each with evidence). See \`.cclaw/lib/agents/reviewer.md\`.
-- Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user.
+- The reviewer applies the **seven-axis** check (correctness / test-quality / readability / architecture / complexity-budget / security / perf — v8.13 added test-quality and complexity-budget; see reviewer.md for the per-axis checklist).
+- **Auto-detect security-sensitive surfaces (T1-7).** Before dispatching the code/integration reviewer, scan the slug's diff file list against the sensitive-surface heuristic below. **Any match forces \`security-reviewer\` to run alongside the regular reviewer**, regardless of \`security_flag\`. Path/keyword matches:
+  - paths containing \`auth\`, \`oauth\`, \`saml\`, \`session\`, \`token\`, \`secret\`, \`credential\`, \`encryption\`, \`crypto\`, \`acl\`, \`permission\`, \`role\`, \`policy\`, \`iam\`, \`csrf\`, \`xss\`;
+  - paths containing \`migration\`, \`schema.prisma\`, \`*.sql\`, \`db/\`;
+  - paths containing \`.env\`, \`config/secrets\`, \`vault\`, \`kms\`, \`keystore\`;
+  - HTTP route definitions (\`routes/\`, \`*.controller.*\`, \`api/\`);
+  - dependency manifests (\`package.json\`, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`Gemfile\`, \`composer.json\`, \`pom.xml\`) with at least one new dependency line;
+  - any file containing the literal token \`@security-sensitive\` in a comment.
+  When any of these match, set \`security_flag: true\` in plan.md frontmatter as a side-effect of the auto-detect (so subsequent review iterations and the ship gate see the flag), then proceed with the parallel reviewer + security-reviewer dispatch. Surface the trigger to the user in one line ("Security-reviewer triggered: \`auth\` keyword in 2 touched files. Continuing with parallel review.") so they know why the security stage happened.
+- Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user. Cap-reached is **not silent** (T1-10); see "Cap-reached split-plan" below.
 - Slim summary: decision (clear / warn / block / cap-reached), open findings count, recommended next (continue / fix-only / cancel).
+
+##### Cap-reached split-plan (T1-10)
+
+When the 5th iteration ends without \`clear\` or \`warn\`, the review **does not just surface "residual blockers"**; the orchestrator (with the reviewer's help) authors a **split/handoff mini-plan** in the same review.md iteration block, under \`## Cap-reached recovery\`:
+
+1. **Why we stopped** — one sentence: which findings persisted across iterations 4-5, what fix attempts converged or oscillated.
+2. **Recommended split** — list of follow-up slugs the orchestrator should propose (\`<slug>-fix-A\`, \`<slug>-rearchitect-B\`, etc.) with one bullet per slug naming what AC / surface that slug would own. The split is the actionable path forward, not just a list of complaints.
+3. **What ships now (if anything)** — a yes/no with reason. When AC-1..AC-K are clean and AC-K+1..AC-N are blocked, the recommendation is "ship AC-1..AC-K under the current slug, open \`<slug>-followup\` for the rest". When everything is entangled, the recommendation is "ship nothing under this slug; open \`<slug>-rearchitect\`".
+4. **Handoff envelope** — for each recommended split slug, the input artifact references (\`flows/<slug>/plan.md#AC-3\`, \`flows/<slug>/review.md#F-7\`) the next slug should preload.
+
+After this block is authored, the orchestrator surfaces a structured ask to the user with the split options (or "discard, re-triage from scratch"). \`/cc-cancel\` remains available as a typed command for nuking the slug.
+
+##### Adversarial pre-mortem rerun on fix-only hot paths (T1-9)
+
+When a fix-only loop touches code that the **adversarial review iteration** previously flagged (i.e., the file:line was named in a finding under axis=correctness/security/architecture in any prior adversarial run on this slug), the orchestrator **re-runs adversarial mode** on the next ship pass — even if it already ran once for this slug in strict mode. The principle: a fix to an adversarially-flagged hot path is itself a hot-path change, and the original adversarial pass cannot have foreseen the fix.
+
+Rerun trigger condition (computed at ship gate):
+
+- The last adversarial iteration produced ≥1 finding with \`severity: required | critical\`, AND
+- a fix-only loop has landed at least one commit since that adversarial run, AND
+- the diff of those fix-only commits intersects the file:line set named in the prior adversarial findings.
+
+When the trigger fires, the ship-gate parallel fan-out includes \`reviewer mode=adversarial\` again (alongside release + security if applicable). When it does not fire, adversarial runs once per slug as before.
+
+Record the rerun reason in \`review.md\`: \`Adversarial reran because fix-only commits <SHA1>, <SHA2> touched lines previously flagged in F-3 and F-7\`.
 
 ##### Self-review gate (mandatory before reviewer dispatch)
 
