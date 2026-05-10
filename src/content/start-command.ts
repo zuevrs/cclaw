@@ -584,14 +584,72 @@ Each step is a separate dispatch + slim summary + end-of-turn. The user can invo
 
 Pause behaviour depends on \`triage.runMode\` (default \`step\`). Both modes share the same resume mechanism: \`/cc\` is the only command that advances a paused flow.
 
+### Handoff artifacts (T2-3, gsd pattern; v8.13)
+
+**After every stage exit** — both at the end of plan / build / review / ship and at every internal discovery checkpoint (brainstormer-done, architect-done) — the orchestrator writes two resumable-checkpoint files alongside \`flow-state.json\`:
+
+1. **\`.cclaw/flows/<slug>/HANDOFF.json\`** — machine-readable, single source of truth for "where exactly are we?". Schema:
+
+\`\`\`json
+{
+  "slug": "<slug>",
+  "stage_completed": "plan | build | review | ship | discovery-brainstormer | discovery-architect",
+  "stage_started_at": "<iso>",
+  "stage_completed_at": "<iso>",
+  "next_stage": "build | review | ship | done | discovery-architect | discovery-planner",
+  "next_specialist": "<id> | null",
+  "open_findings": <count>,
+  "review_iterations": <count>,
+  "feasibility_stamp": "green | yellow | red | null",
+  "ci_smoke_passed": <boolean | null>,
+  "release_notes_filled": <boolean | null>,
+  "security_flag": <boolean>,
+  "blocked_by": <"low-confidence" | "review-pause" | "cap-reached" | "user-decline" | null>,
+  "resume_command": "/cc",
+  "resume_envelope": {
+    "required_first_read": ".cclaw/lib/agents/<next_specialist>.md",
+    "required_second_read": ".cclaw/lib/skills/<next_wrapper>.md",
+    "inputs": [".cclaw/state/flow-state.json", ".cclaw/flows/<slug>/<next_stage>.md", "..."]
+  }
+}
+\`\`\`
+
+2. **\`.cclaw/flows/<slug>/.continue-here.md\`** — human-readable resume note rendered in the user's conversation language. Shape:
+
+\`\`\`markdown
+# Continue here — <slug>
+
+**Stage just completed:** <stage> (<one-sentence verdict in user's language>)
+**Where we are:** <one-sentence summary of the slug's current state — AC count, review iterations, open findings>
+**What's next:** <one-sentence description of the next stage in user's language>
+**To resume:** \`/cc\`  (or \`/cc-cancel\` to discard the slug)
+
+## Open questions or pauses
+- <bullet per pending decision the user must make; empty when none>
+
+## Recent activity
+- <last 3-5 specialist returns in chronological order, each as one short bullet>
+\`\`\`
+
+**Why two files:** \`HANDOFF.json\` is what the orchestrator's resume hop reads to rebuild dispatch context; \`.continue-here.md\` is what the user reads to remember what they were doing — possibly days later when they reopen a stale flow. The dot-prefix on \`.continue-here.md\` keeps it out of casual file-listing noise but keeps it readable when the user grep's for "continue".
+
+**Lifecycle:**
+- Each stage exit (or discovery checkpoint) **rewrites both files from scratch** — they are idempotent snapshots, not appended logs. Stale data is the v8.11-era ship.md bug applied to handoff state; the fix is "always re-author".
+- \`runCompoundAndShip\` moves both files into \`shipped/<slug>/\` alongside the canonical 7 stages (the T0-10 directory scan handles them automatically). Shipped flows preserve their final HANDOFF.json + .continue-here.md as a record of how the slug ended.
+- \`/cc-cancel\` moves both into \`cancelled/<slug>/\`.
+- The Hop 1 detect path may consult \`HANDOFF.json\` as a fallback when \`flow-state.json\` is missing or unparseable (v8.13 hardening: file may be deleted by accident, but HANDOFF.json snapshots can rebuild the resume context).
+
+When a sub-agent dispatch's slim-summary returns, the orchestrator: (1) patches \`flow-state.json\`; (2) re-renders both handoff files; (3) renders the slim summary in the conversation; (4) ends the turn. Step 2 is mandatory — skipping it leaves the next \`/cc\` invocation rebuilding context the wrong way.
+
 ### \`step\` mode (default; safer; recommended for \`strict\` work)
 
 After every dispatch returns:
 
 1. Render the slim summary back to the user.
-2. State the next stage in plain language: "Plan is ready (5 testable conditions). Send \`/cc\` to continue with build."
-3. **End your turn.** Do not call \`askUserQuestion\`; do not wait for a magic word like "continue". The pause IS the end of the turn — \`flow-state.json\` carries the resume point, and the next \`/cc\` invocation resumes from there.
-4. The user invokes \`/cc\` to advance, \`/cc\` (no arg) is identical, \`/cc-cancel\` to discard, or sends free-text feedback like "fix this first" — which the next \`/cc\` reads from the surrounding conversation.
+2. **Re-author \`HANDOFF.json\` and \`.continue-here.md\` from scratch** (idempotent rewrite).
+3. State the next stage in plain language: "Plan is ready (5 testable conditions). Send \`/cc\` to continue with build."
+4. **End your turn.** Do not call \`askUserQuestion\`; do not wait for a magic word like "continue". The pause IS the end of the turn — \`flow-state.json\` + \`HANDOFF.json\` carry the resume point, and the next \`/cc\` invocation resumes from there.
+5. The user invokes \`/cc\` to advance, \`/cc\` (no arg) is identical, \`/cc-cancel\` to discard, or sends free-text feedback like "fix this first" — which the next \`/cc\` reads from the surrounding conversation.
 
 This is the **single resume mechanism** for cclaw. Mid-session and cross-session pauses both end the turn; \`/cc\` is the only verb that moves the flow forward. There is no "type continue" magic word; there is no clickable Continue button mid-turn.
 
@@ -650,7 +708,38 @@ After ship, check the compound quality gate:
 - a security review ran or \`security_flag\` is true;
 - the user explicitly asked to capture (\`/cc <task> --capture-learnings\`).
 
-If any signal fires, dispatch the learnings sub-agent (small one-shot): write \`flows/<slug>/learnings.md\` from \`.cclaw/lib/templates/learnings.md\`, append a line to \`.cclaw/knowledge.jsonl\`. Otherwise skip silently.
+If any signal fires, dispatch the learnings sub-agent (small one-shot): write \`flows/<slug>/learnings.md\` from \`.cclaw/lib/templates/learnings.md\`, append a line to \`.cclaw/knowledge.jsonl\`. Otherwise honour the **learnings hard-stop** (T1-13; see ship runbook §7a) — surface a structured ask rather than skipping silently when the slug is non-trivial.
+
+### Compound-refresh sub-step (T2-4, everyinc pattern; v8.13)
+
+Every **5th** capture (\`knowledge.jsonl\` line count is a multiple of 5 after the new line is appended), the orchestrator runs a **knowledge-refresh** pass over the file. The point: append-only is durable but lossy on signal-to-noise — duplicates accumulate, superseded findings persist, and cross-cutting themes never get consolidated. The refresh applies five actions to the existing entries:
+
+1. **dedup** — entries whose touchSurface + tags + learnings shape are near-identical (Jaccard ≥ 0.8 over the touchSurface union AND tags union AND verbatim-overlap of learnings). Keep the most recent entry, mark the others \`status: dedup-of <newer-slug>\`. The newer entry inherits the older entries' \`historicSlugs: []\` array so the lineage isn't lost.
+2. **keep** — entry is unique, non-stale, still cited by at least one open antipattern reference. No change.
+3. **update** — entry is unique but a later slug refined the lesson (different phrasing, sharper boundary). Patch the entry's \`learnings\` field with the newer phrasing; keep the older slug citation alongside the newer one. Mark \`refined_at: <iso>\`, \`refined_via_slug: <newer-slug>\`.
+4. **consolidate** — 2+ entries on the same theme but different surfaces (e.g., 3 entries about "fix-only loops on auth flows that drifted in scope"). Merge into a single entry with a richer learnings paragraph and \`mergedFrom: [slug-list]\`. The merged entry's \`learnings\` is authored by the orchestrator (synthesis), not copy-paste.
+5. **replace** — old entry is genuinely superseded (architecture changed, library replaced). Keep the old entry but mark \`status: superseded-by <newer-slug>\`; the search/scoring layer treats superseded entries as \`-2\` to keep them out of top-3 picks but still findable for archaeology.
+
+The refresh runs **inline in the orchestrator's context** as the 5th capture finishes. Output: a new \`.cclaw/knowledge-refresh-<iso>.md\` log file (one block per action, citing slug ids) so the user can see what changed. Failures (file unparseable, IO error) write the log but skip the actions; the original \`knowledge.jsonl\` is unchanged.
+
+Trigger thresholds (configurable in \`.cclaw/config.yaml\`):
+
+- \`compoundRefreshEvery: 5\` — run every Nth capture; default 5; set to \`0\` to disable.
+- \`compoundRefreshFloor: 10\` — skip refresh until \`knowledge.jsonl\` has ≥10 lines (otherwise the refresh has nothing to dedup against).
+
+Manual trigger: \`/cc-compound-refresh\` — runs the same pass on demand. Useful after large bulk-import of legacy slugs.
+
+### Discoverability self-check (T2-12)
+
+After ship completes (Hop 6 done), the orchestrator scans \`AGENTS.md\` / \`CLAUDE.md\` / \`README.md\` for any mention of \`knowledge.jsonl\` or \`flows/shipped/\`. When **none** of these files mention either path, the orchestrator surfaces a one-line note in the user's language ("This project's knowledge.jsonl now has N entries but the AGENTS.md / CLAUDE.md / README.md don't reference it. Want me to add a 1-line discovery note so future agents know it exists? [add / skip-this-time / never]"). The user picks; on \`add\`, the orchestrator appends a single line to the most appropriate root file (preferring AGENTS.md, then CLAUDE.md, then README.md):
+
+\`\`\`markdown
+- \`.cclaw/knowledge.jsonl\` — append-only learnings catalogue from cclaw flows; cclaw specialists read this before authoring plans (\`learnings-research\` helper).
+\`\`\`
+
+This makes the catalogue discoverable to future agents/humans who don't already know cclaw's conventions. Without the note, a fresh contributor (or a different harness's bootstrap) won't know it exists.
+
+The discoverability check runs **once per slug** (only when ship completes), and respects the user's \`never\` choice for the rest of the session.
 
 ## Hop 6 — Finalize (ship-finalize: move active artifacts to shipped/)
 
