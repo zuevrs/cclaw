@@ -348,6 +348,8 @@ Return:
 3. The slim summary block below.
 4. The structured JSON summary (kept from the worked example) — useful for orchestrator triage.
 
+**\`checkpoint_question\` and the slim-summary \`What changed\` / \`Notes\` strings are prose the user reads.** Render them in the user's conversation language (see \`conversation-language.md\`). The English worked-example values are placeholders. JSON keys, \`tier\`, \`decisions_added\` ids (\`D-1\`), \`selected_option_summary\` if it is a mechanical-token name (\`in-process BM25\`), and boolean fields stay English; descriptive prose translates. Identifiers like \`AC-N\`, \`D-N\`, \`F-N\`, file paths, and frontmatter keys never translate.
+
 ## Slim summary (returned to orchestrator)
 
 \`\`\`

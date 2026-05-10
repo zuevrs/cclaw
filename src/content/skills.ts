@@ -29,52 +29,56 @@ If the harness exposes a structured question tool — \`AskUserQuestion\` (Claud
 
 Render the analysis as the question prompt and the four choices as options:
 
-- prompt: \`Triage — Complexity: small/medium (high). Recommended: plan → build → review → ship. Why: 3 modules, ~150 LOC, no auth touch. AC mode: soft. Pick a path.\`
+- prompt: <one sentence in the user's language stating: complexity + confidence, recommended path, why (cite file count / LOC / sensitive surface), AC mode, "pick a path">
 - options:
-  - \`Proceed as recommended\`
-  - \`Switch to trivial (inline edit + commit, skip plan/review)\`
-  - \`Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)\`
-  - \`Custom (let me edit complexity / acMode / path)\`
+  - <option label conveying: proceed with the recommended path>
+  - <option label conveying: switch to trivial — inline edit + commit, skip plan/review>
+  - <option label conveying: escalate to large-risky — adds brainstormer + architect, strict AC, parallel slices when applicable>
+  - <option label conveying: customise — user edits complexity / acMode / path>
 
-The prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, ac mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
+The slots above (\`<...>\`) are intent descriptors. Render the prompt body and every option label in the user's conversation language; do not copy the descriptor text. The prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, ac mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
 
 ### Question 2 — run mode
 
 Right after the user picks a path, ask:
 
-- prompt: \`Run mode for this flow?\`
+- prompt: <one sentence in the user's language asking which run mode to use>
 - options:
-  - \`Step (default) — pause after every stage; I type "continue" to advance\`
-  - \`Auto — run plan → build → review → ship without pausing; stop only on block findings or security flag\`
+  - <option label conveying: step mode — pause after each stage; next /cc advances (the default)>
+  - <option label conveying: auto mode — chain plan → build → review → ship; stop only on hard gates>
 
 Default \`step\` if the user dismisses the question or the harness lacks a structured ask facility. Inline / trivial flows skip Question 2 (there are no stages to chain).
+
+\`/cc\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`step\`, \`auto\` stay in their original form (mechanical tokens; see \`conversation-language.md\`); the descriptive prose around them is in the user's language.
 
 ## Fallback — when no structured ask tool exists
 
 Only when the harness has no structured ask facility (rare; legacy CLI mode), print the same content as a fenced block plus numbered options:
 
 \`\`\`
-Triage
+<Triage block heading in the user's language>
 ─ Complexity: <trivial | small/medium | large-risky>  (confidence: <high | medium | low>)
 ─ Recommended path: <inline | plan → build → review → ship>  (large-risky uses the same four-stage path; the discovery sub-phase is an expansion of \`plan\`, not a separate path entry)
-─ Why: <one short sentence; cite file count, LOC estimate, sensitive-surface flag>
+─ Why: <one short sentence in the user's language; cite file count, LOC estimate, sensitive-surface flag>
 ─ AC mode: <inline | soft | strict>
 \`\`\`
 
 \`\`\`
-[1] Proceed as recommended
-[2] Switch to trivial (inline edit + commit, skip plan/review)
-[3] Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)
-[4] Custom (let me edit complexity / acMode / path)
+[1] <option text conveying: proceed with the recommendation>
+[2] <option text conveying: switch to trivial>
+[3] <option text conveying: escalate to large-risky>
+[4] <option text conveying: customise the triage>
 \`\`\`
 
 Then a separate block for run mode:
 
 \`\`\`
-Run mode
-[s] Step — pause after every stage (default)
-[a] Auto — chain stages without pausing; stop only on block findings or security flag
+<Run-mode block heading in the user's language>
+[s] <option text conveying: step mode — pause after each stage; next /cc advances (default)>
+[a] <option text conveying: auto mode — chain stages; stop only on hard gates>
 \`\`\`
+
+The slots inside \`<...>\` are intent only; the actual fallback rendered to the user uses the user's language. Bracketed shortcut letters (\`[1]\`, \`[s]\`) and mechanical tokens (\`/cc\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`step\`, \`auto\`, complexity / acMode keywords) stay in their original form regardless of conversation language.
 
 The fenced form is a fallback, not the primary path. Always try the structured tool first.
 
@@ -268,14 +272,15 @@ Render the numbered list as the question prompt, plus four options:
   Correct me now or I proceed with these.
 
 - options:
-  - \`Proceed with these\`
-  - \`Edit one assumption\`
-  - \`Edit several assumptions\`
-  - \`Cancel — re-think the request\`
+  - <option label conveying: proceed with these assumptions as-is>
+  - <option label conveying: edit one assumption>
+  - <option label conveying: edit several assumptions>
 
-If the user picks "Edit one" or "Edit several", follow up with a free-text ask (textarea / prompt-input) for the corrected list. Re-confirm once with the structured tool, then persist.
+The option slots are intent descriptors. Render every label and the prompt body in the user's conversation language. \`Cancel\` is not an option — if the user wants to abort before any specialist runs, they invoke \`/cc-cancel\` themselves; the orchestrator surfaces that command in plain prose only when the user looks stuck.
 
-If the user dismisses the question (timeout, harness limitation), default to "Proceed with these" — the user has at least seen them once, and the next message can amend if needed.
+If the user picks "edit one" or "edit several" (whatever the user-language label was), follow up with a free-text ask for the corrected list. Re-confirm once with the structured tool, then persist.
+
+If the user dismisses the question (timeout, harness limitation), default to "proceed with these" — the user has at least seen them once, and the next message can amend if needed.
 
 ## Output shape — FALLBACK (no structured ask)
 
@@ -291,8 +296,9 @@ Correct me now or I proceed.
 [1] Proceed
 [2] Edit one assumption — say which number and the replacement
 [3] Edit several — paste the corrected list
-[4] Cancel
 \`\`\`
+
+To abort before any specialist runs, the user invokes \`/cc-cancel\` (a separate command). The fenced fallback never includes a Cancel row.
 
 ## Persistence shape
 
@@ -382,12 +388,17 @@ The request is ambiguous — pick the reading I should run with:
    Tradeoff: latency wins on revisits, no help on cold reads; cache-coherency work.
    Effort: small.
 
-Pick one and I'll plan against that reading. If none fit, type "Cancel — re-think" and I'll ask for more info.
+<closing line in the user's language: "Pick one. If none fit, reply with the axis that actually matters and I will re-fork.">
 \`\`\`
 
-Options: \`Reading 1\` / \`Reading 2\` / \`Reading 3\` / \`Cancel — re-think\` (always include "Cancel — re-think" as a valid choice; do NOT force a pick).
+Options:
+- <option label conveying: pick reading 1 (the first numbered interpretation)>
+- <option label conveying: pick reading 2 (the second numbered interpretation)>
+- <option label conveying: pick reading 3 (the third numbered interpretation, only if it exists)>
 
-If the user picks "Cancel — re-think", abort the flow and surface a free-text ask: "Tell me which axis matters most: latency, throughput, write-amplification, or read-locality?". Do NOT silently pick the first option.
+Render the prompt body and every option label in the user's conversation language. \`Cancel\` is **not** offered — if the user wants to abort the flow, they invoke \`/cc-cancel\` themselves; if no reading fits, the user replies in free text and you re-compose the forks.
+
+If the user dismisses every reading (replies with "none of these" or equivalent in the user's language), do NOT silently pick the first option. Surface a follow-up free-text ask in the user's language naming the axes that drive the choice (e.g. for the search example: latency vs throughput vs write-amplification vs read-locality). Re-compose the forks once the user names the axis.
 
 ### Persistence
 
@@ -449,9 +460,9 @@ Pre-flight — допущения, с которыми буду работать
 Поправь сейчас или продолжаю с этим.
 \`\`\`
 
-Options: \`Иду с этим\` / \`Поправить одно\` / \`Поправить несколько\` / \`Отмена\`.
+Options follow the same intent shape as in the structured-ask schema above (proceed / edit one / edit several), rendered in the user's conversation language. There is no Cancel option — \`/cc-cancel\` is a separate explicit command that the user types if they want to abort.
 
-Note: prompt is in Russian (matches user's language), but \`tokens.css\`, \`tests/\`, \`*.test.tsx\`, \`/api/profile\`, \`Prisma\`, \`Tailwind\` stay in their original form — they are mechanical tokens (see \`conversation-language.md\`).
+Note: in this Russian example the prompt body, the numbered assumptions, and the (omitted) option labels would all be in Russian to match the user. \`tokens.css\`, \`tests/\`, \`*.test.tsx\`, \`/api/profile\`, \`Prisma\`, \`Tailwind\`, \`/cc-cancel\` stay in their original form regardless of conversation language — they are mechanical tokens (see \`conversation-language.md\`).
 
 ## Common pitfalls
 
@@ -485,36 +496,37 @@ Read \`.cclaw/state/flow-state.json\`:
 
 \`\`\`
 Active flow: <slug>
-─ Stage: <plan | build | review | ship>  (last touched <relative-time>)
+─ Stage: <plan | build | review | ship>  (last touched <relative-time, in the user's language>)
 ─ Triage: <complexity> / acMode=<inline | soft | strict>
-─ Progress: <N committed / M total AC>  (or "<N conditions verified" in soft mode)
+─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
 ─ Last specialist: <none | brainstormer | architect | planner | reviewer | security-reviewer | slice-builder>
 ─ Open findings: <K>  (review only; 0 outside review)
-─ Next step: <inferred from stage and progress>
+─ Next step: <one sentence in the user's language describing what /cc will do next>
 \`\`\`
 
 Then ask:
 
 \`\`\`
-[r] Resume — continue from <stage>
-[s] Show — open the artifact for the current stage and pause
-[c] Cancel — /cc-cancel and free the slot
-[n] New — shelve this flow as cancelled and start fresh
+[r] <option text conveying: resume — dispatch the next specialist for <stage>>
+[s] <option text conveying: show — open the artifact for the current stage and stop>
+[n] <option text conveying: new — shelve this flow as cancelled and start the new task fresh>
 \`\`\`
 
-\`[n]\` is shown only when the user passed a new task argument; otherwise drop it.
+\`[n]\` is shown only when the user passed a new task argument; otherwise drop it. \`Cancel\` is **not** an option — if the user wants to nuke this flow without starting a new one, they invoke \`/cc-cancel\` themselves. Surface that command in plain prose, in the user's language, only when the user looks stuck.
+
+The slots inside \`<...>\` (relative time, next step, option text) render in the user's conversation language. \`/cc\`, \`/cc-cancel\`, slug, stage names, \`acMode\`, \`AC-N\`, file paths, frontmatter keys, and specialist names stay in their original form (mechanical tokens; see \`conversation-language.md\`). Bracketed shortcut letters (\`[r]\`, \`[s]\`, \`[n]\`) stay English.
 
 ## Inferring next step
 
 | currentStage | progress condition | next step |
 | --- | --- | --- |
-| \`plan\` | not yet committed | "review the plan in \`flows/<slug>/plan.md\`, then say 'continue' to dispatch slice-builder" |
+| \`plan\` | not yet committed | "review the plan in \`flows/<slug>/plan.md\`, then send \`/cc\` to dispatch slice-builder" |
 | \`build\` | strict mode, AC committed > 0, AC pending > 0 | "continue with AC-<next pending>" |
-| \`build\` | soft mode, build.md exists | "review build evidence in \`flows/<slug>/build.md\`, then say 'continue' to enter review" |
-| \`build\` | strict mode, all AC committed | "ready for review; say 'continue' to dispatch reviewer" |
-| \`review\` | open block findings exist | "fix-only loop: dispatch slice-builder mode=fix-only against open ledger rows" |
-| \`review\` | clear / warn-only convergence | "ready for ship; say 'continue' to dispatch ship" |
-| \`ship\` | compound complete | "flow already shipped; new task or /cc-cancel" |
+| \`build\` | soft mode, build.md exists | "review build evidence in \`flows/<slug>/build.md\`, then send \`/cc\` to enter review" |
+| \`build\` | strict mode, all AC committed | "ready for review; send \`/cc\` to dispatch reviewer" |
+| \`review\` | open block findings exist | "fix-only loop: send \`/cc\` to dispatch slice-builder mode=fix-only against open ledger rows" |
+| \`review\` | clear / warn-only convergence | "ready for ship; send \`/cc\` to dispatch ship" |
+| \`ship\` | compound complete | "flow already shipped; start a new task or invoke \`/cc-cancel\` to clear state" |
 
 ## Resume rules
 
@@ -528,29 +540,29 @@ Then ask:
 - Ignoring \`flow-state.json\` and starting fresh on every \`/cc\` invocation. The state file IS the resume point — re-prompting the user when a flow is already in progress is a contract violation.
 - Re-running the triage gate on resume. The user already chose; respect the saved decision.
 - Re-prompting the user for the slug ("which task?") when \`currentSlug\` is set. Read it from state.
-- Treating \`/cc\` with no argument as an error. It is the canonical "continue" command.
+- Treating \`/cc\` with no argument as an error. It is the canonical resume command — \`/cc\` advances any paused flow.
+- Offering \`Cancel\` as an option in the resume picker. \`/cc-cancel\` is a separate explicit user-typed command; the picker shows \`Resume\` / \`Show\` (and \`New\` on collision) only.
 
-## Worked example
+## Worked example (schema; render in the user's language)
 
 \`\`\`
 > /cc
 
-Active flow: approval-page
-─ Stage: build  (last touched 2 hours ago)
+Active flow: <slug>
+─ Stage: build  (last touched <relative-time>)
 ─ Triage: small/medium / acMode=soft
 ─ Progress: 2 of 3 conditions verified
 ─ Last specialist: slice-builder
 ─ Open findings: 0
-─ Next step: continue with the third condition (tooltip on hover)
+─ Next step: <one sentence describing what /cc will do next>
 
-[r] Resume — continue from build
-[s] Show — open flows/approval-page/build.md and pause
-[c] Cancel — /cc-cancel and free the slot
+[r] <option text conveying: resume — dispatch slice-builder for the next condition>
+[s] <option text conveying: show — open flows/<slug>/build.md and stop>
 \`\`\`
 
-User: r
+User picks the resume option (whichever label the user-language copy used; the harness returns the index, not the string).
 
-Orchestrator dispatches \`slice-builder\` against the third condition.
+Orchestrator dispatches \`slice-builder\` against the next pending condition.
 `;
 
 const PLAN_AUTHORING = `---
@@ -1372,6 +1384,8 @@ Everything that the user reads as prose:
 
 - Status updates ("starting plan", "RED for AC-2 looks good").
 - Questions you ask the user.
+- **Option labels in structured asks** (\`askUserQuestion\` / \`AskQuestion\` / OpenCode "ask" / Codex \`prompt\`). Translate every option string to the user's language. The English samples in skill bodies and orchestrator prompts (\`Proceed as recommended\`, \`Step\`, \`Auto\`, \`Reading 1\`, \`Edit one assumption\`, \`Continue with fix-only\`, \`Stay paused\`, \`Show artifact\`, \`Override and continue\`, etc.) are placeholders — not literal strings to copy.
+- **Slim-summary text fields** that surface to the user — \`What changed\`, \`Notes\`, \`checkpoint_question\`, \`open_questions\` strings. The schema keys (\`Stage\`, \`Artifact\`, \`Open findings\`, \`Confidence\`, \`Recommended next\`) are English; the values written **into** \`What changed\` / \`Notes\` / \`checkpoint_question\` are in the user's language.
 - Clarifications, recommendations, summaries, recaps.
 - Error explanations and recovery suggestions.
 - Diff explanations during review iterations.
@@ -1408,48 +1422,64 @@ If the user explicitly asks for English-only artifacts ("write the plan in Engli
 
 Commit messages: the AC line stays English (\`AC-N: …\`); the rest of the message body may follow the artifact-body language.
 
-## Worked example — Russian conversation
+## Worked schema — language-neutral
 
-User: "сделай мне CLI клиент для нашего REST API"
+The example below uses placeholder slots (\`<...>\`) instead of literal strings so it does not anchor your output on any specific language. When you actually emit one of these, fill each slot in the user's language. No copy-paste of literal example strings.
 
-You (status): "Стартую план \`api-cli\`. Подтягиваю pattern \`api-endpoint.md\`. Пять AC: list, get, create, update, delete. Подтверждаешь?"
-
-You (artifact \`flows/api-cli/plan.md\`):
-
-\`\`\`markdown
----
-slug: api-cli
-stage: plan
-status: active
-ac:
-  - id: AC-1
-    text: list команда вызывает GET /resources и печатает таблицу.
-    status: pending
----
-
-# api-cli
-
-…
+\`\`\`
+askUserQuestion(
+  prompt: <one sentence in the user's language stating the question>,
+  options: [
+    <option label in the user's language conveying intent A>,
+    <option label in the user's language conveying intent B>,
+    <option label in the user's language conveying intent C>
+  ],
+  multiSelect: false
+)
 \`\`\`
 
-Note: slug stays \`api-cli\` (English, kebab-case); AC ids stay \`AC-1\` (English); frontmatter keys stay English; the AC body is in Russian.
+\`\`\`
+Stage: <stage>  ✅ complete  |  ⏸ paused  |  ❌ blocked
+Artifact: .cclaw/flows/<slug>/<stage>.md
+What changed: <one sentence in the user's language>
+Open findings: <integer>
+Confidence: <high | medium | low>
+Notes: <required when Confidence != high; one sentence in the user's language>
+Recommended next: <continue | review-pause | fix-only | cancel>
+\`\`\`
 
-You (commit message): \`AC-1: добавлен list-команд via fetch\`. The \`AC-1:\` prefix is English (commit-helper requires it); the message body is Russian.
+\`\`\`json
+{
+  "specialist": "<id>",
+  "posture": "<posture>",
+  "selected_direction": "<short label; mechanical-token names stay English; descriptive prose in the user's language>",
+  "checkpoint_question": "<one sentence in the user's language>",
+  "open_questions": ["<short phrase in the user's language>"]
+}
+\`\`\`
+
+JSON keys (\`specialist\`, \`posture\`, \`selected_direction\`, \`checkpoint_question\`, \`open_questions\`) and the slim-summary keys (\`Stage\`, \`Artifact\`, \`What changed\`, \`Open findings\`, \`Confidence\`, \`Notes\`, \`Recommended next\`) are wire protocol — always English. The **values** are user-facing prose and follow the user's language. Mechanical tokens inside the prose (\`AC-N\`, \`D-N\`, \`F-N\`, slugs, file paths, \`/cc\`, \`/cc-cancel\`, \`fix-only\`, specialist ids) stay in their original form regardless of language.
+
+For artifact bodies (\`flows/<slug>/plan.md\` etc.), the same rule applies: frontmatter keys are English, AC ids and slugs are English, the prose body is in the user's language. Slugs follow the mandatory \`YYYYMMDD-<semantic-kebab>\` format and are always ASCII kebab-case regardless of conversation language.
+
+Commit messages: the \`AC-N:\` prefix is English (commit-helper parses it); the rest of the message body may follow the artifact-body language.
 
 ## Common pitfalls
 
-- Translating slugs ("добавить-cli" instead of "add-cli"). Slugs are filenames; keep them ASCII kebab-case.
-- Translating frontmatter keys (\`статус: активен\`). Frontmatter is parsed by code; keys must be English.
-- Restating the same status update twice ("Старт. — Starting."). Pick one. Match the user.
+- Translating slugs (writing the slug with non-ASCII characters from the user's language). Slugs are filenames; keep them ASCII kebab-case in the \`YYYYMMDD-<semantic-kebab>\` format.
+- Translating frontmatter keys. Frontmatter is parsed by code; keys must be English.
+- **Copying example strings verbatim.** The orchestrator and skill bodies use placeholder notation (\`<intent>\`) inside fenced \`askUserQuestion(...)\` blocks and slim-summary blocks precisely because any literal string would anchor your output on the language used in the example. Read the placeholder, derive the intent, write the label in the user's language.
+- Writing \`checkpoint_question\`, \`What changed\`, \`Notes\`, or \`open_questions\` string values in a language other than the user's. These are user-facing prose values; the JSON / slim-summary keys are English but the values match the user.
+- Restating the same status update twice in two languages. Pick one. Match the user.
 - Switching to English when the answer is "complicated". The user's complexity tolerance is not your language tolerance.
-- Translating commit-helper output (\`[ошибка]\`). Hook output is read by the harness; leave it in English. Your own commentary on top of the hook output may be in the user's language.
+- Translating hook output (the strings \`commit-helper.mjs\` and the session hooks emit). Hook output is read by the harness; leave it in its original form. Your own commentary above or below hook output may be in the user's language.
 
 ## How to detect language
 
 1. Read the user's last message. If it has at least one full sentence in language X, X is the language.
-2. If the user mixed languages within one message, count tokens; pick the language with the most non-stopword tokens.
-3. If still tied, default to the language of their previous-but-one message.
-4. If there is no usable history (first turn, terse prompt), default to English. Do not guess from one ambiguous word.
+2. If the user mixed languages within one message, count tokens (excluding mechanical tokens like file paths, AC ids, command names, code snippets); pick the language with the most non-stopword tokens.
+3. If still tied, fall back to the language of their previous-but-one message.
+4. If there is no usable history (first turn, terse prompt with only mechanical tokens like a file path), default to English. Do not guess from one ambiguous word.
 `;
 
 const ANTI_SLOP = `---

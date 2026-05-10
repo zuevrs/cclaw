@@ -43,6 +43,20 @@
 
 Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`). Four stages (`plan → build → review → ship`). Six specialists, all on-demand, all running as sub-agents, all emitting `Confidence: high | medium | low`. Seventeen skills including the always-on `triage-gate`, `flow-resume`, `pre-flight-assumptions`, `tdd-cycle`, `conversation-language`, `anti-slop`, and the strict-mode-default `source-driven`. Ten templates including `plan-soft.md` and `build-soft.md` for the soft-mode path. Four runbooks. Eight reference patterns. Three research playbooks. Five recovery playbooks. Eight worked examples. Two mandatory gates in strict mode (AC traceability + TDD phase chain); soft mode keeps both as advisory; inline mode skips both.
 
+## What changed in 8.11
+
+8.11 is a non-breaking orchestrator-spec cleanup release on top of 8.10.1. Five concrete UX regressions from a real session log got fixed:
+
+- **Discovery sub-phase always pauses regardless of `runMode`.** In `large-risky` flows the brainstormer → architect → planner chain used to blow through in `auto` mode — the user never saw the brainstormer's `selected_direction` before architect's tradeoffs landed on top. Now each discovery step renders its slim summary and ends the turn; the user types `/cc` to advance. The auto-mode chain only applies to plan → build → review → ship transitions, never to discovery-internal handoffs.
+- **`Cancel` is no longer a clickable option in any picker.** Hop 1 detect, Hop 2.5 pre-flight, Hop 4 hard gates, flow-resume picker, and interpretation forks all dropped their `Cancel` row. `/cc-cancel` is a separate explicit user-typed command for nuking flow state — the orchestrator surfaces it only in plain prose, only when the user looks stuck. Putting a destructive command behind a one-keystroke option was a footgun.
+- **`/cc` is the single resume verb.** Step mode used to say `I type "continue" to advance` (three places: start-command, triage-gate, flow-resume) — two competing magic words for the same action. Now `step` mode = render slim summary, end the turn; the user sends `/cc` (the same verb that resumes any other paused flow). One mechanic, one verb.
+- **Slug naming format is `YYYYMMDD-<semantic-kebab>`.** Hop 2 Triage now mandates a date prefix on every minted slug (`20260510-billing-rewrite`). Same-day collisions resolve by appending `-2`, `-3`, etc. The date prefix is mandatory and ASCII regardless of conversation language. `orchestrator-routing.semanticSlugTokens(slug)` strips the prefix before Jaccard matching, so same-topic flows on different days are still reliably matched against shipped artefacts.
+- **Structured asks render in the user's conversation language.** Every fenced `askUserQuestion(...)` example in `start-command.ts`, `skills.ts` (triage-gate, pre-flight-assumptions, interpretation-forks, flow-resume), and `conversation-language.md` now uses `<option label conveying: ...>` placeholder notation instead of literal English option strings. The agent cannot copy a literal English string because there isn't one — the slot describes the intent and the agent must verbalise it in the user's language. Mechanical tokens (`/cc`, `/cc-cancel`, stage names, mode names, slugs, file paths, JSON keys, `AC-N`, complexity / acMode keywords) stay in their original form. The `conversation-language` skill's worked example was rewritten as a language-neutral schema. The `brainstormer.ts` and `architect.ts` specialist prompts now explicitly require `checkpoint_question`, `What changed`, `Notes`, and `open_questions` values to render in the user's language.
+
+23 new tests (`tests/unit/v811-cleanup.test.ts`) cover all five fixes; the existing start-command resume test was updated to match the new placeholder shape. 385 tests across 40 files, all green.
+
+No breaking changes, no new CLI commands, no new config keys, no new dependencies. Existing flows with non-dated slugs continue to work; the date prefix is only required for new slugs minted on or after 8.11.
+
 ## What changed in 8.10.1
 
 A real install run on 8.10.0 surfaced two regressions:
