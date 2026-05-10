@@ -206,6 +206,14 @@ _(Per AC: one-line shape change applied, or explicit "skipped: <reason>". Silenc
 
 - AC-1: extracted \`hasViewEmail\` helper from inline check.
 
+## Coverage assessment
+
+_(Per AC, written between GREEN and REFACTOR. One row per AC. Verdict is one of \`full\` / \`partial\` / \`refactor-only\`. \`partial\` is a valid verdict — name the uncovered branch and the reason; an absent row is **not** a valid verdict and the reviewer treats it as severity=\`required\`, axis=correctness.)_
+
+| AC | Verdict | Branches covered (file:line) | Branches uncovered + reason |
+| --- | --- | --- | --- |
+| AC-1 | _full_ | _src/lib/permissions.ts:18 truthy branch (RED test); src/lib/permissions.ts:24 falsy branch (pre-existing test tests/unit/permissions.test.ts:11)_ | _none_ |
+
 ## Fix iterations (after a review block)
 
 _(Append one fix-iteration block per review iteration that returned \`block\`. Same TDD cycle applies; same AC id is reused; finding F-N is cited in the message.)_
@@ -253,6 +261,7 @@ _(One paragraph mirroring \`flows/SLUG-PLACEHOLDER/plan.md\` Plan section.)_
 - **Discovery**: _\`src/<module>/<file>.ts:<line>\`, \`tests/unit/<existing>.test.ts:<line>\`._
 - **RED**: _\`<runner command>\` → N failing (expected). Cite the assertion that fails (≤3 lines)._
 - **GREEN**: _One sentence on the minimal change. \`<full-suite command>\` → all passing._
+- **Coverage**: _Verdict \`full\` / \`partial\` / \`refactor-only\` + which branches are anchored by which test file:line. \`partial\` is valid (name the uncovered branch + reason); absent line is not._
 - **REFACTOR**: _One-line shape change applied, or "skipped: <reason>"._
 - **Commit**: _\`<one-line message>\` (\`<SHA>\`)._
 - **Follow-ups**: _\`info\` items deferred to a separate slug, or "none"._

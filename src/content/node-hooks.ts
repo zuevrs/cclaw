@@ -23,6 +23,51 @@ async function readState() {
   }
 }
 
+// Sum the byte size of all .md artefacts under flows/<slug>/. Used as a proxy
+// for "context pressure" — a long-running flow with many fix iterations and
+// reviewer rounds accumulates artefact bytes that every sub-agent dispatch has
+// to re-read. The thresholds are deliberately advisory: the goal is to
+// surface the cost honestly, not to gate or block.
+async function flowArtifactBytes(slug) {
+  const dir = path.join(root, "flows", slug);
+  let total = 0;
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.endsWith(".md")) continue;
+    try {
+      const stat = await fs.stat(path.join(dir, entry.name));
+      total += stat.size;
+    } catch {
+      // ignore — single-file failures should not break the hook
+    }
+  }
+  return total;
+}
+
+const FLOW_PRESSURE_LIGHT_KB = 30;
+const FLOW_PRESSURE_HIGH_KB = 60;
+const FLOW_PRESSURE_CRITICAL_KB = 100;
+
+function pressureAdvice(bytes) {
+  const kb = Math.round(bytes / 1024);
+  if (kb >= FLOW_PRESSURE_CRITICAL_KB) {
+    return \`[cclaw] context: flow artefacts ~\${kb} KB. Critical pressure — every sub-agent dispatch re-reads this. Consider \\\`/cc-cancel\\\` and resplitting into smaller slugs, or finalising the current slug now and continuing in a follow-up flow.\`;
+  }
+  if (kb >= FLOW_PRESSURE_HIGH_KB) {
+    return \`[cclaw] context: flow artefacts ~\${kb} KB. High pressure — finish the active slice in this session and resume from a clean session for the next AC instead of pushing further here.\`;
+  }
+  if (kb >= FLOW_PRESSURE_LIGHT_KB) {
+    return \`[cclaw] context: flow artefacts ~\${kb} KB. Elevated — let the orchestrator dispatch a fresh sub-agent for the next AC rather than continuing inline.\`;
+  }
+  return null;
+}
+
 const state = await readState();
 if (!state) {
   console.log("[cclaw] no active flow. Use /cc <task> to start.");
@@ -53,6 +98,10 @@ if (acMode === "strict" && ac.length > 0) {
 } else {
   console.log(\`[cclaw] active: \${state.currentSlug} (stage=\${state.currentStage ?? "n/a"}, mode=\${acMode}).\`);
 }
+
+const pressureBytes = await flowArtifactBytes(state.currentSlug);
+const advice = pressureAdvice(pressureBytes);
+if (advice) console.log(advice);
 `;
 
 const STOP_HANDOFF_HOOK = `#!/usr/bin/env node

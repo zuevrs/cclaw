@@ -12,7 +12,13 @@ import { FLOWS_ROOT } from "./constants.js";
 import { exists, ensureDir, removePath, writeFileSafe } from "./fs-utils.js";
 import { readFlowState, resetFlowState, writeFlowState } from "./run-persistence.js";
 import { manifestTemplate, templateBody } from "./content/artifact-templates.js";
-import { appendKnowledgeEntry, type KnowledgeEntry } from "./knowledge-store.js";
+import {
+  appendKnowledgeEntry,
+  findNearDuplicate,
+  type KnowledgeEntry,
+  type NearDuplicateMatch,
+  type NearDuplicateOptions
+} from "./knowledge-store.js";
 import type { AcceptanceCriterionState } from "./types.js";
 
 export interface CompoundQualitySignals {
@@ -27,6 +33,18 @@ export interface CompoundRunOptions {
   signals: CompoundQualitySignals;
   refines?: string | null;
   notes?: string;
+  /**
+   * Caller-provided union of file/directory paths the slug's AC list touched.
+   * The compound layer does not derive this from flow-state because
+   * `AcceptanceCriterionState` is intentionally text-only; supply it from
+   * plan.md when the orchestrator/CLI invokes `runCompoundAndShip`. Optional;
+   * absent leaves dedup to fall back to `tags`-only signature.
+   */
+  touchSurface?: string[];
+  /** Extra tag set (axes / antipattern ids / etc) used by dedup signature. */
+  tags?: string[];
+  /** Override or disable the near-duplicate scan (e.g. for tests). */
+  dedupOptions?: NearDuplicateOptions | { disable: true };
 }
 
 export interface CompoundRunResult {
@@ -35,6 +53,7 @@ export interface CompoundRunResult {
   learningCaptured: boolean;
   movedArtifacts: ArtifactStage[];
   knowledgeEntry?: KnowledgeEntry;
+  dedupeMatch?: NearDuplicateMatch | null;
 }
 
 export class CompoundError extends Error {}
@@ -99,19 +118,33 @@ export async function runCompoundAndShip(
   const learningCaptured = shouldCaptureLearning(options.signals);
 
   let knowledgeEntry: KnowledgeEntry | undefined;
+  let dedupeMatch: NearDuplicateMatch | null = null;
   if (learningCaptured) {
     const learningPath = activeArtifactPath(projectRoot, "learnings", slug);
     if (!(await exists(learningPath))) {
       await writeFileSafe(learningPath, templateBody("learnings", { "SLUG-PLACEHOLDER": slug }));
     }
-    knowledgeEntry = {
+    const baseEntry: KnowledgeEntry = {
       slug,
       ship_commit: options.shipCommit,
       shipped_at: shippedAt,
       signals: { ...options.signals },
       refines: options.refines ?? null,
-      notes: options.notes
+      notes: options.notes,
+      touchSurface: options.touchSurface,
+      tags: options.tags
     };
+    const dedupOpts = options.dedupOptions;
+    if (dedupOpts && "disable" in dedupOpts && dedupOpts.disable) {
+      dedupeMatch = null;
+    } else {
+      dedupeMatch = await findNearDuplicate(
+        projectRoot,
+        baseEntry,
+        dedupOpts && !("disable" in dedupOpts) ? dedupOpts : {}
+      );
+    }
+    knowledgeEntry = dedupeMatch ? { ...baseEntry, dedupeOf: dedupeMatch.entry.slug } : baseEntry;
     await appendKnowledgeEntry(projectRoot, knowledgeEntry);
   }
 
@@ -149,7 +182,7 @@ export async function runCompoundAndShip(
 
   await resetFlowState(projectRoot);
 
-  return { slug, shippedDir, learningCaptured, movedArtifacts: moved, knowledgeEntry };
+  return { slug, shippedDir, learningCaptured, movedArtifacts: moved, knowledgeEntry, dedupeMatch };
 }
 
 export async function defaultPathsToCheck(projectRoot: string): Promise<string[]> {
