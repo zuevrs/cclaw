@@ -3,6 +3,7 @@ import {
   applyKey,
   createPickerState,
   isInteractive,
+  renderPickerFrame,
   selectionToList,
   type PickerState
 } from "../../src/harness-prompt.js";
@@ -108,6 +109,49 @@ describe("harness-prompt: selectionToList", () => {
   it("returns selected harnesses in canonical order", () => {
     const state = createPickerState(["codex", "claude"]);
     expect(selectionToList(state)).toEqual(["claude", "codex"]);
+  });
+});
+
+describe("harness-prompt: renderPickerFrame", () => {
+  it("renders header, every harness row, footer hotkeys; cursor row is marked with `>`", () => {
+    const state = createPickerState(["cursor"], 0);
+    const detected = new Set<HarnessId>(["cursor"]);
+    const out = renderPickerFrame(state, detected, false);
+    expect(out).toContain("cclaw — choose harness(es) to install for");
+    for (const label of ["Claude Code", "Cursor", "OpenCode", "Codex"]) {
+      expect(out).toContain(label);
+    }
+    expect(out).toContain(">");
+    expect(out).toContain("(detected)");
+    expect(out).toContain("Up/Down or k/j to move");
+    expect(out).toContain("Enter to confirm");
+  });
+
+  it("plain ASCII when useColor=false (no ANSI escapes)", () => {
+    const state = createPickerState(["cursor"], 0);
+    const out = renderPickerFrame(state, new Set<HarnessId>(["cursor"]), false);
+    expect(out).not.toMatch(/\u001b\[/);
+  });
+
+  it("includes ANSI escapes when useColor=true (wraps the cursor row in cyan)", () => {
+    const state = createPickerState(["cursor"], 0);
+    const out = renderPickerFrame(state, new Set<HarnessId>(["cursor"]), true);
+    expect(out).toMatch(/\u001b\[/);
+  });
+
+  it("renders [x] for selected harnesses and [ ] for unselected", () => {
+    const state = createPickerState(["cursor"], 0);
+    const out = renderPickerFrame(state, new Set<HarnessId>(), false);
+    expect(out).toContain("[x]");
+    expect(out).toContain("[ ]");
+  });
+
+  it("renders message line below the legend when state.message is set", () => {
+    const base = createPickerState(["cursor"], 0);
+    const empty = applyKey(base, "n").state;
+    const withMessage = applyKey(empty, "\r").state;
+    const out = renderPickerFrame(withMessage, new Set<HarnessId>(), false);
+    expect(out).toContain("Select at least one harness.");
   });
 });
 

@@ -1,5 +1,6 @@
 import process from "node:process";
 import { HARNESS_IDS, type HarnessId } from "./types.js";
+import { colorize, shouldUseColor } from "./ui.js";
 
 const HARNESS_LABELS: Record<HarnessId, string> = {
   claude: "Claude Code",
@@ -13,6 +14,13 @@ const HARNESS_TARGETS: Record<HarnessId, string> = {
   cursor: ".cursor/",
   opencode: ".opencode/",
   codex: ".codex/"
+};
+
+const HARNESS_DESCRIPTIONS: Record<HarnessId, string> = {
+  claude: "Anthropic Claude Code CLI agent",
+  cursor: "Cursor IDE agents",
+  opencode: "OpenCode terminal agent",
+  codex: "OpenAI Codex CLI"
 };
 
 export interface PickerState {
@@ -109,30 +117,85 @@ export interface PromptOptions {
   stdout?: NodeJS.WriteStream;
 }
 
+/**
+ * Pure render of one picker frame. Exposed so tests can assert on layout
+ * (column padding, pointer placement, detected/selected hints) without
+ * spinning up an interactive TTY.
+ *
+ * Rendering rules:
+ *  - First line: cyan "cclaw — choose harness(es) to install for".
+ *  - Each row: pointer (`>` for cursor, ` ` otherwise) · checkbox
+ *    (green `[x]` selected, dim `[ ]` empty) · cyan label · dim path ·
+ *    optional dim cyan `(detected)` tag · dim description.
+ *  - Footer: dim hotkey legend.
+ *  - Optional message line (used for "Select at least one harness").
+ */
+export function renderPickerFrame(
+  state: PickerState,
+  detected: ReadonlySet<HarnessId>,
+  useColor: boolean
+): string {
+  const labelWidth = HARNESS_IDS.reduce(
+    (max, id) => Math.max(max, HARNESS_LABELS[id].length),
+    0
+  );
+  const targetWidth = HARNESS_IDS.reduce(
+    (max, id) => Math.max(max, HARNESS_TARGETS[id].length),
+    0
+  );
+  const lines: string[] = [];
+  lines.push(colorize("cyan", "cclaw — choose harness(es) to install for", useColor));
+  lines.push("");
+
+  for (let index = 0; index < HARNESS_IDS.length; index += 1) {
+    const harness = HARNESS_IDS[index]!;
+    const isCursor = index === state.cursor;
+    const pointer = isCursor ? colorize("cyan", ">", useColor) : " ";
+    const checkbox = state.selected.has(harness)
+      ? colorize("green", "[x]", useColor)
+      : colorize("dim", "[ ]", useColor);
+    const label = HARNESS_LABELS[harness].padEnd(labelWidth);
+    const target = HARNESS_TARGETS[harness].padEnd(targetWidth);
+    const detectedTag = detected.has(harness)
+      ? `  ${colorize("cyan", "(detected)", useColor)}`
+      : `  ${" ".repeat("(detected)".length)}`;
+    const description = colorize("dim", HARNESS_DESCRIPTIONS[harness], useColor);
+    const renderedLabel = isCursor ? colorize("cyan", label, useColor) : label;
+    const renderedTarget = colorize("dim", target, useColor);
+    lines.push(
+      `  ${pointer} ${checkbox} ${renderedLabel}  ${renderedTarget}${detectedTag}  ${description}`
+    );
+  }
+
+  lines.push("");
+  lines.push(
+    colorize(
+      "dim",
+      "Up/Down or k/j to move  ·  Space to toggle  ·  a all  ·  n none  ·  Enter to confirm  ·  Esc/Ctrl-C to cancel",
+      useColor
+    )
+  );
+  if (state.message) {
+    lines.push("");
+    lines.push(colorize("yellow", state.message, useColor));
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 function renderFrame(
   state: PickerState,
   detected: ReadonlySet<HarnessId>,
-  stdout: NodeJS.WriteStream
+  stdout: NodeJS.WriteStream,
+  useColor: boolean
 ): void {
   stdout.write("\u001b[2J\u001b[H");
-  stdout.write("cclaw — choose harness(es) to install for\n\n");
-  HARNESS_IDS.forEach((harness, index) => {
-    const pointer = index === state.cursor ? ">" : " ";
-    const checked = state.selected.has(harness) ? "x" : " ";
-    const tag = detected.has(harness) ? "  (detected)" : "";
-    stdout.write(
-      `  ${pointer} [${checked}] ${HARNESS_LABELS[harness].padEnd(12)} ${HARNESS_TARGETS[harness]}${tag}\n`
-    );
-  });
-  stdout.write(
-    "\nUp/Down or k/j to move  ·  Space to toggle  ·  a all  ·  n none  ·  Enter to confirm  ·  Esc/Ctrl-C to cancel\n"
-  );
-  if (state.message) stdout.write(`\n${state.message}\n`);
+  stdout.write(renderPickerFrame(state, detected, useColor));
 }
 
 export async function runPicker(options: PromptOptions): Promise<HarnessId[]> {
   const stdin = options.stdin ?? process.stdin;
   const stdout = options.stdout ?? process.stdout;
+  const useColor = shouldUseColor(stdout);
   const detectedSet = new Set<HarnessId>(options.detected);
   const initial = options.preselect && options.preselect.length > 0 ? options.preselect : options.detected;
   let state = createPickerState(initial);
@@ -158,7 +221,7 @@ export async function runPicker(options: PromptOptions): Promise<HarnessId[]> {
       const key = chunk.toString("utf8");
       const update = applyKey(state, key);
       state = update.state;
-      renderFrame(state, detectedSet, stdout);
+      renderFrame(state, detectedSet, stdout, useColor);
       if (update.outcome === "confirm") {
         settled = true;
         cleanup();
@@ -176,7 +239,7 @@ export async function runPicker(options: PromptOptions): Promise<HarnessId[]> {
       stdin.setRawMode?.(true);
       stdin.resume();
       stdin.on("data", onData);
-      renderFrame(state, detectedSet, stdout);
+      renderFrame(state, detectedSet, stdout, useColor);
     } catch (err) {
       cleanup();
       reject(err instanceof Error ? err : new Error(String(err)));

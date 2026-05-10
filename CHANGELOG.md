@@ -1,5 +1,40 @@
 # Changelog
 
+## 8.10.0 — Install UX polish: ASCII banner, progress feedback, summary, first-run welcome
+
+### Why
+
+`cclaw init` / `sync` / `upgrade` were silent for ~2 seconds. The orchestrator wrote 8 specialists, 24 skills, 11 templates, 4 stage runbooks, 8 reference patterns, 3 research playbooks, 5 recovery playbooks, 8 worked examples, anti-patterns, decision protocol, and harness assets — and the user saw nothing until a single `[cclaw] init complete. Harnesses: cursor` line at the end. The CLI also looked dated next to peer tools like `gsd-v1`: no banner, no version stamp on every invocation, no colour, monochrome plaintext picker. Worse, `cclaw --version` reported `8.7.0` even when the user had `8.9.0` installed from npm — `CCLAW_VERSION` in `src/constants.ts` was a hardcoded constant that nobody bumped during 8.8 / 8.9. A tool that lies about its own version is a tool you can't debug.
+
+### What changed
+
+**A1 — ASCII logo banner.** New `src/ui.ts` module renders a block-letter `CCLAW` banner (Unicode box-drawing characters, ~6 lines tall) followed by `cclaw vX.Y.Z — harness-first flow toolkit for coding agents`. Shown on `init` / `sync` / `upgrade` / `uninstall` / `help`. **Not** shown on `version` (just prints the bare version string — programmatic callers stay clean). Honours [`NO_COLOR`](https://no-color.org), `FORCE_COLOR`, and `stdout.isTTY` for the colour decision: piped output, CI logs, and `NO_COLOR=1` get plain ASCII; live TTYs get cyan. Logo characters are Unicode but render fine in any modern terminal even with colour off.
+
+**A2 — Coloured help body.** `cclaw help` and `cclaw <unknown>` now render help with cyan flag names, dim descriptions, and yellow `Commands:` / `Options:` section headings. Help columns are auto-aligned per section. Same colour-stripping rules as the banner (NO_COLOR / FORCE_COLOR / TTY).
+
+**A3 — Final summary block.** `init` / `sync` / `upgrade` print an `Installed` block at the end with one row per asset family (Agents, Skills, Templates, Runbooks, Patterns, Research, Recovery, Examples, Hooks, Commands) and counts. `uninstall` reports which harnesses were removed. Adjusts dynamically based on the active config.
+
+**B1 — Per-step progress feedback.** `syncCclaw` now accepts an optional `onProgress: (event: ProgressEvent) => void` callback in `SyncOptions`. The CLI wires it to a `  ✓ <step> — <detail>` line printer (green check, dim detail). Twelve major install steps emit progress: runtime root, specialists, hooks, skills, templates, runbooks, patterns, research, recovery, examples, anti-patterns + decision protocol, harness assets, config write. Programmatic callers (smoke scripts, MCP wrappers, tests) can leave `onProgress` undefined to stay silent.
+
+**B2 — First-run welcome.** On `cclaw init`, if `.cclaw/config.yaml` does not exist yet, the CLI shows a two-line welcome card before the picker / sync starts: `Welcome to cclaw — first-time setup`, followed by what's about to happen and which harnesses (if any) were auto-detected. Suppressed on re-init, sync, and upgrade where the config already exists.
+
+**B3 — Polished harness picker.** `harness-prompt.ts` got a colour pass: cyan header, dim description column per harness (Anthropic Claude Code CLI agent / Cursor IDE agents / OpenCode terminal agent / OpenAI Codex CLI), green `[x]` for selected, dim `[ ]` for unselected, cyan `>` cursor pointer, dim cyan `(detected)` tag for auto-detected harnesses, dim hotkey legend. The picker frame renderer is now a pure `renderPickerFrame(state, detected, useColor): string` function so tests can assert on layout without spinning up a TTY.
+
+**Bonus fix — `CCLAW_VERSION` is single-source-of-truth.** `src/constants.ts` no longer hardcodes the version string. `CCLAW_VERSION` now reads from `package.json` at module-load time using `import.meta.url`-relative path resolution. Works in dev (`src/constants.ts` → `../package.json`), in `dist/` (post-build), and in the published npm tarball (`node_modules/cclaw-cli/dist/...` → `node_modules/cclaw-cli/package.json`). `npm pack` always includes `package.json` regardless of the `files` allow-list, so this is safe at runtime. Version bumps now require updating exactly one file (`package.json`) and the constant — and every thing that imports it (`config.ts`, `cli.ts`, `install.ts`) — picks up the new value automatically. The stale "lock 8.7.0" prose-test in `constants.test.ts` is replaced with a parity check: `CCLAW_VERSION` must equal `package.json.version` and match `^\d+\.\d+\.\d+$`.
+
+### What did not change
+
+- Public CLI surface (commands, flags, harness IDs).
+- Hop sequence, stage layout, specialist roster.
+- `flow-state.json` schema, `knowledge.jsonl` schema, harness-config schemas.
+- `antipatterns.ts`, specialist prompts, skills, runbooks, examples, recovery playbooks.
+- Smoke test, hook event wiring, harness-detection markers.
+- Any non-TTY behaviour: piped `init` / `sync` calls (CI, smoke, npx) get plain ASCII output and the same exit codes as before.
+
+### Migration
+
+Drop-in upgrade from 8.9. No new dependencies (the CLI ships with raw ANSI escapes; no `chalk` / `kleur` / `picocolors`). No new commands, no new config keys, no new flags. Consumers with strict CI logging that depend on a specific exact-line stdout grep should note that `init` / `sync` / `upgrade` now print 13–14 progress lines + a summary block before the existing `[cclaw] init complete.` line — the existing completion line is unchanged.
+
 ## 8.9.0 — Knowledge dedup, slice-builder coverage beat, flow-pressure feedback
 
 ### Why

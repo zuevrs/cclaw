@@ -43,6 +43,20 @@
 
 Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`). Four stages (`plan → build → review → ship`). Six specialists, all on-demand, all running as sub-agents, all emitting `Confidence: high | medium | low`. Seventeen skills including the always-on `triage-gate`, `flow-resume`, `pre-flight-assumptions`, `tdd-cycle`, `conversation-language`, `anti-slop`, and the strict-mode-default `source-driven`. Ten templates including `plan-soft.md` and `build-soft.md` for the soft-mode path. Four runbooks. Eight reference patterns. Three research playbooks. Five recovery playbooks. Eight worked examples. Two mandatory gates in strict mode (AC traceability + TDD phase chain); soft mode keeps both as advisory; inline mode skips both.
 
+## What changed in 8.10
+
+8.10 is a non-breaking install-UX polish release on top of 8.9. `cclaw init` / `sync` / `upgrade` were silent for ~2 seconds and the help / version surface looked dated next to peer tools. Worse, `cclaw --version` was reporting `8.7.0` even on the npm-shipped `8.9.0` — the `CCLAW_VERSION` constant was hardcoded in `src/constants.ts` and nobody bumped it during the 8.8 / 8.9 releases. A tool that lies about its own version is a tool you can't debug.
+
+- **ASCII logo banner.** New `src/ui.ts` module renders a block-letter `CCLAW` banner (Unicode box-drawing) followed by `cclaw vX.Y.Z — harness-first flow toolkit for coding agents`. Shown on `init` / `sync` / `upgrade` / `uninstall` / `help`. **Not** shown on `version`. Honours [`NO_COLOR`](https://no-color.org), `FORCE_COLOR`, and `stdout.isTTY` — piped output, CI logs, and `NO_COLOR=1` get plain ASCII; live TTYs get cyan.
+- **Per-step progress feedback.** `syncCclaw` now accepts `onProgress: (event) => void` in `SyncOptions`; the CLI wires it to a `  ✓ <step> — <detail>` line printer. Twelve major steps emit progress (runtime root, specialists, hooks, skills, templates, runbooks, patterns, research, recovery, examples, anti-patterns, harness assets, config). Programmatic callers (smoke, MCP wrappers, tests) leave `onProgress` undefined to stay silent.
+- **Final summary block.** `init` / `sync` / `upgrade` print an `Installed` block at the end with one row per asset family (Agents, Skills, Templates, Runbooks, Patterns, Research, Recovery, Examples, Hooks, Commands) plus counts. `uninstall` reports which harnesses were removed.
+- **First-run welcome.** On `init` when `.cclaw/config.yaml` does not exist yet, a two-line welcome card prints before the picker / sync starts. Suppressed on re-init, sync, upgrade.
+- **Polished harness picker.** Cyan header, dim description column per harness, green `[x]` selected, dim `[ ]` unselected, cyan `>` cursor pointer, dim cyan `(detected)` tag, dim hotkey legend. Frame renderer is now a pure `renderPickerFrame(state, detected, useColor): string` function so tests can assert on layout without a TTY.
+- **Coloured help body.** `cclaw help` renders cyan flag names, dim descriptions, yellow section headings. Auto-aligned per section.
+- **`CCLAW_VERSION` is single-source-of-truth.** `src/constants.ts` no longer hardcodes the version. The constant now reads from `package.json` at module-load time. Version bumps require updating exactly one file (`package.json`).
+
+No breaking changes. No new dependencies (raw ANSI escapes — no `chalk` / `kleur` / `picocolors`). No new commands, no new config keys, no new flags. Drop-in upgrade — the existing `[cclaw] init complete.` line is unchanged; CI parsers reading that line still work.
+
 ## What changed in 8.9
 
 8.9 is a non-breaking improvement release on top of 8.8. Three concrete additions distilled from a parallel audit of `addyosmani-skills`, `everyinc-compound`, and `gsd-v1` against cclaw v8.8 — most of those references' ideas were rejected (multi-flow factories, marketplace converters, 30+ specialists, prose-lock contract tests, version-archaeology rhetoric). The three that survived address concrete failure modes already happening in real flows.
