@@ -43,6 +43,15 @@
 
 Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`). Four stages (`plan → build → review → ship`). Six specialists, all on-demand, all running as sub-agents, all emitting `Confidence: high | medium | low`. Seventeen skills including the always-on `triage-gate`, `flow-resume`, `pre-flight-assumptions`, `tdd-cycle`, `conversation-language`, `anti-slop`, and the strict-mode-default `source-driven`. Ten templates including `plan-soft.md` and `build-soft.md` for the soft-mode path. Four runbooks. Eight reference patterns. Three research playbooks. Five recovery playbooks. Eight worked examples. Two mandatory gates in strict mode (AC traceability + TDD phase chain); soft mode keeps both as advisory; inline mode skips both.
 
+## What changed in 8.10.1
+
+A real install run on 8.10.0 surfaced two regressions:
+
+1. The picker's full-screen clear (`\u001b[2J\u001b[H`) was wiping the freshly-printed banner and welcome card on first render. Users never saw the new ASCII logo when the picker was involved.
+2. The picker frame stayed in the terminal scrollback after `Enter` — `cleanup` never erased it. Visual leftover sitting above install progress.
+
+8.10.1 fixes both with the same idea: stop using full-screen escapes, let the picker manage only its own region. New pure helpers `eraseLines(count)` and `frameLineCount(frame)` in `harness-prompt.ts`. `runPicker` tracks `lastFrameHeight` and erases only that many rows on redraw and on cleanup. Banner / welcome stay intact above the picker; after confirm the picker vanishes and install progress lines start at the row where the picker frame began. As a bonus, `renderBanner` / `renderSummary` / `renderWelcome` now end with `\n\n` (was `\n`) so there's exactly one blank line of breathing room between every two sections — between banner and `Usage:`, between summary and the final completion line, between welcome and the first `✓` step on the auto-detect path.
+
 ## What changed in 8.10
 
 8.10 is a non-breaking install-UX polish release on top of 8.9. `cclaw init` / `sync` / `upgrade` were silent for ~2 seconds and the help / version surface looked dated next to peer tools. Worse, `cclaw --version` was reporting `8.7.0` even on the npm-shipped `8.9.0` — the `CCLAW_VERSION` constant was hardcoded in `src/constants.ts` and nobody bumped it during the 8.8 / 8.9 releases. A tool that lies about its own version is a tool you can't debug.

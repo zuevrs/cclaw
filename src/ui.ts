@@ -81,13 +81,17 @@ export interface BannerOptions {
  *
  * Output is plain ASCII when `useColor` is false (logo characters are still
  * Unicode box-drawing — they look fine in any modern terminal).
+ *
+ * Ends with `\n\n` so the next section (welcome card, progress feedback,
+ * help body) always renders one blank line below the banner regardless of
+ * whether the section adds its own leading newline.
  */
 export function renderBanner(options: BannerOptions): string {
   const { version, tagline, useColor } = options;
   const logo = LOGO_LINES.map((line) => colorize("cyan", line, useColor)).join("\n");
   const versionTag = colorize("dim", `v${version}`, useColor);
   const header = `cclaw ${versionTag} — ${tagline}`;
-  return `\n${logo}\n\n  ${header}\n`;
+  return `\n${logo}\n\n  ${header}\n\n`;
 }
 
 export interface ProgressEvent {
@@ -148,7 +152,10 @@ export function renderSummary(counts: SummaryCounts, useColor: boolean): string 
       return `    ${colorize("dim", padded, useColor)}  ${count}`;
     })
     .join("\n");
-  return `\n  ${heading}\n${harnessLine}\n${body}\n`;
+  // Trailing `\n\n` produces exactly one blank line between the summary
+  // and the final `[cclaw] ... complete.` info line, mirroring the banner /
+  // welcome conventions for consistent vertical rhythm.
+  return `\n  ${heading}\n${harnessLine}\n${body}\n\n`;
 }
 
 export interface WelcomeOptions {
@@ -159,6 +166,11 @@ export interface WelcomeOptions {
 /**
  * Render the first-run welcome block. Shown only on `cclaw init` when no
  * `.cclaw/config.yaml` exists yet — never on `sync` / `upgrade` / re-init.
+ *
+ * Banner ends with `\n\n` so the welcome card does NOT add a leading
+ * newline of its own. Trailing `\n\n` produces one blank line between
+ * the welcome and whatever follows (interactive picker frame, or the
+ * first `✓ Runtime root` progress line on auto-detect paths).
  */
 export function renderWelcome(options: WelcomeOptions): string {
   const { useColor, detected } = options;
@@ -176,7 +188,7 @@ export function renderWelcome(options: WelcomeOptions): string {
     useColor
   );
   const lines = [`  ${heading} — first-time setup`, `  ${intro}`, `  ${next}`];
-  return `\n${lines.join("\n")}\n`;
+  return `${lines.join("\n")}\n\n`;
 }
 
 /**
