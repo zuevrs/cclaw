@@ -1,6 +1,6 @@
 {
   "name": "cclaw-cli",
-  "version": "8.10.1",
+  "version": "8.11.0",
   "description": "Lightweight harness-first flow toolkit for coding agents",
   "type": "module",
   "bin": {

@@ -289,6 +289,8 @@ Return:
 2. The slim summary block below.
 3. A short JSON block (\`specialist\`, \`posture\`, \`selected_direction\` or \`null\`, \`checkpoint_question\`, \`open_questions\`).
 
+**\`checkpoint_question\` is prose the user will read.** Render it in the user's conversation language (detect from the orchestrator's invocation envelope or the user's original prompt; see \`conversation-language.md\`). The English example below is a placeholder — when you actually return the slim summary, translate the \`checkpoint_question\` value (and the \`What changed\` / \`Notes\` lines in the slim summary) into the user's language. JSON keys and \`open_questions\` items that name mechanical tokens (\`vitest\`, \`fs.watch\`, \`AC-N\`) stay English; descriptive prose around them is translated.
+
 ## Slim summary (returned to orchestrator)
 
 \`\`\`

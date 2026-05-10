@@ -1,5 +1,57 @@
 # Changelog
 
+## 8.11.0 — Orchestrator-spec cleanup: discovery pauses, no-Cancel pickers, /cc as the only resume verb, dated slugs, language-neutral examples
+
+### Why
+
+A real session log (`/Users/zuevrs/Projects/test/1`) surfaced five concrete UX regressions in 8.10.1's orchestrator spec:
+
+1. **Discovery sub-phase blew through the user's view in `auto` mode.** The orchestrator dispatched brainstormer → architect → planner without stopping, so the user couldn't see the brainstormer's selected_direction before architect's tradeoffs landed on top of it. The spec was contradictory: discovery was nominally "always pauses", but the auto-mode rules treated the whole `plan` stage as a single chainable unit.
+2. **Structured asks were rendered in English even when the user wrote in Russian.** Every fenced `askUserQuestion(...)` example in the orchestrator and skills used literal English option strings (`"Proceed as recommended"`, `"Switch to trivial"`, `[r] Resume`, …). The agent dutifully copied them verbatim. The `conversation-language` skill's "translate option labels" footnote was not strong enough to overcome a literal copy-paste anchor.
+3. **`/cc-cancel` was offered as a clickable option in three different pickers** (Hop 1 detect, Hop 2.5 pre-flight, Hop 4 hard gates, flow-resume picker). It is supposed to be a separate explicit user-typed command for nuking flow state. Putting it inside every picker turned a destructive command into a one-keystroke accident.
+4. **Step-mode "pause" prose still said `I type "continue"`** in three places (start-command, triage-gate, flow-resume). The actual mechanic is `/cc` — the same verb that resumes any other paused flow. Two competing magic words is one too many.
+5. **Slug names had no collision protection.** Two flows started on different days against similar topics produced colliding slugs (e.g. `auth-cleanup` from week 1 and `auth-cleanup` from week 3 both wrote into `flows/auth-cleanup/`). Findings, AC, and shipped artifacts could overwrite silently.
+
+### What changed
+
+**#1 — Discovery sub-phase pauses regardless of `runMode`.** `start-command.ts`'s Hop 4 explicitly says: when the dispatch you just received was the brainstormer or architect inside the discovery sub-phase of a `large-risky` plan, you render the slim summary and end the turn. The next `/cc` invocation continues with the next discovery step (architect after brainstormer; planner after architect). `auto` mode applies only to the plan → build → review → ship transitions, never to the brainstormer → architect → planner internal handoff. The auto-mode rules carve out the exception explicitly so the spec is no longer self-contradictory.
+
+**#2 — Language-neutral intent-descriptor placeholders replace literal option strings.** Every fenced `askUserQuestion(...)` and slim-summary block in `start-command.ts`, `skills.ts` (triage-gate, pre-flight-assumptions, interpretation-forks, flow-resume), and `conversation-language.md` now uses `<option label conveying: ...>` notation. The agent cannot copy a literal English string because there is no literal English string to copy — the slot describes the intent and the agent must verbalise it in the user's language. Mechanical tokens (`/cc`, `/cc-cancel`, `plan`, `build`, `review`, `ship`, `step`, `auto`, slugs, file paths, JSON keys, `AC-N`, complexity / acMode keywords) stay in their original form regardless of conversation language. The `conversation-language` skill's worked example was rewritten as a language-neutral schema (no Russian, no English example strings — just `<...>` placeholders). The `brainstormer.ts` and `architect.ts` specialist prompts now explicitly say `checkpoint_question`, `What changed`, `Notes`, and `open_questions` values render in the user's conversation language; English example values are placeholders, not the wire format.
+
+**#3 — `Cancel` is no longer a clickable option in any picker.** Removed `[c] Cancel — discard this flow` from Hop 1 detect (3 places — none/one/many active flows); removed `Cancel — re-think the request` from pre-flight assumptions and from interpretation forks; removed `[c] Cancel` from flow-resume; removed `Cancel — abort the flow now (move to cancelled/, reset state)` from Hop 4 hard gates. The picker option set is `[r] Resume / [s] Show / [n] New (when applicable)`. `/cc-cancel` is mentioned only in plain prose, only when the user looks stuck, and only when the orchestrator has already presented a non-destructive picker option. The always-ask rules explicitly forbid `Cancel` as a clickable option (with one carve-out: Hop 1 collision, where the user explicitly asked to switch tasks).
+
+**#4 — Step mode = end of turn; `/cc` is the only resume verb.** Hop 4's `step` block was rewritten: render the slim summary, then end your turn. No "say `continue` to advance". No "type the magic word". The user sends `/cc` (the same single resume verb) and the orchestrator picks up where it left off. `triage-gate` Question 2's two options now read `Step (default) — pause after each stage; next /cc advances` and `Auto — chain plan → build → review → ship; stop only on hard gates` (intent shape; verbalised in the user's language at runtime). `flow-resume` describes `/cc` as the canonical resume command. The seven-hop summary in start-command says "`/cc` is the single resume verb across step mode, auto-mode hard gates, and the discovery sub-phase".
+
+**#5 — Slug format `YYYYMMDD-<semantic-kebab>`.** Hop 2 Triage now mandates the date prefix on every new slug. Same-day collisions resolve by appending `-2`, `-3`, etc. (`20260510-billing-rewrite`, `20260510-billing-rewrite-2`). The date prefix is mandatory and ASCII regardless of conversation language. `orchestrator-routing.ts` got a new `semanticSlugTokens(slug)` helper that strips the leading `YYYYMMDD-` prefix before feeding tokens to the Jaccard match — same-topic flows on different days are now reliably matched (the date is signal for filename uniqueness, noise for semantic similarity). Cancelled / shipped flow paths inherit the dated slug naturally (`flows/cancelled/20260510-billing-rewrite/` etc.).
+
+### Tests
+
+`tests/unit/v811-cleanup.test.ts` — 23 new tests covering all five issues:
+
+- `#1 discovery pauses` — the spec contains "discovery never auto-chains", `regardless of triage.runMode`, the per-step "renders the slim summary and ends the turn" rules, and the auto-mode carve-out for brainstormer/architect inside discovery.
+- `#3 cancel removal` — flow-resume / pre-flight / interpretation-forks no longer expose `[c] Cancel`, `[4] Cancel`, or `Cancel — re-think`; the always-ask rules contain "/cc-cancel is never a clickable option"; cancel-command keeps the explicit-nuke prose.
+- `#4 step mode + /cc` — start-command says "/cc is the single resume verb", contains the "End your turn" instruction, and no longer says `I type "continue" to advance`; triage-gate Question 2 prose is updated; flow-resume calls `/cc` the canonical resume command.
+- `#5 slug format` — Hop 2 spells out `YYYYMMDD-<semantic-kebab>`, the same-day collision fallback, and the date-prefix-mandatory rule; `findMatchingPlans` correctly matches a YYYYMMDD- slug to a plain semantic task title; date-only task titles do not match plain semantic slugs (the date prefix is excluded from token comparison).
+- `#2 language` — conversation-language exposes "Option labels in structured asks" and "Slim-summary text fields" rules and the language-neutral worked schema; the "Copying example strings verbatim" pitfall is documented; start-command's TRIAGE_ASK_EXAMPLE no longer contains literal `"Proceed as recommended"` / `"Switch to trivial …"` strings; flow-resume picker uses `<option text conveying: …>` for every row; brainstormer + architect prompts explicitly require `checkpoint_question` and slim-summary prose values to render in the user's conversation language.
+
+The existing `start-command.test.ts` resume-path test was updated to match the new placeholder shape (`[r]` / `[s]` shortcut letters with intent descriptors instead of literal `Resume` / `Show` strings).
+
+Total: 385 tests across 40 files, all green.
+
+### What did not change
+
+- Public CLI surface (`init`, `sync`, `upgrade`, `uninstall`, `help`, `version`).
+- Stage layout, specialist roster, schema files, hook contracts, harness wiring.
+- The `conversation-language` skill's core trigger condition or detection rules.
+- `slugifyArtifactTopic` itself (the date prefix is added by the orchestrator at slug-mint time; `slugifyArtifactTopic` keeps producing the semantic part, which `findMatchingPlans` and the orchestrator both consume).
+- All other tests (362 → 385 = +23 net).
+
+### Migration
+
+Drop-in upgrade from 8.10.x. The change is in the orchestrator + skill prompts, the orchestrator-routing helper, and one test update — no new CLI commands, no new config keys, no new dependencies, no breaking schema changes. Existing flows with non-dated slugs continue to work; the date prefix is only required when the orchestrator mints a new slug. Findings, AC, and shipped artifacts in non-dated existing flows are unaffected (the matching helper handles both forms).
+
+If you have automation that scrapes `askUserQuestion(...)` blocks out of the orchestrator prompt for offline analysis, the option strings are now placeholder slots (`<option label conveying: ...>`) rather than literal English — this is intentional. The runtime asks rendered to the user contain real strings in the user's language; only the spec body uses placeholder notation.
+
 ## 8.10.1 — Picker erase-frame fix: banner/welcome survive picker render; no leftovers in scrollback
 
 ### Why

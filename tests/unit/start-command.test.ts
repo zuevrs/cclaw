@@ -32,8 +32,12 @@ describe("start command (/cc) markdown", () => {
 
   it("explains the resume path when an active flow is detected", () => {
     expect(body).toMatch(/flow[- ]resume/i);
-    expect(body).toMatch(/r\] Resume/);
-    expect(body).toMatch(/c\] Cancel/);
+    expect(body).toMatch(/\[r\]/);
+    expect(body).toMatch(/\[s\]/);
+    expect(body).not.toMatch(/\[c\] Cancel/);
+    expect(body).toMatch(/`\/cc-cancel` is \*\*not\*\* offered/);
+    expect(body).toMatch(/conveying: resume — dispatch the next specialist/);
+    expect(body).toMatch(/conveying: show — open the artifact for/);
   });
 
   it("documents the three AC modes (inline/soft/strict) at the build stage", () => {

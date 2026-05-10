@@ -105,6 +105,14 @@ async function tryParseFrontmatter(filePath: string): Promise<ArtifactFrontmatte
   }
 }
 
+const DATE_PREFIX_PATTERN = /^\d{8}-/u;
+
+function semanticSlugTokens(slug: string): Set<string> {
+  const semantic = slug.replace(DATE_PREFIX_PATTERN, "");
+  const parts = semantic.split("-").filter((part) => part.length > 0 && !/^\d+$/u.test(part));
+  return new Set(parts);
+}
+
 async function buildMatch(
   filePath: string,
   origin: ExistingPlanMatch["origin"],
@@ -112,7 +120,7 @@ async function buildMatch(
   taskWords: Set<string>
 ): Promise<ExistingPlanMatch | null> {
   const slug = path.basename(path.dirname(filePath));
-  const slugScore = jaccard(taskSlugTokens, new Set(slug.split("-")));
+  const slugScore = jaccard(taskSlugTokens, semanticSlugTokens(slug));
   const body = await readBody(filePath);
   const bodyScore = jaccard(taskWords, tokenize(body));
   const score = Math.max(slugScore, bodyScore);

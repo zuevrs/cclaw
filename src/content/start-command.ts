@@ -11,12 +11,12 @@ const RESEARCH_HELPER_LIST = RESEARCH_AGENTS.map(
 
 const TRIAGE_ASK_EXAMPLE = `\`\`\`
 askUserQuestion(
-  prompt: "Triage — Complexity: small/medium (high). Recommended: plan → build → review → ship. Why: 3 modules, ~150 LOC, no auth touch. AC mode: soft. Pick a path.",
+  prompt: <one sentence in the user's language stating: complexity + confidence, recommended path, why (cite file count / LOC / sensitive surface), AC mode, and "pick a path">,
   options: [
-    "Proceed as recommended",
-    "Switch to trivial (inline edit + commit, skip plan/review)",
-    "Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)",
-    "Custom (let me edit complexity / acMode / path)"
+    <option label conveying: proceed with the recommended path>,
+    <option label conveying: switch to trivial — inline edit + commit, skip plan/review>,
+    <option label conveying: escalate to large-risky — adds brainstormer + architect, strict AC, parallel slices when applicable>,
+    <option label conveying: customise — user edits complexity / acMode / path>
   ],
   multiSelect: false
 )
@@ -24,33 +24,37 @@ askUserQuestion(
 # After the user picks, ask the second question:
 
 askUserQuestion(
-  prompt: "Run mode for this flow?",
+  prompt: <one sentence in the user's language asking which run mode to use>,
   options: [
-    "Step (default) — pause after every stage; I type \\"continue\\" to advance",
-    "Auto — chain plan → build → review → ship; stop only on block findings or security flag"
+    <option label conveying: step mode — pause after each stage; next /cc advances (the default)>,
+    <option label conveying: auto mode — chain plan → build → review → ship; stop only on hard gates>
   ],
   multiSelect: false
 )
-\`\`\``;
+\`\`\`
+
+The slots above (\`<...>\`) are intent descriptors, not literal strings. Render the prompt and every option label in the user's conversation language; do not copy the descriptor text. Mechanical tokens — \`/cc\`, \`/cc-cancel\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`auto\`, \`step\`, \`AC-N\`, slugs, file paths, JSON keys — remain in their original form regardless of language. See \`conversation-language.md\`.`;
 
 const TRIAGE_FALLBACK_EXAMPLE = `\`\`\`
-Triage
-─ Complexity: small/medium  (confidence: high)
-─ Recommended path: plan → build → review → ship
-─ Why: 3 modules touched, ~150 LOC, no auth/payment/data-layer surface.
-─ AC mode: soft
+<Triage block in the user's language; lines are:>
+─ Complexity: <trivial | small/medium | large-risky>  (confidence: <high | medium | low>)
+─ Recommended path: <inline | plan → build → review → ship>
+─ Why: <one short sentence in the user's language; cite file count / LOC / sensitive-surface flag>
+─ AC mode: <inline | soft | strict>
 
-[1] Proceed as recommended
-[2] Switch to trivial (inline edit + commit, skip plan/review)
-[3] Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)
-[4] Custom (let me edit complexity / acMode / path)
+[1] <option text conveying: proceed with the recommendation>
+[2] <option text conveying: switch to trivial>
+[3] <option text conveying: escalate to large-risky>
+[4] <option text conveying: customise the triage>
 \`\`\`
 
 \`\`\`
-Run mode
-[s] Step — pause after every stage (default)
-[a] Auto — chain stages; stop only on block findings or security flag
-\`\`\``;
+<Run-mode block heading in the user's language>
+[s] <option text conveying: step mode — pause after each stage; next /cc advances (default)>
+[a] <option text conveying: auto mode — chain stages; stop only on hard gates>
+\`\`\`
+
+The slot text inside \`<...>\` is intent only. The actual fallback rendered to the user uses the user's language. The bracketed shortcut letters (\`[1]\`, \`[s]\`, etc.) and mechanical tokens (\`/cc\`, stage names, mode names) stay English.`;
 
 const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 {
@@ -67,18 +71,19 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 \`\`\``;
 
 const RESUME_SUMMARY_EXAMPLE = `\`\`\`
-Active flow: approval-page
-─ Stage: build  (last touched 2 hours ago)
-─ Triage: small/medium / acMode=soft
-─ Progress: 2 of 3 conditions verified
-─ Last specialist: slice-builder
-─ Open findings: 0
-─ Next step: continue with the third condition (tooltip on hover)
+Active flow: <slug>
+─ Stage: <stage>  (last touched <relative-time, in the user's language>)
+─ Triage: <complexity> / acMode=<acMode>
+─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
+─ Last specialist: <none | brainstormer | architect | planner | reviewer | security-reviewer | slice-builder>
+─ Open findings: <K>
+─ Next step: <one sentence in the user's language describing what /cc will do next>
 
-[r] Resume — continue from build
-[s] Show — open flows/approval-page/build.md and pause
-[c] Cancel — /cc-cancel and free the slot
-\`\`\``;
+[r] <option text conveying: resume — dispatch the next specialist for <stage>>
+[s] <option text conveying: show — open the artifact for <stage> and stop>
+\`\`\`
+
+\`/cc-cancel\` is **not** offered as a clickable option; it is a separate user-typed command for explicit nuke (move to \`cancelled/<slug>/\`, reset state). Surface it only in plain prose, in the user's language, if the user looks stuck — never inside the picker. The \`<slug>\`, stage names, \`acMode\` values, and slim-summary keys stay English (wire protocol). The \`<...>\` slots — including the option text after \`[r]\` and \`[s]\` — render in the user's language.`;
 
 const SUB_AGENT_DISPATCH_EXAMPLE = `\`\`\`
 Dispatch <specialist>
@@ -124,7 +129,7 @@ The flow has seven hops, in order:
 2. **Triage** — only on fresh starts; classify and confirm with the user.
 3. **Pre-flight (Hop 2.5)** — only on fresh starts AND only when the path is not \`inline\`; surface 3-7 assumptions; user confirms before any specialist runs.
 4. **Dispatch** — for each stage on the chosen path, hand off to a sub-agent.
-5. **Pause** — after each stage, summarise and wait for "continue" / "show" / "cancel".
+5. **Pause** — after each stage, summarise and end the turn (step) or chain (auto). \`/cc\` is the single resume verb.
 6. **Compound** — automatic learnings capture after ship; gated on quality signals.
 7. **Finalize** — orchestrator-only: \`git mv\` every active artifact into \`shipped/<slug>/\`, reset flow-state. Never delegated to a sub-agent. \`trivial\` skips Hops 5-7.
 
@@ -140,8 +145,8 @@ Read \`.cclaw/state/flow-state.json\`.
 | \`schemaVersion\` < 3 | v8.0/v8.1 state | auto-migrated on read; continue |
 | \`schemaVersion\` < 2 | pre-v8 state | hard stop; surface migration message |
 | \`currentSlug == null\` | no active flow | fresh start |
-| \`currentSlug != null\` and no \`/cc\` arg | resume | run \`flow-resume.md\` summary, ask r/s/c |
-| \`currentSlug != null\` and \`/cc <task>\` arg | collision | run resume summary AND ask r/s/c/n |
+| \`currentSlug != null\` and no \`/cc\` arg | resume | run \`flow-resume.md\` summary, ask r/s |
+| \`currentSlug != null\` and \`/cc <task>\` arg | collision | run resume summary AND ask r/s/n |
 
 Hard-stop message for pre-v8 state:
 
@@ -167,7 +172,19 @@ Once both answers are in, patch \`flow-state.json\`:
 
 ${TRIAGE_PERSIST_EXAMPLE}
 
-The triage decision is **immutable** for the lifetime of the flow. If the user wants a different acMode or runMode mid-flight, the path is \`/cc-cancel\` and a fresh \`/cc\` invocation.
+The triage decision is **immutable** for the lifetime of the flow. If the user wants a different acMode or runMode mid-flight, they invoke \`/cc-cancel\` themselves and start a fresh \`/cc <task>\`. The orchestrator does not auto-cancel; it surfaces the option in prose only when the user appears stuck.
+
+### Slug naming (mandatory format)
+
+Every flow slug uses the format \`YYYYMMDD-<semantic-kebab>\`, where \`YYYYMMDD\` is the UTC date you opened triage and \`<semantic-kebab>\` is the kebab-case 2–4 word summary of the request. Examples:
+
+- \`20260510-file-cli\` (CLI utility for files, opened 2026-05-10).
+- \`20260512-approval-page\` (approval-page UI, opened 2026-05-12).
+- \`20260613-mute-notifications\` (per-project notification mute, opened 2026-06-13).
+
+The date prefix is **mandatory**, even when no prior shipped slug shares the semantic part. It is the cheapest way to keep the \`flows/shipped/\` directory unambiguous: two flows on different days never collide, and re-running the same task name on the same day surfaces the collision visibly (you append \`-2\` if it does happen). Surface the chosen slug verbatim in the triage block so the user sees it before any specialist runs.
+
+If a collision **does** happen on the same day (very rare; user re-running the same prompt minutes apart), append \`-2\`, \`-3\`, etc. until the slug is unique against \`.cclaw/flows/\` and \`.cclaw/flows/shipped/\` and \`.cclaw/flows/cancelled/\`.
 
 After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Hop 4. Before the first dispatch, run **Hop 2.5 (pre-flight)** unless the path is \`inline\`.
 
@@ -183,11 +200,11 @@ Run the \`flow-resume.md\` skill. Render the resume summary:
 
 ${RESUME_SUMMARY_EXAMPLE}
 
-Wait for r/s/c (and n on collision). On \`r\`, jump to Hop 4 with the saved \`currentStage\` — pre-flight is **not** re-run on resume; the saved \`triage.assumptions\` is read from disk. On \`s\`, open the artifact and stop. On \`c\`, run \`/cc-cancel\` semantics (move artifacts to \`cancelled/<slug>/\`, reset state).
+Wait for r/s (and n on collision). On \`r\`, jump to Hop 4 with the saved \`currentStage\` — pre-flight is **not** re-run on resume; the saved \`triage.assumptions\` is read from disk. On \`s\`, open the artifact and stop. There is no \`c\` option in the resume picker; if the user wants to nuke the flow they invoke \`/cc-cancel\` explicitly. On \`n\` (collision case only), shelve the active flow as cancelled and start a fresh \`/cc\` with the new task; you DO run \`/cc-cancel\` semantics on the old slug here, because the user explicitly chose "discard old, start new" — the option is semantic, not a generic abort.
 
 ## Hop 2.5 — Pre-flight (fresh starts on non-inline paths)
 
-Run the \`pre-flight-assumptions.md\` skill. Surface 3-7 numbered assumptions covering stack, conventions, architecture defaults, and out-of-scope items. Use the harness's structured ask tool with four options (\`Proceed\` / \`Edit one\` / \`Edit several\` / \`Cancel\`); fall back to a fenced block only when no structured ask is available.
+Run the \`pre-flight-assumptions.md\` skill. Surface 3-7 numbered assumptions covering stack, conventions, architecture defaults, and out-of-scope items. Use the harness's structured ask tool with three options (\`Proceed\` / \`Edit one\` / \`Edit several\`); fall back to a fenced block only when no structured ask is available. \`Cancel\` is **not** an option here — if the user wants to abort, they invoke \`/cc-cancel\` explicitly.
 
 \`\`\`
 Pre-flight — I'm about to run with these assumptions:
@@ -280,19 +297,21 @@ The orchestrator reads only this. The full artifact stays in \`.cclaw/flows/<slu
 
 ##### Plan stage on large-risky (discovery sub-phase)
 
-When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the orchestrator does **not** dispatch \`planner\` directly. It runs a three-step discovery sub-phase, with a checkpoint and slim summary after each specialist. \`currentStage\` stays \`"plan"\` for all three; \`lastSpecialist\` rotates.
+When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the orchestrator does **not** dispatch \`planner\` directly. It runs a three-step discovery sub-phase, with a **mandatory pause and end-of-turn after each specialist** — regardless of \`triage.runMode\`. \`currentStage\` stays \`"plan"\` for all three; \`lastSpecialist\` rotates.
+
+> **Discovery never auto-chains.** Each specialist's slim summary is a high-stakes decision (selected direction, architectural option, AC table) that the user MUST see before the next specialist runs. The orchestrator renders the slim summary, ends the turn, and waits for the next \`/cc\` invocation to continue. \`auto\` runMode applies to the plan→build→review→ship transitions only, **not** to brainstormer→architect→planner inside the plan stage.
 
 1. **Dispatch \`brainstormer\`** (wrapper skill: \`brainstorming-discovery.md\`).
    - On \`deep\` posture, brainstormer dispatches \`repo-research\` itself before authoring (it needs the same context the planner needs).
    - Output: appends "Frame", "Approaches", "Selected direction" sections to \`flows/<slug>/plan.md\` (same file the planner will finish). Writes nothing else in the flow dir except an optional \`flows/<slug>/research-repo.md\` from its own research dispatch (if \`repo-research\` ran and the planner didn't already trigger one).
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "brainstormer"\` → renders pause → waits.
+   - Orchestrator reads slim summary → patches \`lastSpecialist: "brainstormer"\` → **renders the slim summary and ends the turn**. The user reviews the Frame and Selected Direction; the next \`/cc\` invocation continues with architect.
 2. **Dispatch \`architect\`** (wrapper skill: \`architectural-decision.md\`; also \`source-driven.md\` in strict mode).
    - Inputs: \`flows/<slug>/plan.md\` (with brainstormer's Frame), the research artifact(s), triage assumptions.
    - Output: \`flows/<slug>/decisions.md\` with the decision records (D-1 … D-N). Architect does NOT modify \`plan.md\`.
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "architect"\` → renders pause → waits.
+   - Orchestrator reads slim summary → patches \`lastSpecialist: "architect"\` → **renders the slim summary and ends the turn**. The user reviews the decisions; the next \`/cc\` continues with planner.
 3. **Dispatch \`planner\`** with the same contract as small/medium plan, plus an extra input: \`flows/<slug>/decisions.md\`.
    - Planner now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The "Frame" / "Selected direction" sections from brainstormer remain at the top of \`plan.md\`; planner appends its own sections below.
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "planner"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`).
+   - Orchestrator reads slim summary → patches \`lastSpecialist: "planner"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`). At this point the orchestrator follows \`triage.runMode\` for the plan→build transition: \`step\` ends the turn; \`auto\` chains immediately into the build dispatch.
 
 Resume after a brainstormer or architect checkpoint: \`flow-state.lastSpecialist\` tells the orchestrator which discovery step to skip. If \`lastSpecialist == "architect"\` and \`currentStage == "plan"\`, the resume dispatches \`planner\` directly. The user can also \`/cc <task> --skip-discovery\` to drop straight into a single planner dispatch when the discovery sub-phase already happened in a prior session.
 
@@ -485,39 +504,48 @@ In \`soft\` mode the adversarial pass is **skipped** by default — the lighter-
 
 Discovery is **not a stage in \`triage.path\`** — it is a three-step expansion of the \`plan\` stage on \`triage.complexity == "large-risky"\`. See "Plan stage on large-risky" under Stage details for the full spec. Listed here as a sanity check:
 
-1. \`brainstormer\` writes Frame + (optional) Approaches + Selected direction into \`flows/<slug>/plan.md\`. \`lastSpecialist == "brainstormer"\`. Pause + checkpoint.
-2. \`architect\` writes \`flows/<slug>/decisions.md\`. \`lastSpecialist == "architect"\`. Pause + checkpoint.
-3. \`planner\` finishes \`plan.md\` (AC table, touch surface, topology). \`lastSpecialist == "planner"\`. \`currentStage\` advances to \`"build"\`. Pause + checkpoint.
+1. \`brainstormer\` writes Frame + (optional) Approaches + Selected direction into \`flows/<slug>/plan.md\`. \`lastSpecialist == "brainstormer"\`. **End of turn** — user reviews the direction; next \`/cc\` continues with architect.
+2. \`architect\` writes \`flows/<slug>/decisions.md\`. \`lastSpecialist == "architect"\`. **End of turn** — user reviews the decisions; next \`/cc\` continues with planner.
+3. \`planner\` finishes \`plan.md\` (AC table, touch surface, topology). \`lastSpecialist == "planner"\`. \`currentStage\` advances to \`"build"\`. End of turn in \`step\` mode; chain to build in \`auto\` mode (the discovery-internal pauses fire regardless of mode; the post-discovery transition follows \`triage.runMode\`).
 
-Each step is a separate dispatch + pause + slim summary. The user can \`/cc-cancel\` after any checkpoint and ship what is in the plan.
+Each step is a separate dispatch + slim summary + end-of-turn. The user can invoke \`/cc-cancel\` between any of these steps if they want to abort and ship what is currently in \`plan.md\` / \`decisions.md\`; the orchestrator does not surface \`/cc-cancel\` as a clickable option (it is a power-user explicit command).
 
 ## Hop 4 — Pause and resume
 
-Pause behaviour depends on \`triage.runMode\` (default \`step\`).
+Pause behaviour depends on \`triage.runMode\` (default \`step\`). Both modes share the same resume mechanism: \`/cc\` is the only command that advances a paused flow.
 
 ### \`step\` mode (default; safer; recommended for \`strict\` work)
 
 After every dispatch returns:
 
 1. Render the slim summary back to the user.
-2. State the next stage in plain language: "Plan is ready (5 testable conditions). Continue to build?"
-3. Wait. Do **not** auto-advance. The user types \`continue\`, \`show\`, \`fix-only\`, or \`cancel\`.
-4. On \`continue\` → next stage in \`triage.path\`. On \`show\` → open the artifact and stop. On \`fix-only\` → re-dispatch slice-builder with mode=fix-only and the cited findings. On \`cancel\` → \`/cc-cancel\`.
+2. State the next stage in plain language: "Plan is ready (5 testable conditions). Send \`/cc\` to continue with build."
+3. **End your turn.** Do not call \`askUserQuestion\`; do not wait for a magic word like "continue". The pause IS the end of the turn — \`flow-state.json\` carries the resume point, and the next \`/cc\` invocation resumes from there.
+4. The user invokes \`/cc\` to advance, \`/cc\` (no arg) is identical, \`/cc-cancel\` to discard, or sends free-text feedback like "fix this first" — which the next \`/cc\` reads from the surrounding conversation.
+
+This is the **single resume mechanism** for cclaw. Mid-session and cross-session pauses both end the turn; \`/cc\` is the only verb that moves the flow forward. There is no "type continue" magic word; there is no clickable Continue button mid-turn.
+
+If the user wants \`fix-only\` or \`show\` semantics, they say so in plain text on the next \`/cc\` and the orchestrator routes accordingly:
+
+- "send fix-only" or "/cc fix-only" → next dispatch is slice-builder mode=fix-only with the cited review findings.
+- "show me the plan" or "/cc show" → open the artifact for the current stage and stop.
+- otherwise → advance to the next stage in \`triage.path\`.
 
 ### \`auto\` mode (autopilot; faster; recommended for \`inline\` / \`soft\` work)
 
 After every dispatch returns:
 
 1. Render the slim summary back to the user (one block, no prompt).
-2. **Immediately** dispatch the next stage in \`triage.path\` — no waiting, no question.
+2. **Immediately** dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS the dispatch you just received was the brainstormer or architect inside the discovery sub-phase. The discovery-internal pauses fire regardless of \`runMode\`; see "Plan stage on large-risky" above.
 3. Stop unconditionally only on these hard gates (autopilot **always** asks here):
-   - \`reviewer\` returned \`block\` decision (open findings) → render the findings, ask \`continue with fix-only\` / \`cancel\`.
-   - \`security-reviewer\` raised any finding → ask before proceeding.
-   - \`reviewer\` returned \`cap-reached\` (5 iterations without convergence) → ask.
-   - **A returned slim summary has \`Confidence: low\`** → ask before proceeding (covered in detail below).
-   - About to run \`ship\` (last stage in \`triage.path\`) → ask \`ship now?\` once, then proceed on confirmation. Ship is the only stage that always confirms in autopilot.
+   - \`reviewer\` returned \`block\` decision (open findings) → render the findings, ask via the harness's structured question whether to **dispatch fix-only** (re-run slice-builder mode=fix-only against the cited findings) or **stay paused** (end the turn; user reviews and either replies with their own guidance, or invokes \`/cc-cancel\` to discard).
+   - \`security-reviewer\` raised any finding → same shape (dispatch fix-only / stay paused).
+   - \`reviewer\` returned \`cap-reached\` (5 iterations without convergence) → ask the same shape.
+   - **A returned slim summary has \`Confidence: low\`** → see "Confidence as a hard gate" below.
+   - About to run \`ship\` (last stage in \`triage.path\`) → ask "Ship now?" once with options \`Ship now\` / \`Stay paused — review first\`; on \`Ship now\` proceed; on \`Stay paused\` end the turn. Ship is the only stage that always confirms in autopilot.
+   - End of the discovery sub-phase's brainstormer / architect (regardless of runMode) — render the slim summary and end the turn; next \`/cc\` continues.
 
-Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green stages. The user typed \`auto\` once during triage and meant it.
+Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green non-discovery stages. \`Cancel\` is **never** offered as a clickable option in any of these gates — the user invokes \`/cc-cancel\` themselves if they want to nuke. \`Stay paused\` (end turn) is the always-present safe-out.
 
 ### Confidence as a hard gate (both modes)
 
@@ -525,9 +553,9 @@ Every slim summary carries a \`Confidence: high | medium | low\` line. The orche
 
 | Confidence | step mode | auto mode |
 | --- | --- | --- |
-| \`high\` | normal pause; render summary, ask continue | normal flow; chain to next stage |
-| \`medium\` | normal pause; render summary, mention confidence in the user-facing line ("Plan ready (medium confidence — see Notes). Continue?") | render the summary inline ("medium — see Notes"); chain anyway. The Notes line is required when confidence is medium |
-| \`low\` | hard gate. Render the summary, do **not** offer \`continue\` as a verb. Offer: \`expand <stage>\` (re-dispatch the same specialist with a richer envelope), \`show\` (open the artifact), \`override\` (acknowledge the risk and continue anyway), \`cancel\` | hard gate. Stop chaining. Render the summary, ask the same expand/show/override/cancel question. \`override\` is the only word that resumes auto-chaining |
+| \`high\` | normal pause; render summary, end the turn (\`/cc\` advances) | normal flow; chain to next stage |
+| \`medium\` | normal pause; render summary, mention confidence in the user-facing line ("Plan ready (medium confidence — see Notes). Send \`/cc\` to continue."); end the turn | render the summary inline ("medium — see Notes"); chain anyway. The Notes line is required when confidence is medium |
+| \`low\` | hard gate. Render the summary, end the turn, and surface the Notes verbatim. The user replies with one of: \`/cc expand\` (re-dispatch the same specialist with a richer envelope), \`/cc show\` (open the artifact), \`/cc override\` (acknowledge the risk and advance), or \`/cc-cancel\` (nuke). | hard gate. Stop chaining. Render the summary, ask via structured question: \`Expand <stage>\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\`. \`Override and continue\` is the only choice that resumes auto-chaining; the others end the turn. |
 
 A specialist that returns \`Confidence: low\` MUST also write a non-empty \`Notes:\` line that explains the dimension that drove confidence down (missing input, unverified citation, partial coverage, etc.). The orchestrator surfaces that Notes line verbatim — the sub-agent is the only one with the context to explain.
 
@@ -539,7 +567,9 @@ Override is sticky to **this stage only** — the next stage starts with the nor
 
 Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentStage\`, \`triage\` (with \`runMode\`), \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters Hop 1 → detect → resume summary → continue from \`currentStage\` with the saved runMode.
 
-Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused \`step\` flow renders the slim summary again and waits for \`continue\`.
+Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused \`step\` flow renders the slim summary again and ends the turn (the same end-of-turn rule applies on resume). The user's next \`/cc\` continues.
+
+\`/cc-cancel\` is the **only** way to discard an active flow; it is never offered as a clickable option in any structured question. The orchestrator surfaces it as plain prose ("send \`/cc-cancel\` to discard this flow") only when the user appears stuck — not as the default.
 
 ## Hop 5 — Compound (automatic)
 
@@ -585,12 +615,13 @@ Hard rules for Hop 6:
 ## Always-ask rules
 
 - Always run the triage gate on a fresh \`/cc\`. Never silently pick a path. Use the harness's structured question tool, not a printed code block.
-- In \`step\` mode, always pause after every stage. Never auto-advance.
-- In \`auto\` mode, never auto-advance past a hard gate (block / cap-reached / security finding / **Confidence: low** / ship). The user opted into chaining green stages, not chaining decisions.
-- Always honour \`Confidence: low\` in the slim summary. Stop and ask, both modes. See "Confidence as a hard gate" above.
+- In \`step\` mode, always end your turn after every stage. Never auto-advance. Never wait for a magic word like "continue" — \`/cc\` is the only resume verb.
+- In \`auto\` mode, never auto-advance past a hard gate (block / cap-reached / security finding / **Confidence: low** / ship / discovery-internal checkpoint). The user opted into chaining green stages, not chaining decisions.
+- Always honour \`Confidence: low\` in the slim summary. Stop, both modes. See "Confidence as a hard gate" above.
 - Always ask before \`git push\` or PR creation. Commit-helper auto-commits in strict mode; everything past commit is opt-in.
-- Always ask before deleting active artifacts (\`/cc-cancel\` is the supported way; do not \`rm\` artifacts directly).
+- **\`/cc-cancel\` is never a clickable option.** Do not include "Cancel" in any structured question's options list, with the single exception of the Hop 1 collision case (\`Resume\` / \`Show\` / \`Discard old and start new\`, where "Discard old and start new" is semantic — the user explicitly asked to start a different flow). For every other gate, the safe-out is "Stay paused — end the turn"; \`/cc-cancel\` lives in plain prose only, surfaced when the user appears stuck.
 - Always show the slim summary back to the user; do not summarise from your own memory of the dispatch.
+- Render slim summaries and pause prose in the user's conversation language (see \`conversation-language.md\`). Mechanical tokens — \`AC-N\`, \`/cc\`, slugs, paths, frontmatter keys, mode names, \`Confidence\` field labels — stay English.
 - Hop 6 (finalize) is **never delegated to a sub-agent**. The orchestrator runs \`git mv\` (or \`mv\`) itself and verifies the active dir is empty before resetting flow-state. Sub-agent dispatch envelopes never include the word "copy".
 - Every dispatch envelope, without exception, lists \`.cclaw/lib/agents/<specialist>.md\` as the **first** read and the wrapper skill as the **second**. A sub-agent that skips either of those reads is acting on a hallucinated contract.
 
