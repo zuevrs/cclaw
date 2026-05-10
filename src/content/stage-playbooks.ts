@@ -302,6 +302,22 @@ $ git status --porcelain
 
 Record each result in \`flows/<slug>/ship.md > Preflight checks\` (table). Set frontmatter \`preflight_passed: true\` only when every row is pass/empty. Any failure blocks ship; you do not move on until preflight is fully green.
 
+### 2a. CI smoke gate (mandatory; T1-11 — v8.13)
+
+After local preflight passes, run a **CI-equivalent smoke pass** against the slug's diff before authoring \`ship.md\`. The principle: local preflight catches "did the test suite I last touched still run", but CI runs the **full project suite under the project's CI conditions** (Node version, linting strictness, integration suites that local skips, deterministic environment). If CI would have caught a regression that local missed, the ship gate must catch it before merge.
+
+Three modes, in order of preference:
+
+1. **Project has a CI smoke target** (\`npm run ci:smoke\` / \`make ci-smoke\` / equivalent): run it. Capture stdout + exit code. Pass = exit 0 with no \`FAIL\` lines.
+
+2. **No CI smoke target but a CI workflow file exists** (\`.github/workflows/*.yml\`, \`.gitlab-ci.yml\`, \`circleci/config.yml\`): synthesise the equivalent locally — read the workflow's \`run:\` steps for the test/build/lint job, then execute that exact sequence in this turn. Capture stdout per step. Pass = every step exits 0.
+
+3. **No CI workflow at all** (small/personal repo, prototype): run an **expanded local preflight** that adds (a) a clean install (\`rm -rf node_modules && npm ci\` or equivalent for the language) and (b) every script under \`scripts/test:*\` / \`scripts/lint:*\` / \`scripts/check:*\` that is not already in §2's list. Record this in ship.md's frontmatter as \`ci_smoke_mode: expanded-local\` with the rationale "no CI workflow detected".
+
+Record the ci-smoke result in \`flows/<slug>/ship.md > CI smoke\` (table — command + exit code + 1-3 line summary). Set frontmatter \`ci_smoke_passed: true\` only when **every** row is pass/exit-0. Any failure blocks ship.
+
+The ship gate's Victory Detector treats \`ci_smoke_passed: true\` as a **mandatory** condition (alongside \`preflight_passed: true\`); a slug cannot ship without both.
+
 ## 3. Detect repository mode
 
 \\\`\\\`\\\`bash
@@ -325,6 +341,7 @@ Seed from \`.cclaw/lib/templates/ship.md\`. Required sections (every one must be
 
 - summary (2-4 lines),
 - preflight checks (table with command + fresh output),
+- ci smoke (table; mandatory per §2a),
 - repo mode (\`git\` / \`no-vcs\`),
 - merge-base detection (git mode only),
 - AC ↔ commit map with red/green/refactor SHAs from \`flow-state.ac[].phases\`,
@@ -332,9 +349,35 @@ Seed from \`.cclaw/lib/templates/ship.md\`. Required sections (every one must be
 - monitoring checklist (error rates, latency budgets, business metrics),
 - finalization_mode (exactly one of FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, FINALIZE_DISCARD_BRANCH, FINALIZE_NO_VCS),
 - breaking changes / migration ("none" is a valid value),
-- release notes (one paragraph suitable for CHANGELOG.md),
+- release notes (one paragraph suitable for CHANGELOG.md; see §5a — auto-generated from AC↔commit evidence),
 - risks carried over (warn-severity ledger rows, open assumptions),
+- what didn't work (T2-11; 0-3 bullets naming approaches you tried and abandoned in this slug, why, and the path you took instead — empty section is fine when nothing was abandoned, write \`None.\` explicitly),
 - victory detector check.
+
+### 5a. Release-notes auto-gen (T1-12)
+
+Do not author the \`release notes\` section by hand. Generate it from AC↔commit evidence + reviewer's positive findings:
+
+1. Read \`flow-state.json > ac[]\` for every AC's id, text, phases (red/green/refactor SHAs).
+2. Read the commit messages those SHAs produced (\`git show -s --format=%s <sha>\`); extract the post-AC-id descriptive part.
+3. Read \`flows/<slug>/review.md\` for the latest iteration's \`What's done well\` block.
+4. Synthesise a one-paragraph release-notes block in this shape:
+
+\`\`\`markdown
+## Release notes — <slug>
+
+<one-sentence summary: what user-facing capability landed; phrase as "added" / "fixed" / "improved" / "changed" so it reads cleanly in CHANGELOG.md>
+
+- **AC-1: <one short sentence from AC text>** — <implementation note from green commit>; verified by <test name>.
+- **AC-2: <…>** — <…>.
+…
+\`\`\`
+
+If the slug has \`> 6\` AC, group by touchSurface clusters (one bullet per cluster, naming "AC-X..AC-Y"). The auto-gen is a draft — you may rewrite for grammar, but you may **not** drop AC bullets or invent capabilities not in the AC list. The reviewer cross-checks the release notes against the AC list at iteration N+1; mismatches are \`required\` severity (axis=correctness).
+
+For \`FINALIZE_OPEN_PR\`, the PR body's "Release Notes Draft" section is populated from this same block.
+
+Set frontmatter \`release_notes_filled: true\` after authoring; the Victory Detector requires it.
 
 ## 6. Victory Detector
 
@@ -342,15 +385,18 @@ Ship is allowed only when ALL of these are true:
 
 - review verdict = \`clear\` or \`warn\` (with convergence signal #2 fired),
 - preflight_passed = true with fresh output recorded in this turn,
+- ci_smoke_passed = true with fresh output recorded in this turn (T1-11; see §2a),
 - rollback_recorded = true with all three fields filled,
+- release_notes_filled = true (T1-12; \`release_notes\` body section is non-empty and not the template placeholder; see §5a below),
+- learnings_captured_or_explicitly_skipped = true (T1-13; quality gate captured \`learnings.md\`, OR the user explicitly bypassed via the structured ask in §7a; silent skip is no longer allowed),
 - finalization_mode set to exactly one enum value,
 - repo_mode matches the chosen finalization mode (\`no-vcs\` cannot pick \`FINALIZE_MERGE_LOCAL\`).
 
-If any condition fails, keep \`status: blocked\` and iterate. Do NOT advance with red preflight or a missing rollback.
+If any condition fails, keep \`status: blocked\` and iterate. Do NOT advance with red preflight, a missing rollback, missing release notes, or a silent learnings skip.
 
 ## 7. Run compound
 
-\`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/flows/shipped/<slug>/\`, stamps the shipped frontmatter onto \`ship.md\` (slug, ship_commit, shipped_at, ac_count, review_iterations, security_flag, has_architect_decision, refines), appends an \`## Artefact index\` section listing every moved file, appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state. (On \`legacy-artifacts: true\` it additionally writes a separate \`shipped/<slug>/manifest.md\` for back-compat.)
+\`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/flows/shipped/<slug>/\` (T0-10: also moves any non-canonical files like \`research-repo.md\`, \`cancel.md\`, future \`handoff.json\`), stamps the shipped frontmatter onto \`ship.md\` (slug, ship_commit, shipped_at, ac_count, review_iterations, security_flag, has_architect_decision, refines), appends an \`## Artefact index\` section listing every moved file (canonical and extra), appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state. (On \`legacy-artifacts: true\` it additionally writes a separate \`shipped/<slug>/manifest.md\` for back-compat.)
 
 The compound quality gate captures \`flows/<slug>/learnings.md\` only when at least one of:
 
@@ -359,7 +405,21 @@ The compound quality gate captures \`flows/<slug>/learnings.md\` only when at le
 - a security review ran or \`security_flag\` is true,
 - the user explicitly asked.
 
-When the gate fails, the run still ships — only the learning capture is skipped.
+### 7a. Learnings hard-stop (T1-13)
+
+Prior versions silently skipped the learnings capture when none of the four signals fired. v8.13 makes this **non-silent**: when the quality gate fails AND the slug touched ≥2 modules OR ran ≥3 commits, the orchestrator **pauses before ship** and surfaces a structured ask:
+
+> The compound quality gate did not fire (no architect decision, fewer than 3 review iterations, no security review). Do you want to capture a one-paragraph learning anyway? [capture / skip-this-time / never-on-this-slug]
+
+- **capture** → set \`signals.userRequestedCapture: true\` in the compound options; the gate then captures \`learnings.md\` and appends to \`knowledge.jsonl\` as if the gate had fired naturally.
+- **skip-this-time** → \`signals.userRequestedCapture: false\` AND record the explicit skip in ship.md frontmatter (\`learnings_skipped_at: <iso>\`, \`learnings_skipped_reason: user-declined\`). The Victory Detector sees the explicit skip and accepts.
+- **never-on-this-slug** → same as skip-this-time, plus a marker so a later refinement of this slug doesn't re-prompt.
+
+The pause is the **default behaviour for any non-trivial slug whose gate didn't fire**; the user can suppress it permanently by setting \`config.captureLearningsBypass: true\` in \`.cclaw/config.yaml\` (CI-friendly opt-out).
+
+This guards against the silent-skip path losing knowledge that *could* have shipped because none of the four heuristic signals matched. The user makes the call; cclaw doesn't decide silently.
+
+When the gate fails on **trivial** slugs (single-AC, single-module, no review iterations), the silent skip stays — capturing learnings on a 12-line bug fix is noise.
 
 ## 8. Execute finalization
 
