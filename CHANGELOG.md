@@ -1,5 +1,53 @@
 # Changelog
 
+## 8.12.0 — Cleanup release: 12 Tier-0 bug fixes, antipatterns trimmed 33→7, orphan content libraries deleted, artefact layout collapsed 9→6, legacy-artifacts opt-in flag
+
+### Why
+
+A multi-axis audit against eleven reference repositories (`addyosmani-skills`, `affaan-m-ecc`, `chachamaru127-claude-code-harness`, `everyinc-compound`, `forrestchang-andrej-karpathy-skills`, `gsd-v1`, `gstack`, `mattpocock-skills`, `obra-superpowers`, `oh-my-claudecode`, `oh-my-openagent`) and an internal review of cclaw's own codebase surfaced four classes of weight cclaw was carrying from earlier releases:
+
+1. **Twelve concrete Tier-0 bugs.** `Recommended next` enum drift across orchestrator + 4 specialists; `securityFlag` vs `security_flag` spelling duality in artefact frontmatter; the adversarial pre-mortem template prompting for a literal future date; `finalization_mode` stored in two places (frontmatter and body) that could disagree; `ship.md` not idempotently re-authored after late iterations; the ship-gate picker offering `Cancel` as a clickable row; discovery checkpoint questions never surfaced through the harness's structured ask; the decision-protocol short-form citing deleted worked examples; and three more documented in the v8.12 audit notes.
+
+2. **Twenty-four unused antipatterns.** Of 33 antipatterns shipped in 8.11, only 7 (`A-2`, `A-3`, `A-15`, `A-16`, `A-17`, `A-21`, `A-22` in old numbering) were ever explicitly cited in reviewer hard rules or slice-builder gates. The other 26 were "reference reading" the meta-skill said to consult — but no spec line ever named a specific antipattern by ID for those.
+
+3. **Orphan content libraries.** Same audit finding for reference patterns (only `auth-flow` and `security-hardening` were ever explicitly named; the other six were generic catalogue), recovery playbooks (no spec line ever named a specific recovery file), research playbooks (the dispatched `learnings-research` and `repo-research` specialists are kept; only the duplicate "browse if relevant" markdown library was orphan), and worked examples (early-adopter scaffolding; shipped flows under `flows/shipped/<slug>/` are now the canonical reference).
+
+4. **Nine artefacts where six suffice.** `manifest.md` duplicated frontmatter that could live on `ship.md` itself. `pre-mortem.md` was a parallel artefact summarising the adversarial reviewer's reasoning — but the reasoning belonged in `review.md` next to the findings it produced. `research-learnings.md` was a write-then-immediately-quote-from cycle that the planner could short-circuit by reading the research helper's slim-summary blob directly.
+
+### What changed
+
+**#1 — Twelve Tier-0 bug fixes.** `Recommended next` is now the canonical orchestrator enum `<continue | review-pause | fix-only | cancel | accept-warns-and-ship>`; brainstormer + architect ship the discovery subset `<continue | cancel>`; security-reviewer ships the no-warn-accept subset `<continue | fix-only | cancel>`; reviewer ships the full canonical enum. `security_flag` (snake_case) is canonical across artefact frontmatter (`securityFlag` is gone). The reviewer's adversarial mode is now a `## Pre-mortem (adversarial)` section appended to `review.md`, not a separate file (legacy-artifacts opt-in restores the file). The pre-mortem template explicitly says *"do not write a literal future date — the scenario is rhetorical"*. The ship runbook teaches stamping `finalization_mode` onto `ship.md` frontmatter as the source of truth (the body's `Selected:` line is supplementary). The ship runbook teaches idempotent re-authoring of `ship.md` when late iterations land. The ship-gate picker example explicitly excludes `Cancel` as a clickable option. The orchestrator surfaces brainstormer / architect `checkpoint_question` via the harness's structured ask, not as fenced English. The decision-protocol short-form no longer cites the deleted `decision-permission-cache` worked example.
+
+**#2 — Antipatterns trimmed 33 → 7 and renumbered to A-1..A-7.** Kept: `A-1` TDD phase integrity (was A-2), `A-2` work outside the AC (was A-3), `A-3` mocking-what-should-not-be-mocked (was A-15), `A-4` drive-by edits (was A-16), `A-5` deletion of pre-existing dead code (was A-17), `A-6` untagged debug logs (was A-21), `A-7` single-run flakiness conclusion (was A-22). The 24 deleted entries (A-1 through A-33 minus the seven) were never named by ID in any reviewer rule, slice-builder gate, or specialist contract. Citations across `skills.ts`, `slice-builder.ts`, `reviewer.ts` were updated in lockstep via a one-shot Node migration script. A migration mapping (`old A-N → new A-M`) is at the top of `antipatterns.md` for anyone returning to a v8.11-shipped slug.
+
+**#3 — Orphan libraries deleted.** Reference patterns 8 → 2 (`auth-flow`, `security-hardening` only). Recovery playbooks 5 → 0 (orchestrator now handles recovery inline: pause → surface options → user-driven decision; the spec is in `recovery.ts` index note). Research playbooks 3 → 0 (the *dispatched* `learnings-research` and `repo-research` specialists are kept; only the markdown "browse-if-relevant" library is gone). Worked examples 8 → 0 (`flows/shipped/<slug>/` is now the canonical reference). The empty index files explain the v8.12 cleanup and link to `legacy-artifacts: true` for restoring the deleted libraries.
+
+**#4 — Artefact layout collapsed 9 → 6.** `manifest.md` is gone — its data (slug, ship_commit, shipped_at, ac_count, review_iterations, security_flag, has_architect_decision, refines) is now stamped onto `ship.md`'s frontmatter, with an `## Artefact index` section listing every moved file. `compound.runCompoundAndShip` runs the new `stampShipFrontmatter` helper instead of `writeFile(manifest.md)`. `pre-mortem.md` is gone — appended to `review.md`. `research-learnings.md` is gone — `learnings-research` returns its 0-3 prior lessons inline as a `lessons={...}` blob in the slim-summary's `Notes` field; the planner copies the blob verbatim into `plan.md`'s `## Prior lessons` section. `cancel.md` replaces `manifest.md` for cancelled flows (the manifest concept is reserved for shipped slugs; `cancel.ts` writes `cancel.md` by default).
+
+**#5 — `legacy-artifacts: true` opt-in flag.** New optional boolean in `.cclaw/config.yaml` (default `false`). When `true`, every deletion above is reverted: `compound.ts` writes a separate `manifest.md` alongside `ship.md`; `cancel.ts` writes `manifest.md` instead of `cancel.md`; the reviewer mirrors the pre-mortem section to a standalone `pre-mortem.md`; `learnings-research` writes `research-learnings.md`. The flag exists so downstream tooling that hard-coded paths to the old layout can keep working — there's no behavioural reason to set it on a fresh install. `compound.ts` and `cancel.ts` both branch on `readConfig().legacyArtifacts`.
+
+**#6 — Install-summary hides empty rows.** `cclaw init` no longer prints `Research 0 · Recovery 0 · Examples 0` when those libraries are empty in default mode. `renderSummary` filters rows with `count > 0`. The progress emit lines (`✓ Wrote research`) are also conditional. The output looks clean again.
+
+**#7 — README trim 421 → 308 lines.** Sections "What changed in 8.10.1" through "What changed in v8" moved to `CHANGELOG.md` (where they were duplicated anyway). README now covers v8.12 + v8.11 + a single "Earlier releases" pointer. The "Five recovery playbooks · Eight worked examples" frontmatter line was rewritten to match the v8.12 trimmed reality.
+
+### Investigation notes (T1-E + T1-F skipped after closer look)
+
+The audit also identified two extraction targets — `_subagent-envelope` shared section and `_brownfield-read-order` shared section — and two skills.ts dedupe targets — TDD canonical statement and sensitive-surface canonical. On closer inspection these turned out to be *tuned per-specialist contextual references*, not copy-paste duplicates. Each specialist's "Sub-agent context" section lists a different envelope (different files to read, different writes, different stop conditions). The two `Phase 2.5 — Pre-task read order` sections in `planner.ts` and `architect.ts` differ in their step-1, step-2, and step-4 wording — each tuned to its specialist's authoring purpose. Extracting any of these to a shared TS variable would either lose the per-callsite tuning or add role-conditional templating that's harder to read than the current setup. We left them alone and noted the decision in this CHANGELOG entry instead of papering over it with a "will refactor later" TODO.
+
+### Tests
+
+`tests/unit/v812-cleanup.test.ts` — 27 new tests covering Tier 0 enum normalisation, security_flag canonical spelling, pre-mortem section template, `finalization_mode` source-of-truth, ship.md idempotent re-author, A-1..A-7 renumber + back-compat mapping, A-N citation parity, orphan-library emptiness, decision-protocol broken-ref removal, artefact-collapse instructions, and `legacy-artifacts: true` config-flag plumbing.
+
+Existing prose-locked tests rewritten to match the new ground truth (`reference-patterns.test.ts`, `research-recovery-antipatterns.test.ts`, `install-content-layer.test.ts`, `compound.test.ts`, `cancel.test.ts`, `tdd-cycle.test.ts`, `v88-cleanup.test.ts`). `examples.test.ts` deleted (no behaviour to lock now that `EXAMPLES` is empty).
+
+Total: 404 tests across 40 files, all green. Net source diff: ~1300 lines deleted, ~470 lines added.
+
+### Migration notes
+
+- **No breaking changes for runtime behaviour.** Every spec line that read or wrote the deleted artefacts now branches on `legacyArtifacts: boolean`. The default false path produces fewer, larger artefacts; the legacy true path is a drop-in equivalent of v8.11.
+- **Slugs shipped on v8.11 keep working.** Their `manifest.md`, `pre-mortem.md`, and `research-learnings.md` files stay where they are; the orchestrator's existing-plan detection reads `shipped/<slug>/ship.md` (default) OR `shipped/<slug>/manifest.md` (legacy) — either is sufficient to recognise an already-shipped slug.
+- **Citations to old A-N IDs in v8.11 artefacts stay readable.** The v8.12 antipatterns file documents the renumber mapping at the top so anyone returning to a v8.11 slug can translate the IDs in an iteration block.
+
 ## 8.11.0 — Orchestrator-spec cleanup: discovery pauses, no-Cancel pickers, /cc as the only resume verb, dated slugs, language-neutral examples
 
 ### Why

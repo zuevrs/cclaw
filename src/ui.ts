@@ -133,7 +133,7 @@ export function renderSummary(counts: SummaryCounts, useColor: boolean): string 
   const heading = colorize("bold", "Installed", useColor);
   const harnessesLabel = colorize("cyan", "Harnesses:", useColor);
   const harnessLine = `  ${harnessesLabel} ${counts.harnesses.join(", ")}`;
-  const rows: ReadonlyArray<readonly [string, number]> = [
+  const allRows: ReadonlyArray<readonly [string, number]> = [
     ["Agents", counts.agents],
     ["Skills", counts.skills],
     ["Templates", counts.templates],
@@ -145,6 +145,7 @@ export function renderSummary(counts: SummaryCounts, useColor: boolean): string 
     ["Hooks", counts.hooks],
     ["Commands", counts.commands]
   ];
+  const rows = allRows.filter(([, count]) => count > 0);
   const longest = rows.reduce((max, [label]) => Math.max(max, label.length), 0);
   const body = rows
     .map(([label, count]) => {

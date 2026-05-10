@@ -43,10 +43,14 @@ describe("cancelActiveRun", () => {
     expect(result.movedArtifacts).toContain("plan");
 
     const cancelledPlan = path.join(cancelledArtifactDir(project, "kappa"), "plan.md");
-    const manifest = path.join(cancelledArtifactDir(project, "kappa"), "manifest.md");
+    // v8.12 default: cancellation receipt is `cancel.md` (not `manifest.md`,
+    // which is reserved for shipped slugs and is itself collapsed into
+    // ship.md frontmatter). legacy-artifacts: true brings manifest.md back.
+    const cancelReceipt = path.join(cancelledArtifactDir(project, "kappa"), "cancel.md");
     await expect(fs.access(cancelledPlan)).resolves.toBeUndefined();
-    const manifestBody = await fs.readFile(manifest, "utf8");
-    expect(manifestBody).toContain("user changed mind");
+    await expect(fs.access(path.join(cancelledArtifactDir(project, "kappa"), "manifest.md"))).rejects.toBeTruthy();
+    const cancelBody = await fs.readFile(cancelReceipt, "utf8");
+    expect(cancelBody).toContain("user changed mind");
 
     const state = await readFlowState(project);
     expect(state.currentSlug).toBeNull();

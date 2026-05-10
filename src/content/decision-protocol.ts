@@ -14,10 +14,6 @@ If you find yourself writing one of these, do not open a \`D-N\`. Capture the ch
 
 \`Context · Considered options (>= 2) · Selected · Rationale · Rejected because · Consequences · Refs\`. Add **Failure Mode Table** + **Pre-mortem** for every product-grade or ideal tier decision (see architect.md).
 
-## Worked examples
-
-See \`lib/examples/decision-bm25-search.md\`, \`lib/examples/decision-permission-cache.md\`, \`lib/examples/decision-forward-only-migration.md\`.
-
 ## Refactoring decisions
 
 Decisions are immutable once shipped. To revisit:

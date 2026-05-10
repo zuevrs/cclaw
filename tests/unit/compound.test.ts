@@ -79,7 +79,18 @@ describe("compound", () => {
 
     expect(result.movedArtifacts.sort()).toEqual(["build", "plan", "review", "ship"]);
     const shipped = shippedArtifactDir(project, "demo");
-    expect(await fs.stat(path.join(shipped, "manifest.md"))).toBeDefined();
+    // v8.12 default: manifest.md is gone; ship.md frontmatter carries the
+    // shipped signals, and an "Artefact index" section lists every moved
+    // file. legacy-artifacts: true would bring manifest.md back.
+    await expect(fs.access(path.join(shipped, "manifest.md"))).rejects.toBeTruthy();
+    const shipBody = await fs.readFile(path.join(shipped, "ship.md"), "utf8");
+    expect(shipBody).toMatch(/ship_commit: abc123/);
+    expect(shipBody).toMatch(/shipped_at: /);
+    expect(shipBody).toMatch(/ac_count: 1/);
+    expect(shipBody).toMatch(/^## Artefact index$/m);
+    expect(shipBody).toMatch(/- plan\.md/);
+    expect(shipBody).toMatch(/- build\.md/);
+    expect(shipBody).toMatch(/- review\.md/);
     await expect(fs.access(activeArtifactPath(project, "plan", "demo"))).rejects.toBeTruthy();
   });
 

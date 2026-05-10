@@ -657,7 +657,7 @@ trigger: when /cc detects an existing plan (active or shipped) for the new task
 - last_specialist of the active plan, so the user can see "stopped at architect" or "review iteration 3 in progress".
 - The AC table with their statuses (\`pending\` / \`committed\`).
 - Whether \`security_flag\` was set.
-- A direct link to \`.cclaw/flows/shipped/<slug>/manifest.md\` if the match is a shipped slug.
+- A direct link to \`.cclaw/flows/shipped/<slug>/ship.md\` if the match is a shipped slug (\`legacy-artifacts: true\` also writes \`manifest.md\` alongside).
 `;
 
 const PARALLEL_BUILD = `---
@@ -1024,7 +1024,7 @@ Mechanically:
 3. **Search for callers / dependents.** Even if the fence looks self-contained, an external test or runtime check may rely on its presence.
 4. **If you cannot find a reason, ask** before removing. "I'm about to delete this guard at \`src/auth.ts:127\`; \`git blame\` traces it back to a 2022 incident commit but no test covers it. Is it safe?"
 
-The reviewer cites a fence-removal without due-diligence as **F-N | correctness | required | A-26 — Chesterton's Fence violation**.
+The reviewer cites a fence-removal without due-diligence as **F-N | correctness | required | Chesterton's Fence violation**.
 
 ### Rule of 500 — invest in automation past the threshold
 
@@ -1040,7 +1040,7 @@ Why the threshold:
 - Automation makes the change **inspectable at the rule level** instead of the diff level: the reviewer walks "the rule" once, then runs it against the diff, instead of reading 500+ touched lines.
 - Repeating the same change in the future is free once the codemod exists.
 
-Document the chosen automation in \`decisions.md\` (D-N) before running it. The reviewer cites a hand-rolled mass-refactor as **F-N | architecture | consider | A-27 — Rule of 500 violation**.
+Document the chosen automation in \`decisions.md\` (D-N) before running it. The reviewer cites a hand-rolled mass-refactor as **F-N | architecture | consider | Rule of 500 violation**.
 
 ### Structural simplification patterns
 
@@ -1241,15 +1241,15 @@ vi.mocked(api.createInvoice).mockResolvedValue({ ok: true });
 
 The SDK form **gives each endpoint its own type signature**, which means the mock cannot accidentally return the wrong shape; a refactor of one endpoint touches one mock, not a switch statement that touches all.
 
-The reviewer cites a generic-fetcher mock with conditional logic as **A-28 — Generic-fetcher mock with switch-on-URL logic**, severity \`consider\`. The fix is usually a small refactor: introduce an SDK-style adapter at the network boundary, then mock the adapter in tests.
+The reviewer cites a generic-fetcher mock with conditional logic as **Generic-fetcher mock with switch-on-URL logic**, severity \`consider\`. The fix is usually a small refactor: introduce an SDK-style adapter at the network boundary, then mock the adapter in tests.
 
 ### Smell catalogue — primitive obsession & feature envy
 
 When a test reveals a structural smell in the production code, the slice-builder surfaces the smell as a finding **even if the AC does not require fixing it**. Two named smells the reviewer cites:
 
-- **A-29 — Primitive obsession.** A function that takes \`(string, string, number)\` where each \`string\` has a different meaning (e.g. \`(userId, accountId, ageInDays)\`) is at risk of caller-side mistakes (passing args in the wrong order). The fix is a typed value object (\`UserId\`, \`AccountId\`, \`Days\`); refactor surfaces the type system to catch the mistake. Severity: \`consider\`.
+- **Primitive obsession.** A function that takes \`(string, string, number)\` where each \`string\` has a different meaning (e.g. \`(userId, accountId, ageInDays)\`) is at risk of caller-side mistakes (passing args in the wrong order). The fix is a typed value object (\`UserId\`, \`AccountId\`, \`Days\`); refactor surfaces the type system to catch the mistake. Severity: \`consider\`.
 
-- **A-30 — Feature envy.** A method on \`A\` that mostly reads / writes fields of \`B\` is "envious" of \`B\` — it probably belongs on \`B\`. Symptom: \`a.method()\` reads as \`if (b.x === ...) b.y = b.z + ...\`. The fix is to move the method to \`B\`. Severity: \`consider\`.
+- **Feature envy.** A method on \`A\` that mostly reads / writes fields of \`B\` is "envious" of \`B\` — it probably belongs on \`B\`. Symptom: \`a.method()\` reads as \`if (b.x === ...) b.y = b.z + ...\`. The fix is to move the method to \`B\`. Severity: \`consider\`.
 
 These are surfaced under the build summary's \`### Noticed but didn't touch\` (per \`surgical-edit-hygiene\`); the AC scope does NOT expand to fix them.
 
@@ -1257,12 +1257,12 @@ These are surfaced under the build summary's \`### Noticed but didn't touch\` (p
 
 The TDD cycle has a small number of well-known failure modes, all catalogued in \`antipatterns.md\`. The reviewer cites the antipattern entry directly; this list is a lookup.
 
-- **Skipping RED, scrambling phases, missing REFACTOR, production code in the RED commit.** A-2 — TDD phase integrity broken. The cycle is the contract; an audit trail with reordered phases is unverifiable.
-- **Single test green, didn't run the suite.** A-12 — that is a regression, not GREEN. Run the full relevant suite after every implementation change.
-- **Stage everything with \`git add -A\`.** A-3 — work outside the AC. Stage AC-related files explicitly (\`git add <path>\` per file, or \`git add -p\`).
-- **Horizontal slicing (RED-batch then GREEN-batch).** A-13 — writing all RED tests first, then all GREEN code produces tests of imagined behaviour. One test → one impl → repeat. See the Vertical Slicing section above.
-- **Pushing past a failing test.** A-14 — the next cycle is built on the previous cycle's invariants; if those are broken, you are debugging a stack of broken assumptions. Stop the line, root-cause, then resume.
-- **Mocking what should not be mocked.** A-15 — mocking a database driver for a query test reads green and breaks in production. Use a real test DB or an in-memory fake; mock only what is genuinely outside your control.
+- **Skipping RED, scrambling phases, missing REFACTOR, production code in the RED commit.** A-1 — TDD phase integrity broken. The cycle is the contract; an audit trail with reordered phases is unverifiable.
+- **Single test green, didn't run the suite.** that is a regression, not GREEN. Run the full relevant suite after every implementation change.
+- **Stage everything with \`git add -A\`.** A-2 — work outside the AC. Stage AC-related files explicitly (\`git add <path>\` per file, or \`git add -p\`).
+- **Horizontal slicing (RED-batch then GREEN-batch).** writing all RED tests first, then all GREEN code produces tests of imagined behaviour. One test → one impl → repeat. See the Vertical Slicing section above.
+- **Pushing past a failing test.** the next cycle is built on the previous cycle's invariants; if those are broken, you are debugging a stack of broken assumptions. Stop the line, root-cause, then resume.
+- **Mocking what should not be mocked.** A-3 — mocking a database driver for a query test reads green and breaks in production. Use a real test DB or an in-memory fake; mock only what is genuinely outside your control.
 - **Test file named after the AC id** (\`AC-1.test.ts\`, \`tests/AC-2.spec.ts\`). The reviewer cites this as severity=\`required\`. Mirror the unit under test in the filename; carry the AC id inside the test name and commit message only.
 
 ## Fix-only flow
@@ -1335,7 +1335,7 @@ When the architect / planner introduces a deprecation:
 2. **Choose the migration cost split.** Either (a) the deprecator ships an adapter that wraps the old surface to use the new one (zero migration cost for consumers, higher cost for the deprecator), OR (b) the deprecator pairs with each consumer's owner to land the migration commit (higher coordination cost, but the new shape is the only shape after the cutover).
 3. **Document the choice in \`decisions.md\`.** "We picked path (a) because there are 47 internal consumers; path (b) would mean 47 PRs across 12 teams."
 
-A deprecation that names no migration owner and no consumer plan is **F-N | architecture | required | A-31 — Churn Rule violation**.
+A deprecation that names no migration owner and no consumer plan is **F-N | architecture | required | Churn Rule violation**.
 
 ### The Strangler Pattern
 
@@ -1351,7 +1351,7 @@ phase 4: Old path removed.
 
 Each phase has explicit ship-gate criteria and rollback steps. The Strangler is documented in \`decisions.md\` with the per-phase entry/exit criteria; the orchestrator surfaces "we are in Strangler phase N" in slim summaries until phase 4 ships.
 
-A migration that jumps from phase 0 to phase 4 in one slug is **F-N | architecture | required | A-32 — Big-bang migration** (no canary, no rollback).
+A migration that jumps from phase 0 to phase 4 in one slug is **F-N | architecture | required | Big-bang migration** (no canary, no rollback).
 
 ### Zombie Code lifecycle
 
@@ -1366,7 +1366,7 @@ The architect's response when zombie code is identified:
 
 What you do **NOT** do: leave zombie code in the diff because "we don't have time to deal with it". Every flow that ships through zombie code makes the eventual cleanup more expensive.
 
-The reviewer cites a knowingly-ignored zombie-code dependency as **F-N | architecture | consider | A-33 — Zombie code reliance** (severity \`required\` if the zombie code is on a security-sensitive path).
+The reviewer cites a knowingly-ignored zombie-code dependency as **F-N | architecture | consider | Zombie code reliance** (severity \`required\` if the zombie code is on a security-sensitive path).
 `;
 
 const CONVERSATION_LANGUAGE = `---
@@ -1961,7 +1961,7 @@ When the AC asks you to fix a bug in \`fn foo()\`, you fix \`fn foo()\`. You do 
 
 Each of those is a separate slug (or, if trivial, a separate inline-mode flow). Inside this slug, you ship the AC and **only** the AC.
 
-The reviewer cites a drive-by edit as **A-16 — Drive-by edits to adjacent comments / formatting / imports** with severity \`consider\` (or \`required\` when the drive-by edit hides scope creep).
+The reviewer cites a drive-by edit as **A-4 — Drive-by edits to adjacent comments / formatting / imports** with severity \`consider\` (or \`required\` when the drive-by edit hides scope creep).
 
 ### Rule 2 — Remove only orphans your changes created
 
@@ -1977,7 +1977,7 @@ You **must** remove these. They are debt **your** AC created and they belong in 
 
 You **must NOT** remove orphans that **pre-dated** your change. Pre-existing dead code is not your scope; deleting it produces a diff that mixes "AC implementation" with "cleanup of code I did not own". The AC's audit trail breaks.
 
-The reviewer cites a deleted pre-existing orphan as **A-17 — Deletion of pre-existing dead code without permission** with severity \`required\`.
+The reviewer cites a deleted pre-existing orphan as **A-5 — Deletion of pre-existing dead code without permission** with severity \`required\`.
 
 ### Rule 3 — Mention pre-existing dead code under "Noticed but didn't touch"
 
@@ -2004,7 +2004,7 @@ A slice-builder that ships an AC and writes "no drive-by edits noticed" in the \
 Whenever the reviewer detects a drive-by edit, they record a finding with this exact shape:
 
 \`\`\`
-| F-N | architecture | consider | AC-X | src/foo.ts:42 | A-16 — Drive-by edit: comment reflowed adjacent to AC-X change. The diff at lines 38-44 contains a comment normalisation that is unrelated to the AC. | Move the comment change to a separate slug, or revert it from this commit. |
+| F-N | architecture | consider | AC-X | src/foo.ts:42 | A-4 — Drive-by edit: comment reflowed adjacent to AC-X change. The diff at lines 38-44 contains a comment normalisation that is unrelated to the AC. | Move the comment change to a separate slug, or revert it from this commit. |
 \`\`\`
 
 Severity: \`consider\` for cosmetic drive-bys (formatting, comments, rename of local var). Escalate to \`required\` when the drive-by edit also hides logic change (e.g. "reformatted block" that quietly removed a guard clause).
@@ -2012,7 +2012,7 @@ Severity: \`consider\` for cosmetic drive-bys (formatting, comments, rename of l
 ## Reviewer finding template — deleted pre-existing dead code
 
 \`\`\`
-| F-N | correctness | required | AC-X | src/legacy/util.ts | A-17 — Pre-existing helper \`oldHelper()\` deleted in this commit. The deletion is unrelated to AC-X (no AC referenced it). | Restore the deletion; surface as a follow-up slug under \`## Summary → Noticed but didn't touch\`. |
+| F-N | correctness | required | AC-X | src/legacy/util.ts | A-5 — Pre-existing helper \`oldHelper()\` deleted in this commit. The deletion is unrelated to AC-X (no AC referenced it). | Restore the deletion; surface as a follow-up slug under \`## Summary → Noticed but didn't touch\`. |
 \`\`\`
 
 Always \`required\` (even when the deletion is "obviously dead"): the audit trail breaks regardless of whether the dead code was real.
@@ -2023,7 +2023,7 @@ Always \`required\` (even when the deletion is "obviously dead"): the audit trai
 - **Pre-existing dead code is never deleted in-scope.** Always surfaced under the summary block; never silently removed.
 - **Your-orphan cleanup is mandatory.** An import your change made unused stays in the same commit chain as the change.
 - **The diff scope test:** for every changed line in your commit, you must be able to point at an AC verification line that justifies the change. If you cannot, the line is a drive-by — revert it or split the slug.
-- **\`git add -A\` is forbidden.** Stage files explicitly (\`git add <path>\` per file or \`git add -p\` to pick hunks). The reviewer cites \`git add -A\` in shell history as A-3 (work outside AC).
+- **\`git add -A\` is forbidden.** Stage files explicitly (\`git add <path>\` per file or \`git add -p\` to pick hunks). The reviewer cites \`git add -A\` in shell history as A-2 (work outside AC).
 
 ## Worked example — RIGHT
 
@@ -2055,15 +2055,15 @@ Same AC, but the slice-builder also "improved":
 
 \`\`\`
 src/lib/paginate.ts: -2 lines, +2 lines (the fix)        ← OK
-src/lib/paginate.ts: -8 lines, +12 lines (reformatted)   ← A-16 drive-by
-src/lib/paginate.ts: -14 lines (deleted dead helper)     ← A-17 pre-existing dead code
+src/lib/paginate.ts: -8 lines, +12 lines (reformatted)   ← A-4 drive-by
+src/lib/paginate.ts: -14 lines (deleted dead helper)     ← A-5 pre-existing dead code
 tests/unit/paginate.test.ts: +14 lines                   ← OK
 \`\`\`
 
 Reviewer findings:
 
-- F-1 architecture consider (A-16) — drive-by reformat in lines 14-26.
-- F-2 correctness required (A-17) — \`legacyPaginate\` deletion unrelated to AC-1.
+- F-1 architecture consider (A-4) — drive-by reformat in lines 14-26.
+- F-2 correctness required (A-5) — \`legacyPaginate\` deletion unrelated to AC-1.
 
 Both findings block the slice from going to compound until the slice-builder splits the diff: one commit for AC-1, drive-by reverts in a separate commit (or in a follow-up slug for the "real" cleanups).
 
@@ -2132,7 +2132,7 @@ Pick the prefix once (e.g. \`a4f2\`) and reuse it for every log added in this se
 - **Multiple debugging sessions don't cross-contaminate.** A second bug a week later uses prefix \`b71e\`; you do not delete the first session's logs by accident.
 - **Reviewers can prove cleanup happened.** The reviewer greps for \`\\[DEBUG-\` in the final diff; if the count is 0, cleanup is verified.
 
-The reviewer cites untagged debug logs as **A-21 — Untagged debug logs** with severity \`required\` (the cleanup risk is real: a stray \`console.log\` in production is the canonical post-mortem opener).
+The reviewer cites untagged debug logs as **A-6 — Untagged debug logs** with severity \`required\` (the cleanup risk is real: a stray \`console.log\` in production is the canonical post-mortem opener).
 
 Before commit:
 
@@ -2141,7 +2141,7 @@ Before commit:
 
 ## Phase 4 — Multi-run protocol for non-determinism
 
-If a test fails **once** and passes on a re-run, **the test is not green**. It is undecided. The most common AI-coding failure here is "I re-ran it and it passed; moving on" — that is **A-22 — Single-run flakiness conclusion**, severity \`required\`.
+If a test fails **once** and passes on a re-run, **the test is not green**. It is undecided. The most common AI-coding failure here is "I re-ran it and it passed; moving on" — that is **A-7 — Single-run flakiness conclusion**, severity \`required\`.
 
 The protocol:
 
@@ -2230,7 +2230,7 @@ This artifact is **append-only**. Each new debugging iteration in the same slice
 
 - **Hypotheses before probes.** No "let me just add a log here and see what happens". Three to five hypotheses, ranked, written down, optionally shown to the user.
 - **Cheapest loop first.** Rung 1 unless rung 1 is provably impossible.
-- **Tagged debug logs only.** Untagged \`console.log\` is A-21.
+- **Tagged debug logs only.** Untagged \`console.log\` is A-6.
 - **Single-run pass is not green when flakiness was observed.** Multi-run protocol is mandatory.
 - **No seam is a finding.** Do not invent a seam by mocking a real dependency.
 
@@ -2386,7 +2386,7 @@ Practical implications the architect MUST surface in \`decisions.md\` for any pu
 3. **Pin the silence.** Document what you do NOT return on missing input, on partial failure, on timeout. Silence has shape.
 4. **Pin the timing.** If a response can arrive before / after a side-effect commits (eventual consistency), the contract says so.
 
-The reviewer cites a violation of pin-the-shape as **F-N | architecture | required | A-23 — Hyrum's Law surface unpinned**.
+The reviewer cites a violation of pin-the-shape as **F-N | architecture | required | Hyrum's Law surface unpinned**.
 
 ## The one-version rule
 
@@ -2429,7 +2429,7 @@ This applies to:
 - Queue messages.
 - Anything decoded from \`JSON.parse\`, \`yaml.parse\`, \`toml.parse\`, \`msgpack.decode\` of data that came over a network or from a file the local process did not just write.
 
-The reviewer cites a missed validation on third-party data as **F-N | security | required | A-24 — Unvalidated external response shape**.
+The reviewer cites a missed validation on third-party data as **F-N | security | required | Unvalidated external response shape**.
 
 ## The two-adapter rule
 
@@ -2450,10 +2450,10 @@ Adapters justifying the port (must be at least two):
 1. **PostgresStorage** — production, ships in this slug.
 2. **InMemoryStorage** — tests, ships in this slug under \`tests/fixtures/storage.ts\`.
 
-Rejected: a single adapter (Postgres only) with no test substitute would mean the test layer mocks the database (A-15). The InMemoryStorage is the second adapter that justifies the port.
+Rejected: a single adapter (Postgres only) with no test substitute would mean the test layer mocks the database (A-3). The InMemoryStorage is the second adapter that justifies the port.
 \`\`\`
 
-The reviewer cites a single-adapter port as **F-N | architecture | required | A-25 — Hypothetical seam (one-adapter port)**.
+The reviewer cites a single-adapter port as **F-N | architecture | required | Hypothetical seam (one-adapter port)**.
 
 ## Consistent error model
 
@@ -2841,7 +2841,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "surgical-edit-hygiene",
     fileName: "surgical-edit-hygiene.md",
-    description: "Always-on for slice-builder: no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary instead of deleting it. Reviewer finding templates for A-16 (drive-by) and A-17 (deleted pre-existing dead code).",
+    description: "Always-on for slice-builder: no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary instead of deleting it. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
     triggers: ["always-on", "specialist:slice-builder", "before:git-commit"],
     body: SURGICAL_EDIT_HYGIENE
   },

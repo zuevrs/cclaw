@@ -344,13 +344,19 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   emit("Wrote patterns", `${REFERENCE_PATTERNS.length} reference patterns → .cclaw/lib/patterns/`);
 
   await writeResearchPlaybooks(projectRoot);
-  emit("Wrote research", `${RESEARCH_PLAYBOOKS.length} research playbooks → .cclaw/lib/research/`);
+  if (RESEARCH_PLAYBOOKS.length > 0) {
+    emit("Wrote research", `${RESEARCH_PLAYBOOKS.length} research playbooks → .cclaw/lib/research/`);
+  }
 
   await writeRecoveryPlaybooks(projectRoot);
-  emit("Wrote recovery", `${RECOVERY_PLAYBOOKS.length} recovery playbooks → .cclaw/lib/recovery/`);
+  if (RECOVERY_PLAYBOOKS.length > 0) {
+    emit("Wrote recovery", `${RECOVERY_PLAYBOOKS.length} recovery playbooks → .cclaw/lib/recovery/`);
+  }
 
   await writeExamples(projectRoot);
-  emit("Wrote examples", `${EXAMPLES.length} worked examples → .cclaw/lib/examples/`);
+  if (EXAMPLES.length > 0) {
+    emit("Wrote examples", `${EXAMPLES.length} worked examples → .cclaw/lib/examples/`);
+  }
 
   await writeAntipatterns(projectRoot);
   await writeDecisionProtocol(projectRoot);

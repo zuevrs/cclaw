@@ -11,17 +11,15 @@ This skill is loaded by the harness with every \`/cc\` invocation. It does not d
 
 When \`/cc\` runs, the harness has access to:
 
-- \`.cursor/commands/cc.md\` — your operating manual (also in \`.cursor/skills/cclaw/\` mirrors).
-- \`.cclaw/lib/agents/*.md\` — six specialist prompts.
-- \`.cclaw/lib/skills/*.md\` — six auto-trigger skills.
-- \`.cclaw/lib/templates/*.md\` — ten artifact templates.
-- \`.cclaw/lib/runbooks/*.md\` — four stage runbooks.
-- \`.cclaw/lib/patterns/*.md\` — eight task patterns.
-- \`.cclaw/lib/research/*.md\` — five research playbooks.
-- \`.cclaw/lib/recovery/*.md\` — five recovery playbooks.
+- \`.cursor/commands/cc.md\` (or harness-equivalent) — your operating manual.
+- \`.cclaw/lib/agents/*.md\` — six specialist prompts (brainstormer, architect, planner, slice-builder, reviewer, security-reviewer) plus two research helpers (learnings-research, repo-research).
+- \`.cclaw/lib/skills/*.md\` — auto-trigger skills (slim-summary, conversation-language, pre-flight-assumptions, triage-gate, flow-resume, plan-authoring, surgical-edit-hygiene, debug-loop, browser-verification, anti-slop, summary-format, parallel-build, refinement, ac-traceability, breaking-changes, refactor-safety, source-driven, security-review, tdd-cycle, commit-message-quality, brainstorming-discovery, architectural-decision, api-and-interface-design, documentation-and-adrs).
+- \`.cclaw/lib/templates/*.md\` — artifact templates (plan, plan-soft, build, build-soft, review, ship, decisions, learnings, ideas; on legacy-artifacts: also manifest). v8.12 collapsed manifest → \`ship.md\` frontmatter and pre-mortem → \`review.md\` section by default. The \`learnings-research\` helper returns lessons inline in its slim-summary instead of a separate \`research-learnings.md\` file.
+- \`.cclaw/lib/runbooks/*.md\` — four stage runbooks (plan, build, review, ship).
+- \`.cclaw/lib/patterns/*.md\` — two task patterns (auth-flow, security-hardening). Earlier versions shipped 8; v8.12 deleted 6 orphan patterns that no spec line ever named. Re-enable with \`legacy-artifacts: true\`.
 - \`.cclaw/lib/decision-protocol.md\` — D-N record format.
-- \`.cclaw/lib/examples/*.md\` — thirteen worked examples.
-- \`.cclaw/lib/antipatterns.md\` — twelve known failure modes.
+- \`.cclaw/lib/antipatterns.md\` — seven wired failure modes (A-1..A-7, renumbered in v8.12 from the old A-2/A-3/A-15/A-16/A-17/A-21/A-22 set).
+- \`.cclaw/lib/research/\`, \`.cclaw/lib/recovery/\`, \`.cclaw/lib/examples/\` — empty index files in v8.12 (orphan content was deleted; re-enable with \`legacy-artifacts: true\`).
 
 ## How to read this content efficiently
 
@@ -29,12 +27,11 @@ You do not need to read everything. The right loading pattern:
 
 1. **Always read \`/cc\`** — your operating manual.
 2. **Read the runbook** for the stage you are in (\`.cclaw/lib/runbooks/<stage>.md\`).
-3. **Read the pattern(s)** that match the task (\`.cclaw/lib/patterns/\`).
+3. **Read the pattern** that matches the task (only when the task touches auth or security; otherwise skip).
 4. **Read the specialist prompt** when you invoke a specialist (\`.cclaw/lib/agents/<id>.md\`).
-5. **Read the recovery playbook** when an automated check fails.
-6. **Read examples** when authoring an artifact you have not seen before.
+5. **Read the antipattern catalogue** as a reference when the reviewer cites a finding.
 
-Don't read research playbooks unless you're invoking planner mode=\`research\`. Don't read antipatterns proactively; the reviewer cites them as findings.
+Don't read recovery / research / examples directories proactively — they are empty in v8.12 unless legacy-artifacts is on. Don't read antipatterns proactively for general guidance; the reviewer cites them as findings, and the slice-builder reads only the ones referenced in its hard rules.
 
 ## Your responsibilities as orchestrator
 

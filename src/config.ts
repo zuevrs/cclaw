@@ -11,6 +11,24 @@ export interface CclawConfig {
   flowVersion: "8";
   harnesses: HarnessId[];
   hooks: { profile: HookProfile };
+  /**
+   * Opt-in flag (default `false`) that preserves the v8.11-and-earlier
+   * 9-artefact layout: a separate `manifest.md`, `pre-mortem.md`, and
+   * `research-learnings.md` per shipped slug, plus the deleted
+   * recovery / research / examples library.
+   *
+   * v8.12 default behaviour:
+   *   - `manifest.md` collapses into `ship.md` frontmatter.
+   *   - `pre-mortem.md` collapses into a `## Pre-mortem (adversarial)` section
+   *     appended to `review.md`.
+   *   - `research-learnings.md` is replaced by an inline `lessons={...}` blob
+   *     in the learnings-research slim-summary, copied verbatim into
+   *     `plan.md`'s "Prior lessons" section.
+   *
+   * Set `legacyArtifacts: true` in `.cclaw/config.yaml` to keep the old
+   * 9-artefact layout for downstream tooling that still expects those files.
+   */
+  legacyArtifacts?: boolean;
 }
 
 export function createDefaultConfig(harnesses: HarnessId[] = ["cursor"]): CclawConfig {
@@ -18,7 +36,8 @@ export function createDefaultConfig(harnesses: HarnessId[] = ["cursor"]): CclawC
     version: CCLAW_VERSION,
     flowVersion: "8",
     harnesses,
-    hooks: { profile: "minimal" }
+    hooks: { profile: "minimal" },
+    legacyArtifacts: false
   };
 }
 

@@ -24,6 +24,16 @@ You return the slim summary block (≤6 lines) and write \`.cclaw/flows/<slug>/r
 
 You **do not** open the build / review / ship artifacts of prior slugs unless the candidate's \`learnings.md\` is missing — and even then read at most one prior \`review.md\` for context.
 
+## Greenfield short-circuit
+
+As of v8.12, the planner integrates Prior lessons **as a section of \`plan.md\`**, not as a separate artifact (see "Output" below for the legacy-artifacts override). When you detect any of the following, **return \`continue\` immediately with an empty result and do not write a separate file**:
+
+- \`.cclaw/knowledge.jsonl\` does not exist.
+- \`.cclaw/knowledge.jsonl\` exists but is empty (zero lines after stripping whitespace).
+- \`.cclaw/knowledge.jsonl\` exists with entries but **none score ≥ 4** for this task.
+
+In all three cases your slim summary returns \`Notes: no prior slugs apply (knowledge.jsonl absent | empty | no matches)\` and \`Recommended next: continue\`. The dispatcher writes the literal string \`No prior shipped slugs apply to this task.\` into the plan's "Prior lessons" section, no separate file is created. The 24-line greenfield ceremony from v8.11 is gone.
+
 ## Selection algorithm (do this in your head; do not write it)
 
 Score each \`knowledge.jsonl\` entry on three axes:
@@ -44,7 +54,9 @@ Take the top 1-3 entries with score ≥ 4. If nothing scores ≥ 4, write the ar
 
 ## Output
 
-Write \`.cclaw/flows/<slug>/research-learnings.md\`:
+**Default path:** When you find ≥1 prior lesson that scores ≥4, return the **structured payload below directly to the dispatcher** (planner) in the slim-summary's \`Notes\` field as a serialized inline blob (\`"Notes: lessons={...}"\`). The planner copies the quotes verbatim into \`plan.md\`'s "Prior lessons" section. **Do not write a separate \`research-learnings.md\` file** unless the project has \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`.
+
+**Legacy path (\`legacy-artifacts: true\`):** Write \`.cclaw/flows/<slug>/research-learnings.md\` with the schema below. This preserves the v8.11-era 9-artifact layout for downstream tooling that still expects the file.
 
 \`\`\`markdown
 ---
