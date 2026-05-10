@@ -185,5 +185,45 @@ describe("v8.13 power-and-economy", () => {
       expect(START_COMMAND_BODY).toMatch(/Discoverability self-check/u);
       expect(START_COMMAND_BODY).toMatch(/AGENTS\.md.*CLAUDE\.md.*README\.md/su);
     });
+
+    it("TDD-cycle skill carries anti-rationalization table (T2-8)", () => {
+      const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-cycle")!;
+      expect(tdd.body).toMatch(/Anti-rationalization table/u);
+      expect(tdd.body).toMatch(/rationalization \| truth/u);
+    });
+  });
+
+  describe("T3 architectural foundations", () => {
+    it("config exposes ModelPreferences for category-based routing (T3-2)", async () => {
+      const mod = await import("../../src/config.js");
+      const sample: import("../../src/config.js").CclawConfig = {
+        version: "8.13.0",
+        flowVersion: "8",
+        harnesses: ["claude-code"],
+        hooks: { profile: "default" },
+        modelPreferences: {
+          brainstormer: "fast",
+          architect: "powerful",
+          planner: "balanced",
+        },
+      };
+      expect(sample.modelPreferences?.architect).toBe("powerful");
+      expect(typeof mod).toBe("object");
+    });
+
+    it("namespace router routes are documented (T3-1, gsd pattern)", () => {
+      expect(START_COMMAND_BODY).toMatch(/Namespace router \(T3-1/u);
+      expect(START_COMMAND_BODY).toMatch(/\/cc-plan/u);
+      expect(START_COMMAND_BODY).toMatch(/\/cc-build/u);
+      expect(START_COMMAND_BODY).toMatch(/\/cc-review/u);
+      expect(START_COMMAND_BODY).toMatch(/\/cc-ship/u);
+    });
+
+    it("two-reviewer per-task loop is documented (T3-3, obra pattern)", () => {
+      expect(START_COMMAND_BODY).toMatch(/Two-reviewer per-task loop \(T3-3/u);
+      expect(START_COMMAND_BODY).toMatch(/spec-review/u);
+      expect(START_COMMAND_BODY).toMatch(/code-quality-review/u);
+      expect(START_COMMAND_BODY).toMatch(/spec-block.*skips Pass 2/su);
+    });
   });
 });
