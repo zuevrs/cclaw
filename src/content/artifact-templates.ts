@@ -551,10 +551,10 @@ status: active
 captured_by: orchestrator
 quality_gate: passed
 signals:
-  hasArchitectDecision: false
-  reviewIterations: 0
-  securityFlag: false
-  userRequestedCapture: false
+  has_architect_decision: false
+  review_iterations: 0
+  security_flag: false
+  user_requested_capture: false
 ---
 
 # Learnings — SLUG-PLACEHOLDER

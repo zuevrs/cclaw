@@ -9,6 +9,7 @@ import {
   shippedArtifactPath
 } from "./artifact-paths.js";
 import { FLOWS_ROOT } from "./constants.js";
+import { readConfig } from "./config.js";
 import { exists, ensureDir, removePath, writeFileSafe } from "./fs-utils.js";
 import { readFlowState, resetFlowState, writeFlowState } from "./run-persistence.js";
 import { manifestTemplate, templateBody } from "./content/artifact-templates.js";
@@ -99,6 +100,101 @@ function renderManifest(
     .replace(/## Refines[\s\S]*?(?=\n## Knowledge index)/u, refinesBlock || `## Refines\n\n_None._\n\n`);
 }
 
+/**
+ * v8.12 default: append a shipped-frontmatter block + Artefact index section
+ * to the existing `ship.md` so its frontmatter carries everything the old
+ * `manifest.md` did. We do not rewrite the body — `slice-builder` and the
+ * orchestrator authored the AC↔commit map and Summary section earlier;
+ * we only ensure the frontmatter is stamped and an "## Artefact index"
+ * section exists at the bottom.
+ */
+async function stampShipFrontmatter(
+  shippedDir: string,
+  slug: string,
+  shipCommit: string,
+  shippedAt: string,
+  signals: CompoundQualitySignals,
+  acCount: number,
+  moved: ArtifactStage[],
+  refines: string | null | undefined,
+  legacyArtifacts: boolean
+): Promise<void> {
+  const shipPath = path.join(shippedDir, "ship.md");
+  if (!(await exists(shipPath))) {
+    // ship.md was never authored by the orchestrator (rare; usually hop-6
+    // refused to advance). Synthesize a minimal one so the manifest data
+    // still survives in a single artefact.
+    const minimal = `---
+slug: ${slug}
+stage: shipped
+status: shipped
+ship_commit: ${shipCommit}
+shipped_at: ${shippedAt}
+ac_count: ${acCount}
+review_iterations: ${signals.reviewIterations}
+security_flag: ${signals.securityFlag}
+has_architect_decision: ${signals.hasArchitectDecision}
+${refines ? `refines: ${refines}\n` : ""}---
+
+# ${slug} — shipped
+
+_(ship.md was not authored before finalize; minimal stub written by compound.)_
+
+## Artefact index
+
+${moved.map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`).join("\n")}
+${legacyArtifacts ? "- manifest.md (legacy-artifacts opt-in)" : ""}
+`;
+    await writeFileSafe(shipPath, minimal);
+    return;
+  }
+  const raw = await fs.readFile(shipPath, "utf8");
+  const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/u);
+  let fmBody: string;
+  let docBody: string;
+  if (fmMatch) {
+    fmBody = fmMatch[1]!;
+    docBody = fmMatch[2]!;
+  } else {
+    // Body-only ship.md (no frontmatter): synthesise a minimal
+    // frontmatter so the manifest data is captured. We never silently
+    // discard the existing body.
+    fmBody = `slug: ${slug}\nstage: ship\nstatus: active`;
+    docBody = `\n${raw}`;
+  }
+
+  const stampedFm = fmBody
+    .replace(/^stage:\s*.*$/m, "stage: shipped")
+    .replace(/^status:\s*.*$/m, "status: shipped");
+  const augment: Record<string, string | number | boolean | null> = {
+    ship_commit: shipCommit,
+    shipped_at: shippedAt,
+    ac_count: acCount,
+    review_iterations: signals.reviewIterations,
+    security_flag: signals.securityFlag,
+    has_architect_decision: signals.hasArchitectDecision
+  };
+  if (refines) augment.refines = refines;
+  let nextFm = stampedFm;
+  for (const [key, value] of Object.entries(augment)) {
+    if (new RegExp(`^${key}:`, "m").test(nextFm)) {
+      nextFm = nextFm.replace(new RegExp(`^${key}:.*$`, "m"), `${key}: ${value}`);
+    } else {
+      nextFm = `${nextFm}\n${key}: ${value}`;
+    }
+  }
+
+  const indexSection = `\n\n## Artefact index\n\n${moved
+    .map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`)
+    .join("\n")}${legacyArtifacts ? "\n- manifest.md (legacy-artifacts opt-in)" : ""}\n`;
+  const bodyHasIndex = /^## Artefact index$/m.test(docBody);
+  const nextBody = bodyHasIndex
+    ? docBody
+    : `${docBody.replace(/\n+$/u, "")}${indexSection}`;
+
+  await writeFileSafe(shipPath, `---\n${nextFm}\n---\n${nextBody}`);
+}
+
 export async function runCompoundAndShip(
   projectRoot: string,
   options: CompoundRunOptions
@@ -169,10 +265,27 @@ export async function runCompoundAndShip(
     if (await moveIfExists(source, destination)) moved.push(stage);
   }
 
-  await writeFileSafe(
-    path.join(shippedDir, "manifest.md"),
-    renderManifest(slug, options.shipCommit, shippedAt, state.ac, moved, options.refines)
+  const config = await readConfig(projectRoot);
+  const legacyArtifacts = Boolean(config?.legacyArtifacts);
+
+  await stampShipFrontmatter(
+    shippedDir,
+    slug,
+    options.shipCommit,
+    shippedAt,
+    options.signals,
+    state.ac.length,
+    moved,
+    options.refines ?? null,
+    legacyArtifacts
   );
+
+  if (legacyArtifacts) {
+    await writeFileSafe(
+      path.join(shippedDir, "manifest.md"),
+      renderManifest(slug, options.shipCommit, shippedAt, state.ac, moved, options.refines)
+    );
+  }
 
   const activeDir = activeArtifactDir(projectRoot, slug);
   if (await exists(activeDir)) {

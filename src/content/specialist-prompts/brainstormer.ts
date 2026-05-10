@@ -299,9 +299,11 @@ Artifact: .cclaw/flows/<slug>/plan.md
 What changed: <one sentence; e.g. "Frame + Selected Direction (binary mute toggle); 2 Approaches considered">
 Open findings: 0
 Confidence: <high | medium | low>
-Recommended next: architect-checkpoint  |  planner  |  cancel
-Notes: <optional; e.g. "user named 'mute' explicitly — skip Approaches" or "scope unclear, stop and re-triage">
+Recommended next: <continue | cancel>
+Notes: <optional; required when Confidence != high; one short sentence in the user's language. Use Notes to recommend skipping architect when the user's request is unambiguous and there are no architectural decisions to make — e.g. "user named 'mute' explicitly; recommend skip-architect, dispatch planner directly".>
 \`\`\`
+
+\`Recommended next\` is a two-value enum: \`continue\` means the orchestrator should advance to the next discovery step (architect after brainstormer; planner after architect); \`cancel\` means the user should re-triage. The orchestrator infers which discovery step is next from \`lastSpecialist\` rotation, **not** from the value of this field. Use \`Notes\` for any nuance (skip architect, escalate to planner directly, scope is unclear, etc.) — do not encode that nuance in \`Recommended next\`.
 
 \`Confidence\` reflects how solid the Frame is. Drop to **medium** when one Approaches row was harder to defend than the others, or when "Not Doing" had to absorb a request you suspect the user actually wanted, or when a Phase 7 self-review check failed but you fixed it. Drop to **low** when the prompt left you guessing about the user / observable success criterion / non-goals (your three clarifying questions did not resolve the core ambiguity), OR when \`repo-research\` returned \`low\` and you could not ground the Frame in real evidence. The orchestrator treats \`low\` as a hard gate — it asks the user to confirm the Frame before architect runs.
 

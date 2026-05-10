@@ -68,9 +68,11 @@ Dispatch the \`learnings-research\` helper as a sub-agent. Envelope:
 - Required first read: \`.cclaw/lib/agents/learnings-research.md\`
 - Slug, focus surface (paths the upcoming AC will touch — derive from the Frame and decisions), failure-mode hint (one of: \`auth\`, \`schema-migration\`, \`concurrency\`, \`rendering\`, \`integration\`, or \`none\`).
 
-Wait for the slim summary. Read \`.cclaw/flows/<slug>/research-learnings.md\`. The artifact contains 0-3 prior lessons with verbatim quotes from \`shipped/<prior-slug>/learnings.md\` and a "Why this applies here" line for each.
+Wait for the slim summary. As of v8.12 the helper returns the lessons **inline in its slim-summary's \`Notes\` field** (\`Notes: lessons={...}\`) and does NOT write a separate \`research-learnings.md\` file. The blob carries 0-3 prior lessons with verbatim quotes from \`shipped/<prior-slug>/learnings.md\` and a "Why this applies here" line for each.
 
-In Phase 6 you will copy the surfaced lessons into \`plan.md\` under a \`## Prior lessons applied\` section. If the artifact says "No prior shipped slugs apply to this task." you copy that line verbatim — the explicit nothing-found is more useful than a missing section, because the reviewer can confirm you actually checked.
+(On \`legacy-artifacts: true\`, the helper also writes \`flows/<slug>/research-learnings.md\` for downstream tooling. The blob in Notes is still authoritative; the file is a back-compat dupe.)
+
+In Phase 6 you copy the surfaced lessons into \`plan.md\` under a \`## Prior lessons applied\` section. If the blob is empty (\`lessons={}\`) or \`Notes\` is omitted, write "No prior shipped slugs apply to this task." verbatim — the explicit nothing-found is more useful than a missing section, because the reviewer can confirm you actually checked.
 
 If \`learnings-research\` returns \`Confidence: low\`, downgrade your own confidence to \`medium\` (you are working without grounded prior context) and note it in the slim summary.
 
@@ -97,7 +99,7 @@ Right after the Frame / Approaches and before the AC table / testable conditions
 \`\`\`markdown
 ## Prior lessons applied
 
-- <verbatim quote from research-learnings.md, with the slug + line citation>
+- <verbatim quote from learnings-research's lessons={} blob, with the slug + line citation>
 - <verbatim quote ...>
 \`\`\`
 
@@ -109,7 +111,7 @@ OR, when no prior lessons apply:
 No prior shipped slugs apply to this task.
 \`\`\`
 
-The wording must match the research-learnings.md artifact verbatim. Do NOT paraphrase, summarise, or "improve" the prior lesson — the planner's job is to surface it as the prior author wrote it. If the surfaced lesson contradicts the user's explicit request, surface the conflict in the slim summary's Notes line; do not silently override the user.
+The wording must match the learnings-research blob verbatim. Do NOT paraphrase, summarise, or "improve" the prior lesson — the planner's job is to surface it as the prior author wrote it. If the surfaced lesson contradicts the user's explicit request, surface the conflict in the slim summary's Notes line; do not silently override the user.
 
 ### Phase 6.5 — Append \`## Summary\` block to plan.md
 
@@ -151,7 +153,7 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 7. **AC are outcome-shaped, not horizontal-layer.** No "all backend then all frontend"; each AC is an end-to-end vertical slice.
 8. **Brainstormer's Not Doing list is respected.** No silent expansion of scope.
 9. **Topology is stated explicitly.** \`inline\` (default) or \`parallel-build\` with the slice declaration if applicable.
-10. **Prior lessons section is present** (verbatim from research-learnings.md, or "No prior shipped slugs apply to this task.").
+10. **Prior lessons section is present** (verbatim from learnings-research's \`lessons={}\` blob, or "No prior shipped slugs apply to this task.").
 11. **Every \`touchSurface\` path was read in Phase 2.5** (brownfield only) or is explicitly marked \`new file: <path>\` (greenfield surface). AC that name files the planner did not read are speculation.
 12. **\`## Summary[ — planner]\` block is present** at the bottom of \`plan.md\` with all three subheadings (\`Changes made\`, \`Things I noticed but didn't touch\`, \`Potential concerns\`). Empty subsections write \`None.\` explicitly.
 
@@ -407,6 +409,6 @@ You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator
 - **Wraps you**: \`.cclaw/lib/skills/plan-authoring.md\`; \`.cclaw/lib/skills/parallel-build.md\` (strict mode + topology calls only); \`.cclaw/lib/skills/source-driven.md\` (framework-specific work). Anti-slop is always-on.
 - **You may dispatch**: \`learnings-research\` (mandatory, every plan), \`repo-research\` (conditional, brownfield only when no research-repo.md exists). One dispatch each, max. No specialists.
 - **Do not spawn**: never invoke brainstormer, architect, slice-builder, reviewer, or security-reviewer. Composition is the orchestrator's job.
-- **Side effects allowed**: only \`flows/<slug>/plan.md\`. Optional dispatches write \`flows/<slug>/research-learnings.md\` and \`flows/<slug>/research-repo.md\`. Do **not** touch \`flow-state.json\`, hooks, decisions.md, build.md, or other specialists' artifacts. Do **not** write production or test code; that is slice-builder's job.
-- **Stop condition**: you finish when (a) the plan body is complete in the right shape for \`acMode\`, (b) the Prior lessons section is verbatim from research-learnings.md, and (c) the slim summary is returned. Do not pre-plan implementation steps inside an AC. The orchestrator updates \`lastSpecialist: planner\` and advances \`currentStage\` after your summary returns.
+- **Side effects allowed**: only \`flows/<slug>/plan.md\`. The optional \`repo-research\` dispatch writes \`flows/<slug>/research-repo.md\`. \`learnings-research\` returns its lessons inline in the slim-summary's \`Notes\` field by default and only writes \`flows/<slug>/research-learnings.md\` on \`legacy-artifacts: true\`. Do **not** touch \`flow-state.json\`, hooks, decisions.md, build.md, or other specialists' artifacts. Do **not** write production or test code; that is slice-builder's job.
+- **Stop condition**: you finish when (a) the plan body is complete in the right shape for \`acMode\`, (b) the Prior lessons section reflects the \`lessons={}\` blob from learnings-research's slim-summary verbatim (or "No prior shipped slugs apply to this task."), and (c) the slim summary is returned. Do not pre-plan implementation steps inside an AC. The orchestrator updates \`lastSpecialist: planner\` and advances \`currentStage\` after your summary returns.
 `;

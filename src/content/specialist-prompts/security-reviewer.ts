@@ -147,8 +147,10 @@ What changed: <one sentence; e.g. "5 threat-model items checked: 3 ok, 2 flag (a
 Open findings: <count of security-severity findings still open>
 Confidence: <high | medium | low>
 Recommended next: <continue | fix-only | cancel>
-Notes: <optional; e.g. "credential rotation required before ship" or "pre-existing issue, separate hardening slug recommended">
+Notes: <optional; required when Confidence != high; e.g. "credential rotation required before ship" or "pre-existing issue, separate hardening slug recommended">
 \`\`\`
+
+\`Recommended next\` is a subset of the canonical orchestrator enum (\`continue | review-pause | fix-only | cancel | accept-warns-and-ship\`). Security review never returns \`review-pause\` or \`accept-warns-and-ship\` — security findings are either resolved (\`continue\`), fixed (\`fix-only\`), or blocked (\`cancel\`). Notes carry the nuance.
 
 \`Confidence\` reflects how thoroughly you covered the five threat-model surfaces. Drop to **medium** when one surface was marked \`ok\` on a quick scan rather than a full read (e.g. supply-chain skimmed without checking lockfile diff). Drop to **low** when a surface is genuinely outside your reading depth (custom auth library you cannot inspect, third-party signing service whose docs you could not fetch). The orchestrator treats \`low\` as a hard gate — it asks the user to decide whether to ship, expand the security review, or split into a separate hardening slug.
 

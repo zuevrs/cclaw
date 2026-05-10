@@ -1,19 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { REFERENCE_PATTERNS, REFERENCE_PATTERNS_INDEX } from "../../src/content/reference-patterns.js";
 
-describe("reference patterns", () => {
-  it("ships eight task patterns", () => {
+describe("reference patterns (v8.12 trimmed set)", () => {
+  it("ships only the two explicitly cited patterns: auth-flow + security-hardening", () => {
     const ids = REFERENCE_PATTERNS.map((entry) => entry.id).sort();
-    expect(ids).toEqual([
-      "api-endpoint",
-      "auth-flow",
-      "doc-rewrite",
-      "perf-fix",
-      "refactor",
-      "schema-migration",
-      "security-hardening",
-      "ui-component"
-    ]);
+    expect(ids).toEqual(["auth-flow", "security-hardening"]);
   });
 
   it("each pattern has triggers, AC shape, specialists, and pitfalls sections", () => {
@@ -31,9 +22,10 @@ describe("reference patterns", () => {
     expect(auth?.body).toContain("sensitive-change");
   });
 
-  it("REFERENCE_PATTERNS_INDEX lists every pattern", () => {
+  it("REFERENCE_PATTERNS_INDEX lists every shipped pattern and notes the v8.12 cleanup", () => {
     for (const pattern of REFERENCE_PATTERNS) {
       expect(REFERENCE_PATTERNS_INDEX).toContain(pattern.fileName);
     }
+    expect(REFERENCE_PATTERNS_INDEX).toMatch(/v8\.12/u);
   });
 });

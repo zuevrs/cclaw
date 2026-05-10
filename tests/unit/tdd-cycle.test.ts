@@ -71,12 +71,11 @@ describe("TDD cycle wiring", () => {
     expect(COMMIT_HELPER_HOOK_SPEC.body).toContain("--skipped");
   });
 
-  it("antipatterns library covers TDD phase integrity, scope-bleed, and full-suite GREEN", () => {
+  it("antipatterns library covers TDD phase integrity + scope-bleed (v8.12 trimmed set)", () => {
     expect(ANTIPATTERNS).toContain("TDD phase integrity broken");
     expect(ANTIPATTERNS).toContain("--phase=red");
     expect(ANTIPATTERNS).toContain("--phase=green");
     expect(ANTIPATTERNS).toContain("--phase=refactor");
-    expect(ANTIPATTERNS).toContain("Single test green, didn't run the suite");
     expect(ANTIPATTERNS).toContain("Work outside the AC");
     expect(ANTIPATTERNS).toContain("git add -A");
   });

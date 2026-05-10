@@ -350,7 +350,7 @@ If any condition fails, keep \`status: blocked\` and iterate. Do NOT advance wit
 
 ## 7. Run compound
 
-\`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/flows/shipped/<slug>/\`, writes a \`manifest.md\`, appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state.
+\`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/flows/shipped/<slug>/\`, stamps the shipped frontmatter onto \`ship.md\` (slug, ship_commit, shipped_at, ac_count, review_iterations, security_flag, has_architect_decision, refines), appends an \`## Artefact index\` section listing every moved file, appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state. (On \`legacy-artifacts: true\` it additionally writes a separate \`shipped/<slug>/manifest.md\` for back-compat.)
 
 The compound quality gate captures \`flows/<slug>/learnings.md\` only when at least one of:
 
@@ -363,7 +363,7 @@ When the gate fails, the run still ships — only the learning capture is skippe
 
 ## 8. Execute finalization
 
-Run the action implied by \`finalization_mode\` and record the result back into \`flows/<slug>/ship.md\`:
+Run the action implied by \`finalization_mode\` and record the result back into \`flows/<slug>/ship.md\`. **The first thing you do here is update the \`finalization_mode\` frontmatter field on \`ship.md\`** from \`null\` to the chosen enum value — frontmatter is the machine-readable source of truth, and the body's \`Selected: <mode>\` line is supplementary. Inconsistency between frontmatter and body is a v8.11-era bug; the spec now requires both reflect the same value.
 
 - **FINALIZE_MERGE_LOCAL** — merge into the base branch locally; verify clean merge; record the merged SHA.
 - **FINALIZE_OPEN_PR** — \`gh pr create\` with a structured body (summary, AC↔commit map, rollback plan). Record the PR URL.
@@ -377,14 +377,26 @@ Run the action implied by \`finalization_mode\` and record the result back into 
 
 Ship-stage ends when:
 
-- \`flows/shipped/<slug>/manifest.md\` exists,
+- \`flows/shipped/<slug>/ship.md\` exists with shipped-frontmatter (the v8.12 manifest replacement; \`legacy-artifacts: true\` also yields a separate \`manifest.md\`),
 - flow-state is reset,
 - the user is told push/PR status (whether approved or skipped),
 - the rollback plan is sticky in \`flows/<slug>/ship.md\` (the future operator opens this if anything goes wrong).
 
 The next \`/cc\` invocation can be a brand-new request or a refinement of this slug.
 
-## 10. Common pitfalls
+## 10. Re-write ship.md if late iterations land after the first pass
+
+If the orchestrator dispatches a fix-only loop or an additional review iteration **after \`ship.md\` has been authored for the first time**, you must **re-author \`ship.md\` with the latest counts**, not append a delta paragraph:
+
+- \`review_iterations\` — frontmatter and any body reference must reflect the final count.
+- AC ↔ commit map — re-emit with the latest fix-only commit SHAs.
+- Risks carried over — re-pull from the now-updated Concern Ledger.
+- Victory Detector — re-evaluate against the latest review verdict.
+- Test counts ("16 tests" → "22 tests") — re-pull from the build artefact.
+
+Stale \`ship.md\` is the v8.11-era bug where the file froze at iteration 2 (16 tests) while the manifest correctly reported iteration 5 (22 tests). The fix is **idempotent re-authoring**: re-write the file from scratch every time the ship-gate runs, do not patch incrementally.
+
+## 11. Common pitfalls
 
 - Skipping preflight because "tests passed during build". Preflight is the post-merge sanity check; build-stage tests are pre-merge.
 - Skipping the rollback plan because "it's a small change". Small changes break production too. The triplet is mandatory.
@@ -392,7 +404,8 @@ The next \`/cc\` invocation can be a brand-new request or a refinement of this s
 - Picking \`FINALIZE_MERGE_LOCAL\` in a repo with no \`.git/\`. The Victory Detector will refuse; use \`FINALIZE_NO_VCS\` and record the manual target.
 - Pushing without asking. Always ask, always wait, every time.
 - Opening a PR with stale release notes. Re-read \`flows/<slug>/ship.md\` before opening the PR.
-- Skipping the manifest because "the slug is small". The manifest is the entry point future agents use to understand the slug; skipping it makes refinement harder later.
+- **Letting \`ship.md\` go stale across late iterations.** See §10 above; \`ship.md\` is idempotently re-authored, not patched.
+- **Frontmatter \`finalization_mode: null\` while body says \`Selected: FINALIZE_X\`.** Frontmatter and body must both reflect the same value (see §8 above).
 - Editing artifacts after they're moved to \`.cclaw/flows/shipped/\`. Shipped slugs are read-only. Refinement creates a new slug.
 - Using \`git push --force\` to "fix" the ship_commit. Never. Open a follow-up slug instead.
 `;

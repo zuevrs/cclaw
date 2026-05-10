@@ -358,9 +358,11 @@ Artifact: .cclaw/flows/<slug>/decisions.md
 What changed: <one sentence; e.g. "1 decision recorded (D-1: in-process BM25, product-grade tier)" or "Trivial-Change Escape Hatch filled, no D-N">
 Open findings: 0
 Confidence: <high | medium | low>
-Recommended next: planner-checkpoint  |  cancel
-Notes: <optional; e.g. "security_flag set; recommend security-reviewer post-build" or "migration required, surface to user before build">
+Recommended next: <continue | cancel>
+Notes: <optional; required when Confidence != high; one short sentence in the user's language. Use Notes to flag follow-ups for downstream stages — e.g. "security_flag set; recommend security-reviewer post-build" or "migration required, surface to user before build".>
 \`\`\`
+
+\`Recommended next\` is a two-value enum: \`continue\` means the orchestrator should advance to planner (the next discovery step); \`cancel\` means the user should re-triage. Use \`Notes\` for any nuance (post-build security review, migration warning, etc.) — do not encode it in \`Recommended next\`.
 
 \`Confidence\` is your read on whether the chosen option will hold under build + review. Drop to **medium** when the Failure Mode Table is thin (only the obvious paths) or when one option was rejected on heuristic instead of evidence. Drop to **low** when feasibility-mode surfaced a blocker the user should weigh in on, when an UNVERIFIED framework citation is on the decision, or when the Pre-mortem is missing a class of failure (e.g. you have no story for rollback). The orchestrator treats \`low\` as a hard gate.
 

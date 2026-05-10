@@ -19,12 +19,15 @@ describe("install — deep content layer", () => {
     }
   });
 
-  it("ships every reference pattern under .cclaw/lib/patterns/", async () => {
+  it("ships only the v8.12 trimmed pattern set under .cclaw/lib/patterns/", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const fileName of ["api-endpoint.md", "auth-flow.md", "schema-migration.md", "ui-component.md", "perf-fix.md", "refactor.md", "security-hardening.md", "doc-rewrite.md"]) {
+    for (const fileName of ["auth-flow.md", "security-hardening.md", "index.md"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "lib", "patterns", fileName));
       expect(stat.isFile()).toBe(true);
+    }
+    for (const stale of ["api-endpoint.md", "schema-migration.md", "ui-component.md", "perf-fix.md", "refactor.md", "doc-rewrite.md"]) {
+      await expect(fs.access(path.join(project, ".cclaw", "lib", "patterns", stale))).rejects.toBeTruthy();
     }
   });
 
@@ -37,34 +40,37 @@ describe("install — deep content layer", () => {
     }
   });
 
-  it("ships the decision protocol short-form under .cclaw/lib/", async () => {
+  it("ships the decision protocol short-form under .cclaw/lib/ (no longer cites deleted worked examples)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
     const body = await fs.readFile(path.join(project, ".cclaw", "lib", "decision-protocol.md"), "utf8");
     expect(body).toContain("Decision protocol");
     expect(body).toContain("short form");
-    expect(body).toContain("decision-permission-cache");
+    expect(body).not.toContain("decision-permission-cache");
+    expect(body).not.toContain("Worked examples");
   });
 
-  it("ships antipatterns and meta skill", async () => {
+  it("ships antipatterns (A-1..A-7) and meta skill", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
     const antipatterns = await fs.readFile(path.join(project, ".cclaw", "lib", "antipatterns.md"), "utf8");
     expect(antipatterns).toContain("A-1");
+    expect(antipatterns).toContain("A-7");
+    expect(antipatterns).not.toContain("## A-8");
     const meta = await fs.readFile(path.join(project, ".cclaw", "lib", "skills", "cclaw-meta.md"), "utf8");
     expect(meta).toContain("cclaw-meta");
     expect(meta).toContain("trigger: always-on");
   });
 
-  it("ships exactly 8 examples under .cclaw/lib/examples/ with an index", async () => {
+  it("examples / recovery / research directories ship only their index notes (orphan content deleted)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const fileName of ["plan-small.md", "plan-parallel-build.md", "build-log.md", "review-log.md", "ship-notes.md", "decision-permission-cache.md", "learning-record.md", "commit-helper-session.md", "index.md"]) {
-      const stat = await fs.stat(path.join(project, ".cclaw", "lib", "examples", fileName));
-      expect(stat.isFile()).toBe(true);
-    }
-    for (const stale of ["plan-refinement.md", "decision-record.md", "knowledge-line.md", "refinement-detection.md", "parallel-build-dispatch.md", "review-cap-reached.md"]) {
-      await expect(fs.access(path.join(project, ".cclaw", "lib", "examples", stale))).rejects.toBeTruthy();
+    for (const dir of ["examples", "recovery", "research"]) {
+      const entries = await fs.readdir(path.join(project, ".cclaw", "lib", dir));
+      expect(entries.sort()).toEqual(["index.md"]);
+      const indexBody = await fs.readFile(path.join(project, ".cclaw", "lib", dir, "index.md"), "utf8");
+      expect(indexBody).toMatch(/v8\.12/u);
+      expect(indexBody).toMatch(/legacy-artifacts/u);
     }
   });
 

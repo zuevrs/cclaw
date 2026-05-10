@@ -111,11 +111,22 @@ Dispatch <specialist>
 const SUMMARY_RETURN_EXAMPLE = `\`\`\`
 Stage: <stage>  ✅ complete  |  ⏸ paused  |  ❌ blocked
 Artifact: .cclaw/flows/<slug>/<stage>.md
-What changed: <one sentence; e.g. "5 testable conditions written" or "AC-1 RED+GREEN+REFACTOR committed">
+What changed: <one sentence in the user's language; e.g. "5 testable conditions written" or "AC-1 RED+GREEN+REFACTOR committed">
 Open findings: <0 outside review; integer in review>
 Confidence: <high | medium | low>
-Recommended next: <continue | review-pause | fix-only | cancel>
-\`\`\``;
+Recommended next: <continue | review-pause | fix-only | cancel | accept-warns-and-ship>
+Notes: <optional; required when Confidence != high; one short sentence in the user's language>
+\`\`\`
+
+\`Recommended next\` enum is canonical and matches the values reviewer / security-reviewer / planner / slice-builder use. Discovery specialists (brainstormer, architect) emit a **two-value subset** \`<continue | cancel>\` — within discovery the orchestrator infers the next step from \`lastSpecialist\` rotation (brainstormer → architect → planner), not from the field value. Research dispatches (\`repo-research\`, \`learnings-research\`) always emit \`continue\` (no hard-gate authority). The full enum semantics:
+
+- **continue** — proceed (advance stage, dispatch next specialist, or ship if review is clear).
+- **review-pause** — reviewer found ambiguous findings; surface to user before dispatching slice-builder.
+- **fix-only** — required findings ≥ 1; dispatch slice-builder in fix-only mode for one cycle.
+- **cancel** — flow should stop here; user re-triages. NOT the same as \`/cc-cancel\` (which the user types explicitly to discard a flow). Specialists return \`cancel\` to **recommend** stopping; the orchestrator must still surface a structured ask before the flow is actually cancelled.
+- **accept-warns-and-ship** — strict-mode-only escape hatch (reviewer-emitted); warns acknowledged, no required findings, ship anyway.
+
+Hard-gate logic: \`Recommended next == "cancel"\` always pauses for user; \`Confidence == "low"\` always pauses for user; \`review-pause\` always pauses; the rest follow \`triage.runMode\`.`;
 
 export const START_COMMAND_BODY = `# /cc — cclaw orchestrator
 
@@ -287,10 +298,10 @@ The orchestrator reads only this. The full artifact stays in \`.cclaw/flows/<slu
 - Specialist: \`planner\`.
 - Wrapper skill: \`.cclaw/lib/skills/plan-authoring.md\` (always); \`.cclaw/lib/skills/source-driven.md\` (when the task is framework-specific, even on soft mode).
 - Pre-author research (planner dispatches these BEFORE writing the plan):
-  - \`learnings-research\` — always, on small/medium and large-risky. Reads \`.cclaw/knowledge.jsonl\`, writes \`flows/<slug>/research-learnings.md\` (1-3 prior lessons). Brownfield + greenfield both — the planner needs to know if any prior slug applies even for greenfield tasks.
+  - \`learnings-research\` — always, on small/medium and large-risky. Reads \`.cclaw/knowledge.jsonl\`. Default behaviour: returns 0-3 prior lessons inline in the slim-summary's \`Notes\` field as a serialised \`lessons={...}\` blob; the planner copies the verbatim quotes into \`plan.md\`'s \`## Prior lessons\` section. **No separate \`research-learnings.md\` is written** unless the project sets \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`. Brownfield + greenfield both run this — the planner needs to know if any prior slug applies even for greenfield tasks.
   - \`repo-research\` — only on **brownfield** (when a manifest like \`package.json\`, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`Gemfile\` exists at the repo root AND a source root like \`src/\` or equivalent has files). Skipped on greenfield. Writes \`flows/<slug>/research-repo.md\`.
-- Inputs the planner reads after the contract + wrapper: triage decision (including \`assumptions\` from Hop 2.5), the user's original prompt, \`.cclaw/lib/templates/plan.md\`, the two research artifacts (when present), **\`.cclaw/knowledge.jsonl\`** for cross-checking, and any matching shipped slug if refining.
-- Output: \`.cclaw/flows/<slug>/plan.md\` with \`status: active\`. Includes a \`## Assumptions\` block (verbatim from \`triage.assumptions\`) and a \`## Prior lessons\` block (verbatim quotes from \`research-learnings.md\`, or "No prior shipped slugs apply to this task.").
+- Inputs the planner reads after the contract + wrapper: triage decision (including \`assumptions\` from Hop 2.5), the user's original prompt, \`.cclaw/lib/templates/plan.md\`, the \`lessons={}\` blob from learnings-research (and \`research-repo.md\` when present), **\`.cclaw/knowledge.jsonl\`** for cross-checking, and any matching shipped slug if refining.
+- Output: \`.cclaw/flows/<slug>/plan.md\` with \`status: active\`. Includes a \`## Assumptions\` block (verbatim from \`triage.assumptions\`) and a \`## Prior lessons\` block (verbatim quotes from learnings-research's \`lessons={}\` blob, or "No prior shipped slugs apply to this task.").
 - Soft-mode plan body: bullet list of testable conditions, no AC IDs, no commit-trace block.
 - Strict-mode plan body: AC table with IDs, verification lines, touch surfaces, parallel-build topology if it applies.
 - Slim summary: condition / AC count, max touch surface, parallel-build flag, recommended-next, prior-lesson count.
@@ -304,11 +315,11 @@ When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the 
 1. **Dispatch \`brainstormer\`** (wrapper skill: \`brainstorming-discovery.md\`).
    - On \`deep\` posture, brainstormer dispatches \`repo-research\` itself before authoring (it needs the same context the planner needs).
    - Output: appends "Frame", "Approaches", "Selected direction" sections to \`flows/<slug>/plan.md\` (same file the planner will finish). Writes nothing else in the flow dir except an optional \`flows/<slug>/research-repo.md\` from its own research dispatch (if \`repo-research\` ran and the planner didn't already trigger one).
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "brainstormer"\` → **renders the slim summary and ends the turn**. The user reviews the Frame and Selected Direction; the next \`/cc\` invocation continues with architect.
+   - Orchestrator reads slim summary → patches \`lastSpecialist: "brainstormer"\` → **renders the slim summary and ends the turn**. The user reviews the Frame and Selected Direction; the next \`/cc\` invocation continues with architect. If brainstormer's slim-summary JSON includes a non-empty \`checkpoint_question\` field (e.g. "Continue with architect for D-N decisions, or skip straight to planner since the request is unambiguous?"), the orchestrator renders that question as a structured \`askUserQuestion\` ask before ending the turn — **with two options only**: <option label conveying: continue with architect> and <option label conveying: skip architect, dispatch planner directly>. (\`Cancel\` is not a clickable option per the global rule; the user types \`/cc-cancel\` if they want to abort.) When \`checkpoint_question\` is empty, the orchestrator just ends the turn and the next \`/cc\` invocation continues with architect.
 2. **Dispatch \`architect\`** (wrapper skill: \`architectural-decision.md\`; also \`source-driven.md\` in strict mode).
    - Inputs: \`flows/<slug>/plan.md\` (with brainstormer's Frame), the research artifact(s), triage assumptions.
    - Output: \`flows/<slug>/decisions.md\` with the decision records (D-1 … D-N). Architect does NOT modify \`plan.md\`.
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "architect"\` → **renders the slim summary and ends the turn**. The user reviews the decisions; the next \`/cc\` continues with planner.
+   - Orchestrator reads slim summary → patches \`lastSpecialist: "architect"\` → **renders the slim summary and ends the turn**. The user reviews the decisions; the next \`/cc\` invocation continues with planner. Same \`checkpoint_question\` handling as brainstormer above: if architect's JSON returns a non-empty \`checkpoint_question\`, surface it as a structured ask before ending the turn (typically: continue with planner, or stop and re-triage). When empty, end-of-turn and the next \`/cc\` invocation continues with planner.
 3. **Dispatch \`planner\`** with the same contract as small/medium plan, plus an extra input: \`flows/<slug>/decisions.md\`.
    - Planner now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The "Frame" / "Selected direction" sections from brainstormer remain at the top of \`plan.md\`; planner appends its own sections below.
    - Orchestrator reads slim summary → patches \`lastSpecialist: "planner"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`). At this point the orchestrator follows \`triage.runMode\` for the plan→build transition: \`step\` ends the turn; \`auto\` chains immediately into the build dispatch.
@@ -436,45 +447,36 @@ In parallel-build the gate runs **per slice**: a slice whose self-review fails b
   - \`security-reviewer\` mode=\`threat-model\` — when \`security_flag\` is true.
 - Pattern: **parallel fan-out + merge** (the canonical cclaw fan-out). Dispatch all specialists in the same message; merge their summaries in your context.
 - Inputs: \`.cclaw/flows/<slug>/plan.md\`, build.md, review.md.
-- Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan. Plus, in strict mode, \`.cclaw/flows/<slug>/pre-mortem.md\` written by the adversarial reviewer (see below).
+- Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan. As of v8.12 the adversarial reviewer's pre-mortem section is appended to \`review.md\` (no separate \`pre-mortem.md\` file unless \`legacy-artifacts: true\`).
 - After ship, run the compound learning gate (Hop 6).
+
+##### Ship-gate user ask (finalization mode)
+
+When the ship gate is passed (Victory Detector green) and finalization is required, the orchestrator surfaces a structured ask to the user. The options are the five \`finalization_mode\` enum values; **\`Cancel\` is NOT one of them**. \`/cc-cancel\` remains the explicit user-typed command for discarding a flow; structured asks for finalization MUST NOT include a "Cancel" row, because choosing "Cancel" mid-finalization leaves shipped artefacts in a half-moved state with no defined recovery.
+
+\`\`\`
+askUserQuestion(
+  prompt: <one sentence in the user's language stating: ship gate passed, choose how to finalize the slug, list expected behaviour for git mode (or "no-vcs detected" for the no-vcs path)>,
+  options: [
+    <option label conveying: merge into base branch locally, verify clean merge, record the merged SHA>,
+    <option label conveying: open a PR with structured body (gh pr create), record the URL>,
+    <option label conveying: push the branch upstream and stop (git push -u origin HEAD), keep open for later review>,
+    <option label conveying: discard the branch locally — requires typed confirmation in the next turn>,
+    <option label conveying: no VCS available, record a manual handoff target and rollback owner>
+  ],
+  multiSelect: false
+)
+\`\`\`
+
+If the user wants to abandon the flow at this point, they type \`/cc-cancel\` (out-of-band of the structured ask). The orchestrator does not pre-offer that as a clickable option, because:
+1. The flow has already passed code-mode review + adversarial pre-mortem; cancelling here is unusual.
+2. The shipped artefacts may have already been partially written (manifest-as-frontmatter, learnings.md); cancelling mid-finalize requires a different recovery path than \`/cc-cancel\` from earlier stages.
 
 ##### Adversarial pre-mortem (strict mode only)
 
 Before the ship gate finalises, the orchestrator dispatches \`reviewer\` mode=\`adversarial\` against the diff produced for this slug. The adversarial reviewer's specific job is to **think like the failure**: how would this break in production a week from now?
 
-The adversarial sweep produces \`.cclaw/flows/<slug>/pre-mortem.md\`:
-
-\`\`\`markdown
----
-slug: <slug>
-stage: ship
-status: pre-mortem
-generated_by: reviewer mode=adversarial
-generated_at: <iso>
----
-
-# Pre-mortem — <slug>
-
-It is now <ship-date>+7d. This change shipped, then failed. What was the failure?
-
-## Most likely failure modes
-
-1. **<class>: <one-line failure>** — trigger: <input/condition>; impact: <user-visible result>; covered by AC: <yes/no, AC-N or "no AC tests this">.
-2. **<class>: ...**
-3. ...
-
-## Underexplored axes
-
-- <axis (correctness/readability/architecture/security/perf)>: <what reviewer's code-mode pass might have missed>
-- ...
-
-## Recommended pre-ship actions
-
-- <add a regression test for failure 1: file:line>
-- <surface decision X to the user before merge>
-- <none — pre-mortem is satisfied>
-\`\`\`
+As of v8.12, the adversarial sweep appends a \`## Pre-mortem (adversarial)\` section to the same \`flows/<slug>/review.md\`, not a separate file. (Users on \`legacy-artifacts: true\` still get a separate \`pre-mortem.md\` for tooling compat.) The adversarial reviewer treats the pre-mortem as a **scenario exercise** — reasoning backwards from "this shipped and failed, what was it" — and explicitly does NOT write a literal future date in the artefact body. See \`reviewer.ts\` Adversarial mode for the full schema.
 
 Failure classes the adversarial pass MUST consider (mark each as "covered" / "not covered" / "n/a"):
 
@@ -485,7 +487,7 @@ Failure classes the adversarial pass MUST consider (mark each as "covered" / "no
 - **accidental scope** — diff touches files no AC mentions;
 - **security-edge** — auth bypass, injection, leaked secret in logs, untrusted input.
 
-The adversarial reviewer treats every "not covered" as a finding (axis varies; severity \`required\` by default, escalated to \`critical\` for data-loss / security-edge). Findings go into the existing Concern Ledger in \`review.md\`; the pre-mortem.md is a parallel artifact summarising the adversarial pass's reasoning so the user can read a one-page rationale.
+The adversarial reviewer treats every "not covered" as a finding (axis varies; severity \`required\` by default, escalated to \`critical\` for data-loss / security-edge). Findings go into the existing Concern Ledger in \`review.md\`; the same file gets a \`## Pre-mortem (adversarial)\` section summarising the adversarial pass's reasoning so the user can read a one-page rationale. (On \`legacy-artifacts: true\` the section is mirrored into a standalone \`pre-mortem.md\` for downstream tooling.)
 
 Ship gate decision after fan-out:
 
@@ -597,20 +599,21 @@ This is the orchestrator's job, never a sub-agent's. Run these steps in order, i
    - \`ship.md\`
    - \`decisions.md\` (when present — large-risky only)
    - \`learnings.md\` (when written by Hop 5)
-   - \`pre-mortem.md\` (when written by adversarial sweep)
-   - \`research-repo.md\`, \`research-learnings.md\` (when written by research helpers)
+   - \`pre-mortem.md\` (only on \`legacy-artifacts: true\` — default v8.12 collapses pre-mortem into \`review.md\` as a section)
+   - \`research-repo.md\` (when written by repo-research)
+   - \`research-learnings.md\` (only on \`legacy-artifacts: true\` — default v8.12 keeps learnings inline in the planner's slim-summary)
    The word "copy" must not appear in the dispatch envelope or in your own actions. \`cp\` is forbidden here. The active directory must end up empty after the moves.
-4. **Write the shipped manifest.** Author \`.cclaw/flows/shipped/<slug>/manifest.md\` from \`.cclaw/lib/templates/manifest.md\`. Frontmatter mirrors the final \`flow-state.json\` (slug, shippedAt, acMode, complexity, securityFlag, reviewIterations, AC count). Body lists the artifacts that ended up in the shipped dir (one bullet per file) and a one-line "Last status" copied from the ship summary.
+4. **Stamp the shipped frontmatter on \`ship.md\`.** As of v8.12, manifest.md is collapsed into \`ship.md\`'s frontmatter. Update \`ship.md\`'s frontmatter to include the final flow signals (snake_case keys per artefact-frontmatter convention): \`slug\`, \`shipped_at\`, \`ac_mode\`, \`complexity\`, \`security_flag\`, \`review_iterations\`, \`ac_count\`, \`finalization_mode\`. Body of \`ship.md\` keeps the AC↔commit map (strict) or condition checklist (soft); add an "## Artefact index" section listing the artefacts that ended up in the shipped dir (one bullet per file). Users on the opt-in \`legacy-artifacts: true\` config still get a separate \`manifest.md\` in addition.
 5. **Post-condition check (mandatory).** \`flows/<slug>/\` (the active directory) must be empty. If it is not, you have made a mistake — list the residue, surface it to the user, do NOT continue. The most common cause is mistakenly using \`cp\` instead of \`git mv\`/\`mv\`. Once the active dir is empty, \`rmdir flows/<slug>\` to remove the now-empty directory.
 6. **Promote ADRs (PROPOSED → ACCEPTED).** Scan \`flows/shipped/<slug>/decisions.md\` (just moved in step 3) for any \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` line. For each found ADR file, edit the frontmatter in place: \`status: PROPOSED\` → \`status: ACCEPTED\`; add \`accepted_at: <iso>\`; add \`accepted_in_slug: <slug>\`; add \`accepted_at_commit: <ship-commit-sha>\`. Commit each promotion with \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. Skip the entire step when no PROPOSED ADR was found. Do NOT promote ADRs the architect did not propose for this slug. See \`.cclaw/lib/skills/documentation-and-adrs.md\` for the full lifecycle (including supersession bookkeeping for ADRs that supersede an earlier ACCEPTED one).
 7. **Reset flow-state.** Write \`createInitialFlowState\` defaults to \`.cclaw/state/flow-state.json\` (\`currentSlug: null\`, \`currentStage: null\`, \`triage: null\`, \`ac: []\`, \`reviewIterations: 0\`, \`securityFlag: false\`, \`lastSpecialist: null\`). The shipped manifest is the durable record; flow-state is now a clean slot ready for the next \`/cc\`.
-8. **Render the final summary** to the user: one block citing \`shipped/<slug>/manifest.md\`, the AC count, any captured learnings, and any ADR ids promoted to \`ACCEPTED\` in step 6.
+8. **Render the final summary** to the user: one block citing \`shipped/<slug>/ship.md\` (the file that now carries the manifest frontmatter — or \`shipped/<slug>/manifest.md\` on \`legacy-artifacts: true\`), the AC count, any captured learnings, and any ADR ids promoted to \`ACCEPTED\` in step 6.
 
 Hard rules for Hop 6:
 
 - **No "copy" anywhere.** Sub-agent dispatches do NOT mention copying. The orchestrator's own actions use \`git mv\` (preferred when the files are git-tracked) or \`mv\` (when not). \`cp\` is a bug.
 - **No partial finalize.** If any \`mv\` fails (filesystem error, permission, lock), stop and surface the failure. Do not leave half the flow in shipped and half in active.
-- **No re-entrant finalize on resume.** If \`flows/<slug>/\` is already empty when you reach Hop 6 (a previous run finalised), check that \`shipped/<slug>/manifest.md\` exists; if it does, this slug is already shipped — reset flow-state and tell the user "already finalised in <iso>". Do NOT recreate the manifest.
+- **No re-entrant finalize on resume.** If \`flows/<slug>/\` is already empty when you reach Hop 6 (a previous run finalised), check that \`shipped/<slug>/ship.md\` exists with \`status: shipped\` in its frontmatter; if it does, this slug is already shipped — reset flow-state and tell the user "already finalised in <iso>". Do NOT recreate the artefacts. (On \`legacy-artifacts: true\` you can also key off \`shipped/<slug>/manifest.md\`.)
 
 ## Always-ask rules
 

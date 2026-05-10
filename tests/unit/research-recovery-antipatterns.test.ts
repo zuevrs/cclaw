@@ -1,80 +1,63 @@
 import { describe, expect, it } from "vitest";
-import { RESEARCH_PLAYBOOKS } from "../../src/content/research-playbooks.js";
-import { RECOVERY_PLAYBOOKS } from "../../src/content/recovery.js";
+import { RESEARCH_PLAYBOOKS, RESEARCH_PLAYBOOKS_INDEX } from "../../src/content/research-playbooks.js";
+import { RECOVERY_PLAYBOOKS, RECOVERY_INDEX } from "../../src/content/recovery.js";
 import { ANTIPATTERNS } from "../../src/content/antipatterns.js";
 import { DECISION_PROTOCOL } from "../../src/content/decision-protocol.js";
 import { META_SKILL } from "../../src/content/meta-skill.js";
 
-describe("research playbooks", () => {
-  it("ships exactly three research playbooks (codebase reading, time-boxing, prior slugs)", () => {
-    expect(RESEARCH_PLAYBOOKS.length).toBe(3);
-    const ids = RESEARCH_PLAYBOOKS.map((entry) => entry.id).sort();
-    expect(ids).toEqual(["prior-slugs", "reading-codebase", "time-boxing"]);
+describe("research playbooks (v8.12 — orphan content removed)", () => {
+  it("ships no playbooks by default; legacy-artifacts opt-in restores the old set", () => {
+    expect(RESEARCH_PLAYBOOKS).toEqual([]);
   });
 
-  it("reading-codebase playbook lists stop conditions", () => {
-    const playbook = RESEARCH_PLAYBOOKS.find((entry) => entry.id === "reading-codebase");
-    expect(playbook?.body).toContain("Stop conditions");
-  });
-
-  it("reading-codebase playbook covers test-reading and integration-boundary guidance", () => {
-    const playbook = RESEARCH_PLAYBOOKS.find((entry) => entry.id === "reading-codebase");
-    expect(playbook?.body).toMatch(/Reading existing tests/iu);
-    expect(playbook?.body).toMatch(/integration boundaries/iu);
-  });
-
-  it("time-boxing playbook gives concrete budgets", () => {
-    const playbook = RESEARCH_PLAYBOOKS.find((entry) => entry.id === "time-boxing");
-    expect(playbook?.body).toMatch(/15-30 minutes/u);
+  it("RESEARCH_PLAYBOOKS_INDEX explains the v8.12 cleanup", () => {
+    expect(RESEARCH_PLAYBOOKS_INDEX).toMatch(/v8\.12/u);
+    expect(RESEARCH_PLAYBOOKS_INDEX).toMatch(/legacy-artifacts/u);
   });
 });
 
-describe("recovery playbooks", () => {
-  it("covers AC break, review cap, parallel-build conflict, frontmatter corruption, schemaVersion mismatch", () => {
-    const ids = RECOVERY_PLAYBOOKS.map((entry) => entry.id).sort();
-    expect(ids).toEqual([
-      "ac-traceability-break",
-      "frontmatter-corruption",
-      "parallel-build-conflict",
-      "review-cap-reached",
-      "schema-mismatch"
-    ]);
+describe("recovery playbooks (v8.12 — orphan content removed)", () => {
+  it("ships no playbooks by default; orchestrator handles recovery inline", () => {
+    expect(RECOVERY_PLAYBOOKS).toEqual([]);
   });
 
-  it("each playbook describes symptoms and recovery steps", () => {
-    for (const playbook of RECOVERY_PLAYBOOKS) {
-      expect(playbook.body).toMatch(/Symptoms/iu);
-      expect(playbook.body).toMatch(/Recovery (steps|options)/iu);
-    }
-  });
-
-  it("ac-traceability-break recovery rejects deleting flow-state.json", () => {
-    const playbook = RECOVERY_PLAYBOOKS.find((entry) => entry.id === "ac-traceability-break");
-    expect(playbook?.body).toContain("Do not delete \`.cclaw/state/flow-state.json\`");
+  it("RECOVERY_INDEX explains the v8.12 cleanup", () => {
+    expect(RECOVERY_INDEX).toMatch(/v8\.12/u);
+    expect(RECOVERY_INDEX).toMatch(/legacy-artifacts/u);
   });
 });
 
-describe("antipatterns", () => {
-  it("contains at least 12 entries", () => {
+describe("antipatterns (v8.12 — renumbered to A-1 .. A-7)", () => {
+  it("ships exactly 7 wired antipatterns", () => {
     const matches = ANTIPATTERNS.match(/^## A-\d+/gmu) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(12);
+    expect(matches.length).toBe(7);
+    expect(matches).toEqual(["## A-1", "## A-2", "## A-3", "## A-4", "## A-5", "## A-6", "## A-7"]);
   });
 
-  it("references force-push and shipping-with-pending-AC anti-patterns", () => {
-    expect(ANTIPATTERNS).toContain("Force-push during ship");
-    expect(ANTIPATTERNS).toContain("Shipping with a pending AC");
+  it("retains the canonical TDD-phase + work-outside-the-AC entries", () => {
+    expect(ANTIPATTERNS).toContain("TDD phase integrity broken");
+    expect(ANTIPATTERNS).toContain("Work outside the AC");
+  });
+
+  it("documents the v8.11→v8.12 renumber mapping for back-compat", () => {
+    expect(ANTIPATTERNS).toMatch(/old A-2.*new A-1/u);
+    expect(ANTIPATTERNS).toMatch(/old A-22.*new A-7/u);
   });
 });
 
-describe("decision protocol", () => {
+describe("decision protocol (v8.12 — worked-examples ref removed)", () => {
   it("is a short principles digest, not a full schema", () => {
     expect(DECISION_PROTOCOL.length).toBeLessThan(2000);
     expect(DECISION_PROTOCOL).toContain("short form");
   });
 
-  it("delegates the full schema to architect.md and the worked examples", () => {
+  it("delegates the full schema to architect.md", () => {
     expect(DECISION_PROTOCOL).toContain("architect.md");
-    expect(DECISION_PROTOCOL).toContain("decision-permission-cache");
+  });
+
+  it("no longer references the deleted worked-examples library", () => {
+    expect(DECISION_PROTOCOL).not.toContain("decision-permission-cache");
+    expect(DECISION_PROTOCOL).not.toContain("Worked examples");
   });
 
   it("lists the seven mandatory D-N fields by name", () => {
@@ -85,7 +68,6 @@ describe("decision protocol", () => {
 
   it("flags 'this is not a decision' patterns to suppress D-N noise", () => {
     expect(DECISION_PROTOCOL).toContain("not a decision");
-    expect(DECISION_PROTOCOL).toContain("Use the library that is already in the project");
   });
 });
 
@@ -94,8 +76,8 @@ describe("meta skill", () => {
     expect(META_SKILL).toContain("trigger: always-on");
   });
 
-  it("references runbooks, patterns, recovery, examples, antipatterns", () => {
-    for (const ref of [".cclaw/lib/runbooks/", ".cclaw/lib/patterns/", ".cclaw/lib/recovery/", ".cclaw/lib/examples/", ".cclaw/lib/antipatterns.md"]) {
+  it("references runbooks, patterns, and antipatterns (recovery/examples now opt-in)", () => {
+    for (const ref of [".cclaw/lib/runbooks/", ".cclaw/lib/patterns/", ".cclaw/lib/antipatterns.md"]) {
       expect(META_SKILL).toContain(ref);
     }
   });

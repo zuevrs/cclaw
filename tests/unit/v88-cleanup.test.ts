@@ -71,36 +71,34 @@ describe("v8.8 cleanup", () => {
       expect(tdd).toBeDefined();
     });
 
-    it("does NOT cite phantom A-18 / A-19 / A-20 (those exist with different meanings since v8.7)", () => {
+    it("does NOT cite phantom A-18 / A-19 / A-20 (those never existed in this codebase)", () => {
       const antipatternsSection = tdd!.body.split("## Anti-patterns")[1] ?? "";
       expect(antipatternsSection).not.toMatch(/horizontal slicing.{0,40}A-18/i);
       expect(antipatternsSection).not.toMatch(/pushing past.{0,40}A-19/i);
       expect(antipatternsSection).not.toMatch(/mocking.{0,40}A-20/i);
     });
 
-    it("cites A-2 for skipping RED / phase integrity", () => {
+    it("cites A-1 for skipping RED / phase integrity (renumbered from old A-2 in v8.12)", () => {
       const section = tdd!.body.split("## Anti-patterns")[1] ?? "";
-      expect(section).toMatch(/A-2/);
+      expect(section).toMatch(/A-1.{0,120}TDD phase integrity/s);
     });
 
-    it("cites A-12 for single-test-green", () => {
+    it("cites A-2 for work-outside-the-AC (renumbered from old A-3)", () => {
       const section = tdd!.body.split("## Anti-patterns")[1] ?? "";
-      expect(section).toMatch(/A-12/);
+      expect(section).toMatch(/A-2.{0,80}work outside the AC/s);
     });
 
-    it("cites A-13 for horizontal slicing (regardless of bullet/A-N order)", () => {
+    it("cites A-3 for mocking-what-should-not-be-mocked (renumbered from old A-15)", () => {
       const section = tdd!.body.split("## Anti-patterns")[1] ?? "";
-      expect(section).toMatch(/(A-13.{0,80}[Hh]orizontal slicing|[Hh]orizontal slicing.{0,80}A-13)/s);
+      expect(section).toMatch(/A-3.{0,120}[Mm]ocking/s);
     });
 
-    it("cites A-14 for pushing past a failing test", () => {
+    it("does NOT cite the deleted A-12 / A-13 / A-14 (single-test-green, horizontal slicing, pushing past failing test)", () => {
+      // These antipatterns were among the 24 unused entries deleted in v8.12.
       const section = tdd!.body.split("## Anti-patterns")[1] ?? "";
-      expect(section).toMatch(/(A-14.{0,80}[Pp]ushing past|[Pp]ushing past.{0,80}A-14)/s);
-    });
-
-    it("cites A-15 for mocking-what-should-not-be-mocked", () => {
-      const section = tdd!.body.split("## Anti-patterns")[1] ?? "";
-      expect(section).toMatch(/(A-15.{0,120}[Mm]ocking|[Mm]ocking.{0,120}A-15)/s);
+      expect(section).not.toMatch(/A-12/);
+      expect(section).not.toMatch(/A-13/);
+      expect(section).not.toMatch(/A-14/);
     });
 
     it("A-N parity: every A-N referenced in skills / prompts exists in antipatterns.ts", () => {
