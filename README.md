@@ -43,6 +43,65 @@
 
 Three slash commands (`/cc`, `/cc-cancel`, `/cc-idea`). Four stages (`plan → build → review → ship`). Six specialists, all on-demand, all running as sub-agents, all emitting `Confidence: high | medium | low`. Twenty-four auto-trigger skills including the always-on `triage-gate`, `flow-resume`, `pre-flight-assumptions`, `tdd-cycle`, `conversation-language`, `anti-slop`, and the strict-mode-default `source-driven`. Eleven templates including `plan-soft.md` and `build-soft.md` for the soft-mode path. Four runbooks. Two reference patterns (`auth-flow` + `security-hardening`; v8.12 trimmed the orphan six). Seven antipatterns (`A-1`..`A-7`; v8.12 deleted the 24 unused entries). Recovery / research / examples libraries are now empty by default — the orchestrator handles recovery inline; shipped flows under `flows/shipped/` are the canonical worked examples. `legacy-artifacts: true` in `.cclaw/config.yaml` brings all the deleted content back. Two mandatory gates in strict mode (AC traceability + TDD phase chain); soft mode keeps both as advisory; inline mode skips both.
 
+## What changed in 8.13
+
+8.13 is a power-and-economy release. After a multi-subagent audit (10+ parallel agents across the same eleven reference repos plus an internal review of cclaw's runtime + prompts), 40 actionable items were selected covering speed, token economy, stage power, and architectural foundations.
+
+**Speed and token wins (T0).**
+
+- The planner now dispatches `learnings-research` and `repo-research` (when triggered) **in the same tool-call batch**, saving one LLM round-trip on every plan invocation.
+- The Hop 2 triage example now uses a **single multi-question form** (path + run-mode in one `askUserQuestion` call), saving one user round-trip on every fresh flow.
+- The ship stage's parallel reviewers receive a **shared parsed-diff context**: the orchestrator parses `git diff` once and passes the result, so three reviewers no longer re-parse the same diff.
+- The discovery sub-phase has an **auto-skip heuristic** for `triage.confidence: high` large-risky tasks — brainstormer + architect can be skipped when ambiguity is low, going straight from triage to planner. Saves two specialist dispatches and two user pauses.
+- The compound + ship step now **scans the active flow directory dynamically**, moving every emitted file to `shipped/<slug>/` instead of a hard-coded list. No orphan artefacts left in `flows/<slug>/` after ship.
+
+**Plan stage power (T1).**
+
+- Each AC in `plan.md` now carries a `dependsOn: []` graph (acyclic, topological commit order) and a `rollback: "..."` strategy in frontmatter. Planner self-review enforces graph acyclicity.
+- Plans carry a `feasibility_stamp: green | yellow | red` that the planner computes from coverage of unknowns, schema impact, and risk concentration. A `red` stamp **blocks build dispatch** until the plan is revised; `yellow` triggers a structured ask before continuing.
+- The planner reuses `flows/<slug>/research-repo.md` and the `learnings-research` blob across subsequent specialists — must NOT re-dispatch research helpers when the cache is fresh.
+
+**Build stage power (T1).**
+
+- The slice-builder runs **non-functional checks per AC** between GREEN and REFACTOR: branch-coverage delta, perf-smoke check, plus triggered checks for schema/migration and API contract diff.
+- Refactor-only AC now require `No-behavioural-delta` evidence (anchored test, before/after diff, no public-API drift) — the verdict is part of the build slim-summary.
+- Slice-builder enumerates **refactor candidates** (duplication, long methods, shallow modules, feature envy, primitive obsession) with explicit verdicts, and forbids refactor while RED.
+- Parallel-build fallback to inline-sequential is **no longer silent**: an explicit warning is rendered and the user must accept-fallback before continuing; `fallback_reason` is recorded in `build.md`.
+
+**Review stage power (T1).**
+
+- Reviewer now uses a **seven-axis review** (`correctness · test-quality · readability · architecture · complexity-budget · security · performance`). The slim-summary axes counter is `c=N tq=N r=N a=N cb=N s=N p=N`.
+- Reviewer **auto-detects security-sensitive surfaces** from the diff (regardless of `security_flag` in triage): auth, secrets, crypto, supply-chain, data exposure, IPC.
+- Adversarial pre-mortem **re-runs on fix-only hot paths** when the same file or symbol has surfaced findings in three or more iterations — surfaces a `## Pre-mortem (adversarial, rerun)` section appended to `review.md`.
+- The 5-iteration cap now produces a **structured split-plan recovery**: the orchestrator surfaces a `Recommended split` block (separate AC, separate slug, separate ship) instead of nuking the flow.
+
+**Ship stage power (T1).**
+
+- The ship runbook **mandates a CI smoke gate**: lint + typecheck + unit-test (with `--reporter=verbose` on changed files) before the manifest is stamped. Three modes: `strict` (full CI mirror), `relevant` (changed-files only), `skip` (CI-bypass with `--ci-bypass=intentional` flag).
+- The ship runbook **auto-generates release notes** from AC↔commit evidence: `## Release notes` section in `ship.md` populated from each AC's verification line + commit subject. The Victory Detector requires `release_notes_filled: true`.
+- The `## What didn't work` section is mandatory in `ship.md` — surfaces dead-end approaches, abandoned attempts, and decisions that were considered and rejected. Future agents reading shipped slugs see the negative space, not just what shipped.
+- The compound quality gate has a **learnings hard-stop on non-trivial slugs**: when the gate doesn't fire on a slug ≥4 AC, the orchestrator surfaces an explicit `Capture learnings? — yes / no / explain-why-not` prompt instead of silently skipping. Bypassable via `config.captureLearningsBypass: true` for autonomous pipelines.
+
+**T2 capabilities.**
+
+- New `verification-loop` skill — auto-trigger gate that runs `build → typecheck → lint → test → security → diff` in **strict / continuous / diff-only** modes between AC. Strict for ship; continuous for build phase; diff-only for fix-only flows.
+- New `tests/unit/prompt-budgets.test.ts` — per-specialist line + char ceilings (planner ≤ 380 lines, slice-builder ≤ 360, reviewer ≤ 320, etc.) with a soft combined ceiling. Enforced on every commit; prevents prompt sprawl from accumulating.
+- New **Handoff artifacts** (`HANDOFF.json` + `.continue-here.md`) written at every stage exit: machine-readable state + human-readable resume note. Idempotent rewrites — every checkpoint replaces the previous instance, no append-only history bloat.
+- New **Compound-refresh sub-step** runs every 5th capture (gated by floor of 10 entries): dedup / keep / update / consolidate / replace actions over `.cclaw/knowledge.jsonl`. Configurable via `config.compoundRefreshEvery` and `config.compoundRefreshFloor`.
+- New `scripts/analyze-token-usage.mjs` — post-flow telemetry (token estimate per slug + per artefact, supporting `--active`, `--shipped`, `--json`). Estimates use `chars / 4`.
+- TDD-cycle skill carries an **anti-rationalization table** (`rationalization | truth` rows) — explicit list of the eight excuses agents will produce to skip the cycle, paired with the right answer. When you catch yourself thinking the left column, do the right column instead.
+- New **Discoverability self-check** as a Hop 5 sub-step: after compound writes a `knowledge.jsonl` row, the orchestrator confirms that at least one of `AGENTS.md` / `CLAUDE.md` / `README.md` references the catalogue. If none do, it surfaces a structured ask before considering the flow truly shipped.
+
+**T3 architectural foundations.**
+
+- New `ModelPreferences` interface in `.cclaw/config.yaml`: per-specialist tier hints (`fast` / `balanced` / `powerful`). Optional, defaulted off — harnesses that support model routing can honour the tier in dispatch envelopes.
+- New **namespace router** (gsd pattern, opt-in): documented `/cc-plan`, `/cc-build`, `/cc-review`, `/cc-ship`, `/cc-compound-refresh` routes that map back to `/cc --enter=<stage>` semantics. Harnesses with command palettes can surface stage shortcuts without inventing semantics.
+- New **two-reviewer per-task loop** (obra pattern, opt-in): on the highest-risk band (`large-risky` + `security_flag: true`), the reviewer splits into two passes — spec-review first (correctness + test-quality only), code-quality-review second (readability + architecture + complexity-budget + perf only). Pass 2 short-circuits on `spec-block`. Single-pass remains the v8.12 default; two-pass triggers via `config.reviewerTwoPass: true` or auto-fires on the high-risk combo.
+
+**Tests.** New `tests/unit/v813-cleanup.test.ts` (31 tripwire tests covering all T0/T1/T2/T3 invariants) + `tests/unit/prompt-budgets.test.ts` (9 prompt-size tests). 444 tests across 42 files, all green. No prose-locked test rewrites needed — every change extended the spec rather than rewriting it.
+
+No breaking changes. Drop-in upgrade from 8.12.x. New config keys are all optional and defaulted off.
+
 ## What changed in 8.12
 
 8.12 is a cleanup release. The audit against eleven reference repos (`addyosmani-skills`, `everyinc-compound`, `gsd-v1`, `gstack`, `mattpocock-skills`, `obra-superpowers`, `oh-my-claudecode`, etc.) found that cclaw was carrying a lot of dead weight from earlier releases. We deleted it.

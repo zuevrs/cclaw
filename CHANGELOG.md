@@ -1,5 +1,52 @@
 # Changelog
 
+## 8.13.0 — Power-and-economy release: speed/token wins, plan-build-review-ship power, verification loop, handoff artifacts, compound refresh, model-routing config, namespace router, two-reviewer loop
+
+### Why
+
+A multi-subagent audit (10+ parallel agents across the same eleven reference repos as v8.12 plus an internal review of cclaw's runtime + prompts) surfaced four classes of opportunity in the 8.12 baseline:
+
+1. **Speed and token economy.** Sequential research-helper dispatch forced a round-trip the planner could batch. Two-question forms in Hop 2 triage cost a user round-trip per fresh flow. Three parallel reviewers re-parsed the same `git diff`. The discovery sub-phase always ran end-to-end even when triage confidence was high. Compound moved a hard-coded list of files instead of scanning the active flow directory.
+2. **Stage power.** Plans had no per-AC `dependsOn` graph or `rollback` plan. There was no `feasibility_stamp` to gate build dispatch. Slice-builder enumerated tests but not refactor candidates and had no non-functional check between GREEN and REFACTOR. Reviewer used five axes when seven would let test-quality and complexity-budget produce independent signals. Ship had no CI smoke gate; release notes were free-form prose; learnings were silently skipped on non-trivial slugs that didn't trigger the gate.
+3. **Missing capabilities.** No verification-loop skill (build → typecheck → lint → test → security → diff staged gate). No prompt-size budget tests. No handoff artefacts for cross-session resumption. No compound-refresh dedup pass. No token-cost telemetry. No anti-rationalization table on TDD-cycle. No `## What didn't work` section in ship. No discoverability self-check after compound.
+4. **Architectural ceilings.** No category-based model routing (no way for harnesses to express "planner = powerful, learnings-research = fast"). No namespace router (`/cc-plan`, `/cc-build`, etc.) for harnesses with command palettes. No two-reviewer per-task loop for high-risk slugs.
+
+### What changed
+
+**T0 — Speed and token wins.** Planner dispatches `learnings-research` and `repo-research` in the same tool-call batch (do NOT serialise), saving one LLM round-trip per plan. Hop 2 triage uses a single multi-question `askUserQuestion` form (path + run-mode in one call), saving one user round-trip per fresh flow. Ship parallel reviewers receive a shared parsed-diff context — orchestrator parses `git diff` once and passes the result to all three reviewers. Discovery auto-skip heuristic for `triage.confidence: high` large-risky tasks goes straight from triage to planner, skipping brainstormer + architect (saves two specialist dispatches and two user pauses). `compound.runCompoundAndShip` scans the active flow directory dynamically for emitted files and moves them all to `shipped/<slug>/` (no orphans).
+
+**T1 — Plan stage power.** `plan.md` template carries `dependsOn: []` and `rollback: "..."` per AC in frontmatter. Planner self-review enforces `dependsOn` is acyclic and produces a topological commit order. `feasibility_stamp: green | yellow | red` is computed from coverage of unknowns, schema impact, and risk concentration; a `red` stamp blocks build dispatch. Cross-specialist research cache section in `planner.ts` says `flows/<slug>/research-repo.md` and the learnings-research blob must NOT be re-dispatched by subsequent specialists when fresh.
+
+**T1 — Build stage power.** Slice-builder runs non-functional checks per AC between GREEN and REFACTOR: branch-coverage delta, perf-smoke, plus triggered checks for schema/migration and API contract diff. Refactor-only AC require explicit `No-behavioural-delta` evidence (anchored test, before/after diff, no public-API drift). Refactor candidate inventory section enumerates duplication, long methods, shallow modules, feature envy, primitive obsession with explicit verdicts. Hard rule: never refactor while RED. Parallel-build fallback to inline-sequential is no longer silent — explicit warning, user accept-fallback required, `fallback_reason` recorded in `build.md`.
+
+**T1 — Review stage power.** Reviewer uses seven axes (`correctness · test-quality · readability · architecture · complexity-budget · security · performance`); slim-summary axes counter is `c=N tq=N r=N a=N cb=N s=N p=N`. Auto-detect security-sensitive surfaces from the diff regardless of `security_flag` (auth, secrets, crypto, supply-chain, data exposure, IPC). Adversarial pre-mortem rerun on fix-only hot paths (same file/symbol surfaced findings in 3+ iterations) appends a `## Pre-mortem (adversarial, rerun)` section. 5-iteration cap produces a structured split-plan recovery: `Recommended split` block (separate AC, separate slug, separate ship) instead of nuking the flow.
+
+**T1 — Ship stage power.** CI smoke gate is mandatory: lint + typecheck + unit-test before manifest stamp; three modes (strict / relevant / skip with `--ci-bypass=intentional`). Release-notes auto-gen from AC↔commit evidence into `ship.md` `## Release notes` section. Victory Detector requires `ci_smoke_passed = true`, `release_notes_filled = true`, and `learnings_captured_or_explicitly_skipped`. Mandatory `## What didn't work` section surfaces dead-end approaches, abandoned attempts, and rejected decisions. Learnings hard-stop on non-trivial slugs (≥4 AC) when the compound quality gate doesn't fire — explicit `Capture learnings? — yes / no / explain-why-not` ask, bypassable via `config.captureLearningsBypass`.
+
+**T2 — New capabilities.** `verification-loop` skill (auto-trigger) runs `build/typecheck/lint/test/security` staged gate in strict / continuous / diff-only modes. `tests/unit/prompt-budgets.test.ts` enforces per-specialist line + char ceilings on every commit. `HANDOFF.json` + `.continue-here.md` written at every stage exit (machine-readable state + human-readable resume note, idempotent rewrites). Compound-refresh sub-step runs every 5th capture (gated by floor of 10 entries): dedup / keep / update / consolidate / replace over `.cclaw/knowledge.jsonl`; configurable via `config.compoundRefreshEvery` and `config.compoundRefreshFloor`. `scripts/analyze-token-usage.mjs` for post-flow telemetry. TDD-cycle skill anti-rationalization table (eight `rationalization | truth` rows). Discoverability self-check after compound writes — confirms at least one of `AGENTS.md` / `CLAUDE.md` / `README.md` references `knowledge.jsonl`.
+
+**T3 — Architectural foundations.** `ModelPreferences` interface (per-specialist tier hints `fast` / `balanced` / `powerful`); optional, defaulted off. Namespace router (gsd pattern): documented `/cc-plan`, `/cc-build`, `/cc-review`, `/cc-ship`, `/cc-compound-refresh` routes mapping to `/cc --enter=<stage>` semantics — opt-in for harnesses with command palettes. Two-reviewer per-task loop (obra pattern): on the highest-risk band (`large-risky` + `security_flag: true`), reviewer splits into two passes — spec-review first (correctness + test-quality only), code-quality-review second (readability + architecture + complexity-budget + perf only); pass 2 short-circuits on `spec-block`. Single-pass remains the v8.12 default; two-pass triggers via `config.reviewerTwoPass` or the high-risk auto-trigger.
+
+### Tests
+
+`tests/unit/v813-cleanup.test.ts` — 31 new tripwire tests covering T0 speed wins (parallel research dispatch, multi-question triage, shared-diff context, discovery auto-skip), T1 plan/build/review/ship power (dependsOn + rollback, feasibility stamp, research cache prose, non-functional checks, refactor-only evidence, 7-axis review, security auto-detect, adversarial rerun, cap-reached split-plan, CI smoke gate, release-notes auto-gen, learnings hard-stop), T2 capabilities (verification-loop skill, handoff artifacts, compound-refresh, what-didn't-work, discoverability self-check, anti-rationalization table), T3 architectural foundations (ModelPreferences interface, namespace router, two-reviewer per-task loop).
+
+`tests/unit/prompt-budgets.test.ts` — 9 new tests asserting per-specialist line + char ceilings (planner ≤ 380, slice-builder ≤ 360, reviewer ≤ 320, etc.) plus a soft combined ceiling.
+
+Total: 444 tests across 42 files, all green. No prose-locked test rewrites — every change extended the spec rather than rewriting it.
+
+### Migration
+
+Drop-in upgrade from 8.12.x. New config keys are all optional and defaulted off:
+
+- `modelPreferences?: ModelPreferences` — per-specialist tier hints; absent fields fall back to harness default.
+- `compoundRefreshEvery?: number` (default 5), `compoundRefreshFloor?: number` (default 10) — set `compoundRefreshEvery: 0` to disable.
+- `captureLearningsBypass?: boolean` (default false) — CI-friendly opt-out for the learnings hard-stop ask.
+- `reviewerTwoPass?: boolean` (default false; auto-fires on `large-risky + security_flag: true`).
+- `legacyArtifacts?: boolean` (default false; from v8.12) is unchanged.
+
+Slugs shipped on v8.11 / v8.12 keep working — the orchestrator's existing-plan detection is unchanged. v8.13's new `dependsOn`, `rollback`, and `feasibility_stamp` fields appear only on plans authored on v8.13+ — older plans without them are still valid (the planner stamps them on the next refinement).
+
 ## 8.12.0 — Cleanup release: 12 Tier-0 bug fixes, antipatterns trimmed 33→7, orphan content libraries deleted, artefact layout collapsed 9→6, legacy-artifacts opt-in flag
 
 ### Why

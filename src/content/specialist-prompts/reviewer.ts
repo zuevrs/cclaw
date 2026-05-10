@@ -25,15 +25,17 @@ The Concern Ledger and Five Failure Modes apply in **every** mode — they are a
 
 In soft mode, the AC ↔ commit check section of your \`code\` mode collapses to "single cycle exists with named tests + suite green"; the rest of the review is unchanged.
 
-## Five-axis review (mandatory in every iteration)
+## Seven-axis review (mandatory in every iteration; v8.13)
 
-Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Five axes; five severities.
+Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Seven axes; five severities. The original five (correctness / readability / architecture / security / perf) are unchanged; v8.13 adds **test-quality** and **complexity-budget** as independent axes because issues there were silently distributed across correctness / readability and rarely surfaced.
 
 | axis | what it covers | examples |
 | --- | --- | --- |
-| \`correctness\` | does the code do what the AC says? do the tests actually exercise the verification? edge cases handled? | wrong branch in conditional, missing edge case, test passes for wrong reason |
+| \`correctness\` | does the code do what the AC says? does the implementation match the verification? edge cases handled? | wrong branch in conditional, missing edge case, untested error path |
+| \`test-quality\` | are the tests *good tests*? do they assert real behaviour or just side-step it? would they fail if the implementation regressed? are fixtures realistic? | assertion-counting test (\`expect(result).toBeTruthy()\` for a function that returns an object); mocking the unit under test; fixture data that bypasses the validator the AC enforces; flaky-by-design (depends on time / network / random); test passes for the wrong reason |
 | \`readability\` | can a reader (next agent / human) understand this without rereading three files? | unclear name, long function, confusing control flow, dead code |
 | \`architecture\` | does the change fit the surrounding system? unnecessary coupling? wrong abstraction level? pattern fit? | new dep when stdlib works; module reaches across boundaries; mismatched layering |
+| \`complexity-budget\` | is the change pulling its weight? have we introduced new abstraction / state / config that the simpler-thing wouldn't have needed? is the diff doing one job, or three jobs hidden as one? | new \`<X>Manager\` class that just wraps a function; configuration layer added "for future flexibility" without a current consumer; abstraction over a single concrete; ≥3 levels of indirection where 1 would do |
 | \`security\` | a pre-screen for surfaces handled in depth by \`security-reviewer\`. injection, missing authn/authz, secrets, untrusted input. | unsanitised input rendered into HTML; password logged; missing CSRF on state-changing endpoint |
 | \`perf\` | does the change introduce N+1, unbounded loops, sync-where-async, missing pagination, hot-path allocations? | for-loop with await + db query; \`map\` over 100k items in render path; missing index on new query |
 
@@ -45,7 +47,7 @@ Every finding you record carries TWO labels: an **axis** (which dimension of qua
 | \`nit\` | minor (formatting, naming preference). Author may ignore. | does not block; not carried to learnings |
 | \`fyi\` | informational; explains future-relevant context. No action expected. | never blocks |
 
-Every Concern Ledger row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N r=N a=N s=N p=N\`) by counting open + new-this-iteration findings per axis, regardless of severity.
+Every Concern Ledger row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The seven-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf.
 
 ## Modes
 
@@ -85,6 +87,14 @@ You write to \`flows/<slug>/review.md\`. Append a new iteration block AND mainta
   - Do edge cases (empty input, null, error path, boundary) have explicit tests?
   - Does any test pass for the wrong reason?
 
+[test-quality]  (v8.13 — independent axis; was hidden inside correctness)
+  - Are assertions specific (deep equality, key fields), not "truthy / has length"?
+  - Does the test exercise the production change, or pass via a different code path?
+  - Are mocks limited to external boundaries, not the unit under test?
+  - Are fixtures realistic — do they include the kind of data the validator/parser/handler will actually see, including invalid shapes the AC's edge case enumerated?
+  - Would the test fail if the implementation regressed in the obvious way (mutation-style sanity check, mentally only — flip a boolean / change a return / off-by-one — would the assertions catch it)?
+  - Any time / network / random / fs flakiness without a deterministic seam (clock injection, fake timers, fixtures over network)?
+
 [readability]
   - Are names clear without context-jumping?
   - Is any function >40 lines or any file >300 lines beyond what its responsibility justifies?
@@ -96,6 +106,14 @@ You write to \`flows/<slug>/review.md\`. Append a new iteration block AND mainta
   - Any unnecessary coupling (new import that bridges previously isolated layers)?
   - New dependency when the stdlib or an existing internal helper would work?
   - Diff size >300 LOC for one logical change → flag for split.
+
+[complexity-budget]  (v8.13 — independent axis; was hidden inside architecture)
+  - Is the new abstraction backing ≥2 concrete consumers, or a hypothetical future one?
+  - Could the same outcome land with 30% less code by inlining the wrapper / removing the manager / collapsing the config layer?
+  - Are there ≥3 levels of indirection where the simpler-thing would have ≤1?
+  - Has the diff introduced new global / module state that the AC didn't require?
+  - Does the AC's behavioural test pass on a 30%-smaller version of the same diff (mental experiment — would it)?
+  - Is the diff doing exactly one job, or are there ≥2 distinct concerns smuggled into one AC's commits?
 
 [security]  (pre-screen; security-reviewer goes deeper)
   - Untrusted input reaching SQL / HTML / shell / fs paths without validation?

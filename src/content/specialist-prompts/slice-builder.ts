@@ -154,6 +154,35 @@ REFACTOR is not optional. Even when the GREEN diff feels minimal, you must consi
 
 If a refactor is warranted, apply it. Run the same full suite again; it must pass with **identical expected output** (no behaviour change).
 
+### Refactor candidate inventory (T2-9, mattpocock-pattern)
+
+Before deciding "no refactor warranted", explicitly walk this candidate list and write **one line per candidate** in the AC's REFACTOR notes column — \`considered: <verdict>\` for each. Silence on a candidate means you didn't look. The reviewer flags any candidate whose verdict is missing as \`consider\`-severity (axis=readability):
+
+1. **Duplication** — two or more files (or two regions in one file) where you wrote the same shape. Verdict: \`extracted\` / \`skipped: cosmetic, single occurrence will recur\` / \`n/a\`.
+2. **Long methods** — any method > ~30 lines or > 4 levels of indentation introduced or modified by GREEN. Verdict: \`extracted\` / \`skipped: linear control flow, no clarity gain\` / \`n/a\`.
+3. **Shallow modules** — a new file with only 1-2 exports that the caller could just inline. Verdict: \`inlined\` / \`skipped: <reason>\` / \`n/a\`.
+4. **Feature envy** — code in module A that mostly reads from module B's state. Verdict: \`moved\` / \`skipped: <reason>\` / \`n/a\`.
+5. **Primitive obsession** — string / number passed where a small named type would make intent obvious (e.g., \`string\` for a slug). Verdict: \`introduced \`<TypeName>\`\` / \`skipped: only one call-site\` / \`n/a\`.
+
+### Hard rule: never refactor while RED
+
+REFACTOR commits land **after** GREEN. If you discover a clear refactor opportunity while writing RED or GREEN, write it down in the candidate inventory above for this phase — do **not** apply it before GREEN passes. Refactoring while RED breaks the watched-RED proof and conflates "is the test correct?" with "is the structure pretty?".
+
+### Refactor-only AC verdict (T1-4)
+
+Some AC are intentionally pure refactor — extracting a hook, narrowing a type, inlining a one-shot — with no observable behaviour change. The planner marks these in the AC's verification line ("verifies: existing tests still pass for behaviour X").
+
+For a \`refactor-only\` AC:
+
+- The Coverage line uses verdict \`refactor-only\` and **must list the existing test names that anchor the unchanged behaviour** (file:test-name) — anchor citations are mandatory; "existing tests pass" without specific names is **not** acceptable.
+- The REFACTOR commit's body MUST include a \`No-behavioural-delta:\` evidence block listing:
+  - the **invariant property** preserved (e.g., "for every input \`X\`, return value identical to pre-refactor"),
+  - the **anchored tests** that prove this property (file:test-name list, ≥1 entry, copied from the planner's verification line),
+  - the **suite output** showing the anchored tests pass with identical expected output (the same line count + status appearing in pre-refactor and post-refactor runs).
+- The reviewer cross-checks this evidence: a \`refactor-only\` AC without a No-behavioural-delta block is \`required\` severity (axis=correctness). The reviewer also spot-checks one anchored test by re-reading it, to confirm the test actually exercises the changed code path.
+
+Without the No-behavioural-delta block, "refactor-only" is a label, not a guarantee — slice-builder must produce the evidence; the reviewer must verify it.
+
 If no refactor is warranted, you must say so **explicitly**. Silence fails the gate.
 
 Both paths use commit-helper:
@@ -167,9 +196,56 @@ node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=refactor \\
 # Path B — refactor explicitly skipped:
 node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=refactor --skipped \\
   --message="refactor(AC-N) skipped: 12-line addition, idiomatic"
+
+# Path C — refactor-only AC (no GREEN production change; pure structural):
+git add src/path/to/refactored.ts
+node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=refactor \\
+  --message="$(cat <<'EOF'
+refactor(AC-N): extract useEmailPermission hook
+
+No-behavioural-delta:
+  invariant: hasViewEmail(claims) returns identical bool to pre-refactor
+  anchored tests:
+    - tests/unit/permissions.test.ts: returns null when permission absent
+    - tests/unit/permissions.test.ts: returns email when permission set
+    - tests/integration/request-card.spec.ts: AC-1 happy path
+  suite output (post): 47 passed, 0 failed (same as pre-refactor)
+EOF
+)"
 \`\`\`
 
 \`commit-helper\` records the REFACTOR SHA (or "skipped" sentinel) under \`ac[AC-N].refactor\`. Until \`ac[AC-N]\` has all three phases recorded, the AC's overall status stays \`pending\`.
+
+## Non-functional checks per AC (T1-3, between GREEN and REFACTOR)
+
+Behavioural tests (RED→GREEN) prove the AC encodes its observable outcome. Non-functional checks prove the AC didn't sneak a regression in along an axis the AC text doesn't enforce. Run **both** of the always-on checks below for every AC that produces non-trivial GREEN diff (>30 lines OR >2 files); the security check runs only when triggered.
+
+Append the results to \`build.md\` under a new \`## Non-functional checks\` section, one block per AC.
+
+### Always-on (every AC, strict mode; opt-out only when GREEN diff is ≤30 lines AND ≤2 files)
+
+1. **Branch-coverage delta** — run the project's coverage tool (jest \`--coverage\`, vitest \`--coverage\`, pytest \`--cov\`, go \`test -cover\`, etc.) against the modules in this AC's \`touchSurface\`. Record the **branch coverage % for each touched file** before and after this AC's GREEN+REFACTOR. **Hard rule:** branch coverage may not drop. A coverage drop without a deliberate refactor (e.g., an extracted hook moving uncovered legacy branches into a new file) is \`required\` severity (axis=correctness). Format: \`tests/coverage report → src/lib/permissions.ts: 87% → 92% (+5)\`.
+
+2. **Perf-smoke check** — run the project's smoke perf benchmark if one exists (\`npm run bench:smoke\`, \`pytest tests/perf -k smoke\`, etc.). When no smoke benchmark exists, this check is **skipped with a one-line note** ("no perf-smoke target"); do not invent one. When it does exist, record the median latency (or throughput) for the touched code path before and after. **Hard rule:** a perf regression of >5% requires a one-sentence justification ("acceptable: this path was 0.4ms; +5% is +20μs, far below noise floor"); >25% requires a fix-only or explicit accept-warns from the user.
+
+### Triggered (when the AC's touch surface includes specific markers)
+
+3. **Schema/migration sanity** — when the AC modifies a database schema (\`migrations/\`, \`prisma/schema.prisma\`, \`*.sql\`), run the project's migration dry-run command and confirm both the up and down paths complete successfully. Record the dry-run output. Without a downward path, the AC's \`rollback\` field is unfulfillable — flag this as \`required\` severity (axis=correctness).
+4. **API contract diff** — when the AC modifies a public function signature, an HTTP route, or a published interface (TS \`export\`, JSON schema, OpenAPI YAML), run the project's API-diff tool if one exists (e.g., \`api-extractor\`, \`schemathesis\`) and record the diff. Breaking changes require an architect decision and a CHANGELOG entry; both must be present before the REFACTOR commit lands.
+
+### Opt-out audit trail
+
+When you skip an always-on check (because the GREEN diff is small enough), write **one explicit "skipped" line per check**, with a one-clause reason:
+
+\`\`\`markdown
+## Non-functional checks
+
+### AC-1
+- branch-coverage: skipped — 12-line addition to one file, no new branches.
+- perf-smoke: skipped — pure type narrowing, no execution path change.
+\`\`\`
+
+Silence is **not** acceptable; "looks fine" is **not** acceptable. The reviewer treats absence of the AC's block as severity=\`required\` (axis=correctness) and the slice-builder bounces back in fix-only mode.
 
 ## Build log shape — \`flows/<slug>/build.md\`
 

@@ -117,7 +117,8 @@ async function stampShipFrontmatter(
   acCount: number,
   moved: ArtifactStage[],
   refines: string | null | undefined,
-  legacyArtifacts: boolean
+  legacyArtifacts: boolean,
+  extraMoved: string[] = []
 ): Promise<void> {
   const shipPath = path.join(shippedDir, "ship.md");
   if (!(await exists(shipPath))) {
@@ -142,7 +143,11 @@ _(ship.md was not authored before finalize; minimal stub written by compound.)_
 
 ## Artefact index
 
-${moved.map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`).join("\n")}
+${moved.map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`).join("\n")}${
+      extraMoved.length > 0
+        ? "\n" + extraMoved.map((name) => `- ${name}`).join("\n")
+        : ""
+    }
 ${legacyArtifacts ? "- manifest.md (legacy-artifacts opt-in)" : ""}
 `;
     await writeFileSafe(shipPath, minimal);
@@ -184,9 +189,11 @@ ${legacyArtifacts ? "- manifest.md (legacy-artifacts opt-in)" : ""}
     }
   }
 
-  const indexSection = `\n\n## Artefact index\n\n${moved
-    .map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`)
-    .join("\n")}${legacyArtifacts ? "\n- manifest.md (legacy-artifacts opt-in)" : ""}\n`;
+  const knownLines = moved.map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`).join("\n");
+  const extraLines =
+    extraMoved.length > 0 ? "\n" + extraMoved.map((name) => `- ${name}`).join("\n") : "";
+  const legacyLine = legacyArtifacts ? "\n- manifest.md (legacy-artifacts opt-in)" : "";
+  const indexSection = `\n\n## Artefact index\n\n${knownLines}${extraLines}${legacyLine}\n`;
   const bodyHasIndex = /^## Artefact index$/m.test(docBody);
   const nextBody = bodyHasIndex
     ? docBody
@@ -259,10 +266,31 @@ export async function runCompoundAndShip(
     "learnings",
     "pre-mortem"
   ];
+  const knownArtifactFileNames = new Set<string>();
   for (const stage of allStages) {
     const source = activeArtifactPath(projectRoot, stage, slug);
     const destination = shippedArtifactPath(projectRoot, slug, stage);
     if (await moveIfExists(source, destination)) moved.push(stage);
+    knownArtifactFileNames.add(ARTIFACT_FILE_NAMES[stage]);
+  }
+
+  // T0-10: scan the active dir for any *additional* artifacts the slug emitted
+  // (research-repo.md, research-learnings.md on legacy mode, cancel.md, future
+  // handoff.json / continue-here.md, hooks output, etc.) and move them too.
+  // Without this, those files stay behind in the active dir and become orphans
+  // when flow-state resets. The fixed `allStages` list above covers the
+  // canonical 7 artefact ids; the scan covers everything else by name.
+  const extraMoved: string[] = [];
+  const activeDir = activeArtifactDir(projectRoot, slug);
+  if (await exists(activeDir)) {
+    const entries = await fs.readdir(activeDir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (knownArtifactFileNames.has(entry.name)) continue;
+      const source = path.join(activeDir, entry.name);
+      const destination = path.join(shippedDir, entry.name);
+      if (await moveIfExists(source, destination)) extraMoved.push(entry.name);
+    }
   }
 
   const config = await readConfig(projectRoot);
@@ -277,7 +305,8 @@ export async function runCompoundAndShip(
     state.ac.length,
     moved,
     options.refines ?? null,
-    legacyArtifacts
+    legacyArtifacts,
+    extraMoved
   );
 
   if (legacyArtifacts) {
@@ -287,7 +316,6 @@ export async function runCompoundAndShip(
     );
   }
 
-  const activeDir = activeArtifactDir(projectRoot, slug);
   if (await exists(activeDir)) {
     const remaining = await fs.readdir(activeDir);
     if (remaining.length === 0) await removePath(activeDir);
