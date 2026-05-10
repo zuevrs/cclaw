@@ -2,24 +2,34 @@
 import path from "node:path";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { CCLAW_VERSION } from "./constants.js";
+import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js";
-import { configureLogger, error as logError, info } from "./logger.js";
+import {
+  configureLogger,
+  error as logError,
+  getStdout,
+  info,
+  writeOut
+} from "./logger.js";
+import { detectHarnesses } from "./harness-detect.js";
+import { exists } from "./fs-utils.js";
+import { readConfig } from "./config.js";
+import {
+  renderBanner,
+  renderHelpSections,
+  renderProgress,
+  renderSummary,
+  renderWelcome,
+  shouldUseColor,
+  type ProgressEvent
+} from "./ui.js";
 import { HARNESS_IDS, type CliContext, type HarnessId } from "./types.js";
 
-const HELP_BODY = `cclaw v${CCLAW_VERSION} — harness installer / sync.
+const TAGLINE = "harness-first flow toolkit for coding agents";
 
-Usage: cclaw <command> [options]
+const HELP_USAGE = `Usage: cclaw <command> [options]`;
 
-Commands:
-  init                Install cclaw assets in the current project.
-  sync                Reapply cclaw assets to match the current code (idempotent).
-  upgrade             Sync after upgrading the cclaw-cli npm package.
-  uninstall           Remove cclaw assets from the current project.
-  help                Show this help.
-  version             Print the version.
-
-Harness selection:
+const HELP_NOTES = `Harness selection:
   - If --harness=<id>[,<id>] is passed, install for those.
   - Otherwise, the existing .cclaw/config.yaml (if any) wins.
   - Otherwise, in an interactive TTY, cclaw shows a checkbox picker
@@ -28,11 +38,22 @@ Harness selection:
     root markers (.claude/, .cursor/, .opencode/, .codex/, .agents/skills/,
     CLAUDE.md, opencode.json) and exits with an error if nothing is found.
 
-Flow control (plan / build / review / ship) lives inside the harness via the /cc command, not in this CLI. There is no \`cclaw plan\`, \`cclaw status\`, \`cclaw ship\`, or \`cclaw migrate\` — by design.
+Flow control (plan / build / review / ship) lives inside the harness via
+the /cc command, not in this CLI. There is no \`cclaw plan\`, \`cclaw status\`,
+\`cclaw ship\`, or \`cclaw migrate\` — by design.`;
 
-Options:
-  --harness=<id>[,<id>]  Comma-separated list. Supported: ${HARNESS_IDS.join(", ")}.
-`;
+const HELP_COMMANDS: ReadonlyArray<readonly [string, string]> = [
+  ["init", "Install cclaw assets in the current project."],
+  ["sync", "Reapply cclaw assets to match the current code (idempotent)."],
+  ["upgrade", "Sync after upgrading the cclaw-cli npm package."],
+  ["uninstall", "Remove cclaw assets from the current project."],
+  ["help", "Show this help."],
+  ["version", "Print the version."]
+];
+
+const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
+  ["--harness=<id>[,<id>]", `Comma-separated list. Supported: ${HARNESS_IDS.join(", ")}.`]
+];
 
 interface ParsedArgs {
   command: string;
@@ -62,40 +83,88 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { command, harnesses, flags };
 }
 
+function emitBanner(useColor: boolean): void {
+  writeOut(renderBanner({ version: CCLAW_VERSION, tagline: TAGLINE, useColor }));
+}
+
+function emitHelp(useColor: boolean): void {
+  writeOut(`  ${HELP_USAGE}\n`);
+  writeOut(
+    renderHelpSections(
+      [
+        { heading: "Commands", rows: HELP_COMMANDS },
+        { heading: "Options", rows: HELP_OPTIONS }
+      ],
+      useColor
+    )
+  );
+  writeOut(`\n\n  ${HELP_NOTES.split("\n").join("\n  ")}\n`);
+}
+
+function makeProgressPrinter(useColor: boolean): (event: ProgressEvent) => void {
+  return (event: ProgressEvent) => {
+    writeOut(renderProgress(event, useColor));
+  };
+}
+
+async function isFirstRun(cwd: string): Promise<boolean> {
+  return !(await exists(path.join(cwd, RUNTIME_ROOT, "config.yaml")));
+}
+
 export async function runCli(argv: string[], context: CliContext): Promise<number> {
   configureLogger(context.stdout, context.stderr);
   const args = parseArgs(argv);
+  const stdout = getStdout();
+  const useColor = shouldUseColor(stdout);
+
   switch (args.command) {
     case "init": {
+      const firstRun = await isFirstRun(context.cwd);
+      const detected = firstRun ? await detectHarnesses(context.cwd) : [];
+      emitBanner(useColor);
+      if (firstRun) writeOut(renderWelcome({ detected, useColor }));
       const result = await initCclaw({
         cwd: context.cwd,
         harnesses: args.harnesses,
-        interactive: true
+        interactive: true,
+        onProgress: makeProgressPrinter(useColor)
       });
+      writeOut(renderSummary(result.counts, useColor));
       info(`[cclaw] init complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
       return 0;
     }
     case "sync": {
+      emitBanner(useColor);
       const result = await syncCclaw({
         cwd: context.cwd,
         harnesses: args.harnesses,
-        interactive: true
+        interactive: true,
+        onProgress: makeProgressPrinter(useColor)
       });
+      writeOut(renderSummary(result.counts, useColor));
       info(`[cclaw] sync complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
       return 0;
     }
     case "upgrade": {
+      emitBanner(useColor);
       const result = await upgradeCclaw({
         cwd: context.cwd,
         harnesses: args.harnesses,
-        interactive: true
+        interactive: true,
+        onProgress: makeProgressPrinter(useColor)
       });
+      writeOut(renderSummary(result.counts, useColor));
       info(`[cclaw] upgrade complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
       return 0;
     }
     case "uninstall": {
+      const config = await readConfig(context.cwd);
+      const harnesses = config?.harnesses ?? [];
+      emitBanner(useColor);
       await uninstallCclaw({ cwd: context.cwd });
-      info("[cclaw] uninstall complete.");
+      info(
+        `[cclaw] uninstall complete.${harnesses.length > 0 ? ` Removed: ${harnesses.join(", ")}` : ""}`
+      );
       return 0;
     }
     case "version":
@@ -106,7 +175,8 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     case "help":
     case "--help":
     case "-h":
-      info(HELP_BODY);
+      emitBanner(useColor);
+      emitHelp(useColor);
       return 0;
     case "plan":
     case "status":
@@ -118,7 +188,7 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
       return 2;
     default:
       logError(`[cclaw] unknown command: ${args.command}`);
-      logError(HELP_BODY);
+      emitHelp(useColor);
       return 2;
   }
 }

@@ -39,6 +39,7 @@ import { ensureGitignorePatterns, removeGitignorePatterns } from "./gitignore.js
 import { isInteractive, runPicker } from "./harness-prompt.js";
 import { HARNESS_IDS, type HarnessId } from "./types.js";
 import { ironLawsMarkdown } from "./content/iron-laws.js";
+import type { ProgressEvent, SummaryCounts } from "./ui.js";
 
 export interface HarnessLayout {
   id: HarnessId;
@@ -90,11 +91,24 @@ export interface SyncOptions {
    * a hard error if nothing is found.
    */
   interactive?: boolean;
+  /**
+   * Optional progress callback invoked once per major install step
+   * (agents written, hooks installed, etc.). The CLI wires this to a
+   * `✓` line printer; programmatic callers (smoke, tests, MCP wrappers)
+   * can leave it undefined to stay silent.
+   */
+  onProgress?: (event: ProgressEvent) => void;
 }
 
 export interface SyncResult {
   installedHarnesses: HarnessId[];
   configPath: string;
+  /**
+   * Counts of every asset family written during this sync. Surfaced so
+   * the CLI can render an "Installed: ..." summary block, and so tests
+   * can assert against concrete numbers without re-reading the disk.
+   */
+  counts: SummaryCounts;
 }
 
 export async function ensureRuntimeRoot(projectRoot: string): Promise<void> {
@@ -285,6 +299,10 @@ async function resolveHarnesses(
 
 export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   const projectRoot = options.cwd;
+  const emit = (step: string, detail?: string): void => {
+    options.onProgress?.({ step, detail });
+  };
+
   await ensureRuntimeRoot(projectRoot);
   const existing = await readConfig(projectRoot);
   const harnesses = await resolveHarnesses(
@@ -302,27 +320,69 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     ? { ...existing, version: CCLAW_VERSION, flowVersion: "8" as const, harnesses }
     : createDefaultConfig(harnesses);
   await ensureRunSystem(projectRoot);
+  emit("Runtime root", `.cclaw/{state,hooks,flows,lib}`);
+
   await writeAgentFiles(projectRoot);
+  emit("Wrote specialists", `${CORE_AGENTS.length} agents → .cclaw/lib/agents/`);
+
   for (const hook of NODE_HOOKS) {
     await writeHookFile(projectRoot, hook);
   }
+  emit("Wrote hooks", `${NODE_HOOKS.length} hooks → .cclaw/hooks/`);
+
   await writeRuntimeSkills(projectRoot);
   await writeMetaSkill(projectRoot);
+  emit("Wrote skills", `${AUTO_TRIGGER_SKILLS.length + 1} skills → .cclaw/lib/skills/`);
+
   await writeTemplates(projectRoot);
+  emit("Wrote templates", `${ARTIFACT_TEMPLATES.length + 1} templates → .cclaw/lib/templates/`);
+
   await writeStageRunbooks(projectRoot);
+  emit("Wrote runbooks", `${STAGE_PLAYBOOKS.length} stage runbooks → .cclaw/lib/runbooks/`);
+
   await writeReferencePatterns(projectRoot);
+  emit("Wrote patterns", `${REFERENCE_PATTERNS.length} reference patterns → .cclaw/lib/patterns/`);
+
   await writeResearchPlaybooks(projectRoot);
+  emit("Wrote research", `${RESEARCH_PLAYBOOKS.length} research playbooks → .cclaw/lib/research/`);
+
   await writeRecoveryPlaybooks(projectRoot);
+  emit("Wrote recovery", `${RECOVERY_PLAYBOOKS.length} recovery playbooks → .cclaw/lib/recovery/`);
+
   await writeExamples(projectRoot);
+  emit("Wrote examples", `${EXAMPLES.length} worked examples → .cclaw/lib/examples/`);
+
   await writeAntipatterns(projectRoot);
   await writeDecisionProtocol(projectRoot);
   await writeIdeasSeed(projectRoot);
+  emit("Wrote anti-patterns + decision protocol", "antipatterns.md + decision-protocol.md");
+
   for (const harness of harnesses) {
     await writeHarnessAssets(projectRoot, HARNESS_LAYOUTS[harness]);
   }
+  emit(
+    "Wired harnesses",
+    `${harnesses.join(", ")} → commands · agents · skills${harnesses.some((h) => HARNESS_LAYOUTS[h].hooksConfig) ? " · hooks" : ""}`
+  );
+
   await ensureGitignorePatterns(projectRoot);
   const configPath = await writeConfig(projectRoot, config);
-  return { installedHarnesses: harnesses, configPath };
+  emit("Wrote .cclaw/config.yaml", `harnesses: ${harnesses.join(", ")}`);
+
+  const counts: SummaryCounts = {
+    harnesses: [...harnesses],
+    agents: CORE_AGENTS.length,
+    skills: AUTO_TRIGGER_SKILLS.length + 1,
+    templates: ARTIFACT_TEMPLATES.length + 1,
+    runbooks: STAGE_PLAYBOOKS.length,
+    patterns: REFERENCE_PATTERNS.length,
+    research: RESEARCH_PLAYBOOKS.length,
+    recovery: RECOVERY_PLAYBOOKS.length,
+    examples: EXAMPLES.length,
+    hooks: NODE_HOOKS.length,
+    commands: 3
+  };
+  return { installedHarnesses: harnesses, configPath, counts };
 }
 
 export async function initCclaw(options: SyncOptions): Promise<SyncResult> {
