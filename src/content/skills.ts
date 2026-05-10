@@ -1278,6 +1278,21 @@ The AC id stays the same; commit messages cite \`F-N\`.
 ## When TDD does not apply
 
 The single exception is **bootstrap of the test framework itself** — a slug whose AC-1 is "test framework installed and one passing example test exists". In that case the orchestrator must mark the slug as \`build_profile: bootstrap\` in plan frontmatter, and \`commit-helper\` accepts the GREEN commit without a prior RED for AC-1 only. Every subsequent AC and every other slug uses the full cycle.
+
+## Anti-rationalization table (T2-8, addyosmani pattern; v8.13)
+
+This table is the **explicit list of excuses an agent will produce to skip the cycle**, paired with the truth. When you catch yourself thinking the left column, do the right column instead. Surface the rationalization in your slim-summary Notes when you choose the right column anyway, so the reviewer can see the discipline.
+
+| rationalization | truth |
+| --- | --- |
+| "This is a 5-line change, RED isn't worth the time." | RED takes 60-90 seconds and produces an audit trail. Without it, you're trusting a 5-line read against a 500-line context. The cost was always paid by the next agent who had to verify it. |
+| "I already know this works because I tested it manually." | Manual tests don't ship; the watched-RED proof does. The next agent who reads the build log can't repeat your manual test. |
+| "The full suite is slow; I'll just run the test for this AC." | A regression in another module makes the diff non-shippable regardless of whether your AC's test passes. Run the relevant suite, not the single test. |
+| "REFACTOR is unnecessary here, the GREEN code is already clean." | Then say so explicitly with \`--phase=refactor --skipped\` and a one-line reason. Silence on REFACTOR fails the gate; explicit skip is fine. |
+| "I added a try/catch around the failing path so the test passes." | The RED test was supposed to fail because the production code was wrong; suppressing the error doesn't fix it. Restore the failure, then fix the production code. |
+| "I mocked the database to make the test green faster." | A-3 finding. Real DB > in-memory fake > stub > mock. Reach for the simplest level that gets the job done. |
+| "The test file named \`AC-1.test.ts\` is fine — it's clearer where this test lives." | Required-severity finding. Tests are named after the unit under test; the AC id lives in the test name + commit message. \`tests/unit/permissions.test.ts\` is correct. |
+| "I bypassed commit-helper just this once because the script was slow." | The traceability gate is the contract. Bypassing it once breaks resume / review / ship for everyone downstream. Restore the chain or surface the script bug as an A-N finding. |
 `;
 
 const BREAKING_CHANGES = `---

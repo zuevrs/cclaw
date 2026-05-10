@@ -158,6 +158,31 @@ The flow has seven hops, in order:
 
 Skipping any hop is a bug; the gates downstream will fail. Read \`triage-gate.md\`, \`pre-flight-assumptions.md\`, \`flow-resume.md\`, \`tdd-cycle.md\` (active during build), and \`ac-traceability.md\` (active in strict mode) before starting.
 
+## Namespace router (T3-1, gsd pattern; v8.13)
+
+In addition to \`/cc <task>\` and \`/cc-cancel\` / \`/cc-idea\`, v8.13 documents an optional **namespaced entry surface** for harnesses that want to expose stage-specific shortcuts. These are not mandatory commands; they are documented routes the harness MAY register alongside \`/cc\`. They all map back to \`/cc\` semantics with a stage-specific entry hint:
+
+| route | maps to | when to register |
+| --- | --- | --- |
+| \`/cc-plan <task>\` | \`/cc <task> --enter=plan\` | user wants to start a flow but stop after plan-stage approval |
+| \`/cc-build\` | \`/cc --enter=build\` | active flow is at \`currentStage: plan\` and the user wants to skip the resume summary |
+| \`/cc-review\` | \`/cc --enter=review\` | active flow is at \`currentStage: build\` |
+| \`/cc-ship\` | \`/cc --enter=ship\` | active flow is at \`currentStage: review\` |
+| \`/cc-compound-refresh\` | manual trigger for §Compound-refresh sub-step | run T2-4 dedup pass on demand |
+
+Harnesses that don't register the routes still work — \`/cc\` alone covers everything. The namespace-router exists to let harnesses with command palettes (Cursor, Claude Code) surface stage-specific shortcuts without inventing their own semantics; cclaw's behaviour stays single-spine.
+
+## Two-reviewer per-task loop (T3-3, obra pattern; v8.13)
+
+For high-risk slugs (large-risky complexity OR \`security_flag: true\`), the reviewer dispatch optionally splits into a **two-pass loop**: spec-review first, then code-quality-review. Each pass runs as a separate reviewer iteration but with a sharper focus, producing two independent decision signals.
+
+- **Pass 1 — spec-review** — does the diff actually do what the AC says? Cross-references AC text → verification line → test → production code. Produces correctness + test-quality findings only. Decision: \`spec-clear\` / \`spec-block\` / \`spec-warn\`.
+- **Pass 2 — code-quality-review** — given the diff is doing the right thing (Pass 1 cleared), is it doing it well? Covers readability + architecture + complexity-budget + perf. Produces those-axis findings only. Decision: \`quality-clear\` / \`quality-block\` / \`quality-warn\`.
+
+Pass 2 runs only when Pass 1 returned \`spec-clear\`. A \`spec-block\` or \`spec-warn\` decision skips Pass 2 entirely (the code is fundamentally not doing the right thing yet — quality review on broken behaviour is wasted work).
+
+The two-pass mode is opt-in via \`config.reviewerTwoPass: true\` in \`.cclaw/config.yaml\`, OR auto-triggered when \`triage.complexity == "large-risky"\` AND \`security_flag: true\` (the highest-risk band). Single-pass reviewer (the v8.12 default) remains the standard for small/medium and untriggered large-risky slugs — the two-pass cost is justified only on the high-risk band.
+
 ## Hop 1 — Detect
 
 Read \`.cclaw/state/flow-state.json\`.
