@@ -51,6 +51,10 @@ try {
       throw new Error(`smoke check failed: .cclaw/lib/${dir}/ missing after init`);
     }
   }
+  // v8.12: artefact templates ship `manifest.md` for legacy-artifacts: true
+  // path (template is preserved for back-compat) but the runtime no longer
+  // writes `manifest.md` by default — `ship.md` carries the manifest data
+  // in its frontmatter.
   for (const tpl of ["plan.md", "build.md", "review.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "templates", tpl))) {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
@@ -66,24 +70,22 @@ try {
       throw new Error(`smoke check failed: runbook ${runbook} missing after init`);
     }
   }
-  for (const pattern of ["api-endpoint.md", "auth-flow.md", "schema-migration.md", "ui-component.md", "perf-fix.md", "refactor.md", "security-hardening.md", "doc-rewrite.md"]) {
+  // v8.12 trimmed reference patterns 8 → 2.
+  for (const pattern of ["auth-flow.md", "security-hardening.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "patterns", pattern))) {
       throw new Error(`smoke check failed: pattern ${pattern} missing after init`);
     }
   }
-  for (const recovery of ["ac-traceability-break.md", "review-cap-reached.md", "parallel-build-conflict.md", "frontmatter-corruption.md", "schema-mismatch.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "lib", "recovery", recovery))) {
-      throw new Error(`smoke check failed: recovery ${recovery} missing after init`);
+  for (const stalePattern of ["api-endpoint.md", "schema-migration.md", "ui-component.md", "perf-fix.md", "refactor.md", "doc-rewrite.md"]) {
+    if (existsSync(join(tempDir, ".cclaw", "lib", "patterns", stalePattern))) {
+      throw new Error(`smoke check failed: deleted pattern ${stalePattern} should not be present after v8.12`);
     }
   }
-  for (const example of ["plan-small.md", "plan-parallel-build.md", "build-log.md", "review-log.md", "ship-notes.md", "decision-permission-cache.md", "learning-record.md", "commit-helper-session.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "lib", "examples", example))) {
-      throw new Error(`smoke check failed: example ${example} missing after init`);
-    }
-  }
-  for (const research of ["reading-codebase.md", "time-boxing.md", "prior-slugs.md"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "lib", "research", research))) {
-      throw new Error(`smoke check failed: research ${research} missing after init`);
+  // v8.12 deleted all 5 recovery, 3 research, 8 examples libraries.
+  // Each directory now ships only its index.md note explaining the cleanup.
+  for (const dir of ["recovery", "research", "examples"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", dir, "index.md"))) {
+      throw new Error(`smoke check failed: ${dir}/index.md missing after init`);
     }
   }
   if (!existsSync(join(tempDir, ".cclaw", "lib", "antipatterns.md"))) {
