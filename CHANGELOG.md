@@ -1,5 +1,44 @@
 # Changelog
 
+## 8.10.1 — Picker erase-frame fix: banner/welcome survive picker render; no leftovers in scrollback
+
+### Why
+
+Real-world install run on `cclaw-cli@8.10.0` revealed two regressions in the freshly-shipped TUI:
+
+1. **The full-screen clear at the top of the picker (`\u001b[2J\u001b[H`) was wiping the banner and welcome card** that had just been printed two function calls earlier. Users running `cclaw init` interactively saw the picker first — never the new ASCII logo, never the "Welcome to cclaw" intro. The whole point of the 8.10 banner work was silently nullified the moment the picker started rendering.
+2. **The picker frame stayed in the terminal scrollback after `Enter`**. The `cleanup` function in `runPicker` reset raw mode and detached the keypress listener, but never erased the last-drawn picker frame. So users got: `cclaw — choose harness(es)…` block stuck above the install progress as visual leftover. Looked dirty, looked unfinished, hid signal under noise.
+
+Both bugs are fixed by the same idea: stop using full-screen escapes, and let the picker manage only its own region.
+
+### What changed
+
+**F1 — Cursor-up + clear-line redraw replaces full-screen clear.** `harness-prompt.ts` ditches `stdout.write("\u001b[2J\u001b[H")` (clear screen + home cursor — clobbers everything above). Two new pure helpers do the work:
+
+- `eraseLines(count): string` builds an ANSI sequence that walks the cursor up `count` rows and clears each one, then `\r` to column 0. Returns `""` for `count <= 0` so the very first picker render emits nothing harmful when there is no previous frame yet.
+- `frameLineCount(frame): number` counts newline-terminated lines in a rendered frame string (every line ends with `\n`, so `split("\n").length - 1`).
+
+`runPicker` now tracks `lastFrameHeight` across renders. On every redraw, it issues `eraseLines(lastFrameHeight)` first (no-op on the very first render — `lastFrameHeight` is still 0), then writes the new frame and updates the height. The banner and welcome card above the picker are never touched.
+
+**F2 — Picker frame is erased on `cleanup`, not left in scrollback.** `cleanup()` now issues one final `eraseLines(lastFrameHeight)` before tearing down raw mode and detaching the listener. After `Enter` (or `Esc` / `Ctrl-C`), the picker disappears; install progress lines start at the row where the picker frame began. Whatever was above the picker (banner, welcome) stays. No more "ghost picker" stuck in the terminal scrollback.
+
+**F3 — Vertical rhythm cleanup.** `renderBanner`, `renderSummary`, and `renderWelcome` in `src/ui.ts` now end with `\n\n` instead of `\n`, baking exactly one blank line of breathing room between every two sections. `renderWelcome` lost its leading `\n` (the banner's new trailing `\n\n` already provides the gap). Visible effect:
+
+- `cclaw help` now shows a blank line between `cclaw vX.Y.Z — …` and `Usage: cclaw <command> [options]` instead of cramming them together.
+- `init` / `sync` / `upgrade` show a blank line between the final `Commands  3` summary row and the `[cclaw] init complete.` info line — used to be flush against each other.
+- `init` (auto-detect, no picker) shows a blank line between the welcome `Detected harness: cursor (pre-selected).` and the first `✓ Runtime root` progress event.
+
+### What did not change
+
+- Public CLI surface, hop sequence, stage layout, specialist roster, schema files.
+- Picker key handling (`applyKey`, hotkey behaviour, message rendering).
+- The pure `renderPickerFrame(state, detected, useColor): string` function — only the wrapper around it changed.
+- All non-TTY paths (CI, smoke, npx with stdio piped). `eraseLines` is only emitted when `runPicker` actually runs, which requires `isInteractive() === true`.
+
+### Migration
+
+Drop-in patch from 8.10.0. No new commands, no new config keys, no new flags, no new dependencies. Anyone scripting against `cclaw init` / `sync` / `upgrade` stdout that depended on the previous trailing-`\n` rhythm will see one extra blank line between sections — the existing `[cclaw] … complete.` completion line is unchanged.
+
 ## 8.10.0 — Install UX polish: ASCII banner, progress feedback, summary, first-run welcome
 
 ### Why

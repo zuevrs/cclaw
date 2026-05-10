@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyKey,
   createPickerState,
+  eraseLines,
+  frameLineCount,
   isInteractive,
   renderPickerFrame,
   selectionToList,
@@ -152,6 +154,53 @@ describe("harness-prompt: renderPickerFrame", () => {
     const withMessage = applyKey(empty, "\r").state;
     const out = renderPickerFrame(withMessage, new Set<HarnessId>(), false);
     expect(out).toContain("Select at least one harness.");
+  });
+});
+
+describe("harness-prompt: eraseLines", () => {
+  it("returns empty string for count <= 0 (no-op on first render)", () => {
+    expect(eraseLines(0)).toBe("");
+    expect(eraseLines(-1)).toBe("");
+  });
+
+  it("emits N copies of `\\u001b[1A\\u001b[2K` plus trailing `\\r`", () => {
+    expect(eraseLines(1)).toBe("\u001b[1A\u001b[2K\r");
+    expect(eraseLines(3)).toBe("\u001b[1A\u001b[2K\u001b[1A\u001b[2K\u001b[1A\u001b[2K\r");
+  });
+
+  it("does NOT emit the screen-clear escape `\\u001b[2J` (which would wipe banner/welcome)", () => {
+    for (const count of [1, 5, 10, 25]) {
+      expect(eraseLines(count)).not.toContain("\u001b[2J");
+      expect(eraseLines(count)).not.toContain("\u001b[H");
+    }
+  });
+});
+
+describe("harness-prompt: frameLineCount", () => {
+  it("counts newline-terminated lines (last line ends with `\\n`)", () => {
+    expect(frameLineCount("a\nb\nc\n")).toBe(3);
+    expect(frameLineCount("only-one-line\n")).toBe(1);
+  });
+
+  it("returns 0 for empty frame (idempotent erase guard)", () => {
+    expect(frameLineCount("")).toBe(0);
+  });
+
+  it("matches the line count of an actual rendered picker frame", () => {
+    const state = createPickerState(["cursor"], 0);
+    const frame = renderPickerFrame(state, new Set<HarnessId>(["cursor"]), false);
+    const count = frameLineCount(frame);
+    expect(count).toBeGreaterThan(HARNESS_IDS.length);
+    expect(frame.split("\n").length - 1).toBe(count);
+  });
+});
+
+describe("harness-prompt: renderPickerFrame (no screen clear)", () => {
+  it("does NOT emit `\\u001b[2J` (full-screen clear) — that would wipe banner/welcome above the picker", () => {
+    const state = createPickerState(["cursor"], 0);
+    const frame = renderPickerFrame(state, new Set<HarnessId>(["cursor"]), true);
+    expect(frame).not.toContain("\u001b[2J");
+    expect(frame).not.toContain("\u001b[H");
   });
 });
 

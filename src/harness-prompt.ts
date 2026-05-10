@@ -182,14 +182,37 @@ export function renderPickerFrame(
   return `${lines.join("\n")}\n`;
 }
 
-function renderFrame(
-  state: PickerState,
-  detected: ReadonlySet<HarnessId>,
-  stdout: NodeJS.WriteStream,
-  useColor: boolean
-): void {
-  stdout.write("\u001b[2J\u001b[H");
-  stdout.write(renderPickerFrame(state, detected, useColor));
+/**
+ * Build the ANSI escape sequence that erases `count` previous lines and
+ * leaves the cursor at column 0 of the topmost erased row.
+ *
+ *  `\u001b[1A` — move cursor up one line, keeping the column.
+ *  `\u001b[2K` — clear the entire line cursor sits on, no cursor move.
+ *  `\r`        — carriage return (column 0) so the next write starts clean.
+ *
+ * Returning `""` for `count <= 0` keeps the very first picker render
+ * (when there is no previous frame) from emitting a stray `\r` that
+ * could nudge the cursor inside an existing line of output above the
+ * picker (banner, welcome card).
+ */
+export function eraseLines(count: number): string {
+  if (count <= 0) return "";
+  return "\u001b[1A\u001b[2K".repeat(count) + "\r";
+}
+
+/**
+ * Number of newline-terminated lines a rendered frame string occupies.
+ * `renderPickerFrame` always ends each line — including the last — with
+ * `\n`, so splitting on `\n` produces `lines + 1` chunks (the trailing
+ * empty string after the final newline). We subtract that one back out.
+ *
+ * Exposed for unit tests; runPicker uses it internally to size the
+ * cursor-up + clear-line erasure when it redraws or cleans up.
+ */
+export function frameLineCount(frame: string): number {
+  if (frame.length === 0) return 0;
+  const parts = frame.split("\n");
+  return parts.length - 1;
 }
 
 export async function runPicker(options: PromptOptions): Promise<HarnessId[]> {
@@ -201,11 +224,29 @@ export async function runPicker(options: PromptOptions): Promise<HarnessId[]> {
   let state = createPickerState(initial);
 
   const wasRaw = Boolean(stdin.isRaw);
+  let lastFrameHeight = 0;
+
+  const renderFrame = (): void => {
+    if (lastFrameHeight > 0) {
+      stdout.write(eraseLines(lastFrameHeight));
+    }
+    const frame = renderPickerFrame(state, detectedSet, useColor);
+    stdout.write(frame);
+    lastFrameHeight = frameLineCount(frame);
+  };
 
   return new Promise<HarnessId[]>((resolve, reject) => {
     let settled = false;
 
     const cleanup = (): void => {
+      // Erase the picker frame entirely so it does not pollute the terminal
+      // scrollback. Whatever was on screen above the picker (banner,
+      // welcome card) stays where it is; install progress lines start
+      // immediately after, with no stale picker leftovers in between.
+      if (lastFrameHeight > 0) {
+        stdout.write(eraseLines(lastFrameHeight));
+        lastFrameHeight = 0;
+      }
       stdin.off("data", onData);
       try {
         stdin.setRawMode?.(wasRaw);
@@ -213,7 +254,6 @@ export async function runPicker(options: PromptOptions): Promise<HarnessId[]> {
         // ignore — terminal might already be torn down
       }
       if (!wasRaw) stdin.pause();
-      stdout.write("\n");
     };
 
     const onData = (chunk: Buffer): void => {
@@ -221,7 +261,7 @@ export async function runPicker(options: PromptOptions): Promise<HarnessId[]> {
       const key = chunk.toString("utf8");
       const update = applyKey(state, key);
       state = update.state;
-      renderFrame(state, detectedSet, stdout, useColor);
+      renderFrame();
       if (update.outcome === "confirm") {
         settled = true;
         cleanup();
@@ -239,7 +279,7 @@ export async function runPicker(options: PromptOptions): Promise<HarnessId[]> {
       stdin.setRawMode?.(true);
       stdin.resume();
       stdin.on("data", onData);
-      renderFrame(state, detectedSet, stdout, useColor);
+      renderFrame();
     } catch (err) {
       cleanup();
       reject(err instanceof Error ? err : new Error(String(err)));
