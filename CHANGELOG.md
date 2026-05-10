@@ -1,5 +1,49 @@
 # Changelog
 
+## 8.9.0 — Knowledge dedup, slice-builder coverage beat, flow-pressure feedback
+
+### Why
+
+Three concrete improvements distilled from a parallel audit of `addyosmani-skills` (post-30-Apr commits), `everyinc-compound`, and `gsd-v1` against `cclaw` v8.8. Most ideas in those references were rejected outright (multi-flow factories, marketplace converters, 30+ specialists, prose-lock contract tests, version-archaeology rhetoric — see [the rejection list in the v8.9 PR](https://github.com/zuevrs/cclaw/pull/234) for why). The three that survived address concrete failure modes that were already happening in real flows:
+
+1. `knowledge.jsonl` was append-only with no dedup. After 50+ shipped flows the file was full of near-duplicate "rate-limit middleware bug fixed in src/auth/" entries that the `learnings-research` helper had to wade through.
+2. The slice-builder loop had no explicit beat for "did the test I just wrote actually exercise the production change I just made?". GREEN passing was treated as proof of coverage; in practice GREEN sometimes passed because the test asserted the wrong branch or because pre-existing tests already covered the code path the AC was supposed to introduce.
+3. Long flows (10+ AC, multiple fix iterations, repeated reviewer rounds) silently degraded mid-flow as `flows/<slug>/build.md` and `review.md` accumulated bytes. The agent had no signal that re-reading these on every dispatch was eating context.
+
+### What changed
+
+**A3 — `knowledge.jsonl` near-duplicate detection on append.** `KnowledgeEntry` now carries optional `touchSurface: string[]` and `dedupeOf: string | null` fields (back-compat: legacy entries without these still validate). New helper `findNearDuplicate(projectRoot, candidate, options?)` scans the most recent 50 entries (configurable) and computes Jaccard similarity over `tags ∪ touchSurface`; returns the highest-similarity match if it crosses the 0.6 threshold (configurable). `runCompoundAndShip` accepts `touchSurface`, `tags`, and `dedupOptions` in `CompoundRunOptions`, runs dedup before append, and stamps `dedupeOf: <earlier-slug>` on the new entry when a near-duplicate is found. The append remains append-only (no jsonl rewriting; concurrent-write safety preserved); the new entry just carries metadata pointing at the earlier match. `learnings-research` and human readers see the chain. The `CompoundRunResult` exposes the matched entry for orchestrator messaging. Caller can disable dedup via `dedupOptions: { disable: true }` for tests or special cases.
+
+**A5 — Slice-builder coverage-assess beat between GREEN and REFACTOR.** New hard rule 17 in `slice-builder.ts`: after GREEN passes the full suite and before the REFACTOR commit, the slice-builder writes one explicit Coverage line per AC to `build.md` with one of three verdicts:
+
+- `full` — every observable branch of the GREEN diff is covered by the RED test or pre-existing tests (with file:line refs).
+- `partial` — at least one branch is uncovered, with a named reason ("covered by integration test we don't run here" / "edge case deferred to follow-up slug `<slug>`"). Anything else is a stop-the-line — write a second RED test before moving on.
+- `refactor-only` — pure structural change, behaviour anchored by existing tests.
+
+Silence is not acceptable; "looks fine" is not acceptable. The strict `BUILD_TEMPLATE` gains a `## Coverage assessment` table; the soft `BUILD_TEMPLATE_SOFT` gains a `**Coverage**:` bullet. The slice-builder's `self_review[]` array now carries five rule attestations (was four): `tests-fail-then-pass`, `build-clean`, `no-shims`, `touch-surface-respected`, **`coverage-assessed`**. The orchestrator's pause hop (`start-command.ts`) inspects all five before dispatching the reviewer; an absent or `verified: false` `coverage-assessed` entry triggers a fix-only bounce without paying for a reviewer cycle.
+
+**B2 — Flow-pressure advisory in `session-start.mjs`.** The session-start hook now sums the byte size of every `flows/<slug>/*.md` artefact for the active slug and emits an advisory message at three thresholds:
+
+- `≥30 KB` — *Elevated*: "let the orchestrator dispatch a fresh sub-agent for the next AC rather than continuing inline."
+- `≥60 KB` — *High*: "finish the active slice in this session and resume from a clean session for the next AC."
+- `≥100 KB` — *Critical*: "consider `/cc-cancel` and resplitting into smaller slugs, or finalising the current slug now and continuing in a follow-up flow."
+
+The hook stays advisory: it logs to stdout (alongside the existing active-flow line) and never blocks. The agent reads this on every session start and adjusts its dispatch posture; humans see the same line in their terminal. No new hook file (the advice is folded into the existing `session-start.mjs` so installer surface stays the same), no new harness wiring.
+
+### What did not change
+
+- Public CLI surface (`/cc`, `/cc-cancel`, `/cc-idea`).
+- Hop sequence, stage layout, specialist roster.
+- `flow-state.json` schema (still v3; A3 changes only `knowledge.jsonl` shape).
+- `antipatterns.ts` content (A-1 through A-33).
+- Five-axis review and 5-tier severity scale.
+- Hook event wiring (`session.start` / `session.stop` / `commit-helper`); B2 just adds advisory output to an existing hook.
+- Any specialist's behaviour for flows with `touchSurface` and `tags` absent (A3 dedup is a no-op then; A5 still demands a verdict line; B2 advisory still fires when artefacts grow).
+
+### Migration
+
+Drop-in upgrade from 8.8. `KnowledgeEntry.touchSurface` / `tags` / `dedupeOf` are all optional, so legacy entries deserialize without error. Slice-builders running on 8.8 prompts will not write the Coverage line on the first run after upgrade; the orchestrator's pause-hop will bounce them to fix-only once and they will catch up. Session-start hook advisory messages appear on first session start after re-running `cclaw sync`.
+
 ## 8.8.0 — Cleanup release: bug fixes, test pruning, version-marker strip
 
 ### Why
