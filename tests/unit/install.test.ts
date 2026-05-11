@@ -45,8 +45,8 @@ describe("install", () => {
     expect(result.installedHarnesses).toEqual(["cursor"]);
     const cc = await fs.readFile(path.join(project, ".cursor", "commands", "cc.md"), "utf8");
     expect(cc).toContain("/cc");
-    const planner = await fs.readFile(path.join(project, ".cursor", "agents", "planner.md"), "utf8");
-    expect(planner).toContain("planner");
+    const acAuthor = await fs.readFile(path.join(project, ".cursor", "agents", "ac-author.md"), "utf8");
+    expect(acAuthor).toContain("ac-author");
   });
 
   it("auto-detects multiple harnesses when several markers exist", async () => {

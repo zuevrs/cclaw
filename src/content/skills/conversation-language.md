@@ -37,7 +37,7 @@ Mechanical tokens stay in their original form regardless of conversation languag
 - Slugs (`add-approval-page`, never "добавить-страницу-одобрения").
 - Commands and CLI flags (`/cc`, `--phase=red`, `commit-helper.mjs`).
 - Hook output and machine-readable JSON.
-- Specialist names (`design`, `planner`, `reviewer`, `security-reviewer`, `slice-builder`).
+- Specialist names (`design`, `ac-author`, `reviewer`, `security-reviewer`, `slice-builder`).
 - Mode names (`code`, `text-review`, `integration`, `release`, `adversarial`, `fix-only`).
 - Frontmatter keys (`slug`, `stage`, `status`, `ac`, `phases`).
 - Stage names (`plan`, `build`, `review`, `ship`).

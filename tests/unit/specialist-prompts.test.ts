@@ -94,8 +94,8 @@ describe("specialist prompts", () => {
   });
 
   it("renderAgentMarkdown emits a frontmatter with name + activation", () => {
-    const planner = SPECIALIST_AGENTS.find((agent) => agent.id === "planner")!;
-    const md = renderAgentMarkdown(planner);
+    const acAuthor = SPECIALIST_AGENTS.find((agent) => agent.id === "ac-author")!;
+    const md = renderAgentMarkdown(acAuthor);
     expect(md.startsWith("---\n")).toBe(true);
     expect(md).toContain("activation: on-demand");
     expect(md).toContain("## Modes");

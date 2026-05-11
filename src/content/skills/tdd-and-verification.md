@@ -26,7 +26,7 @@ The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests
 ### RED — write a failing test
 
 - Touch test files **only**. No production edits in the RED commit.
-- The test must encode the AC verification line authored by planner.
+- The test must encode the AC verification line authored by ac-author.
 - The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax / import / fixture error.
 - Capture the runner output that proves the failure (command + 1-3 line excerpt). This is the **watched-RED proof**.
 - **Test files are named by the unit under test, NOT by the AC id.** Mirror the production module path: `src/lib/permissions.ts` → `tests/unit/permissions.test.ts` (or whatever the project's convention is — `*.spec.ts`, `__tests__/*.ts`, `*_test.go`, `test_*.py`). `AC-1.test.ts`, `tests/AC-2.test.ts`, `spec/ac3.spec.ts` are anti-patterns. The AC id lives **inside** the test name (`it('AC-1: tooltip shows email …', …)`), in the commit message (`red(AC-1): …`), and in the build log — never in the filename.

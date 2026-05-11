@@ -11,7 +11,7 @@ The three-section shape is taken directly from the addyosmani-skills git-workflo
 
 ## When to use
 
-Always-on for any specialist that authors a cclaw artifact: `plan.md` (planner / design), `decisions.md` (design Phase 4 on legacy flows), `build.md` (slice-builder), `review.md` (reviewer / security-reviewer per iteration), `ship.md` (slice-builder at ship dispatch), `learnings.md` (the learnings sub-agent). The slim-summary contract — six lines max, `Stage: …`, `What changed: …`, `Next: …`, `Confidence: …` — is enforced on every dispatch return; the artifact Summary block is appended at write time.
+Always-on for any specialist that authors a cclaw artifact: `plan.md` (ac-author / design), `decisions.md` (design Phase 4 on legacy flows), `build.md` (slice-builder), `review.md` (reviewer / security-reviewer per iteration), `ship.md` (slice-builder at ship dispatch), `learnings.md` (the learnings sub-agent). The slim-summary contract — six lines max, `Stage: …`, `What changed: …`, `Next: …`, `Confidence: …` — is enforced on every dispatch return; the artifact Summary block is appended at write time.
 
 ## Format
 
@@ -44,7 +44,7 @@ The block goes at the very bottom of the artifact, after the body, after any wor
 ## Summary — design
 ### Changes made
 ...
-## Summary — planner
+## Summary — ac-author
 ### Changes made
 ...
 ```
@@ -86,7 +86,7 @@ If there are no real concerns, write `None.` and own it.
 | Specialist | Block goes in |
 | --- | --- |
 | `design` | `flows/<slug>/plan.md` (heading: `## Summary — design`) — single block at the bottom of design's appended sections (Frame, Approaches, Selected Direction, optional Decisions, optional Pre-mortem, Not Doing) |
-| `planner` | `flows/<slug>/plan.md` (heading: `## Summary — planner` on large-risky; `## Summary` on small/medium) |
+| `ac-author` | `flows/<slug>/plan.md` (heading: `## Summary — ac-author` on large-risky; `## Summary` on small/medium) |
 | `slice-builder` | `flows/<slug>/build.md` (heading: `## Summary` per cycle in soft mode; per fix-iteration in fix-only mode; per slice in parallel-build) |
 | `reviewer` | `flows/<slug>/review.md` per iteration (heading: `## Summary — iteration N`) — sits right above the next iteration block |
 | `security-reviewer` | `flows/<slug>/review.md` security section (heading: `## Summary — security`) |
@@ -99,7 +99,7 @@ If there are no real concerns, write `None.` and own it.
 - Using `Potential concerns` as a TODO list. It is a risk register, not a backlog. Concrete, future-tense risks only.
 - Multi-author plan.md getting one combined Summary at the end. Each author writes their own.
 
-## Worked example — planner Summary on small/medium
+## Worked example — ac-author Summary on small/medium
 
 ```markdown
 ## Summary

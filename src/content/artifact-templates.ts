@@ -40,7 +40,7 @@ shipped_at: null
 ship_commit: null
 review_iterations: 0
 security_flag: false
-feasibility_stamp: null  # green | yellow | red — set by planner before AC lock-in (T1-2)
+feasibility_stamp: null  # green | yellow | red — set by ac-author before AC lock-in (T1-2)
 ---
 
 # SLUG-PLACEHOLDER
@@ -94,7 +94,7 @@ _(Design Phase 2 / Phase 7 — 3-5 bullets explicitly out of scope. Protects aga
 
 ## Plan
 
-_(Planner authors this. AC-aligned, not horizontal-layer. Each unit ships an end-to-end vertical slice for one AC.)_
+_(AC author authors this. AC-aligned, not horizontal-layer. Each unit ships an end-to-end vertical slice for one AC.)_
 
 - **Phase 1 — Foundation (AC-1).**
   - Concrete change with file:path:line reference.
@@ -119,24 +119,24 @@ Each AC must point at a real \`file:line\` or destination path.
 
 ## Feasibility stamp
 
-_(Planner-authored before AC lock-in. One of \`green\` / \`yellow\` / \`red\`; copy into frontmatter \`feasibility_stamp\`.)_
+_(AC author-authored before AC lock-in. One of \`green\` / \`yellow\` / \`red\`; copy into frontmatter \`feasibility_stamp\`.)_
 
 - **green** — surface ≤3 modules, all AC have direct test analogues, no new dependencies, dependency chain ≤2 hops.
 - **yellow** — surface 4-6 modules, OR one AC depends on a not-yet-existing test fixture, OR one new dependency (with rationale), OR dependency chain 3-5 hops.
-- **red** — surface ≥7 modules, OR multiple AC depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR dependency chain ≥6 hops, OR security flag set without a design D-N covering the sensitive surface. **Red feasibility blocks build dispatch in strict mode** until the planner re-decomposes (likely splitting into multiple slugs) or the orchestrator re-enters design Phase 4 to record the missing D-N.
+- **red** — surface ≥7 modules, OR multiple AC depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR dependency chain ≥6 hops, OR security flag set without a design D-N covering the sensitive surface. **Red feasibility blocks build dispatch in strict mode** until the ac-author re-decomposes (likely splitting into multiple slugs) or the orchestrator re-enters design Phase 4 to record the missing D-N.
 
 The stamp is computed once per plan, before slice-builder enters. The reviewer cross-checks the stamp against the realised diff at review time; an \`actual_complexity > stamp\` is a \`consider\`-severity finding for future calibration.
 
 ## Edge cases
 
-_(Planner-authored. One bullet per AC naming the non-happy-path the slice-builder's RED test must encode.)_
+_(AC author-authored. One bullet per AC naming the non-happy-path the slice-builder's RED test must encode.)_
 
 - **AC-1** — _empty input / boundary / error response_.
 - **AC-2** — _hover under 100ms / missing fixture / etc_.
 
 ## Topology
 
-_(Planner topology mode. Default: \`inline\`. \`parallel-build\` is opt-in; see lib/skills/parallel-build.md for rules.)_
+_(AC author topology mode. Default: \`inline\`. \`parallel-build\` is opt-in; see lib/skills/parallel-build.md for rules.)_
 
 - topology: inline
 - slices: _none_
@@ -168,7 +168,7 @@ security_flag: false
 
 ## Plan
 
-_(Planner authors this. One short paragraph describing the change end-to-end. No phases, no AC IDs.)_
+_(AC author authors this. One short paragraph describing the change end-to-end. No phases, no AC IDs.)_
 
 ## Testable conditions
 

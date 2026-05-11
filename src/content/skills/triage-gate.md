@@ -138,10 +138,10 @@ The triage block is **immutable for the lifetime of the flow**. If the user want
 | path value | what runs | when |
 | --- | --- | --- |
 | `["build"]` (inline trivial) | direct edit + commit, no plan, no review | `complexity == "trivial"` |
-| `["plan", "build", "review", "ship"]` (small/medium) | one planner sub-agent for plan; one slice-builder for build; one reviewer for review; ship fan-out | `complexity == "small-medium"` |
-| `["plan", "build", "review", "ship"]` (large-risky) | **plan stage expands** into design (main context, multi-turn) → planner; build/review/ship behave as small/medium plus parallel-build fan-out and adversarial pre-mortem when applicable | `complexity == "large-risky"` |
+| `["plan", "build", "review", "ship"]` (small/medium) | one ac-author sub-agent for plan; one slice-builder for build; one reviewer for review; ship fan-out | `complexity == "small-medium"` |
+| `["plan", "build", "review", "ship"]` (large-risky) | **plan stage expands** into design (main context, multi-turn) → ac-author; build/review/ship behave as small/medium plus parallel-build fan-out and adversarial pre-mortem when applicable | `complexity == "large-risky"` |
 
-`triage.path` only ever holds the four canonical stages: `plan`, `build`, `review`, `ship`. **`discovery` is never an entry in `path`.** When the orchestrator promises a "discovery sub-phase" it means the `plan` stage runs design (Phase 0-7 in main context) then planner — see `/cc.md` "Plan stage on large-risky" for the dispatch contract.
+`triage.path` only ever holds the four canonical stages: `plan`, `build`, `review`, `ship`. **`discovery` is never an entry in `path`.** When the orchestrator promises a "discovery sub-phase" it means the `plan` stage runs design (Phase 0-7 in main context) then ac-author — see `/cc.md` "Plan stage on large-risky" for the dispatch contract.
 
 The orchestrator's path-validation rule is single-stage: `triage.path` ⊆ `{plan, build, review, ship}`. Any state file that contains a `"discovery"` entry is from an older schema and must be normalised — strip the `"discovery"` entry and continue with the remaining stages.
 
@@ -237,7 +237,7 @@ User: "Migrate the user store from Postgres to DynamoDB."
 ```
 Triage
 ─ Complexity: large-risky  (confidence: high)
-─ Recommended path: plan → build → review → ship  (plan stage expands: design → planner)
+─ Recommended path: plan → build → review → ship  (plan stage expands: design → ac-author)
 ─ Why: data-layer migration, schema change, requires runbook + rollback plan.
 ─ AC mode: strict
 ```
@@ -259,7 +259,7 @@ The user is expected to clarify in (4) Custom or accept (1) Proceed; either way 
 ## Common pitfalls
 
 - **Rendering the triage as a code block when a structured ask tool is available.** Try the harness's structured ask facility (`AskUserQuestion` / `AskQuestion` / `prompt` / "ask" content block) first; the fenced form is a fallback only.
-- Stating "I think this is medium-complexity" and then immediately invoking planner. Wait for the user's pick — orchestrator-decided routing without an explicit user confirmation is the most common cause of mis-scoped flows.
+- Stating "I think this is medium-complexity" and then immediately invoking ac-author. Wait for the user's pick — orchestrator-decided routing without an explicit user confirmation is the most common cause of mis-scoped flows.
 - Picking `large-risky` for a one-file rename "to be safe". Do not pad the heuristic; the user reads it and learns to ignore your triage.
 - **Asking the gate on a trivial / high-confidence request.** The zero-question fast path exists for exactly this case; surfacing a form for a typo-fix is friction without value. If you are about to ask, double-check the confidence is not `high`.
 - **Splitting the combined form into two separate structured-ask calls when the harness supports multi-question.** v8.13's double round-trip is now a regression; pack both questions into one form on every supporting harness (Cursor `AskQuestion`, Claude Code `AskUserQuestion`, OpenCode "ask", Codex `prompt`).
@@ -269,4 +269,4 @@ The user is expected to clarify in (4) Custom or accept (1) Proceed; either way 
 
 ## Next step
 
-After the combined form returns AND the path is **not** `inline`, the orchestrator dispatches the first specialist directly. As of v8.21 there is no separate "Hop 2.5" assumption-confirmation step in between — the assumption surface lives inside the first specialist's first turn (design Phase 0 on large-risky; planner Phase 0 on small-medium). `triage.assumptions` is still a first-class field on `flow-state.json` and is populated by whichever specialist runs first. On the inline path (whether reached via the zero-question fast path or via Question 1 option (2)), the orchestrator goes straight to the build dispatch — there is no assumption surface (a one-line edit has no assumptions worth surfacing).
+After the combined form returns AND the path is **not** `inline`, the orchestrator dispatches the first specialist directly. As of v8.21 there is no separate "Hop 2.5" assumption-confirmation step in between — the assumption surface lives inside the first specialist's first turn (design Phase 0 on large-risky; ac-author Phase 0 on small-medium). `triage.assumptions` is still a first-class field on `flow-state.json` and is populated by whichever specialist runs first. On the inline path (whether reached via the zero-question fast path or via Question 1 option (2)), the orchestrator goes straight to the build dispatch — there is no assumption surface (a one-line edit has no assumptions worth surfacing).

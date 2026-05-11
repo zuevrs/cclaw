@@ -175,7 +175,7 @@ describe("v8.16 thematic skills merge", () => {
       const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "ac-discipline")!;
       for (const trigger of [
         "edit:.cclaw/flows/*/plan.md",
-        "specialist:planner",
+        "specialist:ac-author",
         "specialist:reviewer:text-review",
         "before:git-commit",
         "before:git-push",
@@ -261,7 +261,7 @@ describe("v8.16 thematic skills merge", () => {
         import("../../src/content/specialist-prompts/slice-builder.js"),
         import("../../src/content/specialist-prompts/reviewer.js"),
         import("../../src/content/specialist-prompts/security-reviewer.js"),
-        import("../../src/content/specialist-prompts/planner.js"),
+        import("../../src/content/specialist-prompts/ac-author.js"),
         import("../../src/content/specialist-prompts/design.js"),
         import("../../src/content/start-command.js"),
       ]);
@@ -288,7 +288,7 @@ describe("v8.16 thematic skills merge", () => {
         import("../../src/content/specialist-prompts/slice-builder.js"),
         import("../../src/content/specialist-prompts/reviewer.js"),
         import("../../src/content/specialist-prompts/security-reviewer.js"),
-        import("../../src/content/specialist-prompts/planner.js"),
+        import("../../src/content/specialist-prompts/ac-author.js"),
         import("../../src/content/specialist-prompts/design.js"),
       ]);
       const corpus = sources

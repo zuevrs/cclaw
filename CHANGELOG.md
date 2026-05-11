@@ -1,5 +1,90 @@
 # Changelog
 
+## 8.28.0 — Rename `planner` specialist → `ac-author`: file rename + symbol rename + 281-replacement prose sweep + `rewriteLegacyPlanner` migration (one-release legacy alias)
+
+### Why
+
+cclaw shipped four overlapping nouns that all started with "plan-":
+
+- **`planner`** — the specialist (the dispatching role)
+- **`plan`** — the stage (Hop 3 in the orchestrator's flow)
+- **`plan.md`** — the artifact (the file the specialist writes)
+- **`plan-authoring`** — the skill (rules for editing `plan.md`)
+
+A new agent reading `start-command.ts` or a skill body could not tell at a glance whether "the planner wrote plan.md during plan with the plan-authoring skill" referred to four distinct concepts or four phrasings of the same thing. The role / stage / artifact / skill collision was the highest-friction naming clash in the v8.x cclaw vocabulary; users called it out in the v8.x audit, and the issue compounded on large-risky flows where design also writes to plan.md (so the "planner owns plan.md" mental model was already a lie).
+
+v8.28 renames the specialist to **`ac-author`** — the noun describes what the specialist actually authors (acceptance criteria), which is the unique observable artifact the role produces. The stage stays `plan` (it is the design-and-AC-authoring phase, not "the ac-author stage"). The artifact stays `plan.md` (the file is shared across design + ac-author + slice-builder reads). The `plan-authoring` skill stays (it is about editing the artifact, agnostic of who is doing it).
+
+This is the largest mechanical sweep in the v8.22-v8.28 roadmap — **281 `planner` → `ac-author` replacements across 49 files**, plus a `rewriteLegacyPlanner` migration that mirrors the v8.14 `rewriteLegacyDiscoverySpecialist` shape (semantics-preserving rewrite, not a `null` reset — the planner contract was unchanged, only the id). The migration covers in-flight `flow-state.json` files written by v8.14-v8.27 cclaw, which now auto-rewrite `lastSpecialist: "planner"` to `"ac-author"` on read.
+
+### What changed
+
+**D1 — File rename.** `src/content/specialist-prompts/planner.ts` → `src/content/specialist-prompts/ac-author.ts` (via `git mv` so blame survives). The 492-line prompt body inside the renamed file: every self-reference renamed from "planner" / "Planner" / "PLANNER_PROMPT" to "ac-author" / "AC author" / "AC_AUTHOR_PROMPT". The body's behaviour, phase structure, dispatch envelope contract, and downstream-reader assumptions are unchanged — only the spelling of the role.
+
+**D2 — Symbol rename.** `PLANNER_PROMPT` → `AC_AUTHOR_PROMPT`. The export from `src/content/specialist-prompts/ac-author.ts`; the import in `src/content/specialist-prompts/index.ts`; the key in `SPECIALIST_PROMPTS` (from `planner: PLANNER_PROMPT` to `"ac-author": AC_AUTHOR_PROMPT` — the new key requires quoting because of the kebab-case).
+
+**D3 — Type renames.** `src/types.ts`:
+- `DISCOVERY_SPECIALISTS` updated from `["design", "planner"]` to `["design", "ac-author"]`
+- `SPECIALISTS` array order: `design, ac-author, reviewer, security-reviewer, slice-builder` (was `design, planner, ...`)
+- New `LEGACY_PLANNER_ID = "planner" as const` + `LegacyPlannerId` type — the canonical single-source spelling of the legacy id, with a docstring explaining the one-release coexistence policy and the migration shape
+
+**D4 — Migration in `src/flow-state.ts`.** New `isLegacyPlanner(value): value is "planner"` predicate + new `rewriteLegacyPlanner(raw)` function (mirrors `rewriteLegacyDiscoverySpecialist` from v8.14). The transformation differs from v8.14's: discovery rewrite resets to `null` because the brainstormer / architect → design merge changed the contract; planner → ac-author is **semantics-preserving** (only the id changed) so the rewrite is a direct mapping. Wired into `migrateFlowState` (composes with `rewriteLegacyDiscoverySpecialist`, both run before `assertFlowStateV82`). Also wired into `migrateFromV2` so a v8.0/v8.1 state file with `lastSpecialist: "planner"` migrates to v8.2 schema *and* renames the id in the same pass.
+
+**D5 — Prose sweep across 49 files (281 replacements).** Single regex pass via a one-off script (`/tmp/v828-rename.mjs`) with word-boundary matching (`\bplanner\b` does not match `plan-authoring`, `planning`, `plan.md`). Touched:
+- `src/content/start-command.ts` — 22 references (orchestrator dispatch language, hop diagrams, fallback paths)
+- `src/content/specialist-prompts/{design,reviewer,security-reviewer,slice-builder}.ts` — design.ts had 12 references (Phase 7 handoff, dispatch-envelope comments); slice-builder.ts had 10 (build-time references to "the ac-author authored these AC"); reviewer / security-reviewer ≤ 2 each
+- `src/content/research-prompts/{learnings-research,repo-research}.ts` — 12 combined references (the research helpers are dispatched by ac-author)
+- All 18 skills `.md` files — 50+ combined references (every "planner" in `triage-gate.md`, `parallel-build.md`, `pre-flight-assumptions.md`, `source-driven.md`, etc.)
+- `src/content/{artifact-templates,runbooks-on-demand,core-agents,examples,reference-patterns,research-playbooks,meta-skill,stage-playbooks}.ts` — combined ~30 references (most in runbooks-on-demand for the dispatch envelopes)
+- `src/{flow-state,types,config}.ts` — type / schema renames
+- All 17 affected test files — every `"planner"` string literal, `SPECIALIST_PROMPTS["planner"]` access, and `it("planner ...")` description rewritten
+
+**D6 — Local-variable cleanup pass.** The mechanical sweep left a handful of test files with local-var declarations like `const ac-author = SPECIALIST_PROMPTS["ac-author"]` (illegal kebab-case identifier). A second targeted pass renamed local TS identifiers to camelCase (`const acAuthor = ...`) in test files only — prose contexts (`.md` bodies, prompt-string interpolation) keep the kebab-case `ac-author` (which is the canonical id). Touched: `tests/unit/{specialist-prompts,v88-cleanup,v813-cleanup,v814-cleanup,install,core-agents}.test.ts`.
+
+**D7 — `config.ts` legacy `planner` alias for one release.** `ModelPreferences` schema retains a `planner?: ModelTier` alias (in addition to the new `"ac-author"?: ModelTier` field) with a docstring explaining the one-release coexistence and the v8.29+ removal plan. Existing `.cclaw/config.yaml` files with `modelPreferences: { planner: "fast" }` continue to validate; the orchestrator reads either key at dispatch time. Brainstormer / architect aliases (v8.14 legacy) are unchanged.
+
+**D8 — Tripwire test suite.** `tests/unit/v828-rename-planner-to-ac-author.test.ts` — **21 tests across 7 describe blocks** locking:
+- AC-1 — `SPECIALISTS` carries `ac-author`, not `planner`; order preserved
+- AC-2 — `SPECIALIST_PROMPTS` keyed at `ac-author`; no `planner` key; `AC_AUTHOR_PROMPT` exported symbol matches the keyed value
+- AC-3 — `AC_AUTHOR_PROMPT` body opens with `# ac-author`, refers to itself as `ac-author`, has zero `planner` substring (case-insensitive)
+- AC-4 — `SPECIALIST_AGENTS` has `ac-author` entry, no `planner` entry; `renderAgentMarkdown` emits frontmatter `name: ac-author`
+- AC-5 — `LEGACY_PLANNER_ID === "planner"`; `isLegacyPlanner` predicate works; `migrateFlowState` rewrites `lastSpecialist: "planner"` → `"ac-author"` on read; does not touch valid lastSpecialist values
+- AC-6 — File-walking assertion: every remaining `planner` mention in `src/` and `tests/` lives in the allow-listed set (`types.ts`, `flow-state.ts`, `config.ts`, this test file) — anywhere else fails the audit
+- AC-7 — `config.ts` `ModelPreferences` documents the legacy `planner` alias for one release with the canonical v8.29+ removal plan
+
+### Migration
+
+**v8.27 → v8.28.** Drop-in for fresh installs. Two scenarios require attention:
+
+1. **In-flight `flow-state.json` with `lastSpecialist: "planner"`.** `migrateFlowState` auto-rewrites on the next read. The transformation is in-memory; the next state mutation (any flow advance, any specialist dispatch) persists the new `"ac-author"` id to disk. The user sees no behavioural difference — `/cc` resume on the next slug rendering shows "Last specialist: ac-author" instead of "planner", and continues exactly where the v8.27 cclaw left off.
+
+2. **`.cclaw/config.yaml` with `modelPreferences.planner: <tier>`.** The legacy `planner` key continues to validate for one release. The orchestrator reads either `modelPreferences.planner` or `modelPreferences["ac-author"]` at dispatch time. **Slated for removal in v8.29+** — at that point, users with the old key will see a one-line warning at config load and a deprecation note in the next CHANGELOG.
+
+3. **Shipped flow artifacts under `flows/shipped/<slug>/`.** Historical text in `plan.md`, `build.md`, `review.md`, etc. is **NOT** rewritten. Slugs shipped on v8.14-v8.27 keep their references to "the planner" verbatim — the v8.28 migration is strictly for active `flow-state.json` field values, not on-disk artifact prose. This is intentional: shipped artifacts are immutable history (per cclaw's compound-and-ship contract), and rewriting them would corrupt the audit trail for downstream readers (`/cc-knowledge`, `learnings-research`, etc.) that expect to find slugs textually unchanged.
+
+**No production behaviour change.** The renamed specialist's prompt body has the same phase structure, dispatch envelope shape, and downstream-reader contract. The only observable difference is the id surface: in `flow-state.lastSpecialist`, in dispatch-envelope `--specialist` flags, and in the agents directory filename (`agents/ac-author.md` instead of `agents/planner.md`).
+
+### What we noticed but didn't touch (v8.28 scope)
+
+- **Legacy `planner` alias removal.** Slated for v8.29+. The window of one full release cycle is deliberately conservative — gives in-flight state files time to age out and downstream consumers (claude-code agent.toml, custom OpenCode profiles) time to update their references.
+- **`agents/planner.md` symlink for backwards compat.** Considered but rejected. Symlinks add filesystem complexity that doesn't survive the install layer's clean-write contract; the `rewriteLegacyPlanner` migration covers the only real continuity concern (in-flight `flow-state.json` resumes).
+- **Auto-rename of shipped artifact prose.** Considered and rejected per the migration note above. Historical artifacts are immutable; rewriting them would corrupt the audit trail.
+- **`AC author` vs `AC-author` vs `ac-author` capitalization inconsistency.** The rename uses `ac-author` (lowercase, kebab) as the canonical id (matches `slice-builder`, `security-reviewer`, `learnings-research`) and `AC author` (capital A-C with a space) as the prose form for human-readable contexts (matches "Slice builder", "Security reviewer", "Learnings research" capitalization elsewhere). This is consistent with existing cclaw conventions but worth flagging: a future polish slug could enforce a single capitalization across all surfaces.
+- **Documentation for the rename in user-facing READMEs.** The repo `README.md` already refers to the role generically as "the ac-author specialist"; no callout was added. A future slug could add a "v8.28 rename note" section to `README.md` for migrating users.
+- **`PLANNER_PROMPT` import paths in downstream consumers.** Out of cclaw's control; downstream codebases that imported `PLANNER_PROMPT` directly will see a build error and need to update to `AC_AUTHOR_PROMPT`. The export name change is intentional (the symbol is the role's public contract); the CHANGELOG flags it for downstream maintainers.
+
+### Deferred
+
+- **v8.29+ removal of `LEGACY_PLANNER_ID` + `rewriteLegacyPlanner` + `config.ts` `planner` alias.** The one-release coexistence window expires at v8.29. The removal slug will be small (3 files, ~30 lines): drop `LEGACY_PLANNER_ID` from `types.ts`, drop `isLegacyPlanner` / `rewriteLegacyPlanner` from `flow-state.ts`, drop the `planner` alias from `config.ts` `ModelPreferences`. Tripwire tests in v8.29 will assert "`planner` does not appear anywhere in `src/` after the removal".
+- **`README.md` "v8.28 rename note" for migrating users.** Cheap polish.
+- **Single canonical capitalization for `ac-author` / `AC author` across all surfaces.** Cheap polish; defer until a user reports a confusion.
+
+### Tests
+
+`tests/unit/v828-rename-planner-to-ac-author.test.ts` — **21 new tripwire tests** locking the rename surface across types, prompts, install, migration, and the audit (no orphan `planner` mentions outside the allow-list). The pre-existing skill-count / specialist-list / install-target tests across `v88-cleanup`, `v811-cleanup`, `v813-cleanup`, `v814-cleanup`, `v816-cleanup`, `v817-orphan-cleanup`, `v819-skill-windowing`, `v821-preflight-fold`, `v824-two-stage-reviewer-default`, `v825-nfrs-first-class`, `core-agents`, `flow-state`, `h4-content-depth`, `install`, `prompt-budgets`, `specialist-prompts`, and `types` were all updated by the rename sweep — every `"planner"` literal, `SPECIALIST_PROMPTS["planner"]` access, and `it("planner ...")` description rewritten to `"ac-author"`.
+
+**Total: 780 tests across 56 files (was 759 across 55 in v8.27; +21 net from v828 + 1 new file). All green.**
+
 ## 8.27.0 — `code-simplification` skill imported and adapted: cclaw-native rubric for the REFACTOR step + reviewer's complexity-budget / readability axes
 
 ### Why

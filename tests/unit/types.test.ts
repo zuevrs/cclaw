@@ -14,7 +14,7 @@ describe("types", () => {
     expect(SPECIALISTS).toHaveLength(5);
     expect(SPECIALISTS).toEqual([
       "design",
-      "planner",
+      "ac-author",
       "reviewer",
       "security-reviewer",
       "slice-builder"

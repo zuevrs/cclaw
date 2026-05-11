@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { assertFlowStateV82, FLOW_STATE_SCHEMA_VERSION } from "../../src/flow-state.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { PLANNER_PROMPT } from "../../src/content/specialist-prompts/planner.js";
+import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import type { TriageDecision } from "../../src/types.js";
 
@@ -14,7 +14,7 @@ import type { TriageDecision } from "../../src/types.js";
  * surface into the first specialist's first turn:
  *
  *  - large-risky → design Phase 0 / Phase 1 owns the assumption surface
- *  - small-medium → planner Phase 0 owns it (new mini-section)
+ *  - small-medium → ac-author Phase 0 owns it (new mini-section)
  *  - inline → unchanged, no surface
  *
  * `triage.assumptions` stays a first-class field on flow-state.json;
@@ -45,27 +45,27 @@ describe("v8.21 preflight-fold", () => {
     });
   });
 
-  describe("AC-2 — small-medium inlines into planner's first turn", () => {
-    it("planner.ts has a Phase 0 mini-section for small-medium", () => {
-      expect(PLANNER_PROMPT).toContain("Phase 0 — Assumption confirmation");
+  describe("AC-2 — small-medium inlines into ac-author's first turn", () => {
+    it("ac-author.ts has a Phase 0 mini-section for small-medium", () => {
+      expect(AC_AUTHOR_PROMPT).toContain("Phase 0 — Assumption confirmation");
     });
 
-    it("planner Phase 0 only runs on triage.complexity == 'small-medium'", () => {
-      expect(PLANNER_PROMPT).toMatch(/small-medium[\s\S]*?Phase 0/u);
+    it("ac-author Phase 0 only runs on triage.complexity == 'small-medium'", () => {
+      expect(AC_AUTHOR_PROMPT).toMatch(/small-medium[\s\S]*?Phase 0/u);
     });
 
-    it("planner Phase 0 opens with the assumptions ask and waits one turn", () => {
-      expect(PLANNER_PROMPT).toContain("I'm working from these assumptions");
-      expect(PLANNER_PROMPT).toMatch(/Tell me if any is wrong/iu);
+    it("ac-author Phase 0 opens with the assumptions ask and waits one turn", () => {
+      expect(AC_AUTHOR_PROMPT).toContain("I'm working from these assumptions");
+      expect(AC_AUTHOR_PROMPT).toMatch(/Tell me if any is wrong/iu);
     });
 
-    it("planner Phase 0 persists the agreed list to triage.assumptions", () => {
-      expect(PLANNER_PROMPT).toMatch(/Persist[\s\S]*?triage\.assumptions/iu);
+    it("ac-author Phase 0 persists the agreed list to triage.assumptions", () => {
+      expect(AC_AUTHOR_PROMPT).toMatch(/Persist[\s\S]*?triage\.assumptions/iu);
     });
 
-    it("planner Phase 0 skips when triage.assumptions is already populated", () => {
-      expect(PLANNER_PROMPT).toContain("Skip Phase 0 silently");
-      expect(PLANNER_PROMPT).toMatch(/triage\.assumptions[^\n]*already populated/u);
+    it("ac-author Phase 0 skips when triage.assumptions is already populated", () => {
+      expect(AC_AUTHOR_PROMPT).toContain("Skip Phase 0 silently");
+      expect(AC_AUTHOR_PROMPT).toMatch(/triage\.assumptions[^\n]*already populated/u);
     });
   });
 
@@ -157,9 +157,9 @@ describe("v8.21 preflight-fold", () => {
   });
 
   describe("AC-5 — migration: pre-populated triage.assumptions short-circuits Phase 0", () => {
-    it("planner Phase 0 says 'skip silently' when triage.assumptions is populated", () => {
-      expect(PLANNER_PROMPT).toContain("Skip Phase 0 silently");
-      expect(PLANNER_PROMPT).toMatch(/already populated/u);
+    it("ac-author Phase 0 says 'skip silently' when triage.assumptions is populated", () => {
+      expect(AC_AUTHOR_PROMPT).toContain("Skip Phase 0 silently");
+      expect(AC_AUTHOR_PROMPT).toMatch(/already populated/u);
     });
 
     it("design Phase 0 reads pre-populated triage.assumptions as ground truth", () => {
@@ -179,9 +179,9 @@ describe("v8.21 preflight-fold", () => {
       expect(preFlightSkill!.body).toMatch(/v8\.21 fold/iu);
     });
 
-    it("pre-flight-assumptions.md names both fold targets (design Phase 0 + planner Phase 0)", () => {
+    it("pre-flight-assumptions.md names both fold targets (design Phase 0 + ac-author Phase 0)", () => {
       expect(preFlightSkill!.body).toContain("design Phase 0");
-      expect(preFlightSkill!.body).toContain("planner Phase 0");
+      expect(preFlightSkill!.body).toContain("ac-author Phase 0");
     });
 
     it("triage-gate.md no longer claims a separate 'Hop 2.5' step in the flow diagram", () => {

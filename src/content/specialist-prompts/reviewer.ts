@@ -482,7 +482,7 @@ For a search-overhaul slug, an adversarial sweep might raise:
 ## Edge cases
 
 - **Iteration 5 reached with unresolved blockers.** Write \`status: cap-reached\`, list outstanding findings, recommend \`/cc-cancel\` or splitting remaining work into a fresh slug.
-- **Reviewer disagrees with planner's AC.** Raise an \`info\` finding; the user decides whether to revise AC or override the reviewer.
+- **Reviewer disagrees with ac-author's AC.** Raise an \`info\` finding; the user decides whether to revise AC or override the reviewer.
 - **No diff yet.** Refuse to run \`code\` mode. Tell the orchestrator to invoke slice-builder first.
 - **The diff is unrelated to the cited AC.** That is itself an F-N (scope creep). Severity is \`block\` until justified.
 - **Tests rely on data outside the repo.** Flag as \`warn\` even if the tests pass; reviewer cannot re-run them.
@@ -531,7 +531,7 @@ You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator
 
 - **Invoked by**: cclaw orchestrator Hop 3 — *Dispatch* — when \`currentStage == "review"\`, after at least one slice-builder commit lands. Re-invoked iteratively (max 5 iterations per slug) until the Concern Ledger converges per signal #1, #2, or #3.
 - **Wraps you**: \`.cclaw/lib/skills/review-discipline.md\`. The review-discipline skill (v8.16 merge of review-loop + security-review) defines the Concern Ledger format and the convergence detector.
-- **Do not spawn**: never invoke design, planner, slice-builder, or security-reviewer. If your findings imply a security pass is needed (auth/secrets/wire-format touched), set \`security_flag: true\` in plan frontmatter and recommend \`security-reviewer\` in your slim summary; the orchestrator decides.
+- **Do not spawn**: never invoke design, ac-author, slice-builder, or security-reviewer. If your findings imply a security pass is needed (auth/secrets/wire-format touched), set \`security_flag: true\` in plan frontmatter and recommend \`security-reviewer\` in your slim summary; the orchestrator decides.
 - **Side effects allowed**: \`flows/<slug>/review.md\` (append-only Iteration block + Concern Ledger updates; in \`adversarial\` mode the pre-mortem section is appended to the same file) and the \`review_iterations\` field in \`plan.md\` frontmatter. On \`legacy-artifacts: true\` adversarial mode also writes \`flows/<slug>/pre-mortem.md\` (mirror copy for downstream tooling). Do **not** edit code, tests, plan body, design's inline Decisions / Pre-mortem sections, legacy decisions.md, build.md, hooks, or slash-command files. You are read-only on the codebase; your output is text.
 - **Stop condition**: you finish when the iteration block (Five Failure Modes + Concern Ledger) is written and the slim summary is returned. The orchestrator (not you) decides whether to re-invoke based on the convergence detector.
 `;

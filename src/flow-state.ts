@@ -87,13 +87,13 @@ export function isRunMode(value: unknown): value is RunMode {
 }
 
 /**
- * Narrow check for the discovery specialists (v8.14+: `design`, `planner`).
+ * Narrow check for the discovery specialists (v8.14+: `design`, `ac-author`).
  * Kept for backward compatibility with callers that only care about
  * discovery sub-phase routing; new state-validation paths should use
  * {@link isSpecialist}.
  */
-export function isDiscoverySpecialist(value: unknown): value is "design" | "planner" {
-  return value === "design" || value === "planner";
+export function isDiscoverySpecialist(value: unknown): value is "design" | "ac-author" {
+  return value === "design" || value === "ac-author";
 }
 
 /**
@@ -103,6 +103,23 @@ export function isDiscoverySpecialist(value: unknown): value is "design" | "plan
  */
 export function isLegacyDiscoverySpecialist(value: unknown): value is "brainstormer" | "architect" {
   return value === "brainstormer" || value === "architect";
+}
+
+/**
+ * v8.28 renamed the `planner` specialist to `ac-author`. Recognise the
+ * legacy id on read so a `flow-state.json` written by v8.14–v8.27 cclaw
+ * with `lastSpecialist: "planner"` is auto-rewritten to `"ac-author"`
+ * inside {@link rewriteLegacyPlanner}, mirroring the v8.14 discovery-
+ * specialist migration shape (`rewriteLegacyDiscoverySpecialist`). The
+ * planner contract was a one-shot dispatcher with no per-phase
+ * checkpointing — the rename preserves semantics, so the right migration
+ * is a direct rewrite to the new id rather than a `null` reset.
+ *
+ * See {@link LEGACY_PLANNER_ID} in `types.ts` for the canonical
+ * single-source spelling of the old name.
+ */
+export function isLegacyPlanner(value: unknown): value is "planner" {
+  return value === "planner";
 }
 
 export function isSpecialist(value: unknown): value is SpecialistId {
@@ -374,7 +391,7 @@ export function migrateFlowState(value: unknown): FlowStateV82 {
   }
   const raw = value as Record<string, unknown> & { schemaVersion?: unknown };
   if (raw.schemaVersion === FLOW_STATE_SCHEMA_VERSION) {
-    const rewritten = rewriteLegacyDiscoverySpecialist(raw);
+    const rewritten = rewriteLegacyPlanner(rewriteLegacyDiscoverySpecialist(raw));
     assertFlowStateV82(rewritten);
     return rewritten;
   }
@@ -408,6 +425,35 @@ function rewriteLegacyDiscoverySpecialist(
   return raw;
 }
 
+/**
+ * v8.28: rewrite `lastSpecialist: "planner"` to `"ac-author"` so a
+ * `flow-state.json` written by v8.14–v8.27 cclaw resumes cleanly under
+ * the renamed specialist id. Unlike `rewriteLegacyDiscoverySpecialist`
+ * (which resets to `null` because the v8.14 discovery split / merge
+ * meant the previous artifacts could not be reused), the v8.28 rename
+ * is **semantics-preserving** — the planner / ac-author contract is the
+ * same, only the id changed — so the rewrite is a direct mapping.
+ *
+ * The transformation runs on **every read** of a current-schema state
+ * file, so a long-resumed flow with `lastSpecialist: "planner"` on disk
+ * sees the in-memory value flip to `"ac-author"` immediately; the next
+ * write (any state mutation) persists the new id. Shipped flow
+ * artifacts under `flows/shipped/<slug>/` are NOT rewritten — they keep
+ * their historical text untouched, per the v8.28 migration story.
+ *
+ * Slated for removal in v8.29+ once one full release cycle has aged
+ * out any in-flight state files. See {@link LEGACY_PLANNER_ID} for the
+ * canonical legacy-id spelling.
+ */
+function rewriteLegacyPlanner(
+  raw: Record<string, unknown>
+): Record<string, unknown> {
+  if (isLegacyPlanner(raw.lastSpecialist)) {
+    return { ...raw, lastSpecialist: "ac-author" };
+  }
+  return raw;
+}
+
 function migrateFromV2(raw: Record<string, unknown>): FlowStateV82 {
   const ac = (raw.ac as AcceptanceCriterionState[]) ?? [];
   const securityFlag = Boolean(raw.securityFlag);
@@ -416,7 +462,9 @@ function migrateFromV2(raw: Record<string, unknown>): FlowStateV82 {
   const lastSpecialistRaw = raw.lastSpecialist;
   const lastSpecialist = isLegacyDiscoverySpecialist(lastSpecialistRaw)
     ? null
-    : ((lastSpecialistRaw as SpecialistId | null) ?? null);
+    : isLegacyPlanner(lastSpecialistRaw)
+      ? "ac-author"
+      : ((lastSpecialistRaw as SpecialistId | null) ?? null);
   return {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     currentSlug: (raw.currentSlug as string | null) ?? null,

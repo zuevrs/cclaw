@@ -66,9 +66,9 @@ describe("core agents", () => {
     expect(designMd).toContain("activation: main-context");
     expect(designMd).toContain("# ");
 
-    const plannerAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "planner")!;
-    const plannerMd = renderAgentMarkdown(plannerAgent);
-    expect(plannerMd).toContain("activation: on-demand");
+    const acAuthorAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "ac-author")!;
+    const acAuthorMd = renderAgentMarkdown(acAuthorAgent);
+    expect(acAuthorMd).toContain("activation: on-demand");
   });
 
   it("research helpers render with kind: research-helper in frontmatter", () => {

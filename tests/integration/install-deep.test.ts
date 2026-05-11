@@ -70,7 +70,7 @@ describe("install — deep content", () => {
       expect(designBody).toContain("activation: main-context");
       expect(designBody).toContain("## Modes");
 
-      for (const agent of ["planner", "reviewer", "security-reviewer", "slice-builder"]) {
+      for (const agent of ["ac-author", "reviewer", "security-reviewer", "slice-builder"]) {
         const body = await fs.readFile(path.join(project, harness, "agents", `${agent}.md`), "utf8");
         expect(body).toContain("activation: on-demand");
         expect(body).toContain("## Modes");

@@ -19,11 +19,11 @@ function runbookBody(id: string): string {
  */
 describe("v8.13 power-and-economy", () => {
   describe("T0 speed + token wins", () => {
-    it("planner dispatches research helpers in parallel (T0-6)", () => {
-      const planner = SPECIALIST_PROMPTS["planner"];
-      expect(planner).toMatch(/research dispatch \(parallel; one always, one conditional\)/u);
-      expect(planner).toMatch(/same tool-call batch/u);
-      expect(planner).toMatch(/do NOT serialise/u);
+    it("ac-author dispatches research helpers in parallel (T0-6)", () => {
+      const acAuthor = SPECIALIST_PROMPTS["ac-author"];
+      expect(acAuthor).toMatch(/research dispatch \(parallel; one always, one conditional\)/u);
+      expect(acAuthor).toMatch(/same tool-call batch/u);
+      expect(acAuthor).toMatch(/do NOT serialise/u);
     });
 
     it("triage uses single multi-question call when available (T0-7)", () => {
@@ -54,23 +54,23 @@ describe("v8.13 power-and-economy", () => {
       expect(plan.body).toMatch(/feasibility_stamp:/u);
     });
 
-    it("planner enforces dependsOn acyclic graph in self-review (T1-1)", () => {
-      const planner = SPECIALIST_PROMPTS["planner"];
-      expect(planner).toMatch(/dependsOn` graph is acyclic/u);
-      expect(planner).toMatch(/topological commit order/u);
+    it("ac-author enforces dependsOn acyclic graph in self-review (T1-1)", () => {
+      const acAuthor = SPECIALIST_PROMPTS["ac-author"];
+      expect(acAuthor).toMatch(/dependsOn` graph is acyclic/u);
+      expect(acAuthor).toMatch(/topological commit order/u);
     });
 
-    it("planner emits feasibility_stamp green/yellow/red (T1-2)", () => {
-      const planner = SPECIALIST_PROMPTS["planner"];
-      expect(planner).toMatch(/feasibility_stamp/u);
-      expect(planner).toMatch(/green.*yellow.*red/su);
-      expect(planner).toMatch(/A `red` stamp blocks build dispatch/u);
+    it("ac-author emits feasibility_stamp green/yellow/red (T1-2)", () => {
+      const acAuthor = SPECIALIST_PROMPTS["ac-author"];
+      expect(acAuthor).toMatch(/feasibility_stamp/u);
+      expect(acAuthor).toMatch(/green.*yellow.*red/su);
+      expect(acAuthor).toMatch(/A `red` stamp blocks build dispatch/u);
     });
 
-    it("planner reuses research artefacts across specialists (T1-14)", () => {
-      const planner = SPECIALIST_PROMPTS["planner"];
-      expect(planner).toMatch(/Cross-specialist research cache/u);
-      expect(planner).toMatch(/must NOT re-dispatch/u);
+    it("ac-author reuses research artefacts across specialists (T1-14)", () => {
+      const acAuthor = SPECIALIST_PROMPTS["ac-author"];
+      expect(acAuthor).toMatch(/Cross-specialist research cache/u);
+      expect(acAuthor).toMatch(/must NOT re-dispatch/u);
     });
   });
 
@@ -228,7 +228,7 @@ describe("v8.13 power-and-economy", () => {
         modelPreferences: {
           brainstormer: "fast",
           architect: "powerful",
-          planner: "balanced",
+          "ac-author": "balanced",
         },
       };
       expect(sample.modelPreferences?.architect).toBe("powerful");

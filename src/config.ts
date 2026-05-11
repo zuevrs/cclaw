@@ -15,7 +15,7 @@ export type HookProfile = "minimal" | "strict";
  * Tiers (deliberately abstract to avoid pinning to specific provider names):
  *   - "fast"      — short-context, fast turn-around (cheap models suit
  *                   slice-builder cycles, research helpers, slim summaries).
- *   - "balanced"  — default mid-tier (planner / reviewer for routine work).
+ *   - "balanced"  — default mid-tier (ac-author / reviewer for routine work).
  *   - "powerful"  — deep-context, slow but high-quality (design /
  *                   adversarial review / security-reviewer for ambiguous,
  *                   large-risky, or security-sensitive work).
@@ -27,7 +27,7 @@ export type ModelTier = "fast" | "balanced" | "powerful";
 
 export interface ModelPreferences {
   design?: ModelTier;
-  planner?: ModelTier;
+  "ac-author"?: ModelTier;
   "slice-builder"?: ModelTier;
   reviewer?: ModelTier;
   "security-reviewer"?: ModelTier;
@@ -41,6 +41,14 @@ export interface ModelPreferences {
    */
   brainstormer?: ModelTier;
   architect?: ModelTier;
+  /**
+   * Legacy alias from pre-v8.28 (`planner` was the v8.14–v8.27 spelling).
+   * Retained so users with existing `.cclaw/config.yaml` files don't see
+   * schema-validation errors after upgrading. Equivalent to `"ac-author"`
+   * — the orchestrator reads either at dispatch time. Slated for removal
+   * in v8.29+.
+   */
+  planner?: ModelTier;
 }
 
 export interface CclawConfig {

@@ -25,7 +25,7 @@ function runbookBody(id: string): string {
 describe("v8.14 strong-design + streamlined-gate", () => {
   describe("D1 — design specialist replaces brainstormer + architect", () => {
     it("ships exactly five specialists, design among them, brainstormer + architect retired", () => {
-      expect([...SPECIALISTS]).toEqual(["design", "planner", "reviewer", "security-reviewer", "slice-builder"]);
+      expect([...SPECIALISTS]).toEqual(["design", "ac-author", "reviewer", "security-reviewer", "slice-builder"]);
       for (const legacy of LEGACY_DISCOVERY_SPECIALISTS) {
         expect(SPECIALISTS as readonly string[]).not.toContain(legacy);
       }
@@ -39,7 +39,7 @@ describe("v8.14 strong-design + streamlined-gate", () => {
     });
 
     it("every other specialist remains on-demand (sub-agent)", () => {
-      for (const id of ["planner", "slice-builder", "reviewer", "security-reviewer"] as const) {
+      for (const id of ["ac-author", "slice-builder", "reviewer", "security-reviewer"] as const) {
         const agent = CORE_AGENTS.find((entry) => entry.id === id);
         expect(agent).toBeDefined();
         expect(agent?.activation).toBe("on-demand");
@@ -101,11 +101,11 @@ describe("v8.14 strong-design + streamlined-gate", () => {
       expect(reviewer).toMatch(/legacy.*decisions\.md|decisions\.md.*legacy/iu);
     });
 
-    it("planner's plan.md section list reflects design's inline contributions", () => {
-      const planner = SPECIALIST_PROMPTS["planner"];
-      expect(planner).toMatch(/inline D-N/iu);
-      expect(planner).toMatch(/Pre-?mortem/iu);
-      expect(planner).toMatch(/Selected Direction/iu);
+    it("ac-author's plan.md section list reflects design's inline contributions", () => {
+      const acAuthor = SPECIALIST_PROMPTS["ac-author"];
+      expect(acAuthor).toMatch(/inline D-N/iu);
+      expect(acAuthor).toMatch(/Pre-?mortem/iu);
+      expect(acAuthor).toMatch(/Selected Direction/iu);
     });
   });
 
@@ -140,9 +140,9 @@ describe("v8.14 strong-design + streamlined-gate", () => {
       expect(START_COMMAND_BODY).toMatch(/Last specialist.*design/iu);
     });
 
-    it("Plan stage on large-risky describes the design → planner sub-phase", () => {
+    it("Plan stage on large-risky describes the design → ac-author sub-phase", () => {
       expect(START_COMMAND_BODY).toMatch(/design.*main context.*multi-?turn/iu);
-      expect(START_COMMAND_BODY).toMatch(/planner.*sub-?agent/iu);
+      expect(START_COMMAND_BODY).toMatch(/ac-author.*sub-?agent/iu);
     });
 
     it("legacy lastSpecialist values are migrated explicitly (v8.22: in discovery runbook)", () => {

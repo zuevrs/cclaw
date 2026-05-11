@@ -159,4 +159,4 @@ Both findings block the slice from going to compound until the slice-builder spl
 
 ## Composition
 
-This skill is **always-on** for slice-builder and for any specialist that produces a commit (which today means slice-builder only — design, planner, reviewer, security-reviewer do not commit code). The reviewer reads this skill at the top of every iteration and uses the finding templates above verbatim.
+This skill is **always-on** for slice-builder and for any specialist that produces a commit (which today means slice-builder only — design, ac-author, reviewer, security-reviewer do not commit code). The reviewer reads this skill at the top of every iteration and uses the finding templates above verbatim.

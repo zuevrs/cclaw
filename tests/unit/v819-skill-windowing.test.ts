@@ -7,7 +7,7 @@ import {
   type AutoTriggerStage
 } from "../../src/content/skills.js";
 import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { PLANNER_PROMPT } from "../../src/content/specialist-prompts/planner.js";
+import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { SECURITY_REVIEWER_PROMPT } from "../../src/content/specialist-prompts/security-reviewer.js";
 import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
@@ -68,7 +68,7 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
       expect(stagesById("flow-resume")).toEqual(["always"]);
     });
 
-    it("pre-flight-assumptions covers triage and plan (Hop 2.5 + planner Phase 0)", () => {
+    it("pre-flight-assumptions covers triage and plan (Hop 2.5 + ac-author Phase 0)", () => {
       expect(stagesById("pre-flight-assumptions")).toEqual(["triage", "plan"]);
     });
 
@@ -175,8 +175,8 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
       expect(DESIGN_PROMPT).toContain("## Active skills (stage: `plan`)");
     });
 
-    it("planner prompt includes the plan-stage block heading", () => {
-      expect(PLANNER_PROMPT).toContain("## Active skills (stage: `plan`)");
+    it("ac-author prompt includes the plan-stage block heading", () => {
+      expect(AC_AUTHOR_PROMPT).toContain("## Active skills (stage: `plan`)");
     });
 
     it("reviewer prompt includes the review-stage block heading", () => {
@@ -191,9 +191,9 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
       expect(SLICE_BUILDER_PROMPT).toContain("## Active skills (stage: `build`)");
     });
 
-    it("design / planner prompts list pre-flight-assumptions (plan-stage skill)", () => {
+    it("design / ac-author prompts list pre-flight-assumptions (plan-stage skill)", () => {
       expect(DESIGN_PROMPT).toContain("**pre-flight-assumptions**");
-      expect(PLANNER_PROMPT).toContain("**pre-flight-assumptions**");
+      expect(AC_AUTHOR_PROMPT).toContain("**pre-flight-assumptions**");
     });
 
     it("reviewer prompt does NOT list plan-only skills (plan-authoring is plan-only)", () => {

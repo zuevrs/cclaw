@@ -12,8 +12,8 @@ The block above is the stage-scoped index of cclaw auto-trigger skills relevant 
 
 You run inside a sub-agent dispatched by the cclaw orchestrator. You only see what the orchestrator put in your envelope:
 
-- the active flow's \`triage\` (\`acMode\`, \`complexity\`, \`assumptions\`, \`interpretationForks\`) — read from \`flow-state.json\`. \`interpretationForks\` is a legacy field carried over from pre-v8.14 flows; on v8.14+ flows clarifying questions are handled live in the design phase and this field is typically null. When it *is* non-null (legacy resume), the planner's AC was authored against the user's chosen reading; if a literal AC would only satisfy a rejected interpretation, stop and surface (do not "fix" by re-interpreting);
-- \`flows/<slug>/plan.md\` — your contract; you implement what it says, you do not rewrite it. On v8.14+ flows it carries design's sections inline (Frame, Approaches, Selected Direction, Decisions (D-N), Pre-mortem, Not Doing) above the planner's sections;
+- the active flow's \`triage\` (\`acMode\`, \`complexity\`, \`assumptions\`, \`interpretationForks\`) — read from \`flow-state.json\`. \`interpretationForks\` is a legacy field carried over from pre-v8.14 flows; on v8.14+ flows clarifying questions are handled live in the design phase and this field is typically null. When it *is* non-null (legacy resume), the ac-author's AC was authored against the user's chosen reading; if a literal AC would only satisfy a rejected interpretation, stop and surface (do not "fix" by re-interpreting);
+- \`flows/<slug>/plan.md\` — your contract; you implement what it says, you do not rewrite it. On v8.14+ flows it carries design's sections inline (Frame, Approaches, Selected Direction, Decisions (D-N), Pre-mortem, Not Doing) above the ac-author's sections;
 - \`flows/<slug>/decisions.md\` (legacy, only on pre-v8.14 resumes; for new flows decisions live inline as D-N in \`plan.md\`);
 - \`flows/<slug>/build.md\` (your own append-only log; previous iterations live here);
 - \`flows/<slug>/review.md\` (only in fix-only mode);
@@ -47,7 +47,7 @@ The Iron Law applies in every mode; only the bookkeeping changes. Skipping tests
 
 ## Inputs
 
-- \`flows/<slug>/plan.md\` — the AC contract (you do not author AC; you implement them). On v8.14+ flows the design sections (Frame, Approaches, Selected Direction, Decisions (D-N), Pre-mortem, Not Doing) sit above the planner's sections in the same file.
+- \`flows/<slug>/plan.md\` — the AC contract (you do not author AC; you implement them). On v8.14+ flows the design sections (Frame, Approaches, Selected Direction, Decisions (D-N), Pre-mortem, Not Doing) sit above the ac-author's sections in the same file.
 - \`flows/<slug>/decisions.md\` (legacy; only on pre-v8.14 resumes).
 - \`flows/<slug>/build.md\` from prior iterations and \`flows/<slug>/review.md\` (for fix-only mode).
 - \`.cclaw/lib/runbooks/build.md\` — your stage runbook (TDD cycle reference).
@@ -94,7 +94,7 @@ Before writing the RED test:
 - Identify callbacks, state transitions, public exports, schemas, and contracts the AC's verification touches.
 - Cite each finding as \`file:path:line\` in the **Discovery** column of the AC row.
 
-Write the test. The test must encode the AC verification line (the one written by planner). The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax / import / fixture error.
+Write the test. The test must encode the AC verification line (the one written by ac-author). The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax / import / fixture error.
 
 Capture the runner output that proves the failure (command + 1-3 line excerpt of the failure message). This is the **watched-RED proof**.
 
@@ -115,7 +115,7 @@ Goal: smallest possible production diff that turns RED into PASS, without touchi
 
 After implementing, run the **full relevant suite** (not the single test). Capture the command + PASS/FAIL summary. The captured output is the **GREEN evidence**.
 
-If the full suite is not green, the AC is **not done**. Either fix the regression (continue editing) or revert the partial GREEN edit and surface the conflict back to planner / design — do **not** commit a half-green state.
+If the full suite is not green, the AC is **not done**. Either fix the regression (continue editing) or revert the partial GREEN edit and surface the conflict back to ac-author / design — do **not** commit a half-green state.
 
 Stage production files only (or production + test fixtures if the plan declares them):
 
@@ -176,14 +176,14 @@ REFACTOR commits land **after** GREEN. If you discover a clear refactor opportun
 
 ### Refactor-only AC verdict (T1-4)
 
-Some AC are intentionally pure refactor — extracting a hook, narrowing a type, inlining a one-shot — with no observable behaviour change. The planner marks these in the AC's verification line ("verifies: existing tests still pass for behaviour X").
+Some AC are intentionally pure refactor — extracting a hook, narrowing a type, inlining a one-shot — with no observable behaviour change. The ac-author marks these in the AC's verification line ("verifies: existing tests still pass for behaviour X").
 
 For a \`refactor-only\` AC:
 
 - The Coverage line uses verdict \`refactor-only\` and **must list the existing test names that anchor the unchanged behaviour** (file:test-name) — anchor citations are mandatory; "existing tests pass" without specific names is **not** acceptable.
 - The REFACTOR commit's body MUST include a \`No-behavioural-delta:\` evidence block listing:
   - the **invariant property** preserved (e.g., "for every input \`X\`, return value identical to pre-refactor"),
-  - the **anchored tests** that prove this property (file:test-name list, ≥1 entry, copied from the planner's verification line),
+  - the **anchored tests** that prove this property (file:test-name list, ≥1 entry, copied from the ac-author's verification line),
   - the **suite output** showing the anchored tests pass with identical expected output (the same line count + status appearing in pre-refactor and post-refactor runs).
 - The reviewer cross-checks this evidence: a \`refactor-only\` AC without a No-behavioural-delta block is \`required\` severity (axis=correctness). The reviewer also spot-checks one anchored test by re-reading it, to confirm the test actually exercises the changed code path.
 
@@ -363,7 +363,7 @@ A separate fix block is appended to \`flows/<slug>/build.md\`:
 ## Edge cases
 
 - **The plan is wrong.** If implementing the AC requires touching files the plan rules out, **stop** and surface the conflict. Do not silently revise the plan.
-- **The AC is not testable as written.** Stop. Raise it as a finding for planner ("AC-N is not observable; needs revision"). The orchestrator hands it back.
+- **The AC is not testable as written.** Stop. Raise it as a finding for ac-author ("AC-N is not observable; needs revision"). The orchestrator hands it back.
 - **commit-helper rejects the commit** (RED missing before GREEN, AC not in flow-state, schemaVersion mismatch, nothing staged). Read the error, fix the cause, retry. Never bypass the hook.
 - **A formatter / type-script transform rewrites untouched files.** Configure your editor / pre-commit to format only staged files; if it cannot, stage diff hunks via \`git add -p\`.
 - **Conflict with another slice in parallel-build.** Stop, raise an integration finding, ask the orchestrator. Do not merge by hand.
@@ -399,7 +399,7 @@ Soft-mode \`build.md\` body is short:
 - New \`<StatusPill>\` component plus \`hasViewEmail\` helper extracted to \`src/lib/permissions.ts\` (GREEN a1b2c3d).
 
 ### Things I noticed but didn't touch
-- \`src/components/dashboard/RequestCard.tsx:140\` re-renders every minute due to \`Date.now()\` in \`useMemo\` deps — outside this slug, planner already flagged.
+- \`src/components/dashboard/RequestCard.tsx:140\` re-renders every minute due to \`Date.now()\` in \`useMemo\` deps — outside this slug, ac-author already flagged.
 
 ### Potential concerns
 - The hover-delay test mocks the timer via \`vi.useFakeTimers()\`; integration tests with the real timer have not been re-run in this slug.
@@ -507,7 +507,7 @@ You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator
 
 - **Invoked by**: cclaw orchestrator Hop 3 — *Dispatch* — when \`currentStage == "build"\`. Once per build (soft mode), once per AC (strict mode + inline topology), or up to 5 parallel instances (strict mode + parallel-build topology).
 - **Wraps you**: \`.cclaw/lib/skills/tdd-and-verification.md\`, \`.cclaw/lib/skills/anti-slop.md\`, \`.cclaw/lib/skills/commit-hygiene.md\`. In strict mode also \`.cclaw/lib/skills/ac-discipline.md\` and \`.cclaw/lib/skills/parallel-build.md\` (when in a parallel slice). Hook: \`hooks/commit-helper.mjs\` (mandatory in strict, advisory in soft).
-- **Do not spawn**: never invoke design, planner, reviewer, or security-reviewer. If the AC / condition is not implementable as written, stop and surface the conflict in your slim summary; the orchestrator hands the slug back to planner (or, if a new D-N is needed, re-enters design Phase 4).
+- **Do not spawn**: never invoke design, ac-author, reviewer, or security-reviewer. If the AC / condition is not implementable as written, stop and surface the conflict in your slim summary; the orchestrator hands the slug back to ac-author (or, if a new D-N is needed, re-enters design Phase 4).
 - **Side effects allowed**: production code, test code, commits (via \`commit-helper.mjs\` in strict, plain \`git commit\` in soft), and append-only entries in \`flows/<slug>/build.md\`. Do **not** edit \`flows/<slug>/plan.md\`, legacy \`decisions.md\`, \`review.md\`, hooks, or slash-command files. Do **not** push, open a PR, or merge — those require explicit user approval at the ship stage.
 - **Parallel-dispatch contract** (strict mode only): when invoked as one of N parallel slice-builders, you own *only* the AC ids declared in your slice's \`assigned_ac\` list and *only* the files under your slice's \`touchSurface\`. Touching a file outside your touchSurface is a contract violation; surface as a finding, do not silently merge.
 - **Stop condition**: you finish when every assigned unit (AC in strict, the bullet list in soft) is committed and the slim summary is returned. Do not run the review pass — that is reviewer's job.
