@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { renderStartCommand } from "../../src/content/start-command.js";
@@ -163,7 +164,7 @@ describe("v8.34 — KnowledgeEntry `problemType` field (item 5)", () => {
     project = await createTempProject();
     await ensureRuntimeRoot(project);
     const target = knowledgeLogPath(project);
-    await fs.mkdir(target.substring(0, target.lastIndexOf("/")), { recursive: true });
+    await fs.mkdir(path.dirname(target), { recursive: true });
     const legacyEntry = {
       slug: "20260101-legacy-no-type",
       ship_commit: "deadbeef",
@@ -181,7 +182,7 @@ describe("v8.34 — KnowledgeEntry `problemType` field (item 5)", () => {
     project = await createTempProject();
     await ensureRuntimeRoot(project);
     const target = knowledgeLogPath(project);
-    await fs.mkdir(target.substring(0, target.lastIndexOf("/")), { recursive: true });
+    await fs.mkdir(path.dirname(target), { recursive: true });
     const legacyEntry = {
       slug: "20260101-legacy",
       ship_commit: "deadbeef",
