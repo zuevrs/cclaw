@@ -316,7 +316,7 @@ zero_block_streak: 0
 
 # Review — SLUG-PLACEHOLDER
 
-This is the review log. \`reviewer\` (and \`security-reviewer\`, when relevant) append findings here. The loop is producer ↔ critic: iteration N proposes findings, \`slice-builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-loop skill).
+This is the review log. \`reviewer\` (and \`security-reviewer\`, when relevant) append findings here. The loop is producer ↔ critic: iteration N proposes findings, \`slice-builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-discipline skill (v8.16 merge of review-loop + security-review)).
 
 ## Run summary
 

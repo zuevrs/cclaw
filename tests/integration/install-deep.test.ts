@@ -22,7 +22,7 @@ describe("install — deep content", () => {
   it("populates .cclaw/lib/skills with every auto-trigger skill", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const fileName of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md"]) {
+    for (const fileName of ["plan-authoring.md", "ac-discipline.md", "refinement.md", "parallel-build.md", "review-discipline.md", "tdd-and-verification.md"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "lib", "skills", fileName));
       expect(stat.isFile()).toBe(true);
     }

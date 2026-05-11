@@ -165,7 +165,7 @@ The flow has seven hops, in order:
 6. **Compound** — automatic learnings capture after ship; gated on quality signals.
 7. **Finalize** — orchestrator-only: \`git mv\` every active artifact into \`shipped/<slug>/\`, reset flow-state. Never delegated to a sub-agent. \`trivial\` skips Hops 5-7.
 
-Skipping any hop is a bug; the gates downstream will fail. Read \`triage-gate.md\`, \`pre-flight-assumptions.md\`, \`flow-resume.md\`, \`tdd-cycle.md\` (active during build), and \`ac-traceability.md\` (active in strict mode) before starting.
+Skipping any hop is a bug; the gates downstream will fail. Read \`triage-gate.md\`, \`pre-flight-assumptions.md\`, \`flow-resume.md\`, \`tdd-and-verification.md\` (active during build), and \`ac-discipline.md\` (active in strict mode) before starting.
 
 ## Namespace router (T3-1, gsd pattern; v8.13)
 
@@ -309,8 +309,8 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 | Stage | Specialist | Mode | Wrapper skill | Inline allowed? |
 | --- | --- | --- | --- | --- |
 | \`plan\` | \`planner\` (small/medium); design → planner (large-risky) | — | plan-authoring (planner); design.md is read in main context (no wrapper skill) | yes for trivial; no for any path that includes plan |
-| \`build\` | \`slice-builder\` | \`build\` (or \`fix-only\` after a review with block findings) | tdd-cycle | yes for trivial only |
-| \`review\` | \`reviewer\` | \`code\` (default) or \`integration\` (after parallel-build) | review-loop, anti-slop | no, always sub-agent |
+| \`build\` | \`slice-builder\` | \`build\` (or \`fix-only\` after a review with block findings) | tdd-and-verification | yes for trivial only |
+| \`review\` | \`reviewer\` | \`code\` (default) or \`integration\` (after parallel-build) | review-discipline, anti-slop | no, always sub-agent |
 | \`ship\` | \`reviewer\` (mode=release) + \`reviewer\` (mode=adversarial, strict) + \`security-reviewer\` if \`security_flag\` | parallel fan-out, then merge | release-checklist | no, always sub-agent |
 
 The wrapper-skill column is what you put in the dispatch envelope's "Required second read" line. If multiple wrappers apply (planner reads both \`plan-authoring.md\` and \`source-driven.md\` in strict mode), list both — sub-agent reads them in order.
@@ -398,7 +398,7 @@ Resume after a design or planner checkpoint: \`flow-state.lastSpecialist\` tells
 #### build
 
 - Specialist: \`slice-builder\`.
-- Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/lib/templates/build.md\`, \`.cclaw/lib/skills/tdd-cycle.md\`.
+- Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/lib/templates/build.md\`, \`.cclaw/lib/skills/tdd-and-verification.md\`.
 - Output: \`.cclaw/flows/<slug>/build.md\` with TDD evidence at the granularity dictated by \`acMode\`.
 - Soft mode: one TDD cycle for the whole feature; tests under \`tests/\` mirroring the production module path; plain \`git commit\`. Sequential, single dispatch, no worktrees.
 - Strict mode, sequential: full RED → GREEN → REFACTOR per AC, every commit through \`commit-helper.mjs\`. Single \`slice-builder\` dispatch in the main working tree.
@@ -847,12 +847,11 @@ These skills auto-trigger during \`/cc\`. Do not re-explain them; obey them.
 - **pre-flight-assumptions** — Hop 2.5 of every fresh non-inline \`/cc\`; surfaces 3-7 stack/convention/architecture defaults for user confirmation.
 - **flow-resume** — when \`/cc\` is invoked with no task or with an active flow.
 - **plan-authoring** — on every edit to \`.cclaw/flows/<slug>/plan.md\`.
-- **ac-traceability** — strict mode only; before every commit.
-- **tdd-cycle** — always-on while stage=build; granularity scales with acMode.
+- **ac-discipline** — covers ac-quality (always-on for AC authoring) and ac-traceability (strict mode only; before every commit).
+- **tdd-and-verification** — always-on while stage=build; granularity scales with acMode.
 - **refinement** — when an existing plan match is detected.
 - **parallel-build** — strict mode + planner topology=parallel-build; enforces 5-slice cap and worktree dispatch.
-- **security-review** — when the diff touches sensitive surfaces.
-- **review-loop** — wraps every reviewer / security-reviewer invocation; runs the Concern Ledger + Five-axis pass + convergence detector.
+- **review-discipline** — wraps every reviewer / security-reviewer invocation; runs the Concern Ledger + Five-axis pass + convergence detector.
 - **source-driven** — strict mode only (opt-in for soft); design (deep posture, Phase 4 D-N records that cite framework docs) and planner detect stack version, fetch official doc deep-links, cite URLs, mark UNVERIFIED when docs are missing. Per-project fetch cache lives at \`.cclaw/cache/sdd/\` (gitignored).
 - **documentation-and-adrs** — repo-wide ADR catalogue at \`docs/decisions/ADR-NNNN-<slug>.md\`. Architect proposes (\`PROPOSED\`) when tier=product-grade or ideal AND a D-N matches the trigger table; orchestrator promotes to \`ACCEPTED\` at Hop 6 step 6 after ship; \`/cc-cancel\` marks them \`REJECTED\`; supersession is in-place.
 

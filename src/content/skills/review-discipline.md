@@ -1,9 +1,13 @@
 ---
-name: review-loop
-trigger: when reviewer or security-reviewer is invoked
+name: review-discipline
+trigger: when reviewer or security-reviewer is invoked; when the diff touches authn / authz / secrets / supply chain / data exposure
 ---
 
-# Skill: review-loop
+# Skill: review-discipline
+
+This merged skill covers both review loops with a shared Concern Ledger, Five-axis pass, and Five Failure Modes contract: the generic reviewer iteration (formerly **review-loop**) and the security-specific reviewer that runs in parallel (formerly **security-review**).
+
+## review-loop
 
 Review is a producer ↔ critic loop, not a single pass. Iteration N proposes findings; `slice-builder` (in `fix-only` mode) closes them; iteration N+1 re-checks. The loop ends only when one of three convergence signals fires (see "Convergence detector" below). This is the cclaw analogue of the Karpathy "Ralph loop": short cycles, an explicit ledger, and hard rules for when to stop.
 
@@ -137,3 +141,27 @@ Decision: clear (signal #2). F-2 carries to ships/<slug>.md and learnings/<slug>
 - Recording a finding without an axis. Every row carries an axis (one of `correctness` / `readability` / `architecture` / `security` / `perf`). Pick the dimension the finding speaks to; never blank.
 - Marking everything as `required` because "it might matter". Severity is graduated: `critical` for ship-breaking, `required` for must-fix-before-ship, `consider` for suggestion, `nit` for minor, `fyi` for context only. Padding severity makes it useless.
 - Walking only one or two axes when the diff touches all five. The Five-axis pass is mandatory every iteration; record "no findings" for axes you walked but found clean. Silence is a smell — say what you walked.
+
+## security-review
+
+The orchestrator dispatches `security-reviewer` automatically when the active task or diff touches sensitive surfaces. You can also invoke it explicitly with `/cc <task> --security-review`.
+
+## Rules
+
+1. `security-reviewer` is a separate specialist from `reviewer`. They can run in parallel against the same diff.
+2. `security-reviewer` decisions of severity `security` are block-level: ship is blocked until they are resolved by slice-builder mode=fix-only and the security review reruns clear.
+3. `security_flag: true` in plan frontmatter triggers the compound learning gate even if no other quality signal is present.
+
+## Threat-model checklist (mandatory)
+
+For every `threat-model` invocation, write `ok` / `flag` / `n/a` for each:
+
+1. Authentication
+2. Authorization
+3. Secrets (committed credentials, env, signing keys)
+4. Supply chain (new third-party deps, version pinning, provenance)
+5. Data exposure (logging, transmission, storage of user data)
+
+## Pure UI / docs diffs
+
+State explicitly that all five items are `n/a` and write a one-line justification per item. Do not skip the checklist.

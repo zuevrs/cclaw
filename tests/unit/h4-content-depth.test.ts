@@ -17,7 +17,7 @@ describe("v8 content depth — H4 + H5 trim", () => {
   });
 
   it("review-loop skill defines Concern Ledger and convergence detector", () => {
-    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "review-loop");
+    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "review-discipline");
     expect(skill?.body).toContain("Concern Ledger");
     expect(skill?.body).toContain("Convergence detector");
     expect(skill?.body).toContain("Two consecutive iterations");
@@ -171,7 +171,7 @@ describe("v8 content depth — H4 + H5 trim", () => {
   it("slice-builder + tdd-cycle skill forbid AC-id-named test files", () => {
     expect(SLICE_BUILDER_PROMPT).toContain("Test files follow project convention");
     expect(SLICE_BUILDER_PROMPT).toContain("Never name a test file after an AC id");
-    const tddSkill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "tdd-cycle");
+    const tddSkill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "tdd-and-verification");
     expect(tddSkill?.body).toContain("Test files are named by the unit under test, NOT by the AC id");
     expect(tddSkill?.body).toContain("AC-1.test.ts");
   });
