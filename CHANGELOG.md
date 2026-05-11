@@ -1,5 +1,62 @@
 # Changelog
 
+## 8.31.0 — Path-aware orchestrator trimming: Hop 4 pause/resume + plan-on-small/medium lifted to on-demand runbooks
+
+### Why
+
+The five-audit flow-complexity review (cclaw v8.29 vs flow-complexity audit) found ~2-3K tokens of large-risky-only / non-inline-only mechanics still inlined in `start-command.ts` that load on every `/cc` invocation — including inline / trivial paths that never reach those mechanics. The v8.22 lift moved ten on-demand runbooks out of the body (the body fell from 901 → 472 lines) but stopped short of **path-conditional gating**: every path still loaded the full Hop 4 step/auto mode procedure (47 lines), the per-Confidence × per-mode decision table (~1.2K chars), and the small-medium plan dispatch contract (~1.5K chars), even on flows that never pause (inline) or that never dispatch ac-author (trivial / large-risky).
+
+v8.31 closes the gap: two new on-demand runbooks (`pause-resume.md`, `plan-small-medium.md`) own the path-conditional mechanics; the body keeps the orchestrator-wide invariants (`/cc` is the only resume verb, end-of-turn is the step pause, `Confidence: low` is a hard gate in both modes, `/cc-cancel` is never a clickable option) so the v8.11 / v8.14 / v8.21 / v8.22 / v8.24 tripwires stay green. Observable behaviour (specialist dispatches per path) is identical pre- and post-v8.31 — verified by running every existing integration test unchanged.
+
+### What changed
+
+- **D1 — Two new on-demand runbooks** in `src/content/runbooks-on-demand.ts`:
+  - `pause-resume.md` (~2.7K chars) — full Hop 4 step/auto mode mechanics, the Confidence × mode decision table (`high` / `medium` / `low` rows × `step` / `auto` columns), and the common-rules-for-both-modes block (resume-from-fresh-session, `/cc-cancel` plain-prose-only rule). Trigger: every stage exit when `triage.path != ["build"]`.
+  - `plan-small-medium.md` (~1.7K chars) — full ac-author dispatch contract: pre-author research order (`learnings-research` always; `repo-research` brownfield only), input list, output spec (`flows/<slug>/plan.md` with verbatim `## Assumptions` + `## Prior lessons` sections), soft-mode bullet list vs strict-mode AC table, slim-summary shape. Trigger: `triage.complexity == "small-medium"` AND `plan` in `triage.path`.
+
+- **D2 — Body trim** in `src/content/start-command.ts`:
+  - **Hop 4** collapsed from ~47 lines to ~14 lines: keeps the runMode default mention, the inline-path-skips-Hop-4 callout, the HANDOFF.json / .continue-here.md callout, and the four orchestrator-wide invariants as a bullet list. The full per-mode procedures, the Confidence × mode table, and the resume-from-fresh-session rules moved to `pause-resume.md`.
+  - **Plan stage on small/medium** collapsed from ~10 lines to ~3 lines: keeps the specialist mapping (ac-author + plan-authoring / source-driven wrappers), the pre-author research order summary, and the `legacy-artifacts: true` mention (v8.12 invariant). The full input / output / slim-summary spec moved to `plan-small-medium.md`.
+  - **Trigger table** (line 144) gained two new rows so the body always points the orchestrator at the runbook for the matching path.
+
+- **D3 — Tripwire** at `tests/unit/v831-path-aware-trimming.test.ts` (25 tests, 5 describe blocks):
+  - **AC-1 — body-only budget:** body alone ≤ 42500 chars, ≤ 435 lines, ≥5% char cut vs v8.30 baseline (45212 chars). v8.30 → v8.31 body shrank to 41753 chars (~7.7% cut) / 434 lines.
+  - **AC-2 — per-path budget envelopes:** inline = body only ≤ 42500 chars; small-medium = body + 7 runbooks ≤ 105000 chars; large-risky = body + 10 runbooks ≤ 145000 chars. **Strict ordering enforced: large-risky > small-medium > inline by construction** (large-risky reads discovery.md + parallel-build.md + cap-reached-recovery.md + adversarial-rerun.md on top of small-medium's set).
+  - **AC-3 — new runbooks exist + wired:** `pause-resume.md` and `plan-small-medium.md` both registered in `ON_DEMAND_RUNBOOKS`, both start with the `# On-demand runbook —` heading prefix, body references each by file name, trigger table names `triage.complexity == "small-medium"` and `triage.path != ["build"]` as the gating predicates.
+  - **AC-4 — observable-behaviour invariants preserved:** body still names `/cc` as the single resume verb (v8.11), still tells the agent to `End your turn` in step mode (v8.11), still names `single resume mechanism` (v8.11), still references Hop 4 by heading (start-command.test invariant), still names `Confidence: low` as a hard gate, still names ac-author + plan-authoring for small-medium plan (v8.14), still names large-risky plan as design → ac-author (v8.14).
+  - **AC-5 — lifted content moved, not deleted:** the full step / auto mechanics live in pause-resume.md; the Confidence × mode table (with `| Confidence | step mode | auto mode |` header) lives in pause-resume.md; the ac-author input/output + research order live in plan-small-medium.md; each runbook declares its path-conditional trigger explicitly.
+
+- **D4 — v8.22 tripwire extended (not relaxed):** the hardcoded `expectedRunbookFiles` list grew from 10 to 12. The v8.22 contracts (every runbook reachable from body; every runbook opens with `# On-demand runbook —`; combined body + runbooks ≤ 100K chars) all still fire.
+
+### Per-path token measurements (chars / approx tokens)
+
+| path | body | + runbooks | total chars | total tokens |
+| --- | --- | --- | --- | --- |
+| inline | 41753 | 0 (no dispatches) | 41753 | ~10438 |
+| small-medium | 41753 | 27969 (7 runbooks) | 69722 | ~17431 |
+| large-risky | 41753 | 42637 (10 runbooks) | 84390 | ~21098 |
+
+The inline path saved ~3500 chars (~875 tokens) on every `/cc` invocation versus v8.30. Small-medium and large-risky paths gained the new runbooks but the on-demand pattern means each runbook is opened only when its trigger fires; the LLM never pre-loads the runbook bodies for paths that don't need them.
+
+### Migration
+
+Drop-in. No schema bump, no config change, no breaking change. The orchestrator behaviour per-path is identical:
+
+- **inline / trivial flows** — never opened pause-resume.md or plan-small-medium.md before v8.31 (no Hop 4, no plan stage); still don't. The lift removes content these paths never needed.
+- **small-medium flows** — pause-resume.md and plan-small-medium.md open at the same trigger points where their content used to live in the body (every stage exit; ac-author plan dispatch). LLM sees the same content, sourced from a different file.
+- **large-risky flows** — pause-resume.md opens at the same trigger points; discovery.md (already a runbook from v8.22) continues to own the large-risky plan branch unchanged.
+
+### Deferred to follow-up slugs
+
+- **Two-reviewer per-task loop lift.** The ~10-line large-risky-only / security_flag-only block at the top of `start-command.ts` could move to a `two-pass-reviewer.md` runbook to save another ~1.5K chars on inline / small-medium-without-security paths. v8.31 stops short because the v8.24 tripwire (14 assertions on `START_COMMAND_BODY`) would need mechanical updating; a future slug can lift them cleanly as a paired body+test change.
+- **SUMMARY_RETURN_EXAMPLE prose enum lift.** The "continue / review-pause / fix-only / cancel / accept-warns-and-ship" semantics block (~1.5K chars) could fold into `dispatch-envelope.md` but that's tightly bound to slim-summary contract reading.
+- **Hop 5 compound-gate signal lift.** The 4-signal compound-quality-gate enumeration could compress into a single line + a pointer to `compound-refresh.md` (which already owns the refresh mechanics). ~600-800 chars potential; the four signals are short enough that the body cost is small.
+- **Configurable per-path budget asserts.** v8.31 hardcodes inline ≤ 42500 / small-medium ≤ 105000 / large-risky ≤ 145000. A future slug could move these ceilings into a config knob (`config.pathBudget`) so a downstream consumer that monkey-patches more runbooks can tune them.
+
+### Tests
+
+`npm test`: 826 → 851 (+25) tests across 59 → 60 files. The new tripwire fires on every body re-grow or pointer drift past the per-path ceiling. `release:check`: green; pack 134 files into `cclaw-cli-8.31.0.tgz`. All v8.11 / v8.14 / v8.21 / v8.22 / v8.24 / v8.26 / v8.30 tripwires continue to pass unchanged (verifying observable behaviour is preserved).
+
 ## 8.30.0 — Skill anatomy gaps: `## When NOT to apply` on every skill + `## Common rationalizations` tables in top-8 skills (addy pattern)
 
 ### Why

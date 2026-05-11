@@ -71,6 +71,12 @@ describe("v8.22 orchestrator-slim — `/cc` body line budget", () => {
 });
 
 describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", () => {
+  // v8.31 extends the v8.22 set with two path-conditional runbooks:
+  // pause-resume.md (non-inline pause/resume mechanics) and
+  // plan-small-medium.md (small-medium plan dispatch contract).
+  // The list grows; the v8.22 invariant (every runbook is reachable
+  // from the body and has a `# On-demand runbook —` heading) is
+  // preserved.
   const expectedRunbookFiles = [
     "dispatch-envelope.md",
     "parallel-build.md",
@@ -82,9 +88,11 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
     "handoff-artifacts.md",
     "compound-refresh.md",
     "discovery.md",
+    "pause-resume.md",
+    "plan-small-medium.md",
   ];
 
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the ten expected files", () => {
+  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the twelve expected files (v8.22 ten + v8.31 two)", () => {
     const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
     expect(fileNames).toEqual([...expectedRunbookFiles].sort());
   });
