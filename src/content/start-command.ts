@@ -144,12 +144,14 @@ The orchestrator body keeps only the always-needed hops. Open the matching runbo
 | trigger | runbook |
 | --- | --- |
 | building any dispatch envelope | \`dispatch-envelope.md\` |
+| \`triage.complexity == "small-medium"\` AND \`plan\` in path | \`plan-small-medium.md\` |
 | \`triage.complexity == "large-risky"\` AND \`plan\` in path | \`discovery.md\` |
 | ac-author declares \`topology: parallel-build\` (≥2 slices, strict) | \`parallel-build.md\` |
 | every reviewer-stage exit before the reviewer dispatch | \`self-review-gate.md\` |
 | \`reviewCounter\` reaches 5 without convergence | \`cap-reached-recovery.md\` |
 | fix-only commits intersect a prior adversarial finding | \`adversarial-rerun.md\` |
 | stage ship (every ship attempt) | \`ship-gate.md\` |
+| every stage exit when \`triage.path != ["build"]\` (non-inline pause) | \`pause-resume.md\` |
 | every stage exit (including design Phase 7 sign-off) | \`handoff-artifacts.md\` |
 | compound capture is the 5th, or \`/cc-compound-refresh\` | \`compound-refresh.md\` |
 | Hop 6 starts (ship cleared, ready to move artifacts) | \`finalize.md\` |
@@ -319,13 +321,7 @@ The orchestrator reads only this; the full artifact stays in \`.cclaw/flows/<slu
 
 ##### Plan stage on small/medium (one specialist + research)
 
-- Specialist: \`ac-author\`. Wrapper skills: \`plan-authoring.md\` (always) + \`source-driven.md\` (framework-specific tasks).
-- Pre-author research (ac-author dispatches BEFORE writing the plan):
-  - \`learnings-research\` — always, on small/medium + large-risky. Reads \`.cclaw/knowledge.jsonl\`. Returns 0-3 prior lessons inline in slim-summary's \`Notes\` as \`lessons={...}\`; the ac-author copies verbatim quotes into \`plan.md\`'s \`## Prior lessons\` section. No separate \`research-learnings.md\` unless \`legacy-artifacts: true\`.
-  - \`repo-research\` — brownfield only (manifest at repo root AND populated source root). Skipped on greenfield. Writes \`flows/<slug>/research-repo.md\`.
-- Inputs: triage decision (with \`assumptions\`), user's original prompt, \`templates/plan.md\`, learnings-research blob, \`research-repo.md\` (when present), \`knowledge.jsonl\` for cross-check, matching shipped slug if refining.
-- Output: \`flows/<slug>/plan.md\` with \`status: active\`, \`## Assumptions\` verbatim from \`triage.assumptions\`, \`## Prior lessons\` from the learnings blob. Soft-mode body = bullet list of testable conditions; strict-mode body = AC table with verification lines, touch surfaces, parallel-build topology if it applies.
-- Slim summary: condition / AC count, max touch surface, parallel-build flag, recommended-next, prior-lesson count.
+Specialist: \`ac-author\`. Wrapper skills: \`plan-authoring.md\` (always) + \`source-driven.md\` (framework-specific tasks). ac-author dispatches \`learnings-research\` (always) and \`repo-research\` (brownfield only) **BEFORE** writing the plan; no separate \`research-learnings.md\` unless \`legacy-artifacts: true\`. The full dispatch contract — pre-author research order, input list, output spec (\`flows/<slug>/plan.md\` with verbatim \`## Assumptions\` + \`## Prior lessons\`), slim-summary shape, and the soft / strict body split — lives in \`.cclaw/lib/runbooks/plan-small-medium.md\`. Open that runbook when \`triage.complexity == "small-medium"\` AND \`plan\` is in \`triage.path\`.
 
 ##### Plan stage on large-risky
 
@@ -366,52 +362,18 @@ After ship, run the compound learning gate (Hop 5), then Hop 6 finalize.
 
 ## Hop 4 — Pause and resume
 
-Pause behaviour depends on \`triage.runMode\` (default \`step\`). Both modes share the same resume mechanism: \`/cc\` is the only command that advances a paused flow.
+Pause behaviour depends on \`triage.runMode\` (default \`step\`). Both modes share the same resume mechanism: \`/cc\` is the only command that advances a paused flow. **Inline / trivial paths set \`runMode: null\` and never pause — Hop 4 is skipped entirely on \`triage.path == ["build"]\`.**
 
-After every stage exit (and every design Phase 7 sign-off) the orchestrator writes two resumable-checkpoint files alongside \`flow-state.json\`: \`.cclaw/flows/<slug>/HANDOFF.json\` (machine-readable) and \`.cclaw/flows/<slug>/.continue-here.md\` (human-readable, in the user's language). The schemas, lifecycle, and rewrite trigger live in \`.cclaw/lib/runbooks/handoff-artifacts.md\`. Open that runbook on every stage exit.
+After every stage exit (and every design Phase 7 sign-off) the orchestrator writes resumable-checkpoint files (\`.cclaw/flows/<slug>/HANDOFF.json\` + \`.cclaw/flows/<slug>/.continue-here.md\`); the schemas, lifecycle, and rewrite trigger live in \`runbooks/handoff-artifacts.md\`. Open that runbook on every stage exit.
 
-### \`step\` mode (default; safer; recommended for \`strict\` work)
+Orchestrator-wide invariants Hop 4 enforces (per-mode procedures, table, and resume-from-fresh-session rules live in \`runbooks/pause-resume.md\`):
 
-After every dispatch returns: (1) render the slim summary; (2) re-author \`HANDOFF.json\` + \`.continue-here.md\` (see \`runbooks/handoff-artifacts.md\`); (3) state the next stage in plain language ("Plan is ready (5 testable conditions). Send \`/cc\` to continue with build."); (4) **End your turn** — do NOT call \`askUserQuestion\`, do NOT wait for a magic word; the pause IS the end of the turn; \`flow-state.json\` + \`HANDOFF.json\` carry the resume point.
+- **\`step\` mode** (default; safer; recommended for \`strict\` work) — render slim summary, re-author handoff files, state the next stage, **End your turn**. The pause IS the end of the turn; \`flow-state.json\` + \`HANDOFF.json\` carry the resume point. This is cclaw's **single resume mechanism** — no "type continue" magic word, no clickable Continue button.
+- **\`auto\` mode** (autopilot; faster; recommended for \`inline\` / \`soft\` work) — chain to the next stage immediately; stop only on hard gates: \`reviewer\` returned \`block\` / \`cap-reached\`, \`security-reviewer\` finding, \`Confidence: low\`, about-to-run \`ship\`, or inside design (per-phase pauses fire regardless of runMode; see \`runbooks/discovery.md\`).
+- **\`Confidence: low\`** in any slim summary is a hard gate in **both** modes. Specialist MUST write a non-empty \`Notes:\` line; orchestrator offers \`Expand <stage>\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\`.
+- **\`/cc-cancel\`** is the only way to discard an active flow; never a clickable option in any structured question — the orchestrator surfaces it as plain prose only when the user appears stuck.
 
-This is cclaw's **single resume mechanism**. Mid-session and cross-session pauses both end the turn; \`/cc\` is the only verb that moves the flow forward. No "type continue" magic word; no clickable Continue button mid-turn.
-
-If the user wants \`fix-only\` or \`show\` semantics, they say so in plain text on the next \`/cc\` and the orchestrator routes accordingly: "/cc fix-only" → slice-builder mode=fix-only against cited findings; "/cc show" → open the current-stage artifact and stop; otherwise → advance to the next stage.
-
-### \`auto\` mode (autopilot; faster; recommended for \`inline\` / \`soft\` work)
-
-After every dispatch returns: (1) render the slim summary; (2) immediately dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS inside the design phase (per-phase pauses fire regardless of runMode; see \`runbooks/discovery.md\`).
-
-Stop unconditionally only on these **hard gates** (autopilot **always** asks here):
-
-- \`reviewer\` returned \`block\` (open findings) → ask "dispatch fix-only" / "stay paused".
-- \`security-reviewer\` raised any finding → same shape.
-- \`reviewer\` returned \`cap-reached\` → see \`runbooks/cap-reached-recovery.md\`.
-- A slim summary has \`Confidence: low\` → see "Confidence as a hard gate" below.
-- About to run \`ship\` (last stage) → ask "Ship now?" once. Ship always confirms in autopilot.
-- Inside the design phase — pauses managed by design.md.
-
-Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green non-discovery stages. \`Cancel\` is **never** a clickable option; \`Stay paused\` (end turn) is the always-present safe-out.
-
-### Confidence as a hard gate (both modes)
-
-Every slim summary carries a \`Confidence: high | medium | low\` line — a quality signal for the dispatch that just returned, not a prediction of the next stage:
-
-| Confidence | step mode | auto mode |
-| --- | --- | --- |
-| \`high\` | normal pause; render summary, end the turn (\`/cc\` advances) | normal flow; chain to next stage |
-| \`medium\` | normal pause; mention confidence in the user-facing line ("Plan ready (medium confidence — see Notes). Send \`/cc\` to continue."); end the turn. The \`Notes:\` line is required when confidence is medium | render the summary inline ("medium — see Notes"); chain anyway |
-| \`low\` | hard gate. End the turn, surface \`Notes\` verbatim. User replies with \`/cc expand\` (re-dispatch with richer envelope), \`/cc show\` (open artifact), \`/cc override\` (acknowledge risk + advance), or \`/cc-cancel\` (nuke). | hard gate. Stop chaining. Ask: \`Expand <stage>\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\`. Only \`Override and continue\` resumes auto-chaining. |
-
-A specialist returning \`Confidence: low\` MUST write a non-empty \`Notes:\` line explaining the dimension that drove confidence down (missing input, unverified citation, partial coverage). Repeated low-confidence on the same stage is a routing signal: re-triage with a richer path or split the slug rather than re-dispatching the same specialist. Override is sticky to **this stage only**.
-
-### Common rules for both modes
-
-Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentStage\`, \`triage\` (with \`runMode\`), \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters Hop 1 → detect → resume summary → continue from \`currentStage\` with the saved runMode.
-
-Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused \`step\` flow renders the slim summary again and ends the turn (the same end-of-turn rule applies on resume). The user's next \`/cc\` continues.
-
-\`/cc-cancel\` is the **only** way to discard an active flow; it is never offered as a clickable option in any structured question. The orchestrator surfaces it as plain prose ("send \`/cc-cancel\` to discard this flow") only when the user appears stuck — not as the default.
+Open \`runbooks/pause-resume.md\` on every stage exit when \`triage.path != ["build"]\` (non-inline pause).
 
 ## Hop 5 — Compound (automatic)
 

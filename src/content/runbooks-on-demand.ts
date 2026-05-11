@@ -476,6 +476,108 @@ Resume after a design or ac-author checkpoint: \`flow-state.lastSpecialist\` tel
 **Legacy migration:** state files written by pre-v8.14 cclaw with \`lastSpecialist: "brainstormer"\` or \`lastSpecialist: "architect"\` are rewritten to \`null\` on read; the orchestrator re-runs the unified design phase from scratch on those resumes. Shipped slugs with \`flows/shipped/<old-slug>/decisions.md\` keep that file untouched for historical reference.
 `;
 
+const PAUSE_RESUME = `# On-demand runbook — pause and resume mechanics (step / auto / Confidence gate)
+
+The orchestrator opens this runbook on every stage exit when \`triage.path\` is **non-inline** (i.e., the path contains any of \`plan\` / \`review\` / \`ship\`, not just \`build\`). Inline / trivial paths set \`runMode: null\` and never pause — they skip Hop 4 entirely, so they never open this runbook.
+
+The orchestrator body keeps the orchestrator-wide invariants (\`/cc\` is the only resume verb, end-of-turn is the pause mechanism in step, Confidence: low is a hard gate in both modes). The full mechanics — including the per-mode procedure, the hard-gate enumeration, the Confidence × mode table, and the resume-from-fresh-session rules — live here so the orchestrator body stays slim on inline and small-medium paths that don't need every detail loaded.
+
+## \`step\` mode (default; safer; recommended for \`strict\` work)
+
+After every dispatch returns: (1) render the slim summary; (2) re-author \`HANDOFF.json\` + \`.continue-here.md\` (see \`runbooks/handoff-artifacts.md\`); (3) state the next stage in plain language ("Plan is ready (5 testable conditions). Send \`/cc\` to continue with build."); (4) **End your turn** — do NOT call \`askUserQuestion\`, do NOT wait for a magic word; the pause IS the end of the turn; \`flow-state.json\` + \`HANDOFF.json\` carry the resume point.
+
+This is cclaw's **single resume mechanism**. Mid-session and cross-session pauses both end the turn; \`/cc\` is the only verb that moves the flow forward. No "type continue" magic word; no clickable Continue button mid-turn.
+
+If the user wants \`fix-only\` or \`show\` semantics, they say so in plain text on the next \`/cc\` and the orchestrator routes accordingly: "/cc fix-only" → slice-builder mode=fix-only against cited findings; "/cc show" → open the current-stage artifact and stop; otherwise → advance to the next stage.
+
+## \`auto\` mode (autopilot; faster; recommended for \`inline\` / \`soft\` work)
+
+After every dispatch returns: (1) render the slim summary; (2) immediately dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS inside the design phase (per-phase pauses fire regardless of runMode; see \`runbooks/discovery.md\`).
+
+Stop unconditionally only on these **hard gates** (autopilot **always** asks here):
+
+- \`reviewer\` returned \`block\` (open findings) → ask "dispatch fix-only" / "stay paused".
+- \`security-reviewer\` raised any finding → same shape.
+- \`reviewer\` returned \`cap-reached\` → see \`runbooks/cap-reached-recovery.md\`.
+- A slim summary has \`Confidence: low\` → see "Confidence as a hard gate" below.
+- About to run \`ship\` (last stage) → ask "Ship now?" once. Ship always confirms in autopilot.
+- Inside the design phase — pauses managed by design.md.
+
+Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green non-discovery stages. \`Cancel\` is **never** a clickable option; \`Stay paused\` (end turn) is the always-present safe-out.
+
+## Confidence as a hard gate (both modes)
+
+Every slim summary carries a \`Confidence: high | medium | low\` line — a quality signal for the dispatch that just returned, not a prediction of the next stage:
+
+| Confidence | step mode | auto mode |
+| --- | --- | --- |
+| \`high\` | normal pause; render summary, end the turn (\`/cc\` advances) | normal flow; chain to next stage |
+| \`medium\` | normal pause; mention confidence in the user-facing line ("Plan ready (medium confidence — see Notes). Send \`/cc\` to continue."); end the turn. The \`Notes:\` line is required when confidence is medium | render the summary inline ("medium — see Notes"); chain anyway |
+| \`low\` | hard gate. End the turn, surface \`Notes\` verbatim. User replies with \`/cc expand\` (re-dispatch with richer envelope), \`/cc show\` (open artifact), \`/cc override\` (acknowledge risk + advance), or \`/cc-cancel\` (nuke). | hard gate. Stop chaining. Ask: \`Expand <stage>\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\`. Only \`Override and continue\` resumes auto-chaining. |
+
+A specialist returning \`Confidence: low\` MUST write a non-empty \`Notes:\` line explaining the dimension that drove confidence down (missing input, unverified citation, partial coverage). Repeated low-confidence on the same stage is a routing signal: re-triage with a richer path or split the slug rather than re-dispatching the same specialist. Override is sticky to **this stage only**.
+
+## Common rules for both modes
+
+Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentStage\`, \`triage\` (with \`runMode\`), \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters Hop 1 → detect → resume summary → continue from \`currentStage\` with the saved runMode.
+
+Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused \`step\` flow renders the slim summary again and ends the turn (the same end-of-turn rule applies on resume). The user's next \`/cc\` continues.
+
+\`/cc-cancel\` is the **only** way to discard an active flow; it is never offered as a clickable option in any structured question. The orchestrator surfaces it as plain prose ("send \`/cc-cancel\` to discard this flow") only when the user appears stuck — not as the default.
+`;
+
+const PLAN_SMALL_MEDIUM = `# On-demand runbook — plan stage on small/medium
+
+The orchestrator opens this runbook when \`triage.complexity == "small-medium"\` AND \`plan\` is in \`triage.path\`. For large-risky plan, open \`discovery.md\` instead. For trivial / inline (\`triage.path == ["build"]\`) the plan stage is skipped entirely — this runbook is never opened on the inline path.
+
+## Specialist + wrappers
+
+- Specialist: \`ac-author\`.
+- Wrapper skills: \`plan-authoring.md\` (always) + \`source-driven.md\` (framework-specific tasks; strict mode only by default — soft opts in).
+
+## Pre-author research order (ac-author dispatches BEFORE writing the plan)
+
+- \`learnings-research\` — **always**, on small/medium + large-risky. Reads \`.cclaw/knowledge.jsonl\`. Returns 0-3 prior lessons inline in slim-summary's \`Notes\` as \`lessons={...}\`; the ac-author copies verbatim quotes into \`plan.md\`'s \`## Prior lessons\` section. No separate \`research-learnings.md\` artifact unless \`legacy-artifacts: true\`.
+- \`repo-research\` — **brownfield only** (manifest at repo root AND populated source root). Skipped on greenfield. Writes \`flows/<slug>/research-repo.md\`.
+
+Both research helpers run as sub-agent dispatches with their own \`.cclaw/lib/agents/<id>.md\` contracts; they never become \`lastSpecialist\` and never appear in \`triage.path\`.
+
+## Inputs (ac-author reads after the contract + wrappers)
+
+- triage decision (with \`assumptions\` from triage.assumptions)
+- the user's original \`/cc <task>\` prompt
+- \`.cclaw/lib/templates/plan.md\`
+- the \`learnings-research\` blob (returned inline in its slim-summary \`Notes\`)
+- \`flows/<slug>/research-repo.md\` (when brownfield)
+- \`.cclaw/knowledge.jsonl\` for cross-check (independent of the learnings-research blob)
+- the matching shipped slug if the flow is refining one (\`triage.refines\` is set)
+
+## Output
+
+\`flows/<slug>/plan.md\` with:
+
+- frontmatter \`status: active\`, \`slug\`, \`stage: plan\`, \`acMode\` (\`soft\` or \`strict\`), \`ac: [...]\` (id + status), \`last_specialist: ac-author\`, \`refines\` (if applicable), \`security_flag\`.
+- \`## Assumptions\` section, **verbatim** from \`triage.assumptions\` — do not paraphrase.
+- \`## Prior lessons\` section from the learnings-research blob, **verbatim** quotes (no summary).
+- Body shape depends on acMode:
+  - **soft-mode body** = a bullet list of testable conditions (3-7 items typical).
+  - **strict-mode body** = an AC table with \`AC-N\`, verification line (test name / manual step / command), \`touchSurface\`, and \`parallelSafe\` per row; \`## Topology\` block with \`inline\` (default) or \`parallel-build\` (only when the topology gate from \`plan.md\` stage runbook §5 fires).
+
+## Slim summary (ac-author → orchestrator)
+
+\`\`\`
+Stage: plan  ✅ complete  |  ⏸ paused  |  ❌ blocked
+Artifact: flows/<slug>/plan.md
+What changed: <one sentence; e.g. "5 testable conditions" or "AC-1 … AC-7, parallel-build (3 slices)">
+Open findings: 0
+Confidence: <high | medium | low>
+Recommended next: continue
+Notes: lessons={<count or summary>}, topology=<inline | parallel-build>, prior-lesson-count=<N>
+\`\`\`
+
+The orchestrator reads only this; the full plan.md stays in \`flows/<slug>/plan.md\` for the next stage's slice-builder dispatch. The five report fields the orchestrator uses are: condition / AC count, max \`touchSurface\` value, parallel-build flag, recommended-next, prior-lesson count.
+`;
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -536,6 +638,18 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "discovery.md",
     title: "Discovery sub-phase (large-risky plan)",
     body: DISCOVERY
+  },
+  {
+    id: "pause-resume",
+    fileName: "pause-resume.md",
+    title: "Pause / resume mechanics (step / auto / Confidence gate)",
+    body: PAUSE_RESUME
+  },
+  {
+    id: "plan-small-medium",
+    fileName: "plan-small-medium.md",
+    title: "Plan stage on small/medium",
+    body: PLAN_SMALL_MEDIUM
   }
 ];
 
