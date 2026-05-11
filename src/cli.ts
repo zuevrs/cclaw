@@ -93,6 +93,10 @@ const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
     "--skip-orphan-cleanup",
     "Skip the scan that removes stale .md files in .cclaw/lib/skills/ and .cclaw/lib/runbooks/."
   ],
+  [
+    "--with-context",
+    "install/sync: write a CONTEXT.md project-domain-glossary stub at the project root when the file does not already exist (v8.35; opt-in)."
+  ],
   ["--all", "knowledge: drop the default 20-row limit and print every captured entry."],
   ["--tag=<tag>", "knowledge: filter to entries whose tags[] contains <tag>."],
   [
@@ -332,6 +336,7 @@ async function dispatchInstallAction(
     harnesses: args.harnesses,
     interactive,
     skipOrphanCleanup: Boolean(args.flags["skip-orphan-cleanup"]),
+    withContext: Boolean(args.flags["with-context"]),
     onProgress: makeProgressPrinter(useColor)
   });
   writeOut(renderSummary(result.counts, useColor));

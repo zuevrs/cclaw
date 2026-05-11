@@ -1,5 +1,71 @@
 # Changelog
 
+## 8.35.0 — Project domain glossary (`CONTEXT.md`)
+
+### Why
+
+The five-audit review (mattpocock pattern) identified a small but high-leverage hole in cclaw's specialist dispatch envelope: when a project has its own domain vocabulary ("AC" with a project-specific shape, "slug" with a different cadence, internal jargon like "boson", "harvest mode", "pre-cleared", etc.), every specialist re-discovers it from source — burning context, occasionally getting it wrong, and providing no shared vocabulary the user can correct in one place. The mattpocock convention is a tiny optional file at the project root (`CONTEXT.md`) listing the project's domain terms with 1-2 line definitions. cclaw specialists read it once at the start of each dispatch; the LLM gets shared vocabulary; the user owns the file and can refine it.
+
+v8.35 wires this in:
+
+1. **`CONTEXT.md` is optional and lives at the project root** (not inside `.cclaw/`). Missing file is a no-op — specialists silently skip. Present file is read once per dispatch by every flow-stage specialist (design / ac-author / slice-builder / reviewer). The file is the user's; cclaw never overwrites an existing one.
+
+2. **`cclaw install --with-context` writes a cclaw-shipped stub** when the file is missing. The stub carries H2 sections for the load-bearing cclaw vocabulary (`Slug`, `Acceptance Criterion`, `Compound capture`, `Runbook`, `Triage`) so a fresh project gets the cclaw lexicon documented out of the box; the user then adds project-specific terms below. Without `--with-context`, install never touches CONTEXT.md.
+
+3. **The four flow-stage specialists name CONTEXT.md in their input lists** (design / ac-author / slice-builder / reviewer). The line is guarded with "if the file exists" / "missing file is a no-op" so absence never breaks a dispatch.
+
+The "specialist reads CONTEXT.md if it exists" line is deliberately small (~1 bullet per specialist, ~150-220 chars). It does not change the orchestrator body, so it does not affect v8.31's path-aware token budgets. The `--with-context` flag is opt-in: default `cclaw install` produces no new files at the project root.
+
+### What changed
+
+- **D1 — New module `src/context-glossary.ts`** (~85 lines including the template):
+  - `CONTEXT_MD_FILE_NAME = "CONTEXT.md"` (uppercase, project root, mirrors the mattpocock convention).
+  - `contextGlossaryPath(projectRoot: string): string` — joins projectRoot + canonical filename. Exported so callers do not hard-code the path string.
+  - `readContextGlossary(projectRoot: string): Promise<string | null>` — returns the file body on success; returns `null` when ENOENT (the "missing-is-a-no-op" contract); re-throws other errors. Specialists treat `null` as "skip the read step" and the string return as "pin to dispatch context".
+  - `CONTEXT_MD_TEMPLATE` — the cclaw-shipped stub. Carries H1 + marker comment `<!-- cclaw-context: stub -->` + 5 canonical H2s (Slug / Acceptance Criterion / Compound capture / Runbook / Triage) + a trailing "Project-specific terms" section the user fills in. Marker comment is the anchor for a future "is this our untouched stub?" check.
+
+- **D2 — `cclaw install --with-context` flag** in `src/cli.ts` + `src/install.ts`:
+  - New CLI option `--with-context` (help text: "install/sync: write a CONTEXT.md project-domain-glossary stub at the project root when the file does not already exist (v8.35; opt-in).").
+  - `SyncOptions.withContext?: boolean` (default `false`).
+  - `maybeWriteContextStub(projectRoot, withContext)` in `src/install.ts` returns one of `"created" | "exists" | "skipped"`. **Never overwrites an existing file**: if CONTEXT.md is present, the install layer leaves it verbatim and emits a `Preserved CONTEXT.md` progress event so the user sees the file was untouched.
+  - Progress events: `Wrote CONTEXT.md stub` (when created), `Preserved CONTEXT.md` (when an existing file is left alone). Default `cclaw install` (no `--with-context`) emits neither event and produces no file.
+
+- **D3 — Specialist prompts gain a CONTEXT.md read line** in `src/content/specialist-prompts/`:
+  - `design.ts` — adds a bullet to "Inputs you have access to" naming CONTEXT.md as an optional project glossary, read once at Phase 0 if it exists, used as shared project vocabulary for Frame / Approaches / D-N. Missing file → no-op.
+  - `ac-author.ts` — adds a bullet to the orchestrator-supplied inputs list (item 6) naming CONTEXT.md, same shape, used when authoring AC.
+  - `slice-builder.ts` — adds a bullet to the sub-agent envelope list naming CONTEXT.md, same shape, used while implementing AC.
+  - `reviewer.ts` — adds a bullet to the envelope list naming CONTEXT.md, same shape, used while reviewing.
+  - `security-reviewer.ts` is intentionally untouched — security review reads code + the security-reviewer skill; project-domain vocabulary is not load-bearing for CVE detection. Deferred.
+
+- **D4 — Tripwire** at `tests/unit/v835-context-md-glossary.test.ts` (18 tests, 4 describe blocks):
+  - **AC-1 — template shape:** `CONTEXT_MD_TEMPLATE` is non-empty (>400 chars), opens with a top-level H1 naming the file as a project domain glossary, carries the 3 canonical H2 sections (`Slug`, `Acceptance Criterion`, `Compound capture`), carries the `<!-- cclaw-context: stub -->` marker comment, and instructs the user to add project-specific terms.
+  - **AC-2 — `readContextGlossary` helper:** returns `null` when missing (no-op contract), returns the file body when present, gracefully passes through malformed content (opaque markdown).
+  - **AC-3 — specialist prompts:** all four flow-stage specialists (design / ac-author / slice-builder / reviewer) name `CONTEXT.md` and guard the read with "if it exists" / "when present" / "missing-is-a-no-op" semantics. Per-specialist sub-assertions catch the case where one specialist silently drops the line.
+  - **AC-4 — `contextGlossaryPath` + `CONTEXT_MD_FILE_NAME`:** literal `"CONTEXT.md"` (uppercase, at project root); `contextGlossaryPath("/tmp/sample")` returns `"/tmp/sample/CONTEXT.md"`.
+  - **AC-5 — template anchors:** marker comment + canonical H2 set are present so future tooling has a stable shape to check against.
+  - **AC-6 — install layer respects opt-in:** default install (no `--with-context`) does NOT create CONTEXT.md; `withContext: true` writes the canonical stub; `withContext: true` preserves an existing user-authored CONTEXT.md verbatim.
+
+### Migration
+
+- **No-op for existing projects.** `cclaw sync` / `cclaw upgrade` without `--with-context` produces no new files. Specialists running on a project without CONTEXT.md behave exactly as in v8.34 (the read step short-circuits on `null`).
+- **Opt-in.** Add `--with-context` to any `cclaw install` / `cclaw sync` / `cclaw upgrade` invocation to seed the stub. Edit `CONTEXT.md` to add project-specific terms; commit the file. From then on, every specialist dispatch sees the glossary as shared vocabulary.
+- **User-owned.** Once CONTEXT.md exists, cclaw never overwrites it. Re-running `cclaw install --with-context` against a project that already has CONTEXT.md leaves the file verbatim and emits a "Preserved CONTEXT.md" progress event.
+- **No flow-state migration.** CONTEXT.md is a project-root convention, not a runtime artefact. Nothing in `.cclaw/state/` needs to change.
+
+### Deferred to follow-up slugs
+
+- **TUI prompt at `cclaw install`.** v8.35 ships the `--with-context` flag (non-interactive, scriptable, CI-friendly) but does not add an interactive "Create CONTEXT.md scaffold? (y/N)" prompt to the TUI menu. The current main-menu / harness-prompt layer is single-shot; weaving in a conditional yes/no on a separate file would require a new state machine. Operators who want the stub today run `cclaw install --with-context`. A future slug can grow the TUI hook.
+- **Compound-capture step reads CONTEXT.md.** v8.35 wires the read into the four flow-stage specialists. The end-of-flow compound-capture step (which writes `knowledge.jsonl`) does not yet read CONTEXT.md to enrich the entry's vocabulary. Deferred — the value-add for compound capture is real but smaller than for the flow-stage specialists, and the edit surface intersects v8.34's `problemType` work.
+- **`cclaw context refresh` / `cclaw context diff`.** A CLI subcommand to refresh the cclaw-shipped sections of an existing CONTEXT.md (using the marker comment as the anchor) without clobbering user-added terms. Deferred — the marker comment is already in place (AC-5), so the refresh tooling can land additively.
+- **Security-reviewer reads CONTEXT.md.** Intentionally skipped (see D3 rationale).
+- **`AGENTS.md` / `CLAUDE.md` pointer.** A one-line cross-reference from `AGENTS.md` ("if `CONTEXT.md` exists at the project root, treat it as authoritative domain vocabulary") could nudge non-cclaw agent rigs to read the file. Deferred — out of scope for an additive cclaw slug; in scope for a future "ecosystem polish" pass.
+
+### Tests
+
+- Tripwire: `tests/unit/v835-context-md-glossary.test.ts` (18 tests across 4 describe blocks; see D4 above for the AC matrix).
+- No existing tests change. Skill anatomy (v8.30), path-aware orchestrator trimming (v8.31), skill counts (v8.32 / v8.33), and knowledge / runMode toggle (v8.34) tripwires all remain green.
+- Full suite: 932 tests across 64 files (914 → 932; +18 new tests).
+
 ## 8.34.0 — Knowledge `problemType` field + mid-flight `runMode` toggle
 
 ### Why

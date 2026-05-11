@@ -38,6 +38,11 @@ import { renderIdeaCommand } from "./content/idea-command.js";
 import { ensureDir, exists, removePath, writeFileSafe } from "./fs-utils.js";
 import { ensureRunSystem } from "./run-persistence.js";
 import { createDefaultConfig, readConfig, renderConfig, type CclawConfig } from "./config.js";
+import {
+  CONTEXT_MD_FILE_NAME,
+  CONTEXT_MD_TEMPLATE,
+  contextGlossaryPath
+} from "./context-glossary.js";
 import { detectHarnesses, NO_HARNESS_DETECTED_MESSAGE } from "./harness-detect.js";
 import { ensureGitignorePatterns, removeGitignorePatterns } from "./gitignore.js";
 import { isInteractive, runPicker } from "./harness-prompt.js";
@@ -105,6 +110,18 @@ export interface SyncOptions {
    * as `cclaw <sync|upgrade|init> --skip-orphan-cleanup` on the CLI.
    */
   skipOrphanCleanup?: boolean;
+  /**
+   * v8.35 — when true, write a CONTEXT.md stub at the project root if
+   * one does not already exist. Default `false`: CONTEXT.md is an
+   * opt-in convention, the install layer must never overwrite a file
+   * the user (or another tool) authored. Surfaced behind the
+   * `--with-context` CLI flag.
+   *
+   * An existing CONTEXT.md is preserved verbatim regardless of this
+   * option's value — the install layer never mutates an existing
+   * project-root markdown file.
+   */
+  withContext?: boolean;
   /**
    * Optional progress callback invoked once per major install step
    * (agents written, hooks installed, etc.). The CLI wires this to a
@@ -398,6 +415,31 @@ async function writeConfig(projectRoot: string, config: CclawConfig): Promise<st
   return configPath;
 }
 
+/**
+ * v8.35 — write the CONTEXT.md stub at the project root when the user
+ * opts in via `--with-context` and the file does not already exist.
+ *
+ * Returns `"created" | "exists" | "skipped"` so the install summary can
+ * report what happened. The install layer NEVER overwrites an existing
+ * CONTEXT.md — the file belongs to the user and may have been authored
+ * by them or another tool (mattpocock-style glossary, a non-cclaw
+ * project convention, etc.).
+ */
+async function maybeWriteContextStub(
+  projectRoot: string,
+  withContext: boolean
+): Promise<"created" | "exists" | "skipped"> {
+  if (!withContext) return "skipped";
+  const target = contextGlossaryPath(projectRoot);
+  try {
+    await fs.access(target);
+    return "exists";
+  } catch {
+    await writeFileSafe(target, CONTEXT_MD_TEMPLATE);
+    return "created";
+  }
+}
+
 async function resolveHarnesses(
   projectRoot: string,
   fromOptions: HarnessId[] | undefined,
@@ -512,6 +554,16 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   await ensureGitignorePatterns(projectRoot);
   const configPath = await writeConfig(projectRoot, config);
   emit("Wrote .cclaw/config.yaml", `harnesses: ${harnesses.join(", ")}`);
+
+  const contextOutcome = await maybeWriteContextStub(projectRoot, options.withContext ?? false);
+  if (contextOutcome === "created") {
+    emit("Wrote CONTEXT.md stub", `${CONTEXT_MD_FILE_NAME} (project domain glossary, edit and commit)`);
+  } else if (contextOutcome === "exists") {
+    emit(
+      "Preserved CONTEXT.md",
+      `${CONTEXT_MD_FILE_NAME} already exists; left untouched (install never overwrites)`
+    );
+  }
 
   const counts: SummaryCounts = {
     harnesses: [...harnesses],
