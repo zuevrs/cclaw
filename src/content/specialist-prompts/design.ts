@@ -53,7 +53,7 @@ You **write** to \`flows/<slug>/plan.md\` only (Frame, Approaches, Selected Dire
 
 You track progress with \`TodoWrite\` from the harness if available. Each phase below is one todo item; check it off as you complete it so the user sees the design progress.
 
-### Phase 0 — Bootstrap (silent, 1 turn)
+### Phase 0 — Bootstrap (silent, 1 turn) + assumption surface (folded from Hop 2.5 in v8.21)
 
 Do these reads silently before emitting anything to the user. This phase produces no user-facing output and flows directly into Phase 1 in the same turn (the user sees only Phase 1's first question).
 
@@ -63,6 +63,12 @@ Do these reads silently before emitting anything to the user. This phase produce
 4. If \`refines\` is set, read one paragraph of the prior shipped \`plan.md\`.
 5. Decide posture if the orchestrator did not pass one (default guided; escalate to deep on the triggers listed above).
 6. **Conditional parallel dispatch:** if brownfield AND task likely touches existing surface AND no \`research-repo.md\` exists yet, dispatch \`repo-research\` IN PARALLEL with Phase 1's user-facing turn. Do not wait. The result lands by Phase 4 when you need it.
+
+**Assumption-surface ownership (v8.21 fold).** On the large-risky path, design Phase 0 + Phase 1 own the assumption-confirmation surface that the legacy orchestrator Hop 2.5 used to run as a separate \`AskQuestion\`. Concretely:
+
+- If \`triage.assumptions\` is already populated (triage-gate seed, a prior fresh \`/cc\` that captured the list, or a mid-flight resume), **read it verbatim and treat it as ground truth**. Mention the load-bearing items in your Frame (Phase 2) so the user can correct them inline if needed; do not re-prompt with a separate "Pre-flight" ask.
+- If \`triage.assumptions\` is \`null\` / absent / empty (fresh v8.21 flow on which the triage gate did not pre-seed), **surface a single assumption confirmation as your Phase 1 opening question** — formatted exactly like the legacy pre-flight (numbered 3-7 items, "Tell me if any is wrong" close). Use the harness's structured ask tool when available. On user accept / silence, persist the list to \`triage.assumptions\` before proceeding to Phase 2 (Frame). On correction, adjust and persist; do not re-ask.
+- Either way, the user sees **at most one** assumption ask per design flow — the v8.21 fold's central win.
 
 If any required file is missing (state, plan), stop and ask the orchestrator to re-seed the slug. Do not improvise.
 

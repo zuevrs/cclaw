@@ -1,5 +1,83 @@
 # Changelog
 
+## 8.21.0 — Preflight-fold: assumption surface moves into specialist Phase 0
+
+### Why
+
+Hop 2.5 (Pre-flight) currently surfaces 3-7 assumptions to the user with an `AskQuestion` confirmation. On large-risky flows, design Phase 0 (Bootstrap → Phase 1 Clarify) does the same job richer — its first clarifying question often *is* an assumption confirmation. The two surfaces ran back-to-back, producing a double-ask the user reasonably read as redundant. On small-medium flows, Hop 2.5 was a friction hop without a corresponding design phase to amortise the ask: the planner ran immediately after, opening with another ambient assumption read. The user's original audit flagged the whole shape as "дико переусложнено" — wildly overcomplicated.
+
+v8.21 folds the assumption-confirmation surface into the first specialist's first turn:
+
+- **large-risky** → design Phase 0 / Phase 1 owns the surface (was: Hop 2.5 then design Phase 0).
+- **small-medium** → planner Phase 0 owns it (new mini-section; was: Hop 2.5 then planner Phase 1).
+- **inline** → unchanged; no assumption surface (a one-file edit has no architecture-shape assumptions).
+
+`triage.assumptions` stays a first-class field on `flow-state.json`. The wire format, schema, and every downstream reader are byte-for-byte identical to v8.20. **Only the capture surface moved.**
+
+### What changed
+
+**D1 — Large-risky removes the separate Hop 2.5 ask.** `src/content/start-command.ts` Hop 2.5 section is rewritten as **"Hop 2.5 — Pre-flight (folded into specialist Phase 0)"**. The body documents the new ownership matrix: large-risky → design Phase 0 / Phase 1; small-medium → planner Phase 0; inline → no surface. The legacy structured `AskQuestion` (Proceed / Edit one / Edit several) is gone — the design specialist's existing Phase 1 (Clarify) protocol handles assumption confirmation inline now, asking one structured question per turn through the harness's question facility, exactly as it does for the other clarifying questions.
+
+**D2 — Design Phase 0 explicitly owns the assumption surface on large-risky.** `src/content/specialist-prompts/design.ts` Phase 0 header is renamed to **"Bootstrap (silent, 1 turn) + assumption surface (folded from Hop 2.5 in v8.21)"** and gains a new paragraph naming the v8.21 fold. The rule: when `triage.assumptions` is already populated (triage-gate seed, prior fresh `/cc`, or mid-flight resume), read it verbatim as ground truth and mention load-bearing items inline in the Frame draft (Phase 2). When the field is empty / absent (fresh v8.21 flow on which the triage gate did not pre-seed), surface a single assumption confirmation as Phase 1's opening question, persist to `triage.assumptions` on accept, do not re-ask. **The user sees at most one assumption ask per design flow** — the fold's central win.
+
+**D3 — Planner Phase 0 mini-section for small-medium.** `src/content/specialist-prompts/planner.ts` gains a new **"Phase 0 — Assumption confirmation (small-medium only, single turn)"** section ahead of the existing Phase 1 (Bootstrap). Phase 0 runs only when `triage.complexity == "small-medium"` AND `triage.assumptions` is empty / absent AND this is the planner's first dispatch on the slug. It composes 3-7 numbered assumptions from the same signals as the legacy pre-flight skill (stack / conventions / architecture defaults / out-of-scope), emits one user-facing turn ("I'm working from these assumptions: …. Tell me if any is wrong before I draft the plan. Silence = accept."), waits one turn, and either proceeds (silence / accept), adjusts (correction), or persists an interpretation fork (out-of-band ambiguity). The final agreed list is persisted to `triage.assumptions` before Phase 1 (Bootstrap) reads from disk. Skip rules: `triage.assumptions` already populated, or `triage.complexity == "large-risky"` (the planner ran after design; design owns the surface).
+
+**D4 — Inline path unchanged.** The trivial / inline path (`triage.path == ["build"]`) had no Hop 2.5 to begin with — pre-v8.21 the orchestrator skipped it explicitly. The fold doesn't change that: the inline path still goes straight to the build dispatch. `start-command.ts`'s "Trivial path" section is reworded slightly to say "the inline path has no assumption surface" instead of "skip pre-flight (Hop 2.5) along with them", but the runtime behaviour is identical.
+
+**D5 — `triage.assumptions` stays first-class.** Both new surfaces still write `triage.assumptions: string[]` to `flow-state.json`. The schema is unchanged (TypeScript / Zod-like validator in `assertTriageOrNull` matches v8.20 byte-for-byte; tests cover null / array / non-string-entry / absent shapes). Downstream readers — commit-helper hook, reviewer prompt's plan-cross-check, slice-builder's pre-task read of the active plan — read the field unchanged. The wire format is the contract; the capture surface is implementation.
+
+**D6 — Migration: pre-populated `triage.assumptions` short-circuits Phase 0.** Both design Phase 0 and planner Phase 0 explicitly skip the ask when the field is already populated. This covers:
+
+- **Pre-v8.21 flows resumed on v8.20.x state.** The legacy Hop 2.5 captured `triage.assumptions` on the prior fresh `/cc`; the v8.21 orchestrator reads the populated list and the first specialist runs Phase 0 in short-circuit mode (read + proceed, no user-facing ask).
+- **Mid-flight resume on v8.21 flows.** Same path; the list is on disk from the prior turn.
+- **Triage-gate seed in v8.21+ on small projects.** The triage gate may pre-populate `triage.assumptions` from the most recent shipped slug's `assumptions:` block (the same seed mechanism the legacy pre-flight skill used). When that happens, planner Phase 0 sees a populated list and skips the ask. Identical UX to the legacy "user accepts the pre-flight without edits" path.
+
+Resume detection (Hop 0) never re-prompts for assumptions on resume. That invariant was already enforced by the legacy Hop 2.5's "saved `triage.assumptions` is already on disk → skip" rule; v8.21 carries it forward into the specialist Phase 0 skip-rules.
+
+**D7 — `pre-flight-assumptions.md` skill becomes a thin reference doc.** The skill body is rewritten end-to-end as a "v8.21 fold notice" doc. It opens with "this skill is a reference doc, not a runtime hop", points readers at design Phase 0 / planner Phase 0 for the actual capture surface, and preserves the composition rules (3-7 items, stack / conventions / architecture / out-of-scope, citations) since both new surfaces use the same playbook. The migration note ("flows started on v8.20 or earlier where the legacy Hop 2.5 already captured `triage.assumptions` continue to work unchanged") is explicit so a project reading the doc on a resume understands why no new ask appears.
+
+**D8 — `triage-gate.md` skill no longer mentions a separate Hop 2.5 step.** The flow-diagram phrasing pre-v8.21 was "the orchestrator runs the `pre-flight-assumptions` skill (Hop 2.5) before dispatching the first specialist". v8.21 drops the parenthetical step name and re-routes the surface to the first specialist's first turn. The triage gate doesn't author the assumption list itself; it can still pre-seed `triage.assumptions` from the most-recent-shipped-slug heuristic (unchanged), and the new surface short-circuits on that seed when it exists.
+
+### Migration
+
+**v8.20 → v8.21.** Drop-in. Run `cclaw upgrade` to refresh the spec files in `.cclaw/lib/`. Three scenarios:
+
+1. **Fresh v8.21 `/cc` on a small-medium task.** The user types `/cc <task>`, triage runs, the orchestrator dispatches planner directly (no Hop 2.5 in between). Planner Phase 0 surfaces the assumption-confirmation question in its first turn, user replies, persists, Phase 1 (Bootstrap) reads the persisted list from disk. One ask, no double-asks.
+2. **Fresh v8.21 `/cc` on a large-risky task.** Same shape, but the orchestrator dispatches design first. Design Phase 0 reads any pre-seed; if absent, Phase 1's opening question is the assumption confirmation. Frame (Phase 2) cites the agreed list. Planner runs after sign-off and reads the persisted list.
+3. **Resumed pre-v8.21 flow.** The legacy Hop 2.5 already captured `triage.assumptions` on the prior fresh `/cc`. The v8.21 orchestrator reads the populated list; the first specialist that runs on resume sees a populated `triage.assumptions` and short-circuits its Phase 0 ask (read + proceed, no user-facing ask). Resume behaviour is identical to v8.20.
+
+**The wire format is unchanged.** No code reading `triage.assumptions` has to change. The fold is purely about which surface authors the field for fresh v8.21 flows.
+
+### What we noticed but didn't touch (v8.21 scope)
+
+- **Interpretation forks on small-medium.** The legacy pre-flight skill ran an "ambiguity check" sub-step before composing assumptions, surfacing 2-4 distinct readings via `triage.interpretationForks`. v8.21 keeps the field schema unchanged (still `string[] | null`); planner Phase 0 can surface a fork inline ("I'm reading this as X — say so if you meant Y") and persist to `triage.interpretationForks`. Design Phase 1 (Clarify) on large-risky already handles this via live follow-up questions. A separate sub-step would over-formalise it; deferred.
+- **`triage.assumptions` seed from most-recent-shipped-slug.** The legacy pre-flight skill explicitly read `.cclaw/flows/shipped/<latest>/<plan>.md` for the `assumptions:` block to seed defaults. The new surfaces inherit this rule (the playbook in `pre-flight-assumptions.md` still names it), but the triage gate has not been wired to author the seed yet — that's a separate v8.X+ slug. Today the seed runs at the specialist's first turn; the latency vs runtime cost difference is minor.
+- **AC-7's premise (commit-helper.mjs reads `triage.assumptions`).** The current commit-helper template in `src/content/node-hooks.ts` does NOT read `triage.assumptions` — it reads plan-frontmatter + AC-ids + ac-mode and writes a commit-trace block. The user's AC-7 prose described a behaviour the codebase doesn't actually have; AC-7 effectively collapses to "make sure the existing integration tests still pass". They do (the `install-deep` / install-smoke suite still passes byte-for-byte).
+- **Resume picker UX.** Resume detection (Hop 0) doesn't re-prompt for assumptions — the v8.21 fold preserves that invariant. The picker UX itself is unchanged (`r` / `s` / `n` on collision, `/cc-cancel` for nuke). No work needed here.
+
+### Deferred
+
+- **`triage.interpretationForks` first-class surfacing.** Today both new surfaces can write to the field but neither has a structured "fork picker" UI. A future slug could add an `AskQuestion` for forks inside design Phase 1 / planner Phase 0 when the heuristic detects ambiguity.
+- **Triage-gate authoring of `triage.assumptions` seed.** The legacy pre-flight skill walked the repo + most-recent-shipped-slug to compose the seed list. The triage gate could do the same lookup and pre-populate `triage.assumptions` so the first specialist's Phase 0 short-circuits even more often. Cheap to add but not load-bearing for the fold.
+- **`cclaw doctor` health-check for v8.20-shape resumes.** A resumed pre-v8.21 flow has `triage.assumptions` populated; a fresh v8.21 flow may have it populated by triage seed OR by the first specialist's Phase 0. A `cclaw doctor` line summarising "this flow's assumption surface: <triage-seed | planner Phase 0 | design Phase 0 / Phase 1 | legacy Hop 2.5>" would help debugging.
+
+### Tests
+
+`tests/unit/v821-preflight-fold.test.ts` — **19 new tripwire tests** covering:
+
+- AC-1 — Start-command body documents the fold (no separate Hop 2.5 AskQuestion); names design Phase 0 as the large-risky owner; design.ts Phase 0 explicitly mentions the v8.21 fold and `triage.assumptions`.
+- AC-2 — Planner.ts has a Phase 0 mini-section for small-medium; Phase 0 only runs on `triage.complexity == "small-medium"`; opens with the assumptions ask and waits one turn; persists the agreed list to `triage.assumptions`; skips when the field is already populated.
+- AC-3 — Inline path bypass unchanged: start-command says the inline path has no assumption surface; trivial path section still skips plan / review / ship.
+- AC-4 — `TriageDecision` schema still accepts `triage.assumptions` as a string array; accepts `null` (legacy + inline); rejects non-string entries.
+- AC-5 — Pre-populated `triage.assumptions` short-circuits Phase 0 in both planner (skip silently) and design (read verbatim as ground truth); start-command's skip rules include resume-from-paused and mid-flight migration.
+- AC-8 — `pre-flight-assumptions.md` becomes a thin reference doc with the v8.21 fold notice, naming both fold targets; `triage-gate.md` no longer claims a separate "Hop 2.5" step in the flow diagram.
+
+`tests/unit/v811-cleanup.test.ts` — two assertions updated to reflect the v8.21 fold: the "Cancel — re-think" check now expects the v8.21 fold notice / reference-doc framing instead of the legacy "Cancel is not an option" prose (the legacy ask doesn't exist anymore).
+
+`tests/unit/prompt-budgets.test.ts` — `planner` budget raised 42000 → 46000 chars (530 → 560 lines) to absorb the new Phase 0 mini-section plus ~7% headroom.
+
+**Total: 653 tests across 49 files (was 634 across 48 in v8.20; +19 net from the v821-preflight-fold suite + 1 new file). All green.**
+
 ## 8.20.0 — Review-loop polish: dedup, cap-picker, architecture-severity gate
 
 ### Why

@@ -46,8 +46,8 @@ const PROMPT_BUDGETS: PromptBudget[] = [
   {
     id: "planner",
     body: PLANNER_PROMPT,
-    maxLines: 530,
-    maxChars: 42000
+    maxLines: 560,
+    maxChars: 46000
   },
   {
     id: "reviewer",
