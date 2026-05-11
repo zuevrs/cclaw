@@ -15,6 +15,12 @@ import { CCLAW_VERSION } from "../../src/constants.js";
 // symlink-bearing directory like macOS `/tmp` -> `/private/tmp`. The fix
 // resolves both sides through realpath. These tests exercise the *built*
 // CLI exactly the way npx invokes it.
+//
+// v8.29 — the CLI is now TUI-first. Bare subcommands (e.g. `cclaw init`)
+// were dropped; CI / scripts use `--non-interactive`. These regression
+// tests pin the symlink + realpath behaviour through both the new
+// `--version` / `--help` flag surface and the `--non-interactive init`
+// dispatch path.
 
 // Always invoke through `node <linkPath>` rather than `<linkPath>` directly:
 //
@@ -54,20 +60,25 @@ describe("cli (real binary, real symlink)", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("prints version when invoked via a symlink (npx layout)", () => {
-    const out = execFileSync(process.execPath, [linkPath, "version"], { encoding: "utf8" });
+  it("prints version when invoked via a symlink with --version (npx layout)", () => {
+    const out = execFileSync(process.execPath, [linkPath, "--version"], { encoding: "utf8" });
     expect(out.trim()).toBe(CCLAW_VERSION);
   });
 
-  it("prints help when invoked via a symlink (smoke for direct-execution path)", () => {
-    const out = execFileSync(process.execPath, [linkPath, "help"], { encoding: "utf8" });
+  it("prints help when invoked via a symlink with --help (smoke for direct-execution path)", () => {
+    const out = execFileSync(process.execPath, [linkPath, "--help"], { encoding: "utf8" });
     expect(out).toContain(`cclaw v${CCLAW_VERSION}`);
-    expect(out).toContain("Harness selection:");
+    expect(out).toContain("TUI default:");
+    expect(out).toContain("--non-interactive");
   });
 
-  it("init through a symlink actually creates the runtime (not a silent exit-0 no-op)", async () => {
+  it("--non-interactive install through a symlink actually creates the runtime (not a silent exit-0 no-op)", async () => {
     await fs.mkdir(path.join(tempDir, ".cursor"), { recursive: true });
-    execFileSync(process.execPath, [linkPath, "init"], { cwd: tempDir, stdio: "pipe" });
+    execFileSync(
+      process.execPath,
+      [linkPath, "--non-interactive", "install"],
+      { cwd: tempDir, stdio: "pipe" }
+    );
     const stat = await fs.stat(path.join(tempDir, ".cclaw"));
     expect(stat.isDirectory()).toBe(true);
     const cc = await fs.readFile(path.join(tempDir, ".cursor", "commands", "cc.md"), "utf8");

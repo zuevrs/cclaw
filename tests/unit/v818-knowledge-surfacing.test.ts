@@ -280,7 +280,7 @@ describe("v8.18 cclaw knowledge CLI command", () => {
       })
     ]);
     const { stdout, stderr, out } = captureStreams();
-    const code = await runCli(["knowledge"], { cwd: project, stdout, stderr });
+    const code = await runCli(["--non-interactive", "knowledge"], { cwd: project, stdout, stderr });
     expect(code).toBe(0);
     const joined = out.join("");
     expect(joined).toContain("20260506-permissions");
@@ -295,7 +295,7 @@ describe("v8.18 cclaw knowledge CLI command", () => {
       makeEntry({ slug: "20260508-b", tags: ["b"], touchSurface: ["src/b.ts"] })
     ]);
     const { stdout, stderr, out } = captureStreams();
-    const code = await runCli(["knowledge", "--json"], { cwd: project, stdout, stderr });
+    const code = await runCli(["--non-interactive", "knowledge", "--json"], { cwd: project, stdout, stderr });
     expect(code).toBe(0);
     const lines = out.join("").split(/\n/u).filter((line) => line.trim().length > 0);
     expect(lines).toHaveLength(2);
@@ -321,7 +321,7 @@ describe("v8.18 cclaw knowledge CLI command", () => {
 
     const tagRun = captureStreams();
     const tagCode = await runCli(
-      ["knowledge", "--tag=permissions", "--all"],
+      ["--non-interactive", "knowledge", "--tag=permissions", "--all"],
       { cwd: project, stdout: tagRun.stdout, stderr: tagRun.stderr }
     );
     expect(tagCode).toBe(0);
@@ -334,7 +334,7 @@ describe("v8.18 cclaw knowledge CLI command", () => {
 
     const surfaceRun = captureStreams();
     const surfaceCode = await runCli(
-      ["knowledge", "--surface=permissions.ts", "--all"],
+      ["--non-interactive", "knowledge", "--surface=permissions.ts", "--all"],
       { cwd: project, stdout: surfaceRun.stdout, stderr: surfaceRun.stderr }
     );
     expect(surfaceCode).toBe(0);
@@ -346,7 +346,7 @@ describe("v8.18 cclaw knowledge CLI command", () => {
     expect(surfaceSlugs).toHaveLength(5);
 
     const defaultRun = captureStreams();
-    const defaultCode = await runCli(["knowledge"], {
+    const defaultCode = await runCli(["--non-interactive", "knowledge"], {
       cwd: project,
       stdout: defaultRun.stdout,
       stderr: defaultRun.stderr
@@ -359,7 +359,7 @@ describe("v8.18 cclaw knowledge CLI command", () => {
   it("(l-bis) CLI on empty knowledge.jsonl prints the explicit no-entries message and exits 0", async () => {
     project = await createTempProject({ harnessMarkers: [] });
     const { stdout, stderr, out } = captureStreams();
-    const code = await runCli(["knowledge"], { cwd: project, stdout, stderr });
+    const code = await runCli(["--non-interactive", "knowledge"], { cwd: project, stdout, stderr });
     expect(code).toBe(0);
     expect(out.join("")).toMatch(/no entries yet/u);
   });
@@ -367,7 +367,7 @@ describe("v8.18 cclaw knowledge CLI command", () => {
   it("CLI command is listed in `cclaw help` output", async () => {
     project = await createTempProject({ harnessMarkers: [] });
     const { stdout, stderr, out } = captureStreams();
-    const code = await runCli(["help"], { cwd: project, stdout, stderr });
+    const code = await runCli(["--help"], { cwd: project, stdout, stderr });
     expect(code).toBe(0);
     expect(out.join("")).toMatch(/knowledge\s+List captured learnings/u);
   });
