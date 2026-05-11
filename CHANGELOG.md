@@ -1,5 +1,103 @@
 # Changelog
 
+## 8.22.0 — Orchestrator-slim: on-demand runbooks lift Hop 3-6 procedural blocks out of the always-loaded `/cc` body
+
+### Why
+
+`src/content/start-command.ts` carried every `/cc` invocation's prompt body. v8.21 left it at **901 raw lines / ~52k chars** because every operational procedure — dispatch envelope, parallel-build fan-out, Hop 6 finalize, cap-reached recovery, adversarial pre-mortem rerun, self-review gate, ship-gate user-ask, handoff artifacts, compound-refresh, discovery auto-skip heuristic — was inlined in the orchestrator. The harness loaded the full body on every turn, even on inline / small-medium flows where Hop 6 finalize, parallel-build fan-out, and discovery never fire. That meant the orchestrator paid the worst-case token tax on every dispatch.
+
+The shape is correct (one orchestrator + on-demand specialist runbooks), but the cut between "always needed" and "on-demand" was implicit. v8.22 makes it explicit: lift the conditional procedures into ten on-demand runbooks under `.cclaw/lib/runbooks/`, leave behind a one-paragraph pointer per moved block, and let the agent open the runbook only when the trigger fires.
+
+The runbook layout was *already* the right answer for stage playbooks (plan / build / review / ship, since v8.14). v8.22 extends it to procedure-shaped content that doesn't fit a stage axis. Same install layer, same orphan-cleanup pattern (lifted generic this slug), same on-demand-open discipline.
+
+### What changed
+
+**D1 — Ten new on-demand runbooks under `.cclaw/lib/runbooks/`.** `src/content/runbooks-on-demand.ts` is a new module exporting `ON_DEMAND_RUNBOOKS: OnDemandRunbook[]` and `ON_DEMAND_RUNBOOKS_INDEX_SECTION` (the markdown table the install layer appends to `runbooks/index.md`). The ten runbooks:
+
+- `dispatch-envelope.md` — required reads, inputs, output contract, forbidden actions, inline-fallback rules. Opened before every specialist dispatch.
+- `parallel-build.md` — Hop 5 parallel fan-out: worktree creation, scoped writes, gather pattern, conflict-resolution rerun envelope, idempotency gate. Opened only when the planner emits parallel-eligible slices on a large-risky build.
+- `finalize.md` — Hop 6 finalize procedure: pre-condition check, `cclaw finalize` invocation, post-finalize verification, archive layout, restart contract. Opened only after the ship stage signs off.
+- `cap-reached-recovery.md` — T1-10 split-plan: detect, slice, persist, dispatch. Opened only when a slice exceeds the per-slice cap.
+- `adversarial-rerun.md` — T1-9 fix-only adversarial pre-mortem: trigger conditions, rerun envelope, exit criteria. Opened only on hot-path fix-only builds.
+- `self-review-gate.md` — mandatory before reviewer dispatch: lint / tests / typecheck local pass + AC self-check + the fix-only bounce envelope shape. Opened at end of every build stage.
+- `ship-gate.md` — finalization-mode `askUserQuestion(...)` example with all option labels and the structured PR body shape. Opened only on ship dispatch.
+- `handoff-artifacts.md` — T2-3 gsd pattern: artifact schema and lifecycle (handoff in → process → handoff out). Opened only when a specialist needs to author or read a handoff artifact.
+- `compound-refresh.md` — T2-4 everyinc pattern: refresh cadence and the in-flight refresh sub-step. Opened only on long flows where compound state needs re-reading.
+- `discovery.md` — T2-12 discoverability self-check + the auto-skip heuristic detailed conditions. Opened only on large-risky plan stage.
+
+Each runbook opens with a `# On-demand runbook — <topic>` heading so the file is self-identifying when the agent reads it back from disk.
+
+**D2 — `start-command.ts` shrunk from 901 → 481 raw lines (468 rendered).** The deletions match the runbooks one-to-one. Every removed block leaves behind a 1-3 sentence pointer paragraph that names the runbook and the trigger. Body char count: ~52k → ~44k (a 14% cut, against the body alone; effective per-turn cut is much larger because most flows now skip 4-6 runbooks entirely). The new "On-demand runbooks (v8.22)" subsection at the top of the catalogue area is a trigger → file-name table so the agent can look up which runbook to open from the trigger side, not just the file-name side.
+
+**D3 — Install layer writes the new runbooks on `init / sync / upgrade`.** `src/install.ts::writeStageRunbooks` was extended to write all of `STAGE_PLAYBOOKS` (plan / build / review / ship — unchanged) **and** all of `ON_DEMAND_RUNBOOKS` to `.cclaw/lib/runbooks/`. `runbooks/index.md` is now composed from `STAGE_PLAYBOOKS_INDEX` + `ON_DEMAND_RUNBOOKS_INDEX_SECTION`, so the dir is self-documenting whether the user runs `cclaw init`, `cclaw sync`, or `cclaw upgrade`. `counts.runbooks` reported back to the UI reflects the combined total (4 stage + 10 on-demand = 14).
+
+**D4 — Orphan cleanup generalized from `cleanupOrphanSkills` to `cleanupOrphans(dir, expected, noun, emit)`.** The Tier-4 backlog item `v8.x-orphan-cleanup-generalization` was pulled forward into v8.22 because v8.22 creates the second managed directory under `.cclaw/lib/`. The new generic signature in `src/install.ts`:
+
+```ts
+async function cleanupOrphans(
+  projectRoot: string,
+  dirRelPath: string,
+  expected: Set<string>,
+  noun: { singular: string; plural: string },
+  emit: (step: string, detail?: string) => void
+): Promise<number>
+```
+
+Two callers now: `cleanupOrphanSkills` (preserved as a thin wrapper for `.cclaw/lib/skills/`) and the new `cleanupOrphanRunbooks` (`.cclaw/lib/runbooks/`, expected = stage-playbook file names + on-demand-runbook file names). Same opt-out flag (`--skip-orphan-cleanup` skips both dirs and emits one `Skipped orphan cleanup` event per skipped dir). Same idempotency (a second sync emits zero orphan events). The "Removed orphan skill" event name for the skills dir is preserved verbatim from v8.17 to keep the existing v8.17 cleanup test suite passing byte-for-byte; the runbooks dir uses the parallel name `Removed orphan runbook` / `Cleaned orphan runbooks`.
+
+**D5 — Renders are pure / `START_COMMAND_BODY === renderStartCommand()`.** No mutable state was introduced. The `START_COMMAND_BODY` export remains the single source for downstream test files that snapshot the body. The v8.22 tripwire suite cross-checks `renderStartCommand() === START_COMMAND_BODY` to catch any future drift.
+
+### Migration
+
+**v8.21 → v8.22.** Drop-in. Run `cclaw upgrade` (or `cclaw sync` on an existing project) once. The install layer:
+
+1. Writes the ten new on-demand runbooks to `.cclaw/lib/runbooks/` alongside the existing four stage runbooks.
+2. Rewrites `.cclaw/lib/runbooks/index.md` to include the v8.22 trigger table.
+3. Runs the generalized orphan cleanup on both `lib/skills/` and `lib/runbooks/`. Stale `.md` files in either dir (e.g. a long-dead skill body that was rewritten under a new name, or a hand-edited runbook left over from a debug session) are removed and surfaced via `Removed orphan <noun>` events. The v8.17 / v8.13 / v8.12 / v8.14 / v8.9 test suites still pass byte-for-byte — the existing event names for the skills dir are unchanged.
+4. Refreshes the `.cclaw/lib/start-command.md` (the rendered orchestrator body) to the new ≤480-line shape.
+
+**No flow-state migration is needed.** The runbook split is purely a prompt-layout change. Every existing `flow-state.json`, every shipped slug under `flows/shipped/`, every in-progress build under `flows/<slug>/`, the commit-helper hook, and every downstream reader (reviewer prompt's plan-cross-check, slice-builder's pre-task read of the active plan) are byte-for-byte identical to v8.21. The orchestrator's runtime semantics are unchanged: same triage, same hops, same dispatch envelopes, same self-review gate, same ship gate. Only *where the prose lives on disk* moved.
+
+**A v8.21 project that doesn't run `cclaw upgrade` continues to work** — the orchestrator's body still has all the deleted prose in the prior install. The win disappears (no token cut), but nothing breaks.
+
+### What we noticed but didn't touch (v8.22 scope)
+
+- **The orchestrator body could go further (toward ~350 lines).** Hop 0 (resume / new), Hop 1 (preflight / health-check), and Hop 2 (triage) are still moderately long. A future slug could split Hop 0's resume detection into a `resume-detection.md` runbook. The cut would be smaller (~80 lines), and the trigger is on every `/cc` turn so the on-demand argument is weaker. Deferred.
+- **Catalogue tables (Specialist catalogue, Skill catalogue, Runbook catalogue) account for ~70 lines combined.** These *are* always-needed (every dispatch consults the specialist catalogue), but they could be auto-generated from `SPECIALISTS` in `src/types.ts` instead of hand-maintained. The drift risk is real but small. Deferred.
+- **`runbooks/index.md` is composed at install time but never consumed at runtime.** The orchestrator points at individual runbook files directly, not the index. The index exists for human discoverability (debugging an installed project). A future slug could either remove the index or wire it into the orchestrator as a fallback lookup table. Today the install layer writes it, and the v822 test suite asserts on its presence — a deliberate human-facing surface.
+- **Some moved blocks (e.g. discovery auto-skip detailed conditions) are referenced from both `start-command.ts` and from `runbooks/plan.md` (stage playbook).** The stage playbook reference is unchanged in v8.22; the new on-demand `discovery.md` complements it. There's mild duplication. A future slug could pick one as authoritative and have the other point at it. Deferred — the readers (orchestrator vs plan-stage specialist) want slightly different framings, so the duplication is intentional today.
+- **Char-count budget (≤45k) is set against the rendered body, not the source file.** A future maintainer who edits the runbooks-on-demand source module is not protected by the v822 tripwire; they're protected by the existing per-runbook prompt-budgets test (added per-file in this slug). The body budget is intentionally rendered-only because the orchestrator's runtime cost is the rendered string, not the source.
+
+### Deferred
+
+- **v8.x: catalogue auto-generation from `SPECIALISTS` in `src/types.ts`.** Today the specialist catalogue table in start-command.ts is hand-maintained; the planner / design / reviewer / security-reviewer / slice-builder rows could be derived from the typed array + per-specialist metadata. Cheap win for drift safety; deferred because v8.28 (`planner → ac-author` rename) touches the catalogue body anyway, and doing both at once invites scope creep.
+- **v8.x: resume-detection.md runbook (Hop 0 split).** Hop 0 is ~80 lines. Splitting it out would buy a smaller cut and the trigger is on every turn, so the on-demand argument is weaker than for the v8.22 blocks. Defer until the body re-grows past 500 lines.
+- **v8.x: typed runbook IDs.** Today the orchestrator points at runbooks by file name (`runbooks/finalize.md`). A typed enum + `runbook-id.ts` lookup could harden against typo drift, mirroring how `SPECIALISTS` typing works. Cheap; deferred until a real typo bug surfaces.
+- **v8.x: per-runbook prompt-budget assertion.** `tests/unit/prompt-budgets.test.ts` covers the rendered body and the specialist prompts. A future slug could add per-runbook line / char budgets so a runbook can't quietly grow past 200 lines without a CHANGELOG note. The v822 tripwire only enforces "body ≤45k" and "body + runbooks ≤100k combined"; granular per-file budgets are deferred.
+
+### Tests
+
+`tests/unit/v822-orchestrator-slim.test.ts` — **26 new tripwire tests** across six describe blocks:
+
+- AC-1 — `start-command.ts` body stays ≤480 lines; body is ≥30% smaller than the v8.21 baseline (901 → ≤631 ceiling, today 468).
+- AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the ten expected file names; every runbook body is non-empty (>200 chars) and starts with a `# On-demand runbook — ` heading.
+- AC-3 — `start-command.ts` body references every on-demand runbook by file name; body includes the v8.22 trigger table; body declares the runbooks live under `.cclaw/lib/runbooks/`; body no longer inlines the eight v8.22-extracted block headings (Handoff artifacts, Compound-refresh, Discoverability self-check, Parallel-build fan-out, Cap-reached split-plan, Adversarial pre-mortem rerun, Self-review gate, Ship-gate user ask).
+- AC-4 — body alone is ≤45k chars; `START_COMMAND_BODY === renderStartCommand()`; combined body + on-demand runbook bodies stays ≤100k chars (soft ceiling).
+- AC-5 — `init` writes every on-demand runbook to disk; stage runbooks co-exist; `runbooks/index.md` lists both sections; `ON_DEMAND_RUNBOOKS_INDEX_SECTION` is a non-empty markdown block.
+- AC-6 — baseline sync with no orphans is silent; sync removes a stray `.md` and emits `Removed orphan runbook` + `Cleaned orphan runbooks` events; sync preserves both stage and on-demand runbooks (final dir is the expected set); `--skip-orphan-cleanup` preserves orphans + emits skipped event for runbooks dir; sync is idempotent on runbooks/.
+- AC-7 — every on-demand runbook is reachable via forward pointer in body; Hop 6 finalize body is short + points at finalize.md; parallel-build ASCII no longer inlined; self-review fix-only envelope no longer inlined; ship-gate `askUserQuestion(...)` block no longer inlined; discovery auto-skip detailed conditions live in discovery.md.
+
+Existing test suites updated for the prose relocation (every test that asserted on text now moved into a runbook):
+
+- `tests/unit/start-command.test.ts` — assertions for handoff-artifacts shape and compound-refresh phrasing redirected to `runbookBody("handoff-artifacts")` / `runbookBody("compound-refresh")`, with parallel body-pointer checks for the file names.
+- `tests/unit/v812-cleanup.test.ts` / `v813-cleanup.test.ts` / `v814-cleanup.test.ts` / `v89-cleanup.test.ts` — assertions for parallel-build / cap-reached / adversarial-rerun / self-review-gate / ship-gate / discovery prose redirected to the appropriate runbook bodies; body now asserted to point at the runbook file names.
+- `tests/unit/v820-review-loop-polish.test.ts` — review-loop fix-only bounce envelope assertions moved to `runbookBody("self-review-gate")`.
+- `tests/unit/v811-cleanup.test.ts` — "step-mode ends the turn" assertion re-aligned with the v8.22 case-corrected phrasing ("**End your turn**").
+
+`src/install.ts` orphan cleanup generalization is covered by the existing v8.17 suite (skills dir, byte-for-byte event names preserved) plus the new v8.22 AC-6 block (runbooks dir).
+
+**Total: 679 tests across 50 files (was 653 across 49 in v8.21; +26 net from the v822-orchestrator-slim suite + 1 new file). All green.**
+
 ## 8.21.0 — Preflight-fold: assumption surface moves into specialist Phase 0
 
 ### Why

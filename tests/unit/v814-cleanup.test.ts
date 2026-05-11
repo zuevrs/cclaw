@@ -3,8 +3,15 @@ import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
+import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { CORE_AGENTS } from "../../src/content/core-agents.js";
 import { LEGACY_DISCOVERY_SPECIALISTS, SPECIALISTS } from "../../src/types.js";
+
+function runbookBody(id: string): string {
+  const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.id === id);
+  if (!r) throw new Error(`No on-demand runbook with id=${id}`);
+  return r.body;
+}
 
 /**
  * v8.14 lock-in tests. The release collapses brainstormer + architect into a
@@ -111,6 +118,7 @@ describe("v8.14 strong-design + streamlined-gate", () => {
     it("combined-form ask packs path + run-mode into one structured call", () => {
       expect(START_COMMAND_BODY).toMatch(/Combined-form structured ask/iu);
       expect(START_COMMAND_BODY).toMatch(/TWO questions in one form/iu);
+      expect(START_COMMAND_BODY).toMatch(/saves one round-trip per non-inline flow start/u);
     });
 
     it("triage state shape includes runMode (nullable) and autoExecuted", () => {
@@ -137,9 +145,11 @@ describe("v8.14 strong-design + streamlined-gate", () => {
       expect(START_COMMAND_BODY).toMatch(/planner.*sub-?agent/iu);
     });
 
-    it("legacy lastSpecialist values are migrated explicitly", () => {
-      expect(START_COMMAND_BODY).toMatch(/Legacy migration/iu);
-      expect(START_COMMAND_BODY).toMatch(/lastSpecialist:\s*"brainstormer".+"architect"/u);
+    it("legacy lastSpecialist values are migrated explicitly (v8.22: in discovery runbook)", () => {
+      const discovery = runbookBody("discovery");
+      expect(discovery).toMatch(/Legacy migration/iu);
+      expect(discovery).toMatch(/lastSpecialist:\s*"brainstormer".+"architect"/u);
+      expect(START_COMMAND_BODY).toContain("discovery.md");
     });
   });
 });

@@ -16,6 +16,10 @@ import { AUTO_TRIGGER_SKILLS } from "./content/skills.js";
 import { EXAMPLES, EXAMPLES_INDEX } from "./content/examples.js";
 import { REFERENCE_PATTERNS, REFERENCE_PATTERNS_INDEX } from "./content/reference-patterns.js";
 import { STAGE_PLAYBOOKS, STAGE_PLAYBOOKS_INDEX } from "./content/stage-playbooks.js";
+import {
+  ON_DEMAND_RUNBOOKS,
+  ON_DEMAND_RUNBOOKS_INDEX_SECTION
+} from "./content/runbooks-on-demand.js";
 import { RESEARCH_PLAYBOOKS, RESEARCH_PLAYBOOKS_INDEX } from "./content/research-playbooks.js";
 import { RECOVERY_PLAYBOOKS, RECOVERY_INDEX } from "./content/recovery.js";
 import { ANTIPATTERNS } from "./content/antipatterns.js";
@@ -168,44 +172,40 @@ async function writeRuntimeSkills(projectRoot: string): Promise<void> {
 }
 
 /**
- * v8.17 — garbage-collect `.cclaw/lib/skills/*.md` files that are no
- * longer in `AUTO_TRIGGER_SKILLS` (∪ `cclaw-meta.md`).
+ * v8.22 — generic orphan-`.md`-file garbage collector for a managed
+ * subdirectory under `.cclaw/lib/`. Lifted out of v8.17's
+ * skill-specific `cleanupOrphanSkills` so the same loud, idempotent
+ * scan can run against `lib/skills/` (v8.17) and `lib/runbooks/`
+ * (v8.22, when this PR adds 10 on-demand runbook files alongside the
+ * 4 stage-runbooks shipped since v8.4).
  *
- * Background: the v8.16 thematic merge collapsed 13 source skills into
- * 6 thematic groups. The install layer iterates `AUTO_TRIGGER_SKILLS`
- * and *writes* the current skills, but does NOT remove `.md` files
- * already present from a previous release. Result on existing installs
- * after upgrading from v8.15 → v8.16: 13 retired skill files sit
- * orphaned in `.cclaw/lib/skills/` — harmless, but they bloat the
- * directory, confuse grep-based audits, and a stale agent could `Read`
- * an orphan file thinking it's still the current contract.
- *
- * Scope (intentionally narrow):
- *  - Only `.md` files directly inside `.cclaw/lib/skills/`.
+ * Scope (intentionally narrow; identical contract to v8.17):
+ *  - Only `.md` files directly inside `<projectRoot>/<dirRelPath>`.
  *  - Subdirectories survive (someone may have stashed personal notes
  *    in a subfolder; we don't recurse).
  *  - Non-`.md` files survive (someone added a `something.txt` — that's
- *    not a skill, leave it).
- *  - Nothing outside `.cclaw/lib/skills/` is ever touched.
+ *    not a managed file, leave it).
+ *  - Nothing outside the named directory is ever touched.
  *
- * Loudness: emits one `Removed orphan skill` progress event per file
- * (the CLI renders each as `✓ Removed orphan skill — <fileName>`), then
- * one `Cleaned orphan skills` summary event when N > 0. On a healthy
- * install (N = 0) the scan emits nothing — zero noise.
+ * Loudness contract: emits one `Removed orphan <noun>` progress event
+ * per removed file, then one `Cleaned orphan <noun-plural>` summary
+ * event when N > 0. On a healthy install (N = 0) the scan emits
+ * nothing — zero noise. The per-file `detail` is the file basename; the
+ * summary `detail` starts with `<N> orphan <noun ...> removed` so the
+ * v8.17 regex `/^N orphan skill files? /` continues to match.
  *
  * Idempotent: running `cclaw sync` twice in a row on a clean install
  * produces zero orphan events on the second pass.
  */
-async function cleanupOrphanSkills(
+async function cleanupOrphans(
   projectRoot: string,
+  dirRelPath: string,
+  expected: Set<string>,
+  noun: { singular: string; plural: string },
   emit: (step: string, detail?: string) => void
 ): Promise<number> {
-  const dir = path.join(projectRoot, LIB_ROOT, "skills");
+  const dir = path.join(projectRoot, dirRelPath);
   if (!(await exists(dir))) return 0;
-  const expected = new Set<string>([
-    "cclaw-meta.md",
-    ...AUTO_TRIGGER_SKILLS.map((s) => s.fileName)
-  ]);
   const entries = await fs.readdir(dir, { withFileTypes: true });
   let removed = 0;
   for (const entry of entries) {
@@ -213,14 +213,61 @@ async function cleanupOrphanSkills(
     if (!entry.name.endsWith(".md")) continue;
     if (expected.has(entry.name)) continue;
     await fs.rm(path.join(dir, entry.name), { force: true });
-    emit("Removed orphan skill", entry.name);
+    emit(`Removed orphan ${noun.singular}`, entry.name);
     removed += 1;
   }
   if (removed > 0) {
-    const noun = removed === 1 ? "orphan skill file" : "orphan skill files";
-    emit("Cleaned orphan skills", `${removed} ${noun} removed`);
+    const word = removed === 1 ? `${noun.singular} file` : `${noun.singular} files`;
+    emit(`Cleaned orphan ${noun.plural}`, `${removed} orphan ${word} removed`);
   }
   return removed;
+}
+
+/**
+ * v8.17 wrapper: orphan-clean `.cclaw/lib/skills/`. Expected set is
+ * `AUTO_TRIGGER_SKILLS` ∪ {`cclaw-meta.md`}.
+ */
+async function cleanupOrphanSkills(
+  projectRoot: string,
+  emit: (step: string, detail?: string) => void
+): Promise<number> {
+  const expected = new Set<string>([
+    "cclaw-meta.md",
+    ...AUTO_TRIGGER_SKILLS.map((s) => s.fileName)
+  ]);
+  return cleanupOrphans(
+    projectRoot,
+    path.join(LIB_ROOT, "skills"),
+    expected,
+    { singular: "skill", plural: "skills" },
+    emit
+  );
+}
+
+/**
+ * v8.22 wrapper: orphan-clean `.cclaw/lib/runbooks/`. Expected set is
+ * the 4 `STAGE_PLAYBOOKS` filenames + `index.md` + the 10
+ * `ON_DEMAND_RUNBOOKS` filenames. Loud-and-idempotent like the v8.17
+ * skill scan; emits `Removed orphan runbook` and `Cleaned orphan
+ * runbooks` so callers can distinguish runbook events from skill
+ * events.
+ */
+async function cleanupOrphanRunbooks(
+  projectRoot: string,
+  emit: (step: string, detail?: string) => void
+): Promise<number> {
+  const expected = new Set<string>([
+    "index.md",
+    ...STAGE_PLAYBOOKS.map((p) => p.fileName),
+    ...ON_DEMAND_RUNBOOKS.map((r) => r.fileName)
+  ]);
+  return cleanupOrphans(
+    projectRoot,
+    path.join(LIB_ROOT, "runbooks"),
+    expected,
+    { singular: "runbook", plural: "runbooks" },
+    emit
+  );
 }
 
 async function writeTemplates(projectRoot: string): Promise<void> {
@@ -245,7 +292,11 @@ async function writeStageRunbooks(projectRoot: string): Promise<void> {
   for (const playbook of STAGE_PLAYBOOKS) {
     await writeFileSafe(path.join(dir, playbook.fileName), playbook.body);
   }
-  await writeFileSafe(path.join(dir, "index.md"), STAGE_PLAYBOOKS_INDEX);
+  for (const runbook of ON_DEMAND_RUNBOOKS) {
+    await writeFileSafe(path.join(dir, runbook.fileName), runbook.body);
+  }
+  const combinedIndex = `${STAGE_PLAYBOOKS_INDEX}\n${ON_DEMAND_RUNBOOKS_INDEX_SECTION}`;
+  await writeFileSafe(path.join(dir, "index.md"), combinedIndex);
 }
 
 async function writeReferencePatterns(projectRoot: string): Promise<void> {
@@ -413,7 +464,19 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   emit("Wrote templates", `${ARTIFACT_TEMPLATES.length + 1} templates → .cclaw/lib/templates/`);
 
   await writeStageRunbooks(projectRoot);
-  emit("Wrote runbooks", `${STAGE_PLAYBOOKS.length} stage runbooks → .cclaw/lib/runbooks/`);
+  emit(
+    "Wrote runbooks",
+    `${STAGE_PLAYBOOKS.length} stage + ${ON_DEMAND_RUNBOOKS.length} on-demand → .cclaw/lib/runbooks/`
+  );
+
+  if (options.skipOrphanCleanup) {
+    emit(
+      "Skipped orphan cleanup",
+      "--skip-orphan-cleanup set; stale .md files in .cclaw/lib/runbooks/ will not be removed"
+    );
+  } else {
+    await cleanupOrphanRunbooks(projectRoot, emit);
+  }
 
   await writeReferencePatterns(projectRoot);
   emit("Wrote patterns", `${REFERENCE_PATTERNS.length} reference patterns → .cclaw/lib/patterns/`);
@@ -455,7 +518,7 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     agents: CORE_AGENTS.length,
     skills: AUTO_TRIGGER_SKILLS.length + 1,
     templates: ARTIFACT_TEMPLATES.length + 1,
-    runbooks: STAGE_PLAYBOOKS.length,
+    runbooks: STAGE_PLAYBOOKS.length + ON_DEMAND_RUNBOOKS.length,
     patterns: REFERENCE_PATTERNS.length,
     research: RESEARCH_PLAYBOOKS.length,
     recovery: RECOVERY_PLAYBOOKS.length,

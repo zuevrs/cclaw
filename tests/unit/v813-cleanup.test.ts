@@ -4,6 +4,13 @@ import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.js";
 import { STAGE_PLAYBOOKS } from "../../src/content/stage-playbooks.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
+import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
+
+function runbookBody(id: string): string {
+  const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.id === id);
+  if (!r) throw new Error(`No on-demand runbook with id=${id}`);
+  return r.body;
+}
 
 /**
  * v8.13 power-and-economy release locks. Tripwire tests for the runtime
@@ -24,14 +31,18 @@ describe("v8.13 power-and-economy", () => {
       expect(START_COMMAND_BODY).toMatch(/Combining saves one round-trip per non-inline flow start/u);
     });
 
-    it("ship parallel reviewers receive shared parsed-diff (T0-8)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Shared diff context \(single parse pass\)/u);
-      expect(START_COMMAND_BODY).toMatch(/Shared diff:/u);
+    it("ship parallel reviewers receive shared parsed-diff (T0-8; v8.22: in ship-gate runbook)", () => {
+      const shipGate = runbookBody("ship-gate");
+      expect(shipGate).toMatch(/Shared diff context \(single parse pass\)/u);
+      expect(shipGate).toMatch(/Shared diff:/u);
+      expect(START_COMMAND_BODY).toContain("ship-gate.md");
     });
 
-    it("discovery auto-skip heuristic exists for low-ambiguity large-risky (T0-9)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Discovery auto-skip \(low-ambiguity fast path\)/u);
-      expect(START_COMMAND_BODY).toMatch(/triage\.confidence` is `high`/u);
+    it("discovery auto-skip heuristic exists for low-ambiguity large-risky (T0-9; v8.22: in discovery runbook)", () => {
+      const discovery = runbookBody("discovery");
+      expect(discovery).toMatch(/Discovery auto-skip \(low-ambiguity fast path\)/u);
+      expect(discovery).toMatch(/triage\.confidence` is `high`/u);
+      expect(START_COMMAND_BODY).toContain("discovery.md");
     });
   });
 
@@ -91,10 +102,12 @@ describe("v8.13 power-and-economy", () => {
       expect(sb).toMatch(/Primitive obsession/u);
     });
 
-    it("parallel-build fallback is no longer silent (T1-5)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Parallel-build fallback \(T1-5\)/u);
-      expect(START_COMMAND_BODY).toMatch(/explicit warning/u);
-      expect(START_COMMAND_BODY).toMatch(/accept-fallback/u);
+    it("parallel-build fallback is no longer silent (T1-5; v8.22: in parallel-build runbook)", () => {
+      const pb = runbookBody("parallel-build");
+      expect(pb).toMatch(/Parallel-build fallback \(T1-5\)/u);
+      expect(pb).toMatch(/explicit warning/u);
+      expect(pb).toMatch(/accept-fallback/u);
+      expect(START_COMMAND_BODY).toContain("parallel-build.md");
     });
   });
 
@@ -113,18 +126,22 @@ describe("v8.13 power-and-economy", () => {
 
     it("orchestrator auto-detects security-sensitive surfaces (T1-7)", () => {
       expect(START_COMMAND_BODY).toMatch(/Auto-detect security-sensitive surfaces/u);
-      expect(START_COMMAND_BODY).toMatch(/regardless of `security_flag`/u);
+      expect(START_COMMAND_BODY).toContain("regardless of `security_flag`");
     });
 
-    it("adversarial pre-mortem reruns on fix-only hot paths (T1-9)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Adversarial pre-mortem rerun on fix-only hot paths/u);
-      expect(START_COMMAND_BODY).toMatch(/re-runs adversarial mode/u);
+    it("adversarial pre-mortem reruns on fix-only hot paths (T1-9; v8.22: in adversarial-rerun runbook)", () => {
+      const ar = runbookBody("adversarial-rerun");
+      expect(ar).toMatch(/adversarial pre-mortem rerun/iu);
+      expect(ar).toMatch(/once per ship attempt/u);
+      expect(START_COMMAND_BODY).toContain("adversarial-rerun.md");
     });
 
-    it("cap-reached produces split-plan recovery (T1-10)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Cap-reached split-plan/u);
-      expect(START_COMMAND_BODY).toMatch(/Cap-reached recovery/u);
-      expect(START_COMMAND_BODY).toMatch(/Recommended split/u);
+    it("cap-reached produces split-plan recovery (T1-10; v8.22: in cap-reached-recovery runbook)", () => {
+      const cr = runbookBody("cap-reached-recovery");
+      expect(cr).toMatch(/Cap-reached split-plan/u);
+      expect(cr).toMatch(/Cap-reached recovery/u);
+      expect(cr).toMatch(/Recommended split/u);
+      expect(START_COMMAND_BODY).toContain("cap-reached-recovery.md");
     });
   });
 
@@ -164,16 +181,21 @@ describe("v8.13 power-and-economy", () => {
       expect(skill!.body).toMatch(/strict.*continuous.*diff-only/su);
     });
 
-    it("HANDOFF.json + .continue-here.md schema is documented (T2-3)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Handoff artifacts \(T2-3/u);
-      expect(START_COMMAND_BODY).toMatch(/HANDOFF\.json/u);
-      expect(START_COMMAND_BODY).toMatch(/\.continue-here\.md/u);
-      expect(START_COMMAND_BODY).toMatch(/idempotent rewrite/u);
+    it("HANDOFF.json + .continue-here.md schema is documented (T2-3; v8.22: in handoff-artifacts runbook)", () => {
+      const ha = runbookBody("handoff-artifacts");
+      expect(ha).toMatch(/HANDOFF\.json/u);
+      expect(ha).toMatch(/\.continue-here\.md/u);
+      expect(ha).toMatch(/idempotent/u);
+      expect(START_COMMAND_BODY).toContain("handoff-artifacts.md");
+      expect(START_COMMAND_BODY).toContain("HANDOFF.json");
+      expect(START_COMMAND_BODY).toContain(".continue-here.md");
     });
 
-    it("compound-refresh sub-step is documented (T2-4)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Compound-refresh sub-step/u);
-      expect(START_COMMAND_BODY).toMatch(/dedup.*keep.*update.*consolidate.*replace/su);
+    it("compound-refresh sub-step is documented (T2-4; v8.22: in compound-refresh runbook)", () => {
+      const cr = runbookBody("compound-refresh");
+      expect(cr).toMatch(/Compound-refresh sub-step/u);
+      expect(cr).toMatch(/dedup.*keep.*update.*consolidate.*replace/su);
+      expect(START_COMMAND_BODY).toContain("compound-refresh.md");
     });
 
     it("ship.md template carries 'what didn't work' section (T2-11)", () => {
@@ -181,9 +203,11 @@ describe("v8.13 power-and-economy", () => {
       expect(ship.body).toMatch(/what didn't work/u);
     });
 
-    it("discoverability self-check is documented (T2-12)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Discoverability self-check/u);
-      expect(START_COMMAND_BODY).toMatch(/AGENTS\.md.*CLAUDE\.md.*README\.md/su);
+    it("discoverability self-check is documented (T2-12; v8.22: in compound-refresh runbook)", () => {
+      const cr = runbookBody("compound-refresh");
+      expect(cr).toMatch(/Discoverability self-check/u);
+      expect(cr).toMatch(/AGENTS\.md.*CLAUDE\.md.*README\.md/su);
+      expect(START_COMMAND_BODY).toContain("compound-refresh.md");
     });
 
     it("TDD-cycle skill carries anti-rationalization table (T2-8)", () => {

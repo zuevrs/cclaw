@@ -11,7 +11,14 @@ import { LEARNINGS_RESEARCH_PROMPT } from "../../src/content/research-prompts/le
 import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.js";
 import { STAGE_PLAYBOOKS } from "../../src/content/stage-playbooks.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
+import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { createDefaultConfig } from "../../src/config.js";
+
+function runbookBody(id: string): string {
+  const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.id === id);
+  if (!r) throw new Error(`No on-demand runbook with id=${id}`);
+  return r.body;
+}
 
 /**
  * v8.12 cleanup release locks. If a future change reintroduces the deleted
@@ -156,16 +163,20 @@ describe("v8.12 cleanup", () => {
   });
 
   describe("Tier 1-D — artefact collapse instructions present", () => {
-    it("orchestrator describes ship.md as the manifest replacement", () => {
-      expect(START_COMMAND_BODY).toMatch(
+    it("orchestrator describes ship.md as the manifest replacement (v8.22: in finalize runbook)", () => {
+      const finalize = runbookBody("finalize");
+      expect(finalize).toMatch(
         /manifest\.md is collapsed into `ship\.md`'s frontmatter/u
       );
+      expect(START_COMMAND_BODY).toContain("finalize.md");
     });
 
-    it("orchestrator describes pre-mortem as a review.md section", () => {
-      expect(START_COMMAND_BODY).toMatch(
+    it("orchestrator describes pre-mortem as a review.md section (v8.22: in ship-gate runbook)", () => {
+      const shipGate = runbookBody("ship-gate");
+      expect(shipGate).toMatch(
         /adversarial reviewer's pre-mortem section is appended to `review\.md`/u
       );
+      expect(START_COMMAND_BODY).toContain("ship-gate.md");
     });
 
     it("learnings-research returns lessons inline by default", () => {

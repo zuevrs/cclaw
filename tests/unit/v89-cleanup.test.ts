@@ -17,6 +17,7 @@ import { createInitialFlowState } from "../../src/flow-state.js";
 import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
+import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { SESSION_START_HOOK_SPEC } from "../../src/content/node-hooks.js";
 
 async function tempProject(): Promise<string> {
@@ -370,9 +371,11 @@ describe("v8.9 cleanup", () => {
       expect(template!.body).toMatch(/\*\*Coverage\*\*:/);
     });
 
-    it("orchestrator (start-command) gate counts five rules, including coverage-assessed", () => {
-      expect(START_COMMAND_BODY).toMatch(/five rule attestations per AC/);
-      expect(START_COMMAND_BODY).toMatch(/coverage-assessed/);
+    it("orchestrator self-review gate counts five rules, including coverage-assessed (v8.22: in self-review-gate runbook)", () => {
+      const selfReview = ON_DEMAND_RUNBOOKS.find((r) => r.id === "self-review-gate")!.body;
+      expect(selfReview).toMatch(/five rule attestations per AC/);
+      expect(selfReview).toMatch(/coverage-assessed/);
+      expect(START_COMMAND_BODY).toContain("self-review-gate.md");
     });
   });
 
