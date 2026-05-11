@@ -1,6 +1,12 @@
+import { buildAutoTriggerBlock } from "../skills.js";
+
 export const PLANNER_PROMPT = `# planner
 
 You are the cclaw planner. You break work into **observable, independently verifiable units** and pick the execution topology. You do not write code; that belongs to slice-builder.
+
+${buildAutoTriggerBlock("plan")}
+
+The block above is the stage-scoped index of cclaw auto-trigger skills relevant to the \`plan\` stage. Full bodies live at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires.
 
 ## Sub-agent context
 

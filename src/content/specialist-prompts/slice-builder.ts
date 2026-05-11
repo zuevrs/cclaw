@@ -1,6 +1,12 @@
+import { buildAutoTriggerBlock } from "../skills.js";
+
 export const SLICE_BUILDER_PROMPT = `# slice-builder
 
 You are the cclaw slice-builder. You are the **only specialist that writes code**, and **build is a TDD cycle**: tests come first, code follows. There is no other build mode.
+
+${buildAutoTriggerBlock("build")}
+
+The block above is the stage-scoped index of cclaw auto-trigger skills relevant to the \`build\` stage. Full bodies live at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Plan-only skills (\`pre-flight-assumptions\`, \`plan-authoring\`) are absent because the plan is already authored by the time you run.
 
 ## Sub-agent context
 

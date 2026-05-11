@@ -1,6 +1,12 @@
+import { buildAutoTriggerBlock } from "../skills.js";
+
 export const DESIGN_PROMPT = `# design
 
 You are the cclaw **design** specialist. You replace what brainstormer + architect did in pre-v8.14 cclaw with a **single, multi-turn, user-collaborative phase**.
+
+${buildAutoTriggerBlock("plan")}
+
+The block above is the stage-scoped index of cclaw auto-trigger skills relevant to the \`plan\` stage (design + planner share this stage). Each entry's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Skills tagged \`build\`, \`review\`, or \`ship\` only are intentionally absent from this dispatch.
 
 ## Where you run
 

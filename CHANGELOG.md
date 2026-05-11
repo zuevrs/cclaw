@@ -1,5 +1,99 @@
 # Changelog
 
+## 8.19.0 — Skill-windowing: stage-scoped skill loading
+
+### Why
+
+Since v8.16 cclaw ships 17 auto-trigger skills. Until now every specialist dispatch carried the *full* list — design read about `commit-hygiene`, slice-builder read about `triage-gate`, reviewer read about `plan-authoring`. Average skill description is ~250 chars; with triggers the per-skill bullet runs ~400 chars. The full block is ~6.5 KB *before* anyone reads a skill body. On a build dispatch that means every fix-only pass pays ~6.5 KB of pre-context where ~2.5 KB worth of skills actually apply, plus an attention tax (the agent reads skill summaries it will never trigger). v8.19 tags each skill with the stages it is relevant for, and the prompt block rendered into each specialist now carries only that subset.
+
+This slug is the prompt-layer counterpart to v8.16's body-side merges. v8.16 shrank the *catalogue* (24 → 17 skills); v8.19 shrinks the *per-dispatch view* (~6.5 KB → 4-5 KB depending on stage, on top of v8.16's win).
+
+### What changed
+
+**D1 — `AutoTriggerSkill.stages` field + `AutoTriggerStage` union.** `src/content/skills.ts` exports a new union `AutoTriggerStage = "triage" | "plan" | "build" | "review" | "ship" | "compound" | "always"` and adds an optional `stages?: ReadonlyArray<AutoTriggerStage>` to `AutoTriggerSkill`. An omitted field is treated as `["always"]` (the legacy "ride every stage" shape); every existing entry was tagged explicitly during the same commit so the omitted-stages path is now legacy-compat only. The `always` value is the meta-stage that is never a *dispatch* stage — it modifies which skills are considered relevant across every stage and only ever appears alongside dispatch-stage tags or as the sole tag.
+
+**D2 — Final stage mapping after a body-by-body sweep.** Every one of the 17 entries was tagged with realistic stages after re-reading the skill body:
+
+| skill                       | stages                            |
+| --------------------------- | --------------------------------- |
+| `triage-gate`               | `["triage"]`                      |
+| `flow-resume`               | `["always"]`                      |
+| `pre-flight-assumptions`    | `["triage", "plan"]`              |
+| `plan-authoring`            | `["plan"]`                        |
+| `ac-discipline`             | `["plan", "build", "review"]`     |
+| `refinement`                | `["triage", "plan"]`              |
+| `parallel-build`            | `["build"]`                       |
+| `review-discipline`         | `["review"]`                      |
+| `tdd-and-verification`      | `["build", "review", "ship"]`     |
+| `commit-hygiene`            | `["build", "ship"]`               |
+| `conversation-language`     | `["always"]`                      |
+| `anti-slop`                 | `["always"]`                      |
+| `source-driven`             | `["plan", "build"]`               |
+| `summary-format`            | `["always"]`                      |
+| `documentation-and-adrs`    | `["plan", "ship"]`                |
+| `debug-and-browser`         | `["build", "review"]`             |
+| `api-evolution`             | `["plan", "review"]`              |
+
+A few entries deserved revisiting versus the original brief sketch. `refinement` was provisionally `["always"]` but its body only fires when /cc detects an existing plan match — that's a triage / plan stage signal, not a build / ship one. `documentation-and-adrs` was provisionally `["plan", "build", "ship"]` but ADR authorship lives in design Phase 6.5 (plan) and promotion to ACCEPTED happens at Hop 6 (ship); build never authors ADRs. `api-evolution` was provisionally `["plan", "build", "review"]` but the build slice itself doesn't *make* API decisions — those are pinned during plan, then audited by review. Dropping `build` from those two entries was what pushed every dispatch stage under the 20% reduction floor; the budget assertion in the test suite is what surfaced the over-tagging.
+
+**D3 — `buildAutoTriggerBlock(stage?)` + `buildAutoTriggerBlockForStage(stage)`.** Two exports in `src/content/skills.ts`:
+
+- `buildAutoTriggerBlock(stage?)` — when `stage` is omitted, returns the legacy full block (every skill in `AUTO_TRIGGER_SKILLS`). When `stage` is provided, returns the subset where `skill.stages` includes the value or `"always"`. An unknown stage value falls back to the full set — same as omitting the parameter — so a typo never silently strips every skill out of a dispatch. The known-stage set is the source of truth for that fallback; it lives next to the type union so adding a new stage automatically extends the matcher.
+- `buildAutoTriggerBlockForStage(stage)` — strict variant whose type signature forbids `undefined`. Useful inside specialist prompt template literals where the dispatch stage is hardcoded per file; the type-system error catches the case where someone calls the strict variant without picking a stage.
+
+The block format is a markdown heading (`## Active skills (stage: \`<stage>\`)`) followed by a bullet per skill (`- **<id>** — <description>\n  - triggers: <trigger list>`) and a summary line counting the active subset. The skill *body* is never inlined — those live at `.cclaw/lib/skills/<id>.md` and are loaded by the harness's own skill machinery; the prompt block is a stage-scoped *index* so the specialist knows which skills apply.
+
+**D4 — Specialist prompts embed the right stage block.** Five specialist prompt modules now interpolate the stage-scoped block near the top of their body:
+
+- `design.ts` → `buildAutoTriggerBlock("plan")` (design runs during plan-stage discovery)
+- `planner.ts` → `buildAutoTriggerBlock("plan")`
+- `slice-builder.ts` → `buildAutoTriggerBlock("build")`
+- `reviewer.ts` → `buildAutoTriggerBlock("review")`
+- `security-reviewer.ts` → `buildAutoTriggerBlock("review")`
+
+The block sits between the title and the existing `## Sub-agent context` / `## Where you run` section so the dispatch reader sees the stage-scoped index before reading the contract. A short note after the block explicitly names that the full body of each skill lives at `.cclaw/lib/skills/<id>.md` and is "read on demand" — the agent should not inline the body.
+
+The orchestrator's own context (`start-command.ts`) is intentionally **not** stage-scoped — the orchestrator's job is to route between stages, so it needs the full catalogue. This is the one call-site of the legacy zero-arg form, and it stays.
+
+**D5 — Token-budget assertion (the win is locked in).** `tests/unit/v819-skill-windowing.test.ts` runs the dispatch-stage matrix and asserts each stage block's character count is at most 80% of the legacy full-block count (the spec's "at least 20% smaller" floor). The worst-case stage on this codebase is `build` at ~78%; `compound` is the smallest at ~30%. A future un-tag that regressed every skill to `["always"]` would balloon every dispatch stage back to 100% and this test would catch it immediately. The 20% floor is conservative — most stages clear it by 20+ percentage points.
+
+**D6 — Install-time behaviour unchanged.** `cclaw init` still writes all 17 `.md` files to `.cclaw/lib/skills/` regardless of stage tags. The stages field is **runtime-only** for prompt assembly — the disk artefacts are stable. The v8.17 orphan-skill cleanup pass still iterates `AUTO_TRIGGER_SKILLS.length` and finds 17 expected files; no harness-side flow is affected. The `prompt-budgets.test.ts` budget for `security-reviewer` was bumped from 13000 → 17500 chars (and 200 → 220 lines) to absorb the embedded skill block plus ~16% headroom for the next slug.
+
+### Migration
+
+**v8.18 → v8.19.** Drop-in. Run `cclaw upgrade` to refresh the spec files in `.cclaw/lib/`. The stages field is internal to the cclaw runtime — no project-side configuration changes. Active flows on v8.18 paused mid-dispatch continue with whatever skill block they captured at dispatch time; the next dispatch (planner after design, reviewer after slice-builder, etc.) picks up the stage-scoped block automatically.
+
+**Custom AutoTriggerSkill entries (external integrations).** Any downstream code that constructs an `AutoTriggerSkill` literal without a `stages` field is treated as `["always"]` — i.e. it rides every stage's block exactly like the pre-v8.19 behaviour. The field is `optional` precisely so an external integration can stay on the old shape; we recommend tagging explicitly in a follow-up but no immediate change is required.
+
+**`buildAutoTriggerBlock()` zero-arg callers.** The legacy zero-arg form `buildAutoTriggerBlock()` still returns the full 17-skill block. The orchestrator's `start-command.ts` is the canonical caller of this form (it routes between stages and needs the full catalogue); any external caller pre-dating v8.19 keeps working.
+
+### What we noticed but didn't touch (v8.19 scope)
+
+- **Per-skill body deduplication across stages.** Two skills are pulled into both `build` and `review` (`ac-discipline`, `tdd-and-verification`, `debug-and-browser`) because each one genuinely applies in both. Their description bullets contain ~75% identical content — the dedup would save ~600 chars per dispatch. The fix isn't a stages change, it's a description rewrite that's clearer; punted to its own slug because writing tight per-stage descriptions is a separate ask.
+- **`always` as a sentinel vs. mode flag.** `always` reads as a stage that doesn't dispatch but participates in every dispatch. A cleaner type model would split `stages: AutoTriggerStage[]` from `alwaysOn: boolean`. We picked the union-tag form because it keeps the data shape single-property; the alternative shape is a v8.X+1 ask.
+- **CLI surface for the stages tag.** `cclaw knowledge` lists shipped slugs; there's no `cclaw skills --stage build` yet that would let humans inspect the per-stage block from outside a specialist context. Trivial to add but no real flow needs it; deferred.
+- **Stage tagging for research helpers.** `repo-research` and `learnings-research` are not in `AUTO_TRIGGER_SKILLS` (they live in `RESEARCH_AGENTS`). They could equally benefit from a "when am I dispatched?" tag, but the dispatch surface for research helpers is a single planner-driven call; the cost-benefit doesn't merit a parallel mechanism. Deferred.
+
+### Deferred
+
+- **`cclaw skills --stage <stage>` CLI command.** Mirror of `cclaw knowledge`: surfaces the stage-scoped block from a terminal session for grep / audit use. Out of scope for the windowing work itself.
+- **Per-stage telemetry.** When a flow ships, the compound stage could log "this dispatch's stage block was N skills, vs the full catalogue's M" so over time we'd have data on whether the windowing is reaching the predicted savings. Punted — the v8.19 budget assertion is the only telemetry we need right now.
+
+### Tests
+
+`tests/unit/v819-skill-windowing.test.ts` — **38 new tripwire tests** covering:
+
+- AC-1 — `AUTO_TRIGGER_SKILLS.length === 17`; every skill carries a stages array (no legacy untagged drift); every value in every stages array is a known `AutoTriggerStage`.
+- AC-2 — Per-skill stage assertions for every entry in the table above, including the three revisions from the original brief (`refinement`, `documentation-and-adrs`, `api-evolution`).
+- AC-3 — `buildAutoTriggerBlock()` with no argument returns the legacy full block; with `"triage"` includes triage + always skills only; with `"review"` includes review + always skills only; always-tagged skills appear in every dispatch stage block; unknown stage falls back to the full block; `buildAutoTriggerBlockForStage("plan")` matches `buildAutoTriggerBlock("plan")` byte-for-byte.
+- AC-4 — Specialist prompts embed the right stage block heading (`design` / `planner` → plan, `reviewer` / `security-reviewer` → review, `slice-builder` → build); plan-stage prompts list `pre-flight-assumptions`; non-plan prompts do not.
+- AC-5 — Token-budget assertion per dispatch stage: each stage's block is at least 20% smaller than the legacy full block. All six dispatch stages pass.
+- AC-7 — Install-time behaviour unchanged: `AUTO_TRIGGER_SKILLS.length` still 17; every skill still has a unique `fileName`; every skill still has a non-empty body.
+
+`tests/unit/prompt-budgets.test.ts` — `security-reviewer` budget raised from 13000 → 17500 chars (and 200 → 220 lines). The growth is justified — the embedded skill block adds ~2000 chars to the prompt; the new budget leaves ~16% headroom for the next slug's growth.
+
+**Total: 611 tests across 47 files (was 573 across 46 in v8.18; +38 net from the v819-skill-windowing suite + 1 new file). All green.**
+
 ## 8.18.0 — Knowledge-surfacing: close the compound loop
 
 ### Why
