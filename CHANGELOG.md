@@ -1,5 +1,86 @@
 # Changelog
 
+## 8.17.0 — Orphan cleanup for retired skill files (and smoke-script generalisation)
+
+### Why
+
+v8.16 (PR #243) collapsed 24 skills into 17 via 6 thematic merges. The install layer iterates `AUTO_TRIGGER_SKILLS` and *writes* the current skill files, but does NOT remove `.md` files in `.cclaw/lib/skills/` that are no longer in the array. On any project upgrading from v8.15 → v8.16, this leaves 13 retired skill files orphaned alongside the live ones (`ac-quality.md`, `ac-traceability.md`, `commit-message-quality.md`, `surgical-edit-hygiene.md`, `tdd-cycle.md`, `verification-loop.md`, `refactor-safety.md`, `api-and-interface-design.md`, `breaking-changes.md`, `review-loop.md`, `security-review.md`, `debug-loop.md`, `browser-verification.md`). Harmless — no spec line references them after v8.16 — but they bloat the directory, confuse grep-based audits, and, worst case, a stale agent could `Read` an orphan file thinking it is still the current contract.
+
+v8.16's PR description and CHANGELOG both flagged this as the next slug. v8.17 ships it. The slug is install-layer behaviour + a smoke-script refactor + tripwire tests; no skill body changes, no spec changes, no harness changes.
+
+### What changed
+
+**D1 — `install.ts` cleans orphan skill files after every write pass.** A new internal helper `cleanupOrphanSkills(projectRoot, emit)` runs in `syncCclaw()` right after `writeRuntimeSkills` + `writeMetaSkill` + the `emit("Wrote skills", …)` line. The helper:
+
+- Lists `.cclaw/lib/skills/` with `fs.readdir(…, { withFileTypes: true })`.
+- Builds the expected set: every `AUTO_TRIGGER_SKILLS[i].fileName` plus `cclaw-meta.md`.
+- For each `entry` in the directory: skip if not a regular file, skip if it does not end in `.md`, skip if its name is in the expected set; otherwise `fs.rm` it and `emit("Removed orphan skill", <fileName>)`.
+- After the loop, if `removed > 0`, emit a summary `Cleaned orphan skills — <N> orphan skill file[s] removed`. If N = 0 the summary is suppressed entirely — zero noise on healthy installs.
+
+Because the cleanup lives inside `syncCclaw()` and `initCclaw` / `upgradeCclaw` both delegate to `syncCclaw`, every codepath that writes `.cclaw/lib/skills/` runs the same scan. On a fresh `cclaw init` no orphans exist, so the scan emits nothing. On `cclaw sync` against a v8.15 → v8.16 upgrade, the scan cleans all 13 retired files in one pass and prints `13 orphan skill files removed`.
+
+**D2 — Surgical scope.** The scan is the narrowest predicate that solves the problem:
+
+- Only `.md` files **directly** inside `.cclaw/lib/skills/` are candidates. Subdirectories survive (someone may have stashed personal notes in `skills/user-subdir/`; we do not recurse).
+- Non-`.md` siblings survive (a user `something.txt` is not a skill — leave it).
+- Nothing outside `.cclaw/lib/skills/` is ever touched. A stray `.md` in `.cclaw/lib/templates/` survives.
+- A user-authored `.cclaw/lib/skills/MY-LOCAL-NOTES.md` **will** be removed — the directory is cclaw-managed, and the brief is explicit: that is expected behaviour.
+
+**D3 — Loud, not silent.** Every removed file produces one `Removed orphan skill — <fileName>` progress event on stdout (the same `emit("step", "detail")` channel the surrounding `Wrote skills`, `Wrote templates`, `Wired harnesses` lines use). The user can scroll the install output or `grep` a captured log to see exactly what disappeared. The summary line `Cleaned orphan skills — N orphan skill file[s] removed` is the at-a-glance counter.
+
+**D4 — Idempotent.** Running `cclaw sync` twice in a row on a clean install produces zero orphan events on the second pass — the expected set already matches the directory.
+
+**D5 — `--skip-orphan-cleanup` escape hatch.** `cclaw <init|sync|upgrade> --skip-orphan-cleanup` skips the scan entirely and emits a single warning event: `Skipped orphan cleanup — --skip-orphan-cleanup set; stale .md files in .cclaw/lib/skills/ will not be removed`. Surfaced in the global `cclaw help` Options block AND via per-subcommand help (`cclaw sync --help`, `cclaw init --help`, etc., now short-circuit to the full help instead of running the command — a small CLI ergonomic win that landed alongside the flag because the brief asked for `node dist/cli.js sync --help` verification).
+
+Use cases for the escape hatch are intentionally narrow: an external integration drops extra `.md` files into the install's skills dir that cclaw shouldn't touch, OR an operator wants to compare pre/post-cleanup state without first reseeding the orphans. For everyone else, the scan is the right default — the brief is explicit ("the common case is to let it run").
+
+**D6 — `scripts/smoke-init.mjs` derives its expected skill list from `AUTO_TRIGGER_SKILLS`.** Previously the smoke script hard-coded a list of 12 expected `.md` files; every thematic merge / split / rename forced touching it. Now the script does `import { AUTO_TRIGGER_SKILLS } from "../dist/content/skills.js"` after the build step and builds the expected set as `[...AUTO_TRIGGER_SKILLS.map(s => s.fileName), "cclaw-meta.md"]`. The script then:
+
+- Asserts every expected file is present.
+- Reads the directory and rejects any `.md` file not in the expected set (catches install-layer regressions where a new file leaks into the install).
+- Plants a v8.17-fixture orphan, runs `cclaw sync`, and asserts both the file is gone AND the `Removed orphan skill — v816-retired-fixture.md` / `Cleaned orphan skills` lines appear on stdout (catches install-layer regressions where the cleanup step is bypassed).
+- Plants a second orphan, runs `cclaw sync --skip-orphan-cleanup`, and asserts the file survives + the `Skipped orphan cleanup` warning prints (catches escape-hatch regressions).
+- Runs `cclaw sync` a third time on a clean install and asserts zero `Removed orphan skill` / `Cleaned orphan skills` lines (idempotency check).
+
+The next thematic merge / split touches `src/content/skills.ts` and nothing else.
+
+### Tests
+
+`tests/unit/v817-orphan-cleanup.test.ts` — **11 new tripwire tests** covering:
+
+- **(a)** Baseline sync with no orphans is a silent no-op (no `Removed orphan skill` events, no errors).
+- **(b)** Sync with one v8.16-era orphan removes it AND emits exactly one `Removed orphan skill — ac-quality.md` event plus a `1 orphan skill file removed` summary.
+- **(c)** Sync with three v8.16-era orphans removes all three AND prints `3 orphan skill files removed` (proves the plural is correct).
+- **(d)** Sync preserves a stray `.cclaw/lib/skills/something.txt` (proves the `.md`-only predicate).
+- **(e)** Sync does not recurse into `.cclaw/lib/skills/user-subdir/` — the subdir and its contents survive and emit zero orphan events.
+- **(f)** `skipOrphanCleanup: true` preserves orphans and emits a single `Skipped orphan cleanup` warning event (proves the escape hatch wiring).
+- **(g)** `init → plant orphan → init again` removes the orphan on the second `init` (proves the same scan runs on the install layer's first-run path, not just on `sync` / `upgrade`).
+- **(h)** A stray `.md` in `.cclaw/lib/templates/` survives sync (proves the scan is scoped to `lib/skills/` only).
+- Idempotency: two consecutive `sync` calls — first removes the orphans, second emits zero orphan events.
+- Exact-set assertion: after sync the on-disk `.md` set equals `AUTO_TRIGGER_SKILLS.fileName ∪ {cclaw-meta.md}` — no missing files, no extra files.
+- v8.15 → v8.17 migration story: plant all 13 v8.16-retired files, run sync once, assert every file is removed AND the summary reports `13 orphan skill files removed`.
+
+**Total: 554 tests across 45 files (was 543 across 44 in v8.16; +11 net from the v817-orphan-cleanup suite + 1 new file). All green.**
+
+`tests/unit/install.test.ts`, `tests/integration/install-content-layer.test.ts`, `tests/unit/v816-cleanup.test.ts`, and the rest of the suite were untouched — the new cleanup runs after the existing `writeRuntimeSkills` write loop and never changes any behaviour observable to a fresh `init`.
+
+### Migration
+
+**v8.15 → v8.17.** Run `cclaw upgrade` (or `cclaw sync` — same code path). The 13 retired skill files from v8.16's thematic merge will be removed in a single pass with one `Removed orphan skill — <fileName>` progress line each plus a `Cleaned orphan skills — 13 orphan skill files removed` summary at the end. No manual `rm` invocation required; the v8.16 CHANGELOG migration snippet (`rm .cclaw/lib/skills/{…}.md`) is now obsolete.
+
+**v8.16 → v8.17.** If a user already ran the manual `rm` from v8.16's migration block, `cclaw upgrade` emits zero orphan events on first run. If they didn't, the scan cleans up. Either way the directory ends in the same state.
+
+**Fresh `cclaw init`.** Drop-in. No orphans exist on first run, so the scan emits nothing and the install summary is unchanged.
+
+**Manual operator note.** This is the first change to the install-layer write/scan contract in several releases. The 11 tripwire tests cover the boundary carefully (subdirs survive, non-`.md` survive, files outside `lib/skills/` survive, the scan is idempotent, the escape hatch works). If a future change re-introduces an orphan file that should ship (e.g. a hidden `.md` for a build artefact), it MUST go in `AUTO_TRIGGER_SKILLS` or be moved out of `lib/skills/`; the scan does not have an opt-in allowlist beyond those two registries.
+
+### What we noticed but didn't touch (v8.17 scope)
+
+- The orphan scan is currently `lib/skills/`-only. The same `iterate-then-write-then-leave-orphans` pattern applies in principle to `lib/templates/`, `lib/runbooks/`, `lib/patterns/`, `lib/agents/`, etc. None of those have shipped a removal/merge release yet, so the orphan pressure is zero. When the first such release lands, the cleanup pattern is now established and can be generalised by lifting `cleanupOrphanSkills` into `cleanupOrphans(dir, expectedNames, emit)` — captured as a deferred slug.
+- The `--skip-orphan-cleanup` flag is unscoped: it disables the scan regardless of which directory the future generalisation might add. If we ever ship two independent scans we may want `--skip-orphan-cleanup=skills` / `--skip-orphan-cleanup=templates`. Not worth pre-engineering today; the flag's job is to be the escape hatch, and one boolean is enough.
+- `cclaw uninstall` already removes the entire `lib/skills/` directory via `removePath(.cclaw)`, so it does not need an orphan scan.
+
+
 ## 8.16.0 — Thematic skills merge: 13 source skills collapse into 6 thematic groups, leaving 17 auto-trigger skills (was 24 in v8.15); runtime behaviour unchanged
 
 ### Why

@@ -92,6 +92,16 @@ export interface SyncOptions {
    */
   interactive?: boolean;
   /**
+   * v8.17 — skip the orphan-skill scan that runs after the install layer
+   * writes `.cclaw/lib/skills/*.md`. Default `false` (scan runs and
+   * `fs.rm`s any `.md` file in that directory not in
+   * `AUTO_TRIGGER_SKILLS` ∪ {`cclaw-meta.md`}). Use only as an emergency
+   * escape hatch — the scan is loud (one progress event per removed
+   * file) and idempotent, so the common case is "let it run". Surfaced
+   * as `cclaw <sync|upgrade|init> --skip-orphan-cleanup` on the CLI.
+   */
+  skipOrphanCleanup?: boolean;
+  /**
    * Optional progress callback invoked once per major install step
    * (agents written, hooks installed, etc.). The CLI wires this to a
    * `✓` line printer; programmatic callers (smoke, tests, MCP wrappers)
@@ -155,6 +165,62 @@ async function writeRuntimeSkills(projectRoot: string): Promise<void> {
     const target = path.join(projectRoot, LIB_ROOT, "skills", skill.fileName);
     await writeFileSafe(target, skill.body);
   }
+}
+
+/**
+ * v8.17 — garbage-collect `.cclaw/lib/skills/*.md` files that are no
+ * longer in `AUTO_TRIGGER_SKILLS` (∪ `cclaw-meta.md`).
+ *
+ * Background: the v8.16 thematic merge collapsed 13 source skills into
+ * 6 thematic groups. The install layer iterates `AUTO_TRIGGER_SKILLS`
+ * and *writes* the current skills, but does NOT remove `.md` files
+ * already present from a previous release. Result on existing installs
+ * after upgrading from v8.15 → v8.16: 13 retired skill files sit
+ * orphaned in `.cclaw/lib/skills/` — harmless, but they bloat the
+ * directory, confuse grep-based audits, and a stale agent could `Read`
+ * an orphan file thinking it's still the current contract.
+ *
+ * Scope (intentionally narrow):
+ *  - Only `.md` files directly inside `.cclaw/lib/skills/`.
+ *  - Subdirectories survive (someone may have stashed personal notes
+ *    in a subfolder; we don't recurse).
+ *  - Non-`.md` files survive (someone added a `something.txt` — that's
+ *    not a skill, leave it).
+ *  - Nothing outside `.cclaw/lib/skills/` is ever touched.
+ *
+ * Loudness: emits one `Removed orphan skill` progress event per file
+ * (the CLI renders each as `✓ Removed orphan skill — <fileName>`), then
+ * one `Cleaned orphan skills` summary event when N > 0. On a healthy
+ * install (N = 0) the scan emits nothing — zero noise.
+ *
+ * Idempotent: running `cclaw sync` twice in a row on a clean install
+ * produces zero orphan events on the second pass.
+ */
+async function cleanupOrphanSkills(
+  projectRoot: string,
+  emit: (step: string, detail?: string) => void
+): Promise<number> {
+  const dir = path.join(projectRoot, LIB_ROOT, "skills");
+  if (!(await exists(dir))) return 0;
+  const expected = new Set<string>([
+    "cclaw-meta.md",
+    ...AUTO_TRIGGER_SKILLS.map((s) => s.fileName)
+  ]);
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.endsWith(".md")) continue;
+    if (expected.has(entry.name)) continue;
+    await fs.rm(path.join(dir, entry.name), { force: true });
+    emit("Removed orphan skill", entry.name);
+    removed += 1;
+  }
+  if (removed > 0) {
+    const noun = removed === 1 ? "orphan skill file" : "orphan skill files";
+    emit("Cleaned orphan skills", `${removed} ${noun} removed`);
+  }
+  return removed;
 }
 
 async function writeTemplates(projectRoot: string): Promise<void> {
@@ -333,6 +399,15 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   await writeRuntimeSkills(projectRoot);
   await writeMetaSkill(projectRoot);
   emit("Wrote skills", `${AUTO_TRIGGER_SKILLS.length + 1} skills → .cclaw/lib/skills/`);
+
+  if (options.skipOrphanCleanup) {
+    emit(
+      "Skipped orphan cleanup",
+      "--skip-orphan-cleanup set; stale .md files in .cclaw/lib/skills/ will not be removed"
+    );
+  } else {
+    await cleanupOrphanSkills(projectRoot, emit);
+  }
 
   await writeTemplates(projectRoot);
   emit("Wrote templates", `${ARTIFACT_TEMPLATES.length + 1} templates → .cclaw/lib/templates/`);

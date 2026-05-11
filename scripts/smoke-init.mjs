@@ -1,10 +1,29 @@
 #!/usr/bin/env node
 // Smoke test: init -> sync -> upgrade -> sync -> uninstall must leave the
 // project clean. Verifies the grouped layout: state/, hooks/, flows/*, lib/*.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+//
+// v8.17 generalisation:
+//  - The expected list of `.cclaw/lib/skills/*.md` files is derived from
+//    `AUTO_TRIGGER_SKILLS` (imported from the built `dist/`), not
+//    hardcoded here. Any future thematic merge / split / rename ripples
+//    through automatically — the next slug authoring just edits
+//    `src/content/skills.ts` and runs `npm run smoke:runtime`.
+//  - A new orphan-cleanup smoke check plants a stale `.md` file in the
+//    install's skills dir, runs `cclaw sync`, and asserts the orphan
+//    was removed. Catches install-layer regressions where the v8.17
+//    `cleanupOrphanSkills` step is accidentally bypassed.
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+
+const { AUTO_TRIGGER_SKILLS } = await import(
+  new URL("../dist/content/skills.js", import.meta.url).href
+);
+const EXPECTED_SKILL_FILES = [
+  ...AUTO_TRIGGER_SKILLS.map((s) => s.fileName),
+  "cclaw-meta.md"
+].sort();
 
 const tempDir = mkdtempSync(join(tmpdir(), "cclaw-smoke-"));
 
@@ -60,9 +79,21 @@ try {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }
   }
-  for (const skill of ["plan-authoring.md", "ac-discipline.md", "refinement.md", "parallel-build.md", "review-discipline.md", "commit-hygiene.md", "api-evolution.md", "cclaw-meta.md", "tdd-and-verification.md", "debug-and-browser.md", "conversation-language.md", "anti-slop.md"]) {
+  // v8.17: derive the expected list from `AUTO_TRIGGER_SKILLS` so future
+  // thematic merges / splits don't require touching this script. Assert
+  // the directory contains EXACTLY that set (no orphans, nothing missing).
+  for (const skill of EXPECTED_SKILL_FILES) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "skills", skill))) {
       throw new Error(`smoke check failed: skill ${skill} missing after init`);
+    }
+  }
+  const { readdirSync } = await import("node:fs");
+  const skillsOnDisk = readdirSync(join(tempDir, ".cclaw", "lib", "skills"))
+    .filter((name) => name.endsWith(".md"))
+    .sort();
+  for (const onDisk of skillsOnDisk) {
+    if (!EXPECTED_SKILL_FILES.includes(onDisk)) {
+      throw new Error(`smoke check failed: unexpected skill file ${onDisk} after init — not in AUTO_TRIGGER_SKILLS ∪ {cclaw-meta.md}`);
     }
   }
   for (const runbook of ["plan.md", "build.md", "review.md", "ship.md"]) {
@@ -109,7 +140,48 @@ try {
       throw new Error(`smoke check failed: .gitignore missing pattern ${expected}`);
     }
   }
-  execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: "pipe" });
+  // v8.17: orphan-cleanup smoke check. Plant a stale .md file in the
+  // skills dir, run `cclaw sync`, and assert that the orphan was
+  // removed and that the install.ts cleanup step emitted at least one
+  // `Removed orphan skill` line on stdout.
+  const orphanPath = join(tempDir, ".cclaw", "lib", "skills", "v816-retired-fixture.md");
+  writeFileSync(orphanPath, "---\nname: v816-retired-fixture\n---\nsmoke fixture\n", "utf8");
+  const syncOut = execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] });
+  if (existsSync(orphanPath)) {
+    throw new Error("smoke check failed: v8.17 orphan-cleanup did not remove .cclaw/lib/skills/v816-retired-fixture.md after sync");
+  }
+  const syncStdout = String(syncOut);
+  if (!syncStdout.includes("Removed orphan skill") || !syncStdout.includes("v816-retired-fixture.md")) {
+    throw new Error(`smoke check failed: v8.17 orphan-cleanup did not print "Removed orphan skill — v816-retired-fixture.md" on sync; got:\n${syncStdout}`);
+  }
+  if (!syncStdout.includes("Cleaned orphan skills")) {
+    throw new Error(`smoke check failed: v8.17 orphan-cleanup did not print summary "Cleaned orphan skills" on sync; got:\n${syncStdout}`);
+  }
+  // v8.17: --skip-orphan-cleanup escape hatch. Plant another orphan,
+  // run sync with the flag, assert the orphan survives + the warning
+  // line shows up.
+  const orphanSkipPath = join(tempDir, ".cclaw", "lib", "skills", "v816-skip-fixture.md");
+  writeFileSync(orphanSkipPath, "---\nname: v816-skip-fixture\n---\nskip-flag fixture\n", "utf8");
+  const skipOut = execFileSync(
+    "node",
+    [cli, "sync", "--skip-orphan-cleanup"],
+    { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] }
+  );
+  if (!existsSync(orphanSkipPath)) {
+    throw new Error("smoke check failed: --skip-orphan-cleanup should preserve orphan .md files but v816-skip-fixture.md was removed");
+  }
+  if (!String(skipOut).includes("Skipped orphan cleanup")) {
+    throw new Error(`smoke check failed: --skip-orphan-cleanup did not print warning; got:\n${String(skipOut)}`);
+  }
+  // Clean up the skip-flag fixture so the next sync/uninstall passes are clean.
+  rmSync(orphanSkipPath, { force: true });
+  // Re-run sync to assert idempotency: zero orphan output on a clean install.
+  const idempotentOut = String(
+    execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
+  );
+  if (idempotentOut.includes("Removed orphan skill") || idempotentOut.includes("Cleaned orphan skills")) {
+    throw new Error(`smoke check failed: v8.17 orphan-cleanup should be idempotent (zero orphan events on a clean install); got:\n${idempotentOut}`);
+  }
   execFileSync("node", [cli, "upgrade"], { cwd: tempDir, stdio: "pipe" });
   execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: "pipe" });
   execFileSync("node", [cli, "uninstall"], { cwd: tempDir, stdio: "pipe" });
