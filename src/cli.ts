@@ -14,7 +14,13 @@ import {
 import { detectHarnesses } from "./harness-detect.js";
 import { exists } from "./fs-utils.js";
 import { readConfig } from "./config.js";
-import { readKnowledgeLog, type KnowledgeEntry } from "./knowledge-store.js";
+import {
+  PROBLEM_TYPES,
+  matchesProblemType,
+  readKnowledgeLog,
+  type KnowledgeEntry,
+  type ProblemType
+} from "./knowledge-store.js";
 import {
   renderBanner,
   renderHelpSections,
@@ -92,6 +98,10 @@ const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
   [
     "--surface=<substring>",
     "knowledge: filter to entries whose touchSurface[] contains <substring>."
+  ],
+  [
+    "--type=<kind>",
+    "knowledge: filter by problemType (bug | knowledge | decision | performance | refactor); absent problemType surfaces only under --type=knowledge (v8.34)."
   ],
   ["--json", "knowledge: emit raw jsonl pass-through (one parsed entry per line)."],
   ["--help, -h", "Show this help and exit."],
@@ -211,8 +221,20 @@ async function runKnowledgeCommand(
 
   const tagFilter = typeof flags.tag === "string" ? flags.tag : undefined;
   const surfaceFilter = typeof flags.surface === "string" ? flags.surface : undefined;
+  const typeFilterRaw = typeof flags.type === "string" ? flags.type : undefined;
   const allFlag = flags.all === true;
   const jsonFlag = flags.json === true;
+
+  let typeFilter: ProblemType | undefined;
+  if (typeFilterRaw !== undefined) {
+    if (!(PROBLEM_TYPES as readonly string[]).includes(typeFilterRaw)) {
+      logError(
+        `[cclaw] knowledge: --type=<kind> must be one of ${PROBLEM_TYPES.join(" | ")}; got ${JSON.stringify(typeFilterRaw)}`
+      );
+      return 1;
+    }
+    typeFilter = typeFilterRaw as ProblemType;
+  }
 
   let filtered = entries;
   if (tagFilter) {
@@ -222,6 +244,9 @@ async function runKnowledgeCommand(
     filtered = filtered.filter((entry) =>
       (entry.touchSurface ?? []).some((p) => p.includes(surfaceFilter))
     );
+  }
+  if (typeFilter) {
+    filtered = filtered.filter((entry) => matchesProblemType(entry, typeFilter));
   }
 
   // File order is chronological (append-only); reverse for recency-first.
@@ -243,7 +268,8 @@ async function runKnowledgeCommand(
   if (limited.length === 0) {
     const filterDesc = [
       tagFilter ? `--tag=${tagFilter}` : "",
-      surfaceFilter ? `--surface=${surfaceFilter}` : ""
+      surfaceFilter ? `--surface=${surfaceFilter}` : "",
+      typeFilter ? `--type=${typeFilter}` : ""
     ]
       .filter(Boolean)
       .join(" ");

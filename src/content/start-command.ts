@@ -218,7 +218,19 @@ Once both answers are in, patch \`flow-state.json\`:
 
 ${TRIAGE_PERSIST_EXAMPLE}
 
-The triage decision is **immutable** for the lifetime of the flow. If the user wants a different acMode or runMode mid-flight, they invoke \`/cc-cancel\` themselves and start a fresh \`/cc <task>\`. The orchestrator does not auto-cancel; it surfaces the option in prose only when the user appears stuck.
+The triage decision is **immutable** for the lifetime of the flow **except for \`runMode\`** (v8.34). \`complexity\`, \`acMode\`, and \`path\` are pinned at triage — to change any of those mid-flight, the user invokes \`/cc-cancel\` themselves and starts a fresh \`/cc <task>\`. The orchestrator does not auto-cancel; it surfaces the option in prose only when the user appears stuck.
+
+### Mid-flight \`runMode\` toggle (v8.34)
+
+The user can flip \`triage.runMode\` between \`step\` and \`auto\` at any \`/cc\` invocation — mid-flow, between stages, after plan-approval, or on a fresh resume — by passing \`/cc --mode=auto\` or \`/cc --mode=step\`. Behaviour:
+
+- The orchestrator patches \`flow-state.json > triage.runMode\` immediately and the toggle **persists**: every subsequent \`/cc\` reads the patched value, no need to re-pass the flag.
+- The toggle never re-triages; only \`runMode\` flips. \`complexity\` / \`acMode\` / \`path\` / \`assumptions\` / \`priorLearnings\` stay verbatim.
+- After the patch, the orchestrator continues normally — if the toggle came on a fresh \`/cc\` (no current dispatch), it advances under the new mode; if it came mid-dispatch (rare; the user typed \`/cc --mode=auto\` while a specialist was running), the patch lands and takes effect on the next stage boundary, never mid-specialist.
+- **Inline path rejection.** When \`triage.path == ["build"]\` (inline / trivial), the toggle is structurally meaningless (no stages to chain). The orchestrator responds with the literal note **\`inline path has no runMode\`** (one line, no other action) and proceeds with the inline edit as if no flag had been passed. This is the only \`/cc --mode=\` failure mode; the toggle never errors out, never asks a follow-up question.
+- The \`--mode=\` flag is **only** \`auto\` or \`step\`; any other value (\`--mode=skip\`, \`--mode=\`) is treated as if the flag were absent and surfaces a one-line "unknown runMode value, ignored" note in plain prose. The flag does not consume the user's task text — \`/cc --mode=auto refactor the auth module\` is parsed as "toggle runMode to auto, then proceed as if \`/cc refactor the auth module\` had been passed".
+
+The toggle is the **only** mid-flight triage mutation supported. See \`flow-resume.md\` for the resume-time entry point and the user-facing copy.
 
 ### Slug naming (mandatory format)
 

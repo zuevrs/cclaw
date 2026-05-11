@@ -1,5 +1,87 @@
 # Changelog
 
+## 8.34.0 — Knowledge `problemType` field + mid-flight `runMode` toggle
+
+### Why
+
+The five-audit review identified two paired schema / UX additions that ride on the same edit surface (`flow-state.json` triage block + `knowledge-store.ts` shape + orchestrator body docs):
+
+1. **`problemType` field in `KnowledgeEntry`** (everyinc pattern). The compound-capture pipeline writes one `knowledge.jsonl` row per shipped slug, carrying tags / touchSurface / signals. Tag-based filtering is fine for free-form labels but it leaves no shape for the **categorical question** a downstream reader actually asks: *"is this prior slug a bug, a knowledge note, a decision, a perf fix, or a refactor?"*. v8.34 adds an optional 5-element enum (`bug` / `knowledge` / `decision` / `performance` / `refactor`) the compound step stamps from flow signals, and threads it through both the `findNearKnowledge` filter and the `cclaw knowledge` CLI's filter set so `--type=bug` works alongside the existing `--tag=...` and `--surface=...` flags.
+
+2. **Mid-flight `runMode` toggle** (flow-complexity audit). The current orchestrator marks the triage decision as **immutable for the lifetime of the flow** — a useful invariant for `complexity` / `acMode` / `path` (escalation requires `/cc-cancel` + fresh `/cc`) but an overly strict rule for `runMode`. After plan-approval, the user often wants to autopilot through build → review → ship without re-typing `/cc` between each stage; after a noisy auto-mode run, they want a deliberate pause back. v8.34 lifts the immutability rule **only** for `runMode`: the user invokes `/cc --mode=auto` or `/cc --mode=step` to flip mid-flight; the orchestrator patches `flow-state.json > triage.runMode` and the change persists across `/cc` invocations. The inline path rejects the toggle with the literal one-line note `inline path has no runMode` (no stages to chain).
+
+Both items were forward-pointed by v8.34 placeholders in the existing skills (the `triage-gate.md` rationalizations table mentioned "until v8.34 ships the mid-flight toggle"). v8.34 lands both.
+
+### What changed
+
+- **D1 — `KnowledgeEntry.problemType` field** in `src/knowledge-store.ts`:
+  - New exported `const PROBLEM_TYPES = ["bug", "knowledge", "decision", "performance", "refactor"] as const` and `type ProblemType = (typeof PROBLEM_TYPES)[number]`.
+  - `KnowledgeEntry` interface gains `problemType?: ProblemType | null`.
+  - `assertEntry` validates `problemType` (when present, must be one of the enum; `null` accepted as a forward-compat explicit-clear value; absent is the back-compat default).
+  - New exported helper `matchesProblemType(entry, filter)` — back-compat rule: absent / `null` `problemType` surfaces ONLY under the `knowledge` filter (the prior implicit default before v8.34). Every other filter value (`bug` / `decision` / `performance` / `refactor`) requires an exact string match. Exported so the CLI's filter loop uses the same predicate as the orchestrator's `findNearKnowledge`.
+
+- **D2 — `findNearKnowledge` accepts a `problemType` filter** in `src/knowledge-store.ts`:
+  - `NearKnowledgeOptions` gains `problemType?: ProblemType` (optional; omit to preserve v8.18 behaviour).
+  - When set, the filter runs **before** the Jaccard similarity scoring (cheap filter first; expensive scoring on the survivors), and the helper invokes `matchesProblemType` so the back-compat rule is consistent across CLI + orchestrator.
+  - Invalid filter values surface as `KnowledgeStoreError` (matching the existing `threshold` validation pattern).
+
+- **D3 — `cclaw knowledge --type=<kind>` CLI flag** in `src/cli.ts`:
+  - Help text gets a new row: `--type=<kind>  knowledge: filter by problemType (bug | knowledge | decision | performance | refactor); absent problemType surfaces only under --type=knowledge (v8.34).`
+  - `runKnowledgeCommand` parses `flags.type`, validates against `PROBLEM_TYPES`, applies via `matchesProblemType`, and includes the active filter in the "0 entries match …" diagnostic so the user can see which filter ran.
+  - Invalid `--type=` value exits 1 with a one-line error naming the supported values (matching the existing `--harness` validation pattern).
+
+- **D4 — Mid-flight `runMode` toggle** in `src/content/start-command.ts`:
+  - The existing immutability line (Hop 2, line 221) now reads: "The triage decision is **immutable** for the lifetime of the flow **except for `runMode`** (v8.34)." The rule for `complexity` / `acMode` / `path` is unchanged.
+  - New "Mid-flight `runMode` toggle (v8.34)" subsection under Hop 2 (~16 lines, ~1.9K chars) documenting:
+    - `/cc --mode=auto` and `/cc --mode=step` parse points.
+    - The patch contract (writes `flow-state.json > triage.runMode`; persists across `/cc` invocations).
+    - Mid-specialist behaviour (patch lands; takes effect at next stage boundary, never mid-specialist).
+    - The literal inline-path rejection (`inline path has no runMode`).
+    - Combinability with task text (`/cc --mode=auto refactor the auth module` works).
+    - Invalid `--mode=` value handling (one-line "unknown runMode value, ignored" note; toggle is never an error).
+
+- **D5 — `flow-resume.md` documents the toggle** in `src/content/skills/flow-resume.md`:
+  - Updated Resume rule #1 to note the v8.34 `runMode` exception while preserving the rule for `complexity` / `acMode` / `path`.
+  - New "Mid-flight `runMode` toggle (v8.34)" H2 section covering the user-facing shapes (after-plan-approval → auto; after-noisy-auto → step; resume + toggle in one step), the persistence rule, and the inline-path rejection.
+
+- **D6 — `triage-gate.md` updated** to point at the new toggle:
+  - Common-pitfalls row updated from "until v8.34 ships the mid-flight toggle" to "v8.34 lifts the immutability rule for `runMode` only" with a cross-reference to `flow-resume.md`.
+  - Main immutability paragraph updated to call out the `runMode` exception.
+
+- **D7 — Tripwire** at `tests/unit/v834-knowledge-type-and-runmode-toggle.test.ts` (16 tests, 2 describe blocks):
+  - **AC-1 — KnowledgeEntry shape:** `PROBLEM_TYPES` exports the canonical 5-element union; `ProblemType` type assignability.
+  - **AC-2 — round-trip + validation:** write + read preserves `problemType`; entries with invalid `problemType` throw; entries with `problemType: null` validate.
+  - **AC-3 — filter behaviour:** `findNearKnowledge({ problemType: "bug" })` returns only bug-tagged entries; same for decision / performance; no filter returns all (back-compat).
+  - **AC-4 — back-compat:** legacy entries without `problemType` validate on read and surface under `--type=knowledge` (the prior implicit default).
+  - **AC-5 — orchestrator body:** documents `/cc --mode=auto` + `/cc --mode=step`, names `runMode` as the only mutable triage field, declares the inline-path rejection literal, documents the patch persistence.
+  - **AC-6 — flow-resume.md:** documents the toggle, names mid-flight (not just at-resume), repeats the inline-path rejection literal.
+
+- **D8 — v8.31 tripwire extension** at `tests/unit/v831-path-aware-trimming.test.ts`:
+  - Body-only char ceiling 42500 → 44500 (absorbs ~1.9K chars of v8.34 toggle docs).
+  - Body-only line ceiling 435 → 450 (absorbs ~14 lines).
+  - v8.30 char-ratio ceiling 0.95 → 0.97 (still meaningfully under v8.30 baseline; the v8.31 win is preserved net of the v8.34 spend).
+  - Inline-path budget ceiling 42500 → 44500 (the inline path reads the body alone, so the inline budget tracks the body ceiling 1:1).
+  - All other v8.31 invariants (small-medium ≤ 105K; large-risky ≤ 145K; strict path-ordering; runbook wiring; observable-behaviour preservation) unchanged.
+
+### Migration
+
+Drop-in. No schema bump on `flow-state.json` (the v8.34 `runMode` toggle uses an existing field; the patch is just a value-flip). The `knowledge.jsonl` schema is **forward-compatible without a bump**: legacy entries without `problemType` continue to validate and surface under the `--type=knowledge` filter (the prior implicit default before v8.34).
+
+- **CLI users** gain `cclaw knowledge --type=bug` (or any other PROBLEM_TYPE). Existing `--tag` / `--surface` / `--all` / `--json` flags are unchanged.
+- **Orchestrator users** gain `/cc --mode=auto` and `/cc --mode=step`. The default behaviour (toggle absent → triage decision pins runMode at decide-time) is unchanged.
+- **Compound capture** does not yet stamp `problemType` from flow signals — the field is reserved for the v8.35 compound-stamping pass (see Deferred). v8.34 lands the schema + filter; v8.35 lands the writer.
+
+### Deferred to follow-up slugs
+
+- **Compound capture stamps `problemType` from flow signals.** v8.34 documents the stamping rules (security_flag → bug; design Phase 4 D-N inline → decision; perf finding cleared → performance; code-simplification REFACTOR → refactor; else → knowledge) but does not wire them into the compound writer. v8.35+ landing pass needs to thread the active flow's signals into `appendKnowledgeEntry` so the field is auto-populated.
+- **`cclaw knowledge` interactive filter chip.** Currently the only way to combine filters is the CLI flag string (`cclaw knowledge --type=bug --tag=auth`). A future slug can land an interactive multi-filter picker for the TUI menu's "Browse knowledge" entry.
+- **`/cc --mode=` short forms.** `/cc -a` for auto, `/cc -s` for step would save 5 keystrokes per toggle. Skipped on this slug because the long form is unambiguous and short forms collide with `-h` / `-v` (help / version) in the existing flag parser.
+- **`findNearKnowledge` returns `problemType` in the dispatch envelope.** The orchestrator stamps `triage.priorLearnings` with raw `KnowledgeEntry` rows, so the field is already plumbed to specialists; what's missing is the specialist prompts noticing the field and routing differently (e.g. reviewer's `perf` axis becomes a hard gate when the prior was a perf bug). A future slug can extend the dispatch envelope's "Required first read" rules.
+
+### Tests
+
+`npm test`: 898 → 914 (+16) tests across 62 → 63 files. The new tripwire pins all six AC. v8.26 + v8.30 + v8.32 + v8.33 anatomy tripwires continue to fire over the full 22-skill set and stay green. v8.31 body-budget tripwire extended (not relaxed) to absorb the v8.34 toggle documentation. `release:check`: green; pack target is `cclaw-cli-8.34.0.tgz`.
+
 ## 8.33.0 — Additive skills batch II: `frontend-ui-engineering` + `ci-cd-and-automation` (addy pattern, +2 skills)
 
 ### Why

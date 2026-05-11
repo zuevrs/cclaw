@@ -84,40 +84,40 @@ const LARGE_RISKY_RUNBOOKS: string[] = [
 ];
 
 describe("v8.31 path-aware orchestrator trimming — body-only budget", () => {
-  it("AC-1 — orchestrator body alone is ≤ 42500 chars (was 45212 on v8.30)", () => {
+  it("AC-1 — orchestrator body alone is ≤ 44500 chars (was 45212 on v8.30; v8.34 toggle docs absorbed)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 42500). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; this budget pins the win. Body cut: ~3.5K chars (~7.8%) from v8.30 baseline (45212). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31 stops here to keep v8.24 / v8.21 tripwires unmodified.`
-    ).toBeLessThanOrEqual(42500);
+      `start-command body is ${charCount} chars (budget 44500). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; v8.34 added ~2K chars for the mid-flight runMode toggle (orchestrator-wide, NOT path-conditional, so it stays in the body). Net cut vs v8.30 (45212): ~1.5K chars (~3.3%). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31/v8.34 stop here to keep v8.24 / v8.21 tripwires unmodified.`
+    ).toBeLessThanOrEqual(44500);
   });
 
-  it("AC-1 — orchestrator body alone is ≤ 435 lines (was 472 on v8.30)", () => {
+  it("AC-1 — orchestrator body alone is ≤ 450 lines (was 472 on v8.30; v8.34 toggle docs absorbed)", () => {
     const lineCount = renderStartCommand().split("\n").length;
     expect(
       lineCount,
-      `start-command body is ${lineCount} lines (budget 435). v8.22 budget was 480; v8.31 tightens to 435 as the lifted Hop 4 + plan-small-medium blocks drop the body by ~38 lines.`
-    ).toBeLessThanOrEqual(435);
+      `start-command body is ${lineCount} lines (budget 450). v8.22 budget was 480; v8.31 tightened to 435; v8.34 lifted to 450 to absorb the mid-flight runMode toggle section (~14 lines, orchestrator-wide).`
+    ).toBeLessThanOrEqual(450);
   });
 
-  it("AC-1 — orchestrator body alone meaningfully shrunk vs v8.30 baseline (≥5% char cut)", () => {
+  it("AC-1 — orchestrator body alone still meaningfully smaller vs v8.30 baseline (≤97% char ratio)", () => {
     const v830CharBaseline = 45212;
     const charCount = renderStartCommand().length;
     const ratio = charCount / v830CharBaseline;
     expect(
       ratio,
-      `body is ${charCount} chars, ratio ${ratio.toFixed(3)} of v8.30 baseline (${v830CharBaseline}). v8.31's win disappears if the body re-grows past 95% of pre-v8.31. The current ratio should sit around 0.92-0.93.`
-    ).toBeLessThanOrEqual(0.95);
+      `body is ${charCount} chars, ratio ${ratio.toFixed(3)} of v8.30 baseline (${v830CharBaseline}). v8.31's win was ~7.8% cut; v8.34 spent some of that cut on the mid-flight runMode toggle docs. The body should still sit under 97% of v8.30; future re-growth past this ratio is a signal to lift more content to runbooks.`
+    ).toBeLessThanOrEqual(0.97);
   });
 });
 
 describe("v8.31 path-aware orchestrator trimming — per-path budget envelopes", () => {
-  it("AC-2 — inline-path budget = body only; ≤ 42500 chars", () => {
+  it("AC-2 — inline-path budget = body only; ≤ 44500 chars (v8.34 lifted to absorb the mid-flight runMode toggle docs)", () => {
     const budget = pathBudget(INLINE_RUNBOOKS);
     expect(
       budget,
-      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 42500.`
-    ).toBeLessThanOrEqual(42500);
+      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 44500 (v8.31 = 42500 + v8.34 toggle docs).`
+    ).toBeLessThanOrEqual(44500);
   });
 
   it("AC-2 — small-medium-path budget = body + 7 runbooks; ≤ 105000 chars", () => {

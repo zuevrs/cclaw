@@ -3,6 +3,35 @@ import path from "node:path";
 import { KNOWLEDGE_LOG_REL_PATH } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 
+/**
+ * v8.34 — categorical classification a shipped slug carries forward.
+ *
+ * Compound capture stamps the field from flow signals:
+ *
+ *   - `securityFlag: true` AND reviewer found a CVE-class finding → `bug`.
+ *   - `bug-only` ship (reviewer's `block` cleared by fix-only edits) → `bug`.
+ *   - `hasArchitectDecision: true` AND design Phase 4 D-N inlines a decision → `decision`.
+ *   - reviewer's `perf` axis finding cleared → `performance`.
+ *   - `code-simplification` skill fired during REFACTOR AND no AC text changed → `refactor`.
+ *   - everything else → `knowledge` (the prior implicit default).
+ *
+ * `findNearKnowledge` accepts an optional `problemType` filter; missing
+ * values surface only under the `knowledge` filter (the implicit
+ * default), preserving the back-compat contract from v8.18.
+ */
+export const PROBLEM_TYPES = [
+  "bug",
+  "knowledge",
+  "decision",
+  "performance",
+  "refactor"
+] as const;
+export type ProblemType = (typeof PROBLEM_TYPES)[number];
+
+function isProblemType(value: unknown): value is ProblemType {
+  return typeof value === "string" && (PROBLEM_TYPES as readonly string[]).includes(value);
+}
+
 export interface KnowledgeEntry {
   slug: string;
   ship_commit: string;
@@ -31,6 +60,13 @@ export interface KnowledgeEntry {
    * `null` or absent means "no near-duplicate detected".
    */
   dedupeOf?: string | null;
+  /**
+   * v8.34 — categorical classification (`bug` / `knowledge` / `decision`
+   * / `performance` / `refactor`). Optional; missing reads as "knowledge"
+   * (the prior implicit default). See {@link ProblemType} for the
+   * compound-stamping rules.
+   */
+  problemType?: ProblemType | null;
 }
 
 /**
@@ -80,6 +116,11 @@ function assertEntry(value: unknown): asserts value is KnowledgeEntry {
   }
   if (entry.dedupeOf !== undefined && entry.dedupeOf !== null && typeof entry.dedupeOf !== "string") {
     throw new KnowledgeStoreError("Knowledge entry `dedupeOf` must be a string when present.");
+  }
+  if (entry.problemType !== undefined && entry.problemType !== null && !isProblemType(entry.problemType)) {
+    throw new KnowledgeStoreError(
+      `Knowledge entry \`problemType\` must be one of ${JSON.stringify(PROBLEM_TYPES)} when present; got ${JSON.stringify(entry.problemType)}.`
+    );
   }
 }
 
@@ -194,6 +235,17 @@ export interface NearKnowledgeOptions {
    * the still-being-shipped entry as its own "prior learning".
    */
   excludeSlug?: string;
+  /**
+   * v8.34 — restrict the candidate pool to entries whose
+   * {@link KnowledgeEntry.problemType} equals this value. Entries with
+   * `problemType` absent / `undefined` surface ONLY under the `knowledge`
+   * filter (the prior implicit default before v8.34). Entries with
+   * `problemType: null` are treated identically to absent.
+   *
+   * Omit the option to retain pre-v8.34 behaviour (all problemType
+   * values surface).
+   */
+  problemType?: ProblemType;
 }
 
 /**
@@ -314,10 +366,15 @@ export async function findNearKnowledge(
   projectRoot: string,
   options: NearKnowledgeOptions = {}
 ): Promise<KnowledgeEntry[]> {
-  const { window = 100, threshold = 0.4, limit = 3, excludeSlug } = options;
+  const { window = 100, threshold = 0.4, limit = 3, excludeSlug, problemType } = options;
   if (typeof taskSummary !== "string" || taskSummary.trim().length === 0) return [];
   if (threshold <= 0 || threshold > 1) {
     throw new KnowledgeStoreError(`threshold must be in (0, 1]; got ${threshold}.`);
+  }
+  if (problemType !== undefined && !isProblemType(problemType)) {
+    throw new KnowledgeStoreError(
+      `problemType filter must be one of ${JSON.stringify(PROBLEM_TYPES)}; got ${JSON.stringify(problemType)}.`
+    );
   }
   const taskTokens = tokenizeTaskSummary(taskSummary);
   if (taskTokens.size === 0) return [];
@@ -337,6 +394,7 @@ export async function findNearKnowledge(
   const scored: Array<{ entry: KnowledgeEntry; similarity: number }> = [];
   for (const entry of recent) {
     if (excludeSlug && entry.slug === excludeSlug) continue;
+    if (problemType !== undefined && !matchesProblemType(entry, problemType)) continue;
     const entryTokens = entryTokensForSummaryMatch(entry);
     if (entryTokens.size === 0) continue;
     const similarity = jaccard(taskTokens, entryTokens);
@@ -345,6 +403,24 @@ export async function findNearKnowledge(
   }
   scored.sort((a, b) => b.similarity - a.similarity);
   return scored.slice(0, Math.max(0, limit)).map((row) => row.entry);
+}
+
+/**
+ * v8.34 — does an entry's `problemType` match the requested filter?
+ *
+ * Back-compat rule (v8.18): absent / `null` `problemType` surfaces ONLY
+ * under the `knowledge` filter — the prior implicit default. Every
+ * other filter value (`bug` / `decision` / `performance` / `refactor`)
+ * requires an exact string match.
+ *
+ * Exported for tests; callers should use {@link findNearKnowledge}.
+ */
+export function matchesProblemType(entry: KnowledgeEntry, filter: ProblemType): boolean {
+  const value = entry.problemType;
+  if (value === null || value === undefined) {
+    return filter === "knowledge";
+  }
+  return value === filter;
 }
 
 export async function findRefiningChain(projectRoot: string, slug: string): Promise<KnowledgeEntry[]> {

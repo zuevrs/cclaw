@@ -139,7 +139,7 @@ After the combined form returns (or after the zero-question fast path executes),
 
 `userOverrode` is `true` only when the user picked option (2), (3), or a (4) custom that disagrees with the recommendation. `runMode` is `step` by default on non-inline paths; `auto` when the user explicitly opted into autopilot in Question 2; `null` on inline / trivial paths (no stages to chain). `autoExecuted` is `true` only on the zero-question fast path (trivial / high-confidence).
 
-The triage block is **immutable for the lifetime of the flow**. If the user wants to escalate mid-flight (e.g. discovers it is bigger than thought), `/cc-cancel` and start a fresh flow with new triage. Switching from `step` to `auto` (or vice versa) is also a fresh-flow decision — the orchestrator does not flip mid-flight.
+The triage block is **immutable for the lifetime of the flow** — with one v8.34 exception. `complexity` / `acMode` / `path` cannot change mid-flight; if the user wants to escalate (e.g. discovers it is bigger than thought), `/cc-cancel` and start a fresh flow with new triage. `runMode` is the **single mutable field**: the user passes `/cc --mode=auto` or `/cc --mode=step` to flip mid-flight (`flow-resume.md > Mid-flight runMode toggle` carries the full mechanics). The inline path rejects the toggle (no stages to chain).
 
 ## Path semantics
 
@@ -275,7 +275,7 @@ The triage gate is the easiest place to skip "because the task is obvious". When
 | "Vague prompt + confidence low → small/medium is fine." | On `low` confidence, always escalate one class. The user reads the triage and learns to ignore your scope estimates; escalation produces an honest gate. |
 | "Combined form is overkill for a small slug — let me ask Question 1, then Question 2 separately." | The combined form is the v8.14 default on every supporting harness (Cursor / Claude Code / OpenCode / Codex). Splitting back to two asks wastes a round-trip on every non-inline flow. |
 | "I'll re-render the triage on resume to confirm — safer." | Resume reads the saved triage and continues from `currentStage` — never re-prompts. Re-rendering is a contract violation; the user already chose. |
-| "Mid-flight the user wants to switch from step to auto — let me patch `triage.runMode`." | Triage is immutable for the lifetime of the flow. Mid-flight runMode switch is `/cc-cancel` + fresh `/cc` (until v8.34 ships the mid-flight toggle). The orchestrator does NOT flip mid-flow. |
+| "Mid-flight the user wants to switch from step to auto — let me patch `triage.runMode`." | v8.34 lifts the immutability rule for `runMode` only: the user passes `/cc --mode=auto` or `/cc --mode=step` and the orchestrator patches `triage.runMode` (see `flow-resume.md > Mid-flight runMode toggle`). `complexity` / `acMode` / `path` stay immutable — those still require `/cc-cancel` + fresh `/cc`. Inline path rejects the toggle (no `runMode` to flip). |
 | "`large-risky` to be safe on this one-file rename." | Don't pad the heuristic. The user reads it and learns to ignore your triage; padding undermines the gate's signal-to-noise. |
 | "No-git auto-downgrade is a warning, not a hard rule." | Strict mode requires per-AC commits — without `.git/`, there is no SHA to record. The downgrade is structural; treating it as advisory crashes on the first commit attempt. |
 

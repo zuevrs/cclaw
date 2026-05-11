@@ -66,10 +66,26 @@ The slots inside `<...>` (relative time, next step, option text) render in the u
 
 ## Resume rules
 
-1. **Triage is preserved.** A resumed flow keeps its `acMode`, `complexity`, and `path`. The user does not re-pick. If they want to change mode, the answer is "/cc-cancel and start fresh".
+1. **Triage is preserved.** A resumed flow keeps its `acMode`, `complexity`, and `path`. The user does not re-pick. If they want to change any of those, the answer is "/cc-cancel and start fresh". The **one exception** is `runMode` — see the v8.34 mid-flight toggle below.
 2. **Last-specialist context is restored** by reading `flows/<slug>/<stage>.md` (which now contains the design's Decisions section inline; legacy `flows/<slug>/decisions.md` is read too when it exists from a pre-v8.14 flow). The orchestrator does not summarise from memory; it re-reads the artifact.
 3. **Time gate.** If the resume summary's "last touched" is >7 days ago, surface a warning ("flow is stale — verify scope still applies") but still allow resume.
 4. **Sub-agent dispatch resumes from the same stage.** A build that was paused mid-RED for AC-3 resumes by dispatching slice-builder for AC-3, not by restarting AC-1.
+
+## Mid-flight `runMode` toggle (v8.34)
+
+The user can flip `triage.runMode` between `step` and `auto` at any `/cc` invocation by passing `/cc --mode=auto` or `/cc --mode=step` — including mid-flow (not just at resume / not just from a clean paused state). Common shape:
+
+- **After plan is approved**, the user wants to autopilot through build → review → ship: `/cc --mode=auto`.
+- **After a noisy auto-mode run**, the user wants a deliberate pause between stages: `/cc --mode=step`.
+- **Resume + toggle in one step** is supported: `/cc --mode=auto` on a paused flow patches `runMode` then immediately advances under the new mode (no extra `/cc` needed).
+
+The toggle patches `.cclaw/state/flow-state.json > triage.runMode` and **persists** across `/cc` invocations — every subsequent `/cc` reads the patched value, no need to re-pass the flag. `complexity` / `acMode` / `path` / `assumptions` / `priorLearnings` stay verbatim; only `runMode` flips.
+
+When the flag arrives mid-specialist (the user typed `/cc --mode=auto` while a specialist was running — rare; usually the user is in step mode and types it between stages), the patch lands immediately and takes effect at the next stage boundary, never mid-specialist.
+
+**Inline path rejection.** When `triage.path == ["build"]` (inline / trivial), the toggle is structurally meaningless — the flow has no stages to chain. The orchestrator responds with the literal one-line note **`inline path has no runMode`** and proceeds with the inline edit as if no flag had been passed. This is the only `/cc --mode=` failure mode; the toggle never errors out, never asks a follow-up question.
+
+Combine with task text the normal way: `/cc --mode=auto refactor the auth module` is parsed as "toggle to auto, then proceed as `/cc refactor the auth module`". Only `--mode=auto` and `--mode=step` are recognised; any other value (`--mode=skip`, bare `--mode=`) surfaces a one-line "unknown runMode value, ignored" note and otherwise behaves as if the flag were absent.
 
 ## Common pitfalls
 
