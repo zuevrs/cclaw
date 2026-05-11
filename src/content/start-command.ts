@@ -169,7 +169,7 @@ For high-risk slugs (large-risky complexity OR \`security_flag: true\`), the rev
 
 Pass 2 runs only when Pass 1 returned \`spec-clear\`. A \`spec-block\` or \`spec-warn\` decision skips Pass 2 entirely (the code is fundamentally not doing the right thing yet — quality review on broken behaviour is wasted work).
 
-The two-pass mode is opt-in via \`config.reviewerTwoPass: true\` in \`.cclaw/config.yaml\`, OR auto-triggered when \`triage.complexity == "large-risky"\` AND \`security_flag: true\` (the highest-risk band). Single-pass reviewer (the v8.12 default) remains the standard for small/medium and untriggered large-risky slugs — the two-pass cost is justified only on the high-risk band.
+**v8.24 default:** two-pass auto-triggers on every \`triage.complexity == "large-risky"\` flow (regardless of \`security_flag\`), and on every \`security_flag: true\` flow (any complexity). v8.13's gate was \`large-risky\` AND \`security_flag\`; v8.20 dedup made Pass 2 cheap, so v8.24 lifts the AND to OR. \`config.reviewerTwoPass: true\` still forces two-pass everywhere (small-medium opt-in). \`config.reviewerTwoPass: false\` is the v8.24 opt-out — forces single-pass even on large-risky; rationale logged as "single-pass: config opt-out". Single-pass (v8.12 default) is the standard for small-medium without \`security_flag\` and without explicit config. Pass 1 / Pass 2 axis split (correctness + test-quality vs readability + architecture + complexity-budget + perf) and spec-clear-gates-Pass-2 are unchanged; v8.20 dedup applies per-pass (axes disjoint).
 
 ## Hop 1 — Detect
 

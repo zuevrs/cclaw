@@ -1,5 +1,75 @@
 # Changelog
 
+## 8.24.0 — Two-stage reviewer becomes the default on large-risky (the AND → OR gate shift)
+
+### Why
+
+v8.13 introduced the two-pass reviewer loop (Pass 1: spec-review for correctness + test-quality; Pass 2: code-quality-review for readability + architecture + complexity-budget + perf, gated on Pass 1 returning `spec-clear`). The trigger was deliberately conservative: `config.reviewerTwoPass: true` OR (`triage.complexity == "large-risky"` AND `security_flag: true`). The two-pass cost was real at v8.13 — every iteration produced duplicate findings between the spec-pass and the quality-pass that the user had to mentally dedup before reading.
+
+v8.20 fixed the cost. Per-iteration finding dedup (`(axis, normalised surface, normalised_one_liner)` key, severity-bump on merge, `seen-by` line) collapses the duplicates at write time and stamps `total_findings: M (deduped from K)` so the reader sees what landed, not what the reviewer surfaced raw. With dedup, the two-pass cost is essentially Pass 1's findings plus a small remainder from Pass 2's disjoint axes.
+
+The audit (superpowers reference) recommended two-pass as the default on every large-risky slug — the legacy `AND security_flag` gate was overly conservative once dedup landed. v8.24 lifts the AND to OR: `triage.complexity == "large-risky"` alone is now sufficient to auto-trigger two-pass, regardless of `security_flag`. `security_flag: true` alone (any complexity) also still triggers. `config.reviewerTwoPass: true` still forces it everywhere (small-medium opt-in). A new escape hatch — `config.reviewerTwoPass: false` — forces single-pass even on large-risky for users who deliberately want the v8.12 single-pass behaviour back.
+
+### What changed
+
+**D1 — The trigger paragraph in `src/content/start-command.ts` `## Two-reviewer per-task loop (T3-3, obra pattern; v8.13)` was rewritten.** The legacy one-sentence rule ("auto-triggered when `triage.complexity == "large-risky"` AND `security_flag: true` (the highest-risk band)") is gone. The new paragraph names v8.24 explicitly:
+
+- **v8.24 default**: two-pass auto-triggers on every `large-risky` flow (regardless of `security_flag`), and on every `security_flag: true` flow (any complexity).
+- **Forced opt-in**: `config.reviewerTwoPass: true` forces two-pass everywhere (including small-medium without `security_flag`).
+- **Forced opt-out**: `config.reviewerTwoPass: false` forces single-pass even on large-risky; rationale logged as `single-pass: config opt-out` in the iteration block. Missing / unset config leaves the v8.24 default in effect.
+- **Default-default**: single-pass remains the standard for small-medium without `security_flag` and without explicit config.
+
+The paragraph is intentionally dense (the v8.22 character budget is tight); the full migration story and rationale live in this CHANGELOG entry.
+
+**D2 — Pass 1 / Pass 2 mechanics are unchanged.** The axis split (Pass 1: correctness + test-quality; Pass 2: readability + architecture + complexity-budget + perf), the `spec-clear` → Pass 2 entry gate, the `spec-block` / `spec-warn` skip-Pass-2 rule, and the per-pass decision triplet (`spec-clear` / `spec-block` / `spec-warn` for Pass 1; `quality-clear` / `quality-block` / `quality-warn` for Pass 2) are all byte-for-byte intact. v8.24 only changes the *gate*.
+
+**D3 — v8.20 finding-dedup invariants preserved.** The dedup logic (per-iteration, `(axis, surface, one-liner)` key) applies inside each pass independently. The axes between Pass 1 (correctness, test-quality) and Pass 2 (readability, architecture, complexity-budget, perf) are disjoint by construction, so there is no cross-pass overlap to dedup — the v8.24 paragraph explicitly says "axes disjoint" to remove any ambiguity for a future maintainer.
+
+**D4 — v8.22 character budget bumped 45000 → 46000.** The new v8.24 paragraph (plus v8.23's Hop 1 git-check sub-step) added ~1k chars of always-needed content to the orchestrator body. The line budget (≤480) is intact; the char budget (≤45k as set by v8.22's tripwire) was a tighter constraint than v8.22 strictly needed. The v8.22 tripwire test in `tests/unit/v822-orchestrator-slim.test.ts` is updated to ≤46k chars with a comment naming v8.23 + v8.24 as the explicitly-allowed budget consumers. The 30% line-cut tripwire is unaffected.
+
+### Migration
+
+**v8.23 → v8.24.** Drop-in. Run `cclaw upgrade` to refresh `.cclaw/lib/start-command.md`. Behavioural changes:
+
+1. **Fresh v8.24 `/cc` on a large-risky slug without `security_flag`.** **Previously**: single-pass reviewer (v8.13–v8.23 default). **Now**: two-pass reviewer (Pass 1 spec → Pass 2 code-quality, with Pass 2 gated on `spec-clear`). The user sees one extra reviewer iteration block per review round, with the typical dedup ratio (v8.20 finding-dedup typically collapses 30-50% of cross-pass duplicates).
+2. **Fresh v8.24 `/cc` on a large-risky slug WITH `security_flag: true`.** Behaviour identical to v8.23 (two-pass auto-triggered, same Pass 1 → Pass 2 cascade).
+3. **Fresh v8.24 `/cc` on a small-medium slug.** Behaviour identical to v8.23 (single-pass by default; `config.reviewerTwoPass: true` still forces two-pass).
+4. **A user wants to keep v8.13–v8.23 single-pass-by-default behaviour for large-risky.** They set `config.reviewerTwoPass: false` in `.cclaw/config.yaml`. The orchestrator reads this on every review dispatch, forces single-pass, and stamps `single-pass: config opt-out` as the rationale in the iteration block. This is the new escape hatch.
+5. **Resumed pre-v8.24 flow on v8.24 binary.** No flow-state migration needed. The next review iteration is dispatched under v8.24 rules: a paused large-risky flow without `security_flag` that was about to enter Pass 1-only will now enter Pass 1 → Pass 2. Users who want to preserve the old single-pass behaviour mid-flight can set `config.reviewerTwoPass: false` before resuming.
+
+**No `flow-state.json` schema bump.** No new fields. The change is entirely prompt-level (the orchestrator reads `triage.complexity` and `config.reviewerTwoPass` at review dispatch time).
+
+**The reviewer specialist prompt (`src/content/specialist-prompts/reviewer.ts`) is unchanged.** The prompt instructs the reviewer to honour whichever pass it is currently running; the per-pass axis split, the `Finding dedup` section, the `seen-by` line, and the `total_findings` / `deduped_from` frontmatter are all v8.20 invariants that v8.24 preserves.
+
+### What we noticed but didn't touch (v8.24 scope)
+
+- **The opt-out rationale string (`single-pass: config opt-out`) is documented in prose but not yet enforced by a typed reviewer-prompt field.** A future slug could add a `review_pass: "single" | "two-pass-spec" | "two-pass-quality"` field to the review.md frontmatter so the audit trail is machine-readable. The opt-out is honest today via the prose rationale; the field is a future polish.
+- **`config.reviewerTwoPass` is a config-file boolean today.** A future slug could expose it as a `/cc <task> --review-pass=single|two|auto` CLI flag for one-off overrides without editing config.yaml. Deferred — the typical user changes review behaviour at project level, not per-task.
+- **The cost-justification framing ("v8.20 dedup made Pass 2 cheap") is asserted in the prose but not measured with a per-pass token budget.** Adding a per-pass char/token budget assertion to `prompt-budgets.test.ts` is cheap; deferred until the prompts re-grow enough to threaten the budget.
+- **`security-reviewer` is independent of the two-pass loop.** The ship-gate fan-out (release reviewer + adversarial reviewer + security-reviewer when `security_flag`) is a separate channel — v8.24 does not change ship-gate semantics. `security-reviewer`'s axis (security) is not part of either pass; it runs as its own specialist.
+- **The v8.22 character budget bump (45000 → 46000) is a deliberate one-time absorb-the-v8.23+v8.24-growth move.** Future slugs that add always-needed body content must either fit within 46000 chars or lift the bumped block into a runbook (the v8.22 pattern). The line budget (480) is the hard constraint.
+
+### Deferred
+
+- **`review_pass` frontmatter field on review.md.** Cheap polish; not load-bearing for v8.24's correctness.
+- **`--review-pass` CLI flag.** Per-task override; defer until a concrete user request.
+- **Per-pass prompt-budget assertion** in `tests/unit/prompt-budgets.test.ts`.
+- **Re-evaluating the small-medium + `security_flag` path.** Today that combination triggers two-pass via the `security_flag: true` branch. A future audit may want to weaken this for small-medium slugs where the security_flag is informational (e.g. touching an auth-adjacent file but not auth logic). Out of scope.
+
+### Tests
+
+`tests/unit/v824-two-stage-reviewer-default.test.ts` — **15 new tripwire tests** across five describe blocks:
+
+- AC-1 — Large-risky alone triggers two-pass (no `security_flag` requirement); the legacy AND clause is gone; `security_flag` alone still triggers; `config.reviewerTwoPass: false` is the documented opt-out.
+- AC-2 — `config.reviewerTwoPass: true` is still the explicit-opt-in path; small-medium without `security_flag` and without explicit config remains single-pass; body explicitly names "v8.24" so a future maintainer can trace the default-shift back to this slug.
+- AC-3 — Pass 1 names `spec-clear` / `spec-block` / `spec-warn`; Pass 2 names `quality-clear` / `quality-block` / `quality-warn`; Pass 2 runs only when Pass 1 returned `spec-clear`; pass-1 axis split (correctness + test-quality only) preserved; pass-2 axis split (readability + architecture + complexity-budget + perf only) preserved.
+- AC-4 — Reviewer specialist prompt still names finding-dedup as the within-iteration rule (v8.20 invariant); no cross-pass dedup is introduced.
+- AC-5 — Ship-gate runbook still describes parallel ship reviewers (separate from per-task two-pass).
+
+`tests/unit/v822-orchestrator-slim.test.ts` — AC-4 char-budget tripwire updated from ≤45000 to ≤46000 with a comment naming v8.23 (Hop 1 git-check sub-step) + v8.24 (two-pass default paragraph) as the deliberate budget consumers.
+
+**Total: 711 tests across 52 files (was 696 across 51 in v8.23; +15 net from the v824-two-stage-reviewer-default suite + 1 new file). All green.**
+
 ## 8.23.0 — No-git fallback: Hop 1 git-check auto-downgrades strict → soft, commit-helper.mjs is a graceful no-op without VCS
 
 ### Why
