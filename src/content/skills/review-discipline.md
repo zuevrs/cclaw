@@ -7,6 +7,10 @@ trigger: when reviewer or security-reviewer is invoked; when the diff touches au
 
 This merged skill covers both review loops with a shared Concern Ledger, Five-axis pass, and Five Failure Modes contract: the generic reviewer iteration (formerly **review-loop**) and the security-specific reviewer that runs in parallel (formerly **security-review**).
 
+## When to use
+
+Invoked at the start of every `reviewer` or `security-reviewer` dispatch. Auto-applies when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (triggers `security-reviewer` alongside the regular reviewer regardless of `security_flag`). The Concern Ledger and Five-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security-review section adds the threat-model checklist on top.
+
 ## review-loop
 
 Review is a producer ↔ critic loop, not a single pass. Iteration N proposes findings; `slice-builder` (in `fix-only` mode) closes them; iteration N+1 re-checks. The loop ends only when one of three convergence signals fires (see "Convergence detector" below). This is the cclaw analogue of the Karpathy "Ralph loop": short cycles, an explicit ledger, and hard rules for when to stop.

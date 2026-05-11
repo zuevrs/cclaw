@@ -11,6 +11,14 @@ Triage answers "**how much** work is this?" and "**how should we run it?**". The
 
 Pre-v8.21, this skill ran as a standalone **Hop 2.5** between triage (Hop 2) and the first specialist dispatch (Hop 3). It surfaced a numbered list of assumptions through the harness's structured ask, captured the user's confirmation, and persisted the list to `flow-state.json > triage.assumptions`. v8.21 found that hop was producing a double-ask on large-risky flows (Hop 2.5 then design Phase 0 / Phase 1, both asking about assumptions in close succession) and a friction-only hop on small-medium flows (Hop 2.5 then planner draft, with no corresponding design phase to share the surface with).
 
+## When to use
+
+Reference doc only — there is no longer a runtime "Hop 2.5". The actual capture surface lives in `agents/design.md` Phase 0 / Phase 1 on large-risky and in `agents/planner.md` Phase 0 on small-medium. Read this skill when you need to understand the assumption-list composition rules (3-7 items, stack / conventions / architecture / out-of-scope) that both new surfaces share, or when you are debugging a resumed pre-v8.21 flow.
+
+## Common pitfalls
+
+See `triage-gate.md` for the triage gate's optional seed of `triage.assumptions` from the most-recent-shipped-slug. See `flow-resume.md` for the resume rule (never re-prompt on resume). See `agents/design.md` / `agents/planner.md` for the actual Phase 0 ownership contract.
+
 ## Where the surface lives now
 
 - **`triage.complexity == "large-risky"`** → **design Phase 0 / Phase 1** owns the assumption surface. Design Phase 0 reads any pre-seeded `triage.assumptions` from the triage gate; design Phase 1 (Clarify) opens with the assumption-confirmation question when the field is empty / absent. See `agents/design.md` Phase 0 ("Assumption-surface ownership (v8.21 fold)") and Phase 1.
@@ -34,6 +42,10 @@ The composition rules for an assumptions list are unchanged — design Phase 0 /
 - **3-7 numbered items, one sentence each, citation when non-obvious.**
 
 The interpretation-forks sub-step (when the prompt has multiple readings) also moved into design Phase 1 (Clarify) on large-risky and stays inside the design specialist's protocol; planner Phase 0 on small-medium can surface a fork inline ("I'm reading this as X — say so if you meant Y") and persist to `triage.interpretationForks`.
+
+## Worked example
+
+See `agents/planner.md` Phase 0 (small-medium) and `agents/design.md` Phase 0 / Phase 1 (large-risky) for the canonical opening-question shape. The legacy v8.20-and-earlier Hop 2.5 worked-example (3-7 numbered items, "tell me if any is wrong" close, silence = accept) carries forward unchanged inside both new surfaces.
 
 ## Migration note (pre-v8.21 flows)
 

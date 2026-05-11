@@ -7,6 +7,10 @@ trigger: when design (Phase 4 D-N) proposes a public interface, persistence shap
 
 This merged skill covers both halves of the public-interface lifecycle: how a new interface is designed (formerly **api-and-interface-design**) and how an existing interface is changed, deprecated, or retired (formerly **breaking-changes**).
 
+## When to use
+
+Auto-applies in two cases. **Design phase** — during Phase 4 (Decisions) when proposing a new public interface (HTTP endpoint, RPC method, library export, file format, environment-variable schema, queue payload), or when the slug's `touchSurface` includes any path that is part of a public API surface. **Build / review** — when the diff modifies an existing public interface, persisted contract, or migration shape. Not used for internal helpers that never cross a module / process / repo / service boundary.
+
 ## api-and-interface-design
 
 > "With a sufficient number of users of an API, all observable behaviors of your system will be depended on by somebody, regardless of what you promise in the contract." — **Hyrum's Law**
