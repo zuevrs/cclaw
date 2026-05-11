@@ -183,6 +183,28 @@ export interface TriageDecision {
    * legacy state). Optional for backward compat.
    */
   autoExecuted?: boolean | null;
+  /**
+   * v8.18 — prior shipped slugs whose tag/surface profile matched the
+   * current task at triage time. Populated by the orchestrator between
+   * Hop 2 (triage persistence) and Hop 2.5 (pre-flight) via
+   * `findNearKnowledge(triage.taskSummary, …)`. Read by `design`,
+   * `planner`, and `reviewer` as background context (the spec calls them
+   * "what we already know nearby" / "priors when scoring findings").
+   *
+   * Persistence rule: **omit the field entirely when empty** — the
+   * orchestrator stamps `triage.priorLearnings` only when at least one
+   * hit cleared the Jaccard threshold. An absent field is the canonical
+   * "no prior learnings" signal; downstream specialists check presence,
+   * not array length.
+   *
+   * Stored as the array of raw `KnowledgeEntry` rows (slug, summary,
+   * notes, tags, touchSurface, signals, …) — `unknown[]` here because the
+   * full KnowledgeEntry shape lives in `knowledge-store.ts` and importing
+   * it would create a cycle. Validators only check that each entry is a
+   * plain object with a string `slug`; the entry's own assertions handle
+   * deeper shape checks when readers parse it.
+   */
+  priorLearnings?: unknown[] | null;
 }
 
 export interface CliContext {

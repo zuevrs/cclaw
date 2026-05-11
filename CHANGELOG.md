@@ -1,5 +1,86 @@
 # Changelog
 
+## 8.18.0 — Knowledge-surfacing: close the compound loop
+
+### Why
+
+Since v8.9 the compound gate writes Jaccard-deduped knowledge entries to `.cclaw/state/knowledge.jsonl` with `tags[]`, `touchSurface[]`, `dedupeOf` fields. Every shipped slug pays for that capture. **Nothing reads them back.** The append-only catalogue grows; the cross-flow learning loop is open. Triage runs against the raw user prompt and the orchestrator's own heuristics, with no awareness that two slugs ago the project's `permissions` module shipped a near-identical change.
+
+v8.18 closes that loop. It does NOT try to do "what learnings-research does" — the verbatim-lesson surfacing inside `plan.md > ## Prior lessons applied` stays the planner's mandatory Phase 3 dispatch. v8.18 is the layer below that: a quick top-3 lookup at triage time so specialists *enter their work* aware of relevant prior shipped slugs, and a CLI command (`cclaw knowledge`) so humans can inspect the catalogue without `cat | jq`.
+
+### What changed
+
+**D1 — `findNearKnowledge(taskSummary, projectRoot, options?)` in `src/knowledge-store.ts`.** New text-vs-structured Jaccard helper. Tokenises the task summary (lowercase, splits on `[^a-z0-9]+`, drops length-<3 fragments), tokenises each recent entry as curated signal (`tags[]` value-tokens + `touchSurface[]` path **basename** value-tokens, with TS/JS path stopwords like `src`/`lib`/`test`/`components` filtered out), and computes Jaccard. Returns the top-`limit` hits with `similarity >= threshold`, sorted desc. Defaults: `window=100`, `threshold=0.4`, `limit=3`. Asymmetric — `excludeSlug` filters the active flow's own entry from the candidate pool so a re-search never returns itself. **Missing or empty `knowledge.jsonl` → returns `[]`; never throws.** A read error is also swallowed (the orchestrator must never crash triage because of a knowledge-log read).
+
+Why the tokeniser sticks to tag tokens + path *basenames* (not full path components): full path chains are mostly noise (`src`, `lib`, `tests`, `components`, …) that dominate the union and pull every real hit below threshold. The basename is where the per-slug signal lives (a slug touching `src/lib/permissions.ts` is "about permissions", not "about src or lib"). The stopword list is conservative — every word added there weakens a real Jaccard hit on slugs that happen to share those tokens — and tuned for TS/JS-shaped repos.
+
+**D2 — Orchestrator wires the lookup at triage time.** `src/content/start-command.ts` gains a new **Hop 2 §3 — prior-learnings lookup** that runs after triage persistence and before **Hop 2.5 (pre-flight)**. The spec instructs the orchestrator to call `findNearKnowledge(triage.taskSummary, projectRoot, { window: 100, threshold: 0.4, limit: 3, excludeSlug: currentSlug })` and stamp results into `flow-state.json > triage.priorLearnings`. **Empty results are omitted from state entirely** — the absence of the field is the canonical "no prior learnings" signal; writing `priorLearnings: []` would bloat state and force every reader to length-check. The stamp is immutable for the lifetime of the flow; resume reads the saved snapshot.
+
+**D3 — Specialists read `triage.priorLearnings` as context.** The three discovery / review specialists each get a new paragraph instructing them to read the field if present and treat it as background context, NOT to copy entries verbatim into their output:
+
+- **`design` (Phase 1 Clarify)** — "what we already know nearby"; informs Clarify questions and the Frame draft. Cite the slug inline when directly relevant (e.g. "cf. shipped slug `20260503-…`"); skip silently when the field is absent or empty.
+- **`planner` (Phase 2 cross-check)** — background context for AC scoping (does a prior slug already pin behaviour your AC should not re-litigate?). Distinct from the planner's mandatory Phase 3 `learnings-research` dispatch — that one writes the verbatim `## Prior lessons applied` section in `plan.md`; this one stays in the planner's head as context.
+- **`reviewer` (priors when scoring findings)** — when a prior slug already flagged the same readability/architecture concern on the same module and the author has ignored that pattern, severity here should reflect the history (typically one tier higher than a first-time observation). Cite the slug in the finding's description, not in the Concern Ledger schema columns.
+
+**D4 — `triage.priorLearnings` is added to the schema.** `src/types.ts > TriageDecision` gains `priorLearnings?: unknown[] | null` (typed `unknown[]` to avoid a cycle with `knowledge-store.ts`; the validator checks each entry is a plain object with a string `slug`, and downstream readers do their own `KnowledgeEntry`-shape assertions when parsing). `src/flow-state.ts > assertTriageOrNull` accepts the field as optional. Backward compat: v8.17 state files without `priorLearnings` validate unchanged.
+
+**D5 — `cclaw knowledge` CLI command.** New top-level command in `src/cli.ts`. Default behavior: read `.cclaw/state/knowledge.jsonl`, group entries by `tags[0]` (or `untagged`), print as a slug / summary / tags layout, sorted by recency (most recent first), limit 20 rows total. Flags:
+
+- `--all` — drop the 20-row limit, print every entry.
+- `--tag=<tag>` — filter to entries whose `tags[]` contains the exact value.
+- `--surface=<substring>` — filter to entries whose `touchSurface[]` contains the substring in any path.
+- `--json` — short-circuit formatting; emit one JSON object per line (raw jsonl pass-through), useful for piping into `jq` or external tooling.
+
+Documented in `cclaw help` Options block. Reuses the existing `parseArgs` generic `--name=value` capture; no new flag parser invented.
+
+**D6 — Final tokeniser tuning, documented inline.** The `tokenizeTaskSummary` + `entryTokensForSummaryMatch` helpers are exported alongside `findNearKnowledge` so the test suite can pin the tokeniser shape independently from the Jaccard math. Stopword list lives next to its consumer in `knowledge-store.ts` — not in a separate `tokenize.ts` file — because it's three lines of data and one consumer; the indirection cost would exceed the maintenance benefit.
+
+### Migration
+
+**v8.17 → v8.18.** Drop-in. Run `cclaw upgrade` to refresh the spec files in `.cclaw/lib/`. The new lookup runs on the *next* fresh `/cc`; flows already paused on v8.17 continue without `triage.priorLearnings` — the field is absent, every specialist's "if present" guard no-ops, and the flow ships normally. The next slug after that automatically picks up the new behaviour.
+
+**Greenfield projects.** First fresh `/cc` runs `findNearKnowledge` against a missing `knowledge.jsonl`, gets `[]` back, omits the stamp, proceeds. The lookup is silent on greenfield until the first slug ships and the catalogue starts accumulating.
+
+**Cross-version state files.** v8.16 / v8.17 `knowledge.jsonl` files are readable unchanged — `findNearKnowledge` calls the same `readKnowledgeLog` helper, which already handles every prior entry shape.
+
+### What we noticed but didn't touch (v8.18 scope)
+
+- **Tokeniser language pluggability.** The stopword list and `length >= 3` cutoff are tuned for English / TS / JS. A Python-heavy project would benefit from filtering `def`, `init`, `cls`; a Go project from `pkg`, `cmd`, `internal`. Configurable stopwords are a follow-up (`config.yaml > knowledge.stopwords[]`) — today the constant list is conservative enough that the cclaw repo's own slugs surface correctly.
+- **`triage.priorLearnings` size cap.** Currently uncapped beyond `limit=3` at lookup time. A maximally pathological flow could keep stamping the same 3 entries on resume and bloat state by ~2-4 KB per flow — well below any operational concern, but a `truncate` pass at write time would tighten the contract. Deferred until a real flow exceeds 10 KB of `priorLearnings` text.
+- **CLI table column widths.** The current renderer uses two-space gutters and naive `truncate(value, max)`; a `tag` with multi-byte CJK characters renders narrower than `max` would imply. For grep-based inspection this is fine; for a "polished" CLI the column-width logic would need to count display cells. Out of scope for the loop-closure work.
+- **Read in `cclaw doctor`.** The catalogue is now reachable from the CLI but only via `knowledge`. A future `cclaw doctor` could surface "you have N entries; M tags; oldest entry was K days ago" as health signal. Deferred.
+
+### Deferred
+
+- **Surface `triage.priorLearnings` in `.continue-here.md`.** The handoff artefact (T2-3) currently lists recent activity; on a resume across days, naming the prior slugs the orchestrator considered would help the user re-orient. Cheap to add but not load-bearing for the loop closure — wait for one real resume before deciding the prose shape.
+- **`/cc-knowledge <query>` interactive command.** A harness-side slash command that runs `findNearKnowledge` against a user-typed query (not a triage summary) and prints the same table. Useful as a "what's nearby?" probe before authoring a new prompt. Deferred — the CLI command covers the inspection use case; a slash-command parallel needs its own UX think.
+
+### Tests
+
+`tests/unit/v818-knowledge-surfacing.test.ts` — **19 new tripwire tests** covering:
+
+- **(a)** `findNearKnowledge` returns `[]` when `knowledge.jsonl` is missing — never throws.
+- **(a-bis)** Same when the file exists but is empty.
+- **(b)** Jaccard correctness — default threshold 0.4 hits a tag-rich entry; threshold 0.9 prunes it.
+- **(c)** `limit` and `window` options honoured (default limit 3; explicit `limit: 1`; `window: 2` caps the candidate pool).
+- **(d)** `excludeSlug` removes the active slug from the candidate pool — never returns itself.
+- **(d-bis)** `tokenizeTaskSummary` shape (lowercase, length-<3 drops, no `&` punctuation).
+- **(e)** `start-command.ts` body documents the Hop 2 §3 lookup with `findNearKnowledge` named and `triage.priorLearnings` named.
+- **(f)** `start-command.ts` body instructs the orchestrator to *omit* `priorLearnings` when empty (no `[]` in state).
+- Flow-state validator accepts `triage.priorLearnings` as an optional `{ slug: string }[]`.
+- Flow-state validator rejects entries missing a string slug.
+- Backward compat — v8.17-shape state with no `priorLearnings` field validates unchanged.
+- **(g)** `design` prompt names `triage.priorLearnings`, says "what we already know nearby", and instructs no verbatim copy.
+- **(h)** `planner` prompt names `triage.priorLearnings`, says "background context for AC scoping", and instructs no verbatim copy.
+- **(i)** `reviewer` prompt names `triage.priorLearnings`, says "priors when judging severity", and instructs no verbatim copy into the Concern Ledger.
+- **(j)** CLI smoke — `cclaw knowledge` against a seeded log produces grouped table output with slug rows and a "N of M entries shown" summary line.
+- **(k)** CLI `--json` produces parseable jsonl (one valid `JSON.parse` per line, each carrying a string slug).
+- **(l)** CLI `--tag=<tag>` and `--surface=<substring>` filters narrow correctly; default 20-row cap fires; `--all` lifts it.
+- **(l-bis)** CLI on empty `knowledge.jsonl` prints the explicit "no entries yet" line and exits 0.
+- `cclaw help` lists the new `knowledge` command in its Commands block.
+
+**Total: 573 tests across 46 files (was 554 across 45 in v8.17; +19 net from the v818-knowledge-surfacing suite + 1 new file). All green.**
+
 ## 8.17.0 — Orphan cleanup for retired skill files (and smoke-script generalisation)
 
 ### Why

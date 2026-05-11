@@ -89,7 +89,9 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 }
 \`\`\`
 
-\`autoExecuted: true\` is set **only** on the zero-question fast path (trivial / high-confidence, no structured ask shown). On every other path \`autoExecuted: false\`. \`runMode\` is \`null\` on inline (whether reached via fast path or via Question 1 option "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.`;
+\`autoExecuted: true\` is set **only** on the zero-question fast path (trivial / high-confidence, no structured ask shown). On every other path \`autoExecuted: false\`. \`runMode\` is \`null\` on inline (whether reached via fast path or via Question 1 option "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.
+
+After triage is persisted, the orchestrator runs the **v8.18 prior-learnings lookup** (see "Hop 2 §3 — prior-learnings lookup" below) and stamps \`triage.priorLearnings\` when matches are found.`;
 
 const RESUME_SUMMARY_EXAMPLE = `\`\`\`
 Active flow: <slug>
@@ -247,7 +249,33 @@ The date prefix is **mandatory**, even when no prior shipped slug shares the sem
 
 If a collision **does** happen on the same day (very rare; user re-running the same prompt minutes apart), append \`-2\`, \`-3\`, etc. until the slug is unique against \`.cclaw/flows/\` and \`.cclaw/flows/shipped/\` and \`.cclaw/flows/cancelled/\`.
 
-After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Hop 4. Before the first dispatch, run **Hop 2.5 (pre-flight)** unless the path is \`inline\`.
+After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Hop 4. Before the first dispatch, run the **v8.18 prior-learnings lookup** (Hop 2 §3) and **Hop 2.5 (pre-flight)** unless the path is \`inline\`.
+
+### Hop 2 §3 — prior-learnings lookup (v8.18; runs on every fresh \`/cc\`)
+
+Between the persistence of the triage decision (Hop 2 §2 above) and **Hop 2.5 (pre-flight)**, the orchestrator calls the equivalent of:
+
+\`\`\`ts
+findNearKnowledge(triage.taskSummary, projectRoot, {
+  window: 100,      // most recent 100 entries
+  threshold: 0.4,   // Jaccard ≥ 0.4 on tokenised summary ∩ entry tags/touchSurface
+  limit: 3,         // top-3 hits, sorted by similarity desc
+  excludeSlug: currentSlug
+})
+\`\`\`
+
+\`triage.taskSummary\` is the short prose summary the triage gate captured (one or two sentences in the user's language). The lookup tokenises that summary and runs Jaccard against each recent entry's \`tags\` and \`touchSurface\` value tokens; entries that score ≥ threshold are returned in similarity-sorted order.
+
+Persistence rules:
+
+- **Empty results → omit \`priorLearnings\` from \`flow-state.json\` entirely.** Do not write \`priorLearnings: []\` — that bloats state with a field every other reader has to guard for. The absence of the field is the canonical "no prior learnings".
+- **Non-empty results → stamp them verbatim under \`triage.priorLearnings\` as an array of \`KnowledgeEntry\` objects** (\`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`, plus the other persisted fields). The downstream specialists read the entries directly; do not re-paraphrase them.
+- **Missing or empty \`knowledge.jsonl\` → empty result, no stamp.** Greenfield projects skip this hop cleanly with zero noise.
+- **Errors reading the file are swallowed** — the orchestrator never crashes triage because a knowledge-log read failed. The result is treated as empty.
+
+The lookup is asymmetric: when the orchestrator is re-running this hop on a resume (rare but possible), the active slug is excluded so a flow never finds itself.
+
+The stamp is **immutable for the lifetime of the flow** — Hop 2.5 (pre-flight), every specialist dispatch, and resume reads all see the same \`triage.priorLearnings\` snapshot. If the user explicitly nukes the flow with \`/cc-cancel\` and starts fresh, a new lookup runs.
 
 ### Trivial path (acMode: inline)
 

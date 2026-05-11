@@ -14,6 +14,7 @@ import {
 import { detectHarnesses } from "./harness-detect.js";
 import { exists } from "./fs-utils.js";
 import { readConfig } from "./config.js";
+import { readKnowledgeLog, type KnowledgeEntry } from "./knowledge-store.js";
 import {
   renderBanner,
   renderHelpSections,
@@ -47,6 +48,7 @@ const HELP_COMMANDS: ReadonlyArray<readonly [string, string]> = [
   ["sync", "Reapply cclaw assets to match the current code (idempotent)."],
   ["upgrade", "Sync after upgrading the cclaw-cli npm package."],
   ["uninstall", "Remove cclaw assets from the current project."],
+  ["knowledge", "List captured learnings (.cclaw/state/knowledge.jsonl) grouped by tag."],
   ["help", "Show this help."],
   ["version", "Print the version."]
 ];
@@ -56,6 +58,22 @@ const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
   [
     "--skip-orphan-cleanup",
     "Skip the v8.17 scan that removes .md files in .cclaw/lib/skills/ no longer in AUTO_TRIGGER_SKILLS. Use for emergencies; the scan is normally loud + idempotent."
+  ],
+  [
+    "--all",
+    "knowledge: drop the default 20-row limit and print every captured entry."
+  ],
+  [
+    "--tag=<tag>",
+    "knowledge: filter to entries whose tags[] contains <tag>."
+  ],
+  [
+    "--surface=<substring>",
+    "knowledge: filter to entries whose touchSurface[] contains <substring> as a substring of any path."
+  ],
+  [
+    "--json",
+    "knowledge: emit raw jsonl pass-through (one parsed entry per line, no formatting)."
   ]
 ];
 
@@ -113,6 +131,105 @@ function makeProgressPrinter(useColor: boolean): (event: ProgressEvent) => void 
 
 async function isFirstRun(cwd: string): Promise<boolean> {
   return !(await exists(path.join(cwd, RUNTIME_ROOT, "config.yaml")));
+}
+
+/**
+ * v8.18 — `cclaw knowledge` command body.
+ *
+ * Reads `.cclaw/state/knowledge.jsonl`, applies optional `--tag` /
+ * `--surface` filters, sorts by recency (most recent first; file order is
+ * already chronological — slice from the tail), groups by `tags[0]`
+ * (`untagged` when empty), and renders as a 3-column table:
+ *
+ *     <tag>
+ *       slug                                      summary                                           tags
+ *       ────────────────────────────────────────  ────────────────────────────────────────────────  ────────
+ *       20260503-ac-mode-soft-edge                Soft-mode AC discipline edge cases                ac, soft
+ *
+ * Default cap: 20 rows total (across all groups). `--all` lifts the cap.
+ * `--json` short-circuits everything else and prints one JSON entry per
+ * line (the raw jsonl shape; no human formatting).
+ *
+ * Empty / missing knowledge.jsonl prints a single one-liner and exits 0.
+ */
+async function runKnowledgeCommand(
+  cwd: string,
+  flags: Record<string, string | boolean>
+): Promise<number> {
+  let entries: KnowledgeEntry[];
+  try {
+    entries = await readKnowledgeLog(cwd);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError(`[cclaw] knowledge: failed to read .cclaw/state/knowledge.jsonl (${message})`);
+    return 1;
+  }
+
+  const tagFilter = typeof flags.tag === "string" ? flags.tag : undefined;
+  const surfaceFilter = typeof flags.surface === "string" ? flags.surface : undefined;
+  const allFlag = flags.all === true;
+  const jsonFlag = flags.json === true;
+
+  let filtered = entries;
+  if (tagFilter) {
+    filtered = filtered.filter((entry) => (entry.tags ?? []).includes(tagFilter));
+  }
+  if (surfaceFilter) {
+    filtered = filtered.filter((entry) =>
+      (entry.touchSurface ?? []).some((path) => path.includes(surfaceFilter))
+    );
+  }
+
+  // File order is chronological (append-only); reverse for recency-first.
+  const recent = [...filtered].reverse();
+  const limit = allFlag ? recent.length : Math.min(20, recent.length);
+  const limited = recent.slice(0, limit);
+
+  if (jsonFlag) {
+    for (const entry of limited) {
+      writeOut(`${JSON.stringify(entry)}\n`);
+    }
+    return 0;
+  }
+
+  if (entries.length === 0) {
+    writeOut("[cclaw] knowledge: no entries yet (.cclaw/state/knowledge.jsonl is empty or missing)\n");
+    return 0;
+  }
+  if (limited.length === 0) {
+    const filterDesc = [
+      tagFilter ? `--tag=${tagFilter}` : "",
+      surfaceFilter ? `--surface=${surfaceFilter}` : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+    writeOut(`[cclaw] knowledge: 0 entries match ${filterDesc || "(no filter)"}\n`);
+    return 0;
+  }
+
+  const grouped = new Map<string, KnowledgeEntry[]>();
+  for (const entry of limited) {
+    const groupKey = (entry.tags ?? [])[0] ?? "untagged";
+    const bucket = grouped.get(groupKey) ?? [];
+    bucket.push(entry);
+    grouped.set(groupKey, bucket);
+  }
+
+  for (const [groupKey, rows] of grouped) {
+    writeOut(`\n${groupKey}\n`);
+    for (const row of rows) {
+      const summary = row.notes ?? "";
+      const tags = (row.tags ?? []).join(", ");
+      writeOut(`  ${row.slug}  ${truncate(summary, 60)}  ${truncate(tags, 30)}\n`);
+    }
+  }
+  writeOut(`\n[cclaw] knowledge: ${limited.length} of ${entries.length} entries shown${allFlag ? "" : " (--all to see more)"}\n`);
+  return 0;
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1)}…`;
 }
 
 export async function runCli(argv: string[], context: CliContext): Promise<number> {
@@ -184,6 +301,8 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
       );
       return 0;
     }
+    case "knowledge":
+      return runKnowledgeCommand(context.cwd, args.flags);
     case "version":
     case "--version":
     case "-v":
