@@ -1,5 +1,41 @@
 # Changelog
 
+## 8.15.0 — Source-level skills split: 24 inline template literals in `skills.ts` become 24 per-skill `.md` files; loader reads them at module-import time; runtime behaviour unchanged
+
+### Why
+
+`src/content/skills.ts` was a 3024-line monolith — 24 skill bodies stitched into one TypeScript file as inline template literals, each ranging from ~30 to ~250 lines. That layout fought every editor that has ever read it: navigating between skills meant scrolling thousands of lines, diffs on a single skill bled across the file, and the v8.14 sweep had to re-process every literal for every typography or anti-rationalization rule change. The deferred "source-level split" item from v8.14's `## Deferred` section called this out as a mechanical refactor with its own packaging-change risk surface — best done in its own slug.
+
+### What changed
+
+**D1 — One `.md` file per skill.** Twenty-four files now live under `src/content/skills/` (one per `id`, file name == frontmatter `name:`):
+
+`ac-quality.md`, `ac-traceability.md`, `anti-slop.md`, `api-and-interface-design.md`, `breaking-changes.md`, `browser-verification.md`, `commit-message-quality.md`, `conversation-language.md`, `debug-loop.md`, `documentation-and-adrs.md`, `flow-resume.md`, `parallel-build.md`, `plan-authoring.md`, `pre-flight-assumptions.md`, `refactor-safety.md`, `refinement.md`, `review-loop.md`, `security-review.md`, `source-driven.md`, `summary-format.md`, `surgical-edit-hygiene.md`, `tdd-cycle.md`, `triage-gate.md`, `verification-loop.md`.
+
+Each file is the single editable source of truth — frontmatter (`---\nname: <id>\ntrigger: …\n---`) preserved byte-for-byte from the v8.14 inline literal, body unchanged.
+
+**D2 — `skills.ts` shrinks 3024 → ~250 lines.** The file now contains only the `AutoTriggerSkill` interface, a `readSkill(fileName)` helper, and the 24-entry `AUTO_TRIGGER_SKILLS` array. Each `body:` field is an inline `readSkill("<id>.md")` call (no named constants; nothing imports them by name). The loader resolves paths via `path.dirname(fileURLToPath(import.meta.url))` + `./skills/<file>`, mirroring the pattern already used by `src/constants.ts > readCclawVersion`. Hard-fails with a clear error if a body is missing rather than papering over with an empty string.
+
+**D3 — Build pipeline mirrors `.md` to `dist/`.** TypeScript does not copy non-`.ts` files. A new `scripts/copy-skill-md.mjs` step runs between `tsc` and `build:hook-bundle` and copies `src/content/skills/*.md` → `dist/content/skills/*.md` (idempotent; `mkdir -p`; overwrite). The relative path from `dist/content/skills.js` to `dist/content/skills/<file>.md` matches the one from the source tree, so the same loader code works in dev / test / published-package layouts.
+
+**D4 — npm tarball ships the `.md` files.** `package.json > files` now lists `dist/content/skills/**/*.md` (explicit; already inside the `dist` allow-list, but called out for clarity) and `src/content/skills/**/*.md`. `npm pack --dry-run` confirms all 24 `.md` files appear in both locations of the tarball.
+
+### Runtime behaviour
+
+Unchanged. `install.ts > writeRuntimeSkills` still iterates `AUTO_TRIGGER_SKILLS` and writes `skill.body` (24 files) to `.cclaw/lib/skills/`. The smoke harness (`scripts/smoke-init.mjs`) re-verifies the same 14 hot-path skill files post-install. The `AUTO_TRIGGER_SKILLS[i].body` string contract is byte-identical to v8.14 — a temporary verification script (deleted before commit) confirmed the unwrap (` \` ` → `` ` ``, `\\` → `\`, `\${` → `${`) round-trips correctly for all 24 bodies.
+
+### Tests
+
+458 tests across 43 files, all green. No spec changes; the existing `tests/unit/skills.test.ts` (6 cases asserting `body` shape, anti-slop content, always-on triggers, Five Failure Modes literals, `commit-helper.mjs` mention) and `tests/unit/install.test.ts` (skills-directory write) keep passing because the loader reproduces the same strings.
+
+### Migration
+
+Drop-in. Nothing for end users to do. Contributors editing a skill body now edit `src/content/skills/<id>.md` directly — no template-literal escape juggling required.
+
+### Deferred
+
+- 24-skill thematic merge to ~15 groups (ac-discipline, commit-hygiene, tdd-and-verification, api-evolution, review-discipline, debug-and-browser) — design-affecting work that deserves its own audit and lock-in tests. Slug: `v8.16-skills-thematic-merge`.
+
 ## 8.14.0 — Strong-design release: brainstormer + architect collapse into one main-context `design` specialist with seven multi-turn phases; inline D-N decisions in plan.md; streamlined triage gate (zero-question fast path + single combined two-question form)
 
 ### Why

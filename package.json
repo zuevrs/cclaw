@@ -1,6 +1,6 @@
 {
   "name": "cclaw-cli",
-  "version": "8.14.0",
+  "version": "8.15.0",
   "description": "Lightweight harness-first flow toolkit for coding agents",
   "type": "module",
   "bin": {
@@ -9,6 +9,8 @@
   },
   "files": [
     "dist",
+    "dist/content/skills/**/*.md",
+    "src/content/skills/**/*.md",
     "README.md",
     "LICENSE"
   ],
@@ -17,7 +19,7 @@
   },
   "scripts": {
     "clean:dist": "node -e \"import('node:fs/promises').then((fs) => fs.rm('dist', { recursive: true, force: true }))\"",
-    "build": "npm run clean:dist && tsc -p tsconfig.json && npm run build:hook-bundle && node scripts/chmod-bin.mjs",
+    "build": "npm run clean:dist && tsc -p tsconfig.json && node scripts/copy-skill-md.mjs && npm run build:hook-bundle && node scripts/chmod-bin.mjs",
     "build:hook-bundle": "esbuild src/runtime/run-hook.entry.ts --bundle --platform=node --format=esm --outfile=dist/runtime/run-hook.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
