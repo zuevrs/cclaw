@@ -1,5 +1,80 @@
 # Changelog
 
+## 8.25.0 — NFRs first-class: `## Non-functional` section in plan.md + `nfr-compliance` reviewer axis
+
+### Why
+
+`plan.md` covered Frame / Approaches / Decisions / Pre-mortem / Not Doing / AC table but had **no structural slot for non-functional requirements** (performance budgets, compatibility constraints, accessibility baselines, security baseline). NFRs lived implicitly in Decisions, surfaced inconsistently in review, and were one of the cheapest things to forget on product-grade slugs. A late-stage performance regression or accessibility miss would not be visible in the plan.md → review.md trail until ship-gate or production.
+
+The audit asked for explicit, structural NFR capture. v8.25 adds `## Non-functional` to the strict `PLAN_TEMPLATE` (between `## Frame` and `## Approaches` — the conceptual home for NFRs, authored by `design` Phase 2 alongside Frame). `design.ts` Phase 2 learns to compose four canonical rows (performance / compatibility / accessibility / security) when the slug is product-grade tier OR carries irreversibility. `reviewer.ts` gains an **eighth axis** — `nfr-compliance` — that cross-checks the diff against the plan's `## Non-functional` rows, **gated to emit zero findings when the section is empty / absent / contains only "none specified" rows** (so legacy plan.md files pre-v8.25 and slugs without NFR concerns don't get fabricated NFR findings).
+
+Soft-mode plan.md (`PLAN_TEMPLATE_SOFT`) does not get the section — design Phase 2 does not run on small-medium flows, so there is no author for the rows. NFRs are a large-risky concern by design.
+
+### What changed
+
+**D1 — `PLAN_TEMPLATE` gains `## Non-functional`.** Inserted between `## Frame` and `## Approaches` in `src/content/artifact-templates.ts`. The section is intentionally short (≤8 lines of prose + 4 bullet rows) so the body cost is modest:
+
+- **performance:** budgets (p50 / p95 / p99 latency, throughput, memory, bundle KB) or `none specified`.
+- **compatibility:** browser / runtime / Node / OS / dependency-version constraints, or `none`.
+- **accessibility:** a11y baseline (WCAG level, keyboard, screen-reader, contrast), or `none` for non-UI slugs.
+- **security:** auth / data-classification / compliance baseline; high-level posture only — defer threat modelling to `security-reviewer` when `security_flag: true`.
+
+The introductory prose names the trigger conditions (product-grade tier OR irreversibility), names the "v8.25 contract: large-risky only (soft-mode plans skip design Phase 2 and therefore have no NFR section)", and explicitly tolerates absent sections as a default. The `none specified` value is documented as the explicit "no NFR concerns" answer — preferred over silently dropping a row.
+
+**D2 — `design.ts` Phase 2 (Frame) authors the NFR section.** A new paragraph follows the existing Phase 2 confirm-to-`plan.md > ## Frame` write step. The paragraph names: the v8.25 contract, the trigger conditions (product-grade tier OR irreversibility — data migration, public API, auth / payment, performance hot-path, accessibility-sensitive UI), the canonical four-row composition (performance / compatibility / accessibility / security), example inline values (`p95 < 200ms over 100 RPS`, `Node 20+, Chrome ≥ 118`, `WCAG AA, keyboard nav full coverage`, etc.), the "explicit `none specified` beats silence" rule, and the placement (between `## Frame` and `## Approaches`). The reviewer is named as the downstream consumer; ship-gate is named as the secondary consumer (cross-reference on go/no-go for product-grade slugs).
+
+**D3 — `reviewer.ts` gains the `nfr-compliance` axis (gated).** The "Seven-axis review (mandatory in every iteration; v8.13)" section heading is renamed to "**Eight-axis review (mandatory in every iteration; v8.13 introduced seven, v8.25 added the eighth)**". The axis table gains a new row for `nfr-compliance` with the v8.25 marker, examples (UI change missing WCAG AA contrast row, new endpoint ignoring documented p95 budget, bundle KB exceeds perf row's hard ceiling), and an immediately following "**nfr-compliance gating rule (v8.25)**" paragraph that spells out:
+
+- Fire only when `flows/<slug>/plan.md > ## Non-functional` is non-empty.
+- "Empty" includes the all-`none specified` case across every NFR row.
+- "Absent" includes legacy plan.md files pre-v8.25 — skip silently, no findings.
+- Do not synthesize budgets, do not check against external defaults, do not warn that NFRs were not authored.
+- When populated, cross-check each AC's diff against the relevant NFR row; cite the specific NFR row violated plus the file:line where the violation occurs.
+
+The existing seven-axis prose (correctness / test-quality / readability / architecture / complexity-budget / security / perf) is preserved verbatim — the eighth axis is additive. The slim-summary axes counter (`c=N tq=N r=N a=N cb=N s=N p=N`) is **unchanged in v8.25** — the canonical prefix stays seven letters because `nfr-compliance` is gated and would emit `nfr=0` on every legacy-plan iteration. A future slug can add the eighth letter to the prefix when the field is unconditionally surfaced; today the prefix matches the "always-applicable" axes only.
+
+**D4 — Backward compatibility: legacy plan.md files validate unchanged.** A legacy plan.md without `## Non-functional` is treated as "no NFR section authored" and the reviewer's `nfr-compliance` axis stays silent. No flow-state migration is needed; no plan.md frontmatter changes. Soft-mode plan.md (`PLAN_TEMPLATE_SOFT`) is explicitly unchanged — it doesn't carry the section because soft-mode does not run design Phase 2 to author it.
+
+### Migration
+
+**v8.24 → v8.25.** Drop-in. Run `cclaw upgrade` to refresh `.cclaw/lib/templates/plan.md`, `.cclaw/lib/agents/design.md` (the installed design specialist prompt), and `.cclaw/lib/agents/reviewer.md`. Three scenarios:
+
+1. **Fresh v8.25 `/cc` on a large-risky product-grade slug.** Design Phase 2 composes Frame + NFR rows in the same turn. Plan.md gets a populated `## Non-functional` section. Reviewer's `nfr-compliance` axis fires; findings (if any) cite the violated row + file:line.
+2. **Fresh v8.25 `/cc` on a large-risky internal refactor (no product-grade tier, no irreversibility).** Design Phase 2 skips the NFR section entirely; plan.md has no `## Non-functional` heading. Reviewer's `nfr-compliance` axis stays silent (gating rule: absent section → no findings).
+3. **Resumed pre-v8.25 large-risky flow on v8.25 binary.** The legacy plan.md has no `## Non-functional` section. The reviewer's `nfr-compliance` axis stays silent (legacy plans are explicitly tolerated). The next design Phase 2 dispatch — if any — could author the section retroactively, but the v8.25 contract does not force it; the slug ships under its original NFR-implicit contract.
+
+**No `flow-state.json` schema bump.** No plan.md frontmatter changes. No reviewer Concern Ledger schema changes — `nfr-compliance` rows write the same `(id, axis, severity, AC ref, file:path:line, description, fix)` shape as every other axis.
+
+### What we noticed but didn't touch (v8.25 scope)
+
+- **The slim-summary axes counter (`c=N tq=N r=N a=N cb=N s=N p=N`) stays at seven letters.** A future slug could add `nfr=N` when the gating fires, but the conditional render adds complexity to every iteration's slim summary and the gating's "no findings on empty section" rule means `nfr=0` would dominate on legacy flows. Deferred.
+- **No reviewer self-check that the diff's NFR-relevant signal (a new benchmark, a new a11y test, a new bundle-size check) matches the plan's NFR row.** Today the reviewer reads the NFR row + the diff and decides; a future slug could add a structural check that "any AC touching UI files MUST have a row in `## Non-functional` for accessibility" or similar. Tightens the contract but creates false positives on non-product-grade large-risky slugs. Out of scope.
+- **The `## Non-functional` section is not surfaced in `ship.md` or release-notes.md.** A product-grade slug's release notes could mirror the NFR rows so external readers see what was promised. Deferred — release-notes.md template would need a parallel update, and the audit specifically scoped v8.25 to plan + reviewer.
+- **NFR-row inheritance between sibling slugs in the same domain.** If slug A authored `accessibility: WCAG AA, keyboard nav full coverage`, slug B in the same UI module could inherit by reference. Today every plan.md authors its own rows. A future "NFR catalog" (`.cclaw/nfr-catalog.yaml`?) could centralise reusable rows. Out of scope.
+- **No mechanical enforcement that `none specified` is well-typed.** A row written as `none` instead of `none specified`, or as `tbd`, or left blank, would still pass — the reviewer's gating rule is prose-driven, not regex-checked. The cost of enforcement is high relative to the value; trusted-author assumption holds.
+- **`security` row collision with `security_flag: true` + `security-reviewer`.** The NFR row's `security:` is the high-level posture; `security-reviewer` does deep threat-modelling. The boundary is documented in the template prose ("defer threat modelling to security-reviewer when security_flag: true"), but a future slug could formalise the split with a typed `security_baseline_status: posture | threat-modelled | both` field. Out of scope.
+
+### Deferred
+
+- **Slim-summary axes counter expansion to 8 letters.** Deferred until the gating rule changes (today's "no findings on empty section" makes the eighth letter mostly zero).
+- **Structural reviewer self-check that UI-touching ACs have accessibility rows.** Deferred — creates false positives.
+- **Release notes / ship.md NFR mirroring.** Deferred — out of scope per the plan.
+- **NFR catalog for reusable rows across slugs in a domain.** Deferred — needs a separate design slug.
+- **Typed `none specified` enforcement.** Deferred — trusted-author assumption.
+
+### Tests
+
+`tests/unit/v825-nfrs-first-class.test.ts` — **16 new tripwire tests** across four describe blocks:
+
+- AC-1 — PLAN_TEMPLATE contains `## Non-functional` heading; the section names the four canonical NFR axes (performance / compatibility / accessibility / security); section is explicitly optional / design-Phase-2-authored; section lives between Frame and Approaches; `none specified` is a documented valid value.
+- AC-2 — design.ts mentions NFR / Non-functional in its Phase 2 instructions; design.ts names the gating condition (product-grade tier or irreversibility); design.ts names `## Non-functional` as a section it writes to plan.md.
+- AC-3 — reviewer prompt lists `nfr-compliance` in its axis table; reviewer prompt names the gating rule (no findings when `## Non-functional` is empty / absent); reviewer prompt names what the axis checks (AC vs NFR consistency, NFR-row coverage); preserves the v8.13 seven-axis preamble; names eighth-axis count or "v8.25" explicitly.
+- AC-4 — PLAN_TEMPLATE_SOFT does NOT add the section (soft mode skips design Phase 2); legacy plan.md without the section is documented as acceptable; reviewer prompt explicitly tolerates legacy plan.md without fabricating findings.
+
+`tests/unit/v813-cleanup.test.ts` — one assertion updated: the v8.13 "reviewer uses 7 axes" test now accepts either `Seven-axis review` (pre-v8.25) or `Eight-axis review` (v8.25+) as the heading, with the test description updated to name the v8.25 expansion.
+
+**Total: 727 tests across 53 files (was 711 across 52 in v8.24; +16 net from the v825-nfrs-first-class suite + 1 new file). All green.**
+
 ## 8.24.0 — Two-stage reviewer becomes the default on large-risky (the AND → OR gate shift)
 
 ### Why
