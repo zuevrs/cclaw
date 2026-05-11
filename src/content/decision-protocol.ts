@@ -1,6 +1,6 @@
 export const DECISION_PROTOCOL = `# Decision protocol (short form)
 
-A decision exists only when there is a real choice between at least two options. The full schema, FMT, and pre-mortem rules live in \`lib/agents/architect.md\`. This page covers only the question "is this a decision at all?"
+A decision exists only when there is a real choice between at least two options. The full schema, FMT, and pre-mortem rules live in \`lib/agents/design.md\` (Phase 4 — Decisions; Phase 5 — Pre-mortem). This page covers only the question "is this a decision at all?"
 
 ## What is not a decision
 
@@ -12,7 +12,7 @@ If you find yourself writing one of these, do not open a \`D-N\`. Capture the ch
 
 ## What every D-N must carry
 
-\`Context · Considered options (>= 2) · Selected · Rationale · Rejected because · Consequences · Refs\`. Add **Failure Mode Table** + **Pre-mortem** for every product-grade or ideal tier decision (see architect.md).
+\`Context · Considered options (>= 2) · Selected · Rationale · Rejected because · Consequences · Refs\`. Add **Failure Mode Table** + **Pre-mortem** for every product-grade or ideal tier decision (see \`lib/agents/design.md\` Phase 4 / Phase 5).
 
 ## Refactoring decisions
 

@@ -28,7 +28,7 @@ The user asks for "login", "OAuth", "passkeys", "MFA", "SSO", "session lifetime"
 
 ## Specialists to invoke
 
-- \`architect\` — always, even if the change feels additive.
+- \`design\` (Phase 4 — Decisions, Phase 5 — Pre-mortem) — always, even if the change feels additive. Record auth/secrets/wire-format decisions as inline D-N rows in \`plan.md\`.
 - \`security-reviewer\` mode=\`threat-model\` — always.
 - \`security-reviewer\` mode=\`sensitive-change\` — at code-review time on the diff.
 - \`reviewer\` mode=\`adversarial\` — at least once, looking for the case the author is biased to miss.

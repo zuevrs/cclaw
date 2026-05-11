@@ -10,11 +10,10 @@ describe("types", () => {
     expect(HARNESS_IDS).toEqual(["claude", "cursor", "opencode", "codex"]);
   });
 
-  it("ships exactly six specialists", () => {
-    expect(SPECIALISTS).toHaveLength(6);
+  it("ships exactly five specialists (v8.14 collapsed brainstormer+architect into design)", () => {
+    expect(SPECIALISTS).toHaveLength(5);
     expect(SPECIALISTS).toEqual([
-      "brainstormer",
-      "architect",
+      "design",
       "planner",
       "reviewer",
       "security-reviewer",

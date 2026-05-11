@@ -4,7 +4,16 @@ export type FlowStage = (typeof FLOW_STAGES)[number];
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
-export const DISCOVERY_SPECIALISTS = ["brainstormer", "architect", "planner"] as const;
+/**
+ * v8.14: `brainstormer` + `architect` collapsed into a single `design`
+ * specialist that runs in the MAIN orchestrator context with a multi-turn
+ * user-collaborative protocol (Phases 0-7). The discovery sub-phase under
+ * `plan` is now `design` -> `planner` instead of `brainstormer` -> `architect`
+ * -> `planner`. State files written before v8.14 with `lastSpecialist`
+ * pointing at the removed ids are migrated to `null` on read so the
+ * orchestrator re-runs the design phase from scratch.
+ */
+export const DISCOVERY_SPECIALISTS = ["design", "planner"] as const;
 export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
 
 export const SPECIALISTS = [
@@ -16,9 +25,17 @@ export const SPECIALISTS = [
 export type SpecialistId = (typeof SPECIALISTS)[number];
 
 /**
- * Lightweight read-only research helpers, dispatched by planner / architect /
- * brainstormer (deep posture) BEFORE they author their artifacts. They
- * exist to gather context (live repo signals; prior cclaw lessons) so the
+ * Removed in v8.14. Kept as a type-level reminder for migration paths and
+ * `legacyArtifacts: true` opt-in mode. Do not add new entries.
+ */
+export const LEGACY_DISCOVERY_SPECIALISTS = ["brainstormer", "architect"] as const;
+export type LegacyDiscoverySpecialistId = (typeof LEGACY_DISCOVERY_SPECIALISTS)[number];
+
+/**
+ * Lightweight read-only research helpers, dispatched by `planner` or by the
+ * `design` phase (mostly on `deep` posture, in Phase 2 Frame or Phase 4
+ * Decisions) BEFORE the dispatcher writes its artifact. They exist to
+ * gather context (live repo signals; prior cclaw lessons) so the
  * dispatcher does not have to crawl the codebase or knowledge log itself.
  *
  * Research helpers are not in {@link SpecialistId} on purpose:
@@ -112,9 +129,14 @@ export interface TriageDecision {
    * user only picks once per flow.
    *
    * Optional in TypeScript so v8.2 state files (which lack `runMode`) still
-   * validate; readers MUST default to `step` on absent.
+   * validate; readers MUST default to `step` on absent (non-inline paths).
+   *
+   * On v8.14+ flows that take the inline / trivial path, `runMode` is
+   * written as `null` because there are no stages to chain — the
+   * step-vs-auto choice is structurally meaningless when
+   * `triage.path == ["build"]`.
    */
-  runMode?: RunMode;
+  runMode?: RunMode | null;
   /**
    * Pre-flight assumptions surfaced at Hop 2.5 (between triage and first
    * dispatch). Each entry is one short sentence the orchestrator was about
@@ -134,23 +156,33 @@ export interface TriageDecision {
   assumptions?: string[] | null;
   /**
    * Interpretation forks recorded at Hop 2.5 (sub-step before the
-   * assumptions question). When the user's prompt is ambiguous —
-   * "make search faster", "improve the UI", "fix the auth bug" — the
-   * orchestrator surfaces 2-4 distinct interpretations with tradeoffs and
-   * effort estimates and lets the user pick the one they meant **before**
-   * any assumption is written. Skipping this step is the most common reason
-   * a flow ships the wrong feature even when triage and assumptions look
-   * clean.
+   * assumptions question). **Legacy field.** On pre-v8.14 flows the
+   * orchestrator surfaced 2-4 distinct interpretations of an ambiguous
+   * prompt and let the user pick. v8.14+ handles ambiguity inside the
+   * `design` specialist's Phase 1 (Clarify), which can ask live follow-up
+   * questions instead of relying on a one-shot fork list. The field stays
+   * in the schema so legacy state files validate; new flows leave it
+   * `null`/absent and lean on design Phase 1 instead.
    *
    * Each entry is the verbatim chosen-interpretation sentence (so
    * downstream specialists see the user's framing, not the orchestrator's
    * paraphrase). When the prompt was unambiguous and forks were not
    * surfaced, the field is `null` or absent.
-   *
-   * Optional for backward compat: state files written before this field
-   * existed validate without it.
    */
   interpretationForks?: string[] | null;
+  /**
+   * `true` only on the v8.14 zero-question fast path: trivial complexity
+   * with high confidence, where the orchestrator skipped the structured
+   * triage ask entirely and went straight to the inline edit. The
+   * one-sentence announce-and-execute path leaves an explicit audit trail
+   * in the flag (downstream tooling and `/cc-cancel` rollback flows look at
+   * this to distinguish "user accepted explicitly" from "user did not see a
+   * gate").
+   *
+   * `false` on every other path (combined-form ask answered, custom path,
+   * legacy state). Optional for backward compat.
+   */
+  autoExecuted?: boolean | null;
 }
 
 export interface CliContext {

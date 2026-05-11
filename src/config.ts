@@ -16,9 +16,9 @@ export type HookProfile = "minimal" | "strict";
  *   - "fast"      — short-context, fast turn-around (cheap models suit
  *                   slice-builder cycles, research helpers, slim summaries).
  *   - "balanced"  — default mid-tier (planner / reviewer for routine work).
- *   - "powerful"  — deep-context, slow but high-quality (architect /
- *                   adversarial review / security-reviewer / brainstormer
- *                   for ambiguous large-risky work).
+ *   - "powerful"  — deep-context, slow but high-quality (design /
+ *                   adversarial review / security-reviewer for ambiguous,
+ *                   large-risky, or security-sensitive work).
  *
  * Harness mapping is documented in the harness-specific docs; cclaw itself
  * just plumbs the tier hint into the dispatch envelope.
@@ -26,14 +26,21 @@ export type HookProfile = "minimal" | "strict";
 export type ModelTier = "fast" | "balanced" | "powerful";
 
 export interface ModelPreferences {
-  brainstormer?: ModelTier;
-  architect?: ModelTier;
+  design?: ModelTier;
   planner?: ModelTier;
   "slice-builder"?: ModelTier;
   reviewer?: ModelTier;
   "security-reviewer"?: ModelTier;
   "learnings-research"?: ModelTier;
   "repo-research"?: ModelTier;
+  /**
+   * Legacy aliases (pre-v8.14). Retained so users with existing
+   * `.cclaw/config.yaml` files don't see schema-validation errors after
+   * upgrading. The orchestrator collapses both onto the `design` tier at
+   * dispatch time (highest of the two wins when both are set).
+   */
+  brainstormer?: ModelTier;
+  architect?: ModelTier;
 }
 
 export interface CclawConfig {

@@ -10,10 +10,16 @@ const RESEARCH_HELPER_LIST = RESEARCH_AGENTS.map(
 ).join("\n");
 
 const TRIAGE_ASK_EXAMPLE = `\`\`\`
-# Single tool call, two questions in one form when the harness supports it
-# (Cursor's askUserQuestion, Claude Code's AskUserQuestion both accept a
-# questions[] array of length ≥1; OpenCode and Codex collapse to sequential
-# blocks if multi-question is unsupported). Combining saves one round-trip.
+# Single tool call, TWO questions in one form (always two on the structured-ask
+# path — even when the recommended path is inline, so the form shape stays
+# stable; the run-mode answer is ignored at patch time on inline). Cursor's
+# askUserQuestion, Claude Code's AskUserQuestion, OpenCode's "ask" content
+# block, and Codex's prompt all accept a questions[] array of length ≥1.
+# Combining saves one round-trip per non-inline flow start.
+#
+# IMPORTANT: this ask is skipped entirely on the zero-question fast path
+# (trivial / high-confidence; see Hop 2 §1). The orchestrator only emits the
+# announce sentence then proceeds straight to inline dispatch.
 
 askUserQuestion(
   questions: [
@@ -23,14 +29,13 @@ askUserQuestion(
       options: [
         <option label conveying: proceed with the recommended path>,
         <option label conveying: switch to trivial — inline edit + commit, skip plan/review>,
-        <option label conveying: escalate to large-risky — adds brainstormer + architect, strict AC, parallel slices when applicable>,
+        <option label conveying: escalate to large-risky — adds collaborative design phase, strict AC, parallel slices when applicable>,
         <option label conveying: customise — user edits complexity / acMode / path>
       ],
       allow_multiple: false
     },
     {
       id: "run-mode",
-      # Skip this entry entirely when the recommended path is inline; only ONE question is rendered.
       prompt: <one sentence in the user's language asking which run mode to use>,
       options: [
         <option label conveying: step mode — pause after each stage; next /cc advances (the default)>,
@@ -42,7 +47,8 @@ askUserQuestion(
 )
 
 # Harness fallback (no multi-question support): two sequential askUserQuestion
-# calls in the order shown. Skip the second on the inline path.
+# calls in the order shown. If Question 1 returned "switch to trivial",
+# skip the Question 2 call (no stages to chain).
 \`\`\`
 
 The slots above (\`<...>\`) are intent descriptors, not literal strings. Render the prompt and every option label in the user's conversation language; do not copy the descriptor text. Mechanical tokens — \`/cc\`, \`/cc-cancel\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`auto\`, \`step\`, \`AC-N\`, slugs, file paths, JSON keys — remain in their original form regardless of language. See \`conversation-language.md\`.`;
@@ -77,17 +83,20 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
     "userOverrode": false,
-    "runMode": "step"
+    "runMode": "step",
+    "autoExecuted": false
   }
 }
-\`\`\``;
+\`\`\`
+
+\`autoExecuted: true\` is set **only** on the zero-question fast path (trivial / high-confidence, no structured ask shown). On every other path \`autoExecuted: false\`. \`runMode\` is \`null\` on inline (whether reached via fast path or via Question 1 option "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.`;
 
 const RESUME_SUMMARY_EXAMPLE = `\`\`\`
 Active flow: <slug>
 ─ Stage: <stage>  (last touched <relative-time, in the user's language>)
 ─ Triage: <complexity> / acMode=<acMode>
 ─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
-─ Last specialist: <none | brainstormer | architect | planner | reviewer | security-reviewer | slice-builder>
+─ Last specialist: <none | design | planner | reviewer | security-reviewer | slice-builder>
 ─ Open findings: <K>
 ─ Next step: <one sentence in the user's language describing what /cc will do next>
 
@@ -130,7 +139,7 @@ Recommended next: <continue | review-pause | fix-only | cancel | accept-warns-an
 Notes: <optional; required when Confidence != high; one short sentence in the user's language>
 \`\`\`
 
-\`Recommended next\` enum is canonical and matches the values reviewer / security-reviewer / planner / slice-builder use. Discovery specialists (brainstormer, architect) emit a **two-value subset** \`<continue | cancel>\` — within discovery the orchestrator infers the next step from \`lastSpecialist\` rotation (brainstormer → architect → planner), not from the field value. Research dispatches (\`repo-research\`, \`learnings-research\`) always emit \`continue\` (no hard-gate authority). The full enum semantics:
+\`Recommended next\` enum is canonical and matches the values reviewer / security-reviewer / planner / slice-builder use. The \`design\` specialist (v8.14+) is **main-context** and emits no slim summary — its Phase 7 sign-off picker drives the resume decision directly, so it has no place in this enum. Research dispatches (\`repo-research\`, \`learnings-research\`) always emit \`continue\` (no hard-gate authority). The full enum semantics:
 
 - **continue** — proceed (advance stage, dispatch next specialist, or ship if review is clear).
 - **review-pause** — reviewer found ambiguous findings; surface to user before dispatching slice-builder.
@@ -204,13 +213,17 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 ## Hop 2 — Triage (fresh starts only)
 
-Run the \`triage-gate.md\` skill. **Use the harness's structured question tool** (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code do); fall back to two sequential calls only when the harness does not. Combining saves one user round-trip on every non-inline flow start.
+Run the \`triage-gate.md\` skill. The gate has **two modes** in v8.14+:
+
+1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), AC mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`autoExecuted: true\`, \`runMode: null\`; proceed straight to the inline edit (Hop 3 — *Dispatch* on the build stage). Pre-flight (Hop 2.5) is skipped on inline by design.
+
+2. **Combined-form structured ask** — for every other classification (and for trivial when confidence is \`medium\` or \`low\`), use the harness's structured question tool (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code / OpenCode do); fall back to two sequential calls only when the harness genuinely only supports single-question structured ask. Combining saves one user round-trip on every non-inline flow start.
 
 ${TRIAGE_ASK_EXAMPLE}
 
 The first question's prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, AC mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
 
-The second question (run-mode) is **omitted entirely** on the trivial / inline path (no stages to chain) — render only the first question, never both. Default \`runMode\` is \`step\` if the user dismisses the question or the harness can only show one.
+The second question (run-mode) is **always rendered** when the combined form is shown, even when the user might pick the "switch to trivial" option in Question 1 — the run-mode answer is then **ignored at patch time** and \`runMode\` is written as \`null\` on the inline path (no stages to chain). This keeps the form shape stable across answers and avoids a conditional second-call round-trip. Default \`runMode\` is \`step\` if the user dismisses the form or the harness can only show one question.
 
 If the harness lacks a structured ask facility, fall back to the legacy form:
 
@@ -273,7 +286,7 @@ Skip rules:
 - Resume from a paused flow → skip Hop 2.5 (saved \`assumptions\` is already on disk).
 - \`flow-state.json\` already has \`triage.assumptions\` populated (mid-flight resume) → read but do not re-prompt.
 
-Every dispatch envelope from Hop 3 onward includes the line \`Pre-flight assumptions: see triage.assumptions in flow-state.json\`. Sub-agents read the list; planner and architect copy it verbatim into their artifacts.
+Every dispatch envelope from Hop 3 onward includes the line \`Pre-flight assumptions: see triage.assumptions in flow-state.json\`. Sub-agents read the list; planner and design copy it verbatim into their artifacts.
 
 ## Hop 3 — Dispatch
 
@@ -284,18 +297,18 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 3. **Hand off** in a sub-agent. Do not run the specialist's work in your own context.
 4. When the sub-agent returns, read its slim summary, do not re-read its artifact.
 5. Patch \`flow-state.json\` **after every dispatch** (not only at end-of-stage):
-   - \`lastSpecialist\` = the id of the specialist that just returned (\`brainstormer\` / \`architect\` / \`planner\` / \`slice-builder\` / \`reviewer\` / \`security-reviewer\`). This is the ONLY way checkpoint-based resume works mid-discovery.
-   - \`currentStage\` = the **next** stage in \`triage.path\` only when the **whole stage** is complete. While the discovery sub-phase is in progress (brainstormer or architect just returned), \`currentStage\` stays \`"plan"\` and \`lastSpecialist\` rotates through the three discovery specialists.
+   - \`lastSpecialist\` = the id of the specialist that just returned or just signed off (\`design\` / \`planner\` / \`slice-builder\` / \`reviewer\` / \`security-reviewer\`). The \`design\` specialist runs in **main context** (v8.14+): the orchestrator patches \`lastSpecialist: "design"\` only after Phase 7 sign-off returns \`approve & proceed\`. This is the ONLY way checkpoint-based resume works mid-discovery.
+   - \`currentStage\` = the **next** stage in \`triage.path\` only when the **whole stage** is complete. While the discovery sub-phase is in progress (design is still in Phase 0-6, or planner just returned but the user has not yet seen the plan), \`currentStage\` stays \`"plan"\` and \`lastSpecialist\` rotates through \`design\` then \`planner\`.
    - \`reviewIterations\`, \`securityFlag\`, AC progress — patched in the same write whenever the slim summary reports a change.
 6. Render the pause summary and wait (Hop 4).
 
 ### Stage → specialist mapping
 
-\`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a discovery sub-phase (brainstormer → architect → planner) — see "Plan stage on large-risky" under Stage details.
+\`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → planner) — see "Plan stage on large-risky" under Stage details.
 
 | Stage | Specialist | Mode | Wrapper skill | Inline allowed? |
 | --- | --- | --- | --- | --- |
-| \`plan\` | \`planner\` (small/medium); brainstormer → architect → planner (large-risky) | — | plan-authoring (planner); brainstorming-discovery (brainstormer); architectural-decision (architect) | yes for trivial; no for any path that includes plan |
+| \`plan\` | \`planner\` (small/medium); design → planner (large-risky) | — | plan-authoring (planner); design.md is read in main context (no wrapper skill) | yes for trivial; no for any path that includes plan |
 | \`build\` | \`slice-builder\` | \`build\` (or \`fix-only\` after a review with block findings) | tdd-cycle | yes for trivial only |
 | \`review\` | \`reviewer\` | \`code\` (default) or \`integration\` (after parallel-build) | review-loop, anti-slop | no, always sub-agent |
 | \`ship\` | \`reviewer\` (mode=release) + \`reviewer\` (mode=adversarial, strict) + \`security-reviewer\` if \`security_flag\` | parallel fan-out, then merge | release-checklist | no, always sub-agent |
@@ -308,7 +321,7 @@ When you announce a dispatch in your message to the user, use exactly this shape
 
 ${SUB_AGENT_DISPATCH_EXAMPLE}
 
-The first two reads are non-negotiable. A sub-agent that skips its contract file will hallucinate its own role definition (we observed this in production — brainstormer ran with a 30-line summary instead of its full contract). If the harness has a sub-agent system message, the orchestrator places those two reads as the sub-agent's first instructions; if the harness dispatches via plain "spawn a fresh context", the orchestrator puts them at the top of the inline prompt. Either way, the sub-agent opens \`.cclaw/lib/agents/<specialist>.md\` before doing anything else.
+The first two reads are non-negotiable. A sub-agent that skips its contract file will hallucinate its own role definition (we observed this in production — early discovery specialists ran with a 30-line summary instead of their full contract). If the harness has a sub-agent system message, the orchestrator places those two reads as the sub-agent's first instructions; if the harness dispatches via plain "spawn a fresh context", the orchestrator puts them at the top of the inline prompt. Either way, the sub-agent opens \`.cclaw/lib/agents/<specialist>.md\` before doing anything else.
 
 The sub-agent reads the listed inputs, writes the listed output, and returns the slim summary block. It does **not**:
 
@@ -343,43 +356,44 @@ The orchestrator reads only this. The full artifact stays in \`.cclaw/flows/<slu
 - Strict-mode plan body: AC table with IDs, verification lines, touch surfaces, parallel-build topology if it applies.
 - Slim summary: condition / AC count, max touch surface, parallel-build flag, recommended-next, prior-lesson count.
 
-##### Plan stage on large-risky (discovery sub-phase)
+##### Plan stage on large-risky (discovery sub-phase — v8.14 strong design)
 
-When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the orchestrator runs a three-step discovery sub-phase by default: brainstormer → architect → planner, with a **mandatory pause and end-of-turn after each of the first two specialists** — regardless of \`triage.runMode\`. \`currentStage\` stays \`"plan"\` for all three; \`lastSpecialist\` rotates.
+When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the orchestrator runs a **two-step discovery sub-phase** by default: \`design\` (main context, multi-turn) → \`planner\` (sub-agent). \`currentStage\` stays \`"plan"\` for both; \`lastSpecialist\` rotates through \`design\` then \`planner\`.
+
+The v8.14 collapse: pre-v8.14 ran a three-step \`brainstormer → architect → planner\` chain of one-shot sub-agents, with a checkpoint-question between each. That ceremony was thin — the brainstormer's "Frame" and the architect's "decisions" both came from one shot of the model with no user dialog. v8.14 replaces the first two steps with a **single \`design\` specialist that runs in main context** across seven multi-turn phases (Bootstrap, Clarify, Frame, Approaches, Decisions inline, Pre-mortem, Compose, Sign-off), so framing and structural decisions emerge from a real user-collaborative pass instead of two short summaries.
 
 ###### Discovery auto-skip (low-ambiguity fast path)
 
-Before dispatching brainstormer, run the **discovery-needed heuristic** against the triage and pre-flight state. Skip directly to \`planner\` (single dispatch, no brainstormer or architect) when **all** of the following hold:
+Before activating \`design\`, run the **discovery-needed heuristic** against the triage and pre-flight state. Skip directly to \`planner\` (single dispatch, no design phase) when **all** of the following hold:
 
 1. \`triage.confidence\` is \`high\` (the heuristic produced an unambiguous large-risky classification).
 2. \`triage.assumptions\` is non-empty AND the user accepted them in pre-flight without edits (\`pre_flight_edits == 0\`).
-3. \`triage.interpretationForks\` is null OR a single fork was chosen explicitly.
-4. The user's \`/cc <task>\` prompt names ≥1 concrete file path or module (i.e. the focus surface is already given, not yet to be discovered).
-5. There is no security-sensitive keyword (\`auth\`, \`token\`, \`secret\`, \`oauth\`, \`saml\`, \`encryption\`, \`pii\`, \`gdpr\`, \`pci\`, \`hipaa\`, \`soc2\`) in the prompt **AND** \`security_flag\` is not preset by triage.
+3. The user's \`/cc <task>\` prompt names ≥1 concrete file path or module (i.e. the focus surface is already given, not yet to be discovered).
+4. There is no security-sensitive keyword (\`auth\`, \`token\`, \`secret\`, \`oauth\`, \`saml\`, \`encryption\`, \`pii\`, \`gdpr\`, \`pci\`, \`hipaa\`, \`soc2\`) in the prompt **AND** \`security_flag\` is not preset by triage.
 
-When all five hold, the orchestrator surfaces a one-sentence skip notice in the user's language ("Discovery skipped: triage is high-confidence and the surface is named — going straight to planner. Reply with \`/cc-cancel\` if you want a brainstorm pass instead.") and dispatches \`planner\` directly with the same envelope as small/medium plus \`fast_path: skipped-discovery\` in flow-state. \`lastSpecialist\` stays \`null\` until planner returns.
+When all four hold, the orchestrator surfaces a one-sentence skip notice in the user's language ("Discovery skipped: triage is high-confidence and the surface is named — going straight to planner. Reply with \`/cc-cancel\` if you want a design pass instead.") and dispatches \`planner\` directly with the same envelope as small/medium plus \`fast_path: skipped-discovery\` in flow-state. \`lastSpecialist\` stays \`null\` until planner returns.
 
-When **any** of the five fails, run the full three-step discovery as below.
+When **any** of the four fails, run the full two-step discovery as below.
 
-The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=force\` (always run the full discovery) or \`/cc <task> --discovery=skip\` (always skip, even if the heuristic would not have skipped — they take responsibility).
+The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=force\` (always run the full design phase) or \`/cc <task> --discovery=skip\` (always skip, even if the heuristic would not have skipped — they take responsibility).
 
-###### Full three-step discovery (default; auto-skip declined or its conditions failed)
+###### Full two-step discovery (default; auto-skip declined or its conditions failed)
 
-> **Discovery never auto-chains.** Each specialist's slim summary is a high-stakes decision (selected direction, architectural option, AC table) that the user MUST see before the next specialist runs. The orchestrator renders the slim summary, ends the turn, and waits for the next \`/cc\` invocation to continue. \`auto\` runMode applies to the plan→build→review→ship transitions only, **not** to brainstormer→architect→planner inside the plan stage.
+> **Discovery never auto-chains.** \`design\` runs in main context and pauses end-of-turn between each of its internal phases (Phase 0 through Phase 7) regardless of \`triage.runMode\`. \`auto\` runMode applies to the plan→build→review→ship transitions only, **not** inside the design phase. The planner dispatch that follows the design's Phase 7 sign-off is also a step-mode pause unless \`triage.runMode == auto\`.
 
-1. **Dispatch \`brainstormer\`** (wrapper skill: \`brainstorming-discovery.md\`).
-   - On \`deep\` posture, brainstormer dispatches \`repo-research\` itself before authoring (it needs the same context the planner needs).
-   - Output: appends "Frame", "Approaches", "Selected direction" sections to \`flows/<slug>/plan.md\` (same file the planner will finish). Writes nothing else in the flow dir except an optional \`flows/<slug>/research-repo.md\` from its own research dispatch (if \`repo-research\` ran and the planner didn't already trigger one).
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "brainstormer"\` → **renders the slim summary and ends the turn**. The user reviews the Frame and Selected Direction; the next \`/cc\` invocation continues with architect. If brainstormer's slim-summary JSON includes a non-empty \`checkpoint_question\` field (e.g. "Continue with architect for D-N decisions, or skip straight to planner since the request is unambiguous?"), the orchestrator renders that question as a structured \`askUserQuestion\` ask before ending the turn — **with two options only**: <option label conveying: continue with architect> and <option label conveying: skip architect, dispatch planner directly>. (\`Cancel\` is not a clickable option per the global rule; the user types \`/cc-cancel\` if they want to abort.) When \`checkpoint_question\` is empty, the orchestrator just ends the turn and the next \`/cc\` invocation continues with architect.
-2. **Dispatch \`architect\`** (wrapper skill: \`architectural-decision.md\`; also \`source-driven.md\` in strict mode).
-   - Inputs: \`flows/<slug>/plan.md\` (with brainstormer's Frame), the research artifact(s), triage assumptions.
-   - Output: \`flows/<slug>/decisions.md\` with the decision records (D-1 … D-N). Architect does NOT modify \`plan.md\`.
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "architect"\` → **renders the slim summary and ends the turn**. The user reviews the decisions; the next \`/cc\` invocation continues with planner. Same \`checkpoint_question\` handling as brainstormer above: if architect's JSON returns a non-empty \`checkpoint_question\`, surface it as a structured ask before ending the turn (typically: continue with planner, or stop and re-triage). When empty, end-of-turn and the next \`/cc\` invocation continues with planner.
-3. **Dispatch \`planner\`** with the same contract as small/medium plan, plus an extra input: \`flows/<slug>/decisions.md\`.
-   - Planner now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The "Frame" / "Selected direction" sections from brainstormer remain at the top of \`plan.md\`; planner appends its own sections below.
+1. **Activate \`design\` in main context** (read \`.cclaw/lib/agents/design.md\` as a skill the orchestrator itself follows; do NOT dispatch as a sub-agent).
+   - The orchestrator picks the **posture** before activation: \`deep\` when any of (security-sensitive keyword, \`security_flag\` preset, irreversibility / migration / schema / breaking-change / data-loss / payment / gdpr / pci in the prompt, \`refines:\` points to a slug with \`security_flag: true\`); \`guided\` otherwise. The design prompt may escalate to \`deep\` mid-flight if Phase 3 surfaces irreversibility the orchestrator missed.
+   - The orchestrator follows the design.md prompt phases 0-7 directly in this conversation. Each phase that emits user-facing output (Phase 1 Clarify, Phase 2 Frame, Phase 3 Approaches, Phase 4 Decisions one D-N per turn, Phase 5 Pre-mortem deep only, Phase 7 Sign-off) ends the turn with an \`askUserQuestion\` picker; Phase 0 (Bootstrap) and Phase 6 (Compose + self-review) are silent and flow directly into the next user-facing phase.
+   - Output: appends Frame, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, and Summary — design block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires. **No separate \`decisions.md\` is written; v8.14 inlined that file into the Decisions section of plan.md.**
+   - On Phase 7 \`approve & proceed\`: orchestrator patches \`lastSpecialist: "design"\` and \`plan.md\` frontmatter (\`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`) → **ends the turn**. The next \`/cc\` continues with planner.
+   - On Phase 7 \`revise\` / \`save & cancel\`: orchestrator handles per the design prompt's instructions; it does not patch \`lastSpecialist\` until the user actually signs off.
+2. **Dispatch \`planner\`** as a normal sub-agent with the same contract as small/medium plan, plus an extra input: the design sections already in \`flows/<slug>/plan.md\`.
+   - Planner now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The Frame / Approaches / Selected Direction / Decisions / Pre-mortem sections from design remain at the top of \`plan.md\`; planner appends its own sections below.
    - Orchestrator reads slim summary → patches \`lastSpecialist: "planner"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`). At this point the orchestrator follows \`triage.runMode\` for the plan→build transition: \`step\` ends the turn; \`auto\` chains immediately into the build dispatch.
 
-Resume after a brainstormer or architect checkpoint: \`flow-state.lastSpecialist\` tells the orchestrator which discovery step to skip. If \`lastSpecialist == "architect"\` and \`currentStage == "plan"\`, the resume dispatches \`planner\` directly. The user can also \`/cc <task> --skip-discovery\` to drop straight into a single planner dispatch when the discovery sub-phase already happened in a prior session.
+Resume after a design or planner checkpoint: \`flow-state.lastSpecialist\` tells the orchestrator which discovery step to skip. If \`lastSpecialist == "design"\` and \`currentStage == "plan"\`, the resume dispatches \`planner\` directly. The user can also \`/cc <task> --skip-discovery\` to drop straight into a single planner dispatch when the design phase already happened in a prior session.
+
+**Legacy migration:** state files written by pre-v8.14 cclaw with \`lastSpecialist: "brainstormer"\` or \`lastSpecialist: "architect"\` are rewritten to \`null\` on read; the orchestrator re-runs the unified design phase from scratch on those resumes. Shipped slugs with \`flows/shipped/<old-slug>/decisions.md\` keep that file untouched for historical reference.
 
 #### build
 
@@ -595,15 +609,14 @@ The adversarial pass runs **once per ship attempt**, not iteratively. If it prod
 
 In \`soft\` mode the adversarial pass is **skipped** by default — the lighter-weight regular reviewer is enough for small/medium work. The user can opt in with \`/cc <task> --adversarial\` if they want the extra sweep regardless.
 
-### Discovery (sub-phase of plan on large-risky)
+### Discovery (sub-phase of plan on large-risky — v8.14 strong design)
 
-Discovery is **not a stage in \`triage.path\`** — it is a three-step expansion of the \`plan\` stage on \`triage.complexity == "large-risky"\`. See "Plan stage on large-risky" under Stage details for the full spec. Listed here as a sanity check:
+Discovery is **not a stage in \`triage.path\`** — it is a two-step expansion of the \`plan\` stage on \`triage.complexity == "large-risky"\`. See "Plan stage on large-risky" under Stage details for the full spec. Listed here as a sanity check:
 
-1. \`brainstormer\` writes Frame + (optional) Approaches + Selected direction into \`flows/<slug>/plan.md\`. \`lastSpecialist == "brainstormer"\`. **End of turn** — user reviews the direction; next \`/cc\` continues with architect.
-2. \`architect\` writes \`flows/<slug>/decisions.md\`. \`lastSpecialist == "architect"\`. **End of turn** — user reviews the decisions; next \`/cc\` continues with planner.
-3. \`planner\` finishes \`plan.md\` (AC table, touch surface, topology). \`lastSpecialist == "planner"\`. \`currentStage\` advances to \`"build"\`. End of turn in \`step\` mode; chain to build in \`auto\` mode (the discovery-internal pauses fire regardless of mode; the post-discovery transition follows \`triage.runMode\`).
+1. \`design\` runs in **main orchestrator context** across Phase 0-7 (Bootstrap, Clarify, Frame, Approaches, Decisions inline as D-N, Pre-mortem deep only, Compose + self-review, Sign-off). Each user-facing phase ends the turn with an \`askUserQuestion\` picker. Output: Frame, Approaches, Selected Direction, Decisions (inline), optional Pre-mortem, Not Doing, Open questions, and a Summary block — all appended to \`flows/<slug>/plan.md\`. After Phase 7 \`approve & proceed\`: \`lastSpecialist == "design"\`. \`currentStage\` stays \`"plan"\`.
+2. \`planner\` is dispatched as a normal sub-agent. It finishes \`plan.md\` (AC table, touch surface, topology). \`lastSpecialist == "planner"\`. \`currentStage\` advances to \`"build"\`. End of turn in \`step\` mode; chain to build in \`auto\` mode (the design-internal phase pauses fire regardless of mode; the post-discovery transition follows \`triage.runMode\`).
 
-Each step is a separate dispatch + slim summary + end-of-turn. The user can invoke \`/cc-cancel\` between any of these steps if they want to abort and ship what is currently in \`plan.md\` / \`decisions.md\`; the orchestrator does not surface \`/cc-cancel\` as a clickable option (it is a power-user explicit command).
+Design's seven phases are separate user-facing turns inside one main-context conversation. The user can invoke \`/cc-cancel\` at any point to abort and keep whatever is currently in \`plan.md\`; the orchestrator does not surface \`/cc-cancel\` as a clickable option (it is a power-user explicit command).
 
 ## Hop 4 — Pause and resume
 
@@ -611,17 +624,17 @@ Pause behaviour depends on \`triage.runMode\` (default \`step\`). Both modes sha
 
 ### Handoff artifacts (T2-3, gsd pattern; v8.13)
 
-**After every stage exit** — both at the end of plan / build / review / ship and at every internal discovery checkpoint (brainstormer-done, architect-done) — the orchestrator writes two resumable-checkpoint files alongside \`flow-state.json\`:
+**After every stage exit** — both at the end of plan / build / review / ship and at every design Phase 7 sign-off (which closes the discovery sub-phase under \`plan\`) — the orchestrator writes two resumable-checkpoint files alongside \`flow-state.json\`. Design's internal Phase 0-6 pauses are conversation-only and do NOT trigger a handoff rewrite (those are mid-turn, mid-dialog states inside the same orchestrator context; HANDOFF.json is for resume-across-sessions checkpoints):
 
 1. **\`.cclaw/flows/<slug>/HANDOFF.json\`** — machine-readable, single source of truth for "where exactly are we?". Schema:
 
 \`\`\`json
 {
   "slug": "<slug>",
-  "stage_completed": "plan | build | review | ship | discovery-brainstormer | discovery-architect",
+  "stage_completed": "plan | build | review | ship | discovery-design",
   "stage_started_at": "<iso>",
   "stage_completed_at": "<iso>",
-  "next_stage": "build | review | ship | done | discovery-architect | discovery-planner",
+  "next_stage": "build | review | ship | done | discovery-planner",
   "next_specialist": "<id> | null",
   "open_findings": <count>,
   "review_iterations": <count>,
@@ -689,14 +702,14 @@ If the user wants \`fix-only\` or \`show\` semantics, they say so in plain text 
 After every dispatch returns:
 
 1. Render the slim summary back to the user (one block, no prompt).
-2. **Immediately** dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS the dispatch you just received was the brainstormer or architect inside the discovery sub-phase. The discovery-internal pauses fire regardless of \`runMode\`; see "Plan stage on large-risky" above.
+2. **Immediately** dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS you are currently inside the design phase (Phase 0-7 in main context). Design's internal per-phase pauses fire regardless of \`runMode\`; see "Plan stage on large-risky" above. The plan→build transition after design + planner complete follows \`triage.runMode\` normally.
 3. Stop unconditionally only on these hard gates (autopilot **always** asks here):
    - \`reviewer\` returned \`block\` decision (open findings) → render the findings, ask via the harness's structured question whether to **dispatch fix-only** (re-run slice-builder mode=fix-only against the cited findings) or **stay paused** (end the turn; user reviews and either replies with their own guidance, or invokes \`/cc-cancel\` to discard).
    - \`security-reviewer\` raised any finding → same shape (dispatch fix-only / stay paused).
    - \`reviewer\` returned \`cap-reached\` (5 iterations without convergence) → ask the same shape.
    - **A returned slim summary has \`Confidence: low\`** → see "Confidence as a hard gate" below.
    - About to run \`ship\` (last stage in \`triage.path\`) → ask "Ship now?" once with options \`Ship now\` / \`Stay paused — review first\`; on \`Ship now\` proceed; on \`Stay paused\` end the turn. Ship is the only stage that always confirms in autopilot.
-   - End of the discovery sub-phase's brainstormer / architect (regardless of runMode) — render the slim summary and end the turn; next \`/cc\` continues.
+   - Inside the design phase (any of Phase 0-7 in main context) — the design prompt handles its own per-phase pauses; auto mode does not collapse them.
 
 Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green non-discovery stages. \`Cancel\` is **never** offered as a clickable option in any of these gates — the user invokes \`/cc-cancel\` themselves if they want to nuke. \`Stay paused\` (end turn) is the always-present safe-out.
 
@@ -728,7 +741,7 @@ Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused 
 
 After ship, check the compound quality gate:
 
-- a non-trivial decision was recorded by \`architect\` or \`planner\`;
+- a non-trivial decision was recorded by \`design\` (D-N inline in plan.md) or \`planner\`;
 - review needed three or more iterations;
 - a security review ran or \`security_flag\` is true;
 - the user explicitly asked to capture (\`/cc <task> --capture-learnings\`).
@@ -787,7 +800,7 @@ This is the orchestrator's job, never a sub-agent's. Run these steps in order, i
    The word "copy" must not appear in the dispatch envelope or in your own actions. \`cp\` is forbidden here. The active directory must end up empty after the moves.
 4. **Stamp the shipped frontmatter on \`ship.md\`.** As of v8.12, manifest.md is collapsed into \`ship.md\`'s frontmatter. Update \`ship.md\`'s frontmatter to include the final flow signals (snake_case keys per artefact-frontmatter convention): \`slug\`, \`shipped_at\`, \`ac_mode\`, \`complexity\`, \`security_flag\`, \`review_iterations\`, \`ac_count\`, \`finalization_mode\`. Body of \`ship.md\` keeps the AC↔commit map (strict) or condition checklist (soft); add an "## Artefact index" section listing the artefacts that ended up in the shipped dir (one bullet per file). Users on the opt-in \`legacy-artifacts: true\` config still get a separate \`manifest.md\` in addition.
 5. **Post-condition check (mandatory).** \`flows/<slug>/\` (the active directory) must be empty. If it is not, you have made a mistake — list the residue, surface it to the user, do NOT continue. The most common cause is mistakenly using \`cp\` instead of \`git mv\`/\`mv\`. Once the active dir is empty, \`rmdir flows/<slug>\` to remove the now-empty directory.
-6. **Promote ADRs (PROPOSED → ACCEPTED).** Scan \`flows/shipped/<slug>/decisions.md\` (just moved in step 3) for any \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` line. For each found ADR file, edit the frontmatter in place: \`status: PROPOSED\` → \`status: ACCEPTED\`; add \`accepted_at: <iso>\`; add \`accepted_in_slug: <slug>\`; add \`accepted_at_commit: <ship-commit-sha>\`. Commit each promotion with \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. Skip the entire step when no PROPOSED ADR was found. Do NOT promote ADRs the architect did not propose for this slug. See \`.cclaw/lib/skills/documentation-and-adrs.md\` for the full lifecycle (including supersession bookkeeping for ADRs that supersede an earlier ACCEPTED one).
+6. **Promote ADRs (PROPOSED → ACCEPTED).** Scan \`flows/shipped/<slug>/plan.md\` (just moved in step 3; v8.14+ inlines D-N records there) and any legacy \`flows/shipped/<slug>/decisions.md\` (pre-v8.14 shipped flows) for \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` lines. For each found ADR file, edit the frontmatter in place: \`status: PROPOSED\` → \`status: ACCEPTED\`; add \`accepted_at: <iso>\`; add \`accepted_in_slug: <slug>\`; add \`accepted_at_commit: <ship-commit-sha>\`. Commit each promotion with \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. Skip the entire step when no PROPOSED ADR was found. Do NOT promote ADRs the design phase did not propose for this slug. See \`.cclaw/lib/skills/documentation-and-adrs.md\` for the full lifecycle (including supersession bookkeeping for ADRs that supersede an earlier ACCEPTED one).
 7. **Reset flow-state.** Write \`createInitialFlowState\` defaults to \`.cclaw/state/flow-state.json\` (\`currentSlug: null\`, \`currentStage: null\`, \`triage: null\`, \`ac: []\`, \`reviewIterations: 0\`, \`securityFlag: false\`, \`lastSpecialist: null\`). The shipped manifest is the durable record; flow-state is now a clean slot ready for the next \`/cc\`.
 8. **Render the final summary** to the user: one block citing \`shipped/<slug>/ship.md\` (the file that now carries the manifest frontmatter — or \`shipped/<slug>/manifest.md\` on \`legacy-artifacts: true\`), the AC count, any captured learnings, and any ADR ids promoted to \`ACCEPTED\` in step 6.
 
@@ -818,7 +831,7 @@ ${SPECIALIST_LIST}
 
 ## Available research helpers
 
-These are not specialists — they never become \`lastSpecialist\`, never appear in \`triage.path\`, and are never dispatched by the orchestrator directly. They are dispatched by \`planner\` / \`architect\` / \`brainstormer\` (deep posture) **before** the dispatching specialist authors its artifact. They write a single short markdown file each and return a slim summary. The dispatching specialist reads the artifact and incorporates it.
+These are not specialists — they never become \`lastSpecialist\`, never appear in \`triage.path\`, and are never dispatched by the orchestrator directly. They are dispatched by \`planner\` or by the main-context \`design\` phase (deep posture, in parallel with Phase 1) **before** the dispatching specialist authors its artifact. They write a single short markdown file each and return a slim summary. The dispatching specialist reads the artifact and incorporates it.
 
 ${RESEARCH_HELPER_LIST}
 
@@ -840,7 +853,7 @@ These skills auto-trigger during \`/cc\`. Do not re-explain them; obey them.
 - **parallel-build** — strict mode + planner topology=parallel-build; enforces 5-slice cap and worktree dispatch.
 - **security-review** — when the diff touches sensitive surfaces.
 - **review-loop** — wraps every reviewer / security-reviewer invocation; runs the Concern Ledger + Five-axis pass + convergence detector.
-- **source-driven** — strict mode only (opt-in for soft); architect/planner detect stack version, fetch official doc deep-links, cite URLs, mark UNVERIFIED when docs are missing. Per-project fetch cache lives at \`.cclaw/cache/sdd/\` (gitignored).
+- **source-driven** — strict mode only (opt-in for soft); design (deep posture, Phase 4 D-N records that cite framework docs) and planner detect stack version, fetch official doc deep-links, cite URLs, mark UNVERIFIED when docs are missing. Per-project fetch cache lives at \`.cclaw/cache/sdd/\` (gitignored).
 - **documentation-and-adrs** — repo-wide ADR catalogue at \`docs/decisions/ADR-NNNN-<slug>.md\`. Architect proposes (\`PROPOSED\`) when tier=product-grade or ideal AND a D-N matches the trigger table; orchestrator promotes to \`ACCEPTED\` at Hop 6 step 6 after ship; \`/cc-cancel\` marks them \`REJECTED\`; supersession is in-place.
 
 ${ironLawsMarkdown()}

@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ARCHITECT_PROMPT,
-  BRAINSTORMER_PROMPT,
+  DESIGN_PROMPT,
   PLANNER_PROMPT,
   REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
@@ -39,16 +38,10 @@ interface PromptBudget {
 
 const PROMPT_BUDGETS: PromptBudget[] = [
   {
-    id: "architect",
-    body: ARCHITECT_PROMPT,
+    id: "design",
+    body: DESIGN_PROMPT,
     maxLines: 460,
-    maxChars: 35000
-  },
-  {
-    id: "brainstormer",
-    body: BRAINSTORMER_PROMPT,
-    maxLines: 400,
-    maxChars: 30000
+    maxChars: 32000
   },
   {
     id: "planner",

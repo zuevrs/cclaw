@@ -23,6 +23,15 @@ import {
 import type { AcceptanceCriterionState } from "./types.js";
 
 export interface CompoundQualitySignals {
+  /**
+   * Stable signal name kept across the v8.14 rename. Pre-v8.14 it meant
+   * "the retired `architect` specialist authored at least one decision in
+   * `decisions.md`". v8.14+ it means "the `design` phase (Phase 4 — Decisions)
+   * recorded at least one inline `D-N` row in `plan.md > ## Decisions`,
+   * OR a legacy `decisions.md` exists on a pre-v8.14 resume". The field name
+   * is preserved so shipped frontmatter, `knowledge.jsonl`, and downstream
+   * tooling don't need migration.
+   */
   hasArchitectDecision: boolean;
   reviewIterations: number;
   securityFlag: boolean;

@@ -7,11 +7,17 @@ import {
 } from "../../src/content/core-agents.js";
 
 describe("core agents", () => {
-  it("ships six on-demand specialists and two research helpers", () => {
-    expect(SPECIALIST_AGENTS).toHaveLength(6);
+  it("ships five specialists (one main-context, four on-demand) and two research helpers", () => {
+    expect(SPECIALIST_AGENTS).toHaveLength(5);
     for (const agent of SPECIALIST_AGENTS) {
-      expect(agent.activation).toBe("on-demand");
       expect(agent.kind).toBe("specialist");
+    }
+    const designAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "design")!;
+    expect(designAgent.activation).toBe("main-context");
+    const subAgentSpecialists = SPECIALIST_AGENTS.filter((agent) => agent.id !== "design");
+    expect(subAgentSpecialists).toHaveLength(4);
+    for (const agent of subAgentSpecialists) {
+      expect(agent.activation).toBe("on-demand");
     }
     expect(RESEARCH_AGENTS).toHaveLength(2);
     for (const agent of RESEARCH_AGENTS) {
@@ -36,7 +42,9 @@ describe("core agents", () => {
       "integration-overseer",
       "release-reviewer",
       "fixer",
-      "doc-updater"
+      "doc-updater",
+      "brainstormer",
+      "architect"
     ]) {
       expect(ids.has(legacy as never)).toBe(false);
     }
@@ -52,10 +60,15 @@ describe("core agents", () => {
     expect(slice.modes).toContain("fix-only");
   });
 
-  it("renders agent markdown with activation:on-demand", () => {
-    const md = renderAgentMarkdown(SPECIALIST_AGENTS[0]);
-    expect(md).toContain("activation: on-demand");
-    expect(md).toContain("# ");
+  it("renders agent markdown with the agent's activation value", () => {
+    const designAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "design")!;
+    const designMd = renderAgentMarkdown(designAgent);
+    expect(designMd).toContain("activation: main-context");
+    expect(designMd).toContain("# ");
+
+    const plannerAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "planner")!;
+    const plannerMd = renderAgentMarkdown(plannerAgent);
+    expect(plannerMd).toContain("activation: on-demand");
   });
 
   it("research helpers render with kind: research-helper in frontmatter", () => {

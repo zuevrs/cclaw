@@ -16,10 +16,15 @@ describe("specialist prompts", () => {
     }
   });
 
-  it("each prompt declares modes and an output schema", () => {
+  it("each prompt declares postures/modes and an output schema", () => {
     for (const id of SPECIALISTS) {
       const prompt = SPECIALIST_PROMPTS[id];
-      expect(prompt).toMatch(/##\s+Modes/u);
+      // v8.14: design uses "Posture" instead of "Modes" (guided/deep)
+      if (id === "design") {
+        expect(prompt).toMatch(/##\s+Posture/u);
+      } else {
+        expect(prompt).toMatch(/##\s+Modes/u);
+      }
       expect(prompt).toMatch(/Output schema|Output\b/u);
     }
   });
@@ -65,7 +70,12 @@ describe("specialist prompts", () => {
     for (const id of SPECIALISTS) {
       const prompt = SPECIALIST_PROMPTS[id];
       expect(prompt).toMatch(/##\s+Composition/u);
-      expect(prompt).toContain("on-demand specialist");
+      // v8.14: design is the one main-context specialist; everyone else is on-demand
+      if (id === "design") {
+        expect(prompt).toContain("main orchestrator context");
+      } else {
+        expect(prompt).toContain("on-demand specialist");
+      }
       expect(prompt).toContain("Do not spawn");
       expect(prompt).toMatch(/Stop condition/u);
     }
@@ -84,9 +94,15 @@ describe("specialist prompts", () => {
   });
 
   it("renderAgentMarkdown emits a frontmatter with name + activation", () => {
-    const md = renderAgentMarkdown(CORE_AGENTS[0]);
+    const planner = SPECIALIST_AGENTS.find((agent) => agent.id === "planner")!;
+    const md = renderAgentMarkdown(planner);
     expect(md.startsWith("---\n")).toBe(true);
     expect(md).toContain("activation: on-demand");
     expect(md).toContain("## Modes");
+
+    const design = SPECIALIST_AGENTS.find((agent) => agent.id === "design")!;
+    const designMd = renderAgentMarkdown(design);
+    expect(designMd.startsWith("---\n")).toBe(true);
+    expect(designMd).toContain("activation: main-context");
   });
 });

@@ -34,8 +34,8 @@ If the task matches a pattern in \`.cclaw/lib/patterns/\`, open the pattern file
 
 | signal | propose |
 | --- | --- |
-| ambiguous goal, no clear "user observable" sentence | \`brainstormer\` |
-| competing structural options or feasibility uncertainty | \`architect\` |
+| ambiguous goal, no clear "user observable" sentence | \`design\` (Phase 1 Clarify + Phase 2 Frame) |
+| competing structural options or feasibility uncertainty | \`design\` (Phase 3 Approaches + Phase 4 Decisions) |
 | more than 5 AC, or AC that span multiple modules | \`planner\` |
 
 The orchestrator must ask the user before invoking specialists — never invoke silently. The user can accept all, accept some, or accept none. Document the choice in the plan body.
@@ -259,7 +259,7 @@ Every iteration explicitly answers each mode: yes / no, with citation when yes.
 1. **Hallucinated actions** — invented files, ids, env vars, function names, command flags?
 2. **Scope creep** — diff touches files no AC mentions?
 3. **Cascading errors** — one fix introduces typecheck / runtime / test failures elsewhere?
-4. **Context loss** — earlier decisions / AC text / brainstormer scope ignored?
+4. **Context loss** — earlier decisions / AC text / design Frame ignored?
 5. **Tool misuse** — destructive operations (force push, rm -rf, schema migration without backup), wrong-mode tool calls?
 
 A "yes" without a citation is itself a finding.
@@ -396,11 +396,11 @@ If any condition fails, keep \`status: blocked\` and iterate. Do NOT advance wit
 
 ## 7. Run compound
 
-\`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/flows/shipped/<slug>/\` (T0-10: also moves any non-canonical files like \`research-repo.md\`, \`cancel.md\`, future \`handoff.json\`), stamps the shipped frontmatter onto \`ship.md\` (slug, ship_commit, shipped_at, ac_count, review_iterations, security_flag, has_architect_decision, refines), appends an \`## Artefact index\` section listing every moved file (canonical and extra), appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state. (On \`legacy-artifacts: true\` it additionally writes a separate \`shipped/<slug>/manifest.md\` for back-compat.)
+\`runCompoundAndShip()\` does the gate check, captures learnings if the quality gate passes, moves all active artifacts to \`.cclaw/flows/shipped/<slug>/\` (T0-10: also moves any non-canonical files like \`research-repo.md\`, \`cancel.md\`, future \`handoff.json\`), stamps the shipped frontmatter onto \`ship.md\` (slug, ship_commit, shipped_at, ac_count, review_iterations, security_flag, has_architect_decision, refines — \`has_architect_decision\` is kept as a stable signal name for back-compat; it now means "design's Phase 4 produced ≥1 D-N inline in plan.md"), appends an \`## Artefact index\` section listing every moved file (canonical and extra), appends to \`knowledge.jsonl\` if learnings were captured, and resets flow-state. (On \`legacy-artifacts: true\` it additionally writes a separate \`shipped/<slug>/manifest.md\` for back-compat.)
 
 The compound quality gate captures \`flows/<slug>/learnings.md\` only when at least one of:
 
-- \`architect\` or \`planner\` recorded a non-trivial decision,
+- \`design\` (Phase 4 D-N inline) or \`planner\` recorded a non-trivial decision,
 - review needed ≥3 iterations,
 - a security review ran or \`security_flag\` is true,
 - the user explicitly asked.
@@ -409,7 +409,7 @@ The compound quality gate captures \`flows/<slug>/learnings.md\` only when at le
 
 Prior versions silently skipped the learnings capture when none of the four signals fired. v8.13 makes this **non-silent**: when the quality gate fails AND the slug touched ≥2 modules OR ran ≥3 commits, the orchestrator **pauses before ship** and surfaces a structured ask:
 
-> The compound quality gate did not fire (no architect decision, fewer than 3 review iterations, no security review). Do you want to capture a one-paragraph learning anyway? [capture / skip-this-time / never-on-this-slug]
+> The compound quality gate did not fire (no design D-N recorded, fewer than 3 review iterations, no security review). Do you want to capture a one-paragraph learning anyway? [capture / skip-this-time / never-on-this-slug]
 
 - **capture** → set \`signals.userRequestedCapture: true\` in the compound options; the gate then captures \`learnings.md\` and appends to \`knowledge.jsonl\` as if the gate had fired naturally.
 - **skip-this-time** → \`signals.userRequestedCapture: false\` AND record the explicit skip in ship.md frontmatter (\`learnings_skipped_at: <iso>\`, \`learnings_skipped_reason: user-declined\`). The Victory Detector sees the explicit skip and accepts.

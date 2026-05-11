@@ -27,16 +27,15 @@ describe("v8.12 cleanup", () => {
       );
     });
 
-    it("brainstormer ships the discovery-subset enum (continue | cancel)", () => {
-      expect(SPECIALIST_PROMPTS["brainstormer"]).toMatch(
-        /Recommended next:\s*<continue \| cancel>/u
-      );
-    });
-
-    it("architect ships the discovery-subset enum (continue | cancel)", () => {
-      expect(SPECIALIST_PROMPTS["architect"]).toMatch(
-        /Recommended next:\s*<continue \| cancel>/u
-      );
+    it("design runs in main context — no Recommended next enum (orchestrator owns advancement)", () => {
+      // v8.14: design replaced brainstormer+architect with a main-context
+      // specialist. It returns no slim summary; instead Phase 7 sign-off
+      // emits an explicit approve/revise picker, and the orchestrator
+      // updates flow-state.json directly. So design does NOT carry the
+      // Recommended next enum the way sub-agent specialists do.
+      expect(SPECIALIST_PROMPTS["design"]).not.toMatch(/Recommended next:\s*</u);
+      expect(SPECIALIST_PROMPTS["design"]).toMatch(/main orchestrator context/u);
+      expect(SPECIALIST_PROMPTS["design"]).toMatch(/Phase 7 — Sign-off/u);
     });
 
     it("reviewer ships the full canonical enum", () => {

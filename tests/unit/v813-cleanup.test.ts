@@ -20,8 +20,8 @@ describe("v8.13 power-and-economy", () => {
     });
 
     it("triage uses single multi-question call when available (T0-7)", () => {
-      expect(START_COMMAND_BODY).toMatch(/Single tool call, two questions in one form/u);
-      expect(START_COMMAND_BODY).toMatch(/Combining saves one user round-trip/u);
+      expect(START_COMMAND_BODY).toMatch(/Single tool call, TWO questions in one form/u);
+      expect(START_COMMAND_BODY).toMatch(/Combining saves one round-trip per non-inline flow start/u);
     });
 
     it("ship parallel reviewers receive shared parsed-diff (T0-8)", () => {

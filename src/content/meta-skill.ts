@@ -12,9 +12,9 @@ This skill is loaded by the harness with every \`/cc\` invocation. It does not d
 When \`/cc\` runs, the harness has access to:
 
 - \`.cursor/commands/cc.md\` (or harness-equivalent) — your operating manual.
-- \`.cclaw/lib/agents/*.md\` — six specialist prompts (brainstormer, architect, planner, slice-builder, reviewer, security-reviewer) plus two research helpers (learnings-research, repo-research).
+- \`.cclaw/lib/agents/*.md\` — five specialist prompts (\`design\` (main-context, multi-turn), \`planner\`, \`slice-builder\`, \`reviewer\`, \`security-reviewer\`) plus two research helpers (learnings-research, repo-research). The retired \`brainstormer\` and \`architect\` were merged into the single \`design\` specialist in v8.14.
 - \`.cclaw/lib/skills/*.md\` — auto-trigger skills (slim-summary, conversation-language, pre-flight-assumptions, triage-gate, flow-resume, plan-authoring, surgical-edit-hygiene, debug-loop, browser-verification, anti-slop, summary-format, parallel-build, refinement, ac-traceability, breaking-changes, refactor-safety, source-driven, security-review, tdd-cycle, commit-message-quality, brainstorming-discovery, architectural-decision, api-and-interface-design, documentation-and-adrs).
-- \`.cclaw/lib/templates/*.md\` — artifact templates (plan, plan-soft, build, build-soft, review, ship, decisions, learnings, ideas; on legacy-artifacts: also manifest). v8.12 collapsed manifest → \`ship.md\` frontmatter and pre-mortem → \`review.md\` section by default. The \`learnings-research\` helper returns lessons inline in its slim-summary instead of a separate \`research-learnings.md\` file.
+- \`.cclaw/lib/templates/*.md\` — artifact templates (plan, plan-soft, build, build-soft, review, ship, learnings, ideas; on legacy-artifacts: also manifest, decisions). v8.12 collapsed manifest → \`ship.md\` frontmatter and pre-mortem → \`review.md\` section by default. v8.14 collapsed \`decisions.md\` → \`plan.md\` inline (\`## Decisions\` with D-N rows; legacy \`decisions.md\` template is only installed on \`legacy-artifacts: true\`). The \`learnings-research\` helper returns lessons inline in its slim-summary instead of a separate \`research-learnings.md\` file.
 - \`.cclaw/lib/runbooks/*.md\` — four stage runbooks (plan, build, review, ship).
 - \`.cclaw/lib/patterns/*.md\` — two task patterns (auth-flow, security-hardening). Earlier versions shipped 8; v8.12 deleted 6 orphan patterns that no spec line ever named. Re-enable with \`legacy-artifacts: true\`.
 - \`.cclaw/lib/decision-protocol.md\` — D-N record format.
@@ -46,7 +46,7 @@ Don't read recovery / research / examples directories proactively — they are e
 ## Your boundaries
 
 - You do not write code. \`slice-builder\` does.
-- You do not author decisions alone. \`architect\` does.
+- You do not author decisions alone. The \`design\` phase (which runs in your context, in collaboration with the user across phases 1-7) records D-N rows inline in \`plan.md\`.
 - You do not enforce AC traceability. \`commit-helper.mjs\` does.
 - You do not delete artifacts. \`/cc-cancel\` does.
 - You do not push or open PRs without explicit user approval.

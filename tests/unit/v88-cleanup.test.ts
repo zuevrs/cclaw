@@ -31,17 +31,9 @@ describe("v8.8 cleanup", () => {
   // ─────────────────────────────────────────────────────────────────────
   // B1 — interpretationForks wired through every relevant specialist
   // ─────────────────────────────────────────────────────────────────────
-  describe("B1 — interpretationForks is wired (no longer no-op)", () => {
-    it("planner prompt reads triage.interpretationForks", () => {
+  describe("B1 — interpretationForks is wired (legacy specialists) + v8.14 design supersedes it", () => {
+    it("planner prompt still reads triage.interpretationForks (legacy non-discovery cross-check)", () => {
       expect(SPECIALIST_PROMPTS["planner"]).toMatch(/triage\.interpretationForks/);
-    });
-
-    it("brainstormer prompt reads triage.interpretationForks", () => {
-      expect(SPECIALIST_PROMPTS["brainstormer"]).toMatch(/triage\.interpretationForks/);
-    });
-
-    it("architect prompt reads triage.interpretationForks", () => {
-      expect(SPECIALIST_PROMPTS["architect"]).toMatch(/triage\.interpretationForks/);
     });
 
     it("slice-builder prompt reads triage.interpretationForks", () => {
@@ -54,10 +46,16 @@ describe("v8.8 cleanup", () => {
       );
     });
 
-    it("architect Phase 2 mentions interpretationForks cross-check", () => {
-      expect(SPECIALIST_PROMPTS["architect"]).toMatch(
-        /Phase 2 — Assumptions \+ interpretation cross-check/i
-      );
+    it("v8.14: design Phase 1 (Clarify) replaces the brainstormer/architect interpretation-fork reads with live clarifying questions", () => {
+      // v8.14 retired brainstormer and architect. design's Phase 1
+      // (Clarify) asks <=3 one-at-a-time clarifying questions IN the
+      // running orchestrator context instead of reading a pre-baked
+      // interpretationForks array. Planner / slice-builder still consume
+      // the field for legacy state files, but the new discovery path no
+      // longer writes to it.
+      expect(SPECIALIST_PROMPTS["design"]).toMatch(/Phase 1 — Clarify/);
+      expect(SPECIALIST_PROMPTS["design"]).toMatch(/at most three.{0,200}clarifying questions/i);
+      expect(SPECIALIST_PROMPTS["design"]).toMatch(/ask one|ONE question per turn|Ask ONE/i);
     });
   });
 
@@ -195,27 +193,17 @@ describe("v8.8 cleanup", () => {
       expect(everything).toMatch(/flows\/<slug>\/plan\.md/);
       expect(everything).toMatch(/flows\/<slug>\/build\.md/);
       expect(everything).toMatch(/flows\/<slug>\/review\.md/);
-      expect(everything).toMatch(/flows\/<slug>\/decisions\.md/);
+      // v8.14: decisions inline into plan.md; legacy specialists may still
+      // cite decisions.md from pre-v8.14 shipped slugs but it's no longer a
+      // required artifact for new flows.
     });
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // B6 — architect Sub-agent context numbering 1-7 (no duplicate "6.")
+  // B6 — RETIRED in v8.14: architect prompt was merged into design.
+  // The numbering invariant for architect's Sub-agent context block is
+  // moot because the block no longer exists.
   // ─────────────────────────────────────────────────────────────────────
-  describe("B6 — architect Sub-agent context numbering is sequential 1-7", () => {
-    const arch = SPECIALIST_PROMPTS["architect"];
-    const subAgentBlock = arch.split("## Sub-agent context")[1]!.split("##")[0]!;
-
-    it("Sub-agent context contains a numbered '7. The orchestrator-supplied inputs' (no duplicate 6.)", () => {
-      expect(subAgentBlock).toMatch(/^7\. The orchestrator-supplied inputs/m);
-    });
-
-    it("Sub-agent context does NOT have two lines starting with '6.'", () => {
-      const sixes = subAgentBlock.match(/^6\. /gm);
-      expect(sixes).not.toBeNull();
-      expect(sixes!.length).toBe(1);
-    });
-  });
 
   // ─────────────────────────────────────────────────────────────────────
   // B7 — red_test_written is the canonical name (vs old red_test_recorded)

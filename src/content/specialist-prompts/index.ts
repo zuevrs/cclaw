@@ -1,5 +1,4 @@
-import { ARCHITECT_PROMPT } from "./architect.js";
-import { BRAINSTORMER_PROMPT } from "./brainstormer.js";
+import { DESIGN_PROMPT } from "./design.js";
 import { PLANNER_PROMPT } from "./planner.js";
 import { REVIEWER_PROMPT } from "./reviewer.js";
 import { SECURITY_REVIEWER_PROMPT } from "./security-reviewer.js";
@@ -9,8 +8,7 @@ import { REPO_RESEARCH_PROMPT } from "../research-prompts/repo-research.js";
 import type { SpecialistId } from "../../types.js";
 
 export const SPECIALIST_PROMPTS: Record<SpecialistId, string> = {
-  brainstormer: BRAINSTORMER_PROMPT,
-  architect: ARCHITECT_PROMPT,
+  design: DESIGN_PROMPT,
   planner: PLANNER_PROMPT,
   reviewer: REVIEWER_PROMPT,
   "security-reviewer": SECURITY_REVIEWER_PROMPT,
@@ -18,8 +16,7 @@ export const SPECIALIST_PROMPTS: Record<SpecialistId, string> = {
 };
 
 export {
-  ARCHITECT_PROMPT,
-  BRAINSTORMER_PROMPT,
+  DESIGN_PROMPT,
   PLANNER_PROMPT,
   REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,

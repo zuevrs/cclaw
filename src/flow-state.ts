@@ -65,12 +65,22 @@ export function isRunMode(value: unknown): value is RunMode {
 }
 
 /**
- * Narrow check for the three discovery specialists. Kept for backward
- * compatibility with callers that only care about discovery sub-phase
- * routing; new state-validation paths should use {@link isSpecialist}.
+ * Narrow check for the discovery specialists (v8.14+: `design`, `planner`).
+ * Kept for backward compatibility with callers that only care about
+ * discovery sub-phase routing; new state-validation paths should use
+ * {@link isSpecialist}.
  */
-export function isDiscoverySpecialist(value: unknown): value is "brainstormer" | "architect" | "planner" {
-  return value === "brainstormer" || value === "architect" || value === "planner";
+export function isDiscoverySpecialist(value: unknown): value is "design" | "planner" {
+  return value === "design" || value === "planner";
+}
+
+/**
+ * v8.14 retired `brainstormer` and `architect`. Recognise the legacy ids so
+ * migration paths can rewrite them to `null` (forcing a re-run of the
+ * `design` phase) instead of crashing on read.
+ */
+export function isLegacyDiscoverySpecialist(value: unknown): value is "brainstormer" | "architect" {
+  return value === "brainstormer" || value === "architect";
 }
 
 export function isSpecialist(value: unknown): value is SpecialistId {
@@ -171,8 +181,15 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   if (typeof triage.userOverrode !== "boolean") {
     throw new Error("triage.userOverrode must be a boolean");
   }
-  if (triage.runMode !== undefined && !isRunMode(triage.runMode)) {
+  if (triage.runMode !== undefined && triage.runMode !== null && !isRunMode(triage.runMode)) {
     throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
+  }
+  if (
+    triage.autoExecuted !== undefined &&
+    triage.autoExecuted !== null &&
+    typeof triage.autoExecuted !== "boolean"
+  ) {
+    throw new Error("triage.autoExecuted must be a boolean, null, or absent");
   }
   if (triage.assumptions !== undefined && triage.assumptions !== null) {
     if (!Array.isArray(triage.assumptions)) {
@@ -236,6 +253,10 @@ export function interpretationForksOf(triage: TriageDecision | null | undefined)
  * flows keep their pause-between-stages behaviour byte-for-byte.
  */
 export function runModeOf(triage: TriageDecision | null | undefined): RunMode {
+  // v8.14: triage.runMode is `null` on inline / trivial paths (no stages
+  // to chain). Treat null and undefined the same way and return "step"; the
+  // inline path never reads this value before completing, so the fallback
+  // is purely defensive.
   return triage?.runMode ?? "step";
 }
 
@@ -297,8 +318,9 @@ export function migrateFlowState(value: unknown): FlowStateV82 {
   }
   const raw = value as Record<string, unknown> & { schemaVersion?: unknown };
   if (raw.schemaVersion === FLOW_STATE_SCHEMA_VERSION) {
-    assertFlowStateV82(raw);
-    return raw;
+    const rewritten = rewriteLegacyDiscoverySpecialist(raw);
+    assertFlowStateV82(rewritten);
+    return rewritten;
   }
   if (raw.schemaVersion === LEGACY_V8_FLOW_STATE_SCHEMA_VERSION) {
     const migrated = migrateFromV2(raw);
@@ -311,17 +333,40 @@ export function migrateFlowState(value: unknown): FlowStateV82 {
   );
 }
 
+/**
+ * v8.14: rewrite `lastSpecialist: "brainstormer" | "architect"` to `null` so
+ * the orchestrator re-runs the unified `design` phase. State files written
+ * by pre-v8.14 cclaw on an active flow are valid in every other respect;
+ * only the specialist id changed. We do NOT try to map brainstormer ->
+ * design / architect -> design here because either case usually means
+ * the discovery phase needs to be redone end-to-end (the existing plan.md
+ * has the old brainstormer/architect output split across two files and the
+ * v8.14 design phase expects inline sections in plan.md only).
+ */
+function rewriteLegacyDiscoverySpecialist(
+  raw: Record<string, unknown>
+): Record<string, unknown> {
+  if (isLegacyDiscoverySpecialist(raw.lastSpecialist)) {
+    return { ...raw, lastSpecialist: null };
+  }
+  return raw;
+}
+
 function migrateFromV2(raw: Record<string, unknown>): FlowStateV82 {
   const ac = (raw.ac as AcceptanceCriterionState[]) ?? [];
   const securityFlag = Boolean(raw.securityFlag);
   const startedAt = typeof raw.startedAt === "string" ? raw.startedAt : new Date().toISOString();
   const triage = raw.currentSlug ? inferTriageFromLegacy({ ac, securityFlag, startedAt }) : null;
+  const lastSpecialistRaw = raw.lastSpecialist;
+  const lastSpecialist = isLegacyDiscoverySpecialist(lastSpecialistRaw)
+    ? null
+    : ((lastSpecialistRaw as SpecialistId | null) ?? null);
   return {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,
     currentSlug: (raw.currentSlug as string | null) ?? null,
     currentStage: (raw.currentStage as FlowStage | null) ?? null,
     ac,
-    lastSpecialist: (raw.lastSpecialist as SpecialistId | null) ?? null,
+    lastSpecialist,
     startedAt,
     reviewIterations: typeof raw.reviewIterations === "number" ? raw.reviewIterations : 0,
     securityFlag,
