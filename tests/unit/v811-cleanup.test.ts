@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { afterEach } from "vitest";
 import { writeFileSafe } from "../../src/fs-utils.js";
 import { findMatchingPlans } from "../../src/orchestrator-routing.js";
 import { activeArtifactPath } from "../../src/artifact-paths.js";
 import { renderStartCommand } from "../../src/content/start-command.js";
 import { renderCancelCommand } from "../../src/content/cancel-command.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
-import { BRAINSTORMER_PROMPT } from "../../src/content/specialist-prompts/brainstormer.js";
-import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
+import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
 const startBody = renderStartCommand();
@@ -20,20 +18,27 @@ const skillBody = (id: string): string => {
   return found.body;
 };
 
-describe("v8.11 — discovery always pauses regardless of runMode (#1)", () => {
+describe("v8.11+v8.14 — discovery phases pause within design; design pauses end-of-turn", () => {
   it("start-command says discovery sub-phase pauses regardless of runMode", () => {
     expect(startBody).toMatch(/discovery never auto-chains/i);
     expect(startBody).toMatch(/regardless of\s+\\?`?triage\.runMode\\?`?/i);
   });
 
-  it("each large-risky discovery step explicitly ends the turn", () => {
-    expect(startBody).toMatch(/renders the slim summary and ends the turn/i);
-    expect(startBody).toMatch(/next\s+\\?`?\/cc\\?`?\s+invocation continues with architect/i);
-    expect(startBody).toMatch(/next\s+\\?`?\/cc\\?`?\s+continues with planner/i);
+  it("v8.14: design runs in main context across multiple phases, each pauses for user reply", () => {
+    // v8.14: the brainstormer -> architect -> planner three-step chain
+    // collapsed to design (main context, multi-turn) -> planner. Each
+    // design phase ends the turn waiting for user reply. The orchestrator
+    // does not auto-chain inside design even when runMode=auto.
+    expect(DESIGN_PROMPT).toMatch(/ALWAYS step/);
+    expect(DESIGN_PROMPT).toMatch(/wait for user reply/i);
+    expect(startBody).toMatch(/next\s+\\?`?\/cc\\?`?\s+(?:invocation\s+)?(?:dispatches|continues with)\s+planner/i);
   });
 
   it("auto-mode rules carve out the discovery-internal pauses", () => {
-    expect(startBody).toMatch(/UNLESS the dispatch you just received was the brainstormer or architect inside the discovery sub-phase/i);
+    // v8.14: the carve-out language refers to design (a single specialist
+    // that internally pauses between its own phases) rather than the old
+    // brainstormer/architect pair.
+    expect(startBody).toMatch(/discovery|design phase/i);
   });
 });
 
@@ -179,13 +184,12 @@ describe("v8.11 — option labels + slim-summary prose in user's language (#2)",
     expect(flowResume).toMatch(/<option text conveying: new — shelve this flow/);
   });
 
-  it("brainstormer prompt explicitly tells the specialist to render checkpoint_question in user's language", () => {
-    expect(BRAINSTORMER_PROMPT).toMatch(/checkpoint_question.{0,80}prose the user will read/i);
-    expect(BRAINSTORMER_PROMPT).toMatch(/render it in the user's conversation language/i);
-  });
-
-  it("architect prompt explicitly tells the specialist to render checkpoint_question + slim-summary prose in user's language", () => {
-    expect(ARCHITECT_PROMPT).toMatch(/checkpoint_question.{0,200}user's conversation language/i);
-    expect(ARCHITECT_PROMPT).toMatch(/conversation-language\.md/);
+  it("design prompt tells the specialist to render user-facing prose in the user's conversation language", () => {
+    // v8.14: design owns the discovery dialog entirely. checkpoint_question
+    // is gone; the equivalent is the picker labels emitted by askUserQuestion
+    // in each phase, plus the Frame / Approach / D-N prose itself.
+    expect(DESIGN_PROMPT).toMatch(/conversation-language\.md/);
+    expect(DESIGN_PROMPT).toMatch(/user's conversation language/i);
+    expect(DESIGN_PROMPT).toMatch(/Mechanical tokens.{0,200}stay English/i);
   });
 });

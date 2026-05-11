@@ -101,7 +101,11 @@ describe("compound", () => {
       currentSlug: "demo",
       currentStage: "ship",
       ac: [{ id: "AC-1", text: "outcome", status: "committed", commit: "abc" }],
-      lastSpecialist: "architect",
+      // v8.14: architect retired; design is the single discovery specialist
+      // that produces structural decisions. Test stays valid because the
+      // signal that drives learning capture is `hasArchitectDecision` on the
+      // signals object, not the `lastSpecialist` field.
+      lastSpecialist: "design",
       startedAt: "2026-05-07T00:00:00Z",
       reviewIterations: 0,
       securityFlag: false,

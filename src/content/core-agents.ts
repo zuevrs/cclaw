@@ -3,11 +3,25 @@ import { LEARNINGS_RESEARCH_PROMPT } from "./research-prompts/learnings-research
 import { REPO_RESEARCH_PROMPT } from "./research-prompts/repo-research.js";
 import { SPECIALIST_PROMPTS } from "./specialist-prompts/index.js";
 
+/**
+ * `activation` controls how the orchestrator invokes the agent:
+ *
+ * - `on-demand` — dispatched as a sub-agent with an envelope; returns a slim
+ *   summary. The classic specialist contract.
+ * - `main-context` — the orchestrator activates the prompt as a skill it
+ *   follows itself, opening a multi-turn dialog with the user in the current
+ *   conversation. Used only by `design` (v8.14+) so brainstorm + scope +
+ *   architecture can run as one collaborative pass instead of two one-shot
+ *   dispatches. Main-context agents still own a slot in `flow-state.json` and
+ *   appear in `lastSpecialist` after sign-off.
+ */
+export type AgentActivation = "on-demand" | "main-context";
+
 export interface CoreAgent {
   id: InstallableAgentId;
   kind: "specialist" | "research";
   title: string;
-  activation: "on-demand";
+  activation: AgentActivation;
   modes: string[];
   description: string;
   prompt: string;
@@ -25,22 +39,14 @@ export interface ResearchAgent extends CoreAgent {
 
 export const SPECIALIST_AGENTS: SpecialistAgent[] = [
   {
-    id: "brainstormer",
+    id: "design",
     kind: "specialist",
-    title: "Brainstormer",
-    activation: "on-demand",
-    modes: ["frame", "scope", "alternatives"],
-    description: "Frame what/why and scope. Optional alternatives sweep when the request is ambiguous.",
-    prompt: SPECIALIST_PROMPTS.brainstormer
-  },
-  {
-    id: "architect",
-    kind: "specialist",
-    title: "Architect",
-    activation: "on-demand",
-    modes: ["architecture", "feasibility"],
-    description: "Architectural decisions plus feasibility against the current codebase.",
-    prompt: SPECIALIST_PROMPTS.architect
+    title: "Design",
+    activation: "main-context",
+    modes: ["guided", "deep"],
+    description:
+      "Multi-turn collaborative design: clarify, frame, approaches, decisions inline, optional pre-mortem, sign-off. Runs in the main orchestrator context, not as a one-shot sub-agent. Replaces brainstormer + architect from pre-v8.14.",
+    prompt: SPECIALIST_PROMPTS.design
   },
   {
     id: "planner",

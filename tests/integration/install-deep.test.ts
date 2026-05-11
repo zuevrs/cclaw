@@ -60,10 +60,27 @@ describe("install — deep content", () => {
     project = await createTempProject();
     await syncCclaw({ cwd: project, harnesses: ["cursor", "claude"] });
     for (const harness of [".cursor", ".claude"]) {
-      for (const agent of ["brainstormer", "architect", "planner", "reviewer", "security-reviewer", "slice-builder"]) {
+      // v8.14: brainstormer + architect retired; design takes their place
+      // and runs in main context (activation: main-context). The other four
+      // sub-agent specialists keep activation: on-demand.
+      const designBody = await fs.readFile(
+        path.join(project, harness, "agents", "design.md"),
+        "utf8"
+      );
+      expect(designBody).toContain("activation: main-context");
+      expect(designBody).toContain("## Modes");
+
+      for (const agent of ["planner", "reviewer", "security-reviewer", "slice-builder"]) {
         const body = await fs.readFile(path.join(project, harness, "agents", `${agent}.md`), "utf8");
         expect(body).toContain("activation: on-demand");
         expect(body).toContain("## Modes");
+      }
+
+      // Retired specialists must not be re-installed.
+      for (const retired of ["brainstormer", "architect"]) {
+        await expect(
+          fs.access(path.join(project, harness, "agents", `${retired}.md`))
+        ).rejects.toBeTruthy();
       }
     }
   });

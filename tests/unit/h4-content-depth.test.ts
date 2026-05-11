@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
-import { BRAINSTORMER_PROMPT } from "../../src/content/specialist-prompts/brainstormer.js";
+import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
 import { PLANNER_PROMPT } from "../../src/content/specialist-prompts/planner.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
@@ -89,27 +88,46 @@ describe("v8 content depth — H4 + H5 trim", () => {
     expect(body).toContain("Victory Detector");
   });
 
-  it("brainstormer prompt is lean: Frame + optional Approaches + Selected Direction + Not Doing", () => {
-    expect(BRAINSTORMER_PROMPT).toContain("## Frame");
-    expect(BRAINSTORMER_PROMPT).toContain("## Approaches");
-    expect(BRAINSTORMER_PROMPT).toContain("## Selected Direction");
-    expect(BRAINSTORMER_PROMPT).toContain("## Not Doing");
-    expect(BRAINSTORMER_PROMPT).toContain("baseline");
-    expect(BRAINSTORMER_PROMPT).toContain("challenger");
-    expect(BRAINSTORMER_PROMPT).toContain("at most three");
+  it("design prompt names all 7 collaborative phases (v8.14 strong design)", () => {
+    expect(DESIGN_PROMPT).toContain("Phase 0 — Bootstrap");
+    expect(DESIGN_PROMPT).toContain("Phase 1 — Clarify");
+    expect(DESIGN_PROMPT).toContain("Phase 2 — Frame");
+    expect(DESIGN_PROMPT).toContain("Phase 3 — Approaches");
+    expect(DESIGN_PROMPT).toContain("Phase 4 — Decisions");
+    expect(DESIGN_PROMPT).toContain("Phase 5 — Pre-mortem");
+    expect(DESIGN_PROMPT).toContain("Phase 6 — Compose + self-review");
+    expect(DESIGN_PROMPT).toContain("Phase 7 — Sign-off");
   });
 
-  it("brainstormer prompt has no v7-revival ceremony (Q&A loop, forcing topics, PDR schema, Embedded Grill)", () => {
-    expect(BRAINSTORMER_PROMPT).not.toContain("Q&A Log");
-    expect(BRAINSTORMER_PROMPT).not.toContain("[topic:pain]");
-    expect(BRAINSTORMER_PROMPT).not.toContain("[topic:direct-path]");
-    expect(BRAINSTORMER_PROMPT).not.toContain("[topic:operator]");
-    expect(BRAINSTORMER_PROMPT).not.toContain("[topic:no-go]");
-    expect(BRAINSTORMER_PROMPT).not.toContain("forcing question");
-    expect(BRAINSTORMER_PROMPT).not.toContain("Problem Decision Record");
-    expect(BRAINSTORMER_PROMPT).not.toContain("How Might We");
-    expect(BRAINSTORMER_PROMPT).not.toContain("Embedded Grill");
-    expect(BRAINSTORMER_PROMPT).not.toContain("Self-Review Notes");
+  it("design prompt runs in main context (multi-turn) with guided/deep postures and step-only run-mode", () => {
+    expect(DESIGN_PROMPT).toContain("MAIN ORCHESTRATOR CONTEXT");
+    expect(DESIGN_PROMPT).toContain("guided");
+    expect(DESIGN_PROMPT).toContain("deep");
+    expect(DESIGN_PROMPT).toContain("ALWAYS step");
+  });
+
+  it("design prompt forbids writing code, AC, pseudocode (those are planner / slice-builder jobs)", () => {
+    expect(DESIGN_PROMPT).toContain("do NOT write code");
+    expect(DESIGN_PROMPT).toContain("No code, no AC, no pseudocode");
+  });
+
+  it("design prompt enumerates the rationalization table (8 excuse->reality rows)", () => {
+    expect(DESIGN_PROMPT).toContain("Anti-rationalization table");
+    expect(DESIGN_PROMPT).toContain("Excuse");
+    expect(DESIGN_PROMPT).toContain("Reality");
+  });
+
+  it("design prompt records D-N decisions inline in plan.md (no separate decisions.md)", () => {
+    expect(DESIGN_PROMPT).toContain("## Decisions");
+    expect(DESIGN_PROMPT).toContain("inline in plan.md");
+    expect(DESIGN_PROMPT).not.toContain("flows/<slug>/decisions.md");
+  });
+
+  it("design prompt has no pre-v8.14 ceremony (brainstormer Q&A topics, architect tier vocabulary)", () => {
+    expect(DESIGN_PROMPT).not.toContain("Q&A Log");
+    expect(DESIGN_PROMPT).not.toContain("[topic:pain]");
+    expect(DESIGN_PROMPT).not.toContain("forcing question");
+    expect(DESIGN_PROMPT).not.toContain("Problem Decision Record");
   });
 
   it("planner prompt is lean: AC + edge case per AC + topology with parallel cap", () => {
@@ -130,14 +148,16 @@ describe("v8 content depth — H4 + H5 trim", () => {
     expect(PLANNER_PROMPT).not.toContain("Constraints and Assumptions");
   });
 
-  it("architect prompt defines tier, Escape Hatch, Blast-radius Diff, Failure Mode Table, Pre-mortem", () => {
-    expect(ARCHITECT_PROMPT).toContain("Architecture tier");
-    expect(ARCHITECT_PROMPT).toContain("minimum-viable");
-    expect(ARCHITECT_PROMPT).toContain("product-grade");
-    expect(ARCHITECT_PROMPT).toContain("Trivial-Change Escape Hatch");
-    expect(ARCHITECT_PROMPT).toContain("Blast-radius Diff");
-    expect(ARCHITECT_PROMPT).toContain("Failure Mode Table");
-    expect(ARCHITECT_PROMPT).toContain("Pre-mortem");
+  it("design prompt covers what architect used to: failure modes, alternatives considered, pre-mortem", () => {
+    // v8.14: architect's vocabulary (tier, escape hatch, blast-radius diff) was
+    // dropped because design + planner together produce the same coverage with
+    // a lighter ceremony. The remaining structural-decision discipline lives
+    // inside Phase 4 (D-N records with failure modes + alternatives) and
+    // Phase 5 (pre-mortem, deep posture).
+    expect(DESIGN_PROMPT).toContain("Failure modes");
+    expect(DESIGN_PROMPT).toContain("Alternatives considered");
+    expect(DESIGN_PROMPT).toContain("Blast-radius");
+    expect(DESIGN_PROMPT).toContain("Pre-mortem");
   });
 
   it("reviewer prompt enforces Concern Ledger + convergence detector + closing citation", () => {

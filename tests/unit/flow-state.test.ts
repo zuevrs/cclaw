@@ -127,13 +127,14 @@ describe("flow-state", () => {
     expect(isRunMode(undefined)).toBe(false);
   });
 
-  it("isSpecialist accepts the six specialists and rejects research helpers", () => {
-    expect(isSpecialist("brainstormer")).toBe(true);
-    expect(isSpecialist("architect")).toBe(true);
+  it("isSpecialist accepts the five v8.14 specialists and rejects research helpers / retired ids", () => {
+    expect(isSpecialist("design")).toBe(true);
     expect(isSpecialist("planner")).toBe(true);
     expect(isSpecialist("reviewer")).toBe(true);
     expect(isSpecialist("security-reviewer")).toBe(true);
     expect(isSpecialist("slice-builder")).toBe(true);
+    expect(isSpecialist("brainstormer")).toBe(false);
+    expect(isSpecialist("architect")).toBe(false);
     expect(isSpecialist("repo-research")).toBe(false);
     expect(isSpecialist("learnings-research")).toBe(false);
     expect(isSpecialist("orchestrator")).toBe(false);

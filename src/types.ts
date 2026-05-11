@@ -4,7 +4,16 @@ export type FlowStage = (typeof FLOW_STAGES)[number];
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
-export const DISCOVERY_SPECIALISTS = ["brainstormer", "architect", "planner"] as const;
+/**
+ * v8.14: `brainstormer` + `architect` collapsed into a single `design`
+ * specialist that runs in the MAIN orchestrator context with a multi-turn
+ * user-collaborative protocol (Phases 0-7). The discovery sub-phase under
+ * `plan` is now `design` -> `planner` instead of `brainstormer` -> `architect`
+ * -> `planner`. State files written before v8.14 with `lastSpecialist`
+ * pointing at the removed ids are migrated to `null` on read so the
+ * orchestrator re-runs the design phase from scratch.
+ */
+export const DISCOVERY_SPECIALISTS = ["design", "planner"] as const;
 export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
 
 export const SPECIALISTS = [
@@ -14,6 +23,13 @@ export const SPECIALISTS = [
   "slice-builder"
 ] as const;
 export type SpecialistId = (typeof SPECIALISTS)[number];
+
+/**
+ * Removed in v8.14. Kept as a type-level reminder for migration paths and
+ * `legacyArtifacts: true` opt-in mode. Do not add new entries.
+ */
+export const LEGACY_DISCOVERY_SPECIALISTS = ["brainstormer", "architect"] as const;
+export type LegacyDiscoverySpecialistId = (typeof LEGACY_DISCOVERY_SPECIALISTS)[number];
 
 /**
  * Lightweight read-only research helpers, dispatched by planner / architect /
