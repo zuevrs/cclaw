@@ -5,16 +5,6 @@ coverage/
 *.tgz
 .DS_Store
 release-artifacts/
-docs/*
-!docs/harnesses.md
-!docs/subagent-flow.md
-!docs/config.md
-!docs/hooks.md
-!docs/scheme-of-work.md
-!docs/quality-gates.md
-!docs/v8-vision.md
-!docs/migration-v7-to-v8.md
-!docs/skills.md
 # cclaw generated artifacts
 .cclaw/
 .claude/commands/cc-*.md
@@ -32,6 +22,7 @@ docs/*
 .cursor/rules/cclaw-workflow.mdc
 # editor / agent workspace state — local only
 .cursor/
+docs/
 # graphify knowledge graph outputs — generated locally, not committed
 graphify-out/
 graphify-out-full/

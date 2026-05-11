@@ -33,7 +33,7 @@ try {
   // Verify auto-detect error path: no harness markers + no --harness flag should fail.
   let detected = false;
   try {
-    execFileSync("node", [cli, "init"], { cwd: tempDir, stdio: "pipe" });
+    execFileSync("node", [cli, "--non-interactive", "init"], { cwd: tempDir, stdio: "pipe" });
   } catch (err) {
     detected = String(err?.stderr ?? err?.message ?? "").includes("No harness detected");
   }
@@ -43,7 +43,7 @@ try {
 
   // Seed a Cursor marker; auto-detect should now pick it up.
   mkdirSync(join(tempDir, ".cursor"), { recursive: true });
-  execFileSync("node", [cli, "init"], { cwd: tempDir, stdio: "pipe" });
+  execFileSync("node", [cli, "--non-interactive", "init"], { cwd: tempDir, stdio: "pipe" });
   if (!existsSync(join(tempDir, ".cclaw"))) {
     throw new Error("smoke check failed: .cclaw missing after init");
   }
@@ -146,7 +146,7 @@ try {
   // `Removed orphan skill` line on stdout.
   const orphanPath = join(tempDir, ".cclaw", "lib", "skills", "v816-retired-fixture.md");
   writeFileSync(orphanPath, "---\nname: v816-retired-fixture\n---\nsmoke fixture\n", "utf8");
-  const syncOut = execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] });
+  const syncOut = execFileSync("node", [cli, "--non-interactive", "sync"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] });
   if (existsSync(orphanPath)) {
     throw new Error("smoke check failed: v8.17 orphan-cleanup did not remove .cclaw/lib/skills/v816-retired-fixture.md after sync");
   }
@@ -164,7 +164,7 @@ try {
   writeFileSync(orphanSkipPath, "---\nname: v816-skip-fixture\n---\nskip-flag fixture\n", "utf8");
   const skipOut = execFileSync(
     "node",
-    [cli, "sync", "--skip-orphan-cleanup"],
+    [cli, "--non-interactive", "sync", "--skip-orphan-cleanup"],
     { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] }
   );
   if (!existsSync(orphanSkipPath)) {
@@ -177,14 +177,14 @@ try {
   rmSync(orphanSkipPath, { force: true });
   // Re-run sync to assert idempotency: zero orphan output on a clean install.
   const idempotentOut = String(
-    execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
+    execFileSync("node", [cli, "--non-interactive", "sync"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
   );
   if (idempotentOut.includes("Removed orphan skill") || idempotentOut.includes("Cleaned orphan skills")) {
     throw new Error(`smoke check failed: v8.17 orphan-cleanup should be idempotent (zero orphan events on a clean install); got:\n${idempotentOut}`);
   }
-  execFileSync("node", [cli, "upgrade"], { cwd: tempDir, stdio: "pipe" });
-  execFileSync("node", [cli, "sync"], { cwd: tempDir, stdio: "pipe" });
-  execFileSync("node", [cli, "uninstall"], { cwd: tempDir, stdio: "pipe" });
+  execFileSync("node", [cli, "--non-interactive", "upgrade"], { cwd: tempDir, stdio: "pipe" });
+  execFileSync("node", [cli, "--non-interactive", "sync"], { cwd: tempDir, stdio: "pipe" });
+  execFileSync("node", [cli, "--non-interactive", "uninstall"], { cwd: tempDir, stdio: "pipe" });
   if (existsSync(join(tempDir, ".cclaw"))) {
     throw new Error("smoke check failed: .cclaw still exists after uninstall");
   }

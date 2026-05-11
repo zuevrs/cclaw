@@ -1,5 +1,90 @@
 # Changelog
 
+## 8.29.0 — Install UX cleanup: drop `docs/`, TUI-first CLI (`npx cclaw-cli@latest` opens a top-level menu), `--non-interactive` escape hatch, harness-isolation tripwire suite
+
+### Why
+
+Three small UX papercuts compounded into a real friction tax:
+
+1. **`docs/` had drifted into a parallel-reality shadow tree.** Nine markdown files (`config.md`, `harnesses.md`, `hooks.md`, `migration-v7-to-v8.md`, `quality-gates.md`, `scheme-of-work.md`, `skills.md`, `subagent-flow.md`, `v8-vision.md`) committed to the repo, dated v8.0–v8.4-ish, never updated by the v8.5+ slugs. Nothing in `src/` read them at runtime. The README's "More docs" section linked to six of them — anyone clicking through landed on stale prose that contradicted the CHANGELOG. The only consumer of `docs/` was `scripts/build-harness-docs.mjs`, itself dead code (never wired into `release:check`).
+
+2. **The CLI surface had seven subcommands but no top-level mental model.** `cclaw init` / `cclaw sync` / `cclaw upgrade` / `cclaw uninstall` / `cclaw knowledge` / `cclaw version` / `cclaw help` — each a memorable verb in isolation, but a first-time `npx cclaw-cli@latest` operator had to read the help, pick the right verb, and re-run. Half the time the right verb depended on whether `.cclaw/` already existed (Install vs Sync), and there was no signal to that effect.
+
+3. **Harness isolation was correct but unproven.** The install layer's `writeHarnessAssets()` is correctly gated inside `for (const harness of harnesses)` — every harness-specific path comes from a per-harness `layout` argument — but no integration test asserted the negative: "harness X selection does NOT write to harness Y dirs". A future refactor that pulled a harness-specific writer outside the loop (a plausible mistake) would silently corrupt non-selected harnesses' command/agents/skills/hooks dirs and the existing tests wouldn't catch it.
+
+v8.29 ships the three fixes as one slug because they all touch the install UX surface coherently — the README install snippet (`npx cclaw-cli@latest init` vs `npx cclaw-cli@latest`) is what ties them together. Splitting would have forced two PRs to both edit `cli.ts` and `README.md`.
+
+### What changed
+
+**D1 — Drop `docs/`.** `git rm -r docs/` removes the nine tracked files (123 lines · 60 KB of stale prose). Six matching links removed from the README's "More docs" section. `scripts/build-harness-docs.mjs` deleted (its sole purpose was regenerating `docs/harnesses.md` from install layout metadata). The `build:harness-docs` npm script dropped from `package.json`. The previously-allow-listed `docs/*` block in `.gitignore` simplified to a single `docs/` exclusion so any future local-only working notes the user keeps under `docs/` stay invisible to git. **No `src/` code read `docs/` at runtime** (the only matches in `src/content/**` referred to user-repo ADRs at `docs/decisions/ADR-NNNN-<slug>.md`, a different path under the consumer's project root).
+
+**D2 — TUI-first CLI.** `npx cclaw-cli@latest` (no args) now opens a top-level menu rendered by the new `src/main-menu.ts` module. Seven rows — Install / Sync / Upgrade / Uninstall / Browse knowledge / Show version / Quit — with a **smart-default cursor**: lands on `Install` when no `.cclaw/config.yaml` exists, lands on `Sync` when it does. Arrow keys / `j`/`k` move; number keys `1`-`7` jump; Enter confirms; `q`/`Esc`/`Ctrl-C` cancel. Single-shot — the menu does NOT re-open after the picked action runs. The module mirrors the `harness-prompt.ts` pattern: pure reducer (`applyMenuKey`), pure renderer (`renderMenuFrame`), thin raw-mode TTY runner (`runMainMenu`). Tests never spin up a real TTY.
+
+**D3 — `--non-interactive` escape hatch.** `cclaw --non-interactive <command>` runs the named command without any TUI or harness picker — auto-detect + `--harness=` + existing `config.yaml` fall-through path, hard error if no harness can be resolved. Position-independent (`cclaw --non-interactive install` and `cclaw install --non-interactive` both work). This is non-negotiable for CI / scripted installs — without it, the only way to install cclaw in a CI step would be to fake a TTY. Bare subcommands (`cclaw init`, `cclaw sync`, etc.) now error with the message `'<cmd>' is no longer a bare subcommand. Run 'cclaw' (no args) for the TUI menu, or 'cclaw --non-interactive <cmd>' for CI / scripts.` — discoverable from the first wrong invocation.
+
+**D4 — `--help` / `--version` flags preserved (CLI convention).** Both work at any argv position: `cclaw --help`, `cclaw --version`, `cclaw -h`, `cclaw -v`. Standard CLI convention — these are the only two flags allowed to bypass the no-arg / `--non-interactive` gate. The legacy `help` / `version` subcommands ARE dropped (an operator typing `cclaw version` gets the same "bare subcommand" error pointing at `--version`).
+
+**D5 — `init` aliased to `install` for backwards-compat.** `cclaw --non-interactive init` continues to work as a backwards-compat alias for `cclaw --non-interactive install` — the muscle-memory tax for CI scripts that pinned `cclaw init` between v8.0 and v8.28 is preserved. The TUI menu surfaces the new canonical name (`Install`) but both reach the same code path. Slated for removal in v8.30+ once the migration window closes.
+
+**D6 — Harness-isolation tripwire suite.** New `tests/integration/install-harness-isolation.test.ts` (220 lines, 9 tests). Each test uses a real `mktemp -d` project (no mocks) and asserts against the real filesystem. The matrix:
+- 4 single-harness tests (cursor-only, claude-only, opencode-only, codex-only): selected harness's commands + agents + skills + hooks present; other three harnesses' paths absent.
+- 2 multi-harness tests (claude+cursor, opencode+codex): selected pair present; non-selected pair absent.
+- 1 union test (all four harnesses): all four present.
+- 1 no-root-pollution test: `AGENTS.md` / `CLAUDE.md` never written regardless of harness selection (catches the specific bug shape the v8.29 audit was hunting).
+- 1 shared-runtime invariance test: `.cclaw/hooks/commit-helper.mjs` + `.cclaw/lib/agents/slice-builder.md` + `.cclaw/lib/skills/tdd-and-verification.md` are byte-identical regardless of which harness was selected (per-harness drift in the shared runtime would silently break `/cc`).
+- 1 sync-narrowing documentation test: documents that narrowing from `[claude, cursor]` to `[cursor]` does NOT scrub the dropped harness's command files (current sync behaviour — `uninstall` is what scrubs). Test fails LOUDLY if the contract changes in a future slug so the CHANGELOG note doesn't get missed.
+
+The audit found **no unconditional-writer bug**. The tripwire suite locks the current (correct) behaviour against future refactors.
+
+**D7 — Test suite + smoke script + symlink test updates.** Test suite grew 780 → 818 (+38): +30 new tests across `main-menu.test.ts` + `install-harness-isolation.test.ts`, +6 rewrites in `cli.test.ts` for the new surface, the rest from the existing v8.18 knowledge-CLI tests and the cli-symlink integration test being mechanically updated to use `--non-interactive`. `scripts/smoke-init.mjs` updated to invoke the CLI as `[cli, "--non-interactive", "<command>"]` everywhere (eight execFileSync sites). All 58 test files green.
+
+**D8 — README minimal touch-up (full rewrite deferred to a docs-only PR).** Install snippet rewritten (`npx cclaw-cli@latest` for the TUI, `npx cclaw-cli --non-interactive install --harness=...` for CI). CLI section rewritten (no-arg invocation + `--non-interactive` table). Six dead `docs/<file>.md` links removed from "More docs" (only `CHANGELOG.md` survives). README went 161 → 155 lines. Per the v8.29 slug discipline, the full README rewrite (100–200 lines, compact, no diagrams, every command runs verbatim on a fresh checkout) is a follow-up docs-only PR — this v8.29 touch-up keeps `main` from documenting non-existent surface during the train.
+
+### Migration
+
+**v8.28 → v8.29.** Drop-in for fresh installs. For existing users:
+
+1. **CI / scripts using bare subcommands.** Pipelines that invoke `cclaw init` / `cclaw sync` / `cclaw upgrade` / `cclaw uninstall` / `cclaw knowledge` must add the `--non-interactive` flag. Mechanical fix — `sed -i 's/cclaw init/cclaw --non-interactive init/g'` (etc.) across the pipeline definition. Error message points at the fix from the first wrong invocation.
+
+2. **Interactive users.** Drop in. `npx cclaw-cli@latest` now opens a menu instead of printing help; the help is still reachable via `npx cclaw-cli@latest --help`. The smart-default cursor highlights the most likely action (Install on first run, Sync on re-invocation) so muscle-memory operators can usually just press Enter.
+
+3. **`cclaw version` / `cclaw help` subcommands.** Replaced by the `--version` / `--help` flags. The error message names the fix.
+
+4. **`docs/` local working notes.** Files under `docs/` that were never tracked (`product-features.md`, `reference-feature-research.md`, `feature-research/`, `release-notes/`) are unchanged on disk — they were already gitignored via the `docs/*` block and are now still gitignored via the simplified `docs/` rule. The nine tracked `docs/<file>.md` files are removed from the repo; users with local clones that want to keep their copies should `git stash` or back up before pulling v8.29.
+
+5. **Downstream consumers of `HARNESS_LAYOUT_TABLE` or `build-harness-docs`.** The `HARNESS_LAYOUT_TABLE` export from `src/install.ts` is unchanged (still exported, still drives the install dispatch). Only the dead-code regenerator script was deleted. If anyone forked `build-harness-docs.mjs` to produce their own harness reference table, they can pin against v8.28 or re-import the layout table directly.
+
+**No production behaviour change to the runtime.** `.cclaw/` install output, harness command/agents/skills/hooks layouts, and the `/cc` orchestrator are identical to v8.28. The only observable differences are the CLI invocation shape and the missing `docs/` tree.
+
+### What we noticed but didn't touch (v8.29 scope)
+
+- **`README.md` full rewrite.** Tracked separately as the docs-only follow-up PR mandated by the v8.29 release plan. v8.29's README touch-up is intentionally minimal (~30 lines of diff) — just enough to keep the install snippet truthful and the dead docs/ links gone. The full rewrite will trim the artifact tree, drop verbose specialist tables, and stay within the 100-200-line budget.
+- **`planner` references in README.md prose.** v8.28 renamed `planner` → `ac-author` but the README's "Specialists and research helpers" table and "What makes it different" bullets still say `planner`. Left for the README rewrite PR.
+- **`v8.29+ removal of LEGACY_PLANNER_ID + rewriteLegacyPlanner` slated by v8.28.** Not done in this slug because the slug scope was install UX, not legacy-id cleanup. Defer to a focused v8.30+ slug as v8.28's deferred-list called for.
+- **`init` → `install` alias removal.** The TUI menu surfaces the canonical name `Install`; the `init` alias survives for one release in the `--non-interactive` path. Mirror the v8.28 `planner` legacy-alias precedent — defer the cleanup to v8.30.
+- **`docs/decisions/` ADR catalogue.** All `src/content/**` references to `docs/decisions/ADR-NNNN-<slug>.md` describe the **user's** project root convention (a catalogue cclaw promotes consumers to maintain), not this cclaw repo. Untouched — this is a feature of the toolkit, not stale prose.
+
+### Deferred
+
+- **README v2 (full rewrite).** Next PR after v8.29 lands. Docs-only, no version bump, `docs` + `semver:patch` labels.
+- **Remove `init` → `install` alias.** v8.30+. Cheap cleanup once the one-release migration window closes.
+- **Single-rendering of the menu after a long action.** v8.29 ships single-shot; an operator running Install from the TUI sees install progress and the menu does NOT re-open. A future polish could optionally re-render the menu after Browse-knowledge / Show-version so the operator can chain actions without re-invoking `cclaw`. Deferred until a user reports the friction.
+
+### Tests
+
+- `tests/unit/main-menu.test.ts` — **20 tests across 4 describe blocks** locking the menu reducer + frame renderer:
+  - actions table shape (the seven actions in canonical order)
+  - smart-default cursor (Install when no `.cclaw/`, Sync when it does)
+  - keyboard reducer (arrows, j/k, number keys 1-7, Enter confirms, q jumps-and-confirms, Ctrl-C/Esc cancel, unrecognised keys no-op)
+  - frame rendering (all seven labels visible, pointer placement, hint line correctness, hotkey legend, no full-screen clear escape, no ANSI when `useColor: false`)
+- `tests/unit/cli.test.ts` — **rewritten end-to-end** for the new surface. Asserts: `--version` / `-v` / `--help` / `-h` flags; no-arg invocation without TTY errors with the escape-hatch hint; `--non-interactive` with no subcommand errors; bare `cclaw init` / `cclaw sync` / `cclaw knowledge` all error pointing at the TUI + escape hatch; flow CLI commands (`plan` / `status` / `ship` / `migrate` / `build` / `review`) still rejected with the v8 design-choice message; `--non-interactive install` writes runtime and prints welcome + progress + summary; `--non-interactive init` works as a backwards-compat alias; flag position-independent; `--non-interactive sync` on installed project skips welcome; `--non-interactive uninstall` reports removed harnesses; bad `--harness=` still throws.
+- `tests/integration/install-harness-isolation.test.ts` — **9 tests** real-`mktemp -d` tripwire matrix described in D6.
+- `tests/integration/cli-symlink.test.ts` — symlink regression test rewired to use `--version` / `--help` / `--non-interactive install`. The npx-symlink no-op regression from v8.0/v8.1 is still pinned end-to-end through the new surface.
+- `tests/unit/v818-knowledge-surfacing.test.ts` — six existing CLI assertions rewritten to use `--non-interactive knowledge` and `--help`.
+- `scripts/smoke-init.mjs` — eight `execFileSync` invocations rewired to `--non-interactive`; smoke contract (init → sync with orphan plant → sync idempotent → upgrade → sync → uninstall) preserved end-to-end.
+
+Total: 780 → 818 (+38 net) across 56 → 58 files. `release:check` green: pack ~130 files, smoke passes, `npm pack --dry-run` produces `cclaw-cli-8.29.0.tgz`.
+
 ## 8.28.0 — Rename `planner` specialist → `ac-author`: file rename + symbol rename + 281-replacement prose sweep + `rewriteLegacyPlanner` migration (one-release legacy alias)
 
 ### Why

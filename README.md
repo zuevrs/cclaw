@@ -8,11 +8,11 @@ Requirements: Node.js 20+ and a git project.
 
 ```bash
 cd /path/to/your/repo
-npx cclaw-cli@latest init                       # interactive: picks your harness
-npx cclaw-cli init --harness=claude,cursor      # explicit, no picker
+npx cclaw-cli@latest                                              # interactive TUI menu (default)
+npx cclaw-cli --non-interactive install --harness=claude,cursor   # CI / scripts: explicit, no TUI
 ```
 
-`init` auto-detects existing harnesses (`.claude/`, `.cursor/`, `.opencode/`, `.codex/`) and is idempotent. Three slash commands then become available inside your harness:
+Running `npx cclaw-cli@latest` with no args opens a top-level TUI menu (Install / Sync / Upgrade / Uninstall / Browse knowledge / Show version / Quit) with a smart default highlight based on whether `.cclaw/` already exists. For CI / scripts use `--non-interactive <command>` — bare subcommands like `cclaw init` were dropped in v8.29. Install auto-detects existing harnesses (`.claude/`, `.cursor/`, `.opencode/`, `.codex/`) and is idempotent. Three slash commands then become available inside your harness:
 
 - `/cc <task>` — start a new flow, or resume the active one
 - `/cc-cancel` — abandon the active flow (artifacts move to `.cclaw/flows/cancelled/<slug>/`)
@@ -108,15 +108,16 @@ Seventeen auto-trigger skills wrap the specialists: `triage-gate`, `plan-authori
 ## CLI
 
 ```bash
-cclaw init                     # install assets, wire harness
-cclaw sync                     # idempotent reapply (also runs orphan cleanup)
-cclaw upgrade                  # post-package-update sync
-cclaw knowledge                # list captured learnings (--tag, --surface, --json, --all)
-cclaw uninstall                # remove cclaw assets
-cclaw version | help
+cclaw                                          # open the TUI menu (interactive default)
+cclaw --version | --help                       # version / help flags
+cclaw --non-interactive install                # CI: install assets, wire harness
+cclaw --non-interactive sync                   # CI: idempotent reapply (also runs orphan cleanup)
+cclaw --non-interactive upgrade                # CI: post-package-update sync
+cclaw --non-interactive knowledge              # CI: list captured learnings (--tag, --surface, --json, --all)
+cclaw --non-interactive uninstall              # CI: remove cclaw assets
 ```
 
-`cclaw knowledge` is the read-side of the compound loop. It groups entries by tag, sorts by recency, and accepts `--tag=<tag>` / `--surface=<substring>` filters or `--json` for piping into `jq`.
+`--non-interactive` is the CI / scripts escape hatch — bare `cclaw init` / `cclaw sync` etc. error in v8.29 and point at the TUI. `cclaw --non-interactive knowledge` is the read-side of the compound loop. It groups entries by tag, sorts by recency, and accepts `--tag=<tag>` / `--surface=<substring>` filters or `--json` for piping into `jq`.
 
 ## AC traceability and commit-helper
 
@@ -148,12 +149,6 @@ cclaw replies in the user's language for prose. It never translates wire-protoco
 ## More docs
 
 - [CHANGELOG.md](CHANGELOG.md) — full release history (v8.0 onward; v7→v8 migration at the bottom)
-- [docs/skills.md](docs/skills.md) — the auto-trigger skill layer
-- [docs/config.md](docs/config.md) — `.cclaw/config.yaml` reference
-- [docs/harnesses.md](docs/harnesses.md) — what each harness installs
-- [docs/scheme-of-work.md](docs/scheme-of-work.md) — end-to-end flow walk-through
-- [docs/v8-vision.md](docs/v8-vision.md) — locked design decisions for v8
-- [docs/migration-v7-to-v8.md](docs/migration-v7-to-v8.md) — coming from cclaw 7.x
 
 ## License
 
