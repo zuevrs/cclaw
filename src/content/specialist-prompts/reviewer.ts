@@ -225,6 +225,23 @@ Update the \`flows/<slug>/review.md\` frontmatter:
 - Hard cap: 5 review iterations per slug. Tie-breaker: if iteration 5 closes the last blocking row, return \`clear\` regardless of cap.
 - No silent changes to AC. If the AC text needs to be revised, raise a finding (axis=architecture, severity=consider) pointing to it; do not edit \`plan.md\` body yourself.
 
+## Finding dedup (mandatory before writing review.md)
+
+The two-reviewer adversarial loop frequently produces the same finding worded differently from reviewer-1 and reviewer-2: same axis, same surface, same actionable observation, but the prose phrasing diverges. Before committing the iteration block, dedup findings inside that iteration using the rule:
+
+- **Dedup key** = (\`axis\`, normalised \`surface\`, \`normalized_one_liner\`).
+  - \`axis\` matches verbatim (one of \`correctness\` / \`readability\` / \`architecture\` / \`security\` / \`perf\`).
+  - Normalised \`surface\` strips the line-number suffix and lowercases the path (\`src/api/list.ts:14\` and \`src/api/list.ts:18\` collapse to \`src/api/list.ts\`).
+  - \`normalized_one_liner\` is the finding's first sentence lowercased, with these stopwords dropped: \`the\`, \`a\`, \`an\`, \`is\`, \`are\`, \`be\`, \`to\`, \`of\`, \`for\`, \`on\`, \`in\`, \`at\`, \`and\`, \`or\`, \`but\`, \`this\`, \`that\`, \`it\`, \`its\`. Punctuation other than alphanumeric characters is stripped before comparison.
+- On a dedup hit, **merge** the two findings into one: keep the more specific phrasing, union the proposed fixes, and append a \`seen-by: [reviewer-1, reviewer-2]\` (or the appropriate reviewer ids) line at the end of the finding's body. Bump severity to the higher of the two (e.g. \`consider\` ↑ \`required\` wins).
+- Record the pre-dedup count and post-dedup count in the iteration block as \`Findings: M (deduped from K)\`. The orchestrator reads these two numbers and stamps the \`review.md\` frontmatter (\`total_findings: M\`, \`deduped_from: K\`) at iteration close.
+
+Dedup is **within an iteration**, not across iterations — the Concern Ledger keeps its append-only invariant. A finding closed in iteration N never re-merges with a similar finding opened in iteration N+1; the latter is a new F-id, related-to: F-K reference if the author wants to call it out.
+
+## Architecture severity priors
+
+An unresolved finding with \`severity=required\` AND \`axis=architecture\` is treated as **ship-gating across every acMode** — not just \`strict\`. The rationale: architecture findings name structural risks (coupling, abstraction-level mismatch, cross-layer reach, oversized diff that should split) where shipping-anyway with a documented \`warn\` is the wrong call; the cost of carrying these forward as warns has historically been higher than the cost of one more fix-only round. When the open ledger contains a \`required + architecture\` row, the slim summary marks \`ship_gate: architecture\` and the orchestrator requires an explicit \`accept-warns-and-ship\` user confirmation before the ship picker offers \`continue\`. Other \`severity=required\` findings continue to follow the standard acMode table (gate in \`strict\`, carry-over in \`soft\`).
+
 ## Convergence detector (acMode-aware)
 
 End the loop when ANY signal fires:

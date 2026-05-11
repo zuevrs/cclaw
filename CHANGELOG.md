@@ -1,5 +1,96 @@
 # Changelog
 
+## 8.20.0 — Review-loop polish: dedup, cap-picker, architecture-severity gate
+
+### Why
+
+v8.13 introduced the two-reviewer adversarial loop. In practice that loop has three operational papercuts that didn't surface until enough slugs ran through it:
+
+1. **reviewer-1 and reviewer-2 frequently surface the same finding worded differently.** Same axis, same surface, same actionable observation — but the phrasing diverges, so `review.md` bloats with what look like distinct findings. The Concern Ledger is append-only, so once a duplicate is recorded it stays recorded; the reader has to spot "F-3 and F-7 are the same problem" by eye.
+2. **There is no cap-reached *picker*** — only a `cap-reached` decision that surfaces "residual blockers" and waits. A user who actually wants to buy two more rounds (e.g. "I see what's diverging, give me one more cycle") has no first-class way to do so; the only paths are `/cc-cancel` or `accept-and-ship`. Practically, this pushes flows that are 90% converged into split-plans they don't need.
+3. **`severity=required + axis=architecture` carries over as a `warn` in soft mode.** Architecture-axis findings name structural risks — coupling, abstraction-level mismatch, oversized diff that should split, cross-layer reach. Shipping these as `warn`s and re-encountering them in v+1 slugs has historically been worse than paying for one more fix-only round. The two-tier severity-vs-acMode table makes architecture the same as every other axis; it should be stricter.
+
+v8.20 closes all three. The two-reviewer mode itself stays — the loop is what catches divergent findings in the first place; the dedup is the *post-processing step* that makes the output usable.
+
+### What changed
+
+**D1 — Finding dedup inside `review.md` (reviewer prompt instruction).** The reviewer's prompt (`src/content/specialist-prompts/reviewer.ts`) gains a new section **"Finding dedup (mandatory before writing review.md)"** that specifies the per-iteration dedup contract:
+
+- **Dedup key** = `(axis, normalised surface, normalized_one_liner)`.
+  - `axis` matches verbatim (one of the five-axis values).
+  - Normalised `surface` strips the line-number suffix and lowercases the path (`src/api/list.ts:14` and `src/api/list.ts:18` collapse to `src/api/list.ts`).
+  - `normalized_one_liner` is the finding's first sentence lowercased, with these stopwords dropped: `the`, `a`, `an`, `is`, `are`, `be`, `to`, `of`, `for`, `on`, `in`, `at`, `and`, `or`, `but`, `this`, `that`, `it`, `its`. Punctuation other than alphanumerics is stripped before comparison.
+- **On a dedup hit, merge** the two findings into one: keep the more specific phrasing, union the proposed fixes, append a `seen-by: [reviewer-1, reviewer-2]` line, and bump severity to the higher of the two (`consider` ↑ `required` wins).
+- **Dedup is within an iteration**, not across iterations — the Concern Ledger keeps its append-only invariant. A finding closed in iteration N never re-merges with a similar finding opened in iteration N+1; the latter is a new F-id with a `related-to: F-K` reference if the author wants to call it out.
+
+The dedup happens in prose because reviewer prompts are prose; the stopword list is inlined so the reviewer doesn't drift to a different (whitespace-only) shape. A separate "Concern Ledger as code" representation would be a much larger slug.
+
+**D2 — `reviewCounter` field on flow-state + hard cap picker at 5.** `FlowStateV82` gains `reviewCounter?: number` (optional in TypeScript so v8.19 state files validate unchanged; readers default absent to `0`; `createInitialFlowState` returns `0` on fresh state). It is a sibling of `reviewIterations`:
+
+- `reviewIterations` — monotonic lifetime counter; never reset by user. Drives compound-stage telemetry and `ship.md` frontmatter.
+- `reviewCounter` — cap-budget that the user can extend. Increments on every reviewer dispatch in parallel with `reviewIterations`.
+
+`src/content/start-command.ts` gains a new **"Review-cap picker"** sub-section after the existing 5-iteration cap line. When `reviewCounter` reaches `5`, the orchestrator does NOT dispatch another reviewer; it surfaces a structured `AskQuestion` picker with three options:
+
+1. `cancel-and-replan` — apply the cap-reached split-plan (v8.13 logic), park the current slug, ask the user to confirm the follow-up slug names.
+2. `accept-warns-and-ship` — treat every remaining open ledger row as a `warn` and proceed to ship gate. Greyed out (with explanation) when any row is `critical` OR `required + architecture`.
+3. `keep-iterating-anyway` — reset `reviewCounter` to `3`, buying two more rounds. Stamp `triage.iterationOverride: true` (telemetry: a future "why did this flow take 7 review iterations?" audit can answer without re-reading the iteration log) and resume normal review-pause dispatch.
+
+The picker is not skippable on autopilot; `runMode: auto` pauses here like any other hard gate.
+
+**D3 — `severity=required + axis=architecture` gates ship across acModes.** The reviewer prompt's new **"Architecture severity priors"** section names a stronger gate: an unresolved finding with `severity=required` AND `axis=architecture` is ship-gating in every acMode — not only in `strict`. The orchestrator enforces this at the ship gate (`start-command.ts` Hop 5): when the open ledger contains any `required + architecture` row, the ship picker does NOT offer `continue` until the user explicitly picks `accept-warns-and-ship` for the architecture finding(s). Concretely, when the reviewer's slim summary marks `ship_gate: architecture` (set whenever a `required + architecture` row is open), the ship picker's option list becomes `accept-warns-and-ship` / `fix-only` / `stay-paused`. Other `severity=required` findings continue to follow the standard acMode table (gate in strict, carry-over in soft).
+
+**D4 — Two-reviewer mode stays default.** The adversarial loop is unchanged: reviewer-1 still does the code/security/text-review pass, reviewer-2 still does the adversarial pre-mortem pass on strict-mode slugs. The dedup and cap-picker apply *on top of* the existing flow.
+
+**D5 — `review.md` frontmatter telemetry.** `REVIEW_TEMPLATE` in `src/content/artifact-templates.ts` gains three new frontmatter keys:
+
+- `iteration: N` — which iteration this `review.md` belongs to (matches the latest iteration block's `## Iteration N` header).
+- `total_findings: M` — post-dedup count of findings recorded across all iterations.
+- `deduped_from: K` — pre-dedup count. The dedup ratio `M / K` is the natural telemetry for "how much duplicate is the two-reviewer loop producing?" surfaced in compound-stage digests.
+
+Initial values are `0` (the template is written before any iteration runs). The orchestrator (with the reviewer's slim summary's `Findings: M (deduped from K)` line) patches these at iteration close. Legacy `review_iterations: 0` is preserved unchanged — it's the monotonic lifetime counter that drives `ship.md` frontmatter and the cap; the new fields are per-iteration telemetry.
+
+**D6 — `triage.iterationOverride?: boolean` schema field.** `TriageDecision` gains the optional field plus its validator entry in `assertTriageOrNull`. Set exactly once per flow at the moment the override picker fires; never cleared by ship. Backward compat: v8.19 state files without the field validate unchanged.
+
+### Migration
+
+**v8.19 → v8.20.** Drop-in. Run `cclaw upgrade` to refresh the spec files in `.cclaw/lib/`. v8.19 flows resumed on v8.20:
+
+- start at `reviewCounter: 0` even if `reviewIterations` already reflects prior dispatches — the cap is a fresh budget on resume. This is the intentionally permissive fallback; the alternative (rehydrating `reviewCounter` from `reviewIterations`) would punish a resumed flow that was 4/5 of the way through review on v8.19.
+- read `triage.iterationOverride` as `null/absent` → no override stamped → behaviour identical to a fresh flow.
+- read review.md files written before v8.20 with only `review_iterations` — the new frontmatter keys are absent, the orchestrator stamps them on the next iteration close. No re-validation needed.
+
+**Active flows past the 5-iteration cap on v8.19.** Those flows were already at `cap-reached`; the v8.20 picker shows up on the *next* fresh reviewer dispatch attempt, which happens only after the user picks `keep-iterating-anyway` or `accept-warns-and-ship` on the existing cap-reached split-plan. No silent behaviour change.
+
+### What we noticed but didn't touch (v8.20 scope)
+
+- **Dedup as code, not prose.** The dedup rule is specified to the reviewer in the prompt, which means each iteration the reviewer re-derives the tokens, re-applies the stopword list, re-merges. A real implementation would normalize-and-store on append, so the Ledger itself is dedup-stable. That's a much larger slug (Ledger schema change, migration of in-flight `review.md` files); the v8.20 surface is intentionally "make the reviewer do it" so we can audit whether the prose rule produces sensible merges before locking it into code.
+- **Architecture-severity sub-axes.** "Architecture" is a single axis today; in practice it covers at least four distinct things (coupling, abstraction-level mismatch, oversized-diff-that-should-split, cross-layer reach). The v8.20 gate fires on the umbrella axis. A future slug could subtype architecture findings so the gate logic is finer-grained; today's gate is correct-but-coarse.
+- **Cap value as configurable.** The cap is hardcoded to `5`; the picker resets to `3` (two more rounds). Both are reasonable defaults but the right values depend on team velocity and slug complexity. A `config.yaml > review.cap` knob would let teams tune; out of scope for the polish work.
+- **Picker option ordering for accessibility.** The structured `AskQuestion` picker uses the order `cancel-and-replan` / `accept-warns-and-ship` / `keep-iterating-anyway`. The "safe" path is first (the user can stop the flow); the "extend" path is last. Some harnesses don't preserve option order in the keyboard accelerator mapping — out of scope for v8.20 to fix.
+
+### Deferred
+
+- **Per-iteration dedup-ratio digest.** With `total_findings` and `deduped_from` now in frontmatter, the compound stage could emit "this slug deduped K findings from M raw → useful signal that the two-reviewer loop produced redundancy" as a `KnowledgeEntry` tag. Trivial to add but no flow needs it right now.
+- **`cclaw review --stats <slug>` CLI command.** Mirror of `cclaw knowledge`: surfaces dedup ratios, iteration counts, override flags from a terminal session.
+- **Architecture-axis sub-typing.** As above. The current single-axis gate is correct; sub-typing is a finer-grained ergonomic.
+
+### Tests
+
+`tests/unit/v820-review-loop-polish.test.ts` — **23 new tripwire tests** covering:
+
+- AC-1 — Reviewer prompt instructs dedup by `(axis, surface, normalized_one_liner)`; names a stopword list inline; specifies the `seen-by` line on merge; specifies severity bump (higher wins); tells the reviewer to record pre- and post-dedup counts.
+- AC-2 — `flow-state.json` includes `reviewCounter: 0` in `createInitialFlowState`; `assertFlowStateV82` accepts state with `reviewCounter` set; rejects negative `reviewCounter`; v8.19 state without `reviewCounter` validates unchanged; start-command names the picker options at the 5-iteration cap; specifies `keep-iterating-anyway` resets to 3 and stamps `triage.iterationOverride`; `TriageDecision` schema accepts `iterationOverride: boolean`.
+- AC-3 — Reviewer prompt names the architecture-severity priors rule, says it applies across every acMode; start-command's ship gate enforces it; lists `accept-warns-and-ship` as the path past the architecture gate.
+- AC-4 — Start-command still mentions the parallel reviewer + security-reviewer dispatch; reviewer prompt still names the adversarial Model A / Model B framing.
+- AC-5 — `REVIEW_TEMPLATE` frontmatter includes `iteration: 0`, `total_findings: 0`, `deduped_from: 0`; preserves the legacy `review_iterations: 0` counter.
+
+`tests/unit/flow-state.test.ts` — `creates a fresh state` updated to expect the new `reviewCounter: 0` key.
+
+`tests/unit/prompt-budgets.test.ts` — `reviewer` budget raised 44000 → 48000 chars (610 → 630 lines) to absorb the new "Finding dedup" + "Architecture severity priors" sections plus ~8% headroom.
+
+**Total: 634 tests across 48 files (was 611 across 47 in v8.19; +23 net from the v820-review-loop-polish suite + 1 new file). All green.**
+
 ## 8.19.0 — Skill-windowing: stage-scoped skill loading
 
 ### Why

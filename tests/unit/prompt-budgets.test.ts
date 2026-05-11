@@ -52,8 +52,8 @@ const PROMPT_BUDGETS: PromptBudget[] = [
   {
     id: "reviewer",
     body: REVIEWER_PROMPT,
-    maxLines: 610,
-    maxChars: 44000
+    maxLines: 630,
+    maxChars: 48000
   },
   {
     id: "security-reviewer",

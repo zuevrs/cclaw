@@ -205,6 +205,19 @@ export interface TriageDecision {
    * deeper shape checks when readers parse it.
    */
   priorLearnings?: unknown[] | null;
+  /**
+   * v8.20 — `true` when the user picked `keep-iterating-anyway` at the
+   * 5-iteration review cap, which reset `reviewCounter` to 3 and bought
+   * two more review rounds. Telemetry stamp so a future "why did this
+   * flow take 7 review iterations?" audit can answer without re-reading
+   * the entire iteration log.
+   *
+   * Optional, defaults to absent / `false`. Set exactly once per flow at
+   * the moment the override picker fires; never cleared by ship.
+   * Backward compat: v8.19 state files without the field validate
+   * unchanged.
+   */
+  iterationOverride?: boolean | null;
 }
 
 export interface CliContext {

@@ -26,9 +26,31 @@ export interface FlowStateV82 {
   ac: AcceptanceCriterionState[];
   lastSpecialist: SpecialistId | null;
   startedAt: string;
+  /**
+   * Total reviewer dispatches in this flow's lifetime. Monotonically
+   * increasing; never reset by user. Drives `review.md` Run summary,
+   * compound-stage telemetry, and `ship.md` frontmatter.
+   */
   reviewIterations: number;
   securityFlag: boolean;
   buildProfile?: BuildProfile;
+  /**
+   * v8.20 — cap-tracker that may be reset by the user. Increments on
+   * every reviewer dispatch in parallel with {@link reviewIterations}.
+   * When it reaches 5 the orchestrator does not dispatch another
+   * reviewer until the user picks an option from the review-cap picker
+   * (`cancel-and-replan` / `accept-warns-and-ship` / `keep-iterating-
+   * anyway`). The third option resets `reviewCounter` to 3 — giving two
+   * more rounds — and stamps `triage.iterationOverride: true` so the
+   * extension is auditable.
+   *
+   * Optional in TypeScript so v8.19 state files (which lack the field)
+   * still validate; readers MUST default to `0` on absent. v8.19 flows
+   * resumed on v8.20 start at 0 even if `reviewIterations` already
+   * reflects prior dispatches — the cap is a fresh budget on resume,
+   * which is the intentionally permissive fallback.
+   */
+  reviewCounter?: number;
   /**
    * Triage decision for the active flow. Null while no flow is running.
    * Persisted so resume never re-prompts the user.
@@ -96,6 +118,7 @@ export function createInitialFlowState(nowIso = new Date().toISOString()): FlowS
     lastSpecialist: null,
     startedAt: nowIso,
     reviewIterations: 0,
+    reviewCounter: 0,
     securityFlag: false,
     triage: null
   };
@@ -211,6 +234,13 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
       }
     }
   }
+  if (
+    triage.iterationOverride !== undefined &&
+    triage.iterationOverride !== null &&
+    typeof triage.iterationOverride !== "boolean"
+  ) {
+    throw new Error("triage.iterationOverride must be a boolean, null, or absent");
+  }
   if (triage.priorLearnings !== undefined && triage.priorLearnings !== null) {
     if (!Array.isArray(triage.priorLearnings)) {
       throw new Error("triage.priorLearnings must be an array, null, or absent");
@@ -303,6 +333,11 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
   if (typeof state.startedAt !== "string") throw new Error("flow-state.startedAt must be a string");
   if (typeof state.reviewIterations !== "number" || state.reviewIterations < 0) {
     throw new Error("flow-state.reviewIterations must be a non-negative number");
+  }
+  if (state.reviewCounter !== undefined) {
+    if (typeof state.reviewCounter !== "number" || state.reviewCounter < 0) {
+      throw new Error("flow-state.reviewCounter must be a non-negative number when present");
+    }
   }
   if (typeof state.securityFlag !== "boolean") {
     throw new Error("flow-state.securityFlag must be a boolean");

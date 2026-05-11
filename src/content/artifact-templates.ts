@@ -306,6 +306,9 @@ slug: SLUG-PLACEHOLDER
 stage: review
 status: active
 review_iterations: 0
+iteration: 0
+total_findings: 0
+deduped_from: 0
 modes_run:
   - code
 findings_block: []

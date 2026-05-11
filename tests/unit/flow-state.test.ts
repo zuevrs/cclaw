@@ -34,6 +34,7 @@ describe("flow-state", () => {
       lastSpecialist: null,
       startedAt: "2026-05-07T00:00:00Z",
       reviewIterations: 0,
+      reviewCounter: 0,
       securityFlag: false,
       triage: null
     });
