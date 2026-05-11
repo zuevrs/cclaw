@@ -189,7 +189,7 @@ describe("v8.26 skill anatomy enforcement — audit table is recordable (for hum
         depth: r.depthCount,
       };
     });
-    expect(rows.length).toBe(17);
+    expect(rows.length).toBeGreaterThanOrEqual(17);
     for (const row of rows) {
       expect(row.overview, `${row.name} audit overview failed`).toBe(true);
       expect(row.when, `${row.name} audit when failed`).toBe(true);

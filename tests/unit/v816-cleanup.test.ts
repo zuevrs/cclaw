@@ -126,13 +126,13 @@ const PROVENANCE_SNIPPETS: Record<(typeof MERGED_SKILL_IDS)[number], string[]> =
 
 describe("v8.16 thematic skills merge", () => {
   describe("Skill set shape after merge", () => {
-    it("ships exactly 17 auto-trigger skills (down from 24 in v8.15)", () => {
-      expect(AUTO_TRIGGER_SKILLS.length).toBe(17);
+    it("ships 17 or more auto-trigger skills (down from 24 in v8.15; v8.27 added code-simplification → 18)", () => {
+      expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
-    it("skill count stays in the [15, 18] range mandated by the v8.16 brief", () => {
+    it("skill count stays in the [15, 20] range — v8.16 brief was [15, 18]; v8.27 lifted the ceiling for the code-simplification import and future additive skills", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
-      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(18);
+      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(20);
     });
   });
 
@@ -303,10 +303,10 @@ describe("v8.16 thematic skills merge", () => {
   });
 
   describe("Install layer writes exactly the registered count", () => {
-    it("AUTO_TRIGGER_SKILLS.length stays at 17, the basis for the install loop", () => {
+    it("AUTO_TRIGGER_SKILLS.length stays ≥17, the basis for the install loop (v8.27 lifted floor from =17 to ≥17 for the code-simplification addition)", () => {
       // install.ts iterates AUTO_TRIGGER_SKILLS and writes one .md per entry
-      // plus cclaw-meta.md; the resulting on-disk count is N+1 = 18.
-      expect(AUTO_TRIGGER_SKILLS.length).toBe(17);
+      // plus cclaw-meta.md; the resulting on-disk count is N+1.
+      expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
   });
 });

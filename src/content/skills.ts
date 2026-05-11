@@ -268,6 +268,22 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     ],
     stages: ["plan", "review"],
     body: readSkill("api-evolution.md")
+  },
+  {
+    id: "code-simplification",
+    fileName: "code-simplification.md",
+    description: "v8.27 adaptation of addy osmani's `code-simplification` skill. Canonical rubric for the simplification slot that pre-v8.27 was split between the REFACTOR step of `tdd-and-verification` and the reviewer's `complexity-budget` / `readability` axes. Five principles (preserve behaviour / follow conventions / clarity over cleverness / maintain balance / scope to touchSurfaces) + four-step process (Chesterton's Fence → identify patterns → apply incrementally → verify). Stage-windowed on build (REFACTOR step + fix-only) and review (citation for complexity-budget findings).",
+    triggers: [
+      "stage:build",
+      "specialist:slice-builder",
+      "specialist:reviewer",
+      "phase:refactor",
+      "finding:complexity-budget",
+      "finding:readability",
+      "task:simplification"
+    ],
+    stages: ["build", "review"],
+    body: readSkill("code-simplification.md")
   }
 ];
 

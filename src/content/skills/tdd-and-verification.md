@@ -45,7 +45,7 @@ Why two-stage: affected tests close the loop in seconds → fast iteration; full
 
 ### REFACTOR — mandatory pass
 
-REFACTOR is **not optional**. Even when the GREEN diff feels minimal, you must consider rename / extract / inline / type-narrow / dedup / dead-code-removal.
+REFACTOR is **not optional**. Even when the GREEN diff feels minimal, you must consider rename / extract / inline / type-narrow / dedup / dead-code-removal. **Consult `code-simplification.md`** for the canonical rubric (five principles + four-step process) — that skill is cclaw's home for the simplification slot and bounds what counts as a real simplification vs a stylistic preference. The decision to apply or skip a refactor cites the rubric, not personal taste.
 
 After the refactor edits:
 
