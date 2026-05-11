@@ -7,6 +7,15 @@ trigger: when authoring or reviewing AC entries; when committing changes for an 
 
 This merged skill covers both AC concerns: the bar for every AC entry (formerly **ac-quality**), and the commit-hook contract that wires AC ↔ commit chain in strict mode (formerly **ac-traceability**).
 
+## When NOT to apply
+
+- **Inline / trivial flows (`triage.acMode == "inline"`).** Single-line edits commit straight with plain `git commit`; no AC ids exist to trace.
+- **Soft mode commit chain.** In `soft` the commit-helper is **advisory**, not blocking. Plain `git commit` is acceptable; the AC↔commit chain is not enforced.
+- **Mid-flight AC additions to an existing plan.** Adding new AC during build is scope creep. Either the new work fits an existing AC (no new id), or it's a follow-up slug — never a mid-flight AC graft.
+- **Renumbering AC ids after a delete.** Don't reuse `AC-3` because `AC-2` got removed; the remaining ids stay sequential after compaction without rewriting committed AC references.
+- **Refinement slugs reading parent slug AC ids.** A refining slug restarts at `AC-1` even when the parent shipped slug had `AC-12`.
+- **Strict mode commits via direct `git commit`.** The hook is mandatory in strict mode. Direct `git commit` produces a SHA the hook never recorded — the AC chain breaks and resume gets out of sync.
+
 ## ac-quality
 
 Three checks per AC:
@@ -62,3 +71,18 @@ In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/c
 
 - `flow-state.json` is now out of sync with the working tree.
 - Edit `.cclaw/state/flow-state.json` by hand to add the SHA to the matching AC entry and verify with the orchestrator before continuing. Do not run the hook with an empty stage to "patch" the state — the hook refuses empty stages by design.
+
+## Common rationalizations
+
+AC discipline is the first thing that pressures an agent to "just commit something" when iteration is slow. Catch yourself thinking the left column; do the right column. Surface the rationalization in `## Summary → Potential concerns` when you obey the right column anyway.
+
+| rationalization | truth |
+| --- | --- |
+| "This AC is part of AC-2, I'll just bundle it under AC-2." | Compound AC fails the smell check — independently committable means one AC per commit. Split into a new AC with its own id; the audit trail and ship-gate need the separation. |
+| "Verification is `tests pass`." | That's a vague verification; the smell check rejects it. Cite a specific test name + file + assertion (`tests/unit/permissions.test.ts: 'hides email when permission is missing'`). |
+| "I'll renumber the ACs after I delete AC-2 — `AC-3` becomes the new `AC-2`." | Don't. The remaining ids stay sequential after compaction; renumbering breaks `flow-state.json > ac[i].id` references in already-recorded commits and the resume contract. |
+| "I'll just `git commit` directly this once — the hook is slow." | The hook is the strict-mode contract. Bypassing it once breaks the AC↔commit chain for everyone downstream (resume, review, ship). Restore the chain or surface the script bug as a finding. |
+| "I'll add AC-13 mid-build because I noticed something needed." | Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it's a follow-up slug. AC-13 mid-flight breaks the build sub-phase's commit budget. |
+| "Refinement of `<old-slug>` so AC-1 starts at AC-13 (continuation)." | Refinement slugs restart at AC-1. The `refines:` frontmatter is the link; the AC numbering does not carry. |
+| "The verification line is 'manual test' for this AC." | A manual step is a verification, but it must be **concrete** — name the click target, the expected observable, and the operator. "I clicked around and it looked fine" is the rationalization the reviewer catches. |
+| "I'll inline the AC's text in the diff comment so the reviewer can see it." | The AC lives in `plan.md`, not in source comments. The reviewer reads the plan; inlining the AC text bloats the production diff with quoted plan prose. |

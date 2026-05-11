@@ -9,6 +9,15 @@ A repo-wide **Architecture Decision Record (ADR) catalogue** lives at `docs/deci
 
 ADRs are NOT a replacement for per-slug D-N records — they are the **promoted subset** that has cross-flow durability. Design (Phase 4 + Phase 6.5) writes both: full D-N records in the slug's `plan.md` `## Decisions` section (rationale, alternatives, failure modes, refs); a thinner ADR pointing back to the slug for the long-term catalogue.
 
+## When NOT to apply
+
+- **Internal refactors** with no public-surface change. The D-N inline in `plan.md` is the only durable record needed.
+- **Bug fixes** that preserve the public contract. No architectural decision was made.
+- **Per-feature implementation choices** anyone could trivially redo ("which CSS classes to use for this badge", "what to name this helper"). Not durable enough for the catalogue.
+- **One-off scripts, benchmarks, and migration glue.** Their decision context evaporates with the script; the ADR slot is wasted.
+- **`triage.complexity != "large-risky"` and no `--adr` flag.** Soft / inline flows do not write ADRs; the catalogue is design-specialist territory.
+- **Inside `shipped/<slug>/` after Hop 6.** ADRs are repo-durable; the slug artifact is archived. Writing new ADRs against a shipped slug means opening a fresh refinement slug.
+
 ## When to write an ADR (not every D-N becomes one)
 
 Write an ADR when **any** of these hold:

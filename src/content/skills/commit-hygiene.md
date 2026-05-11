@@ -7,6 +7,15 @@ trigger: before every commit-helper.mjs invocation; always-on for slice-builder;
 
 This merged skill covers both kinds of "what lands in a commit" discipline: how the message reads (formerly **commit-message-quality**) and what changes are allowed inside the commit's diff (formerly **surgical-edit-hygiene**).
 
+## When NOT to apply
+
+- **Inline / trivial flows commit with plain `git commit`.** `commit-helper.mjs` is the strict-mode contract; on inline / soft modes the AC↔commit chain is not enforced.
+- **Amending a commit whose SHA is already recorded in `flow-state.json`.** Amend rewrites the SHA, breaks the AC chain, and orphans the recorded reference. Write a note in `build.md` and move on; the messaging is recoverable in review.
+- **Cleaning up pre-existing dead code outside the AC's `touchSurfaces`.** Surfaced under `## Summary → Noticed but didn't touch`; never deleted in-scope. The audit trail breaks regardless of whether the dead code was real.
+- **Writing co-author trailers on solo commits.** Anti-pattern call-out — co-author trailers belong on collaborative commits.
+- **`git add -A` for "convenience".** Forbidden. Stage explicitly (`git add <path>` or `git add -p`); shell history with `-A` is an A-2 finding.
+- **Stylistic / formatter passes that touch files the AC didn't authorise.** A drive-by reformat is A-4; bundle it into a follow-up slug instead.
+
 ## commit-message-quality
 
 `commit-helper.mjs` accepts any non-empty message, but the AC traceability chain only stays useful if the messages stay readable.
@@ -156,6 +165,21 @@ Reviewer findings:
 - F-2 correctness required (A-5) — `legacyPaginate` deletion unrelated to AC-1.
 
 Both findings block the slice from going to compound until the slice-builder splits the diff: one commit for AC-1, drive-by reverts in a separate commit (or in a follow-up slug for the "real" cleanups).
+
+## Common rationalizations
+
+The drive-by reflex and the dead-code-cleanup reflex are how scope discipline breaks. When you catch yourself thinking the left column, do the right column. Surface the rationalization in `## Summary → Noticed but didn't touch` when you resist it.
+
+| rationalization | truth |
+| --- | --- |
+| "While I'm here, I'll just fix this adjacent comment / format / import." | That's the canonical A-4 drive-by. Open a separate slug (or inline-flow) for the cleanup — the reviewer flags every one, the commit chain stays clean. |
+| "This dead code is obviously unused, I'll just delete it." | Pre-existing dead code is A-5, severity `required` — the audit trail breaks regardless of whether the deletion was "obviously safe". Surface under `Noticed but didn't touch` instead. |
+| "`git add -A` is fine, I know what changed." | Forbidden. Stage explicitly (`git add <path>` per file, or `git add -p` for hunks). Shell history with `-A` is itself an A-2 finding. |
+| "The message will say `WIP` for now; I'll fix it in review." | The reviewer rejects `WIP` / `fixes` / `stuff` as F-1 `block`. The cost to write a real subject is 30 seconds; the cost to fix later is a review iteration. |
+| "Amending the last commit is faster than a new one." | Amend rewrites the SHA. The SHA is recorded in `flow-state.json` and downstream traceability blocks; amending breaks the chain. Write a note in `build.md` and move on. |
+| "Subject 80 characters is fine, `git log --oneline` will truncate it nicely." | 72-char hard cap. Past that, CI signals truncate in unhelpful places and `git log --oneline` becomes unreadable. |
+| "The diff has 5 files outside touchSurfaces but they're trivial." | If you cannot point at an AC verification line that justifies a changed line, the line is a drive-by. Revert it or split the slug; "trivial" is not a justification. |
+| "I'll bundle the rename and the bug fix into one commit; they're related." | They're not. The rename is a refactor (`--phase=refactor`); the bug fix is `red` + `green`. Mixing them defeats the audit trail and makes the diff unreviewable. |
 
 ## Composition
 

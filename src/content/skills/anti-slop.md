@@ -7,6 +7,14 @@ trigger: always-on for any code-modifying step (slice-builder, fix-only, recover
 
 cclaw takes its lean ethos seriously: **no busywork, no fake fixes, no fake progress.** This skill applies whenever you are writing code, modifying tests, debugging a build/lint/test failure, or running verification commands.
 
+## When NOT to apply
+
+- **You actually changed code between two runs of the same command.** Running `npm test` after editing a source file is normal TDD-cycle behaviour, not redundant verification — the input changed.
+- **You added a documented `// eslint-disable` / `# noqa` with a one-line justification AND a follow-up issue id.** The justification is what distinguishes "informed suppression" from slop.
+- **You are mocking at the test boundary** (`vi.mock("./db")` inside a test file, not in production). The location matters — boundary mocks aren't shims.
+- **You are running a different tool after the first one passed** (`tsc --noEmit` after `npm test`). That is a different gate, not a re-run of the same command.
+- **The "fallback" really is the documented contract** (e.g. `value ?? defaultValue` where the default is in the spec). Fallbacks that hide unknown failure modes are slop; fallbacks that codify documented defaults are not.
+
 ## Two iron rules
 
 ### 1. No redundant verification

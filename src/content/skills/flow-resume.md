@@ -11,6 +11,14 @@ trigger: /cc invoked with no task argument, OR with an argument while flow-state
 
 Invoked on `/cc` with no task argument (the canonical resume gesture), and on `/cc <task>` when `flow-state.json > currentSlug` is non-null (collision case — show the resume summary alongside the new-task ask). Skipped on `/cc <task>` with an empty / null `currentSlug` (fresh start; `triage-gate.md` runs instead) and on `/cc-cancel` (no resume; just shelves the active flow).
 
+## When NOT to apply
+
+- **Fresh `/cc <task>` with `currentSlug == null`.** No flow to resume — `triage-gate.md` runs from a clean slate.
+- **`/cc-cancel`.** The cancel verb shelves the active flow into `flows/cancelled/<slug>/` and resets `flow-state.json`; resume is structurally meaningless after.
+- **`/cc-idea`.** Idea capture writes a single artifact and exits without touching `flow-state.json`; no resumable state is produced.
+- **Mid-stage tool output.** Resume summarises *at* a stage boundary (the saved `currentStage` is canonical); rendering a resume summary mid-dispatch leaks half-finished work into the picker.
+- **Pre-v8 state files** (`schemaVersion < 2`). Hop 1 hard-stops on those with the migration prompt; resume never runs against unmigrated state.
+
 ## Detection
 
 Read `.cclaw/state/flow-state.json`:

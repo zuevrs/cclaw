@@ -15,13 +15,13 @@ This skill is cclaw's canonical home for the simplification slot that pre-v8.27 
 - **In the fix-only loop** when the reviewer cited a `complexity-budget` or `readability` finding (severity `consider` or higher). The simplification is the F-N fix; the same RED → GREEN → REFACTOR cycle applies, with the RED being the pre-existing test plus the new finding's "did this break adjacent behaviour?" check.
 - **Reviewer-side** when scoring a `complexity-budget` / `readability` finding: cite this skill body for the canonical "is this a real simplification or a stylistic preference?" rubric. The finding's severity is bounded by the rubric — pure-preference renames are `nit`, abstraction-without-consumer is `consider`, abstraction-that-actively-impedes-comprehension is `required`.
 
-**When NOT to use:**
+## When NOT to apply
 
-- The code is already clean — do not simplify for the sake of producing a REFACTOR diff. Explicit `--phase=refactor --skipped` with reason is the correct outcome.
-- You do not yet understand what the code does — comprehend before simplifying. Apply Chesterton's Fence (see Process step 1).
-- The code is performance-critical and a "simpler" version would be measurably slower (cite a benchmark or a `perf` finding from a prior review).
-- A rewrite is imminent (next slug touches this surface end-to-end) — simplifying throwaway code wastes effort.
-- The change would cross the AC's `touchSurfaces` boundary — surface as a "noticed but didn't touch" entry instead.
+- **The code is already clean.** Do not simplify for the sake of producing a REFACTOR diff. Explicit `--phase=refactor --skipped` with a one-line reason is the correct outcome.
+- **You do not yet understand what the code does.** Comprehend before simplifying. Apply Chesterton's Fence (see Process step 1); ask before removing a "redundant" guard whose history you have not read.
+- **The code is performance-critical** and a "simpler" version would be measurably slower. Cite a benchmark or a prior-review `perf` finding before reverting the simplification.
+- **A rewrite is imminent** (the next slug touches this surface end-to-end). Simplifying throwaway code wastes effort and conflicts with the upcoming diff.
+- **The change would cross the AC's `touchSurfaces` boundary.** Surface as a "noticed but didn't touch" entry instead — drive-by simplification is a `commit-hygiene` A-4 violation.
 
 ## Five principles
 

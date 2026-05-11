@@ -15,6 +15,13 @@ Pre-v8.21, this skill ran as a standalone **Hop 2.5** between triage (Hop 2) and
 
 Reference doc only — there is no longer a runtime "Hop 2.5". The actual capture surface lives in `agents/design.md` Phase 0 / Phase 1 on large-risky and in `agents/ac-author.md` Phase 0 on small-medium. Read this skill when you need to understand the assumption-list composition rules (3-7 items, stack / conventions / architecture / out-of-scope) that both new surfaces share, or when you are debugging a resumed pre-v8.21 flow.
 
+## When NOT to apply
+
+- **`triage.path == ["build"]` (inline / trivial).** Single-file edits have no architectural assumptions worth surfacing; the assumption hop is structurally absent.
+- **Resume from a paused flow.** The first specialist's Phase 0 reads `triage.assumptions` from disk as ground truth and does NOT re-prompt. The user already answered.
+- **Pre-v8.21 flows with populated `triage.assumptions`.** The legacy Hop 2.5 captured the list; the new Phase 0 short-circuits the ask on read. Reading this skill helps debug; running it again does not.
+- **Mid-flight new specialist dispatch.** Once one specialist's Phase 0 stamped the list, subsequent specialists in the same flow read from disk — they don't re-author or re-ask.
+
 ## Common pitfalls
 
 See `triage-gate.md` for the triage gate's optional seed of `triage.assumptions` from the most-recent-shipped-slug. See `flow-resume.md` for the resume rule (never re-prompt on resume). See `agents/design.md` / `agents/ac-author.md` for the actual Phase 0 ownership contract.

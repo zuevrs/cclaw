@@ -13,6 +13,13 @@ The three-section shape is taken directly from the addyosmani-skills git-workflo
 
 Always-on for any specialist that authors a cclaw artifact: `plan.md` (ac-author / design), `decisions.md` (design Phase 4 on legacy flows), `build.md` (slice-builder), `review.md` (reviewer / security-reviewer per iteration), `ship.md` (slice-builder at ship dispatch), `learnings.md` (the learnings sub-agent). The slim-summary contract — six lines max, `Stage: …`, `What changed: …`, `Next: …`, `Confidence: …` — is enforced on every dispatch return; the artifact Summary block is appended at write time.
 
+## When NOT to apply
+
+- **Slim summaries** (the six-line dispatch return). Those have their own contract (`Stage: …`, `Artifact: …`, `Confidence: …`, `Recommended next: …`); the three-section block is for **artifact bodies**, not return envelopes.
+- **Inline / trivial flows.** There is no `plan.md` / `build.md` / `review.md` / `ship.md` artifact to append to on the inline path; the orchestrator's one-sentence summary is the audit trail.
+- **Hook output and machine-readable files** (`flow-state.json`, `knowledge.jsonl`). The block is human-prose; structured wire-format files have their own validation contract.
+- **Mid-stage artifact edits** that don't author a new section (e.g. correcting a typo in an AC body). The Summary block reflects the **authored** unit; mechanical fixes don't get their own block.
+
 ## Format
 
 Append exactly this block to the bottom of the artifact you authored. Do not rename the headings, do not add other sections inside it, do not reorder them.

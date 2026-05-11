@@ -1,5 +1,70 @@
 # Changelog
 
+## 8.30.0 — Skill anatomy gaps: `## When NOT to apply` on every skill + `## Common rationalizations` tables in top-8 skills (addy pattern)
+
+### Why
+
+The five-audit review of cclaw v8.29 against addyosmani-skills / gstack / karpathy+mattpocock / flow-complexity / oh-my-openagent+everyinc+chachamaru flagged two anatomy gaps that are consistent across the 18-skill set:
+
+1. **`When NOT to apply` is missing on 0/18 skills.** The addyosmani anatomy pairs every "When to use" with a negative-scope counterpart that names the cases the skill explicitly does NOT cover. The negative scope is what stops the orchestrator from invoking a skill out of context (e.g. running `pre-flight-assumptions` on an inline / trivial flow that has no assumption surface) and what stops a future agent from cargo-culting the skill into adjacent surfaces. v8.26 enforced the positive `## When to use` rubric; v8.30 closes the symmetric gap.
+
+2. **Common Rationalizations tables exist on only 2/8 top skills.** The two-column `excuse → rebuttal` table materialises the most-common ways an agent talks themselves out of obeying the skill, paired with the rebuttal. The reviewer cites the table directly when a slim-summary `Notes:` line names a listed rationalization. The pattern was already present on `tdd-and-verification` (v8.13) and `code-simplification` (v8.27); v8.30 extends it to the other six top skills the orchestrator dispatches into every flow stage and where an agent is most likely to hand-wave past discipline.
+
+Top-8 skills (the ones the orchestrator routes into multiple stages and where rationalization risk is highest):
+
+`tdd-and-verification`, `review-discipline`, `commit-hygiene`, `ac-discipline`, `code-simplification`, `api-evolution`, `debug-and-browser`, `triage-gate`.
+
+Both gaps are **additive-only**. The v8.26 tripwire (Overview + When-to-use + ≥2 depth sections) still fires from `v826-skill-anatomy.test.ts`; v8.30 ships a new tripwire (`v830-skill-anatomy-gaps.test.ts`) that locks the additions in place.
+
+### What changed
+
+**D1 — `## When NOT to apply` section on every one of the 18 skills.** Each skill body gains an additive H2 with 3-7 bullets of negative-scope content (~5-12 lines per skill). The placement is canonical: immediately after the skill's existing `## When to use` (or equivalent first-meta H2), so the positive and negative scopes sit side-by-side. Skills affected: `ac-discipline`, `anti-slop`, `api-evolution`, `code-simplification`, `commit-hygiene`, `conversation-language`, `debug-and-browser`, `documentation-and-adrs`, `flow-resume`, `parallel-build`, `plan-authoring`, `pre-flight-assumptions`, `refinement`, `review-discipline`, `source-driven`, `summary-format`, `tdd-and-verification`, `triage-gate`.
+
+`tdd-and-verification` had a pre-existing `## When TDD does not apply` H2 covering the bootstrap exception; v8.30 renames it to `## When NOT to apply` and **extends** it with four more negative-scope cases (pure prose / config edits, mechanical renames, inline acMode, discovery-phase artifacts). The bootstrap paragraph stays verbatim — the rename is the only mutation.
+
+`code-simplification` had an inline `**When NOT to use:**` bullet list nested inside the `## When to use` H2 (legacy v8.27 shape). v8.30 lifts it to a top-level `## When NOT to apply` H2 and refines the phrasing — the five negative-scope cases are preserved one-for-one.
+
+**D2 — `## Common rationalizations` H2 added to six top-8 skills.** Each new section carries an 8-row two-column markdown table (`rationalization | truth`). The rationalizations are slug-specific — they name the exact mental moves an agent makes to skip the skill's discipline, paired with the rebuttal grounded in cclaw mechanics. Skills affected: `review-discipline`, `commit-hygiene`, `ac-discipline`, `api-evolution`, `debug-and-browser`, `triage-gate`. The other two top-8 skills (`tdd-and-verification` v8.13, `code-simplification` v8.27) already shipped the table and are left verbatim.
+
+The new tables sit alongside any pre-existing `## Anti-patterns` / `## Common pitfalls` / `## Smell check` sections — they are complementary, not replacements. Anti-patterns is the named-pattern catalogue; rationalizations is the rebuttal catalogue. Each rationalization row also points back to the cclaw mechanic that catches it (e.g. "the cap-recovery picker exists for this exact mistake", "v8.20 architecture-severity gate fires across every acMode").
+
+**D3 — Tripwire test installed.** `tests/unit/v830-skill-anatomy-gaps.test.ts` (8 tests across 3 describe blocks) locks:
+
+- **AC-1** — every skill carries a `## When NOT to apply` (or equivalent) H2 heading with non-empty body content (≥30 chars). The regex accepts variants (`When NOT to use`, `When NOT to invoke`, `When this skill does NOT apply`) but the canonical text is `When NOT to apply`.
+- **AC-2** — each of the eight top skills carries a `## Common rationalizations` or `## Anti-rationalization` H2 AND that section contains a two-column markdown table (pipe-delimited header row immediately followed by a `| --- | --- |` separator). A bullet list, prose paragraph, or single-column table does not satisfy the rubric — the v8.30 addition is the **table shape**.
+- **AC-3** — every skill still has its `# Skill: <name>` H1; the v8.26 `## When to use` heading from the prior anatomy rubric is preserved; bodies stay under a generous 1500-line ceiling (no anatomy patch should bloat a skill past it).
+
+The v8.26 tripwire (Overview + When-to-use + ≥2 depth sections) was NOT modified; it continues to fire independently. The two tripwires together lock the full anatomy: v8.26 covers the positive surface (every skill has the rubric), v8.30 covers the negative-scope surface and the rationalization-table surface.
+
+### Migration
+
+**v8.29 → v8.30.** Drop-in. No flow-state schema change, no orchestrator behaviour change, no skill body removed or rewritten. The 18 skill files gained 5-15 lines each (When NOT) and six of the top-8 gained an additional ~30-50 lines (Common rationalizations table). Specialist prompts read the same skill bodies; the additive sections become available immediately at the next dispatch.
+
+Total skill body growth across the 18 files: ~110 lines for the When-NOT additions + ~245 lines for the rationalizations tables in six top-8 skills + ~7 lines from the tdd-and-verification rename extension. Most affected: `commit-hygiene` (+34 line table), `triage-gate` (+33 line table), `review-discipline` (+33 line table), `api-evolution` (+33 line table), `ac-discipline` (+33 line table + 9-line When-NOT), `debug-and-browser` (+33 line table). Smallest deltas: short reference skills (`refinement`, `pre-flight-assumptions`, `plan-authoring`) gained only the 5-7 line When-NOT — they did not need a rationalizations table (not top-8).
+
+`code-simplification` net change: zero new sections (already had both); the inline When-NOT list was lifted to top-level H2 without semantic change. `tdd-and-verification` net change: rename `## When TDD does not apply` → `## When NOT to apply` + 4 bullets of new negative-scope content; the rationalization table was unchanged.
+
+### What we noticed but didn't touch (v8.30 scope)
+
+- **`anti-slop` rationalization table.** The skill has a "What this skill does NOT prevent" section that functionally lists negative scope; v8.30 added a separate `## When NOT to apply` for consistency. A future polish could merge the two if they drift apart — left for a focused docs slug.
+- **Capitalization consistency across rationalization tables.** Some rows lead with capitals (`"This is a 5-line change..."`); others with lowercase (`"It's working, no need to touch it."`). The variance is intentional — the rationalization is a quoted thought, not a heading. A future polish could enforce one shape via the tripwire if it bothers anyone.
+- **Cross-references between the new tables.** Each table is self-contained on its skill body; some rationalizations would benefit from a citation to a sibling skill's row (e.g. `review-discipline`'s row about severity-padding cross-references `ac-discipline`'s severity guidance). v8.30 keeps tables independent; cross-linking is a polish slug.
+- **Specialist prompts re-reading the rationalization table at dispatch time.** Currently the table is in the skill body; the prompt reads the body via the existing `read-skill` mechanism. A future change could pull a one-line summary of the table into the prompt header for very-short dispatches; for now the body read is the contract.
+
+### Deferred
+
+- **`anti-slop` table merge / consistency polish.** Above.
+- **Cross-referenced rationalization rows.** Above.
+- **Prompt-header rationalization snippets** for short dispatches. Above.
+- **Rationalization tables on non-top-8 skills** when an audit identifies the gap (the rubric is opt-in for non-top-8; v8.30 just locks the floor).
+
+### Tests
+
+- `tests/unit/v830-skill-anatomy-gaps.test.ts` — **8 tests across 3 describe blocks** locking the AC-1 / AC-2 / AC-3 contract.
+- All pre-existing tests stay green; no v8.26 tripwire assertion was modified.
+
+**Total: 818 → 826 (+8 net) across 58 → 59 files. `release:check` green: pack ~130 files, smoke passes, `npm pack --dry-run` produces `cclaw-cli-8.30.0.tgz`.**
+
 ## 8.29.0 — Install UX cleanup: drop `docs/`, TUI-first CLI (`npx cclaw-cli@latest` opens a top-level menu), `--non-interactive` escape hatch, harness-isolation tripwire suite
 
 ### Why

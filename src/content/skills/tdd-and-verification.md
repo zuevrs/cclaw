@@ -218,9 +218,16 @@ When reviewer returns `block`, the same TDD cycle applies to the fix:
 
 The AC id stays the same; commit messages cite `F-N`.
 
-## When TDD does not apply
+## When NOT to apply
 
 The single exception is **bootstrap of the test framework itself** — a slug whose AC-1 is "test framework installed and one passing example test exists". In that case the orchestrator must mark the slug as `build_profile: bootstrap` in plan frontmatter, and `commit-helper` accepts the GREEN commit without a prior RED for AC-1 only. Every subsequent AC and every other slug uses the full cycle.
+
+Other negative-scope cases (skill stays a reference rather than a runtime rule):
+
+- **Pure prose / config edits** with no production code change (README typo, CHANGELOG edit, `package.json` version bump). The verification gate still runs at ship; TDD is structurally absent because there is nothing to test-first.
+- **Mechanical renames driven by `commit-helper`'s known-safe set.** A rename slug uses behaviour-preserving discipline (`refactor-safety` section below); the rename itself does not need a RED.
+- **`triage.acMode == "inline"`.** Trivial inline edits commit straight without the per-AC commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo.
+- **Discovery-phase artifacts** (design Phases 0-7 in main context, plan / decisions / ADR drafts). Those produce prose, not behaviour; the build stage is where TDD opens.
 
 ## Anti-rationalization table (T2-8, addyosmani pattern; v8.13)
 

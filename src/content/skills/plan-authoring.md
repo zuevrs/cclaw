@@ -7,6 +7,13 @@ trigger: when writing or updating .cclaw/flows/<slug>/plan.md
 
 Use this skill whenever you create or modify any `.cclaw/flows/<slug>/plan.md`.
 
+## When NOT to apply
+
+- **Inline / trivial flows (`triage.path == ["build"]`).** No `plan.md` is written; the orchestrator goes straight to the edit + commit.
+- **Editing `flows/shipped/<slug>/plan.md`** — shipped artifacts are read-only history. A refinement creates a NEW slug whose plan carries `refines: <old-slug>`; the shipped plan stays untouched.
+- **Authoring `build.md` / `review.md` / `ship.md` / `learnings.md`.** Each artifact has its own contract; this skill is plan-specific. The `summary-format` skill carries the shared three-section block all artifacts share.
+- **Pure prose questions from the user** that produce no plan write. Reply directly; don't open a flow.
+
 ## Rules
 
 1. **Frontmatter is mandatory.** Every plan starts with the YAML block from `.cclaw/lib/templates/plan.md`. Required keys: `slug`, `stage`, `status`, `ac`, `last_specialist`, `refines`, `shipped_at`, `ship_commit`, `review_iterations`, `security_flag`.
