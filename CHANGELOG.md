@@ -1,5 +1,53 @@
 # Changelog
 
+## 8.32.0 — Additive skills batch I: `context-engineering` + `performance-optimization` (addy pattern, +2 skills)
+
+### Why
+
+The five-audit addyosmani-skills review found two canonical skill patterns the cclaw 18-skill set was missing:
+
+1. **`context-engineering`** — the addy anatomy's rules for *what the dispatcher loads into a context window before the specialist runs*. cclaw had the surface (every `/cc` flow constructs a dispatch envelope, every specialist reads a slim summary, every confusion-management decision rides `flow-state.json`) but no single canonical home for the **rules behind those primitives**: the five-layer context hierarchy (rules → specs → source → errors → conversation), the three packing strategies (brain dump for inline / selective include for small-medium / hierarchical summary for large-risky), and the three confusion-management sources (internal conflict / missing requirement / drift). v8.32 lifts those rules out of the orchestrator body's implicit behaviour and into a stage-windowed-on-`["always"]` skill that the orchestrator and every specialist read on demand.
+
+2. **`performance-optimization`** — addy's measurement-first perf rubric. cclaw's reviewer carries a `perf` axis in its seven-axis pass (v8.13) but the citation surface was a one-line "you should measure" sentence in the reviewer prompt; there was no canonical rubric covering the **what** of perf work (Core Web Vitals targets, N+1 query anti-patterns, bundle budget table, "don't optimise without numbers" iron rule). The v8.32 skill is the citation target the reviewer's `perf` axis points at, and the build-stage REFACTOR's perf-aware checklist consults this skill body before the slim summary is written.
+
+Both skills follow the v8.27 `code-simplification` lift pattern: addy's underlying rubric, cclaw-native stage-windowing, integration with the existing TDD cycle / reviewer axes / dispatch envelope / `commit-hygiene` no-drive-by rule, and cclaw's two-column `excuse → truth` rationalizations table shape.
+
+### What changed
+
+- **D1 — Two new skill bodies** added under `src/content/skills/`:
+  - `context-engineering.md` (~9.5K chars; v8.26 anatomy: Overview / When to use / When NOT to apply / Context hierarchy / Packing strategies / Confusion management / Common rationalizations / Red flags / Verification / Cross-references). Stage-windowed on `["always"]`.
+  - `performance-optimization.md` (~12K chars; same anatomy plus Core Web Vitals targets / Measurement-first workflow / N+1 query anti-patterns / Bundle budget / Iron rule). Stage-windowed on `["build", "review"]`. Triggers include `touch-surface:ui` and `finding:perf`.
+
+- **D2 — `AUTO_TRIGGER_SKILLS` registration** in `src/content/skills.ts`: appended both new entries with explicit `stages`, `triggers`, and `description` fields. Total skill count: 18 → 20.
+
+- **D3 — Tripwire** at `tests/unit/v832-additive-skills-batch-1.test.ts` (21 tests, 5 describe blocks):
+  - **AC-1 — registration:** both skills present in `AUTO_TRIGGER_SKILLS`, file names match, body length ≥ 2000 chars, total count is 20.
+  - **AC-2 — stage windowing:** `context-engineering.stages == ["always"]`; `performance-optimization.stages` includes `build` and `review`, excludes `triage` / `ship` / `compound`; `performance-optimization.triggers` includes `touch-surface:ui` and `finding:perf`.
+  - **AC-3 — content presence:** `context-engineering` names the five-layer hierarchy (and pins ordering rules → specs → source → errors → conversation), the three packing strategies, and the three confusion sources. `performance-optimization` names Core Web Vitals (LCP / INP / CLS with thresholds 2.5s / 200ms / 0.1), the iron rule ("don't optimise without numbers"), an N+1 catalogue ≥ 4 entries, a bundle budget table ≥ 4 entries, and the measurement-first workflow (baseline → RED → GREEN → REFACTOR).
+  - **AC-4 — descriptions in sync with bodies:** both skill descriptions name "addy", the load-bearing primitives, and (for the perf skill) the iron rule.
+  - **AC-5 — v8.26 + v8.30 anatomy invariants preserved on new skills:** both carry `## When to use`, `## When NOT to apply`, and ≥ 2 depth-section headings.
+
+- **D4 — Tripwire extensions (not relaxations):** the v8.27 `code-simplification` tripwire hardcoded `AUTO_TRIGGER_SKILLS.length === 18` and "18 skills total" in the rendered block. v8.32 grows the set to 20; the v8.27 assertions are updated to track the new count. Original semantic intent (assert the set didn't shrink behind a v8.27 mid-flight refactor) is preserved.
+
+### Migration
+
+Drop-in. No schema bump, no breaking change. New skills are additive and ride the existing skill-machinery:
+
+- The orchestrator's "Skills attached" section in `/cc` body picks up both new entries on next `cclaw refresh`.
+- Specialist prompts' `## Active skills` block re-renders to show 20 skills total (or fewer per stage with v8.19 stage-windowing).
+- `cclaw install` writes both new files to `.cclaw/lib/skills/`.
+
+### Deferred to follow-up slugs
+
+- **`context-engineering` cross-references to runbooks not yet authored.** This skill names `dispatch-envelope.md` (exists) and `pre-flight-assumptions.md` (exists) but assumes a future "envelope-construction worked example" runbook the orchestrator opens when an envelope review fails. The runbook is unwritten; v8.32 makes the cross-reference a forward pointer.
+- **`performance-optimization` config knob.** The skill names `cclaw.config.json > perfBudget` as the override for Core Web Vitals + bundle thresholds. The config knob is not yet plumbed through `src/config.ts`; v8.32 documents the intended shape and the next slug can plumb it (a 2-3 line addition, but it lands cleanly on its own).
+- **Reviewer prompt cross-reference.** The reviewer's `perf` axis prompt still contains the one-line "you should measure" sentence; a future slug should swap that for a one-line "see `.cclaw/lib/skills/performance-optimization.md`" pointer so the reviewer's citation chain is direct.
+- **Stage `["always"]` overlap audit.** With v8.32, 4 of the 20 skills are stage-windowed on `["always"]` (anti-slop, conversation-language, summary-format, context-engineering, flow-resume). A future slug can audit whether any pair is semantically overlapping enough to merge (the same way v8.16 merged 13 sources into 6 thematic groups).
+
+### Tests
+
+`npm test`: 851 → 872 (+21) tests across 60 → 61 files. The new tripwire pins all five AC. v8.26 anatomy + v8.30 anatomy-gaps tripwires continue to fire over the full 20-skill set and stay green. `release:check`: green; pack 136 files into `cclaw-cli-8.32.0.tgz`.
+
 ## 8.31.0 — Path-aware orchestrator trimming: Hop 4 pause/resume + plan-on-small/medium lifted to on-demand runbooks
 
 ### Why
