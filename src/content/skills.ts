@@ -32,12 +32,20 @@ export interface AutoTriggerSkill {
 function readSkill(fileName: string): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const full = path.resolve(here, "skills", fileName);
+  let raw: string;
   try {
-    return readFileSync(full, "utf8");
+    raw = readFileSync(full, "utf8");
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     throw new Error(`cclaw: failed to read skill body ${full} (${reason})`);
   }
+  // Normalize CRLF → LF. The .gitattributes file pins skill .md to `eol=lf`,
+  // but Windows checkouts predating that rule, or downstream consumers using
+  // a custom `core.autocrlf` setting, can still hand us \r\n. The runtime
+  // contract requires the body to start with `---\n` and contain LF-only
+  // separators (install.ts copies the body byte-for-byte into `.cclaw/lib/
+  // skills/*.md`, where downstream tooling expects POSIX newlines).
+  return raw.replace(/\r\n/gu, "\n");
 }
 
 export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
