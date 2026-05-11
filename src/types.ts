@@ -218,6 +218,27 @@ export interface TriageDecision {
    * unchanged.
    */
   iterationOverride?: boolean | null;
+  /**
+   * v8.23 — set when Hop 1 (Detect) auto-downgraded `acMode` because the
+   * project lacks a usable VCS. Today the only value is `"no-git"`, which
+   * means the orchestrator detected the absence of `.git/` at projectRoot
+   * and forced `acMode` from `strict` to `soft` (strict requires AC trace
+   * commits, which require git). The field is purely informational — it
+   * leaves an audit trail for "why is this large-risky slug running in
+   * soft mode?". Downstream readers can branch on its presence to
+   * suppress git-only affordances (parallel-build worktrees, inline-path
+   * `git commit`).
+   *
+   * Optional, omitted on flows that did not downgrade. `null` is also
+   * accepted for forward-compat callers that explicitly clear the field.
+   * Pre-v8.23 flows without the field validate unchanged.
+   *
+   * Reserved values: `"no-git"`. Future Hop 1 health checks may add
+   * additional reasons (e.g. `"detached-head"`); validators only check
+   * type (`string | null | absent`), not membership in a fixed enum, so
+   * a new reason can be introduced without a schema bump.
+   */
+  downgradeReason?: string | null;
 }
 
 export interface CliContext {

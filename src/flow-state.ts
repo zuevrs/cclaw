@@ -241,6 +241,13 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   ) {
     throw new Error("triage.iterationOverride must be a boolean, null, or absent");
   }
+  if (
+    triage.downgradeReason !== undefined &&
+    triage.downgradeReason !== null &&
+    typeof triage.downgradeReason !== "string"
+  ) {
+    throw new Error("triage.downgradeReason must be a string, null, or absent");
+  }
   if (triage.priorLearnings !== undefined && triage.priorLearnings !== null) {
     if (!Array.isArray(triage.priorLearnings)) {
       throw new Error("triage.priorLearnings must be an array, null, or absent");

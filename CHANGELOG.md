@@ -1,5 +1,62 @@
 # Changelog
 
+## 8.23.0 — No-git fallback: Hop 1 git-check auto-downgrades strict → soft, commit-helper.mjs is a graceful no-op without VCS
+
+### Why
+
+Three surfaces broke silently on a `.git/`-less project: strict-mode build (commit-helper.mjs's `git diff --cached --name-only` crashed with `"git not available"` and exited 2, halting the build dispatch); the inline path's terminal `git commit` (crashed the same way); parallel-build (couldn't construct `.cclaw/worktrees/<slug>-s-N` via `git worktree`). The orchestrator had no explicit no-git mode — it assumed every project that could run cclaw could also commit. In practice users sometimes drop cclaw into a freshly-extracted tarball, an unpacked download, or a working tree where `.git/` was deleted out-of-band; these flows died with an opaque error inside a hook the user never invoked directly.
+
+v8.23 adds a Hop 1 git-check sub-step, auto-downgrades `triage.acMode` from `strict` to `soft` when `.git/` is absent (with `triage.downgradeReason: "no-git"` as the audit trail), and rewrites `commit-helper.mjs`'s soft-mode branch to be a graceful no-op (one-line stderr warning, exit 0) when git is unavailable. The Hop 6 finalize path already uses `git mv || mv` (since v8.13); the ship-gate's `no-vcs` finalization option is preserved.
+
+### What changed
+
+**D1 — `start-command.ts` Hop 1 gains a git-check sub-step.** A new `### Hop 1 — git-check sub-step (v8.23)` paragraph follows the existing Hop 1 detect table. Before triage patches, the orchestrator checks `<projectRoot>/.git/`; on absence it forces `triage.acMode` to `soft` regardless of class and stamps `triage.downgradeReason: "no-git"`. A one-sentence warning is surfaced to the user at triage time. The downgrade is one-way for the flow's lifetime — running `git init` mid-flight does not re-upgrade (only `/cc-cancel` + fresh `/cc` re-triages). The orchestrator body intentionally stays terse on the rationale (the v8.22 character budget is tight); rationale, behaviour, and downstream consequences live in the `triage-gate.md` skill.
+
+**D2 — `triage-gate.md` documents the auto-downgrade end-to-end.** New section `## No-git auto-downgrade (v8.23)` (between "Path semantics" and "When to skip the gate") covers: the structural reason for the downgrade (strict requires per-AC commits → SHAs that no-git cannot produce; parallel-build requires `git worktree`; inline path's `git commit` would crash); the audit-trail field (`triage.downgradeReason: "no-git"`); the one-sentence user-facing warning template; the one-way-for-lifetime rule; the ship-gate `no-vcs` finalization path remaining available.
+
+**D3 — `TriageDecision.downgradeReason` is a first-class optional field.** `src/types.ts` adds `downgradeReason?: string | null` to the interface with a docstring covering the v8.23 contract (today the only reserved value is `"no-git"`; future Hop 1 health checks may add others). The flow-state validator in `src/flow-state.ts::assertTriageOrNull` validates the field as `string | null | absent` (not a fixed enum, so new reasons can be introduced without a schema bump). Pre-v8.23 flows without the field validate unchanged. Non-string values (number, boolean, object) are rejected with a clear error.
+
+**D4 — `commit-helper.mjs` (the install-layer-written hook) gracefully no-ops in soft mode without git.** `src/content/node-hooks.ts::COMMIT_HELPER_HOOK` is restructured: an up-front `hasGitDir()` check runs once, then both mode branches consult `gitPresent` before invoking any `git` subcommand. In soft / inline mode: no git → write `[commit-helper] no-git: <acMode> mode running without VCS, commit skipped (no-op). Run \`git init\` if you want commit traces.` to stderr, exit 0. Stdout stays empty so CI / scripted consumers reading it parse cleanly. In strict mode: no git → hard-fail with a pointed message naming Hop 1's expected auto-downgrade (`"strict mode requires git, but no .git/ found at projectRoot. Hop 1 should have auto-downgraded to soft acMode with downgradeReason: \"no-git\" — your flow-state.json is inconsistent. Run /cc-cancel and re-triage."`) and exit 2. The strict-mode hard-fail is intentional — a strict-mode flow with no git is structurally inconsistent and the user needs to know.
+
+**D5 — Hop 6 finalize, ship-gate, parallel-build envelope unchanged.** Hop 6 already uses `git mv || mv` (v8.13 behaviour); no change needed. Ship-gate's `no-vcs` finalization option remains the documented escape hatch when the user explicitly wants to finalize without committing. Parallel-build is suppressed at slice-builder dispatch time when `triage.downgradeReason == "no-git"` (the slice-builder reads the field and falls back to sequential dispatch — the structural assertion lives in `triage-gate.md`).
+
+### Migration
+
+**v8.22 → v8.23.** Drop-in. Run `cclaw upgrade` to refresh `.cclaw/lib/skills/triage-gate.md`, `.cclaw/lib/start-command.md`, and the installed `commit-helper.mjs` hook. Three migration scenarios:
+
+1. **Fresh v8.23 `/cc` on a git-backed project.** Behaviour unchanged. Hop 1's git-check passes silently; triage proceeds; no `downgradeReason` is written; commit-helper.mjs takes its existing strict / soft branches.
+2. **Fresh v8.23 `/cc` on a no-git project (the case v8.23 fixes).** Hop 1's git-check fires; triage's `acMode` is forced to `soft`; `triage.downgradeReason: "no-git"` is persisted; the orchestrator surfaces a one-sentence warning. Build dispatch runs in soft mode; commit-helper.mjs treats every commit attempt as a no-op. Ship-gate offers the `no-vcs` finalization path.
+3. **Resumed pre-v8.23 flow on a no-git project (rare).** The legacy strict-mode flow has no `downgradeReason`; commit-helper.mjs is invoked, sees no git, and now writes the v8.23 stderr warning + exits 0 instead of crashing. The flow proceeds but commits are skipped — the user sees a build that "completed" without persisting AC trace SHAs. They can `/cc-cancel` and `git init` + fresh `/cc` to re-triage cleanly.
+
+**No flow-state schema bump.** The new field is optional; legacy state files validate unchanged. **No commit-helper.mjs CLI-arg changes** — `--message`, `--ac`, `--phase`, `--skipped` semantics are unchanged. Only the early-return on no-git is new.
+
+### What we noticed but didn't touch (v8.23 scope)
+
+- **Hop 1 health-check could grow into a richer `cclaw doctor` surface.** Today the only check is `.git/` presence. Future health checks (detached HEAD, dirty working tree, untracked-files threshold, no remote, missing `node_modules` after install) could share the same `downgradeReason` audit-trail pattern. Deferred per the plan's Tier-4 backlog ("no `cclaw doctor` diagnostic — Hop 1 git-check covers the critical case").
+- **The slice-builder's parallel-build envelope suppression** is described in `triage-gate.md` and `runbooks/parallel-build.md` but not enforced by an explicit `triage.downgradeReason` check in the dispatch envelope code path. The slice-builder is prompt-driven (it's a sub-agent reading the dispatch envelope), so the orchestrator's verbal contract is the enforcement surface; a future slug could add a typed precondition on the envelope shape.
+- **commit-helper.mjs's strict-mode hard-fail message** names `/cc-cancel` as the recovery path. A future slug could surface a structured prompt instead, but commit-helper is a hook — it runs outside the agent's structured-ask facility and stderr is the only honest channel.
+- **The `triage.downgradeReason` field is open-ended.** Today only `"no-git"` is valid. The validator does not enforce a string-enum (only `string | null`). A future slug could tighten the constraint or expand the reserved-value list. The open shape today makes adding `"shallow-clone"`, `"detached-head"`, etc. cheap.
+- **No `cclaw upgrade --re-triage` flag.** A user with an in-flight no-git flow who runs `git init` and wants to re-upgrade triage must run `/cc-cancel` + fresh `/cc`. The in-place re-upgrade UX would touch `flow-state.json`'s "triage is immutable for the lifetime of the flow" invariant — declined out of scope.
+
+### Deferred
+
+- **`cclaw doctor` diagnostic command.** Out of scope (Tier-4 rejected; Hop 1 git-check covers the critical surface). Could be revisited if more health-check signals accumulate.
+- **Typed `DowngradeReason` union.** Today the field is `string | null`. A typed union (`"no-git" | "shallow-clone" | "detached-head" | …`) would harden against typos but locks in a small enum. Defer until at least one more reason exists.
+- **Parallel-build envelope type-level suppression.** Today the orchestrator's prompt contract is the enforcement. A future slug could thread `triage.downgradeReason` into the slice-builder's dispatch-envelope typed shape.
+- **Re-triage on `git init` mid-flight.** Deferred — would break the immutable-triage invariant.
+
+### Tests
+
+`tests/unit/v823-no-git-fallback.test.ts` — **17 new tripwire tests** across five describe blocks:
+
+- AC-1 — `start-command.ts` Hop 1 documents the git-check sub-step; body names the auto-downgrade rule (strict → soft when no `.git/`); body names `triage.downgradeReason` as the audit-trail field; body tells the agent to surface a one-line warning.
+- AC-2 — `triage-gate.md` names the no-git auto-downgrade rule; records the audit-trail field name (`downgradeReason`); calls out the parallel-build / worktree consequences.
+- AC-3 — `commit-helper.mjs` body has a soft-mode no-git branch that exits 0; writes the warning to stderr (not stdout); still hard-fails in strict mode when git is unavailable; notes the soft-mode no-op writes no AC trace and no commit.
+- AC-4 — `flow-state.json` round-trips a triage with `downgradeReason: "no-git"`; with `null`; without the field (backward compat); rejects non-string values (e.g. number) with a clear error.
+- AC-5 — `cclaw init` on a freshly-created (no `.git`) temp dir completes without crash; `cclaw sync` is idempotent on a no-git project and writes no `.git` files.
+
+**Total: 696 tests across 51 files (was 679 across 50 in v8.22; +17 net from the v823-no-git-fallback suite + 1 new file). All green.**
+
 ## 8.22.0 — Orchestrator-slim: on-demand runbooks lift Hop 3-6 procedural blocks out of the always-loaded `/cc` body
 
 ### Why
