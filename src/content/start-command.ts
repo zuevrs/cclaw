@@ -10,10 +10,16 @@ const RESEARCH_HELPER_LIST = RESEARCH_AGENTS.map(
 ).join("\n");
 
 const TRIAGE_ASK_EXAMPLE = `\`\`\`
-# Single tool call, two questions in one form when the harness supports it
-# (Cursor's askUserQuestion, Claude Code's AskUserQuestion both accept a
-# questions[] array of length ≥1; OpenCode and Codex collapse to sequential
-# blocks if multi-question is unsupported). Combining saves one round-trip.
+# Single tool call, TWO questions in one form (always two on the structured-ask
+# path — even when the recommended path is inline, so the form shape stays
+# stable; the run-mode answer is ignored at patch time on inline). Cursor's
+# askUserQuestion, Claude Code's AskUserQuestion, OpenCode's "ask" content
+# block, and Codex's prompt all accept a questions[] array of length ≥1.
+# Combining saves one round-trip per non-inline flow start.
+#
+# IMPORTANT: this ask is skipped entirely on the zero-question fast path
+# (trivial / high-confidence; see Hop 2 §1). The orchestrator only emits the
+# announce sentence then proceeds straight to inline dispatch.
 
 askUserQuestion(
   questions: [
@@ -30,7 +36,6 @@ askUserQuestion(
     },
     {
       id: "run-mode",
-      # Skip this entry entirely when the recommended path is inline; only ONE question is rendered.
       prompt: <one sentence in the user's language asking which run mode to use>,
       options: [
         <option label conveying: step mode — pause after each stage; next /cc advances (the default)>,
@@ -42,7 +47,8 @@ askUserQuestion(
 )
 
 # Harness fallback (no multi-question support): two sequential askUserQuestion
-# calls in the order shown. Skip the second on the inline path.
+# calls in the order shown. If Question 1 returned "switch to trivial",
+# skip the Question 2 call (no stages to chain).
 \`\`\`
 
 The slots above (\`<...>\`) are intent descriptors, not literal strings. Render the prompt and every option label in the user's conversation language; do not copy the descriptor text. Mechanical tokens — \`/cc\`, \`/cc-cancel\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`auto\`, \`step\`, \`AC-N\`, slugs, file paths, JSON keys — remain in their original form regardless of language. See \`conversation-language.md\`.`;
@@ -77,10 +83,13 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
     "userOverrode": false,
-    "runMode": "step"
+    "runMode": "step",
+    "autoExecuted": false
   }
 }
-\`\`\``;
+\`\`\`
+
+\`autoExecuted: true\` is set **only** on the zero-question fast path (trivial / high-confidence, no structured ask shown). On every other path \`autoExecuted: false\`. \`runMode\` is \`null\` on inline (whether reached via fast path or via Question 1 option "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.`;
 
 const RESUME_SUMMARY_EXAMPLE = `\`\`\`
 Active flow: <slug>
@@ -204,13 +213,17 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 ## Hop 2 — Triage (fresh starts only)
 
-Run the \`triage-gate.md\` skill. **Use the harness's structured question tool** (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code do); fall back to two sequential calls only when the harness does not. Combining saves one user round-trip on every non-inline flow start.
+Run the \`triage-gate.md\` skill. The gate has **two modes** in v8.14+:
+
+1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), AC mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`autoExecuted: true\`, \`runMode: null\`; proceed straight to the inline edit (Hop 3 — *Dispatch* on the build stage). Pre-flight (Hop 2.5) is skipped on inline by design.
+
+2. **Combined-form structured ask** — for every other classification (and for trivial when confidence is \`medium\` or \`low\`), use the harness's structured question tool (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code / OpenCode do); fall back to two sequential calls only when the harness genuinely only supports single-question structured ask. Combining saves one user round-trip on every non-inline flow start.
 
 ${TRIAGE_ASK_EXAMPLE}
 
 The first question's prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, AC mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
 
-The second question (run-mode) is **omitted entirely** on the trivial / inline path (no stages to chain) — render only the first question, never both. Default \`runMode\` is \`step\` if the user dismisses the question or the harness can only show one.
+The second question (run-mode) is **always rendered** when the combined form is shown, even when the user might pick the "switch to trivial" option in Question 1 — the run-mode answer is then **ignored at patch time** and \`runMode\` is written as \`null\` on the inline path (no stages to chain). This keeps the form shape stable across answers and avoids a conditional second-call round-trip. Default \`runMode\` is \`step\` if the user dismisses the form or the harness can only show one question.
 
 If the harness lacks a structured ask facility, fall back to the legacy form:
 

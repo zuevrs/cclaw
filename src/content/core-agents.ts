@@ -93,7 +93,7 @@ export const RESEARCH_AGENTS: ResearchAgent[] = [
     title: "Repo research",
     activation: "on-demand",
     modes: ["scan"],
-    description: "Read-only repo scan: stack, focus-surface patterns, test conventions, risk areas. Dispatched by planner/architect before authoring on brownfield.",
+    description: "Read-only repo scan: stack, focus-surface patterns, test conventions, risk areas. Dispatched by planner or by the design phase (mostly on `deep` posture) before authoring on brownfield.",
     prompt: REPO_RESEARCH_PROMPT
   },
   {

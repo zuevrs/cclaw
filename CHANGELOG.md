@@ -1,5 +1,64 @@
 # Changelog
 
+## 8.14.0 — Strong-design release: brainstormer + architect collapse into one main-context `design` specialist with seven multi-turn phases; inline D-N decisions in plan.md; streamlined triage gate (zero-question fast path + single combined two-question form)
+
+### Why
+
+The pre-v8.14 discovery sub-phase ran a three-step `brainstormer → architect → planner` chain of one-shot sub-agents with a checkpoint-question between each. The brainstormer's "Frame" and the architect's "decisions" both came from a single sub-agent shot with no user dialog — thin discovery that the audit (10+ parallel agents across the same eleven reference repos plus an internal review of cclaw's runtime + prompts) flagged as the weakest stage on large-risky flows.
+
+The audit also surfaced two friction points in Hop 2 / Hop 2.5: the v8.13 "single multi-question form" only collapsed two of the three early-flow questions, leaving trivial requests stuck behind a structured ask, and decisions lived in a separate `decisions.md` artifact that downstream specialists (reviewer, slice-builder) had to remember to read alongside `plan.md`.
+
+### What changed
+
+**D1 — Strong `design` specialist replaces brainstormer + architect.** New `design` specialist (`src/content/specialist-prompts/design.ts`, 359 lines, 21 KB) runs in the MAIN orchestrator context with `activation: "main-context"` — multi-turn, user-collaborative, across seven phases:
+
+- 0 Bootstrap (silent)
+- 1 Clarify (≤3 questions, one at a time)
+- 2 Frame (confirm / revise / cancel picker)
+- 3 Approaches (2-3 options; pick / follow-up / propose-another / go-simpler)
+- 4 Decisions (one `D-N` record per turn; accept / revise / skip — written inline in `plan.md`)
+- 5 Pre-mortem (`deep` posture only; 3-7 failure modes)
+- 6 Compose + 8-rule self-review (silent)
+- 7 Sign-off (approve / revise / save+cancel)
+
+Two postures (`guided` default; `deep` on irreversibility / security triggers or self-escalated during Phase 3). Always step-mode internally (pauses at every phase boundary regardless of `triage.runMode`). Anti-rationalization table; forbidden actions (no code / no AC / no pseudocode); `lastSpecialist: "design"` only patched after Phase 7 sign-off.
+
+`DISCOVERY_SPECIALISTS = ["design", "planner"]`; `SPECIALISTS` is the 5-tuple `design / planner / reviewer / security-reviewer / slice-builder`. `LEGACY_DISCOVERY_SPECIALISTS = ["brainstormer", "architect"]` kept for migration paths. `CoreAgent.activation` gains `"main-context"` alongside `"on-demand"`.
+
+**D2 — Inline `D-N` decisions in plan.md.** Design Phase 4 writes `D-N` rows directly into `plan.md > ## Decisions`; Phase 5 writes `## Pre-mortem`. No separate `decisions.md` for v8.14+ flows. The legacy `decisions.md` template is kept and marked legacy / pre-v8.14 only (still installed for `legacyArtifacts: true` flows and read on resume for slugs that pre-date v8.14). Reviewer / slice-builder / security-reviewer / planner all updated to read `plan.md > ## Decisions` first and fall back to `decisions.md` only on legacy resumes. `compound.signals.hasArchitectDecision` keeps its stable name for backward compat; it now means "design Phase 4 recorded ≥1 D-N inline in plan.md, OR a legacy decisions.md is present".
+
+**D3 — Streamlined triage gate.** Hop 2 has two modes now:
+
+- **Zero-question fast path**: when the heuristic classifies the request as `trivial` with `high` confidence AND the prompt has no "discuss first" / "design only" / "what do you think" cue, the structured ask is **skipped entirely**. The orchestrator prints a one-sentence announcement (complexity, AC mode, touched files, `/cc-cancel` affordance) and proceeds straight to the inline edit. `flow-state.json > triage.autoExecuted: true` records the fast-path use; `runMode: null` (no stages to chain).
+- **Combined-form ask**: every other classification renders **one** structured-ask call with **two questions in one form** (path + run-mode). The run-mode answer is structurally meaningless on the inline path and is written as `null`; the form shape stays stable across answers.
+
+Type additions: `Triage.autoExecuted?: boolean | null`, `Triage.runMode?: RunMode | null`. `Triage.interpretationForks` kept on the type but marked legacy — v8.14 handles ambiguity live in design Phase 1 (Clarify) instead of pre-listing forks at Hop 2.5.
+
+**D4 — Legacy state migration.** State files written by pre-v8.14 cclaw with `lastSpecialist: "brainstormer" | "architect"` are rewritten to `null` on read (`rewriteLegacyDiscoverySpecialist` in `flow-state.ts`), forcing the unified design phase to re-run on resume. The schema version is unchanged. Shipped slugs with `flows/shipped/<old-slug>/decisions.md` keep that file untouched for historical reference. `ModelPreferences` in `config.ts` accepts legacy aliases `brainstormer` / `architect` as deprecated fields so existing `.cclaw/config.yaml` files validate without errors after the upgrade.
+
+**Sweep of residual references.** `start-command.ts`, `skills.ts` (27 skill bodies), `stage-playbooks.ts`, `artifact-templates.ts`, `meta-skill.ts`, `decision-protocol.ts`, `reference-patterns.ts`, `research-playbooks.ts`, `examples.ts`, `cancel-command.ts`, `compound.ts`, `config.ts`, `core-agents.ts`, plus every specialist prompt (`planner.ts`, `slice-builder.ts`, `reviewer.ts`, `security-reviewer.ts`) and research prompt (`learnings-research.ts`, `repo-research.ts`) updated to refer to `design` / inline D-N where appropriate; legacy `decisions.md` references preserved with explicit "pre-v8.14 only" annotation.
+
+### Tests
+
+`tests/unit/v814-cleanup.test.ts` — 17 new tripwire tests covering D1 (design replaces brainstormer + architect; main-context activation; 7 phases; legacy lastSpecialist values migrated), D2 (inline D-N in plan template; pre-mortem section; decisions.md marked legacy; reviewer / planner read inline first), D3 (zero-question fast path; combined-form ask; triage state shape includes runMode-nullable + autoExecuted; triage-gate skill documents both modes), D4 (design in resume summary; large-risky plan stage describes design → planner; legacy migration documented).
+
+`tests/unit/prompt-budgets.test.ts` — extended to cover `design` (≤460 lines / 32 kB) with `brainstormer` and `architect` removed.
+
+`tests/integration/install-deep.test.ts` — verifies `design.md` is installed with main-context activation; `brainstormer.md` and `architect.md` are NOT installed.
+
+Total: 458 tests across 43 files, all green. Build clean; `npm run smoke:runtime` green.
+
+### Migration
+
+Drop-in upgrade from 8.13.x. No new required config keys. Existing `.cclaw/config.yaml` files with `modelPreferences.brainstormer` / `modelPreferences.architect` continue to validate (treated as deprecated aliases that collapse onto the `design` tier).
+
+Active flows mid-run on v8.13 with `lastSpecialist` pointing at brainstormer / architect will replay the unified design phase on resume — the existing `plan.md` is read, but design Phase 1-7 runs fresh. Shipped slugs with pre-v8.14 `decisions.md` artifacts are untouched. New flows on v8.14 do not produce `decisions.md` unless `legacyArtifacts: true` is set.
+
+### Deferred
+
+- Source-level split of `skills.ts` (3024 lines, 24 skills) into per-skill `src/content/skills/*.md` files with build-time content baking — mechanical refactor; better as a separate slug with its own packaging-change risk surface.
+- Merge of the 24-skill set into ~15 thematic groups (ac-discipline, commit-hygiene, tdd-and-verification, api-evolution, review-discipline, debug-and-browser) — design-affecting work that deserves its own audit and lock-in tests.
+
 ## 8.13.0 — Power-and-economy release: speed/token wins, plan-build-review-ship power, verification loop, handoff artifacts, compound refresh, model-routing config, namespace router, two-reviewer loop
 
 ### Why

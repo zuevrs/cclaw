@@ -51,8 +51,9 @@ describe("decision protocol (v8.12 — worked-examples ref removed)", () => {
     expect(DECISION_PROTOCOL).toContain("short form");
   });
 
-  it("delegates the full schema to architect.md", () => {
-    expect(DECISION_PROTOCOL).toContain("architect.md");
+  it("delegates the full schema to design.md (architect was retired in v8.14)", () => {
+    expect(DECISION_PROTOCOL).toContain("design.md");
+    expect(DECISION_PROTOCOL).not.toContain("architect.md");
   });
 
   it("no longer references the deleted worked-examples library", () => {

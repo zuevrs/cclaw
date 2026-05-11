@@ -181,8 +181,15 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   if (typeof triage.userOverrode !== "boolean") {
     throw new Error("triage.userOverrode must be a boolean");
   }
-  if (triage.runMode !== undefined && !isRunMode(triage.runMode)) {
+  if (triage.runMode !== undefined && triage.runMode !== null && !isRunMode(triage.runMode)) {
     throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
+  }
+  if (
+    triage.autoExecuted !== undefined &&
+    triage.autoExecuted !== null &&
+    typeof triage.autoExecuted !== "boolean"
+  ) {
+    throw new Error("triage.autoExecuted must be a boolean, null, or absent");
   }
   if (triage.assumptions !== undefined && triage.assumptions !== null) {
     if (!Array.isArray(triage.assumptions)) {
@@ -246,6 +253,10 @@ export function interpretationForksOf(triage: TriageDecision | null | undefined)
  * flows keep their pause-between-stages behaviour byte-for-byte.
  */
 export function runModeOf(triage: TriageDecision | null | undefined): RunMode {
+  // v8.14: triage.runMode is `null` on inline / trivial paths (no stages
+  // to chain). Treat null and undefined the same way and return "step"; the
+  // inline path never reads this value before completing, so the fallback
+  // is purely defensive.
   return triage?.runMode ?? "step";
 }
 

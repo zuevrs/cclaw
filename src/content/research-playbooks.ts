@@ -9,7 +9,7 @@ export const RESEARCH_PLAYBOOKS: ResearchPlaybook[] = [];
 
 export const RESEARCH_PLAYBOOKS_INDEX = `# .cclaw/lib/research/
 
-Research playbooks the planner / architect dispatch to before authoring a plan.
+Research playbooks the planner or the \`design\` phase dispatch to before authoring \`plan.md\` (planner sections) or composing design's Phase 6 output.
 
 > **v8.12 cleanup.** Earlier versions shipped 3 research playbooks (\`reading-codebase.md\`, \`time-boxing.md\`, \`prior-slugs.md\`). Audit found **zero explicit citations** in any specialist or orchestrator-prompt — they were "browse if relevant" optional reading that the spec never directed agents to consult by name.
 

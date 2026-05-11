@@ -49,11 +49,11 @@ feasibility_stamp: null  # green | yellow | red — set by planner before AC loc
 
 ## Frame
 
-_(Brainstormer-authored when invoked. 2-5 sentences: what is broken or missing today, who feels it, what success looks like a user or test can verify, what is explicitly out of scope. Cite real evidence — \`file:path:line\`, ticket id, conversation excerpt — when you have it. If the orchestrator runs inline without brainstormer, leave a one-line summary here.)_
+_(Design Phase 2, when invoked. 2-5 sentences: what is broken or missing today, who feels it, what success looks like a user or test can verify, what is explicitly out of scope. Cite real evidence — \`file:path:line\`, ticket id, conversation excerpt — when you have it. If the orchestrator runs inline without design, leave a one-line summary here.)_
 
 ## Approaches
 
-_(Optional. Brainstormer fills this in \`guided\` or \`deep\` posture. Drop dead options before showing the table; do not pad to 3 rows for symmetry.)_
+_(Design Phase 3, optional. Filled in \`guided\` or \`deep\` posture. Drop dead options before showing the table; do not pad to 3 rows for symmetry.)_
 
 | Role | Approach | Trade-off | Reuse / reference |
 | --- | --- | --- | --- |
@@ -62,18 +62,26 @@ _(Optional. Brainstormer fills this in \`guided\` or \`deep\` posture. Drop dead
 
 ## Selected Direction
 
-_(One paragraph when Approaches exists; cites the picked row and why.)_
+_(Design Phase 3 closing paragraph when Approaches exists; cites the picked row and why.)_
+
+## Decisions
+
+_(Design Phase 4, when invoked. One D-N row per decision. Each row is independently citable. Replaces the separate \`decisions.md\` file from pre-v8.14 flows; on \`legacy-artifacts: true\` the separate file is still emitted.)_
+
+- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. ADR: _none | proposed | promoted (path)_.
+
+## Pre-mortem
+
+_(Design Phase 5, optional. 2-4 ways this plan could fail; each line names the failure, the symptom, and the mitigation already encoded in the plan/AC.)_
+
+- _failure_ → _symptom_ → _mitigation in AC-N / D-N_.
 
 ## Not Doing
 
-_(3-5 bullets the brainstorm explicitly is NOT committing to. Protects scope from silent enlargement.)_
+_(Design Phase 2 / Phase 7 — 3-5 bullets explicitly out of scope. Protects against silent enlargement.)_
 
 - _explicit non-commitment_
 - _explicit non-commitment_
-
-## Architecture
-
-_(Architect, when invoked. Link to \`flows/SLUG-PLACEHOLDER/decisions.md\`. Keep this section short — full rationale lives in decisions.md.)_
 
 ## Plan
 
@@ -106,7 +114,7 @@ _(Planner-authored before AC lock-in. One of \`green\` / \`yellow\` / \`red\`; c
 
 - **green** — surface ≤3 modules, all AC have direct test analogues, no new dependencies, dependency chain ≤2 hops.
 - **yellow** — surface 4-6 modules, OR one AC depends on a not-yet-existing test fixture, OR one new dependency (with rationale), OR dependency chain 3-5 hops.
-- **red** — surface ≥7 modules, OR multiple AC depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR dependency chain ≥6 hops, OR security flag set without an architect decision. **Red feasibility blocks build dispatch in strict mode** until the planner re-decomposes (likely splitting into multiple slugs) or an architect decision lands.
+- **red** — surface ≥7 modules, OR multiple AC depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR dependency chain ≥6 hops, OR security flag set without a design D-N covering the sensitive surface. **Red feasibility blocks build dispatch in strict mode** until the planner re-decomposes (likely splitting into multiple slugs) or the orchestrator re-enters design Phase 4 to record the missing D-N.
 
 The stamp is computed once per plan, before slice-builder enters. The reviewer cross-checks the stamp against the realised diff at review time; an \`actual_complexity > stamp\` is a \`consider\`-severity finding for future calibration.
 
@@ -177,7 +185,7 @@ _(Files the slice-builder is allowed to modify. Used by reviewer to flag scope c
 
 ## Notes
 
-_(Optional. Brainstormer / architect did NOT run for soft-mode flows; if you discover the work needs structural decisions or threat modelling mid-flight, surface back to the orchestrator and ask to re-triage as large-risky.)_
+_(Optional. The \`design\` phase does NOT run for soft-mode (small/medium) flows; if you discover the work needs structural decisions, alternative comparison, or threat modelling mid-flight, surface back to the orchestrator and ask to re-triage as large-risky so design Phase 1-7 can run.)_
 `;
 
 const BUILD_TEMPLATE = `---
@@ -509,11 +517,13 @@ architecture_tier: null
 
 # Decisions — SLUG-PLACEHOLDER
 
-\`architect\` (and any reviewer in \`text-review\` mode) records decisions here. Each decision is independently citable.
+> **Legacy template (pre-v8.14).** On v8.14+ flows decisions live inline in \`plan.md\` under \`## Decisions\` (one D-N row each, authored by the \`design\` phase in Phase 4). This separate \`decisions.md\` file is only installed when \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`, and is read-only on resume for slugs that pre-date v8.14.
+
+The \`design\` phase (Phase 4 — Decisions), and any reviewer running in \`text-review\` mode on a legacy resume, records decisions here. Each decision is independently citable.
 
 ## Architecture tier
 
-_(Architect picks one tier per slug, recorded once at the top of this file. Tier sets the depth bar for the whole D-N set.)_
+_(Design Phase 4 picks one tier per slug, recorded once at the top of this file. Tier sets the depth bar for the whole D-N set.)_
 
 - **minimum-viable** — solve only the immediate failure mode; ignore future-proofing. Use for hot-fixes, small enhancements, doc-only.
 - **product-grade** — production-ready quality bar; includes failure modes, monitoring hooks, rollback plan. Default for most slugs.
@@ -573,7 +583,7 @@ status: active
 captured_by: orchestrator
 quality_gate: passed
 signals:
-  has_architect_decision: false
+  has_architect_decision: false  # stable signal name kept for back-compat; v8.14+: true when design Phase 4 recorded ≥1 D-N inline in plan.md
   review_iterations: 0
   security_flag: false
   user_requested_capture: false
@@ -597,7 +607,7 @@ _(Discoveries that contradicted the assumption.)_
 
 ## Decisions worth remembering
 
-- D-N (link to decisions.md)
+- D-N (link to \`flows/SLUG-PLACEHOLDER/plan.md > ## Decisions\` on v8.14+ flows; legacy \`decisions.md\` link on pre-v8.14 resumes)
 
 ## Patterns we should keep
 
@@ -636,7 +646,7 @@ This file is the entry point for any future agent that wants to understand what 
 - build.md — implementation log
 - review.md — review findings
 - ship.md — release notes
-- decisions.md — architectural decisions (if architect was invoked)
+- decisions.md — legacy architectural-decisions file (only present on pre-v8.14 slugs; v8.14+ inlines D-N rows under \`plan.md > ## Decisions\`)
 - learnings.md — lessons captured by compound (if quality gate passed)
 
 ## Refines
@@ -662,7 +672,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
-  { id: "decisions", fileName: "decisions.md", description: "Architect-style decision record template (D-N entries).", body: DECISIONS_TEMPLATE },
+  { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },
   { id: "manifest", fileName: "manifest.md", description: "Shipped manifest template; lists AC, artifacts, refines link.", body: MANIFEST_TEMPLATE },
   { id: "ideas", fileName: "ideas.md", description: "Append-only idea backlog seed.", body: IDEAS_TEMPLATE }

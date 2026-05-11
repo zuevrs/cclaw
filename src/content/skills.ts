@@ -13,7 +13,10 @@ trigger: at the start of every new /cc invocation, before any specialist runs
 
 # Skill: triage-gate
 
-Every new flow opens with a **triage gate**. The orchestrator analyses the user's request, picks a complexity class, names an AC mode, proposes a path, and **asks the user to confirm — twice**: once for the path, once for the run mode (autopilot or step-by-step). Nothing else runs until both questions are answered.
+Every new flow opens with a **triage gate**. The orchestrator analyses the user's request, picks a complexity class, names an AC mode, and proposes a path. v8.14 collapses the prior two-question gate into **at most one structured ask**:
+
+- **trivial / high-confidence**: **zero questions**. The orchestrator announces what it is about to do in one short sentence and goes straight to the inline edit. The user can always type \`/cc-cancel\` to undo and re-open the gate.
+- **everything else**: **one structured ask** that bundles **two questions in a single form** (path + run-mode). Both questions are answered in the same turn; nothing else runs until the form returns.
 
 ## When this skill applies
 
@@ -21,39 +24,53 @@ Every new flow opens with a **triage gate**. The orchestrator analyses the user'
 - Skipped on \`/cc\` (no argument) when an active flow is detected — see \`flow-resume.md\`.
 - Skipped on \`/cc-cancel\` and \`/cc-idea\` (these never open a flow).
 
-## How to render the question — STRUCTURED, not prose
+## Zero-question fast path (trivial / high-confidence)
 
-If the harness exposes a structured question tool — \`AskUserQuestion\` (Claude Code), \`AskQuestion\` (Cursor), an "ask" content block (OpenCode), \`prompt\` (Codex) — **use it**. Two separate calls, in order. Do **not** print the triage as a code block and rely on the user reading numbered options; the harness frequently renders fenced text as prose and the user never sees the choice as a real interactive prompt.
+When the heuristic in §"Heuristics — how to pick" classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, **do not ask anything**. Instead:
 
-### Question 1 — path
+1. Print one short sentence in the user's language naming what is happening: complexity (\`trivial\`), AC mode (\`inline\`), the touched file(s), and a one-clause affordance: "say /cc-cancel to undo and re-triage".
+2. Patch \`flow-state.json > triage\` with \`complexity: "trivial", acMode: "inline", path: ["build"], runMode: null, userOverrode: false, autoExecuted: true\`. \`runMode\` is \`null\` because there are no stages to chain on the inline path.
+3. Proceed straight to the inline edit + commit dispatch (Hop 3 — *Dispatch*; build stage). Pre-flight is skipped on inline by design.
 
-Render the analysis as the question prompt and the four choices as options:
+If confidence is \`medium\` or \`low\`, **fall through to the structured ask** even when the class is \`trivial\` — uncertainty wins.
+
+The auto-execute path exists because >80% of "trivial" requests are mechanical renames, comment fixes, and typo patches; surfacing a two-question gate for those is friction without value. The audit trail is preserved by the one-sentence announcement plus \`flow-state.json > triage.autoExecuted: true\`, which downstream tooling can grep for.
+
+## Combined-form ask (one structured ask, two questions inside)
+
+For every non-trivial classification (and for trivial when confidence is not \`high\`), render the gate as **one** structured-ask call that contains **two question objects in one form** — the user picks one option per question and submits the form once. This eliminates the v8.13-era double round-trip ("answer path", then a separate "answer run-mode" turn) that wasted a structured-ask cycle and broke flow in chat-style harnesses.
+
+If the harness exposes a structured question tool with multi-question support — \`AskUserQuestion\` (Claude Code, accepts \`questions: [...]\`), \`AskQuestion\` (Cursor, accepts \`questions: [...]\`), an "ask" content block (OpenCode, accepts multiple \`question\` entries), \`prompt\` (Codex, accepts multiple prompts in one round-trip) — **use it with both questions in a single call**.
+
+If the harness only supports single-question structured ask, render the two questions back-to-back as two structured-ask calls (legacy v8.13 behaviour). The state is the same — only the UX is rougher.
+
+If the harness has no structured ask at all, fall back to the fenced form below.
+
+### Question 1 (in the same form) — path
 
 - prompt: <one sentence in the user's language stating: complexity + confidence, recommended path, why (cite file count / LOC / sensitive surface), AC mode, "pick a path">
 - options:
   - <option label conveying: proceed with the recommended path>
   - <option label conveying: switch to trivial — inline edit + commit, skip plan/review>
-  - <option label conveying: escalate to large-risky — adds brainstormer + architect, strict AC, parallel slices when applicable>
+  - <option label conveying: escalate to large-risky — adds collaborative design phase, strict AC, parallel slices when applicable>
   - <option label conveying: customise — user edits complexity / acMode / path>
 
 The slots above (\`<...>\`) are intent descriptors. Render the prompt body and every option label in the user's conversation language; do not copy the descriptor text. The prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, ac mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
 
-### Question 2 — run mode
-
-Right after the user picks a path, ask:
+### Question 2 (in the same form) — run mode
 
 - prompt: <one sentence in the user's language asking which run mode to use>
 - options:
   - <option label conveying: step mode — pause after each stage; next /cc advances (the default)>
   - <option label conveying: auto mode — chain plan → build → review → ship; stop only on hard gates>
 
-Default \`step\` if the user dismisses the question or the harness lacks a structured ask facility. Inline / trivial flows skip Question 2 (there are no stages to chain).
+Default \`step\` if the user dismisses the form or the harness only returns Question 1. On the inline path (chosen via Question 1's "switch to trivial" option) the run-mode answer is **ignored** at patch time — \`runMode\` is set to \`null\` because there are no stages to chain.
 
 \`/cc\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`step\`, \`auto\` stay in their original form (mechanical tokens; see \`conversation-language.md\`); the descriptive prose around them is in the user's language.
 
 ## Fallback — when no structured ask tool exists
 
-Only when the harness has no structured ask facility (rare; legacy CLI mode), print the same content as a fenced block plus numbered options:
+Only when the harness has no structured ask facility (rare; legacy CLI mode), print the entire combined form as **one** fenced block:
 
 \`\`\`
 <Triage block heading in the user's language>
@@ -61,24 +78,19 @@ Only when the harness has no structured ask facility (rare; legacy CLI mode), pr
 ─ Recommended path: <inline | plan → build → review → ship>  (large-risky uses the same four-stage path; the discovery sub-phase is an expansion of \`plan\`, not a separate path entry)
 ─ Why: <one short sentence in the user's language; cite file count, LOC estimate, sensitive-surface flag>
 ─ AC mode: <inline | soft | strict>
-\`\`\`
 
-\`\`\`
+<Question 1 — path>
 [1] <option text conveying: proceed with the recommendation>
 [2] <option text conveying: switch to trivial>
 [3] <option text conveying: escalate to large-risky>
 [4] <option text conveying: customise the triage>
-\`\`\`
 
-Then a separate block for run mode:
-
-\`\`\`
-<Run-mode block heading in the user's language>
+<Question 2 — run mode (not asked on inline)>
 [s] <option text conveying: step mode — pause after each stage; next /cc advances (default)>
 [a] <option text conveying: auto mode — chain stages; stop only on hard gates>
 \`\`\`
 
-The slots inside \`<...>\` are intent only; the actual fallback rendered to the user uses the user's language. Bracketed shortcut letters (\`[1]\`, \`[s]\`) and mechanical tokens (\`/cc\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`step\`, \`auto\`, complexity / acMode keywords) stay in their original form regardless of conversation language.
+The user replies with two tokens on the same turn (\`1s\` / \`3a\` / etc.). The slots inside \`<...>\` are intent only; the actual fallback rendered to the user uses the user's language. Bracketed shortcut letters (\`[1]\`, \`[s]\`) and mechanical tokens (\`/cc\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`step\`, \`auto\`, complexity / acMode keywords) stay in their original form regardless of conversation language.
 
 The fenced form is a fallback, not the primary path. Always try the structured tool first.
 
@@ -108,7 +120,7 @@ If the heuristic gives \`small/medium\` but the user said something like "featur
 
 ## What the orchestrator records
 
-After both questions are answered, patch \`.cclaw/state/flow-state.json\`:
+After the combined form returns (or after the zero-question fast path executes), patch \`.cclaw/state/flow-state.json\`:
 
 \`\`\`json
 {
@@ -119,12 +131,13 @@ After both questions are answered, patch \`.cclaw/state/flow-state.json\`:
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
     "userOverrode": false,
-    "runMode": "step"
+    "runMode": "step",
+    "autoExecuted": false
   }
 }
 \`\`\`
 
-\`userOverrode\` is \`true\` only when the user picked (2), (3), or a (4) custom that disagrees with the recommendation. \`runMode\` is \`step\` by default; record \`auto\` only when the user explicitly opted into autopilot in Question 2.
+\`userOverrode\` is \`true\` only when the user picked option (2), (3), or a (4) custom that disagrees with the recommendation. \`runMode\` is \`step\` by default on non-inline paths; \`auto\` when the user explicitly opted into autopilot in Question 2; \`null\` on inline / trivial paths (no stages to chain). \`autoExecuted\` is \`true\` only on the zero-question fast path (trivial / high-confidence).
 
 The triage block is **immutable for the lifetime of the flow**. If the user wants to escalate mid-flight (e.g. discovers it is bigger than thought), \`/cc-cancel\` and start a fresh flow with new triage. Switching from \`step\` to \`auto\` (or vice versa) is also a fresh-flow decision — the orchestrator does not flip mid-flight.
 
@@ -134,9 +147,9 @@ The triage block is **immutable for the lifetime of the flow**. If the user want
 | --- | --- | --- |
 | \`["build"]\` (inline trivial) | direct edit + commit, no plan, no review | \`complexity == "trivial"\` |
 | \`["plan", "build", "review", "ship"]\` (small/medium) | one planner sub-agent for plan; one slice-builder for build; one reviewer for review; ship fan-out | \`complexity == "small-medium"\` |
-| \`["plan", "build", "review", "ship"]\` (large-risky) | **plan stage expands** into brainstormer → checkpoint → architect → checkpoint → planner; build/review/ship behave as small/medium plus parallel-build fan-out and adversarial pre-mortem when applicable | \`complexity == "large-risky"\` |
+| \`["plan", "build", "review", "ship"]\` (large-risky) | **plan stage expands** into design (main context, multi-turn) → planner; build/review/ship behave as small/medium plus parallel-build fan-out and adversarial pre-mortem when applicable | \`complexity == "large-risky"\` |
 
-\`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never an entry in \`path\`.** When the orchestrator promises a "discovery sub-phase" it means the \`plan\` stage runs three specialists with checkpoints between each (brainstormer → architect → planner) — see \`/cc.md\` "Plan stage on large-risky" for the dispatch contract.
+\`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never an entry in \`path\`.** When the orchestrator promises a "discovery sub-phase" it means the \`plan\` stage runs design (Phase 0-7 in main context) then planner — see \`/cc.md\` "Plan stage on large-risky" for the dispatch contract.
 
 The orchestrator's path-validation rule is single-stage: \`triage.path\` ⊆ \`{plan, build, review, ship}\`. Any state file that contains a \`"discovery"\` entry is from an older schema and must be normalised — strip the \`"discovery"\` entry and continue with the remaining stages.
 
@@ -150,23 +163,40 @@ The gate is **never skipped silently**. Three explicit forms of skip:
 
 ## Worked examples
 
-### Trivial — high confidence
+### Trivial — high confidence (zero-question fast path)
 
 User: "Rename \`getCwd\` to \`getCurrentWorkingDirectory\` across the repo."
 
+The orchestrator **does not ask**. It prints one sentence and proceeds straight to the inline edit:
+
+\`\`\`
+Triage: trivial / inline — mechanical rename across ~12 call sites in 5 files; running inline now. Say /cc-cancel to undo and re-triage.
+\`\`\`
+
+Then it dispatches the edit + commit and stops. \`flow-state.json > triage.autoExecuted: true\` records the fast-path use.
+
+### Trivial — medium confidence (combined form, single ask)
+
+User: "Clean up the auth helper."
+
 \`\`\`
 Triage
-─ Complexity: trivial  (confidence: high)
+─ Complexity: trivial  (confidence: medium — prompt is vague: "clean up" could be cosmetic or behavioural)
 ─ Recommended path: inline
-─ Why: Mechanical rename, ~12 call sites in 5 files, no behavioural change.
+─ Why: single helper file, ~80 LOC, no caller touch.
 ─ AC mode: inline
 \`\`\`
 
 \`\`\`
+Question 1 — path
 [1] Proceed as recommended
 [2] Switch to trivial (inline edit + commit, skip plan/review)
-[3] Escalate to large-risky (add brainstormer/architect, strict AC, parallel slices)
+[3] Escalate to large-risky (add collaborative design phase, strict AC, parallel slices)
 [4] Custom (let me edit complexity / acMode / path)
+
+Question 2 — run mode (ignored on inline)
+[s] Step mode — pause after each stage; next /cc advances (default)
+[a] Auto mode — chain plan → build → review → ship; stop only on hard gates
 \`\`\`
 
 ### Small/medium — medium confidence
@@ -188,7 +218,7 @@ User: "Migrate the user store from Postgres to DynamoDB."
 \`\`\`
 Triage
 ─ Complexity: large-risky  (confidence: high)
-─ Recommended path: plan → build → review → ship  (plan stage expands: brainstormer → architect → planner)
+─ Recommended path: plan → build → review → ship  (plan stage expands: design → planner)
 ─ Why: data-layer migration, schema change, requires runbook + rollback plan.
 ─ AC mode: strict
 \`\`\`
@@ -212,13 +242,15 @@ The user is expected to clarify in (4) Custom or accept (1) Proceed; either way 
 - **Rendering the triage as a code block when a structured ask tool is available.** Try the harness's structured ask facility (\`AskUserQuestion\` / \`AskQuestion\` / \`prompt\` / "ask" content block) first; the fenced form is a fallback only.
 - Stating "I think this is medium-complexity" and then immediately invoking planner. Wait for the user's pick — orchestrator-decided routing without an explicit user confirmation is the most common cause of mis-scoped flows.
 - Picking \`large-risky\` for a one-file rename "to be safe". Do not pad the heuristic; the user reads it and learns to ignore your triage.
-- Forgetting to ask Question 2 (run mode) after Question 1 (path). \`triage.runMode\` controls Hop 4 (pause); a missing value defaults to \`step\` — safe but wastes a click for users who wanted autopilot.
+- **Asking the gate on a trivial / high-confidence request.** The zero-question fast path exists for exactly this case; surfacing a form for a typo-fix is friction without value. If you are about to ask, double-check the confidence is not \`high\`.
+- **Splitting the combined form into two separate structured-ask calls when the harness supports multi-question.** v8.13's double round-trip is now a regression; pack both questions into one form on every supporting harness (Cursor \`AskQuestion\`, Claude Code \`AskUserQuestion\`, OpenCode "ask", Codex \`prompt\`).
+- Forgetting that the run-mode answer is **ignored on the inline path**. \`triage.runMode\` is \`null\` on inline; do not write \`"step"\` or \`"auto"\` there.
 - Forgetting to write \`triage\` into \`flow-state.json\`. The hook check \`commit-helper.mjs\` and the resume detector both read it; an absent triage breaks both.
-- Re-running the gate on resume. Resume reads the saved triage (path + runMode) and continues from \`currentStage\`; it never re-prompts.
+- Re-running the gate on resume. Resume reads the saved triage (path + runMode + autoExecuted) and continues from \`currentStage\`; it never re-prompts.
 
 ## Next step
 
-After both triage questions are answered AND the path is **not** \`inline\`, the orchestrator runs the \`pre-flight-assumptions\` skill (Hop 2.5) before dispatching the first specialist. On the inline path, the orchestrator goes straight to the build dispatch — pre-flight is skipped (a one-line edit has no assumptions worth surfacing).
+After the combined form returns AND the path is **not** \`inline\`, the orchestrator runs the \`pre-flight-assumptions\` skill (Hop 2.5) before dispatching the first specialist. On the inline path (whether reached via the zero-question fast path or via Question 1 option (2)), the orchestrator goes straight to the build dispatch — pre-flight is skipped (a one-line edit has no assumptions worth surfacing).
 `;
 
 const PRE_FLIGHT_ASSUMPTIONS = `---
@@ -338,7 +370,7 @@ Pre-flight assumptions: see triage.assumptions in flow-state.json
 Sub-agents (planner, slice-builder, reviewer, etc.) read \`flow-state.json > triage.assumptions\` before authoring their artifact. The list is appended verbatim (under \`## Assumptions\`) to:
 
 - \`flows/<slug>/plan.md\` — copy the list once after the Frame, so the plan stays self-contained for review.
-- \`flows/<slug>/decisions.md\` — when architect runs, the assumptions are the first input the architect must respect.
+- \`flows/<slug>/plan.md\` (\`## Decisions\` section) — design's Phase 4 D-N records cite triage assumptions in their Refs line. Legacy \`decisions.md\` files in shipped/<slug>/ from pre-v8.14 are read-only references.
 
 A sub-agent that would need to break an assumption raises it as a finding (in slice-builder: stop and surface; in reviewer: \`block\`-severity finding) instead of silently overriding.
 
@@ -437,7 +469,7 @@ Write \`triage.interpretationForks: null\` and skip straight to assumptions. The
 ## What the pre-flight is NOT
 
 - It is not a planning step. It does not write AC or design.
-- It is not the brainstormer's Frame. The Frame answers "what are we building?"; pre-flight answers "on what stack and conventions?".
+- It is not design's Frame (Phase 2). The Frame answers "what are we building?"; pre-flight answers "on what stack and conventions?".
 - It is not a security review. Sensitive surfaces still get \`security-reviewer\` later in the flow.
 - It is not optional in soft / strict modes. The whole point is to surface defaults; skipping it defeats the skill.
 
@@ -499,7 +531,7 @@ Active flow: <slug>
 ─ Stage: <plan | build | review | ship>  (last touched <relative-time, in the user's language>)
 ─ Triage: <complexity> / acMode=<inline | soft | strict>
 ─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
-─ Last specialist: <none | brainstormer | architect | planner | reviewer | security-reviewer | slice-builder>
+─ Last specialist: <none | design | planner | reviewer | security-reviewer | slice-builder>
 ─ Open findings: <K>  (review only; 0 outside review)
 ─ Next step: <one sentence in the user's language describing what /cc will do next>
 \`\`\`
@@ -531,7 +563,7 @@ The slots inside \`<...>\` (relative time, next step, option text) render in the
 ## Resume rules
 
 1. **Triage is preserved.** A resumed flow keeps its \`acMode\`, \`complexity\`, and \`path\`. The user does not re-pick. If they want to change mode, the answer is "/cc-cancel and start fresh".
-2. **Last-specialist context is restored** by reading \`flows/<slug>/<stage>.md\` (and \`flows/<slug>/decisions.md\` if architect ran). The orchestrator does not summarise from memory; it re-reads the artifact.
+2. **Last-specialist context is restored** by reading \`flows/<slug>/<stage>.md\` (which now contains the design's Decisions section inline; legacy \`flows/<slug>/decisions.md\` is read too when it exists from a pre-v8.14 flow). The orchestrator does not summarise from memory; it re-reads the artifact.
 3. **Time gate.** If the resume summary's "last touched" is >7 days ago, surface a warning ("flow is stale — verify scope still applies") but still allow resume.
 4. **Sub-agent dispatch resumes from the same stage.** A build that was paused mid-RED for AC-3 resumes by dispatching slice-builder for AC-3, not by restarting AC-1.
 
@@ -592,7 +624,7 @@ Use this skill whenever you create or modify any \`.cclaw/flows/<slug>/plan.md\`
 
 - Plans without AC.
 - Plans whose AC count exceeds 12 (split first).
-- Plans that change scope between brainstormer and planner without going back to brainstormer.
+- Plans that change scope between design (Phase 2 Frame) and planner without re-entering design's Phase 2 first.
 `;
 
 const AC_TRACEABILITY = `---
@@ -654,7 +686,7 @@ trigger: when /cc detects an existing plan (active or shipped) for the new task
 
 ## What the orchestrator surfaces
 
-- last_specialist of the active plan, so the user can see "stopped at architect" or "review iteration 3 in progress".
+- last_specialist of the active plan, so the user can see "stopped mid-design (Phase 4 Decisions)" or "review iteration 3 in progress".
 - The AC table with their statuses (\`pending\` / \`committed\`).
 - Whether \`security_flag\` was set.
 - A direct link to \`.cclaw/flows/shipped/<slug>/ship.md\` if the match is a shipped slug (\`legacy-artifacts: true\` also writes \`manifest.md\` alongside).
@@ -1040,7 +1072,7 @@ Why the threshold:
 - Automation makes the change **inspectable at the rule level** instead of the diff level: the reviewer walks "the rule" once, then runs it against the diff, instead of reading 500+ touched lines.
 - Repeating the same change in the future is free once the codemod exists.
 
-Document the chosen automation in \`decisions.md\` (D-N) before running it. The reviewer cites a hand-rolled mass-refactor as **F-N | architecture | consider | Rule of 500 violation**.
+Document the chosen automation inline in \`plan.md\` under \`## Decisions\` (D-N) before running it. The reviewer cites a hand-rolled mass-refactor as **F-N | architecture | consider | Rule of 500 violation**.
 
 ### Structural simplification patterns
 
@@ -1325,7 +1357,7 @@ When possible, ship the new path alongside the old. Examples:
 - new env var name accepted along with the old (with a deprecation log line);
 - new function exported with the new name; old name aliased to it.
 
-Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to architect; the decision must be recorded in \`flows/<slug>/decisions.md\`.
+Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to the design phase; the decision must be recorded inline in \`flows/<slug>/plan.md\` under \`## Decisions\`.
 
 ## Common pitfalls
 
@@ -1344,11 +1376,11 @@ Three patterns that cover the lifecycle of an API or contract from "still works,
 
 Practically: the team that ships the deprecation owns the migration of every consumer they can identify. They do NOT throw the deprecation over the wall and tell every downstream team to fix their code "by the deadline".
 
-When the architect / planner introduces a deprecation:
+When design (Phase 4) or planner introduces a deprecation:
 
 1. **Identify consumers.** Search the org for callers (\`rg\` in monorepo, dependency-graph tools across repos, package-registry usage stats).
 2. **Choose the migration cost split.** Either (a) the deprecator ships an adapter that wraps the old surface to use the new one (zero migration cost for consumers, higher cost for the deprecator), OR (b) the deprecator pairs with each consumer's owner to land the migration commit (higher coordination cost, but the new shape is the only shape after the cutover).
-3. **Document the choice in \`decisions.md\`.** "We picked path (a) because there are 47 internal consumers; path (b) would mean 47 PRs across 12 teams."
+3. **Document the choice as a D-N in \`plan.md\` \`## Decisions\`** (legacy: \`decisions.md\` on pre-v8.14 resumes). "We picked path (a) because there are 47 internal consumers; path (b) would mean 47 PRs across 12 teams."
 
 A deprecation that names no migration owner and no consumer plan is **F-N | architecture | required | Churn Rule violation**.
 
@@ -1364,7 +1396,7 @@ phase 3: 100% traffic to new path. Old path is fenced off but still in the codeb
 phase 4: Old path removed.
 \`\`\`
 
-Each phase has explicit ship-gate criteria and rollback steps. The Strangler is documented in \`decisions.md\` with the per-phase entry/exit criteria; the orchestrator surfaces "we are in Strangler phase N" in slim summaries until phase 4 ships.
+Each phase has explicit ship-gate criteria and rollback steps. The Strangler is documented as a multi-D-N block inside \`plan.md\` \`## Decisions\` (legacy: \`decisions.md\` on pre-v8.14 resumes) with the per-phase entry/exit criteria; the orchestrator surfaces "we are in Strangler phase N" in slim summaries until phase 4 ships.
 
 A migration that jumps from phase 0 to phase 4 in one slug is **F-N | architecture | required | Big-bang migration** (no canary, no rollback).
 
@@ -1374,7 +1406,7 @@ A migration that jumps from phase 0 to phase 4 in one slug is **F-N | architectu
 
 Symptom: \`git log\` shows the last meaningful change was 2-3+ years ago; the original author has left; nobody on the current team can describe what it does or why; but multiple production paths still call it.
 
-The architect's response when zombie code is identified:
+The design phase's response when zombie code is identified:
 
 1. **Either assign an owner and maintain it properly** — surface as a finding (\`F-N | architecture | required\`); the orchestrator opens a follow-up slug to write tests, document, and refactor.
 2. **Or deprecate it with a concrete migration plan** — apply the Churn Rule and the Strangler Pattern to retire the code.
@@ -1419,7 +1451,7 @@ Mechanical tokens stay in their original form regardless of conversation languag
 - Slugs (\`add-approval-page\`, never "добавить-страницу-одобрения").
 - Commands and CLI flags (\`/cc\`, \`--phase=red\`, \`commit-helper.mjs\`).
 - Hook output and machine-readable JSON.
-- Specialist names (\`brainstormer\`, \`architect\`, \`planner\`, \`reviewer\`, \`security-reviewer\`, \`slice-builder\`).
+- Specialist names (\`design\`, \`planner\`, \`reviewer\`, \`security-reviewer\`, \`slice-builder\`).
 - Mode names (\`code\`, \`text-review\`, \`integration\`, \`release\`, \`adversarial\`, \`fix-only\`).
 - Frontmatter keys (\`slug\`, \`stage\`, \`status\`, \`ac\`, \`phases\`).
 - Stage names (\`plan\`, \`build\`, \`review\`, \`ship\`).
@@ -1588,7 +1620,7 @@ In all four cases: stop, return the summary JSON, do **not** push code that "wor
 
 const SOURCE_DRIVEN = `---
 name: source-driven
-trigger: when architect or planner is dispatched in strict mode AND the task is framework-specific
+trigger: when design (deep posture, Phase 4 D-N) or planner is dispatched/active in strict mode AND the task is framework-specific
 ---
 
 # Skill: source-driven
@@ -1599,7 +1631,7 @@ Framework-specific code (React hooks, Django views, Next.js routing, Prisma migr
 
 | Triage | Stack signal | Apply? |
 | --- | --- | --- |
-| \`strict\` (large-risky / security-flagged) | framework-specific code in scope | **always** — required for architect / planner |
+| \`strict\` (large-risky / security-flagged) | framework-specific code in scope | **always** — required for design (D-N records) and planner |
 | \`soft\` (small-medium) | framework-specific code in scope | **opt-in** — enable when the user asks for "source-driven" or "verified" implementation |
 | \`inline\` (trivial) | any | **never** — single-line edits don't need citations |
 | any | pure logic (loops, data structures, internal helpers) | skip — correctness is version-independent |
@@ -1730,13 +1762,13 @@ B) Match existing code (useState) — keeps codebase consistent.
 → Which approach do you prefer?
 \`\`\`
 
-Do not silently adopt one. The user picks; the decision goes in \`decisions.md\` (architect mode) or in the plan body (planner mode).
+Do not silently adopt one. The user picks; the decision goes inline in \`plan.md\` under \`## Decisions\` (design Phase 4) or in the plan body (planner mode).
 
 ### Step 4 — Cite sources inline
 
 Every framework-specific decision gets a citation. The user must be able to verify every choice without trusting the agent's memory.
 
-In **plan.md** / **decisions.md**, include a \`sources:\` block under the relevant AC or decision. Each entry includes the cache fields from Step 2 — they make the source-driven trail reproducible offline:
+In **plan.md** (v8.14+; legacy \`decisions.md\` for pre-v8.14 shipped slugs), include a \`sources:\` block under the relevant AC or D-N decision. Each entry includes the cache fields from Step 2 — they make the source-driven trail reproducible offline:
 
 \`\`\`yaml
 sources:
@@ -1789,8 +1821,8 @@ Honesty about what you couldn't verify is more valuable than confident guessing.
 ## Specialist contracts
 
 - **planner** in \`source_driven\` envelope: every framework-specific AC carries a \`sources\` block (URL + which AC it supports + fetched timestamp + version). AC without a citation in framework code → reviewer F-N axis=correctness, severity=required.
-- **architect** in \`source_driven\` envelope: every \`D-N\` whose decision rests on framework behaviour (rendering model, state management strategy, persistence pattern, security posture) carries a \`sources\` block. Architects without a citation surface "I could not find current documentation; this decision is based on training data" — explicit, not silent.
-- **slice-builder** in \`source_driven\` envelope: pulls the URL from \`plan.md\` / \`decisions.md\` into the code comment when implementing the pattern. Does not independently re-fetch (architect/planner already did the work).
+- **design** (Phase 4) in \`source_driven\` envelope: every \`D-N\` whose decision rests on framework behaviour (rendering model, state management strategy, persistence pattern, security posture) carries a \`sources\` block inline. Design without a citation surfaces "I could not find current documentation; this decision is based on training data" — explicit, not silent.
+- **slice-builder** in \`source_driven\` envelope: pulls the URL from \`plan.md\` (inline D-N) into the code comment when implementing the pattern. Does not independently re-fetch (design/planner already did the work).
 - **reviewer** runs the citation check as part of the \`correctness\` axis pass. Open finding when:
   - a framework-specific AC has no \`sources\` block;
   - a citation URL is to a non-authoritative source (Stack Overflow, blog, training data);
@@ -1798,7 +1830,7 @@ Honesty about what you couldn't verify is more valuable than confident guessing.
 
 ## MCP integration (when the harness has \`user-context7\`)
 
-cclaw recognises \`user-context7\` as the source-of-truth fetcher. When \`source_driven: true\` is in the envelope, the planner / architect SHOULD prefer:
+cclaw recognises \`user-context7\` as the source-of-truth fetcher. When \`source_driven: true\` is in the envelope, the planner / design (Phase 4 D-N) SHOULD prefer:
 
 1. \`mcp_user-context7_resolve-library-id\` to map a package name to a Context7 library id.
 2. \`mcp_user-context7_get-library-docs\` to fetch the relevant docs at the detected version.
@@ -1867,10 +1899,7 @@ Append exactly this block to the bottom of the artifact you authored. Do not ren
 The block goes at the very bottom of the artifact, after the body, after any worked examples, after any prior-iteration material. One block per artifact write. Multi-author files (plan.md on large-risky) get **one Summary per author**, with a heading suffix:
 
 \`\`\`markdown
-## Summary — brainstormer
-### Changes made
-...
-## Summary — architect
+## Summary — design
 ### Changes made
 ...
 ## Summary — planner
@@ -1914,8 +1943,7 @@ If there are no real concerns, write \`None.\` and own it.
 
 | Specialist | Block goes in |
 | --- | --- |
-| \`brainstormer\` | \`flows/<slug>/plan.md\` (heading: \`## Summary — brainstormer\`) |
-| \`architect\` | \`flows/<slug>/decisions.md\` (heading: \`## Summary\`); also \`flows/<slug>/plan.md\` Architecture subsection if you wrote one (heading: \`## Summary — architect\`) |
+| \`design\` | \`flows/<slug>/plan.md\` (heading: \`## Summary — design\`) — single block at the bottom of design's appended sections (Frame, Approaches, Selected Direction, optional Decisions, optional Pre-mortem, Not Doing) |
 | \`planner\` | \`flows/<slug>/plan.md\` (heading: \`## Summary — planner\` on large-risky; \`## Summary\` on small/medium) |
 | \`slice-builder\` | \`flows/<slug>/build.md\` (heading: \`## Summary\` per cycle in soft mode; per fix-iteration in fix-only mode; per slice in parallel-build) |
 | \`reviewer\` | \`flows/<slug>/review.md\` per iteration (heading: \`## Summary — iteration N\`) — sits right above the next iteration block |
@@ -2084,7 +2112,7 @@ Both findings block the slice from going to compound until the slice-builder spl
 
 ## Composition
 
-This skill is **always-on** for slice-builder and for any specialist that produces a commit (which today means slice-builder only — reviewers, planners, and architects do not commit code). The reviewer reads this skill at the top of every iteration and uses the finding templates above verbatim.
+This skill is **always-on** for slice-builder and for any specialist that produces a commit (which today means slice-builder only — design, planner, reviewer, security-reviewer do not commit code). The reviewer reads this skill at the top of every iteration and uses the finding templates above verbatim.
 `;
 
 const DEBUG_LOOP = `---
@@ -2381,20 +2409,20 @@ This skill is dispatched by slice-builder (Phase 4) and by reviewer (iteration 1
 
 const API_AND_INTERFACE_DESIGN = `---
 name: api-and-interface-design
-trigger: when architect proposes a public interface, persistence shape, RPC schema, or cross-module contract; auto-applies on slugs whose touchSurface includes a public API surface
+trigger: when design (Phase 4 D-N) proposes a public interface, persistence shape, RPC schema, or cross-module contract; auto-applies on slugs whose touchSurface includes a public API surface
 ---
 
 # Skill: api-and-interface-design
 
 > "With a sufficient number of users of an API, all observable behaviors of your system will be depended on by somebody, regardless of what you promise in the contract." — **Hyrum's Law**
 
-This skill is the architect's checklist for **outward-facing contracts**: HTTP endpoints, RPC methods, library exports, file formats, environment-variable schemas, queue payloads. Internal helpers do not need it; once a shape crosses a module / process / repo / service boundary, it does.
+This skill is the **design phase's** checklist for **outward-facing contracts**: HTTP endpoints, RPC methods, library exports, file formats, environment-variable schemas, queue payloads. Internal helpers do not need it; once a shape crosses a module / process / repo / service boundary, it does.
 
 ## Hyrum's Law
 
 Every observable behaviour of your interface — return shape, error message wording, header order, sort order, default value, edge-case coercion — will be depended on by **somebody**, even when the docs explicitly forbid it. Plan for that.
 
-Practical implications the architect MUST surface in \`decisions.md\` for any public interface:
+Practical implications the design phase MUST surface inline in \`plan.md\` \`## Decisions\` for any public interface:
 
 1. **Pin the shape exhaustively.** Document return type, error type, every status code, every header that downstream sees. Untyped or "varies" surfaces become observation contracts.
 2. **Pin the order.** If a list is returned, declare the sort key and direction. Consumers will assume "the order they saw" if you don't.
@@ -2411,7 +2439,7 @@ When you take a dependency on a library, framework, or sibling module, **do not 
 - Module \`a\` exports a \`Date\` from your custom \`utc\` library; module \`b\` exports a \`Date\` from \`date-fns\`. The downstream caller now owns both. **Type-incompatible siblings.** Pick one; deprecate the other.
 - Service \`auth\` returns a \`User\` shape; service \`profile\` returns its own \`User\` shape with three different fields. Downstream needs both. **Schema fork.** Unify the shape OR explicitly name them \`AuthUser\` / \`ProfileUser\` so the fork is visible.
 
-The architect surfaces one-version violations as \`required\` findings; the resolution is documented in \`decisions.md\` under "D-N — version pin".
+The design phase surfaces one-version violations as \`required\` findings; the resolution is documented inline in \`plan.md\` under \`## Decisions\` "D-N — version pin".
 
 ## Untrusted third-party API responses
 
@@ -2452,9 +2480,9 @@ The reviewer cites a missed validation on third-party data as **F-N | security |
 
 Do **not** introduce a port / interface / abstraction unless **at least two adapters** are concretely justified — typically one for production and one for tests, OR two production adapters (e.g. Postgres and SQLite, S3 and local-fs).
 
-Specifically, do NOT introduce a port "in case we ever want to swap out X". A speculative port is dead code with extra surface area; it slows the codebase and survives the refactor that finally removes it. The architect's "we might want to swap this someday" reflex is the canonical \`required\` finding here.
+Specifically, do NOT introduce a port "in case we ever want to swap out X". A speculative port is dead code with extra surface area; it slows the codebase and survives the refactor that finally removes it. The "we might want to swap this someday" reflex during design is the canonical \`required\` finding here.
 
-When proposing an interface, the architect MUST name the adapters in \`decisions.md\`:
+When proposing an interface, the design phase MUST name the adapters inline in \`plan.md\` \`## Decisions\`:
 
 \`\`\`markdown
 ## D-3 — Storage port
@@ -2472,7 +2500,7 @@ The reviewer cites a single-adapter port as **F-N | architecture | required | Hy
 
 ## Consistent error model
 
-Every public interface ships with a consistent error model. The architect picks one shape and pins it:
+Every public interface ships with a consistent error model. The design phase picks one shape and pins it:
 
 - **Result type** — \`{ ok: true, value }\` or \`{ ok: false, error }\` (Rust / Go / fp-ts style).
 - **Throw + typed catch** — exceptions carry a discriminator field the caller switches on.
@@ -2483,13 +2511,13 @@ The choice depends on the language and the surface; what matters is **consistenc
 
 ## Versioning guidance
 
-When a public interface changes shape, the architect's \`decisions.md\` records:
+When a public interface changes shape, the design phase's \`## Decisions\` D-N inline in \`plan.md\` records:
 
 - **Backwards-compatible** — additive only (new optional field, new endpoint). Bump the **minor** version. Document the addition in CHANGELOG.
 - **Breaking** — renamed, removed, type-changed, semantic-changed. Bump the **major** version. \`breaking-changes\` skill kicks in. Coexistence (new + old together) is preferred over hard cutover.
 - **Deprecation** — old surface stays available; new surface is the recommended path. Document the sunset date and the migration step.
 
-For internal-only APIs without a version number, the architect names the **release window** during which the deprecation alias stays alive.
+For internal-only APIs without a version number, the design phase names the **release window** during which the deprecation alias stays alive.
 
 ## Hard rules
 
@@ -2501,19 +2529,19 @@ For internal-only APIs without a version number, the architect names the **relea
 
 ## Composition
 
-The architect reads this skill before authoring any \`decisions.md\` D-N that introduces or changes a public interface. The reviewer reads it for any review iteration on a slug whose \`touchSurface\` includes a public API. The planner does NOT read this skill — interface design is the architect's surface, not the planner's; if the slug only has a planner pass (no architect), the planner adds a \`## Concerns\` bullet pointing at this skill as a follow-up.
+The design phase (Phase 4) reads this skill before authoring any inline D-N that introduces or changes a public interface. The reviewer reads it for any review iteration on a slug whose \`touchSurface\` includes a public API. The planner does NOT read this skill — interface design is the design phase's surface, not the planner's; if the slug only has a planner pass (small/medium routing skipped design), the planner adds a \`## Concerns\` bullet pointing at this skill as a follow-up.
 `;
 
 const DOCUMENTATION_AND_ADRS = `---
 name: documentation-and-adrs
-trigger: when architect picks tier=product-grade or tier=ideal AND a D-N introduces a public interface, persistence shape, security boundary, or new dependency; on ship, when an ADR with status=PROPOSED exists for the slug
+trigger: when design (deep posture, Phase 6.5) AND a Phase 4 D-N introduces a public interface, persistence shape, security boundary, or new dependency; on ship, when an ADR with status=PROPOSED exists for the slug
 ---
 
 # Skill: documentation-and-adrs
 
-A repo-wide **Architecture Decision Record (ADR) catalogue** lives at \`docs/decisions/\`. ADRs outlive flows: \`decisions.md\` is per-slug and gets archived to \`shipped/<slug>/decisions.md\` after Hop 6, but ADRs are durable, repo-scoped, and indexed by sequential numbers. The catalogue is what new contributors and future agents read to understand **why** the codebase looks the way it does.
+A repo-wide **Architecture Decision Record (ADR) catalogue** lives at \`docs/decisions/\`. ADRs outlive flows: D-N records are per-slug (inline in \`plan.md\` under \`## Decisions\` for v8.14+ flows; in legacy \`decisions.md\` for pre-v8.14 shipped slugs) and get archived to \`shipped/<slug>/\` after Hop 6, but ADRs are durable, repo-scoped, and indexed by sequential numbers. The catalogue is what new contributors and future agents read to understand **why** the codebase looks the way it does.
 
-ADRs are NOT a replacement for per-slug \`decisions.md\` — they are the **promoted subset** that has cross-flow durability. Architect writes both: full \`D-N\` records in the slug's \`decisions.md\` (rationale, options, pre-mortem, refs); a thinner ADR pointing back to the slug for the long-term catalogue.
+ADRs are NOT a replacement for per-slug D-N records — they are the **promoted subset** that has cross-flow durability. Design (Phase 4 + Phase 6.5) writes both: full D-N records in the slug's \`plan.md\` \`## Decisions\` section (rationale, alternatives, failure modes, refs); a thinner ADR pointing back to the slug for the long-term catalogue.
 
 ## When to write an ADR (not every D-N becomes one)
 
@@ -2535,7 +2563,7 @@ Do **not** write an ADR for:
 - Per-feature implementation choices that any other team could trivially redo (e.g. "which CSS class names to use for this badge").
 - One-off scripts and benchmarks.
 
-If in doubt: per-slug \`decisions.md\` is enough.
+If in doubt: per-slug D-N (inline in \`plan.md\`) is enough.
 
 ## File layout
 
@@ -2562,14 +2590,14 @@ PROPOSED  ──→  ACCEPTED  ──→  (sometimes)  SUPERSEDED
 
 | Status | Who sets it | When |
 | --- | --- | --- |
-| \`PROPOSED\` | architect | At decision time, when the D-N triggers an ADR. The ADR ships with \`status: PROPOSED\` so reviewers can see the proposed-not-yet-accepted state. |
+| \`PROPOSED\` | design (Phase 6.5) | At decision time, when a Phase 4 D-N triggers an ADR. The ADR ships with \`status: PROPOSED\` so reviewers can see the proposed-not-yet-accepted state. |
 | \`ACCEPTED\` | orchestrator (Hop 6 finalize) | After the slug ships successfully (\`flows/<slug>/ship.md\` had \`status: shipped\`). The ADR is updated in place: \`status: ACCEPTED\`, plus an \`accepted_at: <iso>\` and the shipping \`commit:\` SHA. |
-| \`SUPERSEDED\` | a future architect | When a later slug introduces a new ADR that replaces this one. The new ADR's \`Supersedes\` field cites the old ADR id; the old ADR is updated in place to \`SUPERSEDED\` with a \`superseded_by: ADR-NNNN\` line. |
-| \`REJECTED\` | architect or user | When the slug is cancelled with \`/cc-cancel\` after the ADR was already proposed, or when the user explicitly says "we're not doing this". The ADR is kept (numbers don't get reused) with \`status: REJECTED\` and a one-line \`rejected_because\`. |
+| \`SUPERSEDED\` | a future design pass | When a later slug introduces a new ADR that replaces this one. The new ADR's \`Supersedes\` field cites the old ADR id; the old ADR is updated in place to \`SUPERSEDED\` with a \`superseded_by: ADR-NNNN\` line. |
+| \`REJECTED\` | design pass or user | When the slug is cancelled with \`/cc-cancel\` after the ADR was already proposed, or when the user explicitly says "we're not doing this". The ADR is kept (numbers don't get reused) with \`status: REJECTED\` and a one-line \`rejected_because\`. |
 
 ADRs are never **deleted**. The whole point of the catalogue is that even abandoned decisions remain searchable.
 
-## ADR template (architect writes this)
+## ADR template (design Phase 6.5 writes this)
 
 \`\`\`markdown
 ---
@@ -2591,11 +2619,11 @@ PROPOSED — proposed by cclaw slug \`<slug>\` on <date>. Will be promoted to AC
 
 ## Context
 
-<2-4 sentences. What forced this decision? Cite the slug's plan.md / decisions.md for the long form. Do not duplicate the rationale here.>
+<2-4 sentences. What forced this decision? Cite the slug's plan.md (\`## Decisions\` section) for the long form. Do not duplicate the rationale here.>
 
 ## Decision
 
-<One paragraph. The chosen option, in present tense ("We use BM25..."). No rationale; the rationale lives in the slug's decisions.md.>
+<One paragraph. The chosen option, in present tense ("We use BM25..."). No rationale; the rationale lives in the slug's plan.md D-N record.>
 
 ## Consequences
 
@@ -2605,29 +2633,29 @@ PROPOSED — proposed by cclaw slug \`<slug>\` on <date>. Will be promoted to AC
 
 ## References
 
-- cclaw slug: \`flows/<slug>/decisions.md#D-N\` (full rationale)
+- cclaw slug: \`flows/<slug>/plan.md\` \`## Decisions\` D-N (full rationale)
 - Code: \`src/server/search/scoring.ts\` (primary touch site)
 - External: <official docs URL if the decision rests on framework behaviour>
 \`\`\`
 
-The ADR is **deliberately thinner** than \`decisions.md\`. It is the executive summary — Status, Context, Decision, Consequences, References. Anyone who needs more reads the linked \`decisions.md\` (which lives in \`flows/shipped/<slug>/\` after Hop 6).
+The ADR is **deliberately thinner** than the D-N record. It is the executive summary — Status, Context, Decision, Consequences, References. Anyone who needs more reads the linked D-N inline in \`plan.md\` (which lives in \`flows/shipped/<slug>/\` after Hop 6).
 
-## Architect's contract
+## Design's ADR contract (Phase 6.5)
 
-When architect picks tier=\`product-grade\` or \`ideal\` AND any \`D-N\` matches a "When to write an ADR" trigger:
+When design's posture is \`deep\` (or user passed \`--adr\`) AND any Phase 4 \`D-N\` matches a "When to write an ADR" trigger:
 
 1. Pick the next sequential ADR number. Read \`docs/decisions/\` to find the highest existing number.
 2. Write \`docs/decisions/ADR-NNNN-<slug>.md\` from the template, status \`PROPOSED\`.
-3. Add a line to the \`D-N\` Refs in the slug's \`decisions.md\`: \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\`.
-4. Mention the ADR id in the slim summary's \`What changed\` line.
+3. Add a line to the \`D-N\` Refs inline in \`plan.md\`: \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\`.
+4. Mention the ADR id in the Phase 7 sign-off summary.
 
-Architect does **not** mark the ADR \`ACCEPTED\` themselves — that is the orchestrator's job after a successful ship.
+Design does **not** mark the ADR \`ACCEPTED\` itself — that is the orchestrator's job after a successful ship.
 
 ## Orchestrator's contract — promotion at Hop 6
 
 After Hop 5 (compound) and before / during Hop 6 (finalize):
 
-1. Scan \`flows/<slug>/decisions.md\` for any \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` line.
+1. Scan \`flows/<slug>/plan.md\` (and legacy \`flows/<slug>/decisions.md\` if present from a pre-v8.14 flow) for any \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` line.
 2. For each found ADR file, edit in place:
    - \`status: PROPOSED\` → \`status: ACCEPTED\`
    - Add \`accepted_at: <iso-timestamp>\` after \`proposed_at\`
@@ -2642,7 +2670,7 @@ If the slug is cancelled (\`/cc-cancel\`) instead of shipped:
 
 ## Supersession
 
-When a later architect's decision **replaces** an earlier ADR's choice:
+When a later design pass's decision **replaces** an earlier ADR's choice:
 
 1. The new ADR is written normally, with \`supersedes: ADR-XXXX\` in its frontmatter.
 2. After the new ADR's slug ships, Hop 6 also edits the **old** ADR in place: \`status: ACCEPTED\` → \`status: SUPERSEDED\`, add \`superseded_by: ADR-NNNN\`, add \`superseded_at: <iso>\`. The old ADR's body is **not** rewritten; the catalogue keeps history.
@@ -2653,23 +2681,25 @@ The reviewer (in \`text-review\` mode) flags any new ADR that proposes a decisio
 
 In \`text-review\` mode (when ship.md is being reviewed pre-finalize), the reviewer:
 
-- Verifies that every D-N in the slug's \`decisions.md\` that matches an "ADR trigger" has a corresponding \`docs/decisions/ADR-NNNN-<slug>.md\` file with status \`PROPOSED\`.
-- Verifies that no ADR status was set to \`ACCEPTED\` by the architect (only orchestrator may do that).
+- Verifies that every D-N in the slug's \`plan.md\` \`## Decisions\` section (or legacy \`decisions.md\`) that matches an "ADR trigger" has a corresponding \`docs/decisions/ADR-NNNN-<slug>.md\` file with status \`PROPOSED\`.
+- Verifies that no ADR status was set to \`ACCEPTED\` by design (only orchestrator may do that).
 - Flags missing ADRs as axis=architecture, severity=\`required\` in strict mode (\`consider\` in soft).
 
 ## Worked example
 
 Slug \`bm25-ranking\` (large-risky, strict, tier=product-grade) ships with one D-N about BM25.
 
-Architect writes \`flows/bm25-ranking/decisions.md\`:
+Design's Phase 4 emits D-1 inline in \`flows/bm25-ranking/plan.md\`:
 
 \`\`\`markdown
-## D-1 — Pick BM25 over plain TF for search ranking
+## Decisions
+
+### D-1 — Pick BM25 over plain TF for search ranking
 - ...
 - **Refs:** src/server/search/scoring.ts:1, AC-2, ADR: docs/decisions/ADR-0017-bm25-search-ranking.md (PROPOSED)
 \`\`\`
 
-Architect writes \`docs/decisions/ADR-0017-bm25-search-ranking.md\` with \`status: PROPOSED\`.
+Design's Phase 6.5 writes \`docs/decisions/ADR-0017-bm25-search-ranking.md\` with \`status: PROPOSED\`.
 
 Slug ships successfully. Hop 6 runs:
 
@@ -2677,7 +2707,7 @@ Slug ships successfully. Hop 6 runs:
 2. Edit \`docs/decisions/ADR-0017-bm25-search-ranking.md\`: \`status: ACCEPTED\`, add \`accepted_at\`, \`accepted_at_commit\`.
 3. \`git commit -m "docs(adr-0017): promote to ACCEPTED via bm25-ranking"\`.
 
-Six months later, slug \`vector-search\` introduces ADR-0042 with \`supersedes: ADR-0017\`. After \`vector-search\` ships, Hop 6 also edits ADR-0017: \`status: ACCEPTED\` → \`status: SUPERSEDED\`, \`superseded_by: ADR-0042\`.
+Six months later, slug \`vector-search\` has its design phase introduce ADR-0042 with \`supersedes: ADR-0017\`. After \`vector-search\` ships, Hop 6 also edits ADR-0017: \`status: ACCEPTED\` → \`status: SUPERSEDED\`, \`superseded_by: ADR-0042\`.
 
 ## Common pitfalls
 
@@ -2899,7 +2929,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "source-driven",
     fileName: "source-driven.md",
     description: "Detect stack + versions from manifest, fetch official documentation deep-links, implement against documented patterns, cite URLs in plan/decisions/code. Default in strict mode for framework-specific work.",
-    triggers: ["ac_mode:strict", "specialist:planner", "specialist:architect", "framework-specific-code-detected"],
+    triggers: ["ac_mode:strict", "specialist:planner", "specialist:design", "framework-specific-code-detected"],
     body: SOURCE_DRIVEN
   },
   {
@@ -2909,7 +2939,6 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     triggers: [
       "always-on",
       "edit:.cclaw/flows/*/plan.md",
-      "edit:.cclaw/flows/*/decisions.md",
       "edit:.cclaw/flows/*/build.md",
       "edit:.cclaw/flows/*/review.md",
       "edit:.cclaw/flows/*/ship.md",
@@ -2920,9 +2949,9 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "documentation-and-adrs",
     fileName: "documentation-and-adrs.md",
-    description: "Repo-wide ADR catalogue at docs/decisions/ADR-NNNN-<slug>.md. Architect proposes (PROPOSED); orchestrator promotes to ACCEPTED at Hop 6 after ship; supersession is in-place. Triggers on tier=product-grade or ideal when a D-N introduces a public interface, persistence shape, security boundary, or new dependency.",
+    description: "Repo-wide ADR catalogue at docs/decisions/ADR-NNNN-<slug>.md. Design (Phase 6.5, deep posture) proposes (PROPOSED); orchestrator promotes to ACCEPTED at Hop 6 after ship; supersession is in-place. Triggers when a Phase 4 D-N introduces a public interface, persistence shape, security boundary, or new dependency.",
     triggers: [
-      "specialist:architect",
+      "specialist:design",
       "tier:product-grade",
       "tier:ideal",
       "stage:ship",
@@ -2968,9 +2997,9 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "api-and-interface-design",
     fileName: "api-and-interface-design.md",
-    description: "Architect's checklist for public interfaces: Hyrum's Law (pin shape / order / silence / timing); one-version rule (no diamond deps); untrusted third-party API responses (validate before use); two-adapter rule (no hypothetical seams); consistent error model per boundary.",
+    description: "Design phase's checklist (Phase 4) for public interfaces: Hyrum's Law (pin shape / order / silence / timing); one-version rule (no diamond deps); untrusted third-party API responses (validate before use); two-adapter rule (no hypothetical seams); consistent error model per boundary.",
     triggers: [
-      "specialist:architect",
+      "specialist:design",
       "decision:public-interface",
       "decision:rpc-schema",
       "decision:persistence-shape",
