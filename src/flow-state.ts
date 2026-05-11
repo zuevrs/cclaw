@@ -211,6 +211,20 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
       }
     }
   }
+  if (triage.priorLearnings !== undefined && triage.priorLearnings !== null) {
+    if (!Array.isArray(triage.priorLearnings)) {
+      throw new Error("triage.priorLearnings must be an array, null, or absent");
+    }
+    for (const entry of triage.priorLearnings) {
+      if (typeof entry !== "object" || entry === null) {
+        throw new Error("triage.priorLearnings entries must be objects");
+      }
+      const slug = (entry as { slug?: unknown }).slug;
+      if (typeof slug !== "string" || slug.length === 0) {
+        throw new Error("triage.priorLearnings entries must include a string slug");
+      }
+    }
+  }
 }
 
 /**

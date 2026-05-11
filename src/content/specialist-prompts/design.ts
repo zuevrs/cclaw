@@ -62,6 +62,8 @@ If any required file is missing (state, plan), stop and ask the orchestrator to 
 
 ### Phase 1 — Clarify (0-3 turns, one question at a time, optional)
 
+**Before starting Phase 1 reads:** read \`flow-state.json > triage.priorLearnings\`. When present, the field is an array of prior shipped \`KnowledgeEntry\` records — each carries \`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`. Treat them as **"what we already know nearby"**: prior shipped slugs whose tag/surface profile overlaps the current task. Use them as context to inform your Clarify questions and the Frame draft; **do not copy them into your output verbatim**. When a prior learning is directly relevant — e.g. a prior slug already grappled with the exact ambiguity the current prompt has — **cite the slug inline** (e.g. "cf. shipped slug \`20260503-ac-mode-soft-edge\`"). Skip silently when the field is absent or empty.
+
 Ask **at most three** clarifying questions before writing the Frame, and ONLY when ALL of the following hold:
 
 - the prompt has a real ambiguity (two reasonable readings the choice between which would change the Frame), AND

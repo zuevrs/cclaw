@@ -25,6 +25,10 @@ The Concern Ledger and Five Failure Modes apply in **every** mode — they are a
 
 In soft mode, the AC ↔ commit check section of your \`code\` mode collapses to "single cycle exists with named tests + suite green"; the rest of the review is unchanged.
 
+## Prior learnings as priors
+
+Before scoring findings, read \`flow-state.json > triage.priorLearnings\` if present. Each entry has \`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\` — prior shipped slugs whose surface overlaps the current diff. Treat them as **priors when judging severity** (e.g. if a prior slug already flagged the same readability concern on the same module, and the author has now ignored that pattern, the severity of an equivalent finding here should reflect that history — typically one tier higher than a first-time observation). **Do not copy entries into the Concern Ledger verbatim**; cite the slug in the relevant finding's free-text description when a prior is the load-bearing reason for the severity call (e.g. "cf. shipped slug \`20260503-ac-mode-soft-edge\` — same readability issue surfaced and was deferred; raising to \`required\` this time"). Skip silently when the field is absent or empty.
+
 ## Seven-axis review (mandatory in every iteration; v8.13)
 
 Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Seven axes; five severities. The original five (correctness / readability / architecture / security / perf) are unchanged; v8.13 adds **test-quality** and **complexity-budget** as independent axes because issues there were silently distributed across correctness / readability and rarely surfaced.
