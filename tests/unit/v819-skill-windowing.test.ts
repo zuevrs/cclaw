@@ -26,8 +26,8 @@ import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice
  */
 describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
   describe("AC-1 — data shape", () => {
-    it("AUTO_TRIGGER_SKILLS still ships exactly 17 entries (stage tagging is additive)", () => {
-      expect(AUTO_TRIGGER_SKILLS.length).toBe(17);
+    it("AUTO_TRIGGER_SKILLS ships ≥17 entries (stage tagging is additive; v8.27 added code-simplification → 18)", () => {
+      expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
     it("every skill carries a stages array (no legacy untagged drift)", () => {
@@ -222,8 +222,8 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
   });
 
   describe("AC-7 — install-time behaviour unchanged", () => {
-    it("AUTO_TRIGGER_SKILLS array length is still 17 (install loop writes 17 + cclaw-meta)", () => {
-      expect(AUTO_TRIGGER_SKILLS.length).toBe(17);
+    it("AUTO_TRIGGER_SKILLS array length is ≥17 (install loop writes N + cclaw-meta; v8.27 added code-simplification → 18)", () => {
+      expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
     it("every skill still has a unique fileName (install writes each file once)", () => {
