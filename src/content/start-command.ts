@@ -521,6 +521,24 @@ Hard rules:
 - Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user. Cap-reached is **not silent** (T1-10); see "Cap-reached split-plan" below.
 - Slim summary: decision (clear / warn / block / cap-reached), open findings count, recommended next (continue / fix-only / cancel).
 
+##### Review-cap picker (v8.20+)
+
+Track the cap with \`flow-state.json > reviewCounter\` (v8.20-introduced sibling of \`reviewIterations\`; \`reviewIterations\` continues to be the monotonic lifetime counter, \`reviewCounter\` is the cap-budget that the user can extend). Increment \`reviewCounter\` on every reviewer dispatch in parallel with \`reviewIterations\`. v8.19 flows resumed on v8.20 start at \`reviewCounter: 0\` even if \`reviewIterations\` already reflects prior dispatches — the cap is a fresh budget on resume.
+
+**When \`reviewCounter\` reaches \`5\`**, do NOT dispatch another reviewer. Surface a structured \`AskQuestion\` picker with these options and stop:
+
+1. \`cancel-and-replan\` — Apply the cap-reached split-plan from the next section: orchestrator authors the recommended split into \`review.md\` and asks the user to confirm the follow-up slug names. The current slug is parked; the user picks the first split slug to start, or \`/cc-cancel\` to discard.
+2. \`accept-warns-and-ship\` — Treat every remaining open ledger row as a \`warn\` (only valid if no row is \`critical\` AND, per the architecture priors rule, no row is \`required + architecture\`; if either invariant fails, the option is greyed out and the picker explains why). Proceed to ship gate with the carry-over.
+3. \`keep-iterating-anyway\` — Reset \`reviewCounter\` to \`3\`, buying two more rounds before the picker fires again. Stamp \`triage.iterationOverride: true\` (telemetry: a future "why did this flow take 7 review iterations?" audit can answer without re-reading the iteration log) and resume normal review-pause dispatch.
+
+The picker is not skippable on autopilot; \`runMode: auto\` pauses here like any other hard gate.
+
+##### Architecture severity gates ship (v8.20+)
+
+The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every acMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate (Hop 5): when the open ledger contains any \`required + architecture\` row, the ship picker does NOT offer \`continue\` until the user explicitly picks \`accept-warns-and-ship\` for the architecture finding(s). Other \`severity=required\` findings continue to follow the standard acMode table (gate in strict, carry-over in soft).
+
+Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the ship picker's option list becomes \`accept-warns-and-ship\` (highlighted as the path past the architecture gate) / \`fix-only\` (re-dispatch slice-builder to address) / \`stay-paused\`. The \`continue\` (silent advance) option is not offered.
+
 ##### Cap-reached split-plan (T1-10)
 
 When the 5th iteration ends without \`clear\` or \`warn\`, the review **does not just surface "residual blockers"**; the orchestrator (with the reviewer's help) authors a **split/handoff mini-plan** in the same review.md iteration block, under \`## Cap-reached recovery\`:
