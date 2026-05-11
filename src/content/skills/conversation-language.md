@@ -11,6 +11,14 @@ cclaw is a harness tool. The harness has one user; the user has one language. Yo
 
 Always-on. Every turn the orchestrator (or any specialist) emits user-facing prose — status updates, questions, slim summaries, pause prose, triage announcements, error explanations — runs through this skill's language rule. Mechanical tokens (mode names, `AC-N`, `/cc`, slugs, paths, frontmatter keys) stay English regardless of conversation language; see "What MUST NOT be translated" below.
 
+## When NOT to apply
+
+- **Mechanical tokens** — file paths, AC / D / F ids, slugs, command names, mode names, frontmatter keys, hook output. These are wire protocol and stay in their original form regardless of conversation language.
+- **First-turn prompts that contain only mechanical tokens** (e.g. `/cc plan.md`). No prose to language-detect on; default to English until the user writes a full sentence.
+- **Commit-helper / hook output the harness emits**. The harness reads its own emit; rewriting it breaks the parse contract. Your commentary above / below hook output can be in the user's language.
+- **Direct quotes from documentation or source code citations**. Quotes stay in the source's language; the surrounding prose follows the user.
+- **Slugs, ADR titles, and ADR frontmatter**. The catalogue is ASCII kebab-case for grep stability across team-language switches.
+
 ## What MUST stay in the user's language
 
 Everything that the user reads as prose:

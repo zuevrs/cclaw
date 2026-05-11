@@ -11,6 +11,14 @@ This merged skill covers both review loops with a shared Concern Ledger, Five-ax
 
 Invoked at the start of every `reviewer` or `security-reviewer` dispatch. Auto-applies when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (triggers `security-reviewer` alongside the regular reviewer regardless of `security_flag`). The Concern Ledger and Five-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security-review section adds the threat-model checklist on top.
 
+## When NOT to apply
+
+- **Inline / trivial flows.** `triage.acMode == "inline"` skips the review stage entirely — there is no `flows/<slug>/review.md` and no reviewer dispatch.
+- **Mid-iteration drafts** that have not yet been committed to a slim summary. Iteration N's findings are appended when N returns; partial drafts must not be merged into the ledger.
+- **Renumbering or rewriting F-N rows.** The Concern Ledger is append-only — supersede an old finding with `F-K supersedes F-J` instead of editing F-J in place.
+- **Convergence after one iteration with zero new findings.** Signal #2 requires **two** consecutive zero-blocking iterations; a single zero-finding pass is not enough to declare `clear`.
+- **Authoring code, fix-only patches, or rewriting build evidence.** The reviewer never edits production — that is the slice-builder's surface (under `fix-only` mode). The reviewer cites; the slice-builder closes.
+
 ## review-loop
 
 Review is a producer ↔ critic loop, not a single pass. Iteration N proposes findings; `slice-builder` (in `fix-only` mode) closes them; iteration N+1 re-checks. The loop ends only when one of three convergence signals fires (see "Convergence detector" below). This is the cclaw analogue of the Karpathy "Ralph loop": short cycles, an explicit ledger, and hard rules for when to stop.
@@ -133,6 +141,21 @@ Five-axis pass: no findings. Two consecutive zero-blocking iterations recorded.
 
 Decision: clear (signal #2). F-2 carries to ships/<slug>.md and learnings/<slug>.md.
 ```
+
+## Common rationalizations
+
+The reviewer's discipline is the first thing the slug shape pressures an agent to skip when iterations get long. Catch yourself thinking the left column; do the right column instead. Surface the rationalization verbatim in the iteration's slim-summary `Notes:` when you obey the right column anyway, so the audit trail records the discipline.
+
+| rationalization | truth |
+| --- | --- |
+| "Two iterations with no new findings is enough — let's ship." | Convergence signal #2 requires **two consecutive** zero-blocking iterations. One zero-finding pass is not convergence; it is one data point. The cap-recovery picker exists for this exact mistake. |
+| "The five axes don't all apply here, I'll just walk the relevant ones." | The Five-axis pass is mandatory every iteration. Record "no findings on `<axis>`" explicitly; silence is not the same as a clean walk. |
+| "F-2 is fixed by F-1's commit, I'll close it without re-checking." | Closing a row is itself a claim. Cite the fix SHA / test name / file:line that proves the close. A close without evidence is the next iteration's reopen. |
+| "Severity `required` everywhere makes it look serious." | Padding severity makes the gradient useless. `nit` / `consider` / `required` / `critical` are a routing signal; collapse them and the orchestrator can't decide what blocks ship. |
+| "I'll skip the Concern Ledger this iteration; the findings are short." | The ledger is the resume contract. Iteration N+1 reads it before walking the diff; skipping breaks fix-only dispatch and supersession tracking. |
+| "Architecture severity `required` doesn't block in soft mode anyway." | v8.20 architecture-severity gate fires across **every** acMode (not just strict). Treating it as soft-mode-skippable is a known bypass the gate is designed to catch. |
+| "The diff is small — no real review needed, I'll fast-pass it." | Small diffs hide concentrated risk. The Failure Modes checklist runs every iteration; "I trust myself on this one" is the rationalization the audit catches. |
+| "Two-pass mode is overkill for this slug." | Two-pass is the v8.24 default on every large-risky OR security-flagged slug. `config.reviewerTwoPass: false` is the audit-trailed opt-out; "felt like overkill" is not. |
 
 ## Common pitfalls
 

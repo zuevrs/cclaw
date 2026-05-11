@@ -16,6 +16,14 @@ Every new flow opens with a **triage gate**. The orchestrator analyses the user'
 - Skipped on `/cc` (no argument) when an active flow is detected — see `flow-resume.md`.
 - Skipped on `/cc-cancel` and `/cc-idea` (these never open a flow).
 
+## When NOT to apply
+
+- **Active flow detected** (`flow-state.json > currentSlug != null`). The saved triage is read as ground truth; `flow-resume.md` runs instead and the gate does NOT re-prompt.
+- **`/cc-cancel`** (shelves the active flow) and **`/cc-idea`** (one-shot idea capture). Neither opens a flow; the gate has no surface.
+- **User passed `--triage=<class>`** on the `/cc` invocation. The override is the audit-trailed skip; record `userOverrode: true` and proceed.
+- **User passed `--no-triage`.** Documented escape hatch (`complexity: small-medium`, `acMode: soft`, `userOverrode: true`, rationale "user disabled triage"). Do not re-render the form.
+- **Resume from a pre-v8.21 flow with populated `triage` already on disk.** The orchestrator reads the saved triage; the gate is not re-opened mid-flow.
+
 ## Zero-question fast path (trivial / high-confidence)
 
 When the heuristic in §"Heuristics — how to pick" classifies the request as `trivial` **with confidence `high`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, **do not ask anything**. Instead:
@@ -255,6 +263,21 @@ Triage
 ```
 
 The user is expected to clarify in (4) Custom or accept (1) Proceed; either way the triage is now recorded.
+
+## Common rationalizations
+
+The triage gate is the easiest place to skip "because the task is obvious". When you catch yourself thinking the left column, do the right column. Surface the rationalization in the triage rationale line so the audit trail records why the gate ran (or didn't) the way it did.
+
+| rationalization | truth |
+| --- | --- |
+| "This is obviously trivial — skip the gate entirely." | Confidence must be `high` AND no "discuss first" cue for the zero-question fast path. If either is missing, the structured ask runs; "obviously" is the canonical anchoring bias. |
+| "User said 'just fix it' — go straight to inline." | "just fix it" is a cue but not a free pass. The heuristic still ranks file count / LOC / sensitive surface; if any signal says large-risky, surface large-risky and let the user override. |
+| "Vague prompt + confidence low → small/medium is fine." | On `low` confidence, always escalate one class. The user reads the triage and learns to ignore your scope estimates; escalation produces an honest gate. |
+| "Combined form is overkill for a small slug — let me ask Question 1, then Question 2 separately." | The combined form is the v8.14 default on every supporting harness (Cursor / Claude Code / OpenCode / Codex). Splitting back to two asks wastes a round-trip on every non-inline flow. |
+| "I'll re-render the triage on resume to confirm — safer." | Resume reads the saved triage and continues from `currentStage` — never re-prompts. Re-rendering is a contract violation; the user already chose. |
+| "Mid-flight the user wants to switch from step to auto — let me patch `triage.runMode`." | Triage is immutable for the lifetime of the flow. Mid-flight runMode switch is `/cc-cancel` + fresh `/cc` (until v8.34 ships the mid-flight toggle). The orchestrator does NOT flip mid-flow. |
+| "`large-risky` to be safe on this one-file rename." | Don't pad the heuristic. The user reads it and learns to ignore your triage; padding undermines the gate's signal-to-noise. |
+| "No-git auto-downgrade is a warning, not a hard rule." | Strict mode requires per-AC commits — without `.git/`, there is no SHA to record. The downgrade is structural; treating it as advisory crashes on the first commit attempt. |
 
 ## Common pitfalls
 

@@ -11,6 +11,15 @@ This merged skill covers both halves of the public-interface lifecycle: how a ne
 
 Auto-applies in two cases. **Design phase** — during Phase 4 (Decisions) when proposing a new public interface (HTTP endpoint, RPC method, library export, file format, environment-variable schema, queue payload), or when the slug's `touchSurface` includes any path that is part of a public API surface. **Build / review** — when the diff modifies an existing public interface, persisted contract, or migration shape. Not used for internal helpers that never cross a module / process / repo / service boundary.
 
+## When NOT to apply
+
+- **Internal helpers** that never cross a module / process / repo / service boundary. Hyrum's Law applies to observable contracts; private symbols are not contracts.
+- **Renames inside a single file** that don't touch exported symbols. The interface didn't move; this skill has no surface to attach to.
+- **Test-only fixtures and adapters.** A test fixture is not a public interface; its shape doesn't pin Hyrum's-Law consumers.
+- **First-implementation slugs with no existing consumers** AND no published deprecation. The two-adapter rule and the Churn Rule kick in *after* there are real consumers; for the first impl, the rule is "don't speculate on hypothetical consumers".
+- **CSS / styling / pure UI changes** with no API contract impact. The reviewer's `readability` axis handles those; the API skill has no surface.
+- **Refactor slugs marked `behaviour-preserving: true`.** The contract is pinned by the existing tests; if anything observable changed, the slug has leaked behaviour and the refactor needs to be split (per `tdd-and-verification > refactor-safety`).
+
 ## api-and-interface-design
 
 > "With a sufficient number of users of an API, all observable behaviors of your system will be depended on by somebody, regardless of what you promise in the contract." — **Hyrum's Law**
@@ -156,6 +165,21 @@ When possible, ship the new path alongside the old. Examples:
 - new function exported with the new name; old name aliased to it.
 
 Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to the design phase; the decision must be recorded inline in `flows/<slug>/plan.md` under `## Decisions`.
+
+## Common rationalizations
+
+Public-interface design is where speculative abstraction and "we'll handle it later" most often slip past the gate. Catch yourself thinking the left column; do the right column. Surface the rationalization in `plan.md > ## Decisions` D-N rationale when you obey the right column.
+
+| rationalization | truth |
+| --- | --- |
+| "We might want to swap this dep someday — let's add a port now." | One adapter is a hypothetical seam. Two adapters means a real one. Speculative ports survive the refactor that finally removes them; the cost is paid every time someone reads the file. |
+| "Internal API — not breaking." | If the change crosses a service / process / repo boundary, treat it as breaking. Hyrum's Law: someone is depending on the current shape, observed or not. |
+| "The third-party always returns this shape; validation is overkill." | Validation is the contract. Third-party responses are untrusted data; "always returns" is `F-N | security | required` when it eventually doesn't. |
+| "The CLI flag rename is fine — anyone using it will see the error." | Aliases for CLI flags are nearly free. Add the alias; mark the old name `deprecated`; schedule removal. The cost of an alias is one line; the cost of breaking a user's pipeline is a support thread. |
+| "Hyrum's Law doesn't apply — we never documented the order." | Hyrum's Law applies to **observable** behaviour, not documented behaviour. Order, silence, timing, and edge-case coercion are all observable; pin them. |
+| "I'll skip the CHANGELOG line because everyone on the team knows." | The CHANGELOG is for tomorrow's team and tomorrow's user. "Everyone knows" is true for 3 days; for the migration audit 6 months later, the line is the only record. |
+| "The error model is consistent enough — Result here, throw there." | "Enough" is the rationalization. Within one boundary, pick one model and pin it. Mixing throws + Result + null-on-missing is the canonical Hyrum's-Law trap. |
+| "Strangler is overkill — let's just cut over." | A big-bang migration is `F-N | architecture | required`. Even small subsystems benefit from a canary; the rollback story is structural, not optional. |
 
 ## Common pitfalls
 
