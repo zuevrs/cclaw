@@ -2,11 +2,48 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+/**
+ * Stages a specialist dispatch can target. Used by `AutoTriggerSkill.stages`
+ * to declare which hops of the flow a skill is relevant for, and by
+ * {@link buildAutoTriggerBlock} to render a stage-scoped subset of skills
+ * inside each specialist prompt.
+ *
+ * - `triage`   — Hop 1-2 (gate + persistence)
+ * - `plan`     — design + planner (Hop 2.5 / 3)
+ * - `build`    — slice-builder (Hop 4)
+ * - `review`   — reviewer / security-reviewer (Hop 5)
+ * - `ship`     — commit-helper + compound-and-ship (Hop 6+)
+ * - `compound` — runCompoundAndShip's knowledge write loop
+ * - `always`   — relevant at every hop; rendered into every stage block.
+ */
+export type AutoTriggerStage =
+  | "triage"
+  | "plan"
+  | "build"
+  | "review"
+  | "ship"
+  | "compound"
+  | "always";
+
 export interface AutoTriggerSkill {
   id: string;
   fileName: string;
   description: string;
   triggers: string[];
+  /**
+   * Stages at which this skill is relevant for prompt assembly. Optional
+   * for the legacy data shape; an omitted field is treated as `["always"]`
+   * (the skill rides every stage's block). Each call-site of
+   * {@link buildAutoTriggerBlock} passes the stage it is dispatching for;
+   * only skills whose `stages` includes the value (or `"always"`) appear
+   * in the rendered block.
+   *
+   * The disk-layer behaviour is unchanged — `install.ts` still writes
+   * every skill in {@link AUTO_TRIGGER_SKILLS} to `.cclaw/lib/skills/*.md`
+   * irrespective of stage tags. Stage filtering is **runtime-only** for
+   * specialist prompt composition.
+   */
+  stages?: ReadonlyArray<AutoTriggerStage>;
   body: string;
 }
 
@@ -58,6 +95,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "triage-gate.md",
     description: "Mandatory first step of every new /cc flow: classify complexity, propose acMode/path, ask user to confirm, persist the decision.",
     triggers: ["start:/cc"],
+    stages: ["triage"],
     body: readSkill("triage-gate.md")
   },
   {
@@ -65,6 +103,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "flow-resume.md",
     description: "When /cc is invoked with no task or with an active flow, render a resume summary and let the user continue / show / cancel / start fresh.",
     triggers: ["start:/cc", "active-flow-detected"],
+    stages: ["always"],
     body: readSkill("flow-resume.md")
   },
   {
@@ -72,6 +111,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "pre-flight-assumptions.md",
     description: "Surface 3-7 default assumptions (stack, conventions, architecture defaults, out-of-scope) for the user to confirm before any specialist runs. Skipped on the inline path.",
     triggers: ["after:triage-gate", "before:first-dispatch"],
+    stages: ["triage", "plan"],
     body: readSkill("pre-flight-assumptions.md")
   },
   {
@@ -79,6 +119,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "plan-authoring.md",
     description: "Auto-applies whenever the agent edits .cclaw/flows/<slug>/plan.md.",
     triggers: ["edit:.cclaw/flows/*/plan.md", "create:.cclaw/flows/*/plan.md"],
+    stages: ["plan"],
     body: readSkill("plan-authoring.md")
   },
   {
@@ -86,6 +127,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "ac-discipline.md",
     description: "v8.16 merge of ac-quality + ac-traceability. Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the commit-helper invocation + AC↔commit chain contract. AC-quality always-on for AC authoring; AC-traceability active only when ac_mode=strict, advisory in soft / inline modes.",
     triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:planner", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ac_mode:strict"],
+    stages: ["plan", "build", "review"],
     body: readSkill("ac-discipline.md")
   },
   {
@@ -93,6 +135,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "refinement.md",
     description: "Activates when /cc detects an existing plan match.",
     triggers: ["existing-plan-detected"],
+    stages: ["triage", "plan"],
     body: readSkill("refinement.md")
   },
   {
@@ -100,6 +143,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "parallel-build.md",
     description: "Rules and execution playbook for the parallel-build topology.",
     triggers: ["topology:parallel-build"],
+    stages: ["build"],
     body: readSkill("parallel-build.md")
   },
   {
@@ -107,6 +151,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "review-discipline.md",
     description: "v8.16 merge of review-loop + security-review. Wraps every reviewer / security-reviewer invocation with the shared Concern Ledger, Five-axis pass, Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
     triggers: ["specialist:reviewer", "specialist:security-reviewer", "security-flag:true", "diff:auth|secrets|supply-chain|pii"],
+    stages: ["review"],
     body: readSkill("review-discipline.md")
   },
   {
@@ -122,6 +167,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
       "task:refactor",
       "pattern:refactor"
     ],
+    stages: ["build", "review", "ship"],
     body: readSkill("tdd-and-verification.md")
   },
   {
@@ -129,6 +175,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "commit-hygiene.md",
     description: "v8.16 merge of commit-message-quality + surgical-edit-hygiene. Enforces commit-message conventions for commit-helper.mjs AND the always-on rules for slice-builder commits: no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
     triggers: ["before:commit-helper", "always-on", "specialist:slice-builder", "before:git-commit"],
+    stages: ["build", "ship"],
     body: readSkill("commit-hygiene.md")
   },
   {
@@ -136,6 +183,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "conversation-language.md",
     description: "Always-on policy: reply in the user's language; never translate paths, AC ids, slugs, hook output, or frontmatter keys.",
     triggers: ["always-on"],
+    stages: ["always"],
     body: readSkill("conversation-language.md")
   },
   {
@@ -143,6 +191,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "anti-slop.md",
     description: "Always-on guard against redundant verification, env-specific shims, and silent skip-and-pass fixes.",
     triggers: ["always-on", "task:build", "task:fix-only", "task:recovery"],
+    stages: ["always"],
     body: readSkill("anti-slop.md")
   },
   {
@@ -150,6 +199,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     fileName: "source-driven.md",
     description: "Detect stack + versions from manifest, fetch official documentation deep-links, implement against documented patterns, cite URLs in plan/decisions/code. Default in strict mode for framework-specific work.",
     triggers: ["ac_mode:strict", "specialist:planner", "specialist:design", "framework-specific-code-detected"],
+    stages: ["plan", "build"],
     body: readSkill("source-driven.md")
   },
   {
@@ -164,6 +214,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
       "edit:.cclaw/flows/*/ship.md",
       "edit:.cclaw/flows/*/learnings.md"
     ],
+    stages: ["always"],
     body: readSkill("summary-format.md")
   },
   {
@@ -180,6 +231,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
       "decision:security-boundary",
       "decision:new-dependency"
     ],
+    stages: ["plan", "ship"],
     body: readSkill("documentation-and-adrs.md")
   },
   {
@@ -197,6 +249,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
       "specialist:slice-builder",
       "specialist:reviewer"
     ],
+    stages: ["build", "review"],
     body: readSkill("debug-and-browser.md")
   },
   {
@@ -213,6 +266,100 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
       "diff:public-api",
       "frontmatter:breaking_change=true"
     ],
+    stages: ["plan", "review"],
     body: readSkill("api-evolution.md")
   }
 ];
+
+/**
+ * Known stages that {@link buildAutoTriggerBlock} accepts. Exported so the
+ * test suite can iterate the set without hardcoding the strings twice.
+ *
+ * The list mirrors the {@link AutoTriggerStage} union minus `always`
+ * (the meta-stage that is never a *dispatch* stage — it only modifies
+ * which skills are considered relevant across every stage).
+ */
+export const AUTO_TRIGGER_DISPATCH_STAGES: ReadonlyArray<Exclude<AutoTriggerStage, "always">> = [
+  "triage",
+  "plan",
+  "build",
+  "review",
+  "ship",
+  "compound"
+];
+
+/**
+ * Format a skill into a compact bullet for embedding in a specialist prompt.
+ * One line of `id` + `description`, one sub-line listing the skill's
+ * triggers verbatim. The full skill body is NOT inlined — it lives in
+ * `.cclaw/lib/skills/<id>.md` and is loaded by the harness's own skill
+ * machinery; the block here is a stage-scoped *index* so the specialist
+ * knows which skills apply to its current dispatch.
+ */
+function renderSkillBullet(skill: AutoTriggerSkill): string {
+  return `- **${skill.id}** — ${skill.description}\n  - triggers: ${skill.triggers.join(", ")}`;
+}
+
+/**
+ * Render the stage-scoped block of auto-trigger skills suitable for
+ * interpolation into a specialist prompt. v8.19 introduces the `stage`
+ * parameter as the primary call shape.
+ *
+ * - When `stage` is omitted, the legacy "all skills" block is returned
+ *   (every entry in {@link AUTO_TRIGGER_SKILLS}). This keeps callers that
+ *   pre-date the stage tagging working.
+ * - When `stage` is provided, only skills whose `stages` array includes
+ *   the value **or** `"always"` are rendered. A skill with no `stages`
+ *   field at all is treated as `["always"]` (legacy data shape) and rides
+ *   every stage's block. An unknown stage value falls back to the full
+ *   set — same as omitting the parameter — so a typo never silently
+ *   strips every skill out of a dispatch.
+ *
+ * The token-budget win is real: a stage block is always strictly shorter
+ * than the full block on this codebase (each dispatch stage drops at
+ * least four out-of-scope skills). The v819-skill-windowing suite locks
+ * a minimum 20% reduction at the test level so a future un-tag (every
+ * skill regressing to `["always"]`) is caught.
+ */
+export function buildAutoTriggerBlock(stage?: AutoTriggerStage): string {
+  const known = new Set<AutoTriggerStage>([
+    "triage",
+    "plan",
+    "build",
+    "review",
+    "ship",
+    "compound",
+    "always"
+  ]);
+  const useStage = stage !== undefined && known.has(stage) ? stage : undefined;
+
+  const skills = useStage
+    ? AUTO_TRIGGER_SKILLS.filter((skill) => {
+        const declared = skill.stages ?? (["always"] as const);
+        return declared.includes(useStage) || declared.includes("always");
+      })
+    : AUTO_TRIGGER_SKILLS;
+
+  const heading = useStage
+    ? `## Active skills (stage: \`${useStage}\`)`
+    : "## Active skills (all stages)";
+
+  const bullets = skills.map(renderSkillBullet);
+
+  const summary = useStage
+    ? `_${skills.length} of ${AUTO_TRIGGER_SKILLS.length} skills active for stage \`${useStage}\`. The full body of each skill lives in \`.cclaw/lib/skills/<id>.md\` — read on demand, do not inline._`
+    : `_${AUTO_TRIGGER_SKILLS.length} skills total. The full body of each skill lives in \`.cclaw/lib/skills/<id>.md\` — read on demand, do not inline._`;
+
+  return [heading, "", ...bullets, "", summary].join("\n");
+}
+
+/**
+ * Strict-stage variant of {@link buildAutoTriggerBlock} for call-sites
+ * that always know their dispatch stage at compile time. Equivalent to
+ * `buildAutoTriggerBlock(stage)` but the type signature forbids passing
+ * `undefined` — useful inside specialist prompt template literals where
+ * the stage is hardcoded per file.
+ */
+export function buildAutoTriggerBlockForStage(stage: AutoTriggerStage): string {
+  return buildAutoTriggerBlock(stage);
+}
