@@ -145,6 +145,33 @@ The triage block is **immutable for the lifetime of the flow**. If the user want
 
 The orchestrator's path-validation rule is single-stage: `triage.path` ⊆ `{plan, build, review, ship}`. Any state file that contains a `"discovery"` entry is from an older schema and must be normalised — strip the `"discovery"` entry and continue with the remaining stages.
 
+## No-git auto-downgrade (v8.23)
+
+Before the triage decision is patched into `flow-state.json`, the orchestrator runs the Hop 1 git-check: does `<projectRoot>/.git/` exist? If not, the gate **auto-downgrades** `acMode` from whatever the heuristic recommended to `soft`, regardless of complexity class, and records the audit-trail field:
+
+```json
+{
+  "triage": {
+    "complexity": "large-risky",
+    "acMode": "soft",
+    "downgradeReason": "no-git",
+    "rationale": "..."
+  }
+}
+```
+
+The downgrade is structural, not stylistic:
+
+- **strict mode requires per-AC commits.** `commit-helper.mjs` invokes `git commit` and records each SHA in `flow-state.json > ac[i].commit`. Without `.git/`, there is no SHA to record. v8.23 makes `commit-helper.mjs` a graceful no-op (one-line stderr warning, exit 0) in soft mode without git, but strict mode would still crash on the first commit attempt — the downgrade prevents that.
+- **parallel-build relies on `git worktree add`.** v8.13's parallel fan-out clones the working tree into `.cclaw/worktrees/<slug>-s-N` via `git worktree`; without `.git/`, the dispatch envelope can't construct the worktree. Soft mode falls back to sequential slice dispatch; the slice-builder reads `triage.downgradeReason == "no-git"` and suppresses the parallel envelope.
+- **inline path's terminal `git commit`** is gracefully suppressed too — the orchestrator surfaces "no-git: change applied, no commit recorded" instead of crashing.
+
+Surface the downgrade to the user as a one-sentence warning at triage time, in the user's conversation language: "no `.git/` detected — running in soft acMode; parallel-build is disabled until you initialise a repo." The mechanical tokens (`acMode`, `soft`, `.git/`, `/cc`) stay English.
+
+The downgrade is **one-way for the lifetime of the flow**. Running `git init` mid-flight does NOT re-upgrade the triage — `/cc-cancel` + fresh `/cc` is the only path that re-triages with git now present. This mirrors the general invariant that triage is immutable for the lifetime of the flow (above, in "What the orchestrator records").
+
+Ship-gate's `no-vcs` finalization option remains available regardless of the downgrade — a user can still ship a soft-mode flow without git by picking the no-vcs path at Hop 6 (Finalize). See `runbooks/ship-gate.md`.
+
 ## When to skip the gate
 
 The gate is **never skipped silently**. Three explicit forms of skip:

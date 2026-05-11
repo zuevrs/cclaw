@@ -179,6 +179,20 @@ if (state.schemaVersion !== 3 && state.schemaVersion !== 2) {
 
 const acMode = state.triage?.acMode ?? "strict";
 
+// v8.23 — detect no-git working trees up front. Soft / inline mode treats the
+// absence as a one-line warning + exit 0 (graceful no-op); strict mode hard-
+// fails below because AC trace requires SHAs that no-git cannot produce.
+async function hasGitDir() {
+  try {
+    const stat = await fs.stat(path.join(root, ".git"));
+    return stat.isDirectory() || stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
+const gitPresent = await hasGitDir();
+
 if (acMode !== "strict") {
   // soft / inline mode: advisory passthrough.
   const message = arg("message");
@@ -186,12 +200,25 @@ if (acMode !== "strict") {
     console.error("[commit-helper] --message=\\"...\\" is required.");
     process.exit(2);
   }
+  if (!gitPresent) {
+    // v8.23 no-git fallback: graceful no-op. Hop 1 should have already
+    // auto-downgraded acMode to soft with downgradeReason: "no-git", so
+    // reaching this branch is the expected steady-state for a no-git
+    // project. Emit a single-line warning to stderr (machine-readable
+    // stdout stays empty) and exit 0 so the calling specialist's wrapper
+    // script proceeds.
+    console.error(\`[commit-helper] no-git: \${acMode} mode running without VCS, commit skipped (no-op). Run \\\`git init\\\` if you want commit traces.\`);
+    process.exit(0);
+  }
   let staged;
   try {
     staged = execFileSync("git", ["diff", "--cached", "--name-only"], { cwd: root, encoding: "utf8" }).trim();
   } catch (error) {
-    console.error(\`[commit-helper] git not available: \${error.message}\`);
-    process.exit(2);
+    // git binary is present but the command failed for a reason other
+    // than the missing .git/ dir (e.g. shallow clone, permission). Still
+    // a graceful no-op in soft mode — surface the reason on stderr.
+    console.error(\`[commit-helper] no-git: git command failed (\${error.message}); soft mode commit skipped (no-op).\`);
+    process.exit(0);
   }
   if (!staged) {
     console.error("[commit-helper] nothing staged. Stage your changes before invoking commit-helper.");
@@ -200,6 +227,12 @@ if (acMode !== "strict") {
   execFileSync("git", ["commit", "-m", message], { cwd: root, stdio: "inherit" });
   console.log(\`[commit-helper] committed in \${acMode} mode (no AC trace recorded).\`);
   process.exit(0);
+}
+
+// strict mode below — git is mandatory; hard-fail if missing.
+if (!gitPresent) {
+  console.error("[commit-helper] strict mode requires git, but no .git/ found at projectRoot. Hop 1 should have auto-downgraded to soft acMode with downgradeReason: \\"no-git\\" — your flow-state.json is inconsistent. Run /cc-cancel and re-triage.");
+  process.exit(2);
 }
 
 // strict mode below.

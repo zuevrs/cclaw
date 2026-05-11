@@ -190,6 +190,10 @@ Hard-stop message for pre-v8 state:
 
 Do not auto-delete state. Do not hand-edit the JSON.
 
+### Hop 1 — git-check sub-step (v8.23)
+
+Before triage patches, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), force \`triage.acMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. Surface a one-sentence warning to the user at triage time. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale, behaviour, downstream consequences (commit-helper no-op, parallel-build suppression, inline path \`git commit\` skip) live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
+
 ## Hop 2 — Triage (fresh starts only)
 
 Run the \`triage-gate.md\` skill. The gate has **two modes** in v8.14+:
