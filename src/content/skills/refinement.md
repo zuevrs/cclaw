@@ -12,6 +12,14 @@ trigger: when /cc detects an existing plan (active or shipped) for the new task
 - **refine shipped** — create a new plan with `refines: <old-slug>` linking to the shipped slug;
 - **new** — start an unrelated plan.
 
+## When to use
+
+Triggered by `flow-resume.md` detection when a fresh `/cc <task>` collides with an active flow or fuzzy-matches a recently shipped slug. Skipped on `/cc` (no argument) — that's pure resume, not refinement. Skipped on `/cc-cancel` and `/cc-idea`.
+
+## Common pitfalls
+
+See `flow-resume.md` for the full resume-vs-collision UX and `plan-authoring.md` for the rules a refining plan must satisfy. This skill carries only the refinement-specific decision tree.
+
 ## Rules for refinement
 
 1. `refines: <old-slug>` is set in the new plan's frontmatter and must match a real shipped slug.

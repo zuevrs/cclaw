@@ -7,6 +7,10 @@ trigger: when planner topology = parallel-build
 
 `parallel-build` is the only parallelism allowed during build. It is opt-in. The orchestrator never picks it without planner naming it explicitly in `flows/<slug>/plan.md` Topology section.
 
+## When to use
+
+Triggered when planner topology in `plan.md` reads `parallel-build`. Pre-conditions in the next section gate eligibility (≥4 AC, ≥2 disjoint touchSurface clusters, every AC `parallelSafe: true`, no in-wave dependencies). On large-risky slugs with `triage.downgradeReason == "no-git"` the orchestrator suppresses parallel dispatch even when topology says parallel-build, because `git worktree` is unavailable without `.git/`. See `runbooks/parallel-build.md` for the full dispatch envelope.
+
 ## Pre-conditions (all must hold)
 
 1. **≥4 AC** in the plan.

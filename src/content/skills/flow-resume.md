@@ -7,6 +7,10 @@ trigger: /cc invoked with no task argument, OR with an argument while flow-state
 
 `/cc` without an argument means **"continue what we were doing"**. `/cc <task>` with an existing active flow means the user might either be resuming or starting a new branch — the orchestrator has to ask, never silently pick.
 
+## When to use
+
+Invoked on `/cc` with no task argument (the canonical resume gesture), and on `/cc <task>` when `flow-state.json > currentSlug` is non-null (collision case — show the resume summary alongside the new-task ask). Skipped on `/cc <task>` with an empty / null `currentSlug` (fresh start; `triage-gate.md` runs instead) and on `/cc-cancel` (no resume; just shelves the active flow).
+
 ## Detection
 
 Read `.cclaw/state/flow-state.json`:

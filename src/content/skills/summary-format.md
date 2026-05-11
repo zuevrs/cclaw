@@ -9,6 +9,10 @@ Every cclaw artifact ends with a **standardised three-section Summary block**. T
 
 The three-section shape is taken directly from the addyosmani-skills git-workflow standard: it surfaces scope creep and uncertainty *to the next reader*, instead of relying on memory or clean-up passes that never happen.
 
+## When to use
+
+Always-on for any specialist that authors a cclaw artifact: `plan.md` (planner / design), `decisions.md` (design Phase 4 on legacy flows), `build.md` (slice-builder), `review.md` (reviewer / security-reviewer per iteration), `ship.md` (slice-builder at ship dispatch), `learnings.md` (the learnings sub-agent). The slim-summary contract — six lines max, `Stage: …`, `What changed: …`, `Next: …`, `Confidence: …` — is enforced on every dispatch return; the artifact Summary block is appended at write time.
+
 ## Format
 
 Append exactly this block to the bottom of the artifact you authored. Do not rename the headings, do not add other sections inside it, do not reorder them.

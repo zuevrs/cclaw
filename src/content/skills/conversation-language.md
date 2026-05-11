@@ -7,6 +7,10 @@ trigger: always-on
 
 cclaw is a harness tool. The harness has one user; the user has one language. Your conversational output must be in that language. Detect it from the user's most recent message and stay in it for the remainder of the turn.
 
+## When to use
+
+Always-on. Every turn the orchestrator (or any specialist) emits user-facing prose — status updates, questions, slim summaries, pause prose, triage announcements, error explanations — runs through this skill's language rule. Mechanical tokens (mode names, `AC-N`, `/cc`, slugs, paths, frontmatter keys) stay English regardless of conversation language; see "What MUST NOT be translated" below.
+
 ## What MUST stay in the user's language
 
 Everything that the user reads as prose:

@@ -1,5 +1,74 @@
 # Changelog
 
+## 8.26.0 — Skill anatomy enforcement: every skill carries Overview + When-to-use + ≥2 depth sections (Process / Rationalizations / Red Flags / Verification), with permissive equivalents
+
+### Why
+
+cclaw's 17 skills evolved organically. Some carry every addy-style anatomy slot under custom headings (e.g. `tdd-and-verification.md` has all six); others are missing one or two slots that a future maintainer or auto-trigger consumer would reasonably expect to find. The most common gap was **"When to use"** — eight skills (api-evolution, conversation-language, flow-resume, parallel-build, pre-flight-assumptions, refinement, review-discipline, summary-format) lacked an explicit "when this skill applies" heading even when the frontmatter `trigger:` field was clear and a `When to invoke` or `When this skill applies` heading would have been a one-line addition.
+
+The audit also found two short reference docs (`refinement.md` at 28 lines and `pre-flight-assumptions.md` at 40 lines, the latter intentionally compacted in v8.21 when the pre-flight surface folded into specialist Phase 0) that were a Verification / Pitfalls / Worked-example heading away from satisfying the rubric — adding a one-line pointer body kept them on-spec without bloating the body.
+
+v8.26 patches the gaps and installs the tripwire so a future refactor cannot silently drop a section. The rubric is intentionally permissive: equivalent heading names count (`Common pitfalls` satisfies Red Flags; `Anti-rationalization table` satisfies Common Rationalizations; `Worked example` / `Gates` / `Outcome` satisfy Verification). The four depth slots require **at least 2 of 4** so a skill with depth=2 (Process + Verification, no Rationalizations or Red Flags) still passes.
+
+**No skill body was rewritten.** Every existing heading and paragraph stayed verbatim; the patches are H2 headings + 1-3 sentence bodies inserted near the top of each gap skill. Per the audit's hard constraint: v8.26 is **additive only** — no semantic spec changes hidden in a polish slug.
+
+### What changed
+
+**D1 — `api-evolution.md` gains `## When to use`** after the top paragraph. One paragraph explains the two activation paths (design Phase 4 for new public interfaces; build / review for diffs touching existing public-API surface) and confirms that internal helpers are out of scope.
+
+**D2 — `conversation-language.md` gains `## When to use`.** Names the always-on contract, lists the canonical user-facing prose surfaces (status updates, questions, slim summaries, pause prose, triage announcements, error explanations), and reasserts the "mechanical tokens stay English" carve-out.
+
+**D3 — `flow-resume.md` gains `## When to use`.** Documents the three trigger cases (resume on `/cc` no-arg, collision on `/cc <task>` with non-null `currentSlug`, skip on `/cc-cancel` and `/cc-idea`).
+
+**D4 — `parallel-build.md` gains `## When to use`.** Names the planner-topology trigger, references the pre-conditions section, and explicitly notes v8.23's `triage.downgradeReason == "no-git"` suppression rule.
+
+**D5 — `review-discipline.md` gains `## When to use`.** Names the `reviewer` / `security-reviewer` dispatch trigger and the auto-applies rule for diffs touching `authn` / `authz` / secrets / supply chain / data exposure surfaces; reasserts that the Concern Ledger + Five-axis + Five Failure Modes contract is uniform across all five reviewer modes.
+
+**D6 — `summary-format.md` gains `## When to use`.** Enumerates the six artifact authoring contexts (plan / decisions / build / review / ship / learnings) and the slim-summary ≤6-line constraint.
+
+**D7 — `refinement.md` (short skill, 28 lines)** gains `## When to use` (one paragraph, triggers from `flow-resume.md`'s collision detection) and `## Common pitfalls` (one paragraph pointing at sibling skills `flow-resume.md` and `plan-authoring.md` for full guidance, no new content). Body stays under the 60-line budget per the tripwire.
+
+**D8 — `pre-flight-assumptions.md` (short reference doc, 40 lines, v8.21-rewritten)** gains `## When to use` (one paragraph explaining the reference-doc role + where the actual capture surface now lives — design Phase 0 / planner Phase 0), `## Common pitfalls` (one paragraph pointing at `triage-gate.md`, `flow-resume.md`, and the agents' Phase 0 ownership contracts), and `## Worked example` (one paragraph pointing at the agents' Phase 0 prompts and the legacy v8.20-and-earlier worked example). Body stays under the 80-line budget.
+
+**D9 — Tripwire test installed.** `tests/unit/v826-skill-anatomy.test.ts` is the durable enforcement surface. The audit table is recomputed on every test run; a future maintainer who drops a heading sees a clean failure naming the specific skill + the missing slot + the accepted equivalents.
+
+### Migration
+
+**v8.25 → v8.26.** Drop-in. Run `cclaw upgrade` to refresh `.cclaw/lib/skills/*.md`. Three migration scenarios:
+
+1. **Project on v8.25 sync to v8.26.** The orphan-cleanup (v8.17 + v8.22) does nothing — every patched skill is in the expected `AUTO_TRIGGER_SKILLS` set with the same filename. The skill bodies on disk are byte-replaced with the new versions (additive content only); no orphan files are removed.
+2. **User has hand-edited a skill body in `.cclaw/lib/skills/`.** `cclaw sync` overwrites; the v8.17 orphan cleanup notes the user-edit is now gone. This is the standard cclaw upgrade contract — `.cclaw/lib/skills/` is treated as an install-managed directory. Custom skills go in `.cclaw/local-skills/` (out of scope for v8.26).
+3. **Resumed flow mid-stream.** The orchestrator and specialist prompts read skills on dispatch; the next dispatch reads the v8.26 body. No flow-state changes; no artifact rewrites; no AC re-numbering.
+
+**No skill semantics changed.** Every existing rule, table, worked example, and decision tree is preserved byte-for-byte. The v8.26 patches insert new H2 sections with their own bodies above / between existing sections; no existing content was edited.
+
+### What we noticed but didn't touch (v8.26 scope)
+
+- **The audit table is computed in-test, not exposed as a CLI command.** A `cclaw audit-skills` command could emit the table for human review; the tripwire is sufficient for CI enforcement. Deferred.
+- **The "equivalent heading" mappings are encoded as regex in the test, not as a typed enum.** A typed `AnatomySlot = "process" | "rationalizations" | ...` and a `headingMap: Record<AnatomySlot, RegExp[]>` would harden the rubric, but the test's permissiveness is intentional — over-tightening creates false positives on skills that legitimately use domain headings (e.g. `## Phase N` for procedural skills).
+- **Three skills carry `## Anti-patterns` headings that the test classifies as both Rationalizations AND Red Flags.** The audit count is unaffected (the disjoint-set assumption fails harmlessly; depth count is still `≥2 of 4` because both slots clear). A future slug could disambiguate; today the overlap is benign.
+- **The frontmatter `trigger:` field is the canonical authority on "when to use".** Some skills' new `## When to use` section restates the frontmatter; future maintenance could either drop the frontmatter `trigger:` or auto-render it into the heading. Deferred — both surfaces have downstream readers (frontmatter for prompt assembly; heading for human readers).
+- **`api-evolution.md` has 210 lines; `tdd-and-verification.md` has 402 lines.** No upper-bound budget is asserted for the long skills (the v8.26 test only budgets the three short ones to prevent accidental bloat from the v8.26 patches). A future slug could add per-skill upper-bound budgets.
+- **Skill auto-trigger metadata** (`AUTO_TRIGGER_SKILLS[i].triggers`, `.stages`) is unchanged in v8.26. The "When to use" prose section is the human-readable surface; the typed metadata is the runtime contract.
+
+### Deferred
+
+- **`cclaw audit-skills` CLI command.** Cheap one-shot wrapper around the test's audit function.
+- **Typed `AnatomySlot` enum + canonical heading-equivalence table.** Cheap polish; deferred until a real false positive shows up.
+- **Per-skill upper-bound line budget.** Defer until a skill creeps past a meaningful threshold.
+- **`AUTO_TRIGGER_SKILLS[i].triggers` ↔ `## When to use` cross-check.** A future slug could parse both and assert consistency; intentionally deferred because the prose carries nuance the typed field cannot.
+
+### Tests
+
+`tests/unit/v826-skill-anatomy.test.ts` — **8 new tripwire tests** across four describe blocks:
+
+- AC-1 (3 tests) — Every skill has an Overview body (leading paragraph between frontmatter and first `##`); a `When` heading (equivalents: `When to use` / `When to apply` / `When to invoke` / `When this skill applies` / `Applies` / `Triggers`); at least TWO depth sections from {Process, Rationalizations, Red Flags, Verification} (with permissive equivalents accepted per the rubric).
+- AC-2 (2 tests) — Short skills (plan-authoring, refinement, pre-flight-assumptions) pass the rubric via stub headings + one-line pointer bodies; short-skill line budgets (plan-authoring ≤ 60, refinement ≤ 60, pre-flight-assumptions ≤ 80) protect against v8.26-introduced bloat.
+- AC-3 (2 tests) — Every skill still carries its `# Skill: <name>` top heading; every skill body remains >200 chars (no accidental truncation).
+- AC-4 (1 test) — Full audit table is computable for all 17 skills; every row passes the rubric (this is the canonical "compile the audit" assertion that ties the other three blocks together).
+
+**Total: 735 tests across 54 files (was 727 across 53 in v8.25; +8 net from the v826-skill-anatomy suite + 1 new file). All green.**
+
 ## 8.25.0 — NFRs first-class: `## Non-functional` section in plan.md + `nfr-compliance` reviewer axis
 
 ### Why
