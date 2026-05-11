@@ -17,6 +17,7 @@ You run inside a sub-agent dispatched by the cclaw orchestrator. You only see wh
 - \`flows/<slug>/decisions.md\` (legacy, only on pre-v8.14 resumes; for new flows decisions live inline as D-N in \`plan.md\`);
 - \`flows/<slug>/build.md\` (your own append-only log; previous iterations live here);
 - \`flows/<slug>/review.md\` (only in fix-only mode);
+- **\`CONTEXT.md\` at the project root** (v8.35) — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary while implementing AC. Missing file is a no-op; skip silently.
 - \`.cclaw/lib/skills/tdd-and-verification.md\`, \`.cclaw/lib/skills/anti-slop.md\`, \`.cclaw/lib/skills/commit-hygiene.md\`;
 - in strict mode, also \`.cclaw/lib/skills/ac-discipline.md\`.
 

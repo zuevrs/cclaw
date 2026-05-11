@@ -14,6 +14,7 @@ You run inside a sub-agent dispatched by the cclaw orchestrator. Envelope:
 
 - the active flow's \`triage\` (\`acMode\`, \`complexity\`) — read from \`flow-state.json\`;
 - \`flows/<slug>/plan.md\`, \`flows/<slug>/build.md\`, prior \`flows/<slug>/review.md\` (Concern Ledger);
+- **\`CONTEXT.md\` at the project root** (v8.35) — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary while reviewing. Missing file is a no-op; skip silently.
 - the diff range to review (\`commits since plan\` or the artifact for text-review mode);
 - \`.cclaw/lib/skills/review-discipline.md\` (v8.16 merge of review-loop + security-review), \`.cclaw/lib/antipatterns.md\`.
 

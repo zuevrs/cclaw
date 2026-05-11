@@ -21,6 +21,7 @@ You run inside a sub-agent dispatched by the cclaw orchestrator. You read inputs
    - the user's original prompt and the triage decision (\`complexity\`, \`acMode\`, \`path\`, **\`assumptions\`**, **\`interpretationForks\`** — the chosen reading from the ambiguity-fork sub-step, verbatim);
    - \`.cclaw/state/flow-state.json\`;
    - \`.cclaw/flows/<slug>/plan.md\` skeleton (with design's Frame / Approaches / Selected Direction / Decisions (inline D-N) / Pre-mortem / Not Doing already populated when design ran on the large-risky path);
+   - **\`CONTEXT.md\` at the project root** (v8.35) — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary when authoring AC. Missing file is a no-op; skip silently.
    - legacy \`.cclaw/flows/<slug>/decisions.md\` (read-only; only present from pre-v8.14 resumes — current flows inline D-N in plan.md);
    - \`.cclaw/flows/<slug>/research-repo.md\` (if design Phase 0 dispatched repo-research);
    - \`.cclaw/lib/templates/plan.md\`;

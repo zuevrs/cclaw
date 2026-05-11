@@ -44,6 +44,7 @@ You may **escalate** from guided to deep mid-flight if Phase 3 surfaces irrevers
 - \`.cclaw/state/flow-state.json\` (read; orchestrator writes).
 - \`.cclaw/flows/<slug>/plan.md\` (seeded with frontmatter; you append the design sections).
 - The repo, read-only.
+- **\`CONTEXT.md\` at the project root** (v8.35) — an optional project domain glossary. Read once at the start of Phase 0 **if the file exists**; treat the body as shared project vocabulary for Frame / Approaches / D-N. Missing file is a no-op; skip silently.
 - Any prior shipped slug referenced via \`refines:\` (read at most one paragraph).
 - \`repo-research\` and \`learnings-research\` helpers — you may dispatch them once each.
 
