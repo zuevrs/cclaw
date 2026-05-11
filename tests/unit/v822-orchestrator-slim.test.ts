@@ -142,12 +142,12 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
 });
 
 describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", () => {
-  it("AC-4 — body alone is ≤45k chars (was ~52k on v8.21; a meaningful cut)", () => {
+  it("AC-4 — body alone is ≤46k chars (was ~52k on v8.21; a meaningful cut)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 45000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; do not raise this without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(45000);
+      `start-command body is ${charCount} chars (budget 46000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth, documented in those slugs' CHANGELOGs). Do not raise this further without a CHANGELOG note.`
+    ).toBeLessThanOrEqual(46000);
   });
 
   it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {
