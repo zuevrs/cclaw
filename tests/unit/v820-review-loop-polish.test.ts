@@ -5,9 +5,16 @@ import {
   FLOW_STATE_SCHEMA_VERSION
 } from "../../src/flow-state.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
+import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import type { TriageDecision } from "../../src/types.js";
+
+function runbookBody(id: string): string {
+  const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.id === id);
+  if (!r) throw new Error(`No on-demand runbook with id=${id}`);
+  return r.body;
+}
 
 /**
  * v8.20 review-loop polish. The two-reviewer loop introduced in v8.13 is
@@ -108,19 +115,23 @@ describe("v8.20 review-loop polish", () => {
       expect(() => assertFlowStateV82(v819State)).not.toThrow();
     });
 
-    it("start-command names the picker options at the 5-iteration cap", () => {
-      expect(START_COMMAND_BODY).toMatch(/reviewCounter.*reach[^.]*5|cap[^.]*5/iu);
-      expect(START_COMMAND_BODY).toContain("cancel-and-replan");
-      expect(START_COMMAND_BODY).toContain("accept-warns-and-ship");
-      expect(START_COMMAND_BODY).toContain("keep-iterating-anyway");
+    it("cap-reached picker options live in the cap-reached-recovery runbook (v8.22 split)", () => {
+      const cr = runbookBody("cap-reached-recovery");
+      expect(cr).toMatch(/reviewCounter.*reach[^.]*5|cap[^.]*5/iu);
+      expect(cr).toContain("cancel-and-replan");
+      expect(cr).toContain("accept-warns-and-ship");
+      expect(cr).toContain("keep-iterating-anyway");
+      expect(START_COMMAND_BODY).toContain("cap-reached-recovery.md");
     });
 
-    it("start-command specifies keep-iterating-anyway resets reviewCounter to 3", () => {
-      expect(START_COMMAND_BODY).toMatch(/keep-iterating-anyway[\s\S]*reset[\s\S]*?3/iu);
+    it("cap-reached runbook specifies keep-iterating-anyway resets reviewCounter to 3", () => {
+      const cr = runbookBody("cap-reached-recovery");
+      expect(cr).toMatch(/keep-iterating-anyway[\s\S]*reset[\s\S]*?3/iu);
     });
 
-    it("start-command specifies keep-iterating-anyway stamps triage.iterationOverride", () => {
-      expect(START_COMMAND_BODY).toContain("triage.iterationOverride");
+    it("cap-reached runbook specifies keep-iterating-anyway stamps triage.iterationOverride", () => {
+      const cr = runbookBody("cap-reached-recovery");
+      expect(cr).toContain("triage.iterationOverride");
     });
 
     it("TriageDecision schema accepts iterationOverride boolean", () => {
@@ -169,8 +180,11 @@ describe("v8.20 review-loop polish", () => {
   });
 
   describe("AC-4 — two-reviewer mode stays default (no removal)", () => {
-    it("start-command still mentions the parallel reviewer + security-reviewer dispatch", () => {
-      expect(START_COMMAND_BODY).toContain("parallel reviewer + security-reviewer");
+    it("orchestrator still mentions the parallel reviewer + security-reviewer dispatch (v8.22: in review section + ship-gate runbook)", () => {
+      const inBody = START_COMMAND_BODY.includes("parallel reviewer + security-reviewer");
+      const inRunbook = runbookBody("ship-gate").includes("security-reviewer") ||
+        runbookBody("ship-gate").includes("security_flag");
+      expect(inBody || inRunbook).toBe(true);
     });
 
     it("reviewer prompt still names the adversarial mode (Model A writes / Model B reviews)", () => {

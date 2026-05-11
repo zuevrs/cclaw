@@ -24,10 +24,10 @@ describe("start command (/cc) markdown", () => {
     expect(body).toMatch(/userOverrode/);
   });
 
-  it("describes per-stage sub-agent dispatch with a slim summary contract", () => {
-    expect(body).toMatch(/Dispatch <specialist>/);
+  it("describes per-stage sub-agent dispatch with a slim summary contract (v8.22: envelope shape in runbook)", () => {
     expect(body).toMatch(/Slim summary/i);
-    expect(body).toMatch(/inline-fallback/);
+    expect(body).toContain("dispatch-envelope.md");
+    expect(body).toMatch(/Dispatch envelope/);
   });
 
   it("explains the resume path when an active flow is detected", () => {

@@ -10,48 +10,39 @@ const RESEARCH_HELPER_LIST = RESEARCH_AGENTS.map(
 ).join("\n");
 
 const TRIAGE_ASK_EXAMPLE = `\`\`\`
-# Single tool call, TWO questions in one form (always two on the structured-ask
-# path — even when the recommended path is inline, so the form shape stays
-# stable; the run-mode answer is ignored at patch time on inline). Cursor's
-# askUserQuestion, Claude Code's AskUserQuestion, OpenCode's "ask" content
-# block, and Codex's prompt all accept a questions[] array of length ≥1.
+# Single tool call, TWO questions in one form. The run-mode answer is ignored
+# at patch time on inline (form shape stays stable). Skipped on the
+# zero-question fast path (trivial / high-confidence; see Hop 2 §1).
 # Combining saves one round-trip per non-inline flow start.
-#
-# IMPORTANT: this ask is skipped entirely on the zero-question fast path
-# (trivial / high-confidence; see Hop 2 §1). The orchestrator only emits the
-# announce sentence then proceeds straight to inline dispatch.
-
 askUserQuestion(
   questions: [
     {
       id: "path",
-      prompt: <one sentence in the user's language stating: complexity + confidence, recommended path, why (cite file count / LOC / sensitive surface), AC mode, and "pick a path">,
+      prompt: <one sentence: complexity + confidence, recommended path, why (file count / LOC / sensitive surface), AC mode, "pick a path">,
       options: [
         <option label conveying: proceed with the recommended path>,
         <option label conveying: switch to trivial — inline edit + commit, skip plan/review>,
-        <option label conveying: escalate to large-risky — adds collaborative design phase, strict AC, parallel slices when applicable>,
+        <option label conveying: escalate to large-risky — collaborative design phase, strict AC, parallel slices>,
         <option label conveying: customise — user edits complexity / acMode / path>
       ],
       allow_multiple: false
     },
     {
       id: "run-mode",
-      prompt: <one sentence in the user's language asking which run mode to use>,
+      prompt: <one sentence asking which run mode to use>,
       options: [
-        <option label conveying: step mode — pause after each stage; next /cc advances (the default)>,
+        <option label conveying: step mode — pause after each stage; next /cc advances (default)>,
         <option label conveying: auto mode — chain plan → build → review → ship; stop only on hard gates>
       ],
       allow_multiple: false
     }
   ]
 )
-
-# Harness fallback (no multi-question support): two sequential askUserQuestion
-# calls in the order shown. If Question 1 returned "switch to trivial",
-# skip the Question 2 call (no stages to chain).
+# Harness fallback (no multi-question support): two sequential calls.
+# Skip Q2 if Q1 returned "switch to trivial".
 \`\`\`
 
-The slots above (\`<...>\`) are intent descriptors, not literal strings. Render the prompt and every option label in the user's conversation language; do not copy the descriptor text. Mechanical tokens — \`/cc\`, \`/cc-cancel\`, \`plan\`, \`build\`, \`review\`, \`ship\`, \`auto\`, \`step\`, \`AC-N\`, slugs, file paths, JSON keys — remain in their original form regardless of language. See \`conversation-language.md\`.`;
+\`<...>\` slots are intent descriptors. Render every prompt and option label in the user's conversation language. Mechanical tokens — \`/cc\`, \`/cc-cancel\`, stage names, mode names, \`AC-N\`, slugs, paths, JSON keys — stay English. See \`conversation-language.md\`.`;
 
 const TRIAGE_FALLBACK_EXAMPLE = `\`\`\`
 <Triage block in the user's language; lines are:>
@@ -108,29 +99,6 @@ Active flow: <slug>
 
 \`/cc-cancel\` is **not** offered as a clickable option; it is a separate user-typed command for explicit nuke (move to \`cancelled/<slug>/\`, reset state). Surface it only in plain prose, in the user's language, if the user looks stuck — never inside the picker. The \`<slug>\`, stage names, \`acMode\` values, and slim-summary keys stay English (wire protocol). The \`<...>\` slots — including the option text after \`[r]\` and \`[s]\` — render in the user's language.`;
 
-const SUB_AGENT_DISPATCH_EXAMPLE = `\`\`\`
-Dispatch <specialist>
-─ Required first read: .cclaw/lib/agents/<specialist>.md  (your contract — modes, hard rules, output schema, worked examples; do NOT skip)
-─ Required second read: .cclaw/lib/skills/<wrapper>.md  (your wrapping skill — see "Stage → wrapper" below)
-─ Stage: <plan | build | review | ship>
-─ Slug: <slug>
-─ AC mode: <inline | soft | strict>
-─ Pre-flight assumptions: see triage.assumptions in flow-state.json
-─ Inputs the sub-agent reads after the contract + wrapper:
-    - .cclaw/state/flow-state.json
-    - .cclaw/flows/<slug>/<stage>.md (if it exists)
-    - .cclaw/lib/templates/<stage>.md
-    - other artifacts the stage needs (decisions, research-*, build, review)
-─ Output contract (sub-agent writes):
-    - .cclaw/flows/<slug>/<stage>.md (the main artifact)
-    - return a slim summary block (≤6 lines, see below)
-    - DO NOT mutate flow-state.json — only the orchestrator touches it
-─ Forbidden:
-    - dispatch other specialists (composition is the orchestrator's job)
-    - run git commands besides commit-helper.mjs (and only when acMode=strict)
-    - read or modify files outside the slug's touch surface
-\`\`\``;
-
 const SUMMARY_RETURN_EXAMPLE = `\`\`\`
 Stage: <stage>  ✅ complete  |  ⏸ paused  |  ❌ blocked
 Artifact: .cclaw/flows/<slug>/<stage>.md
@@ -169,19 +137,28 @@ The flow has seven hops, in order:
 
 Skipping any hop is a bug; the gates downstream will fail. Read \`triage-gate.md\`, \`pre-flight-assumptions.md\`, \`flow-resume.md\`, \`tdd-and-verification.md\` (active during build), and \`ac-discipline.md\` (active in strict mode) before starting.
 
+## On-demand runbooks (v8.22)
+
+The orchestrator body keeps only the always-needed hops. Open the matching runbook at \`.cclaw/lib/runbooks/<name>.md\` when its trigger fires; the runbook carries the full procedure:
+
+| trigger | runbook |
+| --- | --- |
+| building any dispatch envelope | \`dispatch-envelope.md\` |
+| \`triage.complexity == "large-risky"\` AND \`plan\` in path | \`discovery.md\` |
+| planner declares \`topology: parallel-build\` (≥2 slices, strict) | \`parallel-build.md\` |
+| every reviewer-stage exit before the reviewer dispatch | \`self-review-gate.md\` |
+| \`reviewCounter\` reaches 5 without convergence | \`cap-reached-recovery.md\` |
+| fix-only commits intersect a prior adversarial finding | \`adversarial-rerun.md\` |
+| stage ship (every ship attempt) | \`ship-gate.md\` |
+| every stage exit (including design Phase 7 sign-off) | \`handoff-artifacts.md\` |
+| compound capture is the 5th, or \`/cc-compound-refresh\` | \`compound-refresh.md\` |
+| Hop 6 starts (ship cleared, ready to move artifacts) | \`finalize.md\` |
+
+The four canonical stage runbooks (\`plan.md\`, \`build.md\`, \`review.md\`, \`ship.md\`) live in the same directory; the orchestrator opens them at every stage transition (unchanged from v8.4). \`.cclaw/lib/runbooks/index.md\` is the single-page index.
+
 ## Namespace router (T3-1, gsd pattern; v8.13)
 
-In addition to \`/cc <task>\` and \`/cc-cancel\` / \`/cc-idea\`, v8.13 documents an optional **namespaced entry surface** for harnesses that want to expose stage-specific shortcuts. These are not mandatory commands; they are documented routes the harness MAY register alongside \`/cc\`. They all map back to \`/cc\` semantics with a stage-specific entry hint:
-
-| route | maps to | when to register |
-| --- | --- | --- |
-| \`/cc-plan <task>\` | \`/cc <task> --enter=plan\` | user wants to start a flow but stop after plan-stage approval |
-| \`/cc-build\` | \`/cc --enter=build\` | active flow is at \`currentStage: plan\` and the user wants to skip the resume summary |
-| \`/cc-review\` | \`/cc --enter=review\` | active flow is at \`currentStage: build\` |
-| \`/cc-ship\` | \`/cc --enter=ship\` | active flow is at \`currentStage: review\` |
-| \`/cc-compound-refresh\` | manual trigger for §Compound-refresh sub-step | run T2-4 dedup pass on demand |
-
-Harnesses that don't register the routes still work — \`/cc\` alone covers everything. The namespace-router exists to let harnesses with command palettes (Cursor, Claude Code) surface stage-specific shortcuts without inventing their own semantics; cclaw's behaviour stays single-spine.
+In addition to \`/cc <task>\` / \`/cc-cancel\` / \`/cc-idea\`, harnesses MAY optionally register stage-specific shortcuts that all map back to \`/cc\` semantics: \`/cc-plan <task>\` → \`/cc <task> --enter=plan\`; \`/cc-build\` → \`/cc --enter=build\`; \`/cc-review\` / \`/cc-ship\` correspondingly; \`/cc-compound-refresh\` runs the T2-4 dedup pass on demand. These are non-mandatory — \`/cc\` alone covers everything. The namespace-router exists so command-palette harnesses (Cursor / Claude Code) surface stage shortcuts without inventing their own semantics; cclaw stays single-spine.
 
 ## Two-reviewer per-task loop (T3-3, obra pattern; v8.13)
 
@@ -239,43 +216,29 @@ The triage decision is **immutable** for the lifetime of the flow. If the user w
 
 ### Slug naming (mandatory format)
 
-Every flow slug uses the format \`YYYYMMDD-<semantic-kebab>\`, where \`YYYYMMDD\` is the UTC date you opened triage and \`<semantic-kebab>\` is the kebab-case 2–4 word summary of the request. Examples:
+Every flow slug uses the format \`YYYYMMDD-<semantic-kebab>\` (UTC date + kebab-case 2-4 word summary). Examples: \`20260510-file-cli\`, \`20260512-approval-page\`, \`20260613-mute-notifications\`. The date prefix is **mandatory** — it keeps \`flows/shipped/\` unambiguous and makes same-day re-runs visible. Surface the chosen slug verbatim in the triage block.
 
-- \`20260510-file-cli\` (CLI utility for files, opened 2026-05-10).
-- \`20260512-approval-page\` (approval-page UI, opened 2026-05-12).
-- \`20260613-mute-notifications\` (per-project notification mute, opened 2026-06-13).
-
-The date prefix is **mandatory**, even when no prior shipped slug shares the semantic part. It is the cheapest way to keep the \`flows/shipped/\` directory unambiguous: two flows on different days never collide, and re-running the same task name on the same day surfaces the collision visibly (you append \`-2\` if it does happen). Surface the chosen slug verbatim in the triage block so the user sees it before any specialist runs.
-
-If a collision **does** happen on the same day (very rare; user re-running the same prompt minutes apart), append \`-2\`, \`-3\`, etc. until the slug is unique against \`.cclaw/flows/\` and \`.cclaw/flows/shipped/\` and \`.cclaw/flows/cancelled/\`.
+On same-day collision (rare), append \`-2\`, \`-3\`, etc. until the slug is unique against \`.cclaw/flows/\` and \`.cclaw/flows/shipped/\` and \`.cclaw/flows/cancelled/\`.
 
 After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Hop 4. Before the first dispatch, run the **v8.18 prior-learnings lookup** (Hop 2 §3). The assumption-confirmation surface (formerly Hop 2.5) is now owned by the first dispatched specialist's Phase 0 — see the **Hop 2.5 (folded)** section below for the v8.21 fold.
 
 ### Hop 2 §3 — prior-learnings lookup (v8.18; runs on every fresh \`/cc\`)
 
-Between the persistence of the triage decision (Hop 2 §2 above) and the first specialist dispatch (Hop 3 — where the v8.21-folded assumption surface lives in design Phase 0 / planner Phase 0), the orchestrator calls the equivalent of:
+Between triage persistence and the first specialist dispatch, the orchestrator calls:
 
 \`\`\`ts
 findNearKnowledge(triage.taskSummary, projectRoot, {
-  window: 100,      // most recent 100 entries
-  threshold: 0.4,   // Jaccard ≥ 0.4 on tokenised summary ∩ entry tags/touchSurface
-  limit: 3,         // top-3 hits, sorted by similarity desc
-  excludeSlug: currentSlug
+  window: 100, threshold: 0.4, limit: 3, excludeSlug: currentSlug
 })
 \`\`\`
 
-\`triage.taskSummary\` is the short prose summary the triage gate captured (one or two sentences in the user's language). The lookup tokenises that summary and runs Jaccard against each recent entry's \`tags\` and \`touchSurface\` value tokens; entries that score ≥ threshold are returned in similarity-sorted order.
+The lookup tokenises \`triage.taskSummary\` and runs Jaccard against each recent entry's \`tags\` and \`touchSurface\` value tokens. Persistence rules:
 
-Persistence rules:
+- **Empty results → omit \`priorLearnings\` from \`flow-state.json\` entirely** (the absence of the field is the canonical "no prior learnings"; do not write \`priorLearnings: []\`).
+- **Non-empty results → stamp them verbatim under \`triage.priorLearnings\`** as \`KnowledgeEntry\` objects (\`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`, …). Downstream specialists read entries directly; do not re-paraphrase.
+- **Missing / empty / unreadable \`knowledge.jsonl\` → empty result, no stamp, no crash.**
 
-- **Empty results → omit \`priorLearnings\` from \`flow-state.json\` entirely.** Do not write \`priorLearnings: []\` — that bloats state with a field every other reader has to guard for. The absence of the field is the canonical "no prior learnings".
-- **Non-empty results → stamp them verbatim under \`triage.priorLearnings\` as an array of \`KnowledgeEntry\` objects** (\`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`, plus the other persisted fields). The downstream specialists read the entries directly; do not re-paraphrase them.
-- **Missing or empty \`knowledge.jsonl\` → empty result, no stamp.** Greenfield projects skip this hop cleanly with zero noise.
-- **Errors reading the file are swallowed** — the orchestrator never crashes triage because a knowledge-log read failed. The result is treated as empty.
-
-The lookup is asymmetric: when the orchestrator is re-running this hop on a resume (rare but possible), the active slug is excluded so a flow never finds itself.
-
-The stamp is **immutable for the lifetime of the flow** — every specialist dispatch and resume read sees the same \`triage.priorLearnings\` snapshot. If the user explicitly nukes the flow with \`/cc-cancel\` and starts fresh, a new lookup runs.
+The stamp is **immutable for the lifetime of the flow**; \`/cc-cancel\` + fresh \`/cc\` triggers a new lookup.
 
 ### Trivial path (acMode: inline)
 
@@ -293,27 +256,26 @@ Wait for r/s (and n on collision). On \`r\`, jump to Hop 4 with the saved \`curr
 
 ## Hop 2.5 — Pre-flight (folded into specialist Phase 0)
 
-As of v8.21 there is no separate Hop 2.5 \`AskQuestion\`. The assumption-confirmation surface is folded into the first specialist that runs:
+As of v8.21 there is no separate Hop 2.5 \`AskQuestion\`. The assumption-confirmation surface is folded into the first specialist's first turn:
 
-- **\`triage.complexity == "large-risky"\`** → design Phase 0 (Bootstrap → Phase 1 Clarify) owns the assumption surface. Design Phase 0 reads any pre-seeded \`triage.assumptions\` from the triage gate (default-shaped from repo signals + most recent shipped slug) and either confirms them inline in its Frame draft (Phase 2) or asks one clarifying question (Phase 1) when an assumption is load-bearing for an Approach. The user sees ONE assumption ask, not two.
-- **\`triage.complexity == "small-medium"\`** → planner Phase 0 (the new v8.21 mini-section in \`agents/planner.md\`) opens with: "I'm working from these assumptions: …. Tell me if any is wrong before I draft the plan." The planner generates the list from the triage summary + task descriptor (same content the legacy Hop 2.5 would have produced) and waits one turn for user reply. Silence / accept proceeds; corrections update \`triage.assumptions\` and the planner adjusts.
-- **\`triage.path == ["build"]\`** (inline / trivial) → unchanged; no assumption surface at all. The trivial path was never running Hop 2.5.
+- **\`triage.complexity == "large-risky"\`** → design Phase 0 (Bootstrap → Phase 1 Clarify) owns it. Phase 0 reads pre-seeded \`triage.assumptions\` (triage seed: repo signals + most recent shipped slug) and either confirms inline in the Frame draft (Phase 2) or asks one clarifying question (Phase 1) when an assumption is load-bearing.
+- **\`triage.complexity == "small-medium"\`** → planner Phase 0 (mini-section in \`agents/planner.md\`) opens with: "I'm working from these assumptions: …. Tell me if any is wrong before I draft the plan." Generates 3-7 items from triage summary + task descriptor, waits one turn; silence = accept.
+- **\`triage.path == ["build"]\`** (inline / trivial) → no assumption surface at all.
 
-Both surfaces still write the user-confirmed list to \`flow-state.json > triage.assumptions\` (string array, immutable for the lifetime of the flow). Downstream readers (commit-helper, reviewer, slice-builder envelope) read the field unchanged; the schema is identical to v8.20.
+Both surfaces write the user-confirmed list to \`flow-state.json > triage.assumptions\` (string array, immutable; schema identical to v8.20). Skip rules:
 
-Skip rules (every path):
-- \`triage.path == ["build"]\` (inline) → no assumption surface (specialist Phase 0 is not the only surface that's gone; there isn't one).
-- Resume from a paused flow → specialist Phase 0 reads \`triage.assumptions\` from disk and **does not re-prompt**. The list was already user-confirmed on the prior fresh \`/cc\`; resume must be silent on this axis.
-- \`flow-state.json\` already has \`triage.assumptions\` populated (mid-flight resume **or** pre-v8.21 flows where the legacy Hop 2.5 captured the list) → read as ground truth; specialist Phase 0 short-circuits the confirmation surface and proceeds directly to its substantive work.
+- \`triage.path == ["build"]\` (inline) → no assumption surface at all.
+- Resume from a paused flow → specialist Phase 0 reads \`triage.assumptions\` from disk and **does not re-prompt**.
+- \`flow-state.json\` already has \`triage.assumptions\` populated (mid-flight resume **or** pre-v8.21 flows where the legacy Hop 2.5 captured the list) → read as ground truth; specialist Phase 0 short-circuits the ask.
 
-Every dispatch envelope from Hop 3 onward still includes the line \`Pre-flight assumptions: see triage.assumptions in flow-state.json\`. Sub-agents read the list; planner and design copy it verbatim into their artifacts. The wire format is identical to v8.20; only the surface that *captures* the list moved.
+Every dispatch envelope from Hop 3 onward still includes \`Pre-flight assumptions: see triage.assumptions in flow-state.json\`. Wire format unchanged; only the capture surface moved.
 
 ## Hop 3 — Dispatch
 
 For each stage in \`triage.path\` (after \`detect\` and starting from \`currentStage\`):
 
-1. Pick the specialist for the stage (mapping below). On large-risky \`plan\` you will dispatch three specialists sequentially with a checkpoint between each — the rule below applies to **every dispatch**, not "every stage".
-2. Build the dispatch envelope. Sub-agent gets the contract reads (agents/<name>.md + wrapper skill), a small filebag, and a tight contract; nothing else.
+1. Pick the specialist for the stage (mapping below). On large-risky \`plan\` you will dispatch up to three specialists sequentially with a checkpoint between each — see \`runbooks/discovery.md\`.
+2. Build the dispatch envelope using the shape in \`runbooks/dispatch-envelope.md\`. Sub-agent gets the contract reads (agents/<name>.md + wrapper skill), a small filebag, and a tight contract; nothing else.
 3. **Hand off** in a sub-agent. Do not run the specialist's work in your own context.
 4. When the sub-agent returns, read its slim summary, do not re-read its artifact.
 5. Patch \`flow-state.json\` **after every dispatch** (not only at end-of-stage):
@@ -324,7 +286,7 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 
 ### Stage → specialist mapping
 
-\`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → planner) — see "Plan stage on large-risky" under Stage details.
+\`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → planner) — see \`runbooks/discovery.md\`.
 
 | Stage | Specialist | Mode | Wrapper skill | Inline allowed? |
 | --- | --- | --- | --- | --- |
@@ -335,21 +297,9 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 
 The wrapper-skill column is what you put in the dispatch envelope's "Required second read" line. If multiple wrappers apply (planner reads both \`plan-authoring.md\` and \`source-driven.md\` in strict mode), list both — sub-agent reads them in order.
 
-### Dispatch envelope (mandatory)
+### Dispatch envelope
 
-When you announce a dispatch in your message to the user, use exactly this shape so the harness picks it up consistently:
-
-${SUB_AGENT_DISPATCH_EXAMPLE}
-
-The first two reads are non-negotiable. A sub-agent that skips its contract file will hallucinate its own role definition (we observed this in production — early discovery specialists ran with a 30-line summary instead of their full contract). If the harness has a sub-agent system message, the orchestrator places those two reads as the sub-agent's first instructions; if the harness dispatches via plain "spawn a fresh context", the orchestrator puts them at the top of the inline prompt. Either way, the sub-agent opens \`.cclaw/lib/agents/<specialist>.md\` before doing anything else.
-
-The sub-agent reads the listed inputs, writes the listed output, and returns the slim summary block. It does **not**:
-
-- dispatch other specialists (composition is your job, not theirs);
-- run \`git commit\` directly (only \`commit-helper.mjs\` in strict mode; plain \`git commit\` in inline / soft mode for a feature-level cycle);
-- modify files outside the slug's touch surface.
-
-If the harness does not support sub-agent dispatch, run the specialist inline in a fresh context (clear the prior conversation if you can). Record the fallback in the artifact's frontmatter (\`subAgentDispatch: inline-fallback\`). This is not an error.
+The full dispatch-envelope shape — required reads, inputs, output contract, forbidden actions, inline-fallback rules — lives in \`.cclaw/lib/runbooks/dispatch-envelope.md\`. The orchestrator opens that file before announcing any dispatch; the announcement uses the envelope shape verbatim so the harness picks it up consistently.
 
 ### Slim summary (sub-agent → orchestrator)
 
@@ -357,7 +307,7 @@ Every sub-agent returns at most six lines:
 
 ${SUMMARY_RETURN_EXAMPLE}
 
-The orchestrator reads only this. The full artifact stays in \`.cclaw/flows/<slug>/<stage>.md\` and is the source of truth for the next stage's sub-agent (which re-reads it from disk, not from your context).
+The orchestrator reads only this; the full artifact stays in \`.cclaw/flows/<slug>/<stage>.md\` for the next stage's sub-agent.
 
 ### Stage details
 
@@ -365,55 +315,19 @@ The orchestrator reads only this. The full artifact stays in \`.cclaw/flows/<slu
 
 ##### Plan stage on small/medium (one specialist + research)
 
-- Specialist: \`planner\`.
-- Wrapper skill: \`.cclaw/lib/skills/plan-authoring.md\` (always); \`.cclaw/lib/skills/source-driven.md\` (when the task is framework-specific, even on soft mode).
-- Pre-author research (planner dispatches these BEFORE writing the plan):
-  - \`learnings-research\` — always, on small/medium and large-risky. Reads \`.cclaw/knowledge.jsonl\`. Default behaviour: returns 0-3 prior lessons inline in the slim-summary's \`Notes\` field as a serialised \`lessons={...}\` blob; the planner copies the verbatim quotes into \`plan.md\`'s \`## Prior lessons\` section. **No separate \`research-learnings.md\` is written** unless the project sets \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`. Brownfield + greenfield both run this — the planner needs to know if any prior slug applies even for greenfield tasks.
-  - \`repo-research\` — only on **brownfield** (when a manifest like \`package.json\`, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`Gemfile\` exists at the repo root AND a source root like \`src/\` or equivalent has files). Skipped on greenfield. Writes \`flows/<slug>/research-repo.md\`.
-- Inputs the planner reads after the contract + wrapper: triage decision (including \`assumptions\` — populated by triage seed + the planner's own Phase 0 ask on small-medium, or by design Phase 0 on large-risky), the user's original prompt, \`.cclaw/lib/templates/plan.md\`, the \`lessons={}\` blob from learnings-research (and \`research-repo.md\` when present), **\`.cclaw/knowledge.jsonl\`** for cross-checking, and any matching shipped slug if refining.
-- Output: \`.cclaw/flows/<slug>/plan.md\` with \`status: active\`. Includes a \`## Assumptions\` block (verbatim from \`triage.assumptions\`) and a \`## Prior lessons\` block (verbatim quotes from learnings-research's \`lessons={}\` blob, or "No prior shipped slugs apply to this task.").
-- Soft-mode plan body: bullet list of testable conditions, no AC IDs, no commit-trace block.
-- Strict-mode plan body: AC table with IDs, verification lines, touch surfaces, parallel-build topology if it applies.
+- Specialist: \`planner\`. Wrapper skills: \`plan-authoring.md\` (always) + \`source-driven.md\` (framework-specific tasks).
+- Pre-author research (planner dispatches BEFORE writing the plan):
+  - \`learnings-research\` — always, on small/medium + large-risky. Reads \`.cclaw/knowledge.jsonl\`. Returns 0-3 prior lessons inline in slim-summary's \`Notes\` as \`lessons={...}\`; the planner copies verbatim quotes into \`plan.md\`'s \`## Prior lessons\` section. No separate \`research-learnings.md\` unless \`legacy-artifacts: true\`.
+  - \`repo-research\` — brownfield only (manifest at repo root AND populated source root). Skipped on greenfield. Writes \`flows/<slug>/research-repo.md\`.
+- Inputs: triage decision (with \`assumptions\`), user's original prompt, \`templates/plan.md\`, learnings-research blob, \`research-repo.md\` (when present), \`knowledge.jsonl\` for cross-check, matching shipped slug if refining.
+- Output: \`flows/<slug>/plan.md\` with \`status: active\`, \`## Assumptions\` verbatim from \`triage.assumptions\`, \`## Prior lessons\` from the learnings blob. Soft-mode body = bullet list of testable conditions; strict-mode body = AC table with verification lines, touch surfaces, parallel-build topology if it applies.
 - Slim summary: condition / AC count, max touch surface, parallel-build flag, recommended-next, prior-lesson count.
 
-##### Plan stage on large-risky (discovery sub-phase — v8.14 strong design)
+##### Plan stage on large-risky
 
-When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the orchestrator runs a **two-step discovery sub-phase** by default: \`design\` (main context, multi-turn) → \`planner\` (sub-agent). \`currentStage\` stays \`"plan"\` for both; \`lastSpecialist\` rotates through \`design\` then \`planner\`.
+When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the plan stage **expands** into a two-step discovery sub-phase: \`design\` (main context, multi-turn, Phases 0-7) → \`planner\` (sub-agent). \`currentStage\` stays \`"plan"\` for both; \`lastSpecialist\` rotates through \`design\` then \`planner\`. Discovery never auto-chains: design pauses end-of-turn between each of its internal phases regardless of \`triage.runMode\`. The next \`/cc\` invocation continues with planner once Phase 7 sign-off has returned \`approve & proceed\`.
 
-The v8.14 collapse: pre-v8.14 ran a three-step \`brainstormer → architect → planner\` chain of one-shot sub-agents, with a checkpoint-question between each. That ceremony was thin — the brainstormer's "Frame" and the architect's "decisions" both came from one shot of the model with no user dialog. v8.14 replaces the first two steps with a **single \`design\` specialist that runs in main context** across seven multi-turn phases (Bootstrap, Clarify, Frame, Approaches, Decisions inline, Pre-mortem, Compose, Sign-off), so framing and structural decisions emerge from a real user-collaborative pass instead of two short summaries.
-
-###### Discovery auto-skip (low-ambiguity fast path)
-
-Before activating \`design\`, run the **discovery-needed heuristic** against the triage and pre-flight state. Skip directly to \`planner\` (single dispatch, no design phase) when **all** of the following hold:
-
-1. \`triage.confidence\` is \`high\` (the heuristic produced an unambiguous large-risky classification).
-2. \`triage.assumptions\` is non-empty AND the user accepted them in pre-flight without edits (\`pre_flight_edits == 0\`).
-3. The user's \`/cc <task>\` prompt names ≥1 concrete file path or module (i.e. the focus surface is already given, not yet to be discovered).
-4. There is no security-sensitive keyword (\`auth\`, \`token\`, \`secret\`, \`oauth\`, \`saml\`, \`encryption\`, \`pii\`, \`gdpr\`, \`pci\`, \`hipaa\`, \`soc2\`) in the prompt **AND** \`security_flag\` is not preset by triage.
-
-When all four hold, the orchestrator surfaces a one-sentence skip notice in the user's language ("Discovery skipped: triage is high-confidence and the surface is named — going straight to planner. Reply with \`/cc-cancel\` if you want a design pass instead.") and dispatches \`planner\` directly with the same envelope as small/medium plus \`fast_path: skipped-discovery\` in flow-state. \`lastSpecialist\` stays \`null\` until planner returns.
-
-When **any** of the four fails, run the full two-step discovery as below.
-
-The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=force\` (always run the full design phase) or \`/cc <task> --discovery=skip\` (always skip, even if the heuristic would not have skipped — they take responsibility).
-
-###### Full two-step discovery (default; auto-skip declined or its conditions failed)
-
-> **Discovery never auto-chains.** \`design\` runs in main context and pauses end-of-turn between each of its internal phases (Phase 0 through Phase 7) regardless of \`triage.runMode\`. \`auto\` runMode applies to the plan→build→review→ship transitions only, **not** inside the design phase. The planner dispatch that follows the design's Phase 7 sign-off is also a step-mode pause unless \`triage.runMode == auto\`.
-
-1. **Activate \`design\` in main context** (read \`.cclaw/lib/agents/design.md\` as a skill the orchestrator itself follows; do NOT dispatch as a sub-agent).
-   - The orchestrator picks the **posture** before activation: \`deep\` when any of (security-sensitive keyword, \`security_flag\` preset, irreversibility / migration / schema / breaking-change / data-loss / payment / gdpr / pci in the prompt, \`refines:\` points to a slug with \`security_flag: true\`); \`guided\` otherwise. The design prompt may escalate to \`deep\` mid-flight if Phase 3 surfaces irreversibility the orchestrator missed.
-   - The orchestrator follows the design.md prompt phases 0-7 directly in this conversation. Each phase that emits user-facing output (Phase 1 Clarify, Phase 2 Frame, Phase 3 Approaches, Phase 4 Decisions one D-N per turn, Phase 5 Pre-mortem deep only, Phase 7 Sign-off) ends the turn with an \`askUserQuestion\` picker; Phase 0 (Bootstrap) and Phase 6 (Compose + self-review) are silent and flow directly into the next user-facing phase.
-   - Output: appends Frame, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, and Summary — design block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires. **No separate \`decisions.md\` is written; v8.14 inlined that file into the Decisions section of plan.md.**
-   - On Phase 7 \`approve & proceed\`: orchestrator patches \`lastSpecialist: "design"\` and \`plan.md\` frontmatter (\`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`) → **ends the turn**. The next \`/cc\` continues with planner.
-   - On Phase 7 \`revise\` / \`save & cancel\`: orchestrator handles per the design prompt's instructions; it does not patch \`lastSpecialist\` until the user actually signs off.
-2. **Dispatch \`planner\`** as a normal sub-agent with the same contract as small/medium plan, plus an extra input: the design sections already in \`flows/<slug>/plan.md\`.
-   - Planner now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The Frame / Approaches / Selected Direction / Decisions / Pre-mortem sections from design remain at the top of \`plan.md\`; planner appends its own sections below.
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "planner"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`). At this point the orchestrator follows \`triage.runMode\` for the plan→build transition: \`step\` ends the turn; \`auto\` chains immediately into the build dispatch.
-
-Resume after a design or planner checkpoint: \`flow-state.lastSpecialist\` tells the orchestrator which discovery step to skip. If \`lastSpecialist == "design"\` and \`currentStage == "plan"\`, the resume dispatches \`planner\` directly. The user can also \`/cc <task> --skip-discovery\` to drop straight into a single planner dispatch when the design phase already happened in a prior session.
-
-**Legacy migration:** state files written by pre-v8.14 cclaw with \`lastSpecialist: "brainstormer"\` or \`lastSpecialist: "architect"\` are rewritten to \`null\` on read; the orchestrator re-runs the unified design phase from scratch on those resumes. Shipped slugs with \`flows/shipped/<old-slug>/decisions.md\` keep that file untouched for historical reference.
+The full sub-phase procedure — discovery auto-skip heuristic, posture selection (guided vs deep), Phase 0-7 pause rules, planner dispatch contract, legacy migration for pre-v8.14 \`brainstormer\` / \`architect\` state — lives in \`.cclaw/lib/runbooks/discovery.md\`. Open that file before activating \`design\`.
 
 #### build
 
@@ -422,78 +336,9 @@ Resume after a design or planner checkpoint: \`flow-state.lastSpecialist\` tells
 - Output: \`.cclaw/flows/<slug>/build.md\` with TDD evidence at the granularity dictated by \`acMode\`.
 - Soft mode: one TDD cycle for the whole feature; tests under \`tests/\` mirroring the production module path; plain \`git commit\`. Sequential, single dispatch, no worktrees.
 - Strict mode, sequential: full RED → GREEN → REFACTOR per AC, every commit through \`commit-helper.mjs\`. Single \`slice-builder\` dispatch in the main working tree.
-- Strict mode, parallel: see "Parallel-build fan-out" below — only when planner declared \`topology: parallel-build\` AND ≥4 AC AND ≥2 disjoint touchSurface clusters.
+- Strict mode, parallel: see \`.cclaw/lib/runbooks/parallel-build.md\` — only when planner declared \`topology: parallel-build\` AND ≥4 AC AND ≥2 disjoint touchSurface clusters.
 - Inline mode: not dispatched here — handled in the trivial path of Hop 2.
 - Slim summary: AC committed (strict) or conditions verified (soft), suite-status (passed / failed), open follow-ups.
-
-##### Parallel-build fan-out (strict mode + planner topology=parallel-build only)
-
-When the planner artifact declares \`topology: parallel-build\` with ≥2 slices and \`acMode == strict\`, the orchestrator fans out one \`slice-builder\` sub-agent per slice, **capped at 5**, each in its own \`git worktree\`. This is the only fan-out cclaw uses outside of \`ship\`.
-
-\`\`\`text
-                                  flows/<slug>/plan.md
-                                  topology: parallel-build
-                                  slices: [s-1, s-2, s-3]   (max 5)
-                                              │
-                                              ▼
-                            git worktree add .cclaw/worktrees/<slug>-s-1 -b cclaw/<slug>/s-1
-                            git worktree add .cclaw/worktrees/<slug>-s-2 -b cclaw/<slug>/s-2
-                            git worktree add .cclaw/worktrees/<slug>-s-3 -b cclaw/<slug>/s-3
-                                              │
-                          ┌───────────────────┼───────────────────┐
-                          ▼                   ▼                   ▼
-                   slice-builder         slice-builder         slice-builder
-                   (s-1; AC-1, AC-2)     (s-2; AC-3)           (s-3; AC-4, AC-5)
-                   cwd: …/<slug>-s-1      cwd: …/<slug>-s-2     cwd: …/<slug>-s-3
-                   RED→GREEN→REFACTOR     RED→GREEN→REFACTOR    RED→GREEN→REFACTOR
-                   per AC, in slice       per AC, in slice      per AC, in slice
-                          │                   │                   │
-                          └───────────────────┼───────────────────┘
-                                              ▼
-                                  reviewer (mode=integration)
-                                  reads each branch, checks
-                                  cross-slice conflicts, AC↔commit
-                                  chain across the wave
-                                              │
-                                              ▼
-                          merge cclaw/<slug>/s-1 → main, then s-2, then s-3
-                          (fast-forward when wave was clean; otherwise stop and ask)
-                                              │
-                                              ▼
-                          git worktree remove .cclaw/worktrees/<slug>-s-N (per slice)
-\`\`\`
-
-Dispatch envelope per slice:
-
-\`\`\`
-Dispatch slice-builder
-─ Stage: build
-─ Slug: <slug>
-─ Slice: s-N  (acIds: [AC-N, AC-N+1])
-─ Working tree: .cclaw/worktrees/<slug>-s-N
-─ Branch: cclaw/<slug>/s-N
-─ AC mode: strict
-─ Touch surface (only paths this slice may modify): [<paths from plan>]
-─ Output: .cclaw/flows/<slug>/build.md (append, marked with slice id)
-─ Forbidden: read or modify any path outside touch surface; read another slice's worktree mid-flight; merge or rebase
-\`\`\`
-
-After every slice-builder returns:
-
-1. Patch \`flow-state.json\` with the per-slice progress.
-2. When **every** slice has reported, dispatch \`reviewer\` mode=\`integration\` (one sub-agent, reads from each branch).
-3. On clear integration review, merge slices into main one at a time. On block, dispatch \`slice-builder\` mode=\`fix-only\` against the cited file:line refs, then re-run the integration reviewer.
-4. Worktree cleanup happens after merge; the cclaw branches stay until ship.
-
-Hard rules:
-
-- **More than 5 parallel slices is forbidden.** If planner produced >5, the planner must merge thinner slices into fatter ones before build; do not generate "wave 2".
-- Slice-builders never read each other's worktrees mid-flight. A slice that detects a conflict with another stops and raises an integration finding.
-- **Parallel-build fallback (T1-5)** — when the harness lacks sub-agent dispatch or worktree creation fails (non-git repo, permissions, dirty working tree, harness limit reached), parallel-build degrades to inline-sequential. The fallback is **not silent**:
-  - Render an explicit warning to the user in their language naming the cause (e.g., "harness does not support parallel sub-agents — falling back to sequential build, will run AC-1..AC-N one after another"), AND
-  - Use the harness's structured ask to surface a single \`accept-fallback\` option (and inform the user they may invoke \`/cc-cancel\` themselves if the loss of parallelism makes the work not worth doing under sequential timing) — the orchestrator must wait for the user's explicit \`accept-fallback\` reply before dispatching the sequential slice-builder. The parallel→sequential decision changes wall-clock substantially; the user gets to make the call.
-  - Record the fallback in \`flows/<slug>/build.md\` frontmatter (\`subAgentDispatch: inline-fallback\`, \`fallback_reason: <one-line>\`, \`fallback_accepted_at: <iso>\`) so the reviewer sees it. The fallback is not an error, but it is a visible event with a recorded user-acknowledgement.
-- \`auto\` runMode does **not** affect the integration-reviewer ask: a parallel wave that produces a block finding always asks the user before fix-only.
 
 #### review
 
@@ -502,270 +347,59 @@ Hard rules:
 - Output: \`.cclaw/flows/<slug>/review.md\` with the **Concern Ledger** (always; same shape regardless of acMode).
 - The five Failure Modes checklist runs every iteration. Every iteration block also includes \`What's done well\` (≥1 evidence-backed item, anti-sycophancy gate) and a \`Verification story\` table (tests run / build run / security checked, each with evidence). See \`.cclaw/lib/agents/reviewer.md\`.
 - The reviewer applies the **seven-axis** check (correctness / test-quality / readability / architecture / complexity-budget / security / perf — v8.13 added test-quality and complexity-budget; see reviewer.md for the per-axis checklist).
-- **Auto-detect security-sensitive surfaces (T1-7).** Before dispatching the code/integration reviewer, scan the slug's diff file list against the sensitive-surface heuristic below. **Any match forces \`security-reviewer\` to run alongside the regular reviewer**, regardless of \`security_flag\`. Path/keyword matches:
-  - paths containing \`auth\`, \`oauth\`, \`saml\`, \`session\`, \`token\`, \`secret\`, \`credential\`, \`encryption\`, \`crypto\`, \`acl\`, \`permission\`, \`role\`, \`policy\`, \`iam\`, \`csrf\`, \`xss\`;
-  - paths containing \`migration\`, \`schema.prisma\`, \`*.sql\`, \`db/\`;
-  - paths containing \`.env\`, \`config/secrets\`, \`vault\`, \`kms\`, \`keystore\`;
-  - HTTP route definitions (\`routes/\`, \`*.controller.*\`, \`api/\`);
-  - dependency manifests (\`package.json\`, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`Gemfile\`, \`composer.json\`, \`pom.xml\`) with at least one new dependency line;
-  - any file containing the literal token \`@security-sensitive\` in a comment.
-  When any of these match, set \`security_flag: true\` in plan.md frontmatter as a side-effect of the auto-detect (so subsequent review iterations and the ship gate see the flag), then proceed with the parallel reviewer + security-reviewer dispatch. Surface the trigger to the user in one line ("Security-reviewer triggered: \`auth\` keyword in 2 touched files. Continuing with parallel review.") so they know why the security stage happened.
-- Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user. Cap-reached is **not silent** (T1-10); see "Cap-reached split-plan" below.
+- **Auto-detect security-sensitive surfaces (T1-7).** Before dispatching the reviewer, scan the slug's diff file list against the sensitive-surface heuristic in \`.cclaw/lib/runbooks/review.md\` (auth/oauth/saml/session/token/secret/credential/encryption/crypto/acl/permission/role/policy/iam/csrf/xss paths; migrations and SQL; \`.env\` / vault / kms; HTTP route files; dependency manifests with new lines; \`@security-sensitive\` comment marker). **Any match forces \`security-reviewer\` to run alongside the regular reviewer, regardless of \`security_flag\`** preset state. On a match, set \`security_flag: true\` in plan.md frontmatter (so subsequent iterations and the ship gate see the flag), dispatch the parallel reviewer + security-reviewer, and surface the trigger to the user in one line ("Security-reviewer triggered: \`auth\` keyword in 2 touched files. Continuing with parallel review.").
+- Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user. **Cap-reached recovery is not silent** — the full picker + split-plan procedure lives in \`.cclaw/lib/runbooks/cap-reached-recovery.md\`. The runbook also covers the v8.20 architecture-severity ship gate (\`required + architecture\` findings gate ship in every acMode, not just strict).
+- **Self-review gate before reviewer dispatch.** Every slice-builder strict-mode return carries a \`self_review\` array; the orchestrator inspects it before deciding whether to dispatch reviewer or bounce the slice back. The full gate procedure (decision rule, fix-only bounce envelope, escalation, parallel-build behaviour) lives in \`.cclaw/lib/runbooks/self-review-gate.md\`. Open that runbook on every reviewer-stage exit before the dispatch decision.
 - Slim summary: decision (clear / warn / block / cap-reached), open findings count, recommended next (continue / fix-only / cancel).
-
-##### Review-cap picker (v8.20+)
-
-Track the cap with \`flow-state.json > reviewCounter\` (v8.20-introduced sibling of \`reviewIterations\`; \`reviewIterations\` continues to be the monotonic lifetime counter, \`reviewCounter\` is the cap-budget that the user can extend). Increment \`reviewCounter\` on every reviewer dispatch in parallel with \`reviewIterations\`. v8.19 flows resumed on v8.20 start at \`reviewCounter: 0\` even if \`reviewIterations\` already reflects prior dispatches — the cap is a fresh budget on resume.
-
-**When \`reviewCounter\` reaches \`5\`**, do NOT dispatch another reviewer. Surface a structured \`AskQuestion\` picker with these options and stop:
-
-1. \`cancel-and-replan\` — Apply the cap-reached split-plan from the next section: orchestrator authors the recommended split into \`review.md\` and asks the user to confirm the follow-up slug names. The current slug is parked; the user picks the first split slug to start, or \`/cc-cancel\` to discard.
-2. \`accept-warns-and-ship\` — Treat every remaining open ledger row as a \`warn\` (only valid if no row is \`critical\` AND, per the architecture priors rule, no row is \`required + architecture\`; if either invariant fails, the option is greyed out and the picker explains why). Proceed to ship gate with the carry-over.
-3. \`keep-iterating-anyway\` — Reset \`reviewCounter\` to \`3\`, buying two more rounds before the picker fires again. Stamp \`triage.iterationOverride: true\` (telemetry: a future "why did this flow take 7 review iterations?" audit can answer without re-reading the iteration log) and resume normal review-pause dispatch.
-
-The picker is not skippable on autopilot; \`runMode: auto\` pauses here like any other hard gate.
-
-##### Architecture severity gates ship (v8.20+)
-
-The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every acMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate (Hop 5): when the open ledger contains any \`required + architecture\` row, the ship picker does NOT offer \`continue\` until the user explicitly picks \`accept-warns-and-ship\` for the architecture finding(s). Other \`severity=required\` findings continue to follow the standard acMode table (gate in strict, carry-over in soft).
-
-Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the ship picker's option list becomes \`accept-warns-and-ship\` (highlighted as the path past the architecture gate) / \`fix-only\` (re-dispatch slice-builder to address) / \`stay-paused\`. The \`continue\` (silent advance) option is not offered.
-
-##### Cap-reached split-plan (T1-10)
-
-When the 5th iteration ends without \`clear\` or \`warn\`, the review **does not just surface "residual blockers"**; the orchestrator (with the reviewer's help) authors a **split/handoff mini-plan** in the same review.md iteration block, under \`## Cap-reached recovery\`:
-
-1. **Why we stopped** — one sentence: which findings persisted across iterations 4-5, what fix attempts converged or oscillated.
-2. **Recommended split** — list of follow-up slugs the orchestrator should propose (\`<slug>-fix-A\`, \`<slug>-rearchitect-B\`, etc.) with one bullet per slug naming what AC / surface that slug would own. The split is the actionable path forward, not just a list of complaints.
-3. **What ships now (if anything)** — a yes/no with reason. When AC-1..AC-K are clean and AC-K+1..AC-N are blocked, the recommendation is "ship AC-1..AC-K under the current slug, open \`<slug>-followup\` for the rest". When everything is entangled, the recommendation is "ship nothing under this slug; open \`<slug>-rearchitect\`".
-4. **Handoff envelope** — for each recommended split slug, the input artifact references (\`flows/<slug>/plan.md#AC-3\`, \`flows/<slug>/review.md#F-7\`) the next slug should preload.
-
-After this block is authored, the orchestrator surfaces a structured ask to the user with the split options (or "discard, re-triage from scratch"). \`/cc-cancel\` remains available as a typed command for nuking the slug.
-
-##### Adversarial pre-mortem rerun on fix-only hot paths (T1-9)
-
-When a fix-only loop touches code that the **adversarial review iteration** previously flagged (i.e., the file:line was named in a finding under axis=correctness/security/architecture in any prior adversarial run on this slug), the orchestrator **re-runs adversarial mode** on the next ship pass — even if it already ran once for this slug in strict mode. The principle: a fix to an adversarially-flagged hot path is itself a hot-path change, and the original adversarial pass cannot have foreseen the fix.
-
-Rerun trigger condition (computed at ship gate):
-
-- The last adversarial iteration produced ≥1 finding with \`severity: required | critical\`, AND
-- a fix-only loop has landed at least one commit since that adversarial run, AND
-- the diff of those fix-only commits intersects the file:line set named in the prior adversarial findings.
-
-When the trigger fires, the ship-gate parallel fan-out includes \`reviewer mode=adversarial\` again (alongside release + security if applicable). When it does not fire, adversarial runs once per slug as before.
-
-Record the rerun reason in \`review.md\`: \`Adversarial reran because fix-only commits <SHA1>, <SHA2> touched lines previously flagged in F-3 and F-7\`.
-
-##### Self-review gate (mandatory before reviewer dispatch)
-
-slice-builder's strict-mode JSON summary returns a \`self_review\` array with five rule attestations per AC: \`tests-fail-then-pass\`, \`build-clean\`, \`no-shims\`, \`touch-surface-respected\`, \`coverage-assessed\`. (Soft mode: one block per rule with \`ac: "feature"\`.) Each entry carries \`verified: true|false\` and a non-empty \`evidence\` string.
-
-Before you dispatch the reviewer, **inspect \`self_review\`** in your own context. The reviewer never sees this field; it is your gate.
-
-Decision rule:
-
-- **All entries \`verified: true\` AND \`evidence\` non-empty** → dispatch reviewer normally.
-- **Any \`verified: false\`** OR **any empty/missing \`evidence\`** OR **\`self_review\` array missing entirely** → **bounce the slice straight back to slice-builder with mode=fix-only**, citing the failed rule(s) and the slice-builder's own evidence string in the dispatch envelope. Do NOT dispatch reviewer.
-
-The fix-only bounce envelope reuses the slice-builder dispatch envelope shape; the "Inputs" line names the failed rules instead of a Concern Ledger fix list:
-
-\`\`\`
-Dispatch slice-builder
-─ Stage: build (self-review fix-only)
-─ Slug: <slug>
-─ AC: <AC-N> (the AC whose self_review failed)
-─ Failed rules: <one line per failed rule, copying the slice-builder's own evidence>
-─ Output: .cclaw/flows/<slug>/build.md (append a "Self-review fix" iteration block above the existing Summary)
-─ Then: re-emit the strict-mode JSON summary with self_review[] re-attested
-\`\`\`
-
-This gate is cheap to run (you already have the JSON in context) and saves one full reviewer cycle per failed attestation. Repeated self-review failures (third bounce) escalate to user: render the failed evidence and ask whether to continue or split the AC.
-
-In parallel-build the gate runs **per slice**: a slice whose self-review fails bounces back; **healthy slices proceed** to integration review independently. Do not block a clean slice waiting on a sibling's fix-only loop.
 
 #### ship
 
-- Specialists fanned out in parallel (the only fan-out cclaw uses):
-  - \`reviewer\` mode=\`release\` — always.
-  - \`reviewer\` mode=\`adversarial\` — **strict mode only** (see below).
-  - \`security-reviewer\` mode=\`threat-model\` — when \`security_flag\` is true.
-- Pattern: **parallel fan-out + merge** (the canonical cclaw fan-out). Dispatch all specialists in the same message; merge their summaries in your context.
-- Inputs: \`.cclaw/flows/<slug>/plan.md\`, build.md, review.md.
-- **Shared diff context (single parse pass).** Before the parallel dispatch, run \`git diff --stat <plan-base>..HEAD\` and \`git diff --name-only <plan-base>..HEAD\` once in the orchestrator's context. Pass the parsed shape (touched files list, additions/deletions per file, total LOC delta) to **every** parallel reviewer in the dispatch envelope under a \`Shared diff:\` block. Each reviewer reads its own filtered subset (release-mode reads everything; adversarial-mode skims for hot paths; security-reviewer prioritises files matching sensitive patterns). This avoids three independent \`git diff\` calls and three independent file-list parses — savings: 1-2 seconds per ship + ~1-2K tokens × 3 (diff parse boilerplate). The reviewers still independently \`git show <SHA>\` per finding to read commit-level context; only the aggregated diff shape is shared.
-- Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan. As of v8.12 the adversarial reviewer's pre-mortem section is appended to \`review.md\` (no separate \`pre-mortem.md\` file unless \`legacy-artifacts: true\`).
-- After ship, run the compound learning gate (Hop 6).
+The ship stage uses parallel fan-out (release reviewer + adversarial reviewer in strict + security-reviewer when \`security_flag\`), then a structured user ask for finalization mode (merge / open-PR / push-only / discard-local / no-vcs). \`Cancel\` is NEVER an option in the ship-gate ask — the user invokes \`/cc-cancel\` out-of-band if they want to abandon.
 
-##### Ship-gate user ask (finalization mode)
+The full ship-gate procedure — shared diff context, ship-gate user ask shape, adversarial pre-mortem failure classes, ship-gate decision matrix, the soft-mode opt-out — lives in \`.cclaw/lib/runbooks/ship-gate.md\`. The conditional rerun rule (when fix-only commits intersect prior adversarial findings) lives in \`.cclaw/lib/runbooks/adversarial-rerun.md\`. Open the ship-gate runbook at every ship attempt; open the adversarial-rerun runbook at ship gate when the trigger condition holds.
 
-When the ship gate is passed (Victory Detector green) and finalization is required, the orchestrator surfaces a structured ask to the user. The options are the five \`finalization_mode\` enum values; **\`Cancel\` is NOT one of them**. \`/cc-cancel\` remains the explicit user-typed command for discarding a flow; structured asks for finalization MUST NOT include a "Cancel" row, because choosing "Cancel" mid-finalization leaves shipped artefacts in a half-moved state with no defined recovery.
-
-\`\`\`
-askUserQuestion(
-  prompt: <one sentence in the user's language stating: ship gate passed, choose how to finalize the slug, list expected behaviour for git mode (or "no-vcs detected" for the no-vcs path)>,
-  options: [
-    <option label conveying: merge into base branch locally, verify clean merge, record the merged SHA>,
-    <option label conveying: open a PR with structured body (gh pr create), record the URL>,
-    <option label conveying: push the branch upstream and stop (git push -u origin HEAD), keep open for later review>,
-    <option label conveying: discard the branch locally — requires typed confirmation in the next turn>,
-    <option label conveying: no VCS available, record a manual handoff target and rollback owner>
-  ],
-  multiSelect: false
-)
-\`\`\`
-
-If the user wants to abandon the flow at this point, they type \`/cc-cancel\` (out-of-band of the structured ask). The orchestrator does not pre-offer that as a clickable option, because:
-1. The flow has already passed code-mode review + adversarial pre-mortem; cancelling here is unusual.
-2. The shipped artefacts may have already been partially written (manifest-as-frontmatter, learnings.md); cancelling mid-finalize requires a different recovery path than \`/cc-cancel\` from earlier stages.
-
-##### Adversarial pre-mortem (strict mode only)
-
-Before the ship gate finalises, the orchestrator dispatches \`reviewer\` mode=\`adversarial\` against the diff produced for this slug. The adversarial reviewer's specific job is to **think like the failure**: how would this break in production a week from now?
-
-As of v8.12, the adversarial sweep appends a \`## Pre-mortem (adversarial)\` section to the same \`flows/<slug>/review.md\`, not a separate file. (Users on \`legacy-artifacts: true\` still get a separate \`pre-mortem.md\` for tooling compat.) The adversarial reviewer treats the pre-mortem as a **scenario exercise** — reasoning backwards from "this shipped and failed, what was it" — and explicitly does NOT write a literal future date in the artefact body. See \`reviewer.ts\` Adversarial mode for the full schema.
-
-Failure classes the adversarial pass MUST consider (mark each as "covered" / "not covered" / "n/a"):
-
-- **data-loss** — write paths that could lose user data on rollback or partial failure;
-- **race** — concurrent operations on shared state without locking / ordering guarantees;
-- **regression** — prior-shipped behaviour an existing test does not pin;
-- **rollback impossibility** — schema migration / persisted state shape that cannot be reverted;
-- **accidental scope** — diff touches files no AC mentions;
-- **security-edge** — auth bypass, injection, leaked secret in logs, untrusted input.
-
-The adversarial reviewer treats every "not covered" as a finding (axis varies; severity \`required\` by default, escalated to \`critical\` for data-loss / security-edge). Findings go into the existing Concern Ledger in \`review.md\`; the same file gets a \`## Pre-mortem (adversarial)\` section summarising the adversarial pass's reasoning so the user can read a one-page rationale. (On \`legacy-artifacts: true\` the section is mirrored into a standalone \`pre-mortem.md\` for downstream tooling.)
-
-Ship gate decision after fan-out:
-
-| reviewer:release | reviewer:adversarial | security-reviewer | gate |
-| --- | --- | --- | --- |
-| clear | clear | clear | clear → ship may proceed |
-| clear | block | any | block → fix-only loop or user override |
-| any | any | block | block → fix-only loop |
-| clear | warn | clear | warn → render adversarial findings, ask user |
-
-The adversarial pass runs **once per ship attempt**, not iteratively. If it produces \`block\`-level findings, the orchestrator dispatches \`slice-builder\` mode=\`fix-only\` and re-runs the **regular** reviewer (mode=\`code\`) to confirm the fix; the adversarial pass does not re-run unless the user explicitly requests it (the marginal value drops fast on second run).
-
-In \`soft\` mode the adversarial pass is **skipped** by default — the lighter-weight regular reviewer is enough for small/medium work. The user can opt in with \`/cc <task> --adversarial\` if they want the extra sweep regardless.
-
-### Discovery (sub-phase of plan on large-risky — v8.14 strong design)
-
-Discovery is **not a stage in \`triage.path\`** — it is a two-step expansion of the \`plan\` stage on \`triage.complexity == "large-risky"\`. See "Plan stage on large-risky" under Stage details for the full spec. Listed here as a sanity check:
-
-1. \`design\` runs in **main orchestrator context** across Phase 0-7 (Bootstrap, Clarify, Frame, Approaches, Decisions inline as D-N, Pre-mortem deep only, Compose + self-review, Sign-off). Each user-facing phase ends the turn with an \`askUserQuestion\` picker. Output: Frame, Approaches, Selected Direction, Decisions (inline), optional Pre-mortem, Not Doing, Open questions, and a Summary block — all appended to \`flows/<slug>/plan.md\`. After Phase 7 \`approve & proceed\`: \`lastSpecialist == "design"\`. \`currentStage\` stays \`"plan"\`.
-2. \`planner\` is dispatched as a normal sub-agent. It finishes \`plan.md\` (AC table, touch surface, topology). \`lastSpecialist == "planner"\`. \`currentStage\` advances to \`"build"\`. End of turn in \`step\` mode; chain to build in \`auto\` mode (the design-internal phase pauses fire regardless of mode; the post-discovery transition follows \`triage.runMode\`).
-
-Design's seven phases are separate user-facing turns inside one main-context conversation. The user can invoke \`/cc-cancel\` at any point to abort and keep whatever is currently in \`plan.md\`; the orchestrator does not surface \`/cc-cancel\` as a clickable option (it is a power-user explicit command).
+After ship, run the compound learning gate (Hop 5), then Hop 6 finalize.
 
 ## Hop 4 — Pause and resume
 
 Pause behaviour depends on \`triage.runMode\` (default \`step\`). Both modes share the same resume mechanism: \`/cc\` is the only command that advances a paused flow.
 
-### Handoff artifacts (T2-3, gsd pattern; v8.13)
-
-**After every stage exit** — both at the end of plan / build / review / ship and at every design Phase 7 sign-off (which closes the discovery sub-phase under \`plan\`) — the orchestrator writes two resumable-checkpoint files alongside \`flow-state.json\`. Design's internal Phase 0-6 pauses are conversation-only and do NOT trigger a handoff rewrite (those are mid-turn, mid-dialog states inside the same orchestrator context; HANDOFF.json is for resume-across-sessions checkpoints):
-
-1. **\`.cclaw/flows/<slug>/HANDOFF.json\`** — machine-readable, single source of truth for "where exactly are we?". Schema:
-
-\`\`\`json
-{
-  "slug": "<slug>",
-  "stage_completed": "plan | build | review | ship | discovery-design",
-  "stage_started_at": "<iso>",
-  "stage_completed_at": "<iso>",
-  "next_stage": "build | review | ship | done | discovery-planner",
-  "next_specialist": "<id> | null",
-  "open_findings": <count>,
-  "review_iterations": <count>,
-  "feasibility_stamp": "green | yellow | red | null",
-  "ci_smoke_passed": <boolean | null>,
-  "release_notes_filled": <boolean | null>,
-  "security_flag": <boolean>,
-  "blocked_by": <"low-confidence" | "review-pause" | "cap-reached" | "user-decline" | null>,
-  "resume_command": "/cc",
-  "resume_envelope": {
-    "required_first_read": ".cclaw/lib/agents/<next_specialist>.md",
-    "required_second_read": ".cclaw/lib/skills/<next_wrapper>.md",
-    "inputs": [".cclaw/state/flow-state.json", ".cclaw/flows/<slug>/<next_stage>.md", "..."]
-  }
-}
-\`\`\`
-
-2. **\`.cclaw/flows/<slug>/.continue-here.md\`** — human-readable resume note rendered in the user's conversation language. Shape:
-
-\`\`\`markdown
-# Continue here — <slug>
-
-**Stage just completed:** <stage> (<one-sentence verdict in user's language>)
-**Where we are:** <one-sentence summary of the slug's current state — AC count, review iterations, open findings>
-**What's next:** <one-sentence description of the next stage in user's language>
-**To resume:** \`/cc\`  (or \`/cc-cancel\` to discard the slug)
-
-## Open questions or pauses
-- <bullet per pending decision the user must make; empty when none>
-
-## Recent activity
-- <last 3-5 specialist returns in chronological order, each as one short bullet>
-\`\`\`
-
-**Why two files:** \`HANDOFF.json\` is what the orchestrator's resume hop reads to rebuild dispatch context; \`.continue-here.md\` is what the user reads to remember what they were doing — possibly days later when they reopen a stale flow. The dot-prefix on \`.continue-here.md\` keeps it out of casual file-listing noise but keeps it readable when the user grep's for "continue".
-
-**Lifecycle:**
-- Each stage exit (or discovery checkpoint) **rewrites both files from scratch** — they are idempotent snapshots, not appended logs. Stale data is the v8.11-era ship.md bug applied to handoff state; the fix is "always re-author".
-- \`runCompoundAndShip\` moves both files into \`shipped/<slug>/\` alongside the canonical 7 stages (the T0-10 directory scan handles them automatically). Shipped flows preserve their final HANDOFF.json + .continue-here.md as a record of how the slug ended.
-- \`/cc-cancel\` moves both into \`cancelled/<slug>/\`.
-- The Hop 1 detect path may consult \`HANDOFF.json\` as a fallback when \`flow-state.json\` is missing or unparseable (v8.13 hardening: file may be deleted by accident, but HANDOFF.json snapshots can rebuild the resume context).
-
-When a sub-agent dispatch's slim-summary returns, the orchestrator: (1) patches \`flow-state.json\`; (2) re-renders both handoff files; (3) renders the slim summary in the conversation; (4) ends the turn. Step 2 is mandatory — skipping it leaves the next \`/cc\` invocation rebuilding context the wrong way.
+After every stage exit (and every design Phase 7 sign-off) the orchestrator writes two resumable-checkpoint files alongside \`flow-state.json\`: \`.cclaw/flows/<slug>/HANDOFF.json\` (machine-readable) and \`.cclaw/flows/<slug>/.continue-here.md\` (human-readable, in the user's language). The schemas, lifecycle, and rewrite trigger live in \`.cclaw/lib/runbooks/handoff-artifacts.md\`. Open that runbook on every stage exit.
 
 ### \`step\` mode (default; safer; recommended for \`strict\` work)
 
-After every dispatch returns:
+After every dispatch returns: (1) render the slim summary; (2) re-author \`HANDOFF.json\` + \`.continue-here.md\` (see \`runbooks/handoff-artifacts.md\`); (3) state the next stage in plain language ("Plan is ready (5 testable conditions). Send \`/cc\` to continue with build."); (4) **End your turn** — do NOT call \`askUserQuestion\`, do NOT wait for a magic word; the pause IS the end of the turn; \`flow-state.json\` + \`HANDOFF.json\` carry the resume point.
 
-1. Render the slim summary back to the user.
-2. **Re-author \`HANDOFF.json\` and \`.continue-here.md\` from scratch** (idempotent rewrite).
-3. State the next stage in plain language: "Plan is ready (5 testable conditions). Send \`/cc\` to continue with build."
-4. **End your turn.** Do not call \`askUserQuestion\`; do not wait for a magic word like "continue". The pause IS the end of the turn — \`flow-state.json\` + \`HANDOFF.json\` carry the resume point, and the next \`/cc\` invocation resumes from there.
-5. The user invokes \`/cc\` to advance, \`/cc\` (no arg) is identical, \`/cc-cancel\` to discard, or sends free-text feedback like "fix this first" — which the next \`/cc\` reads from the surrounding conversation.
+This is cclaw's **single resume mechanism**. Mid-session and cross-session pauses both end the turn; \`/cc\` is the only verb that moves the flow forward. No "type continue" magic word; no clickable Continue button mid-turn.
 
-This is the **single resume mechanism** for cclaw. Mid-session and cross-session pauses both end the turn; \`/cc\` is the only verb that moves the flow forward. There is no "type continue" magic word; there is no clickable Continue button mid-turn.
-
-If the user wants \`fix-only\` or \`show\` semantics, they say so in plain text on the next \`/cc\` and the orchestrator routes accordingly:
-
-- "send fix-only" or "/cc fix-only" → next dispatch is slice-builder mode=fix-only with the cited review findings.
-- "show me the plan" or "/cc show" → open the artifact for the current stage and stop.
-- otherwise → advance to the next stage in \`triage.path\`.
+If the user wants \`fix-only\` or \`show\` semantics, they say so in plain text on the next \`/cc\` and the orchestrator routes accordingly: "/cc fix-only" → slice-builder mode=fix-only against cited findings; "/cc show" → open the current-stage artifact and stop; otherwise → advance to the next stage.
 
 ### \`auto\` mode (autopilot; faster; recommended for \`inline\` / \`soft\` work)
 
-After every dispatch returns:
+After every dispatch returns: (1) render the slim summary; (2) immediately dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS inside the design phase (per-phase pauses fire regardless of runMode; see \`runbooks/discovery.md\`).
 
-1. Render the slim summary back to the user (one block, no prompt).
-2. **Immediately** dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS you are currently inside the design phase (Phase 0-7 in main context). Design's internal per-phase pauses fire regardless of \`runMode\`; see "Plan stage on large-risky" above. The plan→build transition after design + planner complete follows \`triage.runMode\` normally.
-3. Stop unconditionally only on these hard gates (autopilot **always** asks here):
-   - \`reviewer\` returned \`block\` decision (open findings) → render the findings, ask via the harness's structured question whether to **dispatch fix-only** (re-run slice-builder mode=fix-only against the cited findings) or **stay paused** (end the turn; user reviews and either replies with their own guidance, or invokes \`/cc-cancel\` to discard).
-   - \`security-reviewer\` raised any finding → same shape (dispatch fix-only / stay paused).
-   - \`reviewer\` returned \`cap-reached\` (5 iterations without convergence) → ask the same shape.
-   - **A returned slim summary has \`Confidence: low\`** → see "Confidence as a hard gate" below.
-   - About to run \`ship\` (last stage in \`triage.path\`) → ask "Ship now?" once with options \`Ship now\` / \`Stay paused — review first\`; on \`Ship now\` proceed; on \`Stay paused\` end the turn. Ship is the only stage that always confirms in autopilot.
-   - Inside the design phase (any of Phase 0-7 in main context) — the design prompt handles its own per-phase pauses; auto mode does not collapse them.
+Stop unconditionally only on these **hard gates** (autopilot **always** asks here):
 
-Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green non-discovery stages. \`Cancel\` is **never** offered as a clickable option in any of these gates — the user invokes \`/cc-cancel\` themselves if they want to nuke. \`Stay paused\` (end turn) is the always-present safe-out.
+- \`reviewer\` returned \`block\` (open findings) → ask "dispatch fix-only" / "stay paused".
+- \`security-reviewer\` raised any finding → same shape.
+- \`reviewer\` returned \`cap-reached\` → see \`runbooks/cap-reached-recovery.md\`.
+- A slim summary has \`Confidence: low\` → see "Confidence as a hard gate" below.
+- About to run \`ship\` (last stage) → ask "Ship now?" once. Ship always confirms in autopilot.
+- Inside the design phase — pauses managed by design.md.
+
+Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green non-discovery stages. \`Cancel\` is **never** a clickable option; \`Stay paused\` (end turn) is the always-present safe-out.
 
 ### Confidence as a hard gate (both modes)
 
-Every slim summary carries a \`Confidence: high | medium | low\` line. The orchestrator reads it and treats it as a quality signal for the dispatch that just returned, not a prediction of the next stage:
+Every slim summary carries a \`Confidence: high | medium | low\` line — a quality signal for the dispatch that just returned, not a prediction of the next stage:
 
 | Confidence | step mode | auto mode |
 | --- | --- | --- |
 | \`high\` | normal pause; render summary, end the turn (\`/cc\` advances) | normal flow; chain to next stage |
-| \`medium\` | normal pause; render summary, mention confidence in the user-facing line ("Plan ready (medium confidence — see Notes). Send \`/cc\` to continue."); end the turn | render the summary inline ("medium — see Notes"); chain anyway. The Notes line is required when confidence is medium |
-| \`low\` | hard gate. Render the summary, end the turn, and surface the Notes verbatim. The user replies with one of: \`/cc expand\` (re-dispatch the same specialist with a richer envelope), \`/cc show\` (open the artifact), \`/cc override\` (acknowledge the risk and advance), or \`/cc-cancel\` (nuke). | hard gate. Stop chaining. Render the summary, ask via structured question: \`Expand <stage>\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\`. \`Override and continue\` is the only choice that resumes auto-chaining; the others end the turn. |
+| \`medium\` | normal pause; mention confidence in the user-facing line ("Plan ready (medium confidence — see Notes). Send \`/cc\` to continue."); end the turn. The \`Notes:\` line is required when confidence is medium | render the summary inline ("medium — see Notes"); chain anyway |
+| \`low\` | hard gate. End the turn, surface \`Notes\` verbatim. User replies with \`/cc expand\` (re-dispatch with richer envelope), \`/cc show\` (open artifact), \`/cc override\` (acknowledge risk + advance), or \`/cc-cancel\` (nuke). | hard gate. Stop chaining. Ask: \`Expand <stage>\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\`. Only \`Override and continue\` resumes auto-chaining. |
 
-A specialist that returns \`Confidence: low\` MUST also write a non-empty \`Notes:\` line that explains the dimension that drove confidence down (missing input, unverified citation, partial coverage, etc.). The orchestrator surfaces that Notes line verbatim — the sub-agent is the only one with the context to explain.
-
-Repeated low-confidence on the same stage (the second consecutive dispatch returns low) is itself a routing signal: the orchestrator should suggest re-triage with a richer path (e.g. \`small/medium\` → \`large-risky\`) or splitting the slug, rather than dispatching the same specialist a third time.
-
-Override is sticky to **this stage only** — the next stage starts with the normal high-confidence-default behaviour.
+A specialist returning \`Confidence: low\` MUST write a non-empty \`Notes:\` line explaining the dimension that drove confidence down (missing input, unverified citation, partial coverage). Repeated low-confidence on the same stage is a routing signal: re-triage with a richer path or split the slug rather than re-dispatching the same specialist. Override is sticky to **this stage only**.
 
 ### Common rules for both modes
 
@@ -786,67 +420,13 @@ After ship, check the compound quality gate:
 
 If any signal fires, dispatch the learnings sub-agent (small one-shot): write \`flows/<slug>/learnings.md\` from \`.cclaw/lib/templates/learnings.md\`, append a line to \`.cclaw/knowledge.jsonl\`. Otherwise honour the **learnings hard-stop** (T1-13; see ship runbook §7a) — surface a structured ask rather than skipping silently when the slug is non-trivial.
 
-### Compound-refresh sub-step (T2-4, everyinc pattern; v8.13)
-
-Every **5th** capture (\`knowledge.jsonl\` line count is a multiple of 5 after the new line is appended), the orchestrator runs a **knowledge-refresh** pass over the file. The point: append-only is durable but lossy on signal-to-noise — duplicates accumulate, superseded findings persist, and cross-cutting themes never get consolidated. The refresh applies five actions to the existing entries:
-
-1. **dedup** — entries whose touchSurface + tags + learnings shape are near-identical (Jaccard ≥ 0.8 over the touchSurface union AND tags union AND verbatim-overlap of learnings). Keep the most recent entry, mark the others \`status: dedup-of <newer-slug>\`. The newer entry inherits the older entries' \`historicSlugs: []\` array so the lineage isn't lost.
-2. **keep** — entry is unique, non-stale, still cited by at least one open antipattern reference. No change.
-3. **update** — entry is unique but a later slug refined the lesson (different phrasing, sharper boundary). Patch the entry's \`learnings\` field with the newer phrasing; keep the older slug citation alongside the newer one. Mark \`refined_at: <iso>\`, \`refined_via_slug: <newer-slug>\`.
-4. **consolidate** — 2+ entries on the same theme but different surfaces (e.g., 3 entries about "fix-only loops on auth flows that drifted in scope"). Merge into a single entry with a richer learnings paragraph and \`mergedFrom: [slug-list]\`. The merged entry's \`learnings\` is authored by the orchestrator (synthesis), not copy-paste.
-5. **replace** — old entry is genuinely superseded (architecture changed, library replaced). Keep the old entry but mark \`status: superseded-by <newer-slug>\`; the search/scoring layer treats superseded entries as \`-2\` to keep them out of top-3 picks but still findable for archaeology.
-
-The refresh runs **inline in the orchestrator's context** as the 5th capture finishes. Output: a new \`.cclaw/knowledge-refresh-<iso>.md\` log file (one block per action, citing slug ids) so the user can see what changed. Failures (file unparseable, IO error) write the log but skip the actions; the original \`knowledge.jsonl\` is unchanged.
-
-Trigger thresholds (configurable in \`.cclaw/config.yaml\`):
-
-- \`compoundRefreshEvery: 5\` — run every Nth capture; default 5; set to \`0\` to disable.
-- \`compoundRefreshFloor: 10\` — skip refresh until \`knowledge.jsonl\` has ≥10 lines (otherwise the refresh has nothing to dedup against).
-
-Manual trigger: \`/cc-compound-refresh\` — runs the same pass on demand. Useful after large bulk-import of legacy slugs.
-
-### Discoverability self-check (T2-12)
-
-After ship completes (Hop 6 done), the orchestrator scans \`AGENTS.md\` / \`CLAUDE.md\` / \`README.md\` for any mention of \`knowledge.jsonl\` or \`flows/shipped/\`. When **none** of these files mention either path, the orchestrator surfaces a one-line note in the user's language ("This project's knowledge.jsonl now has N entries but the AGENTS.md / CLAUDE.md / README.md don't reference it. Want me to add a 1-line discovery note so future agents know it exists? [add / skip-this-time / never]"). The user picks; on \`add\`, the orchestrator appends a single line to the most appropriate root file (preferring AGENTS.md, then CLAUDE.md, then README.md):
-
-\`\`\`markdown
-- \`.cclaw/knowledge.jsonl\` — append-only learnings catalogue from cclaw flows; cclaw specialists read this before authoring plans (\`learnings-research\` helper).
-\`\`\`
-
-This makes the catalogue discoverable to future agents/humans who don't already know cclaw's conventions. Without the note, a fresh contributor (or a different harness's bootstrap) won't know it exists.
-
-The discoverability check runs **once per slug** (only when ship completes), and respects the user's \`never\` choice for the rest of the session.
+After a capture, the **compound-refresh** sub-step may fire (every 5th capture; T2-4, everyinc pattern). The refresh actions (dedup / keep / update / consolidate / replace), trigger thresholds, the manual \`/cc-compound-refresh\` route, and the downstream **discoverability self-check** (T2-12) all live in \`.cclaw/lib/runbooks/compound-refresh.md\`.
 
 ## Hop 6 — Finalize (ship-finalize: move active artifacts to shipped/)
 
-After Hop 5 (compound) the orchestrator finalises the slug's directory layout. The orchestrator MUST move (not copy) \`flows/<slug>/\` to \`flows/shipped/<slug>/\`; duplicating into both directories is forbidden.
+After Hop 5 (compound), the orchestrator finalises the slug's directory layout: \`git mv\` every active artifact into \`flows/shipped/<slug>/\`, stamp the shipped frontmatter on \`ship.md\`, promote any PROPOSED ADRs to ACCEPTED, reset flow-state. This is the orchestrator's job, never a sub-agent's.
 
-This is the orchestrator's job, never a sub-agent's. Run these steps in order, in your own context, after the ship summary returned and the compound learning gate (Hop 5) has either written or skipped \`learnings.md\`:
-
-1. **Pre-condition check.** \`flows/<slug>/ship.md\` exists with \`status: shipped\` (or equivalent gate). If the gate is \`block\`, do NOT finalise — stay paused. If the path was \`inline\` (trivial), there is nothing to finalise; skip Hop 6 entirely.
-2. **Create the shipped directory.** \`mkdir -p .cclaw/flows/shipped/<slug>\`. Idempotent: if the directory already exists (re-run, race), continue without error.
-3. **Move every artifact.** Use \`git mv\` when the repo is a git workspace and the active flow files are tracked; otherwise plain \`mv\`. Move (do NOT copy) every file in \`flows/<slug>/\`:
-   - \`plan.md\`
-   - \`build.md\` (when present)
-   - \`review.md\` (when present)
-   - \`ship.md\`
-   - \`decisions.md\` (when present — large-risky only)
-   - \`learnings.md\` (when written by Hop 5)
-   - \`pre-mortem.md\` (only on \`legacy-artifacts: true\` — default v8.12 collapses pre-mortem into \`review.md\` as a section)
-   - \`research-repo.md\` (when written by repo-research)
-   - \`research-learnings.md\` (only on \`legacy-artifacts: true\` — default v8.12 keeps learnings inline in the planner's slim-summary)
-   The word "copy" must not appear in the dispatch envelope or in your own actions. \`cp\` is forbidden here. The active directory must end up empty after the moves.
-4. **Stamp the shipped frontmatter on \`ship.md\`.** As of v8.12, manifest.md is collapsed into \`ship.md\`'s frontmatter. Update \`ship.md\`'s frontmatter to include the final flow signals (snake_case keys per artefact-frontmatter convention): \`slug\`, \`shipped_at\`, \`ac_mode\`, \`complexity\`, \`security_flag\`, \`review_iterations\`, \`ac_count\`, \`finalization_mode\`. Body of \`ship.md\` keeps the AC↔commit map (strict) or condition checklist (soft); add an "## Artefact index" section listing the artefacts that ended up in the shipped dir (one bullet per file). Users on the opt-in \`legacy-artifacts: true\` config still get a separate \`manifest.md\` in addition.
-5. **Post-condition check (mandatory).** \`flows/<slug>/\` (the active directory) must be empty. If it is not, you have made a mistake — list the residue, surface it to the user, do NOT continue. The most common cause is mistakenly using \`cp\` instead of \`git mv\`/\`mv\`. Once the active dir is empty, \`rmdir flows/<slug>\` to remove the now-empty directory.
-6. **Promote ADRs (PROPOSED → ACCEPTED).** Scan \`flows/shipped/<slug>/plan.md\` (just moved in step 3; v8.14+ inlines D-N records there) and any legacy \`flows/shipped/<slug>/decisions.md\` (pre-v8.14 shipped flows) for \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` lines. For each found ADR file, edit the frontmatter in place: \`status: PROPOSED\` → \`status: ACCEPTED\`; add \`accepted_at: <iso>\`; add \`accepted_in_slug: <slug>\`; add \`accepted_at_commit: <ship-commit-sha>\`. Commit each promotion with \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. Skip the entire step when no PROPOSED ADR was found. Do NOT promote ADRs the design phase did not propose for this slug. See \`.cclaw/lib/skills/documentation-and-adrs.md\` for the full lifecycle (including supersession bookkeeping for ADRs that supersede an earlier ACCEPTED one).
-7. **Reset flow-state.** Write \`createInitialFlowState\` defaults to \`.cclaw/state/flow-state.json\` (\`currentSlug: null\`, \`currentStage: null\`, \`triage: null\`, \`ac: []\`, \`reviewIterations: 0\`, \`securityFlag: false\`, \`lastSpecialist: null\`). The shipped manifest is the durable record; flow-state is now a clean slot ready for the next \`/cc\`.
-8. **Render the final summary** to the user: one block citing \`shipped/<slug>/ship.md\` (the file that now carries the manifest frontmatter — or \`shipped/<slug>/manifest.md\` on \`legacy-artifacts: true\`), the AC count, any captured learnings, and any ADR ids promoted to \`ACCEPTED\` in step 6.
-
-Hard rules for Hop 6:
-
-- **No "copy" anywhere.** Sub-agent dispatches do NOT mention copying. The orchestrator's own actions use \`git mv\` (preferred when the files are git-tracked) or \`mv\` (when not). \`cp\` is a bug.
-- **No partial finalize.** If any \`mv\` fails (filesystem error, permission, lock), stop and surface the failure. Do not leave half the flow in shipped and half in active.
-- **No re-entrant finalize on resume.** If \`flows/<slug>/\` is already empty when you reach Hop 6 (a previous run finalised), check that \`shipped/<slug>/ship.md\` exists with \`status: shipped\` in its frontmatter; if it does, this slug is already shipped — reset flow-state and tell the user "already finalised in <iso>". Do NOT recreate the artefacts. (On \`legacy-artifacts: true\` you can also key off \`shipped/<slug>/manifest.md\`.)
+The full Hop 6 step-by-step (pre-condition check, mkdir, \`git mv\`-vs-\`mv\` rules, the no-\`cp\` invariant, post-condition empty-dir check, ADR promotion, flow-state reset, final summary to user) lives in \`.cclaw/lib/runbooks/finalize.md\`. Open that runbook before starting Hop 6.
 
 ## Always-ask rules
 
@@ -877,21 +457,21 @@ When a specialist needs a research helper, the dispatch envelope shape is the sa
 
 ## Skills attached
 
-These skills auto-trigger during \`/cc\`. Do not re-explain them; obey them.
+These skills auto-trigger during \`/cc\`. Do not re-explain them; obey them. Each skill body lives at \`.cclaw/lib/skills/<id>.md\`.
 
-- **conversation-language** — always-on; reply in the user's language but never translate \`AC-N\`, \`D-N\`, \`F-N\`, slugs, paths, frontmatter keys, mode names, or hook output.
-- **anti-slop** — always-on for any code-modifying step; bans redundant verification and environment shims.
+- **conversation-language** — always-on; reply in user's language; never translate \`AC-N\`, \`D-N\`, \`F-N\`, slugs, paths, frontmatter keys, mode names, hook output.
+- **anti-slop** — always-on; bans redundant verification and environment shims.
 - **triage-gate** — Hop 2 of every fresh \`/cc\`.
-- **pre-flight-assumptions** — reference doc only as of v8.21. Points at design Phase 0 (large-risky) and planner Phase 0 (small-medium) where the assumption surface actually lives now; no separate user-facing ask.
-- **flow-resume** — when \`/cc\` is invoked with no task or with an active flow.
-- **plan-authoring** — on every edit to \`.cclaw/flows/<slug>/plan.md\`.
-- **ac-discipline** — covers ac-quality (always-on for AC authoring) and ac-traceability (strict mode only; before every commit).
-- **tdd-and-verification** — always-on while stage=build; granularity scales with acMode.
+- **pre-flight-assumptions** — reference doc only (v8.21+); design Phase 0 and planner Phase 0 own the surface.
+- **flow-resume** — when \`/cc\` runs with no task or with an active flow.
+- **plan-authoring** — on every edit to \`flows/<slug>/plan.md\`.
+- **ac-discipline** — ac-quality (always-on for AC authoring) + ac-traceability (strict only; before every commit).
+- **tdd-and-verification** — always-on while \`stage=build\`; granularity scales with acMode.
 - **refinement** — when an existing plan match is detected.
-- **parallel-build** — strict mode + planner topology=parallel-build; enforces 5-slice cap and worktree dispatch.
-- **review-discipline** — wraps every reviewer / security-reviewer invocation; runs the Concern Ledger + Five-axis pass + convergence detector.
-- **source-driven** — strict mode only (opt-in for soft); design (deep posture, Phase 4 D-N records that cite framework docs) and planner detect stack version, fetch official doc deep-links, cite URLs, mark UNVERIFIED when docs are missing. Per-project fetch cache lives at \`.cclaw/cache/sdd/\` (gitignored).
-- **documentation-and-adrs** — repo-wide ADR catalogue at \`docs/decisions/ADR-NNNN-<slug>.md\`. Architect proposes (\`PROPOSED\`) when tier=product-grade or ideal AND a D-N matches the trigger table; orchestrator promotes to \`ACCEPTED\` at Hop 6 step 6 after ship; \`/cc-cancel\` marks them \`REJECTED\`; supersession is in-place.
+- **parallel-build** — strict mode + planner \`topology=parallel-build\`; enforces 5-slice cap and worktree dispatch.
+- **review-discipline** — wraps every reviewer / security-reviewer invocation; Concern Ledger + seven-axis pass + convergence detector.
+- **source-driven** — strict mode only (opt-in for soft); detect stack version, fetch official doc deep-links, cite URLs, mark UNVERIFIED when docs missing. Cache at \`.cclaw/cache/sdd/\` (gitignored).
+- **documentation-and-adrs** — repo-wide ADR catalogue at \`docs/decisions/ADR-NNNN-<slug>.md\`; design proposes (\`PROPOSED\`) on qualifying D-N, orchestrator promotes to \`ACCEPTED\` at Hop 6, \`/cc-cancel\` marks them \`REJECTED\`.
 
 ${ironLawsMarkdown()}
 `;
