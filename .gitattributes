@@ -1,0 +1,23 @@
+# Force LF newlines on checkout for all text the runtime reads byte-for-byte.
+#
+# v8.15 introduced src/content/skills/*.md, which the compiled module loads
+# via fs.readFileSync. Windows' default `core.autocrlf=true` checks `.md`
+# files out with CRLF, which breaks `body.startsWith("---\n")` and any other
+# downstream string comparison that assumes LF-only line endings.
+#
+# We also normalize CRLF in the loader as defence-in-depth, but pinning the
+# on-disk encoding here keeps `git diff` clean and makes the file the same
+# bytes on every contributor's machine.
+
+* text=auto eol=lf
+*.md text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.mdc text eol=lf
