@@ -49,11 +49,19 @@ describe("v8.32 additive skills batch I — registration", () => {
     expect(PERF_OPT!.body.length, "skill body must be non-trivial").toBeGreaterThan(2000);
   });
 
-  it("AC-1 — total skill count grew from 18 (v8.30) to 20 (v8.32)", () => {
+  it("AC-1 — both v8.32 skills survive (count grew 18→20 in v8.32, then 20→22 in v8.33)", () => {
+    expect(
+      SKILLS.find((s) => s.id === "context-engineering"),
+      "context-engineering must survive subsequent slugs"
+    ).toBeDefined();
+    expect(
+      SKILLS.find((s) => s.id === "performance-optimization"),
+      "performance-optimization must survive subsequent slugs"
+    ).toBeDefined();
     expect(
       SKILLS.length,
-      `expected 20 skills total (v8.30 baseline 18 + 2 new in v8.32); found ${SKILLS.length}`
-    ).toBe(20);
+      `expected at least 20 skills (v8.32 baseline); v8.33 pins the next-step count of 22 in v833-additive-skills-batch-2.test.ts`
+    ).toBeGreaterThanOrEqual(20);
   });
 });
 
