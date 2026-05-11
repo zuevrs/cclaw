@@ -284,6 +284,30 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     ],
     stages: ["build", "review"],
     body: readSkill("code-simplification.md")
+  },
+  {
+    id: "context-engineering",
+    fileName: "context-engineering.md",
+    description: "v8.32 adaptation of addy osmani's `context-engineering` skill. Canonical rubric for the dispatcher's context-window construction: a five-layer hierarchy (rules → specs → source → errors → conversation), three packing strategies (brain dump for inline / selective include for small-medium / hierarchical summary for large-risky), and three confusion-management sources (internal conflict / missing requirement / drift). Stage-windowed on `[\"always\"]`. Companion to `dispatch-envelope.md` (the runbook) — this skill is the rules, the runbook is the shape.",
+    triggers: ["always-on", "before:dispatch", "pack-context", "confusion-detected"],
+    stages: ["always"],
+    body: readSkill("context-engineering.md")
+  },
+  {
+    id: "performance-optimization",
+    fileName: "performance-optimization.md",
+    description: "v8.32 adaptation of addy osmani's `performance-optimization` skill. Iron rule: don't optimise without numbers. Core Web Vitals targets (LCP / INP / CLS / TTFB / FCP / TBT thresholds at the Lighthouse `Slow 4G + 4× CPU` profile), measurement-first workflow (baseline → RED → GREEN → REFACTOR triple), N+1 query anti-pattern catalogue with fixes, bundle budget table. Stage-windowed on `[\"build\", \"review\"]`. Triggers on `touch-surface:ui` OR reviewer `perf` axis finding.",
+    triggers: [
+      "stage:build",
+      "specialist:slice-builder",
+      "specialist:reviewer",
+      "touch-surface:ui",
+      "finding:perf",
+      "ac:performance",
+      "diff:hot-path"
+    ],
+    stages: ["build", "review"],
+    body: readSkill("performance-optimization.md")
   }
 ];
 

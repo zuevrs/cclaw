@@ -22,8 +22,8 @@ import { AUTO_TRIGGER_SKILLS, buildAutoTriggerBlock } from "../../src/content/sk
 const findSkill = (id: string) => AUTO_TRIGGER_SKILLS.find((s) => s.id === id);
 
 describe("v8.27 — code-simplification skill registered in AUTO_TRIGGER_SKILLS", () => {
-  it("AC-1: AUTO_TRIGGER_SKILLS length is 18 (was 17 in v8.26, +1 for code-simplification)", () => {
-    expect(AUTO_TRIGGER_SKILLS.length).toBe(18);
+  it("AC-1: AUTO_TRIGGER_SKILLS length is 20 (v8.26 baseline 17 + code-simplification in v8.27 + context-engineering + performance-optimization in v8.32)", () => {
+    expect(AUTO_TRIGGER_SKILLS.length).toBe(20);
   });
 
   it("AC-1: a skill with id `code-simplification` exists in AUTO_TRIGGER_SKILLS", () => {
@@ -163,7 +163,8 @@ describe("v8.27 — install layer and stage-windowing wire the new skill correct
   it("AC-6: full block (no stage filter) includes code-simplification", () => {
     const block = buildAutoTriggerBlock();
     expect(block).toMatch(/code-simplification/u);
-    expect(block).toMatch(/18 skills total/u);
+    // v8.32 grew the set from 18 to 20 (context-engineering + performance-optimization).
+    expect(block).toMatch(/20 skills total/u);
   });
 });
 
