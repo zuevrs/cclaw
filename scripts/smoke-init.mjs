@@ -60,7 +60,7 @@ try {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }
   }
-  for (const skill of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md", "commit-message-quality.md", "ac-quality.md", "refactor-safety.md", "breaking-changes.md", "cclaw-meta.md", "tdd-cycle.md", "conversation-language.md", "anti-slop.md"]) {
+  for (const skill of ["plan-authoring.md", "ac-discipline.md", "refinement.md", "parallel-build.md", "review-discipline.md", "commit-hygiene.md", "api-evolution.md", "cclaw-meta.md", "tdd-and-verification.md", "debug-and-browser.md", "conversation-language.md", "anti-slop.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "skills", skill))) {
       throw new Error(`smoke check failed: skill ${skill} missing after init`);
     }

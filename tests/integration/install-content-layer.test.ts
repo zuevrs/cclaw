@@ -74,10 +74,10 @@ describe("install — deep content layer", () => {
     }
   });
 
-  it("ships ten skills including meta and the four new ones", async () => {
+  it("ships the merged-thematic skill set (v8.16) including meta", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const fileName of ["plan-authoring.md", "ac-traceability.md", "refinement.md", "parallel-build.md", "security-review.md", "review-loop.md", "commit-message-quality.md", "ac-quality.md", "refactor-safety.md", "breaking-changes.md", "cclaw-meta.md"]) {
+    for (const fileName of ["plan-authoring.md", "ac-discipline.md", "refinement.md", "parallel-build.md", "review-discipline.md", "commit-hygiene.md", "tdd-and-verification.md", "api-evolution.md", "debug-and-browser.md", "cclaw-meta.md"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "lib", "skills", fileName));
       expect(stat.isFile()).toBe(true);
     }

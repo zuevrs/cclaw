@@ -63,7 +63,7 @@ describe("v8.8 cleanup", () => {
   // B2 — TDD anti-patterns rebuilt from antipatterns.ts; A-N parity
   // ─────────────────────────────────────────────────────────────────────
   describe("B2 — TDD anti-patterns reference correct A-numbers", () => {
-    const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-cycle");
+    const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-and-verification");
 
     it("tdd-cycle skill is registered", () => {
       expect(tdd).toBeDefined();
@@ -210,12 +210,12 @@ describe("v8.8 cleanup", () => {
   // ─────────────────────────────────────────────────────────────────────
   describe("B7 — TDD gate name is unified (red_test_written)", () => {
     it("tdd-cycle skill body uses red_test_written", () => {
-      const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-cycle")!;
+      const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-and-verification")!;
       expect(tdd.body).toMatch(/red_test_written/);
     });
 
     it("tdd-cycle skill body does NOT use the legacy red_test_recorded name", () => {
-      const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-cycle")!;
+      const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-and-verification")!;
       expect(tdd.body).not.toMatch(/red_test_recorded/);
     });
 

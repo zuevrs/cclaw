@@ -1,9 +1,13 @@
 ---
-name: tdd-cycle
-trigger: when stage=build (granularity depends on ac_mode — see below)
+name: tdd-and-verification
+trigger: when stage=build (granularity depends on ac_mode — see below); before any handoff between specialists or before ship; auto-triggered for slice-builder (between phases) and reviewer (before dispatch); when the slug is identified as a pure refactor
 ---
 
-# Skill: tdd-cycle (RED → GREEN → REFACTOR)
+# Skill: tdd-and-verification (RED → GREEN → REFACTOR + staged verification gate + refactor safety)
+
+This merged skill covers the full build-stage loop: the test-first cycle (formerly **tdd-cycle**), the staged verification gate that wraps handoffs (formerly **verification-loop**), and the behaviour-preservation rules that govern the REFACTOR step on pure-refactor slugs (formerly **refactor-safety**).
+
+## tdd-cycle
 
 build is a TDD stage. **What changes between modes is the granularity, not whether to write tests.**
 
@@ -190,7 +194,7 @@ When a test reveals a structural smell in the production code, the slice-builder
 
 - **Feature envy.** A method on `A` that mostly reads / writes fields of `B` is "envious" of `B` — it probably belongs on `B`. Symptom: `a.method()` reads as `if (b.x === ...) b.y = b.z + ...`. The fix is to move the method to `B`. Severity: `consider`.
 
-These are surfaced under the build summary's `### Noticed but didn't touch` (per `surgical-edit-hygiene`); the AC scope does NOT expand to fix them.
+These are surfaced under the build summary's `### Noticed but didn't touch` (per `commit-hygiene` / `surgical-edit-hygiene` rules); the AC scope does NOT expand to fix them.
 
 ## Anti-patterns
 
@@ -232,3 +236,167 @@ This table is the **explicit list of excuses an agent will produce to skip the c
 | "I mocked the database to make the test green faster." | A-3 finding. Real DB > in-memory fake > stub > mock. Reach for the simplest level that gets the job done. |
 | "The test file named `AC-1.test.ts` is fine — it's clearer where this test lives." | Required-severity finding. Tests are named after the unit under test; the AC id lives in the test name + commit message. `tests/unit/permissions.test.ts` is correct. |
 | "I bypassed commit-helper just this once because the script was slow." | The traceability gate is the contract. Bypassing it once breaks resume / review / ship for everyone downstream. Restore the chain or surface the script bug as an A-N finding. |
+
+## verification-loop
+
+A **staged verification gate**. Each step runs only when the previous step passed. The point: catch regressions at the earliest, cheapest gate, instead of letting build/lint failures surface at ship and costing a full review iteration.
+
+## Gates (in order)
+
+1. **build** — `npm run build` (or the project's equivalent). Compilation / bundling success. Cheapest gate, catches type errors that escape the editor LSP, missing imports, etc.
+2. **typecheck** — `npm run typecheck` / `tsc --noEmit` / `pyright` / `mypy` / `go vet`. Run separately from `build` because some build pipelines emit on type errors and only fail at runtime; the typecheck gate makes the contract explicit.
+3. **lint** — `npm run lint` / `ruff check` / `golangci-lint run`. Style + obvious-bugs gate. Lint warnings count as **failures** here when the project has lint-as-error in CI; otherwise warnings pass but are recorded.
+4. **test** — the project's full relevant suite (`npm test`, `pytest`, `go test ./...`). The slice-builder's GREEN evidence is a *subset* of this gate (per-AC suite); verification-loop runs the full repo suite.
+5. **security** — when the slug's `security_flag` is true OR the diff matches the security-sensitive heuristic from the review stage (see start-command.ts), run the project's security check (`npm audit --audit-level=high`, `pip-audit`, `bandit`, `govulncheck`). When the check is absent, skip with an explicit "no security check configured" line in the verification log.
+6. **diff** — `git diff --stat` + `git diff --name-only` against the slug's plan-base. Verifies the working tree is clean (no uncommitted changes) and the touched-file set matches the AC's union of touchSurfaces. Detects accidental commits to files outside the slug.
+
+## How to run
+
+Run gates **in order**. On failure of any gate:
+
+- **Stop**. Do not continue to later gates — they will be running on a known-broken state and their output is misleading.
+- **Capture** the failing gate's output (command + 1-3 line failure excerpt).
+- **Decide** the recovery path:
+  - If the gate is `build` / `typecheck` / `lint` and the failure is mechanical (missing semicolon, unused import, type widening): fix it, re-run from gate 1. **No reviewer dispatch yet.**
+  - If the gate is `test` and the failure is a real regression: bounce the slice back to slice-builder in `fix-only` mode citing the failing test. **No reviewer dispatch yet.**
+  - If the gate is `security`: surface to user with the audit output; require explicit `accept-warns` for medium-severity, `fix-only` for high+.
+  - If the gate is `diff`: investigate uncommitted changes — were they leftover from a fix-only loop? Stage and commit, or stash and re-run.
+
+## Modes
+
+- **strict** (default for ship-gate): every gate must pass; failure of any blocks the next.
+- **continuous** (slice-builder between AC): runs in the background as you work; reports status after each AC's REFACTOR commit. Failures surface as warnings; build proceeds to the next AC, but the cumulative failure list must be empty before review-stage entry.
+- **diff-only** (text-only changes): skip build/typecheck/lint/test/security; run only the diff gate (working tree cleanliness + touchSurface match).
+
+## Output format
+
+Append to `flows/<slug>/build.md > Verification log` (one block per run):
+
+```markdown
+## Verification log — 2026-05-10T19:34Z (mode=strict)
+
+| gate | command | result | evidence |
+| --- | --- | --- | --- |
+| build | npm run build | pass | exit 0; bundle size 142kb |
+| typecheck | npm run typecheck | pass | exit 0; 0 errors |
+| lint | npm run lint | pass | exit 0; 0 warnings |
+| test | npm test | pass | 47 passed, 0 failed (2.3s) |
+| security | npm audit --audit-level=high | pass | 0 high or critical vulnerabilities |
+| diff | git diff --stat origin/main...HEAD | pass | 4 files changed, 89 ins, 12 del; touchSurface match |
+
+Verdict: pass — ready for handoff.
+```
+
+When a gate fails, the row records `fail` with the excerpt; subsequent rows are blank with a single line "(skipped — earlier gate failed)" instead of running. The verdict is `fail — <reason>`.
+
+## When to invoke
+
+- **slice-builder** runs the loop in `continuous` mode after every AC's REFACTOR commit; in `strict` mode before returning the slim summary.
+- **reviewer** runs the loop in `strict` mode before deciding `clear` or `warn`; a failed gate forces `block` regardless of finding count.
+- **ship-gate** runs the loop in `strict` mode (this is the same set of gates §2 + §2a of the ship runbook codifies; verification-loop is the named skill that wraps them coherently).
+- **slice-builder fix-only** runs the loop in `strict` mode after the fix commit, before re-handing off to reviewer.
+
+## Hard rules
+
+- **Never skip a gate to "save time".** A skipped gate is recorded as `skipped` with reason; the reviewer treats unjustified skips as `required` (axis=correctness).
+- **Never run later gates after an earlier failure.** Their output is meaningless on a broken substrate.
+- **Never silence a failing gate by editing the gate config** (changing lint rules, removing security audits, marking tests as `.skip`) without an explicit `Decisions.md` entry citing why.
+- **Never claim a gate passed by pasting yesterday's output.** Run it fresh in the current turn.
+
+## Common pitfalls
+
+- Running test before typecheck and reporting "tests pass" while the build is broken — typecheck catches contract violations the test cannot.
+- Running the gate then immediately re-editing without re-running. The recorded evidence must match the current working tree.
+- Treating lint warnings as "fyi" without checking the project's CI strictness — many CI pipelines fail on warnings.
+- Skipping the diff gate because "I know what I changed". The diff gate catches uncommitted leftover edits from a prior loop that would have shipped without anyone noticing.
+- Running security only when `security_flag` is set, even though the diff added a new dependency. Dependency adds always trigger security regardless of the flag.
+
+## refactor-safety
+
+Refactors must be **behaviour-preserving**. The harness enforces this with three structural rules.
+
+## Pin behaviour first
+
+Before any rewrite, identify the pin:
+
+- existing tests that should pass with the same expected output;
+- a snapshot or fixture set that should not change;
+- a manual repro the user accepts as the contract.
+
+If no pin exists, "add a pin" is AC-1 of the refactor.
+
+## One refactor at a time
+
+A refactor slug must contain refactor changes only. A bug fix that would have been "while we're here" is a separate slug. The pin from the refactor slug is then valid input for the fix slug.
+
+## Public API discipline
+
+If the refactor renames or restructures public exports:
+
+- add a deprecation alias so external consumers still compile;
+- mark the old name with a `@deprecated` JSDoc / equivalent;
+- record the deprecation deadline in `flows/<slug>/ship.md`.
+
+If the project policy forbids deprecation aliases (some libraries), the refactor is breaking; `security_flag` does not apply but breaking-change handling does (see api-evolution skill).
+
+## Verification
+
+Refactor AC verification is "no behavioural diff": tests pass, snapshots unchanged, fixtures unchanged. If anything changes, the refactor leaked behaviour and must be split.
+
+## Code-simplification catalog
+
+Three rules that turn "make it simpler" from a feeling into mechanical, reviewer-checkable behaviour.
+
+### Chesterton's Fence — understand WHY before removing
+
+Before deleting a check, a guard, an early-return, an "obviously redundant" branch, a comment, an option flag, or a config knob, **understand why it exists**. The framing:
+
+> "If you see a fence across a road and don't understand why it's there, don't tear it down."
+
+Mechanically:
+
+1. **Read the git history of the fence.** `git log -L ":<symbol>:<file>"` or `git blame` on the relevant lines. The commit message of the introduction often tells you why.
+2. **Search for related tests.** A fence often has a regression test pinning it; if the test fails when you remove the fence, the fence was load-bearing.
+3. **Search for callers / dependents.** Even if the fence looks self-contained, an external test or runtime check may rely on its presence.
+4. **If you cannot find a reason, ask** before removing. "I'm about to delete this guard at `src/auth.ts:127`; `git blame` traces it back to a 2022 incident commit but no test covers it. Is it safe?"
+
+The reviewer cites a fence-removal without due-diligence as **F-N | correctness | required | Chesterton's Fence violation**.
+
+### Rule of 500 — invest in automation past the threshold
+
+If a refactor would touch **more than 500 lines** of code by hand, **stop and invest in automation** instead. Options:
+
+- **Codemod** — `jscodeshift`, `ts-morph`, `Bowery` for JS/TS; `libcst` for Python; `gofmt` / `go-rewrite` for Go.
+- **AST transform script** — purpose-built one-shot script using the language's AST library.
+- **`sed` / structural search-and-replace** — when the change is regular and AST is overkill.
+
+Why the threshold:
+
+- Hand-rolling 500+ line changes is where attention slips. Drive-by edits, missed call sites, partially-applied patterns become normal.
+- Automation makes the change **inspectable at the rule level** instead of the diff level: the reviewer walks "the rule" once, then runs it against the diff, instead of reading 500+ touched lines.
+- Repeating the same change in the future is free once the codemod exists.
+
+Document the chosen automation inline in `plan.md` under `## Decisions` (D-N) before running it. The reviewer cites a hand-rolled mass-refactor as **F-N | architecture | consider | Rule of 500 violation**.
+
+### Structural simplification patterns
+
+When the refactor is "make this easier to read", apply named patterns. Each is a one-line rule the reviewer can cite:
+
+| Symptom | Pattern | One-line rule |
+|---|---|---|
+| Deep nesting (`if/if/if/if`) | **Guard clauses** | Invert the condition; return early. |
+| Boolean flag parameter (`createUser(name, email, isAdmin)`) | **Options object** | Replace flags with a discriminated options object. |
+| Long parameter list (`> 4 args`) | **Parameter object** | Group related args into a single typed object. |
+| Repeated null checks at every call site | **Null object** | Return a typed empty value instead of `null`; checks become uniform. |
+| Boolean output of a switch / chain | **Polymorphism** | Replace conditional with a per-type method. |
+| Unrelated functions with shared local state | **Extract class** | Group state + methods that operate on it. |
+| Lost intermediate values in a long chain | **Extract variable** | Name intermediate steps; the diff reads as prose. |
+| Inline comment explaining what code does | **Extract function** | Move the block into a function whose name replaces the comment. |
+
+Each pattern is a refactor; each refactor still ships under `--phase=refactor`. The reviewer cites a missed pattern as severity `consider`, never `required` — pattern hygiene is a polish concern, not a correctness concern.
+
+### Hard rules
+
+- **Chesterton's Fence applies before any deletion** — comments, branches, option flags, env-var defaults included.
+- **The 500-line threshold is a hard line** — over it, codemod or split the slug.
+- **Pattern names go in commit messages.** `refactor(AC-3): extract guard clauses in paginate()` is the right shape; `refactor(AC-3): cleanup` is not.

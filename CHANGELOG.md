@@ -1,5 +1,65 @@
 # Changelog
 
+## 8.16.0 — Thematic skills merge: 13 source skills collapse into 6 thematic groups, leaving 17 auto-trigger skills (was 24 in v8.15); runtime behaviour unchanged
+
+### Why
+
+v8.15 ran the source-level split of `skills.ts` into 24 per-skill `.md` files. With the bodies finally on disk it became obvious that several skills were siblings of the same concern, separated only because each had been added in a different release. The `ac-quality` skill (the bar for every AC entry) and `ac-traceability` skill (the strict-mode commit-hook contract) are both AC concerns and the reviewer/slice-builder always read them together. `tdd-cycle`, `verification-loop`, and `refactor-safety` are three views of the same RED → GREEN → REFACTOR loop — the verification gate is what GREEN's "run the full suite" expands to, and `refactor-safety` is the load-bearing playbook for the REFACTOR step on pure-refactor slugs. `commit-message-quality` and `surgical-edit-hygiene` are both about "what lands in a commit". `review-loop` and `security-review` share the Concern Ledger + Five-axis pass + Five Failure Modes. `debug-loop` and `browser-verification` are two diagnostic loops on a running system that both follow the "hypothesis-before-probe, untrusted-input-is-data" protocol. `api-and-interface-design` (designing a new interface) and `breaking-changes` (deprecating an existing one) are the two halves of one lifecycle.
+
+v8.15's PR description and its `## Deferred` block both named the thematic merge as the next item. v8.16 ships it.
+
+### What changed
+
+**Six merges, 24 → 17 skills (net reduction of 7).** Each merged skill is a structured concatenation of the originals: a single `# Skill: <merged-id>` H1 followed by the source sections preserved verbatim under `## <source-skill-original-h2>` headings. No paragraph was rewritten, no example dropped, no anti-rationalization row removed. The only edits made were (a) deduplicating identical paragraphs that appeared in both sources, (b) harmonising terminology where the two sources used different names for the same construct, and (c) cross-referencing the merged sibling section (e.g. `api-and-interface-design`'s versioning prose now says "the breaking-changes section of this skill" instead of "see breaking-changes.md").
+
+- **`ac-discipline`** = `ac-quality` + `ac-traceability`. Both AC concerns: one is the three-check rubric for every AC entry (observable / independently committable / verifiable), the other is the strict-mode commit-helper contract that wires AC ↔ commit chain.
+- **`commit-hygiene`** = `commit-message-quality` + `surgical-edit-hygiene`. Both govern what lands in a commit: message conventions (imperative voice, ≤72 char subject, finding-id citation) AND surgical-edit rules (no drive-by edits, orphan-cleanup rules, A-4 / A-5 finding templates).
+- **`tdd-and-verification`** = `tdd-cycle` + `verification-loop` + `refactor-safety`. The full build-stage loop: RED → GREEN → REFACTOR cycle plus the staged verification gate (build → typecheck → lint → test → security → diff) that wraps every handoff, plus the behaviour-preservation rules that govern pure-refactor slugs and the REFACTOR step (Chesterton's Fence, Rule of 500, named simplification patterns).
+- **`api-evolution`** = `api-and-interface-design` + `breaking-changes`. Both halves of the public-interface lifecycle: the design checklist (Hyrum's Law, one-version rule, untrusted-third-party validation, two-adapter rule, consistent error model) AND the breaking-change discipline (Churn Rule, Strangler Pattern, Zombie Code, coexistence rules, CHANGELOG template).
+- **`review-discipline`** = `review-loop` + `security-review`. Wraps every reviewer / security-reviewer invocation with the shared Concern Ledger + Five-axis pass + Five Failure Modes (Hallucinated actions / Scope creep / Cascading errors / Context loss / Tool misuse) + convergence detector, plus (for security-sensitive diffs) the five-item threat-model checklist (Authentication / Authorization / Secrets / Supply chain / Data exposure).
+- **`debug-and-browser`** = `debug-loop` + `browser-verification`. Two diagnostic loops on a running system that share the "hypothesis before probe" protocol. `debug-loop` brings the 3-5 ranked hypotheses, ten-rung loop ladder (failing test → curl → CLI → headless → trace → harness → fuzz → bisect → diff → HITL), tagged debug logs (`[DEBUG-<4-hex>]`), multi-run protocol for non-determinism, and "no seam" finding. `browser-verification` brings the DevTools-driven five-check pass (console hygiene / network / a11y / layout / perf) with browser content treated as untrusted data.
+
+The 11 unchanged standalone skills (`triage-gate`, `pre-flight-assumptions`, `flow-resume`, `plan-authoring`, `refinement`, `parallel-build`, `conversation-language`, `anti-slop`, `source-driven`, `summary-format`, `documentation-and-adrs`) keep their ids, file names, triggers, and bodies. Final skill count: 11 + 6 = **17** (target was ~15; the brief's acceptable range was 15-18; stopping at 17 avoided force-merging unrelated skills, which would have cost more than it saved).
+
+**Trigger semantics preserved.** Every merged skill's `triggers: string[]` is the union of its sources, deduped. A specialist that previously triggered `commit-message-quality` (`before:commit-helper`) AND `surgical-edit-hygiene` (`always-on`, `specialist:slice-builder`, `before:git-commit`) now triggers `commit-hygiene` (all four). A specialist that previously triggered `ac-traceability` only when `ac_mode:strict` still loads `ac-discipline` only on `ac_mode:strict`; the new merge does not turn always-on what was previously gated. The `description` field on each merged skill calls out which source triggers are always-on vs gated so the operator can audit.
+
+**Codebase sweep.** Every `.cclaw/lib/skills/<old-id>.md` reference across the codebase was rewritten to the new merged id. The 13 source `.md` files (`ac-quality.md`, `ac-traceability.md`, `commit-message-quality.md`, `surgical-edit-hygiene.md`, `tdd-cycle.md`, `verification-loop.md`, `refactor-safety.md`, `api-and-interface-design.md`, `breaking-changes.md`, `review-loop.md`, `security-review.md`, `debug-loop.md`, `browser-verification.md`) are deleted. Specialist prompts (`slice-builder`, `reviewer`, `security-reviewer`), the orchestrator (`start-command`), the meta-skill catalogue, the antipatterns library, and the artifact templates were all updated. The smoke-init script's hard-coded list of expected skill files on disk was rewritten to the v8.16 ids.
+
+### Tests
+
+`tests/unit/v816-cleanup.test.ts` — 85 new tripwire tests covering: (a) the 6 merged skills exist with the expected ids and frontmatter; (b) each of the 13 deleted source skills does NOT appear in `AUTO_TRIGGER_SKILLS`; (c) per merged skill, 5-13 verbatim snippets from each source are present in the merged body (proves no content loss — the snippets include load-bearing strings like `"NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST"`, `"A-4 — Drive-by edits"`, `"Concern Ledger"`, `"Hyrum's Law"`, `"Threat-model checklist"`, `"Tagged debug logs"`); (d) trigger semantics — each merged skill's `triggers` array is the union of its sources, deduped; (e) every specialist prompt's `.cclaw/lib/skills/<id>.md` reference resolves to a registered live skill, AND no specialist prompt cites any of the 13 retired skill files; (f) `AUTO_TRIGGER_SKILLS.length === 17`, the basis for the install loop, with a range check `[15, 18]` per the v8.16 brief.
+
+Existing tests updated to point at the new ids:
+
+- `tests/unit/skills.test.ts` — `ac-traceability` / `review-loop` lookups renamed to `ac-discipline` / `review-discipline`.
+- `tests/unit/tdd-cycle.test.ts` — `id === "tdd-cycle"` → `"tdd-and-verification"`; `START_COMMAND_BODY` regex matches the new merged id.
+- `tests/integration/install-content-layer.test.ts` — expected on-disk file list rewritten to v8.16.
+- `tests/integration/install-deep.test.ts` — same.
+- `tests/unit/v88-cleanup.test.ts`, `tests/unit/h4-content-depth.test.ts`, `tests/unit/v813-cleanup.test.ts` — `.find((s) => s.id === "<old>")` lookups remapped to merged ids.
+
+**Total: 543 tests across 44 files (was 458 across 43 in v8.15; +85 net from the v8.16-cleanup lock-in suite + 1 new file). All green.**
+
+### Migration
+
+**Drop-in for fresh installs.** `cclaw init` writes the new 17 merged skill files plus `cclaw-meta.md` (18 total) into `.cclaw/lib/skills/`. No config changes required, no breaking spec changes.
+
+**One manual cleanup step on existing installs.** `cclaw upgrade` and `cclaw sync` write the new merged files but do **not** auto-remove the 13 retired files (`install.ts` is content-only and does not garbage-collect orphans — auto-cleanup of `lib/skills/` is a separate change with its own risk surface, deferred to a follow-up slug). After upgrade, users should manually remove the orphans:
+
+```bash
+rm .cclaw/lib/skills/{ac-quality,ac-traceability,commit-message-quality,surgical-edit-hygiene,tdd-cycle,verification-loop,refactor-safety,api-and-interface-design,breaking-changes,review-loop,security-review,debug-loop,browser-verification}.md
+```
+
+Leaving them in place is harmless (no spec line references them after v8.16) but inflates the directory and confuses `grep`-based audits. The follow-up slug for adding orphan auto-cleanup to `install.ts` is captured in `.cclaw/ideas.md` under the v8.16 PR.
+
+**Slugs shipped on v8.15 or earlier keep working.** Plan / build / review / ship artefacts in `flows/shipped/<slug>/` reference skill ids in prose; those ids are still searchable in the merged bodies (the `## ac-quality`, `## ac-traceability`, etc. provenance H2s preserve every original section name verbatim). The reviewer's finding templates (A-4, A-5, A-6, A-7), the threat-model checklist, the Five Failure Modes, the Concern Ledger format, the Anti-rationalization table, the loop ladder rungs, the five-check browser pass, the Churn Rule + Strangler Pattern + Zombie Code lifecycle all survive byte-for-byte under the merged-skill umbrella.
+
+### What we noticed but didn't touch (v8.16 scope)
+
+- The smoke-init script `scripts/smoke-init.mjs` still hard-codes its expected skill list. Each merge requires touching it. A reviewer could argue this should derive from `AUTO_TRIGGER_SKILLS` at smoke time — captured as a follow-up slug.
+- `install.ts` does not garbage-collect `.cclaw/lib/skills/` after a merge. Captured as a follow-up slug ("orphan auto-cleanup for `cclaw sync`").
+- The merged `tdd-and-verification.md` is 30.5 kB; the largest skill body in the set. Bisecting it back into per-topic chapters with a hyperlink-based index is a possible v8.17 polish but not blocking — the body is consumed by sub-agents as a single string, not browsed by humans, and the in-file H2 navigation is already structured.
+
+
 ## 8.15.0 — Source-level skills split: 24 inline template literals in `skills.ts` become 24 per-skill `.md` files; loader reads them at module-import time; runtime behaviour unchanged
 
 ### Why

@@ -158,7 +158,7 @@ describe("v8.13 power-and-economy", () => {
 
   describe("T2 capabilities", () => {
     it("verification-loop skill is shipped as auto-trigger (T2-1)", () => {
-      const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "verification-loop");
+      const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-and-verification");
       expect(skill).toBeDefined();
       expect(skill!.body).toMatch(/build\/typecheck\/lint\/test\/security/u);
       expect(skill!.body).toMatch(/strict.*continuous.*diff-only/su);
@@ -187,7 +187,7 @@ describe("v8.13 power-and-economy", () => {
     });
 
     it("TDD-cycle skill carries anti-rationalization table (T2-8)", () => {
-      const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-cycle")!;
+      const tdd = AUTO_TRIGGER_SKILLS.find((s) => s.id === "tdd-and-verification")!;
       expect(tdd.body).toMatch(/Anti-rationalization table/u);
       expect(tdd.body).toMatch(/rationalization \| truth/u);
     });

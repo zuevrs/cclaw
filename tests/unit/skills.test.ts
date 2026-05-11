@@ -4,7 +4,7 @@ import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 describe("auto-trigger skills", () => {
   it("ships at least the six core skills", () => {
     const ids = AUTO_TRIGGER_SKILLS.map((skill) => skill.id);
-    for (const expected of ["plan-authoring", "ac-traceability", "refinement", "parallel-build", "security-review", "review-loop"]) {
+    for (const expected of ["plan-authoring", "ac-discipline", "refinement", "parallel-build", "review-discipline", "tdd-and-verification"]) {
       expect(ids).toContain(expected);
     }
   });
@@ -18,12 +18,12 @@ describe("auto-trigger skills", () => {
   });
 
   it("ac-traceability mentions commit-helper.mjs explicitly", () => {
-    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "ac-traceability");
+    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "ac-discipline");
     expect(skill?.body).toContain("commit-helper.mjs");
   });
 
   it("review-loop names the Five Failure Modes", () => {
-    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "review-loop");
+    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "review-discipline");
     for (const mode of ["Hallucinated actions", "Scope creep", "Cascading errors", "Context loss", "Tool misuse"]) {
       expect(skill?.body).toContain(mode);
     }

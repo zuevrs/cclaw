@@ -43,7 +43,7 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 **Underlying mistake.** "While I'm here, let me improve this" sounds helpful and corrupts the audit trail. The AC commit no longer maps cleanly to the AC; reviewers cannot tell which lines were the actual fix and which were cosmetic; bisection on the slug becomes harder.
 
-**Correction.** Touch only what the AC requires. If you spot a fix-worthy thing nearby, list it under your build artifact's \`## Summary → Noticed but didn't touch\` block (per the \`summary-format\` skill) and open a follow-up slug — never absorb it into the current commit. The reviewer cites this with severity \`consider\` for cosmetic drive-bys, escalating to \`required\` when the drive-by edit also masks a logic change. See the \`surgical-edit-hygiene\` skill for finding templates.
+**Correction.** Touch only what the AC requires. If you spot a fix-worthy thing nearby, list it under your build artifact's \`## Summary → Noticed but didn't touch\` block (per the \`summary-format\` skill) and open a follow-up slug — never absorb it into the current commit. The reviewer cites this with severity \`consider\` for cosmetic drive-bys, escalating to \`required\` when the drive-by edit also masks a logic change. See the \`commit-hygiene\` skill (v8.16 merge of commit-message-quality + surgical-edit-hygiene) for finding templates.
 
 ## A-5 — Deletion of pre-existing dead code without permission
 
@@ -59,7 +59,7 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 **Underlying mistake.** Cleanup of untagged debug logs is manual: every \`console.\` call needs human review to decide "kept or scrubbed". When the AC ships with stray logs, production console output gets noisy; in worse cases, logs leak PII or internal state. The slow drift of "stray debug log" → "load-bearing log" → "log-as-API" is a real phenomenon.
 
-**Correction.** Tag every temporary debug log with a unique 4-character hex prefix per debugging session: \`console.log("[DEBUG-a4f2] cache lookup", { ... })\`. Before commit, \`rg "[DEBUG-a4f2]" src/\` must return 0 hits; \`rg "console\\.(log|error|warn)" -g '!*.test.*' src/\` must show no new lines. See the \`debug-loop\` skill for the full multi-step protocol.
+**Correction.** Tag every temporary debug log with a unique 4-character hex prefix per debugging session: \`console.log("[DEBUG-a4f2] cache lookup", { ... })\`. Before commit, \`rg "[DEBUG-a4f2]" src/\` must return 0 hits; \`rg "console\\.(log|error|warn)" -g '!*.test.*' src/\` must show no new lines. See the \`debug-and-browser\` skill (debug-loop section, v8.16 merge of debug-loop + browser-verification) for the full multi-step protocol.
 
 ## A-7 — Single-run flakiness conclusion
 
@@ -67,5 +67,5 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 **Underlying mistake.** A single-run pass after an observed failure is **undecided**, not green. The failure could be flakiness (real concurrency / RNG / time-zone bug masquerading as "transient"), an environment delta (CI vs local), or a race with another test in the same suite. "It passed this time" is not evidence of correctness; it is evidence that the test sometimes passes.
 
-**Correction.** Multi-run protocol: 20 iterations on first observed failure; escalate to 100 if any failure shows up. Document the iteration count and failure pattern in \`build.md\`. After the fix, re-run N×2 times to verify. The fix must eliminate the failure, not reduce its rate. See the \`debug-loop\` skill, Phase 4.
+**Correction.** Multi-run protocol: 20 iterations on first observed failure; escalate to 100 if any failure shows up. Document the iteration count and failure pattern in \`build.md\`. After the fix, re-run N×2 times to verify. The fix must eliminate the failure, not reduce its rate. See the \`debug-and-browser\` skill (debug-loop section, v8.16 merge of debug-loop + browser-verification), Phase 4.
 `;

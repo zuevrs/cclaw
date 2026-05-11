@@ -8,7 +8,7 @@ import { ANTIPATTERNS } from "../../src/content/antipatterns.js";
 
 describe("TDD cycle wiring", () => {
   it("ships a tdd-cycle auto-trigger skill that fires on stage=build", () => {
-    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "tdd-cycle");
+    const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "tdd-and-verification");
     expect(skill).toBeDefined();
     expect(skill!.triggers).toContain("stage:build");
     expect(skill!.body).toMatch(/RED.*GREEN.*REFACTOR/u);
@@ -83,7 +83,7 @@ describe("TDD cycle wiring", () => {
   it("/cc command (start-command) wires build as a TDD cycle with mode-aware granularity", async () => {
     const { START_COMMAND_BODY } = await import("../../src/content/start-command.js");
     expect(START_COMMAND_BODY).toMatch(/build/);
-    expect(START_COMMAND_BODY).toMatch(/tdd-cycle/);
+    expect(START_COMMAND_BODY).toMatch(/tdd-and-verification/);
     expect(START_COMMAND_BODY).toMatch(/RED → GREEN → REFACTOR/u);
     expect(START_COMMAND_BODY).toContain("commit-helper.mjs");
     expect(START_COMMAND_BODY).toMatch(/strict mode/i);
