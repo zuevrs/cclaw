@@ -308,6 +308,38 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     ],
     stages: ["build", "review"],
     body: readSkill("performance-optimization.md")
+  },
+  {
+    id: "frontend-ui-engineering",
+    fileName: "frontend-ui-engineering.md",
+    description: "v8.33 adaptation of addy osmani's `frontend-ui-engineering` skill. Five rule sets for UI work: component architecture (composition over configuration, controlled vs uncontrolled — one mode per component), design-system adherence (use the system, don't invent tokens), AI-aesthetic anti-pattern table (purple gradient hero / rounded-2xl everywhere / oversized padding / center-everything / drop-shadow-on-everything / etc.), WCAG 2.1 AA accessibility baseline (focus indicators / semantic HTML / ARIA-only-when-needed / contrast / motion), responsive design (mobile-first, fluid before fixed, touch targets ≥ 44×44px). Stage-windowed on `[\"build\", \"review\"]`. Triggers on `touch-surface:ui` OR `.tsx` / `.jsx` / `.vue` / `.svelte` / `.html` / `.css` file pattern.",
+    triggers: [
+      "stage:build",
+      "specialist:slice-builder",
+      "specialist:reviewer",
+      "touch-surface:ui",
+      "diff:tsx|jsx|vue|svelte|html|css",
+      "finding:readability:ui",
+      "finding:accessibility"
+    ],
+    stages: ["build", "review"],
+    body: readSkill("frontend-ui-engineering.md")
+  },
+  {
+    id: "ci-cd-and-automation",
+    fileName: "ci-cd-and-automation.md",
+    description: "v8.33 adaptation of addy osmani's `ci-cd-and-automation` skill. The 8-stage quality-gate pipeline (setup → lint → typecheck → test → coverage → security-audit → bundle-check → optional E2E), GitHub Actions baseline template (Node / TypeScript reference; adapt for the stack), three optimisation patterns (caching / parallelism / path filters), and branch-protection essentials. Stage-windowed on `[\"ship\"]`. Triggers on `.github/workflows/` file pattern OR CI / CD / pipeline AC.",
+    triggers: [
+      "stage:ship",
+      "diff:.github/workflows",
+      "diff:.gitlab-ci|azure-pipelines|Jenkinsfile",
+      "ac:ci",
+      "ac:cd",
+      "task:fix-ci",
+      "task:speed-up-build"
+    ],
+    stages: ["ship"],
+    body: readSkill("ci-cd-and-automation.md")
   }
 ];
 

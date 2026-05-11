@@ -52,14 +52,14 @@ const PROMPT_BUDGETS: PromptBudget[] = [
   {
     id: "reviewer",
     body: REVIEWER_PROMPT,
-    maxLines: 630,
-    maxChars: 48000
+    maxLines: 660,
+    maxChars: 50000
   },
   {
     id: "security-reviewer",
     body: SECURITY_REVIEWER_PROMPT,
-    maxLines: 220,
-    maxChars: 17500
+    maxLines: 240,
+    maxChars: 19000
   },
   {
     id: "slice-builder",

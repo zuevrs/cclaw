@@ -130,9 +130,9 @@ describe("v8.16 thematic skills merge", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
-    it("skill count stays in the [15, 20] range — v8.16 brief was [15, 18]; v8.27 lifted the ceiling for the code-simplification import and future additive skills", () => {
+    it("skill count stays in the [15, 24] range — v8.16 brief was [15, 18]; v8.27 lifted the ceiling for the code-simplification import; v8.32 (context-engineering + performance-optimization) and v8.33 (frontend-ui-engineering + ci-cd-and-automation) extended the ceiling further", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
-      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(20);
+      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(24);
     });
   });
 
