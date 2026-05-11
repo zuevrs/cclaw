@@ -52,7 +52,11 @@ const HELP_COMMANDS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
-  ["--harness=<id>[,<id>]", `Comma-separated list. Supported: ${HARNESS_IDS.join(", ")}.`]
+  ["--harness=<id>[,<id>]", `Comma-separated list. Supported: ${HARNESS_IDS.join(", ")}.`],
+  [
+    "--skip-orphan-cleanup",
+    "Skip the v8.17 scan that removes .md files in .cclaw/lib/skills/ no longer in AUTO_TRIGGER_SKILLS. Use for emergencies; the scan is normally loud + idempotent."
+  ]
 ];
 
 interface ParsedArgs {
@@ -117,6 +121,16 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
   const stdout = getStdout();
   const useColor = shouldUseColor(stdout);
 
+  // Short-circuit per-subcommand help: `cclaw sync --help`, `cclaw init -h`,
+  // etc. all print the global help block instead of running the command.
+  // Keeps option discovery (e.g. `--skip-orphan-cleanup`) reachable from
+  // wherever the user happens to be in their muscle memory.
+  if (args.flags.help === true || args.flags.h === true) {
+    emitBanner(useColor);
+    emitHelp(useColor);
+    return 0;
+  }
+
   switch (args.command) {
     case "init": {
       const firstRun = await isFirstRun(context.cwd);
@@ -127,6 +141,7 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
         cwd: context.cwd,
         harnesses: args.harnesses,
         interactive: true,
+        skipOrphanCleanup: Boolean(args.flags["skip-orphan-cleanup"]),
         onProgress: makeProgressPrinter(useColor)
       });
       writeOut(renderSummary(result.counts, useColor));
@@ -139,6 +154,7 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
         cwd: context.cwd,
         harnesses: args.harnesses,
         interactive: true,
+        skipOrphanCleanup: Boolean(args.flags["skip-orphan-cleanup"]),
         onProgress: makeProgressPrinter(useColor)
       });
       writeOut(renderSummary(result.counts, useColor));
@@ -151,6 +167,7 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
         cwd: context.cwd,
         harnesses: args.harnesses,
         interactive: true,
+        skipOrphanCleanup: Boolean(args.flags["skip-orphan-cleanup"]),
         onProgress: makeProgressPrinter(useColor)
       });
       writeOut(renderSummary(result.counts, useColor));
