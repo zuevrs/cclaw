@@ -51,6 +51,15 @@ feasibility_stamp: null  # green | yellow | red — set by planner before AC loc
 
 _(Design Phase 2, when invoked. 2-5 sentences: what is broken or missing today, who feels it, what success looks like a user or test can verify, what is explicitly out of scope. Cite real evidence — \`file:path:line\`, ticket id, conversation excerpt — when you have it. If the orchestrator runs inline without design, leave a one-line summary here.)_
 
+## Non-functional
+
+_(Design Phase 2 authors this when invoked AND the slug is product-grade tier OR carries irreversibility — e.g. data-migration, public API, auth/payment surface, performance hot-path. v8.25 contract: large-risky only (soft-mode plans skip design Phase 2 and therefore have no NFR section). Optional and may be entirely absent on legacy plans. When the slug has no NFR concerns, write "none specified" inline against each axis rather than dropping the section — explicit "none" beats implicit silence for the reviewer's \`nfr-compliance\` axis gate.)_
+
+- **performance:** _budgets (p50/p95/p99 latency, throughput, memory, bundle KB) or "none specified"._
+- **compatibility:** _browser / runtime / Node / OS / dependency-version constraints, or "none"._
+- **accessibility:** _a11y baseline (WCAG level, keyboard, screen-reader, contrast), or "none" for non-UI slugs._
+- **security:** _auth / data-classification / compliance baseline; defer threat modelling to \`security-reviewer\` when \`security_flag: true\` — this row is the high-level posture only._
+
 ## Approaches
 
 _(Design Phase 3, optional. Filled in \`guided\` or \`deep\` posture. Drop dead options before showing the table; do not pad to 3 rows for symmetry.)_
