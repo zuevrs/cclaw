@@ -32,16 +32,16 @@ describe("v8.8 cleanup", () => {
   // B1 — interpretationForks wired through every relevant specialist
   // ─────────────────────────────────────────────────────────────────────
   describe("B1 — interpretationForks is wired (legacy specialists) + v8.14 design supersedes it", () => {
-    it("planner prompt still reads triage.interpretationForks (legacy non-discovery cross-check)", () => {
-      expect(SPECIALIST_PROMPTS["planner"]).toMatch(/triage\.interpretationForks/);
+    it("ac-author prompt still reads triage.interpretationForks (legacy non-discovery cross-check)", () => {
+      expect(SPECIALIST_PROMPTS["ac-author"]).toMatch(/triage\.interpretationForks/);
     });
 
     it("slice-builder prompt reads triage.interpretationForks", () => {
       expect(SPECIALIST_PROMPTS["slice-builder"]).toMatch(/interpretationForks/);
     });
 
-    it("planner Phase 2 mentions interpretationForks cross-check (not just assumptions)", () => {
-      expect(SPECIALIST_PROMPTS["planner"]).toMatch(
+    it("ac-author Phase 2 mentions interpretationForks cross-check (not just assumptions)", () => {
+      expect(SPECIALIST_PROMPTS["ac-author"]).toMatch(
         /Phase 2 — Assumptions \+ interpretation cross-check/i
       );
     });
@@ -50,7 +50,7 @@ describe("v8.8 cleanup", () => {
       // v8.14 retired brainstormer and architect. design's Phase 1
       // (Clarify) asks <=3 one-at-a-time clarifying questions IN the
       // running orchestrator context instead of reading a pre-baked
-      // interpretationForks array. Planner / slice-builder still consume
+      // interpretationForks array. AC author / slice-builder still consume
       // the field for legacy state files, but the new discovery path no
       // longer writes to it.
       expect(SPECIALIST_PROMPTS["design"]).toMatch(/Phase 1 — Clarify/);
@@ -145,10 +145,10 @@ describe("v8.8 cleanup", () => {
       expect(sb).not.toMatch(/severity: `block`/);
     });
 
-    it("planner edge-case finding cites severity=required (not block)", () => {
-      const planner = SPECIALIST_PROMPTS["planner"];
-      expect(planner).toMatch(/severity=`required`.{0,80}edge-case coverage/s);
-      expect(planner).not.toMatch(/flags an AC as `block`/);
+    it("ac-author edge-case finding cites severity=required (not block)", () => {
+      const acAuthor = SPECIALIST_PROMPTS["ac-author"];
+      expect(acAuthor).toMatch(/severity=`required`.{0,80}edge-case coverage/s);
+      expect(acAuthor).not.toMatch(/flags an AC as `block`/);
     });
 
     it("security-reviewer Output section uses 5-tier scale (no block / warn / info severity)", () => {

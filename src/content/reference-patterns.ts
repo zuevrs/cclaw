@@ -80,7 +80,7 @@ export const REFERENCE_PATTERNS_INDEX = `# .cclaw/lib/patterns/
 
 Two reference patterns the orchestrator pulls from before authoring a plan when the task touches a sensitive surface. Each pattern declares its trigger keywords, the pre-flight checklist, the AC shape, the specialists to invoke, and the common pitfalls.
 
-> **v8.12 cleanup.** Earlier versions shipped 8 patterns (api-endpoint, ui-component, schema-migration, perf-fix, refactor, doc-rewrite, plus the two below). The 6 deleted patterns had **zero explicit citations** in the orchestrator / specialist contracts — they were "browse if relevant" optional reading that the spec never directed agents to consult by name. They are gone in v8.12; specialists rely on the planner's own pre-flight read of the touch surface instead. Users who want the deleted patterns back can opt into \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`.
+> **v8.12 cleanup.** Earlier versions shipped 8 patterns (api-endpoint, ui-component, schema-migration, perf-fix, refactor, doc-rewrite, plus the two below). The 6 deleted patterns had **zero explicit citations** in the orchestrator / specialist contracts — they were "browse if relevant" optional reading that the spec never directed agents to consult by name. They are gone in v8.12; specialists rely on the ac-author's own pre-flight read of the touch surface instead. Users who want the deleted patterns back can opt into \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`.
 
 | pattern | triggers |
 | --- | --- |

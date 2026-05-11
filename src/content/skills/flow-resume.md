@@ -27,7 +27,7 @@ Active flow: <slug>
 ─ Stage: <plan | build | review | ship>  (last touched <relative-time, in the user's language>)
 ─ Triage: <complexity> / acMode=<inline | soft | strict>
 ─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
-─ Last specialist: <none | design | planner | reviewer | security-reviewer | slice-builder>
+─ Last specialist: <none | design | ac-author | reviewer | security-reviewer | slice-builder>
 ─ Open findings: <K>  (review only; 0 outside review)
 ─ Next step: <one sentence in the user's language describing what /cc will do next>
 ```

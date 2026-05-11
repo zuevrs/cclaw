@@ -1,5 +1,5 @@
 import { DESIGN_PROMPT } from "./design.js";
-import { PLANNER_PROMPT } from "./planner.js";
+import { AC_AUTHOR_PROMPT } from "./ac-author.js";
 import { REVIEWER_PROMPT } from "./reviewer.js";
 import { SECURITY_REVIEWER_PROMPT } from "./security-reviewer.js";
 import { SLICE_BUILDER_PROMPT } from "./slice-builder.js";
@@ -9,7 +9,7 @@ import type { SpecialistId } from "../../types.js";
 
 export const SPECIALIST_PROMPTS: Record<SpecialistId, string> = {
   design: DESIGN_PROMPT,
-  planner: PLANNER_PROMPT,
+  "ac-author": AC_AUTHOR_PROMPT,
   reviewer: REVIEWER_PROMPT,
   "security-reviewer": SECURITY_REVIEWER_PROMPT,
   "slice-builder": SLICE_BUILDER_PROMPT
@@ -17,7 +17,7 @@ export const SPECIALIST_PROMPTS: Record<SpecialistId, string> = {
 
 export {
   DESIGN_PROMPT,
-  PLANNER_PROMPT,
+  AC_AUTHOR_PROMPT,
   REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   SLICE_BUILDER_PROMPT

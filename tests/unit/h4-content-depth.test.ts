@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { PLANNER_PROMPT } from "../../src/content/specialist-prompts/planner.js";
+import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
 import { templateBody } from "../../src/content/artifact-templates.js";
@@ -106,7 +106,7 @@ describe("v8 content depth — H4 + H5 trim", () => {
     expect(DESIGN_PROMPT).toContain("ALWAYS step");
   });
 
-  it("design prompt forbids writing code, AC, pseudocode (those are planner / slice-builder jobs)", () => {
+  it("design prompt forbids writing code, AC, pseudocode (those are ac-author / slice-builder jobs)", () => {
     expect(DESIGN_PROMPT).toContain("do NOT write code");
     expect(DESIGN_PROMPT).toContain("No code, no AC, no pseudocode");
   });
@@ -130,27 +130,27 @@ describe("v8 content depth — H4 + H5 trim", () => {
     expect(DESIGN_PROMPT).not.toContain("Problem Decision Record");
   });
 
-  it("planner prompt is lean: AC + edge case per AC + topology with parallel cap", () => {
-    expect(PLANNER_PROMPT).toContain("Acceptance Criteria");
-    expect(PLANNER_PROMPT).toContain("parallelSafe");
-    expect(PLANNER_PROMPT).toContain("touchSurface");
-    expect(PLANNER_PROMPT).toContain("Edge cases");
-    expect(PLANNER_PROMPT).toContain("5 parallel slices");
-    expect(PLANNER_PROMPT).toContain("worktree");
+  it("ac-author prompt is lean: AC + edge case per AC + topology with parallel cap", () => {
+    expect(AC_AUTHOR_PROMPT).toContain("Acceptance Criteria");
+    expect(AC_AUTHOR_PROMPT).toContain("parallelSafe");
+    expect(AC_AUTHOR_PROMPT).toContain("touchSurface");
+    expect(AC_AUTHOR_PROMPT).toContain("Edge cases");
+    expect(AC_AUTHOR_PROMPT).toContain("5 parallel slices");
+    expect(AC_AUTHOR_PROMPT).toContain("worktree");
   });
 
-  it("planner prompt has no v7-revival ceremony (2-5 minute steps, Acceptance Mapping table, Reproduction contract)", () => {
-    expect(PLANNER_PROMPT).not.toContain("2-5 minute");
-    expect(PLANNER_PROMPT).not.toContain("2–5 minute");
-    expect(PLANNER_PROMPT).not.toContain("five-minute");
-    expect(PLANNER_PROMPT).not.toContain("Acceptance Mapping");
-    expect(PLANNER_PROMPT).not.toContain("Reproduction contract");
-    expect(PLANNER_PROMPT).not.toContain("Constraints and Assumptions");
+  it("ac-author prompt has no v7-revival ceremony (2-5 minute steps, Acceptance Mapping table, Reproduction contract)", () => {
+    expect(AC_AUTHOR_PROMPT).not.toContain("2-5 minute");
+    expect(AC_AUTHOR_PROMPT).not.toContain("2–5 minute");
+    expect(AC_AUTHOR_PROMPT).not.toContain("five-minute");
+    expect(AC_AUTHOR_PROMPT).not.toContain("Acceptance Mapping");
+    expect(AC_AUTHOR_PROMPT).not.toContain("Reproduction contract");
+    expect(AC_AUTHOR_PROMPT).not.toContain("Constraints and Assumptions");
   });
 
   it("design prompt covers what architect used to: failure modes, alternatives considered, pre-mortem", () => {
     // v8.14: architect's vocabulary (tier, escape hatch, blast-radius diff) was
-    // dropped because design + planner together produce the same coverage with
+    // dropped because design + ac-author together produce the same coverage with
     // a lighter ceremony. The remaining structural-decision discipline lives
     // inside Phase 4 (D-N records with failure modes + alternatives) and
     // Phase 5 (pre-mortem, deep posture).

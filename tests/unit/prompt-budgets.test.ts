@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DESIGN_PROMPT,
-  PLANNER_PROMPT,
+  AC_AUTHOR_PROMPT,
   REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   SLICE_BUILDER_PROMPT,
@@ -44,8 +44,8 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     maxChars: 32000
   },
   {
-    id: "planner",
-    body: PLANNER_PROMPT,
+    id: "ac-author",
+    body: AC_AUTHOR_PROMPT,
     maxLines: 560,
     maxChars: 46000
   },

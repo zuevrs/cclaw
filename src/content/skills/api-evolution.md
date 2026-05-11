@@ -128,7 +128,7 @@ For internal-only APIs without a version number, the design phase names the **re
 
 ## Composition
 
-The design phase (Phase 4) reads this skill before authoring any inline D-N that introduces or changes a public interface. The reviewer reads it for any review iteration on a slug whose `touchSurface` includes a public API. The planner does NOT read this skill — interface design is the design phase's surface, not the planner's; if the slug only has a planner pass (small/medium routing skipped design), the planner adds a `## Concerns` bullet pointing at this skill as a follow-up.
+The design phase (Phase 4) reads this skill before authoring any inline D-N that introduces or changes a public interface. The reviewer reads it for any review iteration on a slug whose `touchSurface` includes a public API. The ac-author does NOT read this skill — interface design is the design phase's surface, not the ac-author's; if the slug only has a ac-author pass (small/medium routing skipped design), the ac-author adds a `## Concerns` bullet pointing at this skill as a follow-up.
 
 ## breaking-changes
 
@@ -174,7 +174,7 @@ Three patterns that cover the lifecycle of an API or contract from "still works,
 
 Practically: the team that ships the deprecation owns the migration of every consumer they can identify. They do NOT throw the deprecation over the wall and tell every downstream team to fix their code "by the deadline".
 
-When design (Phase 4) or planner introduces a deprecation:
+When design (Phase 4) or ac-author introduces a deprecation:
 
 1. **Identify consumers.** Search the org for callers (`rg` in monorepo, dependency-graph tools across repos, package-registry usage stats).
 2. **Choose the migration cost split.** Either (a) the deprecator ships an adapter that wraps the old surface to use the new one (zero migration cost for consumers, higher cost for the deprecator), OR (b) the deprecator pairs with each consumer's owner to land the migration commit (higher coordination cost, but the new shape is the only shape after the cutover).

@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
  * inside each specialist prompt.
  *
  * - `triage`   — Hop 1-2 (gate + persistence)
- * - `plan`     — design + planner (Hop 2.5 / 3)
+ * - `plan`     — design + ac-author (Hop 2.5 / 3)
  * - `build`    — slice-builder (Hop 4)
  * - `review`   — reviewer / security-reviewer (Hop 5)
  * - `ship`     — commit-helper + compound-and-ship (Hop 6+)
@@ -126,7 +126,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "ac-discipline",
     fileName: "ac-discipline.md",
     description: "v8.16 merge of ac-quality + ac-traceability. Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the commit-helper invocation + AC↔commit chain contract. AC-quality always-on for AC authoring; AC-traceability active only when ac_mode=strict, advisory in soft / inline modes.",
-    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:planner", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ac_mode:strict"],
+    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:ac-author", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ac_mode:strict"],
     stages: ["plan", "build", "review"],
     body: readSkill("ac-discipline.md")
   },
@@ -198,7 +198,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "source-driven",
     fileName: "source-driven.md",
     description: "Detect stack + versions from manifest, fetch official documentation deep-links, implement against documented patterns, cite URLs in plan/decisions/code. Default in strict mode for framework-specific work.",
-    triggers: ["ac_mode:strict", "specialist:planner", "specialist:design", "framework-specific-code-detected"],
+    triggers: ["ac_mode:strict", "specialist:ac-author", "specialist:design", "framework-specific-code-detected"],
     stages: ["plan", "build"],
     body: readSkill("source-driven.md")
   },

@@ -25,4 +25,4 @@ Use this skill whenever you create or modify any `.cclaw/flows/<slug>/plan.md`.
 
 - Plans without AC.
 - Plans whose AC count exceeds 12 (split first).
-- Plans that change scope between design (Phase 2 Frame) and planner without re-entering design's Phase 2 first.
+- Plans that change scope between design (Phase 2 Frame) and ac-author without re-entering design's Phase 2 first.

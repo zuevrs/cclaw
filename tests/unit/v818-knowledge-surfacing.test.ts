@@ -11,7 +11,7 @@ import {
 import { runCli } from "../../src/cli.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { PLANNER_PROMPT } from "../../src/content/specialist-prompts/planner.js";
+import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { assertFlowStateV82 } from "../../src/flow-state.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
@@ -26,7 +26,7 @@ import { createTempProject, removeProject } from "../helpers/temp-project.js";
  *     tokens, sorted by Jaccard similarity.
  *  2. Orchestrator (start-command spec) reads them between Hop 2 and Hop
  *     2.5 and stamps `triage.priorLearnings` when non-empty.
- *  3. design / planner / reviewer prompts each instruct the specialist to
+ *  3. design / ac-author / reviewer prompts each instruct the specialist to
  *     read `triage.priorLearnings` as context (do NOT copy verbatim).
  *  4. `cclaw knowledge` CLI command lists captured entries grouped by
  *     `tags[0]` with `--all` / `--tag` / `--surface` / `--json` flags.
@@ -236,10 +236,10 @@ describe("v8.18 specialist prompts read priorLearnings", () => {
     expect(DESIGN_PROMPT).toMatch(/do not copy them into your output/iu);
   });
 
-  it("(h) planner prompt instructs to read triage.priorLearnings as background context for AC scoping", () => {
-    expect(PLANNER_PROMPT).toContain("triage.priorLearnings");
-    expect(PLANNER_PROMPT).toMatch(/background context for AC scoping/iu);
-    expect(PLANNER_PROMPT).toMatch(/do not copy entries into your output verbatim/iu);
+  it("(h) ac-author prompt instructs to read triage.priorLearnings as background context for AC scoping", () => {
+    expect(AC_AUTHOR_PROMPT).toContain("triage.priorLearnings");
+    expect(AC_AUTHOR_PROMPT).toMatch(/background context for AC scoping/iu);
+    expect(AC_AUTHOR_PROMPT).toMatch(/do not copy entries into your output verbatim/iu);
   });
 
   it("(i) reviewer prompt instructs to use triage.priorLearnings as priors when scoring findings", () => {

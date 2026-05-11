@@ -36,7 +36,7 @@ If the task matches a pattern in \`.cclaw/lib/patterns/\`, open the pattern file
 | --- | --- |
 | ambiguous goal, no clear "user observable" sentence | \`design\` (Phase 1 Clarify + Phase 2 Frame) |
 | competing structural options or feasibility uncertainty | \`design\` (Phase 3 Approaches + Phase 4 Decisions) |
-| more than 5 AC, or AC that span multiple modules | \`planner\` |
+| more than 5 AC, or AC that span multiple modules | \`ac-author\` |
 
 The orchestrator must ask the user before invoking specialists — never invoke silently. The user can accept all, accept some, or accept none. Document the choice in the plan body.
 
@@ -57,7 +57,7 @@ AC that fail any of the three checks are not real AC. Reject them or rewrite the
 1. ≥4 AC AND ≥2 distinct touchSurface clusters.
 2. Every AC in a parallel wave has \`parallelSafe: true\`.
 3. No AC depends on the output of another AC in the same wave.
-4. The slug fits in **≤5 parallel slices** (slice = 1+ AC sharing a touchSurface). If planner produces more than 5 slices, merge thinner slices into fatter ones — never generate "wave 2".
+4. The slug fits in **≤5 parallel slices** (slice = 1+ AC sharing a touchSurface). If ac-author produces more than 5 slices, merge thinner slices into fatter ones — never generate "wave 2".
 
 The orchestrator must not silently choose \`parallel-build\`. Always surface the topology and ask the user to confirm. See \`.cclaw/lib/skills/parallel-build.md\` for the worktree dispatch pattern and the silent fallback to \`inline\` when the harness does not support sub-agent dispatch.
 
@@ -103,7 +103,7 @@ Before writing the failing test, **read** the affected surface:
 - The runnable command(s) that execute those tests (\`npm test path\`, \`pytest path\`, \`go test ./pkg/...\`).
 - Public API surfaces, callbacks, state transitions, schemas, and contracts the AC touches.
 
-Cite each citation as \`file:path:line\`. No invented paths. If the planner cited a file that does not exist, **stop** and surface it back as a planner-stage finding.
+Cite each citation as \`file:path:line\`. No invented paths. If the ac-author cited a file that does not exist, **stop** and surface it back as a ac-author-stage finding.
 
 The discovery output goes into \`flows/<slug>/build.md\` under the AC's row, in the **Discovery** column. Skipping discovery is one of the five mandatory gate failures.
 
@@ -400,7 +400,7 @@ If any condition fails, keep \`status: blocked\` and iterate. Do NOT advance wit
 
 The compound quality gate captures \`flows/<slug>/learnings.md\` only when at least one of:
 
-- \`design\` (Phase 4 D-N inline) or \`planner\` recorded a non-trivial decision,
+- \`design\` (Phase 4 D-N inline) or \`ac-author\` recorded a non-trivial decision,
 - review needed ≥3 iterations,
 - a security review ran or \`security_flag\` is true,
 - the user explicitly asked.

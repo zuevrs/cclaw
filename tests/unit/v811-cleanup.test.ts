@@ -25,13 +25,13 @@ describe("v8.11+v8.14 — discovery phases pause within design; design pauses en
   });
 
   it("v8.14: design runs in main context across multiple phases, each pauses for user reply", () => {
-    // v8.14: the brainstormer -> architect -> planner three-step chain
-    // collapsed to design (main context, multi-turn) -> planner. Each
+    // v8.14: the brainstormer -> architect -> ac-author three-step chain
+    // collapsed to design (main context, multi-turn) -> acAuthor. Each
     // design phase ends the turn waiting for user reply. The orchestrator
     // does not auto-chain inside design even when runMode=auto.
     expect(DESIGN_PROMPT).toMatch(/ALWAYS step/);
     expect(DESIGN_PROMPT).toMatch(/wait for user reply/i);
-    expect(startBody).toMatch(/next\s+\\?`?\/cc\\?`?\s+(?:invocation\s+)?(?:dispatches|continues with)\s+planner/i);
+    expect(startBody).toMatch(/next\s+\\?`?\/cc\\?`?\s+(?:invocation\s+)?(?:dispatches|continues with)\s+ac-author/i);
   });
 
   it("auto-mode rules carve out the discovery-internal pauses", () => {
@@ -53,7 +53,7 @@ describe("v8.11 — pause options drop Cancel; /cc-cancel is explicit only (#3)"
     const preFlight = skillBody("pre-flight-assumptions");
     expect(preFlight).not.toMatch(/Cancel — re-think the request/);
     expect(preFlight).not.toMatch(/\[4\]\s+Cancel/);
-    // v8.21 folded the pre-flight ask into design Phase 0 / planner
+    // v8.21 folded the pre-flight ask into design Phase 0 / ac-author
     // Phase 0; the skill body is now a thin reference doc and no
     // longer carries any Cancel-option discussion (the original
     // assertion "Cancel is not an option" was specific to the legacy
@@ -66,10 +66,10 @@ describe("v8.11 — pause options drop Cancel; /cc-cancel is explicit only (#3)"
     const preFlight = skillBody("pre-flight-assumptions");
     expect(preFlight).not.toMatch(/always include "Cancel — re-think" as a valid choice/);
     // v8.21 fold: interpretation forks now surface inside design
-    // Phase 1 (Clarify) on large-risky or inline in planner Phase 0
+    // Phase 1 (Clarify) on large-risky or inline in ac-author Phase 0
     // on small-medium. The skill body documents the fold; no Cancel
     // option discussion remains because there is no separate ask.
-    expect(preFlight).toMatch(/design Phase 1|planner Phase 0|interpretation-forks/iu);
+    expect(preFlight).toMatch(/design Phase 1|ac-author Phase 0|interpretation-forks/iu);
   });
 
   it("start-command always-ask rules call out that /cc-cancel is never a clickable option", () => {

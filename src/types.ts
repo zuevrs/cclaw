@@ -8,12 +8,13 @@ export type HarnessId = (typeof HARNESS_IDS)[number];
  * v8.14: `brainstormer` + `architect` collapsed into a single `design`
  * specialist that runs in the MAIN orchestrator context with a multi-turn
  * user-collaborative protocol (Phases 0-7). The discovery sub-phase under
- * `plan` is now `design` -> `planner` instead of `brainstormer` -> `architect`
- * -> `planner`. State files written before v8.14 with `lastSpecialist`
- * pointing at the removed ids are migrated to `null` on read so the
- * orchestrator re-runs the design phase from scratch.
+ * `plan` is now `design` -> `ac-author` (was `design` -> `planner` from
+ * v8.14 through v8.27; renamed in v8.28 — see {@link LEGACY_PLANNER_ID}).
+ * State files written before v8.14 with `lastSpecialist` pointing at the
+ * removed ids are migrated to `null` on read so the orchestrator re-runs
+ * the design phase from scratch.
  */
-export const DISCOVERY_SPECIALISTS = ["design", "planner"] as const;
+export const DISCOVERY_SPECIALISTS = ["design", "ac-author"] as const;
 export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
 
 export const SPECIALISTS = [
@@ -32,7 +33,30 @@ export const LEGACY_DISCOVERY_SPECIALISTS = ["brainstormer", "architect"] as con
 export type LegacyDiscoverySpecialistId = (typeof LEGACY_DISCOVERY_SPECIALISTS)[number];
 
 /**
- * Lightweight read-only research helpers, dispatched by `planner` or by the
+ * v8.28: `planner` specialist renamed to `ac-author` to disambiguate the
+ * specialist role from the `plan` stage and `plan.md` artifact. The two
+ * names coexist for **one release**:
+ *
+ * - on read, `flow-state.json` files with `lastSpecialist: "planner"` are
+ *   rewritten to `"ac-author"` by `rewriteLegacyPlanner` in `flow-state.ts`;
+ * - on write, the orchestrator and all specialist prompts emit `"ac-author"`;
+ * - on dispatch, `SPECIALISTS` no longer carries `"planner"`, so the
+ *   orchestrator cannot accidentally dispatch to the old id.
+ *
+ * The plan is to remove this legacy id in v8.29+ once one full release
+ * cycle has aged out any in-flight state files. Until then, this constant
+ * is the canonical place to spell the old name — every other reference
+ * to `"planner"` in source has been removed.
+ *
+ * Shipped flow artifacts under `flows/shipped/<slug>/` keep their
+ * historical text untouched — the migration only rewrites the active
+ * `flow-state.json` field, not on-disk artifact prose.
+ */
+export const LEGACY_PLANNER_ID = "planner" as const;
+export type LegacyPlannerId = typeof LEGACY_PLANNER_ID;
+
+/**
+ * Lightweight read-only research helpers, dispatched by `ac-author` or by the
  * `design` phase (mostly on `deep` posture, in Phase 2 Frame or Phase 4
  * Decisions) BEFORE the dispatcher writes its artifact. They exist to
  * gather context (live repo signals; prior cclaw lessons) so the
@@ -188,7 +212,7 @@ export interface TriageDecision {
    * current task at triage time. Populated by the orchestrator between
    * Hop 2 (triage persistence) and Hop 2.5 (pre-flight) via
    * `findNearKnowledge(triage.taskSummary, …)`. Read by `design`,
-   * `planner`, and `reviewer` as background context (the spec calls them
+   * `ac-author`, and `reviewer` as background context (the spec calls them
    * "what we already know nearby" / "priors when scoring findings").
    *
    * Persistence rule: **omit the field entirely when empty** — the
