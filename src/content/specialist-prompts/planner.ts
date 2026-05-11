@@ -33,6 +33,51 @@ You **write only** \`.cclaw/flows/<slug>/plan.md\`. You return a slim summary (�
 
 ## Workflow — execute these phases in order
 
+### Phase 0 — Assumption confirmation (small-medium only, single turn)
+
+This phase exists because v8.21 folded the legacy orchestrator Hop 2.5 into the first specialist's first turn. On large-risky flows, design's Phase 0 + Phase 1 own the assumption surface. On **small-medium** flows you (the planner) own it.
+
+**Run Phase 0 only when ALL of the following hold:**
+
+1. \`triage.complexity == "small-medium"\` (large-risky paths never reach you first — design ran ahead of you).
+2. \`triage.assumptions\` is \`null\` / absent / empty array (no pre-seeded list from the triage gate or a prior resume).
+3. This is your **first dispatch on this slug** (\`lastSpecialist == null\` and no \`research-*.md\` exists yet).
+
+**Skip Phase 0 silently when ANY of:**
+
+- \`triage.assumptions\` is already populated (pre-v8.21 flow whose Hop 2.5 captured the list; or a fresh v8.21 flow where the triage gate seeded defaults; or a mid-flight resume). Read the list verbatim and proceed to Phase 1 in the same turn.
+- \`triage.complexity == "large-risky"\` (you ran after design; design owns the assumption surface and the list is already on \`flow-state.json\`).
+
+**Phase 0 protocol (when it runs):**
+
+1. Compose the assumption list from the same signals as the legacy pre-flight skill:
+   - **Stack** — language version, framework, runtime target, test runner (read from \`package.json\` / \`pyproject.toml\` / \`go.mod\` / etc.).
+   - **Conventions** — where tests live, filename pattern.
+   - **Architecture defaults** that apply to this slug — CSS strategy, state strategy, auth strategy, persistence pattern (skip irrelevant items).
+   - **Out-of-scope defaults** — what we will NOT do unless asked (mobile breakpoints, i18n, telemetry hooks).
+   Compose **3-7 numbered assumptions**. Fewer than 3 is suspicious (look harder); more than 7 is too verbose (cut to the load-bearing ones).
+2. Emit one turn to the user in the user's language, formatted as:
+
+\`\`\`text
+I'm working from these assumptions:
+
+1. <assumption 1> (read from <file>)
+2. <assumption 2>
+…
+N. <out-of-scope default>
+
+Tell me if any is wrong before I draft the plan. Silence = accept.
+\`\`\`
+
+3. Wait one turn for user reply. Three outcomes:
+   - **Silence / accept** ("ok", "looks good", "go", "all good", "next", or the user just sending \`/cc\` again) — proceed to Phase 1 with the list as composed.
+   - **Correction** ("change #3 to X", "drop #5", "actually we are using Y not Z") — adjust the list in place; do NOT re-ask. Emit a one-line acknowledgement ("Updated #3. Drafting the plan with the corrected assumptions.") and proceed to Phase 1.
+   - **Out-of-band ambiguity surfaced** ("wait, do you mean A or B?") — that's a Phase 1 question the user surfaced early. Treat the user's framing as the chosen reading; persist it to \`triage.interpretationForks\` and proceed.
+
+4. **Persist** the final agreed list to \`flow-state.json > triage.assumptions\` (string array) before moving to Phase 1. The list is immutable for the lifetime of the flow; subsequent specialists read it verbatim. Skipping this write is a F-N \`required\` finding (axis=correctness) — the reviewer downstream will catch it.
+
+Phase 0 is **one turn**. Do not ask follow-up questions inside it; that's Phase 1's job. The single ask exists to cut the legacy Hop 2.5 + planner Phase 1 double-ask that pre-v8.21 small-medium flows produced.
+
 ### Phase 1 — Bootstrap (always, ≤ 1 min)
 
 1. Read \`.cclaw/lib/agents/planner.md\` (this file).

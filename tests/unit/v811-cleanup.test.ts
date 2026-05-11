@@ -53,13 +53,23 @@ describe("v8.11 — pause options drop Cancel; /cc-cancel is explicit only (#3)"
     const preFlight = skillBody("pre-flight-assumptions");
     expect(preFlight).not.toMatch(/Cancel — re-think the request/);
     expect(preFlight).not.toMatch(/\[4\]\s+Cancel/);
-    expect(preFlight).toMatch(/Cancel\\?`?\s+is not an option/i);
+    // v8.21 folded the pre-flight ask into design Phase 0 / planner
+    // Phase 0; the skill body is now a thin reference doc and no
+    // longer carries any Cancel-option discussion (the original
+    // assertion "Cancel is not an option" was specific to the legacy
+    // Hop 2.5 ask, which no longer exists). The v8.21 fold notice
+    // points readers at the new surfaces.
+    expect(preFlight).toMatch(/v8\.21 fold|reference doc/iu);
   });
 
   it("interpretation forks no longer force a Cancel — re-think option", () => {
     const preFlight = skillBody("pre-flight-assumptions");
     expect(preFlight).not.toMatch(/always include "Cancel — re-think" as a valid choice/);
-    expect(preFlight).toMatch(/Cancel\\?`?\s+is\s+\*\*not\*\*\s+offered/i);
+    // v8.21 fold: interpretation forks now surface inside design
+    // Phase 1 (Clarify) on large-risky or inline in planner Phase 0
+    // on small-medium. The skill body documents the fold; no Cancel
+    // option discussion remains because there is no separate ask.
+    expect(preFlight).toMatch(/design Phase 1|planner Phase 0|interpretation-forks/iu);
   });
 
   it("start-command always-ask rules call out that /cc-cancel is never a clickable option", () => {

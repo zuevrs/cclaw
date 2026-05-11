@@ -161,7 +161,7 @@ The flow has seven hops, in order:
 
 1. **Detect** — fresh \`/cc\` or resume?
 2. **Triage** — only on fresh starts; classify and confirm with the user.
-3. **Pre-flight (Hop 2.5)** — only on fresh starts AND only when the path is not \`inline\`; surface 3-7 assumptions; user confirms before any specialist runs.
+3. **Pre-flight (folded into specialist Phase 0 in v8.21)** — assumptions surface inside the first dispatched specialist's first turn (design Phase 0 on large-risky; planner Phase 0 on small-medium). The legacy Hop 2.5 \`AskQuestion\` is gone.
 4. **Dispatch** — for each stage on the chosen path, hand off to a sub-agent.
 5. **Pause** — after each stage, summarise and end the turn (step) or chain (auto). \`/cc\` is the single resume verb.
 6. **Compound** — automatic learnings capture after ship; gated on quality signals.
@@ -217,7 +217,7 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 Run the \`triage-gate.md\` skill. The gate has **two modes** in v8.14+:
 
-1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), AC mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`autoExecuted: true\`, \`runMode: null\`; proceed straight to the inline edit (Hop 3 — *Dispatch* on the build stage). Pre-flight (Hop 2.5) is skipped on inline by design.
+1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), AC mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`autoExecuted: true\`, \`runMode: null\`; proceed straight to the inline edit (Hop 3 — *Dispatch* on the build stage). The inline path has no assumption surface (v8.21 fold: design Phase 0 owns large-risky, planner Phase 0 owns small-medium; inline gets neither).
 
 2. **Combined-form structured ask** — for every other classification (and for trivial when confidence is \`medium\` or \`low\`), use the harness's structured question tool (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code / OpenCode do); fall back to two sequential calls only when the harness genuinely only supports single-question structured ask. Combining saves one user round-trip on every non-inline flow start.
 
@@ -249,11 +249,11 @@ The date prefix is **mandatory**, even when no prior shipped slug shares the sem
 
 If a collision **does** happen on the same day (very rare; user re-running the same prompt minutes apart), append \`-2\`, \`-3\`, etc. until the slug is unique against \`.cclaw/flows/\` and \`.cclaw/flows/shipped/\` and \`.cclaw/flows/cancelled/\`.
 
-After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Hop 4. Before the first dispatch, run the **v8.18 prior-learnings lookup** (Hop 2 §3) and **Hop 2.5 (pre-flight)** unless the path is \`inline\`.
+After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Hop 4. Before the first dispatch, run the **v8.18 prior-learnings lookup** (Hop 2 §3). The assumption-confirmation surface (formerly Hop 2.5) is now owned by the first dispatched specialist's Phase 0 — see the **Hop 2.5 (folded)** section below for the v8.21 fold.
 
 ### Hop 2 §3 — prior-learnings lookup (v8.18; runs on every fresh \`/cc\`)
 
-Between the persistence of the triage decision (Hop 2 §2 above) and **Hop 2.5 (pre-flight)**, the orchestrator calls the equivalent of:
+Between the persistence of the triage decision (Hop 2 §2 above) and the first specialist dispatch (Hop 3 — where the v8.21-folded assumption surface lives in design Phase 0 / planner Phase 0), the orchestrator calls the equivalent of:
 
 \`\`\`ts
 findNearKnowledge(triage.taskSummary, projectRoot, {
@@ -275,11 +275,11 @@ Persistence rules:
 
 The lookup is asymmetric: when the orchestrator is re-running this hop on a resume (rare but possible), the active slug is excluded so a flow never finds itself.
 
-The stamp is **immutable for the lifetime of the flow** — Hop 2.5 (pre-flight), every specialist dispatch, and resume reads all see the same \`triage.priorLearnings\` snapshot. If the user explicitly nukes the flow with \`/cc-cancel\` and starts fresh, a new lookup runs.
+The stamp is **immutable for the lifetime of the flow** — every specialist dispatch and resume read sees the same \`triage.priorLearnings\` snapshot. If the user explicitly nukes the flow with \`/cc-cancel\` and starts fresh, a new lookup runs.
 
 ### Trivial path (acMode: inline)
 
-\`triage.path\` is \`["build"]\`. Skip plan/review/ship — and skip pre-flight (Hop 2.5) along with them. Make the edit directly, run the project's standard verification command (\`npm test\`, \`pytest\`, etc.) once if there is one, commit with plain \`git commit\`. Single message back to the user with the commit SHA. Done.
+\`triage.path\` is \`["build"]\`. Skip plan/review/ship; the inline path has no assumption surface (the v8.21 fold puts that surface inside design Phase 0 / planner Phase 0, neither of which runs on inline). Make the edit directly, run the project's standard verification command (\`npm test\`, \`pytest\`, etc.) once if there is one, commit with plain \`git commit\`. Single message back to the user with the commit SHA. Done.
 
 This is the only path where the orchestrator writes code itself; everything else dispatches a sub-agent.
 
@@ -291,30 +291,22 @@ ${RESUME_SUMMARY_EXAMPLE}
 
 Wait for r/s (and n on collision). On \`r\`, jump to Hop 4 with the saved \`currentStage\` — pre-flight is **not** re-run on resume; the saved \`triage.assumptions\` is read from disk. On \`s\`, open the artifact and stop. There is no \`c\` option in the resume picker; if the user wants to nuke the flow they invoke \`/cc-cancel\` explicitly. On \`n\` (collision case only), shelve the active flow as cancelled and start a fresh \`/cc\` with the new task; you DO run \`/cc-cancel\` semantics on the old slug here, because the user explicitly chose "discard old, start new" — the option is semantic, not a generic abort.
 
-## Hop 2.5 — Pre-flight (fresh starts on non-inline paths)
+## Hop 2.5 — Pre-flight (folded into specialist Phase 0)
 
-Run the \`pre-flight-assumptions.md\` skill. Surface 3-7 numbered assumptions covering stack, conventions, architecture defaults, and out-of-scope items. Use the harness's structured ask tool with three options (\`Proceed\` / \`Edit one\` / \`Edit several\`); fall back to a fenced block only when no structured ask is available. \`Cancel\` is **not** an option here — if the user wants to abort, they invoke \`/cc-cancel\` explicitly.
+As of v8.21 there is no separate Hop 2.5 \`AskQuestion\`. The assumption-confirmation surface is folded into the first specialist that runs:
 
-\`\`\`
-Pre-flight — I'm about to run with these assumptions:
+- **\`triage.complexity == "large-risky"\`** → design Phase 0 (Bootstrap → Phase 1 Clarify) owns the assumption surface. Design Phase 0 reads any pre-seeded \`triage.assumptions\` from the triage gate (default-shaped from repo signals + most recent shipped slug) and either confirms them inline in its Frame draft (Phase 2) or asks one clarifying question (Phase 1) when an assumption is load-bearing for an Approach. The user sees ONE assumption ask, not two.
+- **\`triage.complexity == "small-medium"\`** → planner Phase 0 (the new v8.21 mini-section in \`agents/planner.md\`) opens with: "I'm working from these assumptions: …. Tell me if any is wrong before I draft the plan." The planner generates the list from the triage summary + task descriptor (same content the legacy Hop 2.5 would have produced) and waits one turn for user reply. Silence / accept proceeds; corrections update \`triage.assumptions\` and the planner adjusts.
+- **\`triage.path == ["build"]\`** (inline / trivial) → unchanged; no assumption surface at all. The trivial path was never running Hop 2.5.
 
-1. <stack: lang version, framework, runtime>  (read from <file>)
-2. <test convention: location + filename pattern>  (read from <file or shipped slug>)
-3. <architecture default 1>
-4. <architecture default 2>
-5. <out-of-scope default>
+Both surfaces still write the user-confirmed list to \`flow-state.json > triage.assumptions\` (string array, immutable for the lifetime of the flow). Downstream readers (commit-helper, reviewer, slice-builder envelope) read the field unchanged; the schema is identical to v8.20.
 
-Correct me now or I proceed with these.
-\`\`\`
+Skip rules (every path):
+- \`triage.path == ["build"]\` (inline) → no assumption surface (specialist Phase 0 is not the only surface that's gone; there isn't one).
+- Resume from a paused flow → specialist Phase 0 reads \`triage.assumptions\` from disk and **does not re-prompt**. The list was already user-confirmed on the prior fresh \`/cc\`; resume must be silent on this axis.
+- \`flow-state.json\` already has \`triage.assumptions\` populated (mid-flight resume **or** pre-v8.21 flows where the legacy Hop 2.5 captured the list) → read as ground truth; specialist Phase 0 short-circuits the confirmation surface and proceeds directly to its substantive work.
 
-Persist the user-confirmed list to \`flow-state.json\` under \`triage.assumptions\` (string array). The list is **immutable** for the lifetime of the flow.
-
-Skip rules:
-- \`triage.path == ["build"]\` (inline) → skip Hop 2.5 entirely.
-- Resume from a paused flow → skip Hop 2.5 (saved \`assumptions\` is already on disk).
-- \`flow-state.json\` already has \`triage.assumptions\` populated (mid-flight resume) → read but do not re-prompt.
-
-Every dispatch envelope from Hop 3 onward includes the line \`Pre-flight assumptions: see triage.assumptions in flow-state.json\`. Sub-agents read the list; planner and design copy it verbatim into their artifacts.
+Every dispatch envelope from Hop 3 onward still includes the line \`Pre-flight assumptions: see triage.assumptions in flow-state.json\`. Sub-agents read the list; planner and design copy it verbatim into their artifacts. The wire format is identical to v8.20; only the surface that *captures* the list moved.
 
 ## Hop 3 — Dispatch
 
@@ -378,7 +370,7 @@ The orchestrator reads only this. The full artifact stays in \`.cclaw/flows/<slu
 - Pre-author research (planner dispatches these BEFORE writing the plan):
   - \`learnings-research\` — always, on small/medium and large-risky. Reads \`.cclaw/knowledge.jsonl\`. Default behaviour: returns 0-3 prior lessons inline in the slim-summary's \`Notes\` field as a serialised \`lessons={...}\` blob; the planner copies the verbatim quotes into \`plan.md\`'s \`## Prior lessons\` section. **No separate \`research-learnings.md\` is written** unless the project sets \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`. Brownfield + greenfield both run this — the planner needs to know if any prior slug applies even for greenfield tasks.
   - \`repo-research\` — only on **brownfield** (when a manifest like \`package.json\`, \`pyproject.toml\`, \`go.mod\`, \`Cargo.toml\`, \`Gemfile\` exists at the repo root AND a source root like \`src/\` or equivalent has files). Skipped on greenfield. Writes \`flows/<slug>/research-repo.md\`.
-- Inputs the planner reads after the contract + wrapper: triage decision (including \`assumptions\` from Hop 2.5), the user's original prompt, \`.cclaw/lib/templates/plan.md\`, the \`lessons={}\` blob from learnings-research (and \`research-repo.md\` when present), **\`.cclaw/knowledge.jsonl\`** for cross-checking, and any matching shipped slug if refining.
+- Inputs the planner reads after the contract + wrapper: triage decision (including \`assumptions\` — populated by triage seed + the planner's own Phase 0 ask on small-medium, or by design Phase 0 on large-risky), the user's original prompt, \`.cclaw/lib/templates/plan.md\`, the \`lessons={}\` blob from learnings-research (and \`research-repo.md\` when present), **\`.cclaw/knowledge.jsonl\`** for cross-checking, and any matching shipped slug if refining.
 - Output: \`.cclaw/flows/<slug>/plan.md\` with \`status: active\`. Includes a \`## Assumptions\` block (verbatim from \`triage.assumptions\`) and a \`## Prior lessons\` block (verbatim quotes from learnings-research's \`lessons={}\` blob, or "No prior shipped slugs apply to this task.").
 - Soft-mode plan body: bullet list of testable conditions, no AC IDs, no commit-trace block.
 - Strict-mode plan body: AC table with IDs, verification lines, touch surfaces, parallel-build topology if it applies.
@@ -890,7 +882,7 @@ These skills auto-trigger during \`/cc\`. Do not re-explain them; obey them.
 - **conversation-language** — always-on; reply in the user's language but never translate \`AC-N\`, \`D-N\`, \`F-N\`, slugs, paths, frontmatter keys, mode names, or hook output.
 - **anti-slop** — always-on for any code-modifying step; bans redundant verification and environment shims.
 - **triage-gate** — Hop 2 of every fresh \`/cc\`.
-- **pre-flight-assumptions** — Hop 2.5 of every fresh non-inline \`/cc\`; surfaces 3-7 stack/convention/architecture defaults for user confirmation.
+- **pre-flight-assumptions** — reference doc only as of v8.21. Points at design Phase 0 (large-risky) and planner Phase 0 (small-medium) where the assumption surface actually lives now; no separate user-facing ask.
 - **flow-resume** — when \`/cc\` is invoked with no task or with an active flow.
 - **plan-authoring** — on every edit to \`.cclaw/flows/<slug>/plan.md\`.
 - **ac-discipline** — covers ac-quality (always-on for AC authoring) and ac-traceability (strict mode only; before every commit).
