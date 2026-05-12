@@ -89,12 +89,60 @@ export interface TddPhaseRecord {
   reason?: string;
 }
 
+/**
+ * v8.36 — per-AC `posture` annotation (everyinc-compound pattern).
+ *
+ * The ac-author stamps one of these six values on every AC stanza in
+ * `plan.md` frontmatter. Slice-builder reads `posture` and selects the
+ * commit ceremony; commit-helper.mjs uses it as the routing key for
+ * the per-phase gate; reviewer uses it to scope posture-specific
+ * checks (e.g. tests-as-deliverable skips the strict TDD-integrity
+ * check because tests ARE the deliverable, not a precondition for
+ * production code).
+ *
+ * The order is the canonical heuristic order from the v8.36 spec:
+ *   - test-first (default) is first so legacy plans pick it up;
+ *   - characterization-first sits next because it is the closest
+ *     cousin (still RED-first, just on existing rather than new code);
+ *   - tests-as-deliverable / refactor-only / docs-only / bootstrap
+ *     are the "tests are not new behaviour" branches.
+ */
+export const POSTURES = [
+  "test-first",
+  "characterization-first",
+  "tests-as-deliverable",
+  "refactor-only",
+  "docs-only",
+  "bootstrap"
+] as const;
+export type Posture = (typeof POSTURES)[number];
+
+/**
+ * Default posture for AC frontmatter that omits the field.
+ *
+ * Backward compatibility: plans authored before v8.36 do not carry a
+ * posture field; the slice-builder treats absence as `test-first` so
+ * the original RED → GREEN → REFACTOR ceremony continues to apply
+ * unchanged.
+ */
+export const DEFAULT_POSTURE: Posture = "test-first";
+
+export function isPosture(value: unknown): value is Posture {
+  return typeof value === "string" && (POSTURES as readonly string[]).includes(value);
+}
+
 export interface AcceptanceCriterionState {
   id: string;
   text: string;
   commit?: string;
   status: AcceptanceCriterionStatus;
   phases?: Partial<Record<TddPhase, TddPhaseRecord>>;
+  /**
+   * v8.36 — per-AC posture annotation. Absent means
+   * {@link DEFAULT_POSTURE} ("test-first"). Validators reject unknown
+   * string values.
+   */
+  posture?: Posture;
 }
 
 export type BuildProfile = "default" | "bootstrap";

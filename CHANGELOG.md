@@ -1,5 +1,98 @@
 # Changelog
 
+## 8.36.0 — `is_behavior_adding` predicate + `posture` field
+
+### Why
+
+A reference audit of 11 harnesses found two complementary patterns for handling AC where the standard TDD `RED → GREEN → REFACTOR` cycle is structurally absent or actively wrong (contract tests, pure refactors, docs-only edits, bootstrap of the test framework itself, etc.). Before v8.36, cclaw handled exactly **one** of these — bootstrap — via a top-level `build_profile: bootstrap` field on the plan, and treated every other case as either "force the test-first ceremony anyway" (busywork, often producing fake RED commits) or "trip the Iron Law and surface a finding" (false-positive review noise). The `## When NOT to apply` section in `tdd-and-verification.md` had grown into a 5-bullet prose list (rename / docs / inline / discovery / bootstrap) with no machine-readable counterpart — so the slice-builder had to *re-derive* the right ceremony from a verbal heuristic on every dispatch.
+
+v8.36 combines two patterns to fix this:
+
+- **gsd-v1 `is_behavior_adding` predicate** — a file-extension-driven gate that auto-detects "this AC isn't touching production behaviour, the standard cycle doesn't apply" by scanning the AC's `touchSurface`.
+- **everyinc-compound `posture` field** — a lightweight per-AC annotation in `plan.md` frontmatter that names the ceremony directly: `test-first` (default) | `characterization-first` | `tests-as-deliverable` | `refactor-only` | `docs-only` | `bootstrap`.
+
+The combined design is: **predicate is the gate** (lives in `commit-helper.mjs`, catches contradictions like `posture=docs-only` paired with a source file in `touchSurface`); **posture is the annotation** (lives in plan.md AC frontmatter, set by ac-author, read by slice-builder + reviewer + commit-helper). The 5-bullet prose list in `tdd-and-verification.md` is replaced by a posture mapping table that maps each posture to its required ceremony, commit-helper invocation, verification-loop mode, and reviewer checks — the slice-builder no longer re-derives anything, it picks a row.
+
+The legacy `build_profile: bootstrap` field is still honoured by `commit-helper.mjs` for backward compatibility (in-flight projects continue to work); new plans should use `posture: bootstrap` on AC-1 of bootstrap slugs.
+
+### What changed
+
+- **AC-1 — `is_behavior_adding(touchSurface)` predicate** (`src/is-behavior-adding.ts`, ~70 LOC):
+  - Pure function. Returns `false` iff every file in `touchSurface` matches the exclusion set (`**/*.md`, `**/*.json`, `**/*.{yml,yaml,toml,ini,cfg,conf}`, `**/.env*`, `tests/**`, `**/*.test.*`, `**/*.spec.*`, `__tests__/**`, `docs/**`, `.cclaw/**`, `.github/**`). Returns `true` when any file is OUTSIDE the exclusion set.
+  - Empty `touchSurface` returns `false` (nothing to verify; treat as non-behaviour).
+  - Exported alongside `IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION` (the canonical exclusion list as a human-readable string) for tripwire pinning.
+  - **Inlined verbatim** into the `commit-helper.mjs` hook body (`src/content/node-hooks.ts`) because the hook runs as a standalone `.mjs` script in the user's project with no shared imports. The `tests/unit/v836-cleanup.test.ts` tripwire pins both copies to the same exclusion set.
+
+- **AC-2 — `posture` field in AC frontmatter** (`src/types.ts`, `src/artifact-frontmatter.ts`, `src/content/artifact-templates.ts`):
+  - New `POSTURES` const tuple (6 values), `Posture` type, `DEFAULT_POSTURE = "test-first"`, `isPosture()` type guard in `src/types.ts`.
+  - `AcceptanceCriterionState.posture?: Posture` — optional field on the AC state interface.
+  - `parseArtifact()` validates the field: unknown values throw `FrontmatterError` citing the AC id + bad value + allowed list. Missing posture is fine (defaults applied downstream).
+  - `PLAN_TEMPLATE` (strict-mode plan template) now ships `posture: test-first` on every example AC stanza, and the `Acceptance Criteria` table gains a `posture` column with a documentation bullet listing all six values.
+
+- **AC-3 — `commit-helper.mjs` posture-aware gate** (`src/content/node-hooks.ts`):
+  - `ALLOWED_PHASES` extended to `red | green | refactor | test | docs`.
+  - Resolves posture per AC from flow-state, falling back to `DEFAULT_POSTURE`; legacy `buildProfile === "bootstrap"` is promoted into `posture: bootstrap` for backward compatibility.
+  - **Posture-specific phase routing:**
+    - `test-first` / `characterization-first` — full RED → GREEN → REFACTOR chain (existing behaviour).
+    - `tests-as-deliverable` — accepts `--phase=test` (single commit, recorded under `phases.green`); RED-before-GREEN gate is suppressed.
+    - `refactor-only` — accepts `--phase=refactor` directly (no RED required).
+    - `docs-only` — accepts `--phase=docs` (single commit); refuses if any file in `touchSurface` would make `isBehaviorAdding()` return `true` (the predicate-as-double-check).
+    - `bootstrap` — AC-1 accepts `--phase=green` without prior RED; AC-2+ uses the full cycle.
+  - All existing strict-mode invariants preserved (git-unavailable hard fail, RED stages no production files, AC id required, commits unique per phase).
+
+- **AC-4 — `ac-author` populates posture** (`src/content/specialist-prompts/ac-author.ts`):
+  - New mandatory section `## Posture heuristic table (v8.36; mandatory)` enumerating the verb-and-touch-surface heuristics for each posture (contract test → `tests-as-deliverable`, rename/extract → `refactor-only`, docs/ADR/README → `docs-only`, test framework setup → `bootstrap`, characterization pin → `characterization-first`, default → `test-first`).
+  - `Acceptance Criteria` table column added; Phase 7 self-review checklist gains item 16 ("posture set on every AC and consistent with `touchSurface`").
+
+- **AC-5 — `slice-builder` reads posture and selects ceremony** (`src/content/specialist-prompts/slice-builder.ts`):
+  - New section `## Posture-driven ceremony (v8.36, strict mode)` with one paragraph per posture explaining what to do — including the `--phase` flag, the number of commits, the cross-reference to `commit-helper.mjs`, and the "stop and surface" rule when posture looks wrong for the AC.
+  - `acMode` table updated to include the new `--phase=test|docs` flags in the strict-mode row.
+
+- **AC-6 — `reviewer` posture-aware checks** (`src/content/specialist-prompts/reviewer.ts`):
+  - New section `## Posture-aware TDD checks (v8.36, strict mode)` after the acMode table. The legacy "missing RED commit → A-1 finding" rule is now **conditional on posture**:
+    - `test-first` / `characterization-first` — full TDD-integrity check (RED + GREEN + REFACTOR or skipped-with-reason).
+    - `tests-as-deliverable` — three-row deliverable check (test runs, deterministic outcome, touchSurface is tests only).
+    - `refactor-only` — no-behaviour-delta check (suite passes before AND after with same output; no snapshot diff).
+    - `docs-only` — two-row docs check (touchSurface in exclusion set, verification ran in `diff-only` mode).
+    - `bootstrap` — A-1 fires on AC-2+ only; AC-1 is GREEN-only.
+
+- **AC-7 — `tdd-and-verification.md` posture mapping** (`src/content/skills/tdd-and-verification.md`):
+  - The legacy `## When NOT to apply` prose section is replaced by `## Posture mapping (v8.36, supersedes "When NOT to apply")` containing the canonical 6-row table (posture → ceremony → commit-helper invocation → verification-loop mode → reviewer checks).
+  - The five existing prose exceptions (pure prose / config edits, mechanical renames, contract test slug, bootstrap, characterization slug) are kept as **worked examples** mapping each scenario to the right posture row.
+  - A new `## When NOT to apply` section (H2, satisfies the v8.30 skill anatomy rule) covers the two cases that live OUTSIDE the posture system: `triage.acMode == "inline"` (skill never opens for inline mode) and discovery-phase artifacts (the skill is a build-stage rule, not a discovery-stage rule).
+
+- **AC-8 — Tests** (3 new files, 41 new tests):
+  - `tests/unit/is-behavior-adding.test.ts` (12 tests) — predicate cases (empty / docs-only / config-only / dotenv / tests-only / .cclaw/.github / single source / mixed / non-standard locations / pure-docs multi-file).
+  - `tests/unit/posture.test.ts` (12 tests) — enum shape, `isPosture` type guard, `parseArtifact` accepts all six values, rejects unknown values + non-string values, round-trips every posture, plan template carries the field.
+  - `tests/unit/v836-cleanup.test.ts` (17 tests) — cross-surface tripwire: predicate description names every protected category, `POSTURES` documented in ac-author / slice-builder / reviewer prompts and in `tdd-and-verification.md`, hook body inlines the predicate with the same exclusion set, hook body documents all six postures, posture-specific branches present (`tests-as-deliverable` / `refactor-only` / `docs-only` / `bootstrap`), legacy `buildProfile` still recognised, regression-guards for v8.23 strict-mode behaviour and `test-first` RED-rejects-production-files invariant.
+  - `tests/unit/prompt-budgets.test.ts` — `ac-author` budget raised from 560 lines / 46000 chars to 600 / 56000; `reviewer` budget raised from 50000 chars to 62000 (lines unchanged) to accommodate the posture heuristics and posture-aware-checks sections (17% headroom over current size).
+
+### Migration
+
+- **Existing plans** (no `posture` field on AC) continue to work unchanged. `parseArtifact()` accepts the missing field; `commit-helper.mjs` defaults to `test-first`; the slice-builder runs the standard RED → GREEN → REFACTOR cycle.
+- **Existing plans with `build_profile: bootstrap`** continue to work. `commit-helper.mjs` recognises the legacy field and promotes it into `posture: bootstrap` for the gate-routing logic. New plans should write `posture: bootstrap` on AC-1 directly.
+- **New plans** get `posture: test-first` on every AC by default (via the updated `PLAN_TEMPLATE`); ac-author overrides per the heuristic table when the AC is a contract test / pure refactor / docs / bootstrap / characterization pin.
+
+### Files changed
+
+- `src/is-behavior-adding.ts` (new, ~70 LOC).
+- `src/types.ts` — `POSTURES`, `Posture`, `DEFAULT_POSTURE`, `isPosture`, `AcceptanceCriterionState.posture?`.
+- `src/artifact-frontmatter.ts` — per-AC posture validation in `parseArtifact()`.
+- `src/content/artifact-templates.ts` — `posture: test-first` in plan template AC stanzas + `posture` column + documentation bullet.
+- `src/content/node-hooks.ts` — inlined predicate + posture-aware phase routing in `COMMIT_HELPER_HOOK`.
+- `src/content/specialist-prompts/ac-author.ts` — `## Posture heuristic table (v8.36; mandatory)` + AC table column + self-review item 16.
+- `src/content/specialist-prompts/slice-builder.ts` — `## Posture-driven ceremony (v8.36, strict mode)` + acMode table update.
+- `src/content/specialist-prompts/reviewer.ts` — `## Posture-aware TDD checks (v8.36, strict mode)`.
+- `src/content/skills/tdd-and-verification.md` — `## Posture mapping` (replaces `## When NOT to apply` prose) + new minimal `## When NOT to apply` for non-posture exceptions.
+- `tests/unit/is-behavior-adding.test.ts` (new), `tests/unit/posture.test.ts` (new), `tests/unit/v836-cleanup.test.ts` (new).
+- `tests/unit/prompt-budgets.test.ts` — budgets raised for ac-author + reviewer (heuristics + checks justify ~10% growth; budget bump leaves 15-25% headroom).
+
+### References
+
+- gsd-v1 reference: `is_behavior_adding` file-extension predicate as the auto-detect gate.
+- everyinc-compound reference: `posture` enum on each AC frontmatter entry.
+- The 5-audit findings reviewed in design Phase 0 of this slug; CONTEXT.md unchanged.
+
 ## 8.35.0 — Project domain glossary (`CONTEXT.md`)
 
 ### Why

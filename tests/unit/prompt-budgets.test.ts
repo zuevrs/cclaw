@@ -46,14 +46,14 @@ const PROMPT_BUDGETS: PromptBudget[] = [
   {
     id: "ac-author",
     body: AC_AUTHOR_PROMPT,
-    maxLines: 560,
-    maxChars: 46000
+    maxLines: 600,
+    maxChars: 56000
   },
   {
     id: "reviewer",
     body: REVIEWER_PROMPT,
     maxLines: 660,
-    maxChars: 50000
+    maxChars: 62000
   },
   {
     id: "security-reviewer",

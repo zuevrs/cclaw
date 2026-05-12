@@ -27,6 +27,7 @@ ac:
     touchSurface: []
     dependsOn: []
     rollback: "Replace with revert/disable strategy if this AC ships and breaks."
+    posture: test-first  # v8.36 — one of: test-first | characterization-first | tests-as-deliverable | refactor-only | docs-only | bootstrap
   - id: AC-2
     text: "Replace with the second observable outcome, or delete this entry if one AC is enough."
     status: pending
@@ -34,6 +35,7 @@ ac:
     touchSurface: []
     dependsOn: []
     rollback: "Replace with revert/disable strategy if this AC ships and breaks."
+    posture: test-first
 last_specialist: null
 refines: null
 shipped_at: null
@@ -103,10 +105,10 @@ _(AC author authors this. AC-aligned, not horizontal-layer. Each unit ships an e
 
 ## Acceptance Criteria
 
-| id | text | status | parallelSafe | dependsOn | touchSurface | rollback | commit |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| AC-1 | _Replace with the first observable outcome._ | pending | true | _none_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | — |
-| AC-2 | _Replace or delete._ | pending | true | _AC-1_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | — |
+| id | text | status | parallelSafe | dependsOn | touchSurface | rollback | posture | commit |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| AC-1 | _Replace with the first observable outcome._ | pending | true | _none_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | test-first | — |
+| AC-2 | _Replace or delete._ | pending | true | _AC-1_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | test-first | — |
 
 The AC block is the source of truth. Every commit produced by \`commit-helper.mjs\` references exactly one AC id.
 
@@ -114,6 +116,7 @@ The AC block is the source of truth. Every commit produced by \`commit-helper.mj
 - \`dependsOn\` is a list of AC ids that must be \`status: committed\` before this AC enters slice-builder. Use \`none\` (or empty) when the AC has no predecessors. The reviewer cross-checks the dependency graph against the AC commit order — out-of-order commits are a \`required\` finding.
 - \`touchSurface\` is the list of repo-relative paths the AC is allowed to modify.
 - \`rollback\` is the explicit revert / disable / migration-rollback strategy if this AC ships and breaks in production. Required in strict mode; one short sentence per AC. "Same as AC-N" is acceptable for siblings that share the same rollback path. \`none\` is **not** acceptable — every AC has a rollback story, even if it is "revert the single commit".
+- \`posture\` (v8.36) is one of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The slice-builder reads this field to select the commit ceremony; \`commit-helper.mjs\` uses it as the routing key for the per-phase gate. See \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle).
 
 Each AC must point at a real \`file:line\` or destination path.
 
