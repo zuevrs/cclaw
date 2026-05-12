@@ -218,16 +218,41 @@ When reviewer returns `block`, the same TDD cycle applies to the fix:
 
 The AC id stays the same; commit messages cite `F-N`.
 
+## Posture mapping (v8.36, supersedes "When NOT to apply")
+
+Every AC in strict mode carries a **`posture`** value in its `plan.md` frontmatter — a per-AC annotation that picks the right TDD ceremony. The default is `test-first` (the standard RED → GREEN → REFACTOR cycle); the other five values cover the cases where the standard cycle is structurally absent or actively wrong. The ac-author sets the posture using the heuristic table in its prompt; the slice-builder reads it and selects the ceremony; the reviewer applies the posture-specific check; and `commit-helper.mjs` enforces the ceremony with the right `--phase` flag.
+
+The mapping is mechanical — there is no "did the agent feel like TDD today?" judgement call. Pick the row that matches the AC's posture; do exactly what that row says.
+
+| posture | ceremony required | commit-helper invocation | verification-loop mode | reviewer checks |
+| --- | --- | --- | --- | --- |
+| **`test-first`** (default) | RED → GREEN → REFACTOR (3 commits) | `--phase=red`, then `--phase=green`, then `--phase=refactor` (or `--phase=refactor --skipped`) | full (build, lint, typecheck, test, scope) | A-1 fires if RED is missing or stages production files; full TDD-integrity check |
+| **`characterization-first`** | RED (pin existing behaviour) → GREEN (tiny shape fix) → REFACTOR (the real structural change) (3 commits) | same as `test-first`: `--phase=red|green|refactor` | full | same as `test-first` plus a check that the RED test actually exercises the code about to be refactored |
+| **`tests-as-deliverable`** | write the contract / integration / snapshot test, capture deterministic outcome, single commit | `--phase=test` (helper records SHA under `phases.green`) | full (the test IS the deliverable; it must compile, run, and produce a deterministic outcome) | A-1 does NOT fire; reviewer checks (a) test compiles + runs, (b) deterministic outcome (named pass OR named expected-failure), (c) `touchSurface` is test/spec files only |
+| **`refactor-only`** | pin existing suite (run, capture pass) → apply refactor → re-run suite (must pass with identical output), single commit | `--phase=refactor` (helper skips the RED+GREEN gate for this posture) | full (existing suite is the safety net) | A-1 does NOT fire; reviewer checks (a) pre-refactor suite captured passing, (b) post-refactor suite passes with same output, (c) no snapshot diff (snapshot move is `critical` axis=correctness); a `No-behavioural-delta:` block in the commit body is required |
+| **`docs-only`** | single commit; no behaviour change | `--phase=docs` (helper refuses if `touchSurface` contains a source file — the predicate-as-double-check) | `diff-only` (skip build/typecheck/lint/test gates; only working-tree cleanliness + touchSurface match) | A-1 does NOT fire; reviewer checks (a) `touchSurface` matches the exclusion set, (b) verification ran in `diff-only` mode |
+| **`bootstrap`** | AC-1: GREEN-only (runner is being installed; no RED is possible) ⇒ subsequent AC: full `test-first` cycle | AC-1: `--phase=green` (helper skips RED for AC-1 when posture is bootstrap); AC-2+: standard `--phase=red|green|refactor` | full | A-1 fires on AC-2+ if RED is missing; does NOT fire on AC-1 of a bootstrap slug |
+
+The predicate-as-double-check: `commit-helper.mjs` runs `is_behavior_adding(touchSurface)` on every commit. The function returns `false` iff every file in `touchSurface` matches the exclusion set (`*.md`, `*.json`, `*.yml|*.yaml`, `*.toml`, `*.ini`, `*.cfg`, `*.conf`, `.env*`, `tests/**`, `*.test.*`, `*.spec.*`, `__tests__/**`, `docs/**`, `.cclaw/**`, `.github/**`). When `posture` says `docs-only` but the predicate returns `true`, the commit is refused with `posture=docs-only contradicts touchSurface containing source files`. The posture is the **annotation** an agent picked; the predicate is the **gate** that catches a contradiction.
+
+### Worked examples — picking the posture
+
+Each of the five legacy "When NOT to apply" examples maps cleanly to a posture row above; the canonical TDD list is now the table, not the prose.
+
+- **Pure prose / config edits** (README typo, CHANGELOG edit, `package.json` version bump): posture is **`docs-only`**. Single `docs(AC-N): ...` commit; verification-loop in `diff-only` mode; `touchSurface` constrained to docs/config files by the predicate.
+- **Mechanical renames** driven by `commit-helper`'s known-safe set (e.g. rename a symbol via codemod): posture is **`refactor-only`**. Pin the suite, perform the rename, re-run the suite, single `refactor(AC-N): ...` commit. If the existing suite has insufficient coverage of the renamed code, surface a `required` finding and switch the posture to `characterization-first` — the rename cannot land without a pin.
+- **Contract / integration / snapshot test slug** (e.g. "add a contract test against the public API"): posture is **`tests-as-deliverable`**. Write the test, run it, capture deterministic outcome, single `test(AC-N): ...` commit. The test IS the AC; there is no fake RED-then-immediately-GREEN dance.
+- **Bootstrap of the test framework itself** (a slug whose AC-1 is "test framework installed and one passing example test exists"): posture is **`bootstrap`** on AC-1. The orchestrator must set posture on each AC explicitly; the legacy `build_profile: bootstrap` field is still recognised by `commit-helper.mjs` for backward compatibility, but new plans should use posture.
+- **Characterization slug** (about to refactor a legacy module and want a safety net before touching it): posture is **`characterization-first`** on the pinning AC, then **`refactor-only`** on the structural-change AC.
+
 ## When NOT to apply
 
-The single exception is **bootstrap of the test framework itself** — a slug whose AC-1 is "test framework installed and one passing example test exists". In that case the orchestrator must mark the slug as `build_profile: bootstrap` in plan frontmatter, and `commit-helper` accepts the GREEN commit without a prior RED for AC-1 only. Every subsequent AC and every other slug uses the full cycle.
+The posture mapping above covers every AC the slice-builder will see. Two cases live OUTSIDE the posture system because they are not "an AC with a different ceremony" — they are "no AC at all in the strict-mode sense", and so the skill itself does not apply:
 
-Other negative-scope cases (skill stays a reference rather than a runtime rule):
+- **`triage.acMode == "inline"`.** Trivial inline edits commit straight without the per-AC commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo. The orchestrator never dispatches the slice-builder for inline mode, so this skill never opens.
+- **Discovery-phase artifacts** (design Phases 0-7 in main context, plan / decisions / ADR drafts before the build stage opens). Those produce prose, not behaviour; the build stage is where the posture system opens. The skill is a build-stage rule, not a discovery-stage rule.
 
-- **Pure prose / config edits** with no production code change (README typo, CHANGELOG edit, `package.json` version bump). The verification gate still runs at ship; TDD is structurally absent because there is nothing to test-first.
-- **Mechanical renames driven by `commit-helper`'s known-safe set.** A rename slug uses behaviour-preserving discipline (`refactor-safety` section below); the rename itself does not need a RED.
-- **`triage.acMode == "inline"`.** Trivial inline edits commit straight without the per-AC commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo.
-- **Discovery-phase artifacts** (design Phases 0-7 in main context, plan / decisions / ADR drafts). Those produce prose, not behaviour; the build stage is where TDD opens.
+For every other AC, pick a row from the posture mapping above and follow it. There is no third "skip TDD entirely" escape hatch beyond these two — every other "we don't need a test here" instinct maps to **`docs-only`**, **`refactor-only`**, or **`tests-as-deliverable`** posture and gets the corresponding (smaller) ceremony, not zero ceremony.
 
 ## Anti-rationalization table (T2-8, addyosmani pattern; v8.13)
 

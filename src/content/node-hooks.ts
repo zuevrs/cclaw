@@ -138,8 +138,15 @@ const COMMIT_HELPER_HOOK = `#!/usr/bin/env node
 // cclaw commit-helper: ac_mode-aware atomic commit hook.
 //
 // strict mode (large-risky / security-flagged):
-//   commit-helper.mjs --ac=AC-N --phase=red|green|refactor [--skipped] [--message="..."]
+//   commit-helper.mjs --ac=AC-N --phase=red|green|refactor|test|docs [--skipped] [--message="..."]
 //   enforces TDD cycle, AC trace, no production files in RED, full chain RED -> GREEN -> REFACTOR.
+//   v8.36 — per-AC posture annotation drives which phases are required:
+//     - test-first              standard RED -> GREEN -> REFACTOR (default)
+//     - characterization-first  same shape; pin existing behaviour first
+//     - tests-as-deliverable    single \`--phase=test\` commit (recorded as GREEN)
+//     - refactor-only           skip RED requirement; single \`--phase=refactor\` commit
+//     - docs-only               single \`--phase=docs\` commit; touchSurface must be non-behaviour-adding
+//     - bootstrap               GREEN-only for AC-1, full cycle for AC-2+ (legacy buildProfile=bootstrap honoured)
 //
 // soft / inline mode (small-medium / trivial):
 //   commit-helper.mjs --message="..."
@@ -153,6 +160,45 @@ import path from "node:path";
 
 const root = process.cwd();
 const statePath = path.join(root, ".cclaw", "state", "flow-state.json");
+
+// v8.36 — is_behavior_adding predicate inlined from src/is-behavior-adding.ts.
+// Returns false iff every file in touchSurface matches the exclusion set
+// (markdown / config / dotenv / tests / docs / .cclaw / .github).
+// Returns true when at least one file is OUTSIDE the exclusion set, i.e.
+// the diff is touching production behaviour. Empty list returns false.
+// The canonical exclusion set:
+//   *.md, *.json, *.yml, *.yaml, *.toml, *.ini, *.cfg, *.conf,
+//   .env*, tests/**, **/*.test.*, **/*.spec.*, __tests__/**,
+//   docs/**, .cclaw/**, .github/**
+function isExcludedFile(p) {
+  const lower = p.toLowerCase();
+  const base = lower.split("/").pop() ?? lower;
+  if (base === ".env" || base.startsWith(".env.")) return true;
+  if (/\\.(md|json|ya?ml|toml|ini|cfg|conf)$/.test(lower)) return true;
+  if (lower.startsWith("tests/")) return true;
+  if (lower.includes("/__tests__/") || lower.startsWith("__tests__/")) return true;
+  if (/\\.(test|spec)\\.[a-z0-9.]+$/.test(lower)) return true;
+  if (lower.startsWith("docs/")) return true;
+  if (lower.startsWith(".cclaw/")) return true;
+  if (lower.startsWith(".github/")) return true;
+  return false;
+}
+
+function isBehaviorAdding(touchSurface) {
+  if (!Array.isArray(touchSurface) || touchSurface.length === 0) return false;
+  return touchSurface.some((entry) => typeof entry === "string" && !isExcludedFile(entry));
+}
+
+// v8.36 — six canonical postures (everyinc-compound pattern).
+const POSTURES = [
+  "test-first",
+  "characterization-first",
+  "tests-as-deliverable",
+  "refactor-only",
+  "docs-only",
+  "bootstrap"
+];
+const DEFAULT_POSTURE = "test-first";
 
 function arg(name) {
   const prefix = \`--\${name}=\`;
@@ -242,13 +288,19 @@ const message = arg("message") ?? \`cclaw: progress on \${acId ?? "AC"}\`;
 const skipped = flag("skipped");
 
 if (!acId || !/^AC-\\d+$/.test(acId)) {
-  console.error("[commit-helper] strict mode usage: commit-helper.mjs --ac=AC-N --phase=red|green|refactor [--skipped] [--message='...']");
+  console.error("[commit-helper] strict mode usage: commit-helper.mjs --ac=AC-N --phase=red|green|refactor|test|docs [--skipped] [--message='...']");
   process.exit(2);
 }
 
-if (!phase || !["red", "green", "refactor"].includes(phase)) {
-  console.error("[commit-helper] --phase is required in strict mode. Allowed: red, green, refactor.");
-  console.error("[commit-helper] strict-mode build is a TDD cycle: every AC needs RED -> GREEN -> REFACTOR.");
+// v8.36 — the accepted phase set depends on the AC's posture. The
+// classic three (red / green / refactor) still cover the test-first
+// and characterization-first majority; \`test\` and \`docs\` are the
+// single-commit shortcuts for tests-as-deliverable and docs-only.
+const ALLOWED_PHASES = ["red", "green", "refactor", "test", "docs"];
+if (!phase || !ALLOWED_PHASES.includes(phase)) {
+  console.error("[commit-helper] --phase is required in strict mode. Allowed: red, green, refactor, test, docs.");
+  console.error("[commit-helper] strict-mode build is a TDD cycle: test-first AC need RED -> GREEN -> REFACTOR.");
+  console.error("[commit-helper] posture-aware shortcuts: --phase=test (tests-as-deliverable) | --phase=docs (docs-only).");
   process.exit(2);
 }
 
@@ -263,18 +315,86 @@ if (!matching) {
   process.exit(2);
 }
 
-const profile = state.buildProfile ?? "default";
-const phases = matching.phases ?? {};
-
-if (phase === "green" && !phases.red && profile !== "bootstrap") {
-  console.error(\`[commit-helper] cannot record GREEN for \${acId}: no RED commit on record.\`);
-  console.error("[commit-helper] write a failing test first and commit it with --phase=red.");
-  console.error("[commit-helper] (override: set buildProfile to 'bootstrap' in flow-state for test-framework bootstrap slugs only.)");
+// v8.36 — resolve the AC's posture (default test-first when absent).
+// The legacy \`state.buildProfile === "bootstrap"\` override is still
+// honoured for in-flight projects whose flow-state predates v8.36 —
+// when set, treat the AC as posture=bootstrap regardless of what its
+// stanza says.
+let posture = typeof matching.posture === "string" ? matching.posture : DEFAULT_POSTURE;
+if (!POSTURES.includes(posture)) {
+  console.error(\`[commit-helper] AC \${acId} has an unknown posture \${JSON.stringify(posture)}. Allowed: \${POSTURES.join(" | ")}.\`);
   process.exit(2);
 }
-if (phase === "refactor" && (!phases.red || !phases.green)) {
-  console.error(\`[commit-helper] cannot record REFACTOR for \${acId}: missing \${!phases.red ? "RED" : "GREEN"} commit.\`);
+const legacyProfile = state.buildProfile ?? "default";
+if (legacyProfile === "bootstrap") posture = "bootstrap";
+
+// v8.36 — predicate-as-double-check. The ac-author's posture
+// annotation is the routing key; the predicate refuses commits whose
+// touchSurface contradicts it (the most common failure: an AC tagged
+// docs-only that actually edits src/**).
+const touchSurface = Array.isArray(matching.touchSurface) ? matching.touchSurface : [];
+if (posture === "docs-only" && isBehaviorAdding(touchSurface)) {
+  console.error(\`[commit-helper] \${acId} posture=docs-only contradicts touchSurface containing source files: \${touchSurface.join(", ")}\`);
+  console.error("[commit-helper] either remove source files from touchSurface (true docs-only) or re-classify the AC's posture to test-first / characterization-first.");
   process.exit(2);
+}
+
+// v8.36 — posture-aware phase routing.
+//
+//   tests-as-deliverable: accept ONLY --phase=test (or --phase=green
+//     for back-compat with operators who type "green" out of habit).
+//     The recorded SHA goes under \`phases.green\` because the test IS
+//     the deliverable; cycle closes on the single commit. RED is not
+//     required.
+//   refactor-only: accept ONLY --phase=refactor. RED + GREEN are not
+//     required. Cycle closes on the single commit.
+//   docs-only: accept ONLY --phase=docs. RED + GREEN are not
+//     required. Cycle closes on the single commit.
+//   bootstrap: GREEN-only is allowed for AC-1 (legacy semantics); AC-2+
+//     uses the full RED -> GREEN -> REFACTOR cycle.
+//   test-first / characterization-first (default): unchanged; the
+//     full RED -> GREEN -> REFACTOR cycle applies.
+if (posture === "tests-as-deliverable") {
+  if (phase !== "test" && phase !== "green") {
+    console.error(\`[commit-helper] AC \${acId} posture=tests-as-deliverable accepts --phase=test (single commit). Got --phase=\${phase}.\`);
+    process.exit(2);
+  }
+} else if (posture === "refactor-only") {
+  if (phase !== "refactor") {
+    console.error(\`[commit-helper] AC \${acId} posture=refactor-only accepts --phase=refactor only. Got --phase=\${phase}.\`);
+    console.error("[commit-helper] refactor-only AC are pure structural changes; no RED or GREEN is required.");
+    process.exit(2);
+  }
+} else if (posture === "docs-only") {
+  if (phase !== "docs") {
+    console.error(\`[commit-helper] AC \${acId} posture=docs-only accepts --phase=docs only. Got --phase=\${phase}.\`);
+    process.exit(2);
+  }
+} else if (phase === "test" || phase === "docs") {
+  console.error(\`[commit-helper] AC \${acId} posture=\${posture} does not accept --phase=\${phase}. Use --phase=red|green|refactor.\`);
+  process.exit(2);
+}
+
+const phases = matching.phases ?? {};
+
+// Phase-chain enforcement for the test-first / characterization-first
+// / bootstrap postures. The simple postures (tests-as-deliverable,
+// refactor-only, docs-only) skip these guards entirely because the
+// cycle has been collapsed to a single commit.
+const isStandardCycle = posture === "test-first" || posture === "characterization-first" || posture === "bootstrap";
+const isBootstrap = posture === "bootstrap" || legacyProfile === "bootstrap";
+
+if (isStandardCycle) {
+  if (phase === "green" && !phases.red && !isBootstrap) {
+    console.error(\`[commit-helper] cannot record GREEN for \${acId}: no RED commit on record.\`);
+    console.error("[commit-helper] write a failing test first and commit it with --phase=red.");
+    console.error("[commit-helper] (override: set posture: bootstrap on the AC for test-framework bootstrap slugs only.)");
+    process.exit(2);
+  }
+  if (phase === "refactor" && (!phases.red || !phases.green)) {
+    console.error(\`[commit-helper] cannot record REFACTOR for \${acId}: missing \${!phases.red ? "RED" : "GREEN"} commit.\`);
+    process.exit(2);
+  }
 }
 
 if (phase === "refactor" && skipped) {
@@ -326,29 +446,55 @@ if (phase === "red") {
   }
 }
 
-const commitMessage = \`\${message}\\n\\nrefs: \${acId} (phase=\${phase})\`;
+// v8.36 — docs-only commits refuse staged source files. Defence in
+// depth: the touchSurface check above caught the AC declaration; this
+// catches the case where the operator hand-staged something outside
+// the declared surface.
+if (phase === "docs") {
+  const stagedFiles = staged.split("\\n").filter(Boolean);
+  const looksLikeProduction = stagedFiles.find((file) => /^src\\//.test(file) || /^lib\\//.test(file) || /^app\\//.test(file));
+  if (looksLikeProduction) {
+    console.error(\`[commit-helper] docs phase rejects production files: \${looksLikeProduction}\`);
+    console.error("[commit-helper] docs-only AC stage only markdown / config / docs files. Use --phase=green for source changes.");
+    process.exit(2);
+  }
+}
+
+const commitMessage = \`\${message}\\n\\nrefs: \${acId} (phase=\${phase}, posture=\${posture})\`;
 execFileSync("git", ["commit", "-m", commitMessage], { cwd: root, stdio: "inherit" });
 
 const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+// v8.36 — \`test\` / \`docs\` shortcuts record under \`phases.green\`
+// because that is the slot the orchestrator reads as the canonical
+// "AC committed" SHA. The phase label is preserved alongside so the
+// audit trail tells the next reader which posture was used.
+const recordSlot = phase === "test" || phase === "docs" ? "green" : phase;
 const updated = {
   ...state,
   ac: state.ac.map((item) => {
     if (item.id !== acId) return item;
-    const nextPhases = { ...(item.phases ?? {}), [phase]: { sha } };
-    const cycleDone = nextPhases.red && nextPhases.green && nextPhases.refactor;
+    const nextPhases = { ...(item.phases ?? {}), [recordSlot]: { sha, phase } };
+    let cycleDone = false;
+    if (posture === "tests-as-deliverable" || posture === "docs-only") {
+      cycleDone = Boolean(nextPhases.green);
+    } else if (posture === "refactor-only") {
+      cycleDone = Boolean(nextPhases.refactor);
+    } else {
+      cycleDone = Boolean(nextPhases.red && nextPhases.green && nextPhases.refactor);
+    }
     return {
       ...item,
       phases: nextPhases,
-      commit: cycleDone ? (nextPhases.green.sha ?? sha) : item.commit ?? null,
+      commit: cycleDone ? (nextPhases.green?.sha ?? nextPhases.refactor?.sha ?? sha) : item.commit ?? null,
       status: cycleDone ? "committed" : "pending"
     };
   })
 };
 await fs.writeFile(statePath, \`\${JSON.stringify(updated, null, 2)}\\n\`, "utf8");
-console.log(\`[commit-helper] \${acId} phase=\${phase} committed as \${sha}\`);
+console.log(\`[commit-helper] \${acId} phase=\${phase} (posture=\${posture}) committed as \${sha}\`);
 const after = updated.ac.find((item) => item.id === acId);
 if (after && after.status === "committed") {
-  console.log(\`[commit-helper] \${acId} cycle complete (red, green, refactor).\`);
+  console.log(\`[commit-helper] \${acId} cycle complete (posture=\${posture}).\`);
 }
 `;
 

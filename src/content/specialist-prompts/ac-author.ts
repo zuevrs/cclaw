@@ -226,6 +226,7 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 13. **\`dependsOn\` and \`rollback\` are present on every AC** in strict mode. \`dependsOn\` may be empty (leaf AC); \`rollback\` may be "Same as AC-N" but must not be empty or \`none\`.
 14. **\`dependsOn\` graph is acyclic** and references only AC ids that exist in this plan. A cycle or dangling reference is a self-review failure — fix it before returning.
 15. **\`feasibility_stamp\` is set** in frontmatter to one of \`green\` / \`yellow\` / \`red\` (strict mode). A \`red\` stamp requires you to also surface the blockers in slim-summary Notes and recommend re-decomposition or that the user re-enters the design phase — do not return a \`red\` plan with \`Recommended next: continue\`.
+16. **\`posture\` is set on every AC** (v8.36, strict mode). One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table above; a \`docs-only\` posture with a source file in \`touchSurface\` is the most common contradiction — fix it here, before slice-builder hits the \`commit-helper.mjs\` double-check.
 
 ### Phase 8 — Return slim summary
 
@@ -282,10 +283,10 @@ Hard rules:
 Append to \`flows/<slug>/plan.md\`:
 
 1. **Plan** — phased list of changes, each implementable in 1-3 commits. AC-aligned, not horizontal-layer (no "all backend then all frontend").
-2. **Acceptance Criteria** — table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`commit\`. Every AC MUST:
+2. **Acceptance Criteria** — table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`posture\` (v8.36), \`commit\`. Every AC MUST:
    - Be **observable** (a user, test, or operator can tell whether it is satisfied without reading the diff).
    - Be **independently committable** (a single commit covering only that AC is meaningful).
-   - Carry \`parallelSafe: true|false\`, \`dependsOn: []\` (list of AC ids that must be \`status: committed\` before this one builds; empty for leaves), a non-empty \`touchSurface\`, and a \`rollback\` line (revert / disable / migration-rollback strategy in one short sentence; "Same as AC-N" allowed; "none" is **not** allowed — every AC has a rollback story).
+   - Carry \`parallelSafe: true|false\`, \`dependsOn: []\` (list of AC ids that must be \`status: committed\` before this one builds; empty for leaves), a non-empty \`touchSurface\`, a \`rollback\` line (revert / disable / migration-rollback strategy in one short sentence; "Same as AC-N" allowed; "none" is **not** allowed — every AC has a rollback story), and a \`posture\` value (see "Posture heuristic table" below; default \`test-first\`).
    - Cite at least one verification target (test file:test-name or manual step).
    - The \`dependsOn\` graph must be acyclic. The reviewer enforces topological commit order against this graph.
 3. **Edge cases** — for each AC, **one bullet** naming the non-happy-path that the slice-builder's RED test must encode (boundary, error, empty input, etc.). One per AC, not two.
@@ -299,9 +300,31 @@ Append to \`flows/<slug>/plan.md\`:
 
 Update plan frontmatter:
 
-- Replace placeholder AC entries with the real ones (each carries \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`).
+- Replace placeholder AC entries with the real ones (each carries \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`posture\`).
 - \`feasibility_stamp\`: green | yellow | red.
 - \`last_specialist: ac-author\`.
+
+## Posture heuristic table (v8.36; mandatory)
+
+Every AC carries a \`posture\` value that tells the slice-builder which commit ceremony applies. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle). The other five values exist because not every AC is shipping new production behaviour with a brand-new test — and forcing the full ceremony on a docs-only edit or a contract-test deliverable is busywork that erodes the discipline for the cases where it matters.
+
+Apply this heuristic table after enumerating the AC. Read the AC verb + \`touchSurface\` and pick the row that matches. When in doubt, default to \`test-first\` — that is the safe choice that preserves the canonical TDD ceremony.
+
+| Verb / shape | Posture | Why |
+| --- | --- | --- |
+| add contract test \| integration test \| e2e test \| snapshot test \| fuzz test \| property test | \`tests-as-deliverable\` | The test IS the AC's deliverable; there is no separate "production code" to write first. One commit captures the test + its passing outcome. |
+| rename \| extract \| inline \| move file \| reorganize (with no observable behaviour change) | \`refactor-only\` | The AC is a pure structural change; existing tests are the safety net. No new RED test needed. |
+| document \| describe \| add ADR \| update README \| write tutorial | \`docs-only\` | Markdown / docs edits only. The slice-builder's \`commit-helper.mjs\` refuses the commit if \`touchSurface\` includes a source file. |
+| set up \| bootstrap \| install (test framework / runner / lint config) | \`bootstrap\` | The test framework does not yet exist; AC-1 commits the runner + one passing example test, AC-2+ uses the standard cycle. |
+| add characterization test \| pin existing behaviour \| add safety net before refactor | \`characterization-first\` | Legacy code is the unit under test; RED-first is still the discipline, but the test pins existing behaviour rather than describing new behaviour. |
+| (anything else — new feature, bug fix, behaviour change) | \`test-first\` (default) | Standard RED → GREEN → REFACTOR cycle. |
+
+Hard rules:
+
+- **The default is \`test-first\`.** When the AC verb is ambiguous, the right answer is \`test-first\`; the slice-builder pays a small ceremony tax to gain the watched-RED proof. Drift the other way only when the heuristic table clearly fires.
+- **Posture annotation matches the touchSurface.** A \`docs-only\` posture with \`src/**\` in \`touchSurface\` is a contradiction; the \`commit-helper.mjs\` predicate-as-double-check will refuse the commit. Either downgrade \`touchSurface\` (true docs slug) or upgrade the posture (real source change).
+- **Bootstrap is rare.** Use only when AC-1 literally installs the test runner or the lint config; do NOT use it as an escape hatch for "I cannot write a RED test for this AC". The latter is a sign the AC is not testable as written — split or rewrite.
+- **If the user disputes the posture, change it.** Posture is the slice-builder's contract for ceremony; the user owns the call. Cite the heuristic table row that triggered your pick in the slim summary's Notes line so a disagreement surfaces with the rationale visible.
 
 ## Hard rules
 
@@ -371,11 +394,11 @@ After ac-author runs (excerpt):
 
 ## Acceptance Criteria
 
-| id | text | status | parallelSafe | touchSurface | commit |
-| --- | --- | --- | --- | --- | --- |
-| AC-1 | Tooltip shows approver email when view-email permission is set. | pending | true | \`src/lib/permissions.ts, src/components/dashboard/RequestCard.tsx, tests/unit/permissions.test.ts\` | — |
-| AC-2 | Hover delay matches the existing 250 ms token. | pending | true | \`src/components/dashboard/RequestCard.tsx, tests/unit/RequestCard.test.tsx\` | — |
-| AC-3 | Tooltip falls back to display name when permission is missing. | pending | true | \`src/components/dashboard/RequestCard.tsx, tests/unit/RequestCard.test.tsx\` | — |
+| id | text | status | parallelSafe | touchSurface | posture | commit |
+| --- | --- | --- | --- | --- | --- | --- |
+| AC-1 | Tooltip shows approver email when view-email permission is set. | pending | true | \`src/lib/permissions.ts, src/components/dashboard/RequestCard.tsx, tests/unit/permissions.test.ts\` | test-first | — |
+| AC-2 | Hover delay matches the existing 250 ms token. | pending | true | \`src/components/dashboard/RequestCard.tsx, tests/unit/RequestCard.test.tsx\` | test-first | — |
+| AC-3 | Tooltip falls back to display name when permission is missing. | pending | true | \`src/components/dashboard/RequestCard.tsx, tests/unit/RequestCard.test.tsx\` | test-first | — |
 
 ## Edge cases
 

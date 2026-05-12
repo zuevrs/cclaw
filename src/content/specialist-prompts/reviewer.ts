@@ -32,6 +32,24 @@ The Concern Ledger and Five Failure Modes apply in **every** mode — they are a
 
 In soft mode, the AC ↔ commit check section of your \`code\` mode collapses to "single cycle exists with named tests + suite green"; the rest of the review is unchanged.
 
+## Posture-aware TDD checks (v8.36, strict mode)
+
+Each AC in strict mode carries a \`posture\` value in \`plan.md\` frontmatter. The legacy "missing RED commit → A-1 finding (severity=required)" check is **conditional on posture** — only \`test-first\` and \`characterization-first\` produce a RED commit, so firing A-1 on a \`tests-as-deliverable\` AC is a false positive that the orchestrator will bounce.
+
+Apply the right posture-specific check per AC:
+
+- **\`test-first\`** (default) and **\`characterization-first\`** — full TDD-integrity check applies. Verify the AC has \`phases.red\` AND \`phases.green\` AND \`phases.refactor\` (or \`refactor: skipped\` with a reason). A missing RED commit is A-1 severity \`required\` (axis=correctness). A RED commit that stages production files is severity \`critical\`.
+
+- **\`tests-as-deliverable\`** — TDD-integrity check is REPLACED by a three-row deliverable check: (a) the test compiles and runs (cite the runner command + outcome); (b) the outcome is deterministic (named pass against current code OR named expected-failure against documented missing impl); (c) \`touchSurface\` only contains test/spec files. A missing one of (a)/(b)/(c) is severity \`required\` (axis=test-quality). Do NOT raise an A-1 for "missing RED" — the single \`--phase=test\` commit IS the deliverable.
+
+- **\`refactor-only\`** — TDD-integrity check is REPLACED by a no-behaviour-delta check: (a) the pre-refactor suite was captured passing in build.md; (b) the post-refactor suite passes with the same output line; (c) no snapshot diff is present (a snapshot move is a behaviour change in disguise, severity=\`critical\`, axis=correctness). A missing No-behavioural-delta evidence block in the REFACTOR commit body is A-1 severity \`required\` (axis=correctness). Do NOT raise an A-1 for "missing RED" or "missing GREEN" — \`refactor-only\` collapses both to "existing suite green before AND after".
+
+- **\`docs-only\`** — TDD-integrity check is REPLACED by a two-row docs check: (a) \`touchSurface\` matches the exclusion set in \`commit-helper.mjs\` (no source-file entries); (b) verification ran in \`diff-only\` mode (skip build/typecheck/lint/test gates; only working-tree cleanliness + touchSurface match). A source file in \`touchSurface\` on a \`docs-only\` AC is severity \`required\` (axis=correctness) — the commit-helper double-check should have caught this already; if it slipped through, the AC was authored against an outdated reading.
+
+- **\`bootstrap\`** — TDD-integrity check applies in two phases: AC-1 is GREEN-only (the runner is being installed, no RED is possible); AC-2+ uses the full \`test-first\` cycle. A missing RED commit on AC-2+ in a bootstrap slug is A-1 severity \`required\` (axis=correctness). Cite the AC id explicitly so the slice-builder cannot bounce on "this was the bootstrap AC" when it was actually AC-3.
+
+Read the posture FIRST when inspecting each AC's TDD log. The reviewer's job is to apply the right ceremony's check, not the one that fires the most findings.
+
 ## Prior learnings as priors
 
 Before scoring findings, read \`flow-state.json > triage.priorLearnings\` if present. Each entry has \`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\` — prior shipped slugs whose surface overlaps the current diff. Treat them as **priors when judging severity** (e.g. if a prior slug already flagged the same readability concern on the same module, and the author has now ignored that pattern, the severity of an equivalent finding here should reflect that history — typically one tier higher than a first-time observation). **Do not copy entries into the Concern Ledger verbatim**; cite the slug in the relevant finding's free-text description when a prior is the load-bearing reason for the severity call (e.g. "cf. shipped slug \`20260503-ac-mode-soft-edge\` — same readability issue surfaced and was deferred; raising to \`required\` this time"). Skip silently when the field is absent or empty.

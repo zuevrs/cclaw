@@ -29,11 +29,31 @@ The triage decision dictates **how** the TDD cycle is recorded.
 
 | acMode | unit of work | how to commit | what to log |
 | --- | --- | --- | --- |
-| \`strict\` | one AC at a time, RED → GREEN → REFACTOR per AC | \`commit-helper.mjs --ac=AC-N --phase=red|green|refactor\` (mandatory) | full six-column row in \`build.md\` per AC |
+| \`strict\` | one AC at a time, RED → GREEN → REFACTOR per AC | \`commit-helper.mjs --ac=AC-N --phase=red|green|refactor|test|docs\` (mandatory) | full six-column row in \`build.md\` per AC |
 | \`soft\` | one TDD cycle for **the whole feature** (1–3 tests covering all listed conditions) | plain \`git commit -m "..."\` (commit-helper is advisory in soft mode) | a short build log: tests added, suite output, commits, follow-ups |
 | \`inline\` | not dispatched here — handled by the orchestrator's trivial path | n/a | n/a |
 
 If \`triage.acMode\` is missing, default to \`strict\`. If you receive an envelope claiming \`inline\`, stop and surface — you should not have been dispatched.
+
+## Posture-driven ceremony (v8.36, strict mode)
+
+Each AC carries a \`posture\` value in its plan.md frontmatter — read it BEFORE writing the first RED test. The posture is the slice-builder's contract for which commit ceremony applies; running the full RED → GREEN → REFACTOR for an AC whose posture says "tests are the deliverable" is busywork that the reviewer will flag. Conversely, skipping the watched-RED proof on a \`test-first\` AC is the original Iron Law violation. Default when the field is missing is \`test-first\` (so legacy plans are unchanged).
+
+The six postures and their ceremony selectors:
+
+- **\`test-first\`** (default) — standard RED → GREEN → REFACTOR. Three commits via \`commit-helper.mjs --phase=red|green|refactor\`. This is the section above; nothing changes here. Apply this whenever the AC is shipping new observable behaviour and a brand-new test encodes it.
+
+- **\`characterization-first\`** — same shape as \`test-first\`, but the RED test pins **existing** behaviour rather than describing new behaviour. Useful when you are about to refactor legacy code and want a safety net before the refactor. RED commits the characterization test (must fail until the test runner is wired); GREEN is a tiny adjustment (often a no-op assertion shape fix) to make the suite pass against today's code; REFACTOR is the actual structural change you came here to do. Same three commits via \`commit-helper.mjs --phase=red|green|refactor\`.
+
+- **\`tests-as-deliverable\`** — the test IS the AC's deliverable. Examples: a new contract test, an integration test pinned to a live system, a snapshot test that captures the current rendering. **Write the test, run it, capture the deterministic outcome** (either pass against the current system OR a documented expected failure when the AC's verification line says "RED until <slug> ships"). **Single commit** via \`commit-helper.mjs --ac=AC-N --phase=test --message="test(AC-N): ..."\` — the helper records the SHA under \`phases.green\` so the orchestrator's "AC committed" check still passes. No fake RED-then-immediately-GREEN dance; the deterministic outcome IS the verification.
+
+- **\`refactor-only\`** — pure structural change with no observable behaviour delta (rename, extract, inline, move file, type narrowing). **Pin the existing suite as the safety net BEFORE the refactor** (run \`npm test\` and capture the PASS line; this is the implicit "RED guard" for refactor-only — if it doesn't pass first, the refactor is unverifiable). Apply the refactor. Re-run the full relevant suite and confirm the same PASS line. **Single commit** via \`commit-helper.mjs --ac=AC-N --phase=refactor --message="refactor(AC-N): <shape change>"\` — the helper skips the RED+GREEN gate for this posture. If the existing suite has insufficient coverage of the refactored code (you cannot find a test that anchors the behaviour you are preserving), **surface a finding** with severity \`required\` recommending \`characterization-first\` posture would be more appropriate — the refactor cannot land without a pin.
+
+- **\`docs-only\`** — markdown / README / CHANGELOG / docs/** / config edits with no source-file touch. **Single commit** via \`commit-helper.mjs --ac=AC-N --phase=docs --message="docs(AC-N): ..."\` — the helper refuses the commit if \`touchSurface\` includes a source file (the predicate-as-double-check). Verification mode runs in \`diff-only\` (skip build / typecheck / lint / test gates; only check working-tree cleanliness + touchSurface match).
+
+- **\`bootstrap\`** — test framework / runner / lint config setup. **AC-1 commits the runner + one passing example test as a single GREEN** (\`commit-helper.mjs --ac=AC-1 --phase=green\` — the helper skips the RED requirement for AC-1 only when posture=bootstrap). **AC-2+ uses the full RED → GREEN → REFACTOR cycle** because the framework now exists. Document the bootstrap rationale in build.md's first AC row.
+
+The slice-builder selects the ceremony by reading \`plan.md > Acceptance Criteria > posture\` for the AC under construction. The selection is mechanical — there is no judgement call here; the ac-author picked the posture using the heuristic table in their prompt, and your job is to honour it. If a posture pick looks wrong (e.g. \`refactor-only\` on an AC whose verb is "add validation"), **stop and surface** in your slim summary — do not silently switch to a different posture.
 
 ## Iron Law
 

@@ -67,14 +67,13 @@ Each prompt is 200-600 lines with an output schema, worked examples, and hard ru
 ```bash
 cclaw                                          # open the TUI menu (interactive default)
 cclaw --version | --help                       # version / help flags
-cclaw --non-interactive install                # CI: install assets, wire harness
-cclaw --non-interactive sync                   # CI: idempotent reapply (also runs orphan cleanup)
-cclaw --non-interactive upgrade                # CI: post-package-update sync
+cclaw --non-interactive install                # CI: install / reapply assets (idempotent + orphan cleanup)
 cclaw --non-interactive knowledge              # CI: list captured learnings (--tag, --surface, --json, --all)
 cclaw --non-interactive uninstall              # CI: remove cclaw assets
+cclaw --non-interactive version | help         # CI: print version / help and exit
 ```
 
-`--non-interactive` is the CI / scripts escape hatch — bare `cclaw init` / `cclaw sync` etc. error in v8.29 and point at the TUI. `--non-interactive knowledge` is the read-side of the compound loop; it groups entries by tag, sorts by recency, and accepts `--tag=<tag>` / `--surface=<substring>` filters or `--json` for piping into `jq`.
+`--non-interactive` is the CI / scripts escape hatch — bare `cclaw init` / `cclaw sync` etc. error in v8.29 and point at the TUI. The non-interactive surface is five commands: **install**, **knowledge**, **uninstall**, **version**, **help**. `--non-interactive install` is the single idempotent installer — calling it on an already-installed project re-applies cclaw assets and runs orphan cleanup, which is what `--non-interactive sync` / `--non-interactive upgrade` did before v8.37; those names exit 1 with a migration hint pointing at `install`. The TUI menu keeps its `Sync` / `Upgrade` rows so a human reading the menu sees the right intent. `--non-interactive knowledge` is the read-side of the compound loop; it groups entries by tag, sorts by recency, and accepts `--tag=<tag>` / `--surface=<substring>` filters or `--json` for piping into `jq`.
 
 ## AC traceability via `commit-helper`
 

@@ -145,15 +145,36 @@ describe("cli (v8.29 TUI-first surface)", () => {
     expect(ctx.out.data).toContain("install complete");
   });
 
-  it("--non-interactive sync on an already-installed project skips welcome but shows progress + summary", async () => {
+  it("--non-interactive sync on an already-installed project exits 1 with v8.37 migration message", async () => {
+    // v8.37 — `--non-interactive sync` was collapsed into `install` because
+    // both ultimately called the same idempotent installer + orphan-cleanup
+    // path under the hood. The migration message names the new command so a
+    // CI script author can self-correct without reading the CHANGELOG. The
+    // pre-v8.37 behaviour (re-run the installer silently) is preserved via
+    // `--non-interactive install`, which is idempotent on an already-installed
+    // project. See `tests/unit/cli-non-interactive.test.ts` for the full
+    // v8.37 surface matrix.
     project = await createTempProject();
     await runCli(["--non-interactive", "install"], mkContext(project));
     const ctx = mkContext(project);
     const code = await runCli(["--non-interactive", "sync"], ctx);
+    expect(code).toBe(1);
+    expect(ctx.err.data).toMatch(/sync.*renamed/);
+    expect(ctx.err.data).toContain("cclaw --non-interactive install");
+  });
+
+  it("--non-interactive install on an already-installed project is idempotent (the post-v8.37 path that replaces sync)", async () => {
+    // Repeat-install is the new way to do what `--non-interactive sync` did
+    // before v8.37. The first install is the welcome-bearing one; the second
+    // is silent on Welcome but still shows progress + summary because
+    // install is idempotent.
+    project = await createTempProject();
+    await runCli(["--non-interactive", "install"], mkContext(project));
+    const ctx = mkContext(project);
+    const code = await runCli(["--non-interactive", "install"], ctx);
     expect(code).toBe(0);
     expect(ctx.out.data).toContain(`cclaw v${CCLAW_VERSION}`);
     expect(ctx.out.data).not.toContain("Welcome to cclaw");
-    expect(ctx.out.data).toContain("✓ Wired harnesses");
     expect(ctx.out.data).toContain("Installed");
   });
 

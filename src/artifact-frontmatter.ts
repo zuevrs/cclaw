@@ -2,7 +2,13 @@ import fs from "node:fs/promises";
 import YAML from "yaml";
 import { activeArtifactPath } from "./artifact-paths.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
-import type { AcceptanceCriterionState, FlowStage, DiscoverySpecialistId, ArtifactStatus } from "./types.js";
+import {
+  POSTURES,
+  type AcceptanceCriterionState,
+  type ArtifactStatus,
+  type DiscoverySpecialistId,
+  type FlowStage
+} from "./types.js";
 
 export interface ArtifactFrontmatter {
   slug: string;
@@ -68,6 +74,25 @@ export function parseArtifact(raw: string, sourcePath?: string): ParsedArtifact 
   }
   if (frontmatter.ac !== undefined && !Array.isArray(frontmatter.ac)) {
     throw new FrontmatterError("Frontmatter `ac` must be an array.", sourcePath);
+  }
+  // v8.36 — validate per-AC `posture` annotation. Unknown values are
+  // rejected with a clear error citing the AC id + the bad value so
+  // the ac-author can fix the typo. Missing posture is fine (it
+  // defaults to `test-first` downstream).
+  if (Array.isArray(frontmatter.ac)) {
+    for (const entry of frontmatter.ac as unknown as Array<Record<string, unknown>>) {
+      if (!entry || typeof entry !== "object") continue;
+      if (!("posture" in entry)) continue;
+      const posture = entry.posture;
+      if (typeof posture !== "string" || !(POSTURES as readonly string[]).includes(posture)) {
+        const rawId = entry.id;
+        const id = typeof rawId === "string" ? rawId : "<AC>";
+        throw new FrontmatterError(
+          `${id} has an unknown \`posture\` value: ${JSON.stringify(posture)}. Allowed: ${POSTURES.join(" | ")}.`,
+          sourcePath
+        );
+      }
+    }
   }
   return { frontmatter, body, raw };
 }
