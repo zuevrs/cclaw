@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Smoke test: init -> sync -> upgrade -> sync -> uninstall must leave the
-// project clean. Verifies the grouped layout: state/, hooks/, flows/*, lib/*.
+// Smoke test: init -> install -> install -> install -> uninstall must leave
+// the project clean. Verifies the grouped layout: state/, hooks/, flows/*,
+// lib/*.
 //
 // v8.17 generalisation:
 //  - The expected list of `.cclaw/lib/skills/*.md` files is derived from
@@ -9,9 +10,17 @@
 //    through automatically — the next slug authoring just edits
 //    `src/content/skills.ts` and runs `npm run smoke:runtime`.
 //  - A new orphan-cleanup smoke check plants a stale `.md` file in the
-//    install's skills dir, runs `cclaw sync`, and asserts the orphan
-//    was removed. Catches install-layer regressions where the v8.17
-//    `cleanupOrphanSkills` step is accidentally bypassed.
+//    install's skills dir, runs `cclaw --non-interactive install`, and
+//    asserts the orphan was removed. Catches install-layer regressions
+//    where the v8.17 `cleanupOrphanSkills` step is accidentally bypassed.
+//
+// v8.37 consolidation: `--non-interactive sync` and `--non-interactive
+// upgrade` were collapsed into `--non-interactive install` (the
+// underlying `syncCclaw()` / `upgradeCclaw()` calls were aliases for the
+// same idempotent installer with orphan cleanup). The smoke script
+// migrated to `install` — re-running `install` on an already-installed
+// project does the same orphan-cleanup + reapply work the retired
+// commands did, so the assertions below are unchanged in spirit.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -140,31 +149,34 @@ try {
       throw new Error(`smoke check failed: .gitignore missing pattern ${expected}`);
     }
   }
-  // v8.17: orphan-cleanup smoke check. Plant a stale .md file in the
-  // skills dir, run `cclaw sync`, and assert that the orphan was
-  // removed and that the install.ts cleanup step emitted at least one
-  // `Removed orphan skill` line on stdout.
+  // v8.17 + v8.37: orphan-cleanup smoke check. Plant a stale .md file
+  // in the skills dir, run `cclaw --non-interactive install` (which in
+  // v8.37 replaced the old `sync` and `upgrade` commands; install on an
+  // already-installed project is idempotent and runs the same
+  // orphan-cleanup pass `sync` ran pre-v8.37), and assert that the
+  // orphan was removed and that the install.ts cleanup step emitted at
+  // least one `Removed orphan skill` line on stdout.
   const orphanPath = join(tempDir, ".cclaw", "lib", "skills", "v816-retired-fixture.md");
   writeFileSync(orphanPath, "---\nname: v816-retired-fixture\n---\nsmoke fixture\n", "utf8");
-  const syncOut = execFileSync("node", [cli, "--non-interactive", "sync"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] });
+  const syncOut = execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] });
   if (existsSync(orphanPath)) {
-    throw new Error("smoke check failed: v8.17 orphan-cleanup did not remove .cclaw/lib/skills/v816-retired-fixture.md after sync");
+    throw new Error("smoke check failed: v8.17 orphan-cleanup did not remove .cclaw/lib/skills/v816-retired-fixture.md after install (idempotent re-run)");
   }
   const syncStdout = String(syncOut);
   if (!syncStdout.includes("Removed orphan skill") || !syncStdout.includes("v816-retired-fixture.md")) {
-    throw new Error(`smoke check failed: v8.17 orphan-cleanup did not print "Removed orphan skill — v816-retired-fixture.md" on sync; got:\n${syncStdout}`);
+    throw new Error(`smoke check failed: v8.17 orphan-cleanup did not print "Removed orphan skill — v816-retired-fixture.md" on install (idempotent re-run); got:\n${syncStdout}`);
   }
   if (!syncStdout.includes("Cleaned orphan skills")) {
-    throw new Error(`smoke check failed: v8.17 orphan-cleanup did not print summary "Cleaned orphan skills" on sync; got:\n${syncStdout}`);
+    throw new Error(`smoke check failed: v8.17 orphan-cleanup did not print summary "Cleaned orphan skills" on install (idempotent re-run); got:\n${syncStdout}`);
   }
   // v8.17: --skip-orphan-cleanup escape hatch. Plant another orphan,
-  // run sync with the flag, assert the orphan survives + the warning
+  // run install with the flag, assert the orphan survives + the warning
   // line shows up.
   const orphanSkipPath = join(tempDir, ".cclaw", "lib", "skills", "v816-skip-fixture.md");
   writeFileSync(orphanSkipPath, "---\nname: v816-skip-fixture\n---\nskip-flag fixture\n", "utf8");
   const skipOut = execFileSync(
     "node",
-    [cli, "--non-interactive", "sync", "--skip-orphan-cleanup"],
+    [cli, "--non-interactive", "install", "--skip-orphan-cleanup"],
     { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] }
   );
   if (!existsSync(orphanSkipPath)) {
@@ -173,17 +185,23 @@ try {
   if (!String(skipOut).includes("Skipped orphan cleanup")) {
     throw new Error(`smoke check failed: --skip-orphan-cleanup did not print warning; got:\n${String(skipOut)}`);
   }
-  // Clean up the skip-flag fixture so the next sync/uninstall passes are clean.
+  // Clean up the skip-flag fixture so the next install/uninstall passes are clean.
   rmSync(orphanSkipPath, { force: true });
-  // Re-run sync to assert idempotency: zero orphan output on a clean install.
+  // Re-run install to assert idempotency: zero orphan output on a clean install.
   const idempotentOut = String(
-    execFileSync("node", [cli, "--non-interactive", "sync"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
+    execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
   );
   if (idempotentOut.includes("Removed orphan skill") || idempotentOut.includes("Cleaned orphan skills")) {
     throw new Error(`smoke check failed: v8.17 orphan-cleanup should be idempotent (zero orphan events on a clean install); got:\n${idempotentOut}`);
   }
-  execFileSync("node", [cli, "--non-interactive", "upgrade"], { cwd: tempDir, stdio: "pipe" });
-  execFileSync("node", [cli, "--non-interactive", "sync"], { cwd: tempDir, stdio: "pipe" });
+  // v8.37 — `sync` / `upgrade` non-interactive commands were collapsed
+  // into `install`. The retired names now exit 1 with a migration hint;
+  // the smoke script runs `install` three more times (the pre-v8.37
+  // sequence was install -> upgrade -> sync -> uninstall; the v8.37
+  // sequence is install -> install -> install -> uninstall, all
+  // idempotent).
+  execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: "pipe" });
+  execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: "pipe" });
   execFileSync("node", [cli, "--non-interactive", "uninstall"], { cwd: tempDir, stdio: "pipe" });
   if (existsSync(join(tempDir, ".cclaw"))) {
     throw new Error("smoke check failed: .cclaw still exists after uninstall");
