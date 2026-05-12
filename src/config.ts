@@ -4,8 +4,6 @@ import YAML from "yaml";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
 import { HARNESS_IDS, type HarnessId } from "./types.js";
 
-export type HookProfile = "minimal" | "strict";
-
 /**
  * Per-specialist model preference (T3-2, v8.13). Maps each cclaw specialist
  * id to one of three logical model tiers; the harness translates the tier
@@ -55,7 +53,6 @@ export interface CclawConfig {
   version: string;
   flowVersion: "8";
   harnesses: HarnessId[];
-  hooks: { profile: HookProfile };
   /**
    * Opt-in flag (default `false`) that preserves the v8.11-and-earlier
    * 9-artefact layout: a separate `manifest.md`, `pre-mortem.md`, and
@@ -105,7 +102,6 @@ export function createDefaultConfig(harnesses: HarnessId[] = ["cursor"]): CclawC
     version: CCLAW_VERSION,
     flowVersion: "8",
     harnesses,
-    hooks: { profile: "minimal" },
     legacyArtifacts: false
   };
 }
@@ -129,7 +125,9 @@ export async function readConfig(projectRoot: string): Promise<CclawConfig | nul
   const configPath = path.join(projectRoot, RUNTIME_ROOT, "config.yaml");
   try {
     const raw = await fs.readFile(configPath, "utf8");
-    return YAML.parse(raw) as CclawConfig;
+    const parsed = YAML.parse(raw) as CclawConfig & { hooks?: unknown };
+    if (parsed && typeof parsed === "object" && "hooks" in parsed) delete parsed.hooks;
+    return parsed as CclawConfig;
   } catch (err) {
     if (err instanceof Error && "code" in err && (err as { code?: string }).code === "ENOENT") return null;
     throw err;

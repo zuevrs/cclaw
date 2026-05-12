@@ -404,7 +404,6 @@ describe("v8.9 cleanup", () => {
 
     it("the hook is shipped as session-start (not a new file)", () => {
       expect(SESSION_START_HOOK_SPEC.fileName).toBe("session-start.mjs");
-      expect(SESSION_START_HOOK_SPEC.defaultEnabled).toBe(true);
     });
   });
 });

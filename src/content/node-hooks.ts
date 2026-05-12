@@ -2,9 +2,7 @@ export interface NodeHookSpec {
   id: string;
   fileName: string;
   description: string;
-  events: string[];
   body: string;
-  defaultEnabled: boolean;
 }
 
 const SESSION_START_HOOK = `#!/usr/bin/env node
@@ -502,27 +500,21 @@ export const SESSION_START_HOOK_SPEC: NodeHookSpec = {
   id: "session-start",
   fileName: "session-start.mjs",
   description: "Rehydrate flow state when a new session begins.",
-  events: ["session.start"],
-  body: SESSION_START_HOOK,
-  defaultEnabled: true
+  body: SESSION_START_HOOK
 };
 
 export const STOP_HANDOFF_HOOK_SPEC: NodeHookSpec = {
   id: "stop-handoff",
   fileName: "stop-handoff.mjs",
   description: "Surface a short handoff message when the agent stops mid-flow.",
-  events: ["session.stop"],
-  body: STOP_HANDOFF_HOOK,
-  defaultEnabled: true
+  body: STOP_HANDOFF_HOOK
 };
 
 export const COMMIT_HELPER_HOOK_SPEC: NodeHookSpec = {
   id: "commit-helper",
   fileName: "commit-helper.mjs",
   description: "Atomic commit per AC plus traceability check (AC -> commit SHA).",
-  events: [],
-  body: COMMIT_HELPER_HOOK,
-  defaultEnabled: true
+  body: COMMIT_HELPER_HOOK
 };
 
 export const NODE_HOOKS: NodeHookSpec[] = [
@@ -530,5 +522,3 @@ export const NODE_HOOKS: NodeHookSpec[] = [
   STOP_HANDOFF_HOOK_SPEC,
   COMMIT_HELPER_HOOK_SPEC
 ];
-
-export const DEFAULT_HOOK_PROFILE = "minimal" as const;
