@@ -10,7 +10,6 @@ describe("node hooks", () => {
     const hook = NODE_HOOKS.find((entry) => entry.id === "commit-helper")!;
     expect(hook.body).toContain("AC-");
     expect(hook.body).toContain("--phase=red|green|refactor");
-    expect(hook.body).toContain("schemaVersion !== 3 && state.schemaVersion !== 2");
     expect(hook.body).toContain("RED phase rejects production files");
   });
 

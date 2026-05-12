@@ -119,11 +119,6 @@ try {
   process.exit(2);
 }
 
-if (state.schemaVersion !== 3 && state.schemaVersion !== 2) {
-  console.error(\`[commit-helper] unsupported flow-state schemaVersion \${state.schemaVersion}.\`);
-  process.exit(2);
-}
-
 const acMode = state.triage?.acMode ?? "strict";
 
 // v8.23 — detect no-git working trees up front. Soft / inline mode treats the

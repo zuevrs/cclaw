@@ -235,6 +235,10 @@ The mapping is mechanical — there is no "did the agent feel like TDD today?" j
 
 The predicate-as-double-check: `commit-helper.mjs` runs `is_behavior_adding(touchSurface)` on every commit. The function returns `false` iff every file in `touchSurface` matches the exclusion set (`*.md`, `*.json`, `*.yml|*.yaml`, `*.toml`, `*.ini`, `*.cfg`, `*.conf`, `.env*`, `tests/**`, `*.test.*`, `*.spec.*`, `__tests__/**`, `docs/**`, `.cclaw/**`, `.github/**`). When `posture` says `docs-only` but the predicate returns `true`, the commit is refused with `posture=docs-only contradicts touchSurface containing source files`. The posture is the **annotation** an agent picked; the predicate is the **gate** that catches a contradiction.
 
+### Bootstrap escape — the only AC-1 exception to RED-before-GREEN (v8.38, named)
+
+AC-1 of a slug whose first task is installing the test framework itself sets `posture: bootstrap`; `commit-helper.mjs` accepts a GREEN commit without a RED predecessor for that AC only. AC-2+ in the same slug uses the full RED → GREEN → REFACTOR cycle. The legacy `state.buildProfile === "bootstrap"` field is still honoured for in-flight projects whose flow-state predates v8.36 — when set, the helper treats every AC as `posture: bootstrap` regardless of what its stanza says. Surfacing this as a named subsection (rather than a runtime knob in the hook body) is the v8.38 follow-up to the audit note that the bootstrap path was previously a hidden escape.
+
 ### Worked examples — picking the posture
 
 Each of the five legacy "When NOT to apply" examples maps cleanly to a posture row above; the canonical TDD list is now the table, not the prose.
