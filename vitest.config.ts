@@ -14,7 +14,7 @@ export default defineConfig({
       clean: true,
       all: true,
       include: ["src/**/*.ts"],
-      exclude: ["src/**/*.d.ts", "src/types.ts", "src/runtime/run-hook.entry.ts", "scripts/**"],
+      exclude: ["src/**/*.d.ts", "src/types.ts", "scripts/**"],
       thresholds: {
         lines: 60,
         statements: 60,
