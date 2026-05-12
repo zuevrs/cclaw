@@ -1,5 +1,48 @@
 # Changelog
 
+## 8.37.0 — CLI consolidation (non-interactive install is the single installer)
+
+### Why
+
+The non-interactive CLI surface had three command names — `install`, `sync`, `upgrade` — that ALL called the same idempotent installer under the hood. `syncCclaw()` and `upgradeCclaw()` were thin aliases around the same `initCclaw()`-shaped path with orphan cleanup. The three names mapped to three TUI menu rows for human-readable intent, which is fine in a menu — but in CI the rename was pure cognitive overhead. A CI script author looking at "should I run install, sync, or upgrade?" had no machine-readable way to tell that all three did the same work; the answer lived in the source.
+
+v8.37 collapses the non-interactive surface to a single idempotent installer (`install`) plus the read-only / lifecycle commands (`knowledge`, `uninstall`, `version`, `help`). `sync` and `upgrade` are NOT removed from the TUI menu — humans benefit from intent-named items, and the menu rows still call `syncCclaw()` / `upgradeCclaw()` internally (no functional change). Only the non-interactive surface collapses. The legacy `--non-interactive sync` and `--non-interactive upgrade` invocations exit 1 with a one-line migration message pointing at the new command.
+
+### What changed
+
+- **AC-1 — `--non-interactive` dispatch** (`src/cli.ts`):
+  - New constant `COLLAPSED_NON_INTERACTIVE_COMMANDS` maps each retired non-interactive command to its migration hint. Lookup happens BEFORE the menu-action switch; the matching command prints the hint to stderr and returns exit 1 (NOT 2 — the invocation shape is valid, the command itself is retired).
+  - New constant `NON_INTERACTIVE_COMMANDS` (a `Set`) enumerates the five supported non-interactive commands: `install`, `knowledge`, `uninstall`, `version`, `help`. Anything else is refused with a "not a non-interactive command. Supported: …" error (exit 2).
+  - The dispatch switch handles `install`, `uninstall`, `knowledge`, `version` directly; `sync` / `upgrade` / `quit` cases remain in the switch only for TypeScript exhaustiveness (the gates above filter them out before they reach the switch).
+  - `help` is handled BEFORE the bare-subcommand gate so `cclaw help` (no `--non-interactive`) and `cclaw --non-interactive help` both print the help screen and exit 0. `help` is read-only "print and exit" that does not benefit from the TUI / non-interactive distinction.
+
+- **AC-2 — Help text + README update** (`src/cli.ts`, `README.md`):
+  - `HELP_USAGE` retains the same shape; `HELP_NOTES` gains a new `v8.37 migration:` paragraph explaining the rename and the rationale.
+  - `HELP_COMMANDS` rewritten to list the canonical five (`install`, `knowledge`, `uninstall`, `version`, `help`) followed by the retired `sync` / `upgrade` entries framed as renamed (`(v8.37) renamed — use \`cclaw --non-interactive install\` ...`). A user reading `--help` sees both the supported surface and the migration path.
+  - The "no subcommand" error message updates its allow-list from `install | sync | upgrade | uninstall | knowledge | version` to `install | knowledge | uninstall | version | help`.
+  - `README.md` CLI section lists the five canonical non-interactive commands; the prose paragraph explains the consolidation, names the migration target, and notes that the TUI menu keeps its Sync / Upgrade rows.
+
+- **AC-3 — Tests** (`tests/unit/cli-non-interactive.test.ts` new, `tests/unit/cli.test.ts` patched):
+  - `cli-non-interactive.test.ts` (11 tests) covers the full v8.37 matrix: install works (and is idempotent on repeat-call), sync exits 1 with migration message, upgrade exits 1 with migration message, sync/upgrade do NOT call `syncCclaw` / `upgradeCclaw` internally (verified by checking that `.cclaw/config.yaml` does NOT appear after the call on a virgin project), knowledge works, uninstall works, version prints the version string, help prints the help screen, `init` non-interactive alias still works for backward compat, help text lists the new canonical surface.
+  - `cli.test.ts` — the legacy `"--non-interactive sync on an already-installed project skips welcome but shows progress + summary"` test is replaced by two new tests: one asserts the v8.37 migration message + exit 1; one asserts `--non-interactive install` is idempotent on an already-installed project (the post-v8.37 path that replaces sync). Both tests carry a comment header naming the v8.37 migration so a future engineer reading the diff sees the migration story.
+
+### Migration
+
+- **CI scripts** invoking `cclaw --non-interactive sync` or `cclaw --non-interactive upgrade` need to switch to `cclaw --non-interactive install`. The install command is idempotent (calling it on an already-installed project is fine) and runs orphan cleanup — same work as sync / upgrade did before v8.37.
+- **TUI users** are unaffected. The TUI menu keeps Sync / Upgrade as menu rows; each calls the same code as before.
+- **Help text** lists both the supported commands and the retired names (with the migration hint), so `cclaw --help` is self-documenting.
+
+### Files changed
+
+- `src/cli.ts` — `COLLAPSED_NON_INTERACTIVE_COMMANDS`, `NON_INTERACTIVE_COMMANDS`, `help` command handler, updated `HELP_USAGE` / `HELP_NOTES` / `HELP_COMMANDS`, updated "no subcommand" error message.
+- `README.md` — CLI quick reference + prose paragraph reflecting the five-command non-interactive surface.
+- `tests/unit/cli-non-interactive.test.ts` (new, 11 tests).
+- `tests/unit/cli.test.ts` — patched legacy sync test (replaced with migration + idempotent install assertions).
+
+### References
+
+- The user previously raised the redundancy at the install layer (sync/upgrade/install all routed through `syncCclaw()`); this slug acts on it.
+
 ## 8.36.0 — `is_behavior_adding` predicate + `posture` field
 
 ### Why

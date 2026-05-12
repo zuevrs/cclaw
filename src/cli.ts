@@ -41,7 +41,7 @@ import { HARNESS_IDS, type CliContext, type HarnessId } from "./types.js";
 const TAGLINE = "harness-first flow toolkit for coding agents";
 
 /**
- * v8.29 — `cclaw` is now TUI-first. The canonical invocation is
+ * v8.29 — `cclaw` is TUI-first. The canonical invocation is
  * `npx cclaw-cli@latest` (no args), which opens a top-level menu
  * (Install / Sync / Upgrade / Uninstall / Browse knowledge / Show
  * version / Quit) with a smart default highlight based on whether
@@ -50,11 +50,20 @@ const TAGLINE = "harness-first flow toolkit for coding agents";
  * The bare subcommand surface (`cclaw init`, `cclaw sync`, …) was
  * dropped in v8.29 — those error out and point at the no-arg
  * invocation. The `--non-interactive` flag is the escape hatch for
- * CI / scripts / piped input: `cclaw --non-interactive init`,
- * `cclaw --non-interactive sync --harness=cursor`, etc.
+ * CI / scripts / piped input.
  *
- * `--help` / `-h` / `--version` / `-v` are preserved as flags
- * regardless of mode (standard CLI convention).
+ * v8.37 — `cclaw --non-interactive sync` and `cclaw --non-interactive
+ * upgrade` were collapsed into `cclaw --non-interactive install`.
+ * Under the hood, all three previously called `syncCclaw()` /
+ * `upgradeCclaw()` (themselves thin wrappers around the same idempotent
+ * installer with orphan cleanup). The non-interactive surface now
+ * matches the code path: ONE installer (`install`), the read-only
+ * commands (`knowledge`, `version`, `help`), and `uninstall`. The TUI
+ * menu keeps `Sync` / `Upgrade` rows because a human reading the menu
+ * benefits from intent-named items; in CI the rename was overhead.
+ *
+ * `--help` / `-h` / `--version` / `-v` are preserved as flags regardless
+ * of mode (standard CLI convention).
  */
 const HELP_USAGE = `Usage:
   cclaw                                     # open the TUI menu (interactive default)
@@ -65,25 +74,37 @@ const HELP_NOTES = `TUI default:
   Running \`cclaw\` (or \`npx cclaw-cli@latest\`) with no arguments opens a
   top-level menu — Install / Sync / Upgrade / Uninstall / Browse
   knowledge / Show version / Quit. The smart default highlights Install
-  when no .cclaw/ exists, Sync when it does. Requires a real TTY.
+  when no .cclaw/ exists, Sync when it does. Requires a real TTY. The
+  Sync / Upgrade menu items are kept for intent-named UX; both call the
+  same idempotent installer that \`Install\` does.
 
 Non-interactive (CI / scripts):
   \`cclaw --non-interactive <command>\` runs the named command without
-  any TUI or picker. Harness selection falls back to --harness=<id>,
-  then the existing .cclaw/config.yaml, then auto-detect from project
-  root markers (.claude/, .cursor/, .opencode/, .codex/, .agents/skills/,
+  any TUI or picker. Supported commands: install, knowledge, uninstall,
+  version, help. Harness selection falls back to --harness=<id>, then
+  the existing .cclaw/config.yaml, then auto-detect from project root
+  markers (.claude/, .cursor/, .opencode/, .codex/, .agents/skills/,
   CLAUDE.md, opencode.json). Errors out if nothing is found.
+
+v8.37 migration:
+  \`--non-interactive sync\` and \`--non-interactive upgrade\` were merged
+  into \`--non-interactive install\`. The installer is idempotent and runs
+  orphan cleanup; calling it on an installed project produces the same
+  result \`sync\` produced before. CI scripts should rename their command;
+  the old names exit 1 with a migration hint.
 
 Flow control (plan / build / review / ship) lives inside the harness
 via the /cc command, not in this CLI. There is no \`cclaw plan\`,
 \`cclaw status\`, \`cclaw ship\`, or \`cclaw migrate\` — by design.`;
 
 const HELP_COMMANDS: ReadonlyArray<readonly [string, string]> = [
-  ["install", "Install cclaw assets in the current project (TUI default when no .cclaw/)."],
-  ["sync", "Reapply cclaw assets to match the current code (idempotent)."],
-  ["upgrade", "Sync after upgrading the cclaw-cli npm package."],
+  ["install", "Install / reapply cclaw assets (idempotent; runs orphan cleanup). The single installer."],
+  ["knowledge", "List captured learnings (.cclaw/state/knowledge.jsonl) grouped by tag."],
   ["uninstall", "Remove cclaw assets from the current project."],
-  ["knowledge", "List captured learnings (.cclaw/state/knowledge.jsonl) grouped by tag."]
+  ["version", "Print the cclaw version and exit (alias of --version)."],
+  ["help", "Print this help screen and exit (alias of --help)."],
+  ["sync", "(v8.37) renamed — use `cclaw --non-interactive install` (idempotent + orphan cleanup)."],
+  ["upgrade", "(v8.37) renamed — use `cclaw --non-interactive install` after upgrading the package."]
 ];
 
 const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
@@ -396,12 +417,39 @@ const SUBCOMMAND_TO_MENU_ACTION: Record<string, MenuAction> = {
   // surfaces the new canonical name (`Install`).
   init: "install",
   install: "install",
+  // v8.37 — `sync` and `upgrade` remain in the map so the TUI menu
+  // dispatch (which routes menu items through this map) still works;
+  // the non-interactive path branches BEFORE this lookup and refuses
+  // sync/upgrade with a migration message. Removing them here would
+  // also remove them from the TUI menu, which is the opposite of what
+  // we want (the menu's Sync / Upgrade rows survive).
   sync: "sync",
   upgrade: "upgrade",
   uninstall: "uninstall",
   knowledge: "knowledge",
   version: "version"
 };
+
+/**
+ * v8.37 — non-interactive commands that were collapsed into `install`.
+ * `sync` and `upgrade` previously called `syncCclaw()` and `upgradeCclaw()`
+ * which are thin aliases around the idempotent installer. In CI / scripts
+ * the rename was cognitive overhead with zero functional difference; we
+ * refuse them here with a one-line migration hint pointing at `install`.
+ * The TUI menu keeps both items (intent-named UX for humans).
+ */
+const COLLAPSED_NON_INTERACTIVE_COMMANDS: Record<string, string> = {
+  sync: "sync was renamed; use `cclaw --non-interactive install` (it is idempotent and runs orphan cleanup).",
+  upgrade:
+    "upgrade was renamed; use `cclaw --non-interactive install` after upgrading the cclaw-cli npm package."
+};
+
+/**
+ * v8.37 — set of subcommands the non-interactive path accepts. Anything
+ * not in this set OR not in `COLLAPSED_NON_INTERACTIVE_COMMANDS` is a
+ * hard "unknown command" error. The TUI menu surface is broader.
+ */
+const NON_INTERACTIVE_COMMANDS = new Set(["install", "init", "knowledge", "uninstall", "version", "help"]);
 
 const BLOCKED_FLOW_COMMANDS = new Set([
   "plan",
@@ -434,7 +482,7 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
   if (!args.command) {
     if (args.nonInteractive) {
       logError(
-        "[cclaw] --non-interactive requires a subcommand (install | sync | upgrade | uninstall | knowledge | version)."
+        "[cclaw] --non-interactive requires a subcommand (install | knowledge | uninstall | version | help)."
       );
       return 2;
     }
@@ -469,11 +517,18 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     return 2;
   }
 
-  const menuAction = SUBCOMMAND_TO_MENU_ACTION[args.command];
-  if (!menuAction) {
-    logError(`[cclaw] unknown command: ${args.command}`);
+  // v8.37 — `help` is a non-interactive command (alias of the --help
+  // flag). Handled BEFORE the bare-subcommand gate AND before the
+  // menu-action lookup because there is no `help` MenuAction (the TUI
+  // menu doesn't surface help as a menu row, and bare `cclaw help`
+  // would otherwise hit the same "no longer a bare subcommand" path
+  // every other command hits — but `help` is a read-only "print and
+  // exit" that does not benefit from the TUI / non-interactive
+  // distinction at all).
+  if (args.command === "help") {
+    emitBanner(useColor);
     emitHelp(useColor);
-    return 2;
+    return 0;
   }
 
   // v8.29 — bare subcommand surface dropped. `cclaw init` /
@@ -488,14 +543,40 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     return 2;
   }
 
+  // v8.37 — non-interactive `sync` / `upgrade` were collapsed into
+  // `install`. Print the one-line migration hint and exit 1 (NOT 2 —
+  // the command shape is valid, the command itself is retired).
+  const collapsedHint = COLLAPSED_NON_INTERACTIVE_COMMANDS[args.command];
+  if (collapsedHint) {
+    logError(`[cclaw] ${collapsedHint}`);
+    return 1;
+  }
+
+  // v8.37 — the supported non-interactive command set is a small fixed
+  // list. Anything not in it is an unknown command — refuse here so the
+  // error names the gate explicitly rather than the older generic
+  // "unknown command" emit-help path.
+  if (!NON_INTERACTIVE_COMMANDS.has(args.command)) {
+    logError(
+      `[cclaw] '${args.command}' is not a non-interactive command. Supported: install, knowledge, uninstall, version, help.`
+    );
+    return 2;
+  }
+
+  const menuAction = SUBCOMMAND_TO_MENU_ACTION[args.command];
+  if (!menuAction) {
+    logError(`[cclaw] unknown command: ${args.command}`);
+    emitHelp(useColor);
+    return 2;
+  }
+
   // --non-interactive path: same code as the TUI dispatcher but with
   // interactive: false so the harness picker doesn't fire even when a
   // TTY happens to be attached. Auto-detect + --harness fall-through
-  // unchanged from v8.28.
+  // unchanged from v8.28. Note: sync/upgrade cases were stripped above
+  // by the COLLAPSED_NON_INTERACTIVE_COMMANDS gate.
   switch (menuAction) {
     case "install":
-    case "sync":
-    case "upgrade":
       return dispatchInstallAction(menuAction, context, args, false, useColor);
     case "uninstall":
       return dispatchUninstall(context, useColor);
@@ -504,6 +585,13 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     case "version":
       info(CCLAW_VERSION);
       return 0;
+    // The `sync`, `upgrade`, and `quit` cases are unreachable from
+    // the non-interactive path: sync/upgrade are filtered by
+    // COLLAPSED_NON_INTERACTIVE_COMMANDS above; `quit` is a TUI-only
+    // action that never enters this dispatcher. Listed here so the
+    // TypeScript exhaustiveness check stays happy.
+    case "sync":
+    case "upgrade":
     case "quit":
       return 0;
   }
