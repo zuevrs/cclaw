@@ -134,6 +134,17 @@ try {
   if (!existsSync(join(tempDir, ".cclaw", "lib", "decision-protocol.md"))) {
     throw new Error("smoke check failed: lib/decision-protocol.md missing after init");
   }
+  // v8.38 — stop-handoff.mjs was retired; verify a fresh install no
+  // longer ships it. The only hook files under .cclaw/hooks/ should be
+  // session-start.mjs and commit-helper.mjs.
+  for (const hook of ["session-start.mjs", "commit-helper.mjs"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "hooks", hook))) {
+      throw new Error(`smoke check failed: hook ${hook} missing after init`);
+    }
+  }
+  if (existsSync(join(tempDir, ".cclaw", "hooks", "stop-handoff.mjs"))) {
+    throw new Error("smoke check failed: stop-handoff.mjs was retired in v8.38 but is still present after init");
+  }
   if (existsSync(join(tempDir, "AGENTS.md"))) {
     throw new Error("smoke check failed: AGENTS.md should NOT be created by cclaw init");
   }
@@ -187,12 +198,31 @@ try {
   }
   // Clean up the skip-flag fixture so the next install/uninstall passes are clean.
   rmSync(orphanSkipPath, { force: true });
+  // v8.38 — retired-hook cleanup smoke check. Plant a stale
+  // .cclaw/hooks/stop-handoff.mjs file (the retired v8.37-and-earlier
+  // hook) and assert the next install removes it and emits the
+  // `Removed retired hook` progress event. Mirrors the v8.17 skill /
+  // v8.22 runbook orphan-cleanup pattern.
+  const retiredHookPath = join(tempDir, ".cclaw", "hooks", "stop-handoff.mjs");
+  writeFileSync(retiredHookPath, "#!/usr/bin/env node\n// stale v8.37 stop-handoff fixture\nprocess.exit(0);\n", "utf8");
+  const retiredHookOut = String(
+    execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
+  );
+  if (existsSync(retiredHookPath)) {
+    throw new Error("smoke check failed: v8.38 retired-hook cleanup did not remove .cclaw/hooks/stop-handoff.mjs after install");
+  }
+  if (!retiredHookOut.includes("Removed retired hook") || !retiredHookOut.includes("stop-handoff.mjs")) {
+    throw new Error(`smoke check failed: v8.38 retired-hook cleanup did not print "Removed retired hook — stop-handoff.mjs" on install; got:\n${retiredHookOut}`);
+  }
   // Re-run install to assert idempotency: zero orphan output on a clean install.
   const idempotentOut = String(
     execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
   );
   if (idempotentOut.includes("Removed orphan skill") || idempotentOut.includes("Cleaned orphan skills")) {
     throw new Error(`smoke check failed: v8.17 orphan-cleanup should be idempotent (zero orphan events on a clean install); got:\n${idempotentOut}`);
+  }
+  if (idempotentOut.includes("Removed retired hook")) {
+    throw new Error(`smoke check failed: v8.38 retired-hook cleanup should be idempotent (zero retired-hook events on a clean install); got:\n${idempotentOut}`);
   }
   // v8.37 — `sync` / `upgrade` non-interactive commands were collapsed
   // into `install`. The retired names now exit 1 with a migration hint;

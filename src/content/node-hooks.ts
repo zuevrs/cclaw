@@ -102,36 +102,6 @@ const advice = pressureAdvice(pressureBytes);
 if (advice) console.log(advice);
 `;
 
-const STOP_HANDOFF_HOOK = `#!/usr/bin/env node
-// cclaw stop-handoff: short reminder when the agent stops mid-flow.
-import fs from "node:fs/promises";
-import path from "node:path";
-
-const root = process.cwd();
-const statePath = path.join(root, ".cclaw", "state", "flow-state.json");
-
-async function readState() {
-  try {
-    return JSON.parse(await fs.readFile(statePath, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-const state = await readState();
-if (!state || !state.currentSlug) process.exit(0);
-
-const acMode = state.triage?.acMode ?? "strict";
-if (acMode === "strict") {
-  const pending = (state.ac || []).filter((item) => item.status !== "committed");
-  if (pending.length === 0) process.exit(0);
-  console.error(\`[cclaw] stopping with \${pending.length} pending AC for \${state.currentSlug}: \${pending.map((item) => item.id).join(", ")}\`);
-  process.exit(0);
-}
-
-console.error(\`[cclaw] stopping mid-flow for \${state.currentSlug} (stage=\${state.currentStage ?? "n/a"}, mode=\${acMode}). Run /cc to resume.\`);
-`;
-
 const COMMIT_HELPER_HOOK = `#!/usr/bin/env node
 // cclaw commit-helper: ac_mode-aware atomic commit hook.
 //
@@ -503,13 +473,6 @@ export const SESSION_START_HOOK_SPEC: NodeHookSpec = {
   body: SESSION_START_HOOK
 };
 
-export const STOP_HANDOFF_HOOK_SPEC: NodeHookSpec = {
-  id: "stop-handoff",
-  fileName: "stop-handoff.mjs",
-  description: "Surface a short handoff message when the agent stops mid-flow.",
-  body: STOP_HANDOFF_HOOK
-};
-
 export const COMMIT_HELPER_HOOK_SPEC: NodeHookSpec = {
   id: "commit-helper",
   fileName: "commit-helper.mjs",
@@ -519,6 +482,15 @@ export const COMMIT_HELPER_HOOK_SPEC: NodeHookSpec = {
 
 export const NODE_HOOKS: NodeHookSpec[] = [
   SESSION_START_HOOK_SPEC,
-  STOP_HANDOFF_HOOK_SPEC,
   COMMIT_HELPER_HOOK_SPEC
 ];
+
+/**
+ * Hook filenames that previous cclaw versions wrote into `.cclaw/hooks/`
+ * but the current version no longer ships. The installer removes these
+ * files (when present) so existing projects upgrade cleanly without
+ * leaving dead hook bodies on disk.
+ *
+ * v8.38 — `stop-handoff.mjs` retired (advisory hook with no consumers).
+ */
+export const RETIRED_HOOK_FILES: readonly string[] = ["stop-handoff.mjs"];
