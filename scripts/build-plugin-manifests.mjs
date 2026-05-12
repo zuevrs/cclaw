@@ -19,9 +19,6 @@ function hooksJson(harness) {
       events: {
         "session.start": [
           { command: "node", args: ["./.cclaw/hooks/session-start.mjs"] }
-        ],
-        "session.stop": [
-          { command: "node", args: ["./.cclaw/hooks/stop-handoff.mjs"] }
         ]
       }
     },
@@ -30,7 +27,7 @@ function hooksJson(harness) {
   ) + "\n";
 }
 
-const opencodePlugin = `// cclaw opencode plugin (minimal). Wires session-start and stop-handoff hooks.
+const opencodePlugin = `// cclaw opencode plugin (minimal). Wires the session-start hook.
 import { spawn } from "node:child_process";
 import path from "node:path";
 function run(filePath) {
@@ -38,8 +35,7 @@ function run(filePath) {
 }
 export default {
   events: {
-    "session.start": run("session-start.mjs"),
-    "session.stop": run("stop-handoff.mjs")
+    "session.start": run("session-start.mjs")
   }
 };
 `;

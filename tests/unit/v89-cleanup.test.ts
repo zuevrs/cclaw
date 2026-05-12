@@ -379,32 +379,17 @@ describe("v8.9 cleanup", () => {
     });
   });
 
-  describe("B2 — session-start hook surfaces flow-artifact pressure advice", () => {
-    it("hook body defines flowArtifactBytes (per-slug artefact byte sum)", () => {
-      expect(SESSION_START_HOOK_SPEC.body).toMatch(/async function flowArtifactBytes/);
+  describe("B2 — session-start hook is the slug ping (v8.38: pressure advisory dropped)", () => {
+    it("hook body prints the [cclaw] active: line for active flows", () => {
+      expect(SESSION_START_HOOK_SPEC.body).toContain("[cclaw] active:");
     });
 
-    it("hook body defines the three thresholds (light / high / critical)", () => {
-      expect(SESSION_START_HOOK_SPEC.body).toMatch(/FLOW_PRESSURE_LIGHT_KB\s*=\s*30/);
-      expect(SESSION_START_HOOK_SPEC.body).toMatch(/FLOW_PRESSURE_HIGH_KB\s*=\s*60/);
-      expect(SESSION_START_HOOK_SPEC.body).toMatch(/FLOW_PRESSURE_CRITICAL_KB\s*=\s*100/);
-    });
-
-    it("hook body defines pressureAdvice that returns null below the light threshold", () => {
-      expect(SESSION_START_HOOK_SPEC.body).toMatch(/function pressureAdvice/);
-      expect(SESSION_START_HOOK_SPEC.body).toMatch(/return null;/);
-    });
-
-    it("hook body invokes pressureAdvice after the active-flow log line", () => {
-      const indexOfActiveLog = SESSION_START_HOOK_SPEC.body.indexOf("[cclaw] active:");
-      const indexOfAdviceCall = SESSION_START_HOOK_SPEC.body.indexOf("const advice = pressureAdvice");
-      expect(indexOfActiveLog).toBeGreaterThan(-1);
-      expect(indexOfAdviceCall).toBeGreaterThan(indexOfActiveLog);
+    it("hook body prints the no-active-flow line when state is missing or empty", () => {
+      expect(SESSION_START_HOOK_SPEC.body).toContain("[cclaw] no active flow. Use /cc <task> to start.");
     });
 
     it("the hook is shipped as session-start (not a new file)", () => {
       expect(SESSION_START_HOOK_SPEC.fileName).toBe("session-start.mjs");
-      expect(SESSION_START_HOOK_SPEC.defaultEnabled).toBe(true);
     });
   });
 });

@@ -36,13 +36,13 @@ describe("install/sync/upgrade/uninstall round-trip", () => {
     await expect(fs.access(path.join(project, ".cursor", "commands", "cc.md"))).rejects.toBeTruthy();
   });
 
-  it("config reflects v8 flow + minimal hooks", async () => {
+  it("config reflects v8 flow + selected harnesses", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project, harnesses: ["claude", "cursor"] });
     const yaml = await fs.readFile(path.join(project, ".cclaw", "config.yaml"), "utf8");
     expect(yaml).toContain("flowVersion: \"8\"");
-    expect(yaml).toContain("profile: minimal");
     expect(yaml).toContain("- claude");
     expect(yaml).toContain("- cursor");
+    expect(yaml).not.toContain("profile:");
   });
 });

@@ -1,5 +1,93 @@
 # Changelog
 
+## 8.38.0 — hooks cleanup
+
+### Why
+
+The v8.36 hook-and-posture audit flagged five hook-adjacent surfaces that paid carrying cost without anyone reading them:
+
+1. `src/runtime/run-hook.entry.ts` — a `dist/runtime/run-hook.mjs` bundle entry that `src/install.ts` never invokes (the installer writes hook bodies directly from `NODE_HOOKS`).
+2. `esbuild` devDependency + `build:hook-bundle` script — only existed to bundle the loader above.
+3. `NodeHookSpec.events: string[]` and `NodeHookSpec.defaultEnabled: boolean` — declared on the interface and on every shipped spec, never read; harness wiring in `src/install.ts` hard-codes the event → file mapping. `DEFAULT_HOOK_PROFILE`, `HookProfile` type, and `CclawConfig.hooks.profile` were the same kind of dead schema noise.
+4. `stop-handoff.mjs` (29 LOC body) — registered on the `session.stop` harness event in two places, but the body printed messages that either duplicated `session-start`'s "AC committed N/M" line (strict mode) or the resume picker (soft mode). Zero references outside install / test plumbing.
+5. `session-start.mjs` (96 LOC body) — overgrown. The pressure advisory and the schemaVersion-1 migration nag wrote to stdout that most harnesses don't surface to the agent who could act on it; cclaw's stage-windowed skill loading already keeps prompt size bounded.
+
+v8.38 deletes (or slims) each of these surgically, plus tightens `commit-helper.mjs` and **names** the previously-hidden `posture: bootstrap` escape in `tdd-and-verification.md` so future contributors don't rediscover it the hard way.
+
+### What changed
+
+- **AC-1 — dead loader and bundle removed** (`src/runtime/run-hook.entry.ts`, `package.json`, `vitest.config.ts`):
+  - Deleted `src/runtime/run-hook.entry.ts` (22 LOC). The directory is now empty and gone.
+  - Removed the `build:hook-bundle` script from `package.json`; the `build` chain no longer invokes `esbuild`.
+  - Removed `esbuild` from `devDependencies` (no other repo file references it).
+  - Removed the `src/runtime/run-hook.entry.ts` entry from `vitest.config.ts`'s coverage exclude list.
+  - Published tarball no longer ships `dist/runtime/run-hook.mjs` (verified via `npm pack --dry-run`).
+
+- **AC-2 — dead schema fields removed** (`src/content/node-hooks.ts`, `src/config.ts`):
+  - `NodeHookSpec` interface no longer declares `events: string[]` or `defaultEnabled: boolean`; the three shipped specs no longer carry the fields.
+  - `DEFAULT_HOOK_PROFILE` constant removed.
+  - `HookProfile` type and `CclawConfig.hooks.profile` field removed from `src/config.ts`; `createDefaultConfig` / `renderConfig` no longer emit them.
+  - One-line backwards-compat in `readConfig`: parsed `.cclaw/config.yaml` with a stale `hooks:` block has the field stripped before being typed as `CclawConfig`, so old configs upgrade silently.
+
+- **AC-3 — `stop-handoff.mjs` retired** (`src/content/node-hooks.ts`, `src/install.ts`, `scripts/build-plugin-manifests.mjs`, `scripts/smoke-init.mjs`):
+  - `STOP_HANDOFF_HOOK` constant and `STOP_HANDOFF_HOOK_SPEC` export removed from `src/content/node-hooks.ts`.
+  - `NODE_HOOKS` is now `[SESSION_START_HOOK_SPEC, COMMIT_HELPER_HOOK_SPEC]` (in that order).
+  - New `RETIRED_HOOK_FILES: readonly string[]` export naming `stop-handoff.mjs` (used by the installer's orphan cleanup).
+  - `src/install.ts` — new `removeRetiredHookFiles()` helper runs on every `install` / `sync` / `upgrade`. Existing `.cclaw/hooks/stop-handoff.mjs` files are removed and the event is surfaced as `Removed retired hook — stop-handoff.mjs` so upgrade output is auditable. The `session.stop` wiring under `claude/.claude/hooks.json` and `opencode/.opencode/plugin.mjs` is gone.
+  - `scripts/build-plugin-manifests.mjs` — generated harness manifests no longer wire `session.stop`.
+  - `scripts/smoke-init.mjs` — covers two new shapes: a fresh install must NOT ship `stop-handoff.mjs`; an install run against a project that has a stale `.cclaw/hooks/stop-handoff.mjs` (simulating an upgrade) must remove it and print the retired-hook line. A second install on the now-clean tree must NOT re-print the line (idempotent).
+
+- **AC-4 — `session-start.mjs` slimmed to a minimal ping** (`src/content/node-hooks.ts`, ~96 → ~28 LOC body):
+  - Dropped `flowArtifactBytes()`, `pressureAdvice()`, `PRESSURE_LOW`, `PRESSURE_HIGH` and the schemaVersion-1 migration nag.
+  - Kept the contract: read `.cclaw/state/flow-state.json` (graceful nullable), print `[cclaw] active: <slug> (stage=…, mode=…)`; strict mode appends `; AC committed N/M`; missing or empty state prints `[cclaw] no active flow. Use /cc <task> to start.`
+  - Pressure advisory was not moved into the orchestrator dispatch envelope (the audit's alternative). Rationale: (a) the value claim was unverified (no real-user report of pressure-triggered behaviour change), (b) cclaw already has stage-windowed skill loading + orchestrator-slim runbooks (v8.19 / v8.22) so prompt size is bounded by design, (c) one less moving piece.
+
+- **AC-5 — `commit-helper.mjs` tightened + bootstrap escape named** (`src/content/node-hooks.ts`, `src/content/skills/tdd-and-verification.md`):
+  - Dropped the schemaVersion-1 migration nag (matches AC-4); `migrateFlowState()` already handles schema migration on read, so a runtime guard inside the commit-time hook is dead defence.
+  - **Kept the `posture === "bootstrap"` escape** unchanged. v8.36 promoted the old `state.buildProfile === "bootstrap"` runtime knob into a named posture, and `commit-helper.mjs` still consults both — `posture` first, then the legacy field as a fallback for in-flight projects whose `flow-state.json` predates v8.36.
+  - **Documented** the escape in `src/content/skills/tdd-and-verification.md` under a new `### Bootstrap escape — the only AC-1 exception to RED-before-GREEN (v8.38, named)` subsection placed under the posture-mapping table. The audit flagged this as a hidden runtime knob; making it a named subsection in the user-facing skill text closes that gap.
+  - **Did NOT** lift `touchSurfacePrefixes` from flow-state (audit item 5c). No real-user failure report; the RED-scan regex limitation can be a follow-up slug if a monorepo user hits it.
+
+- **AC-6 — tripwire test for the v8.38 cleanup contract** (`tests/unit/v838-cleanup.test.ts` new, 31 tests):
+  - One tripwire per AC so a single regression flips exactly one assertion. Asserts: `src/runtime/run-hook.entry.ts` is gone; `package.json` has no `build:hook-bundle` / `esbuild`; `vitest.config.ts` no longer excludes the deleted file; `NodeHookSpec` source has no `events` / `defaultEnabled`; runtime spec objects carry no `events` / `defaultEnabled`; `DEFAULT_HOOK_PROFILE` is unexported; `src/config.ts` has no `HookProfile` / `hooks.profile`; `renderConfig` emits no `hooks:` block; `STOP_HANDOFF_HOOK` and `STOP_HANDOFF_HOOK_SPEC` are unexported; `NODE_HOOKS` is `[session-start, commit-helper]`; `RETIRED_HOOK_FILES` includes `stop-handoff.mjs`; `scripts/build-plugin-manifests.mjs` and `src/install.ts` no longer reference `session.stop` / `stop-handoff`; session-start body has no `flowArtifactBytes` / `pressureAdvice` / `PRESSURE_LOW` / `PRESSURE_HIGH` / `schemaVersion` strings; body fits inside ~30 lines; commit-helper still recognises `bootstrap` + `buildProfile`; `tdd-and-verification.md` skill body names the Bootstrap escape, `posture: bootstrap`, `AC-1`, and `buildProfile === "bootstrap"`.
+
+### LOC totals
+
+- Source-only (`src/`, `scripts/`, `vitest.config.ts`, `package.json`, excluding `package-lock.json`): **89 insertions, 176 deletions** — net `-87` LOC.
+- Hook bodies + dead loader (`src/content/node-hooks.ts`, `src/runtime/`): **24 insertions, 156 deletions** — net `-132` LOC.
+- Tests + integration: **246 insertions, 45 deletions** — net `+201` LOC (mostly the new 216-line `v838-cleanup.test.ts`).
+- Overall (excluding lockfile): **335 insertions, 221 deletions** — net `+114` LOC, with the production code shrinking by ~130 LOC and the test surface growing by ~200 LOC.
+
+### Migration
+
+- **Existing installs** upgrade smoothly: `cclaw install` (or `cclaw --non-interactive install`) on a project that has `.cclaw/hooks/stop-handoff.mjs` removes the file and prints `Removed retired hook — stop-handoff.mjs`. A second run on the now-clean tree is silent (idempotent). Smoke-init covers both paths.
+- **Old `.cclaw/config.yaml` with `hooks: { profile: minimal }`** parses fine; the field is stripped on read and never re-emitted on the next sync.
+- **Harness plugin files** (`.claude/hooks.json`, `.opencode/plugin.mjs`) re-emit without the `session.stop` event on next install. No user action needed.
+- **CI / external integrations** that scraped `session-start.mjs` stdout for pressure advisories must remove that handling. The pressure advisory wrote to stdout that most harnesses didn't surface anyway; nothing in this repo or in shipped slugs read it.
+
+### Files changed
+
+- `src/runtime/run-hook.entry.ts` — DELETED (22 LOC).
+- `package.json` — removed `build:hook-bundle` script + `esbuild` devDep; bumped to `8.38.0`.
+- `vitest.config.ts` — removed coverage exclude for the deleted file.
+- `src/content/node-hooks.ts` — removed `events` / `defaultEnabled` from `NodeHookSpec` + every spec, removed `DEFAULT_HOOK_PROFILE`, removed `STOP_HANDOFF_HOOK` body and `STOP_HANDOFF_HOOK_SPEC` export, slimmed `SESSION_START_HOOK` body from ~96 → ~28 LOC, dropped schemaVersion guard from `COMMIT_HELPER_HOOK`, added `RETIRED_HOOK_FILES` export.
+- `src/config.ts` — removed `HookProfile` type, removed `hooks.profile` from `CclawConfig` + `createDefaultConfig` + `renderConfig`; added one-line strip-on-read in `readConfig` for legacy YAML.
+- `src/install.ts` — removed `session.stop` wiring; added `removeRetiredHookFiles()` helper hooked into `syncCclaw`.
+- `scripts/build-plugin-manifests.mjs` — removed `session.stop` from generated `hooks.json` and `plugin.mjs`.
+- `scripts/smoke-init.mjs` — added retired-hook cleanup smoke (write stale `stop-handoff.mjs`, run install, assert removal + line in output, assert idempotence on second install).
+- `src/content/skills/tdd-and-verification.md` — added `### Bootstrap escape` subsection under the posture-mapping table.
+- `tests/unit/v838-cleanup.test.ts` — new, 31 tests.
+- `tests/unit/v89-cleanup.test.ts` — pressure-advisory `§B2` rewritten to assert the slimmed slug-ping behaviour.
+- `tests/unit/node-hooks.test.ts` — removed `DEFAULT_HOOK_PROFILE` test, removed `defaultEnabled` per-spec assertions, removed the `stop-handoff` hook test block, removed schemaVersion-guard assertion.
+- `tests/unit/install.test.ts` — replaced `writes session-start, stop-handoff, commit-helper hooks` with `writes session-start and commit-helper hooks (stop-handoff retired in v8.38)` + added `install cleans up an existing .cclaw/hooks/stop-handoff.mjs from pre-v8.38 installs`.
+- `tests/unit/config.test.ts` — removed the `hooks.profile === "minimal"` assertion.
+- `tests/integration/install-smoke.test.ts` — removed the `profile: minimal` assertion; added a negative assertion that `profile:` no longer appears in `config.yaml`.
+
+### References
+
+- The v8.36 hook-and-posture audit surfaced these as carrying cost.
+- Pressure-advisory removal: the original v8.9 §B2 acceptance claim was that "the agent will respond to the advisory line" — never independently verified, no shipped slug evidence; v8.19/v8.22 stage-windowed skill loading made the implicit prompt-size goal a property of the design rather than something a hook needs to nudge.
+
 ## 8.37.0 — CLI consolidation (non-interactive install is the single installer)
 
 ### Why

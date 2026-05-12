@@ -28,8 +28,8 @@ import { META_SKILL } from "./content/meta-skill.js";
 import {
   COMMIT_HELPER_HOOK_SPEC,
   NODE_HOOKS,
+  RETIRED_HOOK_FILES,
   SESSION_START_HOOK_SPEC,
-  STOP_HANDOFF_HOOK_SPEC,
   type NodeHookSpec
 } from "./content/node-hooks.js";
 import { renderStartCommand } from "./content/start-command.js";
@@ -389,7 +389,7 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
     const { dir, fileName } = layout.hooksConfig;
     await ensureDir(path.join(projectRoot, dir));
     if (fileName.endsWith(".mjs")) {
-      const moduleBody = `// cclaw opencode plugin (minimal). Wires session-start and stop-handoff hooks.\nimport { spawn } from \"node:child_process\";\nimport path from \"node:path\";\nfunction run(filePath) {\n  return () => spawn(process.execPath, [path.join(\"${HOOKS_REL_PATH}\", filePath)], { stdio: \"inherit\" });\n}\nexport default {\n  events: {\n    \"session.start\": run(\"session-start.mjs\"),\n    \"session.stop\": run(\"stop-handoff.mjs\")\n  }\n};\n`;
+      const moduleBody = `// cclaw opencode plugin (minimal). Wires the session-start hook.\nimport { spawn } from \"node:child_process\";\nimport path from \"node:path\";\nfunction run(filePath) {\n  return () => spawn(process.execPath, [path.join(\"${HOOKS_REL_PATH}\", filePath)], { stdio: \"inherit\" });\n}\nexport default {\n  events: {\n    \"session.start\": run(\"session-start.mjs\")\n  }\n};\n`;
       await writeFileSafe(path.join(projectRoot, dir, fileName), moduleBody);
     } else {
       const hooksJson = {
@@ -398,13 +398,30 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
         events: {
           "session.start": [
             { command: "node", args: [`./${HOOKS_REL_PATH}/${SESSION_START_HOOK_SPEC.fileName}`] }
-          ],
-          "session.stop": [
-            { command: "node", args: [`./${HOOKS_REL_PATH}/${STOP_HANDOFF_HOOK_SPEC.fileName}`] }
           ]
         }
       };
       await writeFileSafe(path.join(projectRoot, dir, fileName), `${JSON.stringify(hooksJson, null, 2)}\n`);
+    }
+  }
+}
+
+/**
+ * v8.38 — remove hook files we shipped in earlier versions but no
+ * longer write. Idempotent; emits one progress event per removed
+ * file, nothing when the project is already clean. The list lives
+ * alongside `NODE_HOOKS` in `node-hooks.ts` so adding / removing a
+ * hook in a future slug stays one-touch.
+ */
+async function removeRetiredHookFiles(
+  projectRoot: string,
+  emit: (step: string, detail?: string) => void
+): Promise<void> {
+  for (const fileName of RETIRED_HOOK_FILES) {
+    const target = path.join(projectRoot, HOOKS_REL_PATH, fileName);
+    if (await exists(target)) {
+      await fs.rm(target, { force: true });
+      emit("Removed retired hook", fileName);
     }
   }
 }
@@ -488,6 +505,8 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     await writeHookFile(projectRoot, hook);
   }
   emit("Wrote hooks", `${NODE_HOOKS.length} hooks → .cclaw/hooks/`);
+
+  await removeRetiredHookFiles(projectRoot, emit);
 
   await writeRuntimeSkills(projectRoot);
   await writeMetaSkill(projectRoot);

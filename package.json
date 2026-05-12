@@ -1,6 +1,6 @@
 {
   "name": "cclaw-cli",
-  "version": "8.37.0",
+  "version": "8.38.0",
   "description": "Lightweight harness-first flow toolkit for coding agents",
   "type": "module",
   "bin": {
@@ -19,8 +19,7 @@
   },
   "scripts": {
     "clean:dist": "node -e \"import('node:fs/promises').then((fs) => fs.rm('dist', { recursive: true, force: true }))\"",
-    "build": "npm run clean:dist && tsc -p tsconfig.json && node scripts/copy-skill-md.mjs && npm run build:hook-bundle && node scripts/chmod-bin.mjs",
-    "build:hook-bundle": "esbuild src/runtime/run-hook.entry.ts --bundle --platform=node --format=esm --outfile=dist/runtime/run-hook.mjs",
+    "build": "npm run clean:dist && tsc -p tsconfig.json && node scripts/copy-skill-md.mjs && node scripts/chmod-bin.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -52,7 +51,6 @@
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/node": "^24.7.2",
     "@vitest/coverage-v8": "^3.2.4",
-    "esbuild": "^0.28.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

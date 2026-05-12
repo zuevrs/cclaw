@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import { createDefaultConfig, validateHarnesses } from "../../src/config.js";
 
 describe("config", () => {
-  it("default config locks v8 flow + minimal hooks", () => {
+  it("default config locks v8 flow + cursor harness", () => {
     const config = createDefaultConfig();
     expect(config.flowVersion).toBe("8");
-    expect(config.hooks.profile).toBe("minimal");
     expect(config.harnesses).toEqual(["cursor"]);
   });
 
