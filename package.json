@@ -1,6 +1,6 @@
 {
   "name": "cclaw-cli",
-  "version": "8.42.0",
+  "version": "8.43.0",
   "description": "Lightweight harness-first flow toolkit for coding agents",
   "type": "module",
   "bin": {
@@ -25,8 +25,7 @@
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
     "smoke:runtime": "npm run build && node scripts/smoke-init.mjs",
-    "build:plugin-manifests": "npm run build && node scripts/build-plugin-manifests.mjs",
-    "release:check": "npm run build && node scripts/verify-bin-executable.mjs && npm run test && node scripts/build-plugin-manifests.mjs && npm pack --dry-run && node scripts/smoke-init.mjs",
+    "release:check": "npm run build && node scripts/verify-bin-executable.mjs && npm run test && npm pack --dry-run && node scripts/smoke-init.mjs",
     "release:bundle": "npm run release:check && npm pack"
   },
   "keywords": [

@@ -274,6 +274,85 @@ describe("flow-state", () => {
       })
     ).toThrow(/triage\.interpretationForks entries must be strings/);
   });
+
+  // v8.43 — G-1/G-2 composition-drift fix from the v8.42 critic dogfood.
+  // The critic prompt and the critic-stage runbook both referenced
+  // `triage.criticOverride` (block-ship picker's accept-and-ship audit
+  // trail) and `triageNotes` (docs-only-trivial skip rationale) without
+  // declaring either field on `TriageDecision`. v8.43 lifts them into
+  // the canonical type + validator.
+  describe("v8.43 — triage.criticOverride and triage.notes (composition-drift fix)", () => {
+    const base = {
+      schemaVersion: 3 as const,
+      currentSlug: "x",
+      currentStage: null,
+      ac: [],
+      lastSpecialist: null,
+      startedAt: "2026-05-07T00:00:00Z",
+      reviewIterations: 0,
+      securityFlag: false
+    };
+    const validTriage: TriageDecision = {
+      complexity: "small-medium",
+      acMode: "soft",
+      path: ["plan", "build", "review", "ship"],
+      rationale: "x",
+      decidedAt: "2026-05-07T00:00:00Z",
+      userOverrode: false
+    };
+
+    it("round-trips triage.criticOverride: true (block-ship picker accept-and-ship audit trail)", () => {
+      const triage: TriageDecision = { ...validTriage, criticOverride: true };
+      expect(() => assertFlowStateV82({ ...base, triage })).not.toThrow();
+      expect(triage.criticOverride).toBe(true);
+    });
+
+    it("accepts absent triage.criticOverride (the common path)", () => {
+      expect(() => assertFlowStateV82({ ...base, triage: validTriage })).not.toThrow();
+    });
+
+    it("rejects triage.criticOverride of a wrong type (audit trail must be unambiguous boolean)", () => {
+      expect(() =>
+        assertFlowStateV82({
+          ...base,
+          triage: { ...validTriage, criticOverride: "yes" as never }
+        })
+      ).toThrow(/triage\.criticOverride must be a boolean/);
+      // null is explicitly rejected — absent means no override, `true` means
+      // override; there is no third state and accepting null would muddy the
+      // audit-trail semantics.
+      expect(() =>
+        assertFlowStateV82({
+          ...base,
+          triage: { ...validTriage, criticOverride: null as never }
+        })
+      ).toThrow(/triage\.criticOverride must be a boolean/);
+    });
+
+    it("round-trips triage.notes: \"...\" (critic docs-only-trivial skip rationale)", () => {
+      const triage: TriageDecision = {
+        ...validTriage,
+        notes: "skipped — docs-only-trivial (1 AC, ≤200 char text, ≤2 files)."
+      };
+      expect(() => assertFlowStateV82({ ...base, triage })).not.toThrow();
+      expect(triage.notes).toBe(
+        "skipped — docs-only-trivial (1 AC, ≤200 char text, ≤2 files)."
+      );
+    });
+
+    it("accepts absent triage.notes (the common path)", () => {
+      expect(() => assertFlowStateV82({ ...base, triage: validTriage })).not.toThrow();
+    });
+
+    it("rejects triage.notes of a wrong type (must be string when present, not null)", () => {
+      expect(() =>
+        assertFlowStateV82({ ...base, triage: { ...validTriage, notes: 42 as never } })
+      ).toThrow(/triage\.notes must be a string/);
+      expect(() =>
+        assertFlowStateV82({ ...base, triage: { ...validTriage, notes: null as never } })
+      ).toThrow(/triage\.notes must be a string/);
+    });
+  });
 });
 
 describe("migrateFlowState", () => {

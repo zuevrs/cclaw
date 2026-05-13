@@ -385,6 +385,42 @@ export interface TriageDecision {
    * a new reason can be introduced without a schema bump.
    */
   downgradeReason?: string | null;
+  /**
+   * v8.43 — set by the orchestrator when the user picks
+   * `[2] accept-and-ship` at the Hop 4.5 block-ship picker (see
+   * `.cclaw/lib/runbooks/critic-stage.md > Verdict handling`). The
+   * critic returned `block-ship` and the user chose to ship anyway. The
+   * field is a pure audit-trail boolean — downstream readers do not
+   * branch on it; it just records that a critic block was overridden
+   * for this slug so a future "why did this slug ship with critic
+   * blocks open?" audit can answer without re-reading review.md /
+   * critic.md.
+   *
+   * Optional, omitted on the common path (critic `pass` / `iterate` or
+   * user accepted the picker's `[1] fix and re-review` arm). Stamped
+   * exactly once per slug, at the moment the picker fires; never
+   * cleared by ship. Strict in shape — `true` is the only meaningful
+   * value, so the validator rejects `null` to keep the audit trail
+   * unambiguous (absent = no override; `true` = override). Pre-v8.43
+   * flows without the field validate unchanged.
+   */
+  criticOverride?: boolean;
+  /**
+   * v8.43 — free-text per-decision notes attached to the triage. The
+   * critic uses this to record skip rationale (e.g. the
+   * `docs-only-trivial` exemption skip reason cited in
+   * `.cclaw/lib/agents/critic.md > Skip conditions`). Originally
+   * referenced in prose as `triageNotes` in the v8.42 critic prompt;
+   * v8.43 lifts it into the canonical `triage.notes` slot on the
+   * `TriageDecision` so the field has a declared home and a typed
+   * validator entry.
+   *
+   * Optional, omitted on flows with nothing to record. Validators
+   * accept only `string` when present; `null` is rejected to keep the
+   * "absent = no note" semantics unambiguous. Pre-v8.43 flows without
+   * the field validate unchanged.
+   */
+  notes?: string;
 }
 
 export interface CliContext {
