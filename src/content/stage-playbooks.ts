@@ -15,7 +15,7 @@ If the task is a typo / format / rename limited to ≤1 file and ≤30 lines, **
 
 - create the change directly,
 - stage it,
-- run \`commit-helper.mjs --ac=AC-1 --message="..."\` with a one-line AC declared inline (no \`plan.md\` file),
+- run \`git commit -m "<feat|fix|refactor|docs>: <one-line summary>"\` (no per-AC prefix; inline-mode flows do not produce an AC table),
 - proceed to ship.
 
 For anything else, continue with this runbook.
@@ -88,7 +88,7 @@ const BUILD_PLAYBOOK = `# Stage runbook — build (TDD cycle)
 
 > NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. THE RED FAILURE IS THE SPEC.
 
-Build refuses to commit production code that is not preceded by a recorded RED test. \`commit-helper.mjs\` invocations carry a \`--phase\` flag (\`red\` / \`green\` / \`refactor\`) so the AC traceability chain encodes the cycle.
+Build refuses to commit production code that is not preceded by a recorded RED test. As of v8.40 the cycle is enforced by **prompt + commit-message-prefix contract** (no hook): each AC's commits carry an explicit \`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` (or posture-specific \`test\` / \`docs\`) prefix that the reviewer scans at handoff time via \`git log --grep="(AC-N):"\`. Missing or out-of-order commits are A-1 findings (severity=required).
 
 ## 1. Pick the next pending AC
 
@@ -121,11 +121,10 @@ Stage and commit:
 
 \`\`\`bash
 git add tests/path/to/new-or-updated.test.ts
-node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=red \\
-  --message="red(AC-N): assert <observable behaviour>"
+git commit -m "red(AC-N): assert <observable behaviour>"
 \`\`\`
 
-Append the watched-RED proof to \`flows/<slug>/build.md\` under the AC row, in the **RED proof** column (test name + 1-2 line failure excerpt).
+Append the watched-RED proof to \`flows/<slug>/build.md\` under the AC row, in the **RED proof** column (test name + 1-2 line failure excerpt). The commit SHA goes into the row's **commits** column so the reviewer can cross-reference \`git log --grep="^red(AC-N):"\`.
 
 ## 4. GREEN — minimal production change to make RED pass
 
@@ -140,11 +139,10 @@ Stage and commit:
 
 \`\`\`bash
 git add src/path/to/implementation.ts
-node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=green \\
-  --message="green(AC-N): minimal impl that satisfies RED"
+git commit -m "green(AC-N): minimal impl that satisfies RED"
 \`\`\`
 
-Append the GREEN evidence to \`flows/<slug>/build.md\` under the AC row, in the **GREEN evidence** column.
+Append the GREEN evidence to \`flows/<slug>/build.md\` under the AC row, in the **GREEN evidence** column. The reviewer cross-checks with \`git log --grep="^green(AC-N):"\` at handoff time — a \`green(AC-N): ...\` commit without a prior \`red(AC-N): ...\` (and posture is \`test-first\` or \`characterization-first\`) is an A-1 finding (severity=required, axis=correctness).
 
 ## 5. REFACTOR — keep behaviour, improve shape (mandatory)
 
@@ -158,11 +156,10 @@ If a refactor lands, commit it separately:
 
 \`\`\`bash
 git add src/path/to/refactored.ts
-node .cclaw/hooks/commit-helper.mjs --ac=AC-N --phase=refactor \\
-  --message="refactor(AC-N): <one-line shape change>"
+git commit -m "refactor(AC-N): <one-line shape change>"
 \`\`\`
 
-Otherwise call \`commit-helper.mjs --ac=AC-N --phase=refactor --skipped\` so the chain records the explicit decision.
+Otherwise commit an empty marker so the reviewer's git-log scan still finds the decision: \`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\`. The literal \`skipped:\` token after \`(AC-N)\` is what the reviewer recognises; a row that omits the marker commit is treated as missing-refactor (A-1, severity=required).
 
 ## 6. Append the AC row to builds/<slug>.md
 
@@ -183,9 +180,9 @@ If more AC are pending, repeat from step 1. If all AC are through REFACTOR, tran
 When \`reviewer\` returns \`block\`, the slice-builder is dispatched in \`fix-only\` mode bound to the file:line refs from the latest review block. The TDD cycle still applies:
 
 - if the fix changes observable behaviour, write a new RED test that encodes the corrected behaviour, then GREEN, then REFACTOR;
-- if the fix is purely a refactor of existing code (no behaviour change), commit it under \`--phase=refactor\` with a citation of the F-N finding;
-- the AC id stays the same (\`commit-helper.mjs --ac=AC-N --phase=… --message="fix: F-N …"\`);
-- a separate set of rows in \`flows/<slug>/build.md\` records F-N → phase → commit.
+- if the fix is purely a refactor of existing code (no behaviour change), commit it as \`refactor(AC-N): fix F-N — <one-line>\`;
+- the AC id stays the same (\`git commit -m "<prefix>(AC-N): fix F-N — <one-line>"\`); the \`fix F-N\` token in the body is what the reviewer cross-references against the review block;
+- a separate set of rows in \`flows/<slug>/build.md\` records F-N → phase → commit (SHA).
 
 ## 9. Mandatory gates (every AC)
 
@@ -198,9 +195,9 @@ Before transitioning to review, every AC must satisfy:
 5. **green_full_suite** — full relevant suite green after GREEN, not the single test.
 6. **refactor_completed_or_skipped_with_reason** — REFACTOR ran, or was explicitly skipped with a one-line reason.
 7. **traceable_to_plan** — AC commits reference plan AC ids and the plan's file set.
-8. **commit_chain_intact** — \`commit-helper.mjs\` recorded RED + GREEN + REFACTOR SHAs in flow-state.
+8. **commit_chain_intact** — \`git log --grep="(AC-N):" --oneline\` shows the posture-appropriate commit sequence (e.g. \`red(AC-N)\` before \`green(AC-N)\` for \`test-first\` / \`characterization-first\` postures; \`refactor(AC-N)\` only for \`refactor-only\`; \`test(AC-N)\` only for \`tests-as-deliverable\`; \`docs(AC-N)\` only for \`docs-only\`).
 
-\`commit-helper.mjs\` enforces 1, 3, 6, 8 mechanically. The reviewer enforces 2, 4, 5, 7 in iteration 1.
+All eight gates are now reviewer-enforced ex-post via prompt + git log + \`build.md\` inspection (v8.40 retired the mechanical pre-commit gate cclaw used to ship). The slice-builder's \`self_review[]\` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running \`git log --grep\` against the plan's AC list.
 
 ## 10. Common pitfalls
 
@@ -208,7 +205,7 @@ Before transitioning to review, every AC must satisfy:
 - Single test passes, full suite fails, but commit anyway. That is not GREEN; it is a regression.
 - REFACTOR phase silently skipped. Always emit the explicit "skipped: reason" note.
 - Writing production code in the RED commit. Stage and commit test files only in the RED phase.
-- Bypassing commit-helper "just this once". The traceability gate breaks.
+- Skipping the per-AC prefix (\`red(AC-N): ...\`) "just this once" or committing without an AC id. The reviewer's \`git log --grep\` scan misses it and the AC reads as missing → A-1 finding, fix-only bounce.
 - \`git add -A\` inside build. Stage AC-related files only.
 - Refactoring across files outside the AC scope. That is a separate slug.
 `;
@@ -344,7 +341,7 @@ Seed from \`.cclaw/lib/templates/ship.md\`. Required sections (every one must be
 - ci smoke (table; mandatory per §2a),
 - repo mode (\`git\` / \`no-vcs\`),
 - merge-base detection (git mode only),
-- AC ↔ commit map with red/green/refactor SHAs from \`flow-state.ac[].phases\`,
+- AC ↔ commit map with red/green/refactor SHAs read from \`git log --grep="(AC-N):" --oneline\` for every AC in the plan,
 - rollback plan triplet (trigger / steps / verification — all three or it does not count),
 - monitoring checklist (error rates, latency budgets, business metrics),
 - finalization_mode (exactly one of FINALIZE_MERGE_LOCAL, FINALIZE_OPEN_PR, FINALIZE_KEEP_BRANCH, FINALIZE_DISCARD_BRANCH, FINALIZE_NO_VCS),
