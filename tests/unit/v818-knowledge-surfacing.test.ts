@@ -153,8 +153,8 @@ describe("v8.18 findNearKnowledge — knowledge-surfacing helper", () => {
 });
 
 describe("v8.18 orchestrator wiring — triage.priorLearnings", () => {
-  it("(e) start-command spec describes the prior-learnings lookup hop with findNearKnowledge name", () => {
-    expect(START_COMMAND_BODY).toMatch(/Hop 2 §3 — prior-learnings lookup/u);
+  it("(e) start-command spec describes the prior-learnings lookup step with findNearKnowledge name", () => {
+    expect(START_COMMAND_BODY).toMatch(/^### Prior-learnings lookup/mu);
     expect(START_COMMAND_BODY).toContain("findNearKnowledge");
     expect(START_COMMAND_BODY).toContain("triage.priorLearnings");
   });
@@ -245,7 +245,7 @@ describe("v8.18 specialist prompts read priorLearnings", () => {
   it("(i) reviewer prompt instructs to use triage.priorLearnings as priors when scoring findings", () => {
     expect(REVIEWER_PROMPT).toContain("triage.priorLearnings");
     expect(REVIEWER_PROMPT).toMatch(/priors when judging severity/iu);
-    expect(REVIEWER_PROMPT).toMatch(/do not copy entries into the Concern Ledger verbatim/iu);
+    expect(REVIEWER_PROMPT).toMatch(/do not copy entries into the Findings table verbatim/iu);
   });
 });
 

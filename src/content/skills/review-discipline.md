@@ -5,17 +5,17 @@ trigger: when reviewer or security-reviewer is invoked; when the diff touches au
 
 # Skill: review-discipline
 
-This merged skill covers both review loops with a shared Concern Ledger, Five-axis pass, and Five Failure Modes contract: the generic reviewer iteration (formerly **review-loop**) and the security-specific reviewer that runs in parallel (formerly **security-review**).
+This merged skill covers both review loops with a shared Findings, Five-axis pass, and Five Failure Modes contract: the generic reviewer iteration (formerly **review-loop**) and the security-specific reviewer that runs in parallel (formerly **security-review**).
 
 ## When to use
 
-Invoked at the start of every `reviewer` or `security-reviewer` dispatch. Auto-applies when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (triggers `security-reviewer` alongside the regular reviewer regardless of `security_flag`). The Concern Ledger and Five-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security-review section adds the threat-model checklist on top.
+Invoked at the start of every `reviewer` or `security-reviewer` dispatch. Auto-applies when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (triggers `security-reviewer` alongside the regular reviewer regardless of `security_flag`). The Findings and Five-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security-review section adds the threat-model checklist on top.
 
 ## When NOT to apply
 
 - **Inline / trivial flows.** `triage.acMode == "inline"` skips the review stage entirely — there is no `flows/<slug>/review.md` and no reviewer dispatch.
 - **Mid-iteration drafts** that have not yet been committed to a slim summary. Iteration N's findings are appended when N returns; partial drafts must not be merged into the ledger.
-- **Renumbering or rewriting F-N rows.** The Concern Ledger is append-only — supersede an old finding with `F-K supersedes F-J` instead of editing F-J in place.
+- **Renumbering or rewriting F-N rows.** The Findings table is append-only — supersede an old finding with `F-K supersedes F-J` instead of editing F-J in place.
 - **Convergence after one iteration with zero new findings.** Signal #2 requires **two** consecutive zero-blocking iterations; a single zero-finding pass is not enough to declare `clear`.
 - **Authoring code, fix-only patches, or rewriting build evidence.** The reviewer never edits production — that is the slice-builder's surface (under `fix-only` mode). The reviewer cites; the slice-builder closes.
 
@@ -33,12 +33,12 @@ Every iteration runs the **Five Failure Modes** checklist:
 
 For each mode the reviewer answers yes/no with a citation when "yes". A "yes" without a citation is itself a finding (you cited nothing, that is the finding).
 
-## Concern Ledger
+## Findings
 
 Every `flows/<slug>/review.md` carries an append-only ledger. Each row is a single finding; rows are never edited or deleted, only appended.
 
 ```markdown
-## Concern Ledger
+## Findings
 
 | ID | Opened in | Mode | Axis | Severity | Status | Closed in | Citation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -152,7 +152,7 @@ The reviewer's discipline is the first thing the slug shape pressures an agent t
 | "The five axes don't all apply here, I'll just walk the relevant ones." | The Five-axis pass is mandatory every iteration. Record "no findings on `<axis>`" explicitly; silence is not the same as a clean walk. |
 | "F-2 is fixed by F-1's commit, I'll close it without re-checking." | Closing a row is itself a claim. Cite the fix SHA / test name / file:line that proves the close. A close without evidence is the next iteration's reopen. |
 | "Severity `required` everywhere makes it look serious." | Padding severity makes the gradient useless. `nit` / `consider` / `required` / `critical` are a routing signal; collapse them and the orchestrator can't decide what blocks ship. |
-| "I'll skip the Concern Ledger this iteration; the findings are short." | The ledger is the resume contract. Iteration N+1 reads it before walking the diff; skipping breaks fix-only dispatch and supersession tracking. |
+| "I'll skip the Findings this iteration; the findings are short." | The ledger is the resume contract. Iteration N+1 reads it before walking the diff; skipping breaks fix-only dispatch and supersession tracking. |
 | "Architecture severity `required` doesn't block in soft mode anyway." | v8.20 architecture-severity gate fires across **every** acMode (not just strict). Treating it as soft-mode-skippable is a known bypass the gate is designed to catch. |
 | "The diff is small — no real review needed, I'll fast-pass it." | Small diffs hide concentrated risk. The Failure Modes checklist runs every iteration; "I trust myself on this one" is the rationalization the audit catches. |
 | "Two-pass mode is overkill for this slug." | Two-pass is the v8.24 default on every large-risky OR security-flagged slug. `config.reviewerTwoPass: false` is the audit-trailed opt-out; "felt like overkill" is not. |

@@ -76,7 +76,7 @@ If the touch surface really was clean, write `None.` (one word + period). Do not
 
 Forward-looking. What might bite the **next stage** or **the user**? Uncertainties, partial coverage, untested edges, decisions you made under low confidence, dependencies on external systems, migration footguns.
 
-Drop `Confidence: low` items here verbatim with a one-line cause. The reviewer can use this section to seed the Concern Ledger.
+Drop `Confidence: low` items here verbatim with a one-line cause. The reviewer can use this section to seed the Findings table.
 
 If there are no real concerns, write `None.` and own it.
 
@@ -84,7 +84,7 @@ If there are no real concerns, write `None.` and own it.
 
 - **All three subheadings present.** Even when one is empty, the H3 heading + `None.` line stays. Skipping a subheading is a finding (reviewer axis=readability, severity=consider).
 - **No prose paragraphs in the block.** Bullets only. The block is read fast; paragraphs are read slow.
-- **No new findings here.** If you have a finding, surface it in the slim summary and (if reviewer) in the Concern Ledger. The Summary block is reflective, not active.
+- **No new findings here.** If you have a finding, surface it in the slim summary and (if reviewer) in the Findings table. The Summary block is reflective, not active.
 - **No fabrication.** `Things I noticed but didn't touch` is not the place to invent improvements you didn't actually consider; it is the place to record the ones you did.
 - **No copy-paste between artifacts.** Each artifact's Summary block is unique to that artifact's authorship.
 

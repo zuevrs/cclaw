@@ -325,7 +325,7 @@ After every cycle (soft mode: one cycle for the feature; strict mode: after the 
 
 The \`Things I noticed but didn't touch\` section is the **anti-scope-creep section**: force yourself to list things you noticed but did not act on. Silently fixing sibling issues is the contract violation the reviewer flags as scope creep — list them here instead.
 
-The \`Potential concerns\` section seeds the reviewer's Concern Ledger. The reviewer reads your concerns first, then runs the five-axis pass independently — your block is helpful, not authoritative.
+The \`Potential concerns\` section seeds the reviewer's Findings table. The reviewer reads your concerns first, then runs the five-axis pass independently — your block is helpful, not authoritative.
 
 **Post-fix self-check (mandatory before returning the slim summary).** If a fix-only loop or any in-iteration repair landed AFTER you authored the Summary block (i.e. the Summary was written, then you changed code, then you ran tests again), **re-read every bullet in \`Things I noticed but didn't touch\` and \`Potential concerns\`**. For each bullet:
 
@@ -537,7 +537,7 @@ The reviewer never sees \`self_review\`. It is a **pre-reviewer** orchestrator g
 
 You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator decides when to invoke you and what to do with your output.
 
-- **Invoked by**: cclaw orchestrator Hop 3 — *Dispatch* — when \`currentStage == "build"\`. Once per build (soft mode), once per AC (strict mode + inline topology), or up to 5 parallel instances (strict mode + parallel-build topology).
+- **Invoked by**: cclaw orchestrator *Dispatch* step — when \`currentStage == "build"\`. Once per build (soft mode), once per AC (strict mode + inline topology), or up to 5 parallel instances (strict mode + parallel-build topology).
 - **Wraps you**: \`.cclaw/lib/skills/tdd-and-verification.md\`, \`.cclaw/lib/skills/anti-slop.md\`, \`.cclaw/lib/skills/commit-hygiene.md\`. In strict mode also \`.cclaw/lib/skills/ac-discipline.md\` and \`.cclaw/lib/skills/parallel-build.md\` (when in a parallel slice). There is no \`.cclaw/hooks/\` directory and no mechanical commit gate; commit shape and TDD ordering are prompt-enforced (this file) + ex-post checked by the reviewer's git-log inspection.
 - **Do not spawn**: never invoke design, ac-author, reviewer, or security-reviewer. If the AC / condition is not implementable as written, stop and surface the conflict in your slim summary; the orchestrator hands the slug back to ac-author (or, if a new D-N is needed, re-enters design Phase 4).
 - **Side effects allowed**: production code, test code, plain \`git commit\` calls (one per phase in strict, one per feature in soft), and append-only entries in \`flows/<slug>/build.md\`. Do **not** edit \`flows/<slug>/plan.md\`, legacy \`decisions.md\`, \`review.md\`, or slash-command files. Do **not** push, open a PR, or merge — those require explicit user approval at the ship stage.

@@ -77,7 +77,7 @@ describe("v8.42 — critic Hop 4.5 install layer (e2e)", () => {
   });
 });
 
-describe("v8.42 — critic Hop 4.5 dispatch path is reachable from start-command body", () => {
+describe("v8.42 — critic step dispatch path is reachable from start-command body", () => {
   it("body adds `critic` to the canonical stage list (5 stages now)", () => {
     const body = renderStartCommand();
     expect(body).toMatch(/`plan`,\s*`build`,\s*`review`,\s*`critic`,\s*`ship`/);
@@ -85,7 +85,7 @@ describe("v8.42 — critic Hop 4.5 dispatch path is reachable from start-command
 
   it("body adds a `#### critic` stage section between `#### review` and `#### ship`", () => {
     const body = renderStartCommand();
-    expect(body).toMatch(/#### critic \(v8\.42\+, Hop 4\.5\)/);
+    expect(body).toMatch(/#### critic \(v8\.42\+, critic step\)/);
     const criticIdx = body.indexOf("#### critic");
     const reviewIdx = body.indexOf("#### review");
     const shipIdx = body.indexOf("#### ship");

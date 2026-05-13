@@ -16,9 +16,9 @@ describe("v8 content depth — H4 + H5 trim", () => {
     expect(skill?.body).toContain("AC ids");
   });
 
-  it("review-loop skill defines Concern Ledger and convergence detector", () => {
+  it("review-loop skill defines Findings table and convergence detector", () => {
     const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "review-discipline");
-    expect(skill?.body).toContain("Concern Ledger");
+    expect(skill?.body).toContain("Findings");
     expect(skill?.body).toContain("Convergence detector");
     expect(skill?.body).toContain("Two consecutive iterations");
     expect(skill?.body).toContain("F-N");
@@ -160,8 +160,8 @@ describe("v8 content depth — H4 + H5 trim", () => {
     expect(DESIGN_PROMPT).toContain("Pre-mortem");
   });
 
-  it("reviewer prompt enforces Concern Ledger + convergence detector + closing citation", () => {
-    expect(REVIEWER_PROMPT).toContain("Concern Ledger");
+  it("reviewer prompt enforces Findings table + convergence detector + closing citation", () => {
+    expect(REVIEWER_PROMPT).toContain("Findings");
     expect(REVIEWER_PROMPT).toContain("F-N ids are stable");
     expect(REVIEWER_PROMPT).toContain("Convergence detector");
     expect(REVIEWER_PROMPT).toContain("Closing a row requires a citation");

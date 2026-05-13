@@ -10,12 +10,12 @@ describe("start command (/cc) markdown", () => {
     }
   });
 
-  it("describes the v8.2 hop sequence: detect → triage → dispatch → pause → ship", () => {
-    expect(body).toMatch(/Hop 1 — Detect/);
-    expect(body).toMatch(/Hop 2 — Triage/);
-    expect(body).toMatch(/Hop 3 — Dispatch/);
-    expect(body).toMatch(/Hop 4 — Pause/);
-    expect(body).toMatch(/Hop 5 — Compound/);
+  it("describes the v8.45 stage sequence: detect → triage → dispatch → pause → compound", () => {
+    expect(body).toMatch(/^## Detect$/m);
+    expect(body).toMatch(/^## Triage/m);
+    expect(body).toMatch(/^## Dispatch$/m);
+    expect(body).toMatch(/^## Pause and resume$/m);
+    expect(body).toMatch(/^## Compound/m);
   });
 
   it("requires the triage gate on every fresh /cc and persists the decision", () => {

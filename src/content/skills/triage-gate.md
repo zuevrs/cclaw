@@ -30,7 +30,7 @@ When the heuristic in §"Heuristics — how to pick" classifies the request as `
 
 1. Print one short sentence in the user's language naming what is happening: complexity (`trivial`), AC mode (`inline`), the touched file(s), and a one-clause affordance: "say /cc-cancel to undo and re-triage".
 2. Patch `flow-state.json > triage` with `complexity: "trivial", acMode: "inline", path: ["build"], runMode: null`. `runMode` is `null` because there are no stages to chain on the inline path. Append a v8.44 audit-log entry to `.cclaw/state/triage-audit.jsonl` with `autoExecuted: true` (the fast-path bit lives in the audit log, not on the triage object; see `src/triage-audit.ts > appendTriageAudit`).
-3. Proceed straight to the inline edit + commit dispatch (Hop 3 — *Dispatch*; build stage). Pre-flight is skipped on inline by design.
+3. Proceed straight to the inline edit + commit dispatch (the dispatch step; build stage). Pre-flight is skipped on inline by design.
 
 If confidence is `medium` or `low`, **fall through to the structured ask** even when the class is `trivial` — uncertainty wins.
 
@@ -153,7 +153,7 @@ The orchestrator's path-validation rule is single-stage: `triage.path` ⊆ `{pla
 
 ## No-git auto-downgrade (v8.23)
 
-Before the triage decision is patched into `flow-state.json`, the orchestrator runs the Hop 1 git-check: does `<projectRoot>/.git/` exist? If not, the gate **auto-downgrades** `acMode` from whatever the heuristic recommended to `soft`, regardless of complexity class, and records the audit-trail field:
+Before the triage decision is patched into `flow-state.json`, the orchestrator runs the detect-step git-check: does `<projectRoot>/.git/` exist? If not, the gate **auto-downgrades** `acMode` from whatever the heuristic recommended to `soft`, regardless of complexity class, and records the audit-trail field:
 
 ```json
 {
@@ -176,7 +176,7 @@ Surface the downgrade to the user as a one-sentence warning at triage time, in t
 
 The downgrade is **one-way for the lifetime of the flow**. Running `git init` mid-flight does NOT re-upgrade the triage — `/cc-cancel` + fresh `/cc` is the only path that re-triages with git now present. This mirrors the general invariant that triage is immutable for the lifetime of the flow (above, in "What the orchestrator records").
 
-Ship-gate's `no-vcs` finalization option remains available regardless of the downgrade — a user can still ship a soft-mode flow without git by picking the no-vcs path at Hop 6 (Finalize). See `runbooks/ship-gate.md`.
+Ship-gate's `no-vcs` finalization option remains available regardless of the downgrade — a user can still ship a soft-mode flow without git by picking the no-vcs path at the finalize step. See `runbooks/ship-gate.md`.
 
 ## When to skip the gate
 
@@ -290,4 +290,4 @@ The triage gate is the easiest place to skip "because the task is obvious". When
 
 ## Next step
 
-After the combined form returns AND the path is **not** `inline`, the orchestrator dispatches the first specialist directly. As of v8.21 there is no separate "Hop 2.5" assumption-confirmation step in between — the assumption surface lives inside the first specialist's first turn (design Phase 0 on large-risky; ac-author Phase 0 on small-medium). `triage.assumptions` is still a first-class field on `flow-state.json` and is populated by whichever specialist runs first. On the inline path (whether reached via the zero-question fast path or via Question 1 option (2)), the orchestrator goes straight to the build dispatch — there is no assumption surface (a one-line edit has no assumptions worth surfacing).
+After the combined form returns AND the path is **not** `inline`, the orchestrator dispatches the first specialist directly. As of v8.21 there is no separate preflight assumption-confirmation step in between — the assumption surface lives inside the first specialist's first turn (design Phase 0 on large-risky; ac-author Phase 0 on small-medium). `triage.assumptions` is still a first-class field on `flow-state.json` and is populated by whichever specialist runs first. On the inline path (whether reached via the zero-question fast path or via Question 1 option (2)), the orchestrator goes straight to the build dispatch — there is no assumption surface (a one-line edit has no assumptions worth surfacing).

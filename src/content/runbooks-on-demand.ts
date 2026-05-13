@@ -125,13 +125,13 @@ Dispatch slice-builder
 - \`auto\` runMode does **not** affect the integration-reviewer ask: a parallel wave that produces a block finding always asks the user before fix-only.
 `;
 
-const FINALIZE = `# On-demand runbook — Hop 6 finalize (ship → shipped)
+const FINALIZE = `# On-demand runbook — finalize (ship → shipped)
 
-Open this runbook **only after Hop 5 (compound) completes** and \`flows/<slug>/ship.md\` carries \`status: shipped\`. Hop 6 is the orchestrator's job, never a sub-agent's.
+Open this runbook **only after the compound step completes** and \`flows/<slug>/ship.md\` carries \`status: shipped\`. Finalize is the orchestrator's job, never a sub-agent's.
 
 ## Steps (in order, in the orchestrator's own context)
 
-1. **Pre-condition check.** \`flows/<slug>/ship.md\` exists with \`status: shipped\` (or equivalent gate). If the gate is \`block\`, do NOT finalise — stay paused. If the path was \`inline\` (trivial), there is nothing to finalise; skip Hop 6 entirely.
+1. **Pre-condition check.** \`flows/<slug>/ship.md\` exists with \`status: shipped\` (or equivalent gate). If the gate is \`block\`, do NOT finalise — stay paused. If the path was \`inline\` (trivial), there is nothing to finalise; skip finalize entirely.
 2. **Create the shipped directory.** \`mkdir -p .cclaw/flows/shipped/<slug>\`. Idempotent: if the directory already exists (re-run, race), continue without error.
 3. **Move every artifact.** Use \`git mv\` when the repo is a git workspace and the active flow files are tracked; otherwise plain \`mv\`. Move (do NOT copy) every file in \`flows/<slug>/\`:
    - \`plan.md\`
@@ -139,7 +139,7 @@ Open this runbook **only after Hop 5 (compound) completes** and \`flows/<slug>/s
    - \`review.md\` (when present)
    - \`ship.md\`
    - \`decisions.md\` (when present — large-risky only, pre-v8.14 shipped flows)
-   - \`learnings.md\` (when written by Hop 5)
+   - \`learnings.md\` (when written by the compound step)
    - \`pre-mortem.md\` (only on \`legacy-artifacts: true\` — default v8.12 collapses pre-mortem into \`review.md\` as a section)
    - \`research-repo.md\` (when written by repo-research)
    - \`research-learnings.md\` (only on \`legacy-artifacts: true\` — default v8.12 keeps learnings inline in the ac-author's slim-summary)
@@ -154,7 +154,7 @@ Open this runbook **only after Hop 5 (compound) completes** and \`flows/<slug>/s
 
 - **No "copy" anywhere.** Sub-agent dispatches do NOT mention copying. The orchestrator's own actions use \`git mv\` (preferred when the files are git-tracked) or \`mv\` (when not). \`cp\` is a bug.
 - **No partial finalize.** If any \`mv\` fails (filesystem error, permission, lock), stop and surface the failure. Do not leave half the flow in shipped and half in active.
-- **No re-entrant finalize on resume.** If \`flows/<slug>/\` is already empty when you reach Hop 6 (a previous run finalised), check that \`shipped/<slug>/ship.md\` exists with \`status: shipped\` in its frontmatter; if it does, this slug is already shipped — reset flow-state and tell the user "already finalised in <iso>". Do NOT recreate the artefacts. (On \`legacy-artifacts: true\` you can also key off \`shipped/<slug>/manifest.md\`.)
+- **No re-entrant finalize on resume.** If \`flows/<slug>/\` is already empty when you reach finalize (a previous run finalised), check that \`shipped/<slug>/ship.md\` exists with \`status: shipped\` in its frontmatter; if it does, this slug is already shipped — reset flow-state and tell the user "already finalised in <iso>". Do NOT recreate the artefacts. (On \`legacy-artifacts: true\` you can also key off \`shipped/<slug>/manifest.md\`.)
 `;
 
 const CAP_REACHED_RECOVERY = `# On-demand runbook — cap-reached recovery (review iteration 5)
@@ -186,7 +186,7 @@ After this block is authored, the orchestrator surfaces a structured ask to the 
 
 ## Architecture severity gates ship (v8.20+)
 
-The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every acMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate (Hop 5): when the open ledger contains any \`required + architecture\` row, the ship picker does NOT offer \`continue\` until the user explicitly picks \`accept-warns-and-ship\` for the architecture finding(s). Other \`severity=required\` findings continue to follow the standard acMode table (gate in strict, carry-over in soft).
+The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every acMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate: when the open ledger contains any \`required + architecture\` row, the ship picker does NOT offer \`continue\` until the user explicitly picks \`accept-warns-and-ship\` for the architecture finding(s). Other \`severity=required\` findings continue to follow the standard acMode table (gate in strict, carry-over in soft).
 
 Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the ship picker's option list becomes \`accept-warns-and-ship\` (highlighted as the path past the architecture gate) / \`fix-only\` (re-dispatch slice-builder to address) / \`stay-paused\`. The \`continue\` (silent advance) option is not offered.
 `;
@@ -234,7 +234,7 @@ Before you dispatch the reviewer, **inspect \`self_review\`** in your own contex
 
 ## Fix-only bounce envelope
 
-The fix-only bounce envelope reuses the slice-builder dispatch envelope shape; the "Inputs" line names the failed rules instead of a Concern Ledger fix list:
+The fix-only bounce envelope reuses the slice-builder dispatch envelope shape; the "Inputs" line names the failed rules instead of a Findings fix list:
 
 \`\`\`
 Dispatch slice-builder
@@ -275,7 +275,7 @@ Inputs: \`.cclaw/flows/<slug>/plan.md\`, build.md, review.md.
 
 Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan. As of v8.12 the adversarial reviewer's pre-mortem section is appended to \`review.md\` (no separate \`pre-mortem.md\` file unless \`legacy-artifacts: true\`).
 
-After ship, run the compound learning gate (Hop 5).
+After ship, run the compound learning gate.
 
 ## Ship-gate user ask (finalization mode)
 
@@ -314,7 +314,7 @@ Failure classes the adversarial pass MUST consider (mark each as "covered" / "no
 - **accidental scope** — diff touches files no AC mentions;
 - **security-edge** — auth bypass, injection, leaked secret in logs, untrusted input.
 
-The adversarial reviewer treats every "not covered" as a finding (axis varies; severity \`required\` by default, escalated to \`critical\` for data-loss / security-edge). Findings go into the existing Concern Ledger in \`review.md\`; the same file gets a \`## Pre-mortem (adversarial)\` section summarising the adversarial pass's reasoning so the user can read a one-page rationale. (On \`legacy-artifacts: true\` the section is mirrored into a standalone \`pre-mortem.md\` for downstream tooling.)
+The adversarial reviewer treats every "not covered" as a finding (axis varies; severity \`required\` by default, escalated to \`critical\` for data-loss / security-edge). Findings go into the existing Findings table in \`review.md\`; the same file gets a \`## Pre-mortem (adversarial)\` section summarising the adversarial pass's reasoning so the user can read a one-page rationale. (On \`legacy-artifacts: true\` the section is mirrored into a standalone \`pre-mortem.md\` for downstream tooling.)
 
 ## Ship-gate decision matrix
 
@@ -336,7 +336,7 @@ Open this runbook **after every stage exit** — both at the end of plan / build
 
 ## Why two files
 
-\`HANDOFF.json\` is what the orchestrator's resume hop reads to rebuild dispatch context; \`.continue-here.md\` is what the user reads to remember what they were doing — possibly days later when they reopen a stale flow. The dot-prefix on \`.continue-here.md\` keeps it out of casual file-listing noise but keeps it readable when the user grep's for "continue".
+\`HANDOFF.json\` is what the orchestrator's resume step reads to rebuild dispatch context; \`.continue-here.md\` is what the user reads to remember what they were doing — possibly days later when they reopen a stale flow. The dot-prefix on \`.continue-here.md\` keeps it out of casual file-listing noise but keeps it readable when the user grep's for "continue".
 
 ## HANDOFF.json schema
 
@@ -386,7 +386,7 @@ Open this runbook **after every stage exit** — both at the end of plan / build
 - Each stage exit (or discovery checkpoint) **rewrites both files from scratch** — they are idempotent snapshots, not appended logs. Stale data is the v8.11-era ship.md bug applied to handoff state; the fix is "always re-author".
 - \`runCompoundAndShip\` moves both files into \`shipped/<slug>/\` alongside the canonical 7 stages (the T0-10 directory scan handles them automatically). Shipped flows preserve their final HANDOFF.json + .continue-here.md as a record of how the slug ended.
 - \`/cc-cancel\` moves both into \`cancelled/<slug>/\`.
-- The Hop 1 detect path may consult \`HANDOFF.json\` as a fallback when \`flow-state.json\` is missing or unparseable (v8.13 hardening: file may be deleted by accident, but HANDOFF.json snapshots can rebuild the resume context).
+- The detect step may consult \`HANDOFF.json\` as a fallback when \`flow-state.json\` is missing or unparseable (v8.13 hardening: file may be deleted by accident, but HANDOFF.json snapshots can rebuild the resume context).
 
 ## When the orchestrator rewrites
 
@@ -400,7 +400,7 @@ Open this runbook **after a compound capture writes a line to \`.cclaw/state/kno
 - \`knowledge.jsonl\` line count is a multiple of 5 after the new line is appended (compound-refresh trigger), OR
 - The user runs \`/cc-compound-refresh\` manually.
 
-For the compound gate itself (does this slug capture learnings?), see start-command's Hop 5.
+For the compound gate itself (does this slug capture learnings?), see start-command's Compound step.
 
 ## Compound-refresh sub-step (T2-4, everyinc pattern; v8.13)
 
@@ -423,7 +423,7 @@ Manual trigger: \`/cc-compound-refresh\` — runs the same pass on demand. Usefu
 
 ## Discoverability self-check (T2-12)
 
-After ship completes (Hop 6 done), the orchestrator scans \`AGENTS.md\` / \`CLAUDE.md\` / \`README.md\` for any mention of \`knowledge.jsonl\` or \`flows/shipped/\`. When **none** of these files mention either path, the orchestrator surfaces a one-line note in the user's language ("This project's knowledge.jsonl now has N entries but the AGENTS.md / CLAUDE.md / README.md don't reference it. Want me to add a 1-line discovery note so future agents know it exists? [add / skip-this-time / never]"). The user picks; on \`add\`, the orchestrator appends a single line to the most appropriate root file (preferring AGENTS.md, then CLAUDE.md, then README.md):
+After ship completes (finalize done), the orchestrator scans \`AGENTS.md\` / \`CLAUDE.md\` / \`README.md\` for any mention of \`knowledge.jsonl\` or \`flows/shipped/\`. When **none** of these files mention either path, the orchestrator surfaces a one-line note in the user's language ("This project's knowledge.jsonl now has N entries but the AGENTS.md / CLAUDE.md / README.md don't reference it. Want me to add a 1-line discovery note so future agents know it exists? [add / skip-this-time / never]"). The user picks; on \`add\`, the orchestrator appends a single line to the most appropriate root file (preferring AGENTS.md, then CLAUDE.md, then README.md):
 
 \`\`\`markdown
 - \`.cclaw/knowledge.jsonl\` — append-only learnings catalogue from cclaw flows; cclaw specialists read this before authoring plans (\`learnings-research\` helper).
@@ -480,7 +480,7 @@ Resume after a design or ac-author checkpoint: \`flow-state.lastSpecialist\` tel
 
 const PAUSE_RESUME = `# On-demand runbook — pause and resume mechanics (step / auto / Confidence gate)
 
-The orchestrator opens this runbook on every stage exit when \`triage.path\` is **non-inline** (i.e., the path contains any of \`plan\` / \`review\` / \`ship\`, not just \`build\`). Inline / trivial paths set \`runMode: null\` and never pause — they skip Hop 4 entirely, so they never open this runbook.
+The orchestrator opens this runbook on every stage exit when \`triage.path\` is **non-inline** (i.e., the path contains any of \`plan\` / \`review\` / \`ship\`, not just \`build\`). Inline / trivial paths set \`runMode: null\` and never pause — they skip pause/resume entirely, so they never open this runbook.
 
 The orchestrator body keeps the orchestrator-wide invariants (\`/cc\` is the only resume verb, end-of-turn is the pause mechanism in step, Confidence: low is a hard gate in both modes). The full mechanics — including the per-mode procedure, the hard-gate enumeration, the Confidence × mode table, and the resume-from-fresh-session rules — live here so the orchestrator body stays slim on inline and small-medium paths that don't need every detail loaded.
 
@@ -521,7 +521,7 @@ A specialist returning \`Confidence: low\` MUST write a non-empty \`Notes:\` lin
 
 ## Common rules for both modes
 
-Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentStage\`, \`triage\` (with \`runMode\`), \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters Hop 1 → detect → resume summary → continue from \`currentStage\` with the saved runMode.
+Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentStage\`, \`triage\` (with \`runMode\`), \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters detect → resume summary → continue from \`currentStage\` with the saved runMode.
 
 Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused \`step\` flow renders the slim summary again and ends the turn (the same end-of-turn rule applies on resume). The user's next \`/cc\` continues.
 
@@ -580,7 +580,7 @@ Notes: lessons={<count or summary>}, topology=<inline | parallel-build>, prior-l
 The orchestrator reads only this; the full plan.md stays in \`flows/<slug>/plan.md\` for the next stage's slice-builder dispatch. The five report fields the orchestrator uses are: condition / AC count, max \`touchSurface\` value, parallel-build flag, recommended-next, prior-lesson count.
 `;
 
-const CRITIC_STAGE = `# On-demand runbook — critic stage (Hop 4.5, v8.42+)
+const CRITIC_STAGE = `# On-demand runbook — critic step (v8.42+)
 
 The orchestrator opens this runbook **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the v8.42 on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + AC self-audit + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this runbook covers what the orchestrator does *around* the dispatch.
 
@@ -597,7 +597,7 @@ The orchestrator opens this runbook **on every transition from \`review\` to \`c
 1. **Architectural-tier change** — touchSurface includes ≥2 files marked \`tier: architectural\` in plan.md OR the build introduced one.
 2. **Test-first + zero failing tests in build.md** — slug posture is \`test-first\` AND the TDD log shows zero \`RED\` rows (v8.42 Q5: narrow trigger, do NOT widen to "missing RED excerpt"; the difference matters — a slug with \`RED\` rows that lack a captured excerpt is a build.md audit-trail gap to be flagged, not a critic escalator).
 3. **Large surface size** — \`git diff --stat\` reports ≥10 files OR ≥500 net lines changed since the plan committed.
-4. **\`security_flag: true\`** OR security-reviewer ran during Hop 4.
+4. **\`security_flag: true\`** OR security-reviewer ran during review.
 5. **\`reviewIterations >= 4\`** — the slug needed near-cap iterations to converge; hidden complexity signal.
 
 The orchestrator computes the trigger set deterministically from \`flow-state.json\` + \`plan.md\` frontmatter + \`build.md\` table + \`git diff --stat\` BEFORE dispatching critic. The dispatch envelope stamps the firing triggers verbatim so the prompt copies them into \`critic.md > frontmatter > escalation_triggers\`.
@@ -618,11 +618,11 @@ Mapping fired-triggers count to \`criticEscalation\`:
 
 | critic \`Verdict:\` | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
 | --- | --- | --- | --- |
-| \`pass\` | \`"ship"\` | step pauses end-of-stage; auto chains to Hop 5 | no user gate; advance straight to ship |
-| \`iterate\` | \`"ship"\` | step pauses end-of-stage; auto chains to Hop 5 | open critic gaps with severity \`iterate\` are copied verbatim into \`ship.md > ## Risks carried over\`; one line to the user ("Critic returned iterate (\<N\> gaps carried over). Continuing to ship.") |
+| \`pass\` | \`"ship"\` | step pauses end-of-stage; auto chains to ship | no user gate; advance straight to ship |
+| \`iterate\` | \`"ship"\` | step pauses end-of-stage; auto chains to ship | open critic gaps with severity \`iterate\` are copied verbatim into \`ship.md > ## Risks carried over\`; one line to the user ("Critic returned iterate (\<N\> gaps carried over). Continuing to ship.") |
 | \`block-ship\` | stays \`"critic"\` | both modes hard-gate | surface the block-ship picker: \`[1] fix and re-review\` (consumes the one allowed rerun), \`[2] accept-and-ship\` (strict-mode escape hatch; stamps \`triage.criticOverride: true\` for audit trail), \`[3] /cc-cancel\` (out-of-band). Single-line summary cites the \`block-ship\` G-N / F-N anchors verbatim. |
 
-**Confidence: low** in the critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator offers \`Expand critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard Hop 4 invariants.
+**Confidence: low** in the critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator offers \`Expand critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
 
 ## FlowState patches
 
@@ -669,7 +669,7 @@ The migration is one-pass and idempotent — a slug whose critic has already run
 - Commit, push, rebase, or merge. The critic owns no git operations.
 - Dispatch other specialists. Composition is the orchestrator's job.
 - Exceed 20k input+output tokens. Approaching the cap is itself a finding (\`Confidence: low\`, recommend split).
-- Re-walk the reviewer's eight axes. The critic reads \`review.md > ## Concern Ledger\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
+- Re-walk the reviewer's eight axes. The critic reads \`review.md > ## Findings\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
 
 The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see v8.42 Q2).
 `;
@@ -690,7 +690,7 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "finalize",
     fileName: "finalize.md",
-    title: "Hop 6 finalize",
+    title: "Finalize step",
     body: FINALIZE
   },
   {
@@ -750,7 +750,7 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "critic-stage",
     fileName: "critic-stage.md",
-    title: "Critic stage (Hop 4.5, v8.42+)",
+    title: "Critic step (v8.42+)",
     body: CRITIC_STAGE
   }
 ];

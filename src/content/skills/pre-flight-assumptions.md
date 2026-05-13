@@ -5,21 +5,21 @@ trigger: reference doc only — the assumption surface moved to design Phase 0 /
 
 # Skill: pre-flight-assumptions
 
-**v8.21 fold notice — this skill is a reference doc, not a runtime hop.**
+**v8.21 fold notice — this skill is a reference doc, not a runtime step.**
 
 Triage answers "**how much** work is this?" and "**how should we run it?**". The assumption confirmation answers "**on what assumptions** are we doing it?". They are different questions, and the silently-defaulted-assumption problem is real: it is the most common reason a small/medium build ships the wrong feature.
 
-Pre-v8.21, this skill ran as a standalone **Hop 2.5** between triage (Hop 2) and the first specialist dispatch (Hop 3). It surfaced a numbered list of assumptions through the harness's structured ask, captured the user's confirmation, and persisted the list to `flow-state.json > triage.assumptions`. v8.21 found that hop was producing a double-ask on large-risky flows (Hop 2.5 then design Phase 0 / Phase 1, both asking about assumptions in close succession) and a friction-only hop on small-medium flows (Hop 2.5 then ac-author draft, with no corresponding design phase to share the surface with).
+Pre-v8.21, this skill ran as a standalone **preflight step** between triage and the first specialist dispatch. It surfaced a numbered list of assumptions through the harness's structured ask, captured the user's confirmation, and persisted the list to `flow-state.json > triage.assumptions`. v8.21 found that step was producing a double-ask on large-risky flows (preflight then design Phase 0 / Phase 1, both asking about assumptions in close succession) and a friction-only step on small-medium flows (preflight then ac-author draft, with no corresponding design phase to share the surface with).
 
 ## When to use
 
-Reference doc only — there is no longer a runtime "Hop 2.5". The actual capture surface lives in `agents/design.md` Phase 0 / Phase 1 on large-risky and in `agents/ac-author.md` Phase 0 on small-medium. Read this skill when you need to understand the assumption-list composition rules (3-7 items, stack / conventions / architecture / out-of-scope) that both new surfaces share, or when you are debugging a resumed pre-v8.21 flow.
+Reference doc only — there is no longer a runtime preflight step. The actual capture surface lives in `agents/design.md` Phase 0 / Phase 1 on large-risky and in `agents/ac-author.md` Phase 0 on small-medium. Read this skill when you need to understand the assumption-list composition rules (3-7 items, stack / conventions / architecture / out-of-scope) that both new surfaces share, or when you are debugging a resumed pre-v8.21 flow.
 
 ## When NOT to apply
 
-- **`triage.path == ["build"]` (inline / trivial).** Single-file edits have no architectural assumptions worth surfacing; the assumption hop is structurally absent.
+- **`triage.path == ["build"]` (inline / trivial).** Single-file edits have no architectural assumptions worth surfacing; the assumption step is structurally absent.
 - **Resume from a paused flow.** The first specialist's Phase 0 reads `triage.assumptions` from disk as ground truth and does NOT re-prompt. The user already answered.
-- **Pre-v8.21 flows with populated `triage.assumptions`.** The legacy Hop 2.5 captured the list; the new Phase 0 short-circuits the ask on read. Reading this skill helps debug; running it again does not.
+- **Pre-v8.21 flows with populated `triage.assumptions`.** The legacy preflight step captured the list; the new Phase 0 short-circuits the ask on read. Reading this skill helps debug; running it again does not.
 - **Mid-flight new specialist dispatch.** Once one specialist's Phase 0 stamped the list, subsequent specialists in the same flow read from disk — they don't re-author or re-ask.
 
 ## Common pitfalls
@@ -34,8 +34,8 @@ See `triage-gate.md` for the triage gate's optional seed of `triage.assumptions`
 
 ## Why the fold
 
-- The user's original audit flagged the legacy double-ask as "дико переусложнено" — the design specialist's Phase 1 already opens with a clarifying question, and a separate Hop 2.5 right before it produced two back-to-back asks that asked overlapping things.
-- On small-medium, Hop 2.5 was a friction hop without a corresponding design phase to amortise the ask. The ac-author now opens with the same content as the legacy Hop 2.5 would have produced, in the same single turn, but inside its own context (so a follow-up correction can flow into Phase 1 immediately).
+- The user's original audit flagged the legacy double-ask as "дико переусложнено" — the design specialist's Phase 1 already opens with a clarifying question, and a separate preflight step right before it produced two back-to-back asks that asked overlapping things.
+- On small-medium, the preflight step was a friction step without a corresponding design phase to amortise the ask. The ac-author now opens with the same content as the legacy preflight step would have produced, in the same single turn, but inside its own context (so a follow-up correction can flow into Phase 1 immediately).
 - `triage.assumptions` stays a first-class field on `flow-state.json` (same wire format, same schema, same downstream readers). Only the *capture surface* moved.
 
 ## What still applies (from the legacy skill body)
@@ -52,8 +52,8 @@ The interpretation-forks sub-step (when the prompt has multiple readings) also m
 
 ## Worked example
 
-See `agents/ac-author.md` Phase 0 (small-medium) and `agents/design.md` Phase 0 / Phase 1 (large-risky) for the canonical opening-question shape. The legacy v8.20-and-earlier Hop 2.5 worked-example (3-7 numbered items, "tell me if any is wrong" close, silence = accept) carries forward unchanged inside both new surfaces.
+See `agents/ac-author.md` Phase 0 (small-medium) and `agents/design.md` Phase 0 / Phase 1 (large-risky) for the canonical opening-question shape. The legacy v8.20-and-earlier preflight worked-example (3-7 numbered items, "tell me if any is wrong" close, silence = accept) carries forward unchanged inside both new surfaces.
 
 ## Migration note (pre-v8.21 flows)
 
-Flows started on v8.20 or earlier where the legacy Hop 2.5 already captured `triage.assumptions` continue to work unchanged. The first specialist that runs on resume reads the populated list as ground truth and **does not re-prompt**. The fold is purely about the capture surface for **fresh** v8.21 flows; resumed pre-v8.21 flows skip both the legacy Hop 2.5 (already gone) and the new specialist Phase 0 ask (the list is already on disk).
+Flows started on v8.20 or earlier where the legacy preflight step already captured `triage.assumptions` continue to work unchanged. The first specialist that runs on resume reads the populated list as ground truth and **does not re-prompt**. The fold is purely about the capture surface for **fresh** v8.21 flows; resumed pre-v8.21 flows skip both the legacy preflight step (already gone) and the new specialist Phase 0 ask (the list is already on disk).

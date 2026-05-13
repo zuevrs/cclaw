@@ -25,14 +25,14 @@ describe("v8.21 preflight-fold", () => {
   const preFlightSkill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "pre-flight-assumptions");
   const triageGateSkill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "triage-gate");
 
-  describe("AC-1 — large-risky removes the separate Hop 2.5 ask", () => {
-    it("start-command body documents the fold (no separate Hop 2.5 AskQuestion)", () => {
-      // The legacy hop ran `pre-flight-assumptions.md` and surfaced a
+  describe("AC-1 — large-risky removes the separate preflight ask", () => {
+    it("start-command body documents the fold (no separate preflight AskQuestion)", () => {
+      // The legacy step ran `pre-flight-assumptions.md` and surfaced a
       // structured ask with Proceed / Edit one / Edit several. v8.21
       // names the fold explicitly so the orchestrator does not run
       // both surfaces in series.
-      expect(START_COMMAND_BODY).toContain("Hop 2.5 — Pre-flight (folded into specialist Phase 0)");
-      expect(START_COMMAND_BODY).toMatch(/no separate Hop 2\.5/iu);
+      expect(START_COMMAND_BODY).toContain("## Preflight (folded into specialist Phase 0)");
+      expect(START_COMMAND_BODY).toMatch(/no separate preflight/iu);
     });
 
     it("start-command names design Phase 0 as the large-risky owner", () => {
@@ -168,7 +168,7 @@ describe("v8.21 preflight-fold", () => {
 
     it("start-command's skip rules include resume-from-paused and mid-flight migration", () => {
       expect(START_COMMAND_BODY).toMatch(/Resume from a paused flow[\s\S]*?Phase 0[\s\S]*?does not re-prompt/u);
-      expect(START_COMMAND_BODY).toMatch(/pre-v8\.21[\s\S]*?legacy Hop 2\.5[\s\S]*?captured/u);
+      expect(START_COMMAND_BODY).toMatch(/pre-v8\.21[\s\S]*?legacy preflight[\s\S]*?captured/u);
     });
   });
 
