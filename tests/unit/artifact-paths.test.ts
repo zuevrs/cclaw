@@ -10,11 +10,12 @@ import {
 } from "../../src/artifact-paths.js";
 
 describe("artifact paths", () => {
-  it("uses singular file names for every artifact stage", () => {
+  it("uses singular file names for every artifact stage (v8.42 added critic between review and ship)", () => {
     expect(ARTIFACT_FILE_NAMES).toEqual({
       plan: "plan.md",
       build: "build.md",
       review: "review.md",
+      critic: "critic.md",
       ship: "ship.md",
       decisions: "decisions.md",
       learnings: "learnings.md",

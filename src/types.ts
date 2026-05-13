@@ -1,4 +1,18 @@
-export const FLOW_STAGES = ["plan", "build", "review", "ship"] as const;
+/**
+ * v8.42 — `critic` stage inserted between `review` and `ship`. The critic
+ * runs at Hop 4.5 (after the reviewer returns `clear`/`warn`, before the
+ * ship gate begins) and writes `critic.md`. The stage value is gated by
+ * `acMode`: `inline` skips critic entirely; `soft` runs critic in `gap`
+ * mode; `strict` runs the full critic protocol with adversarial
+ * escalation per the trigger set in `.cclaw/lib/agents/critic.md`.
+ *
+ * Legacy migration: pre-v8.42 state files where `currentStage == "review"`
+ * AND `lastSpecialist == "reviewer"` AND no `criticVerdict` field is set
+ * are auto-treated as legacy-pre-critic on the next `/cc` — the
+ * orchestrator dispatches critic before advancing to ship. See
+ * `src/flow-state.ts` for the migration shape.
+ */
+export const FLOW_STAGES = ["plan", "build", "review", "critic", "ship"] as const;
 export type FlowStage = (typeof FLOW_STAGES)[number];
 
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
@@ -17,10 +31,20 @@ export type HarnessId = (typeof HARNESS_IDS)[number];
 export const DISCOVERY_SPECIALISTS = ["design", "ac-author"] as const;
 export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
 
+/**
+ * v8.42 — `critic` joins the specialist roster as an on-demand sub-agent
+ * between `security-reviewer` and `slice-builder`. The order in this
+ * array matters: it traces the canonical discovery → review → critic →
+ * ship dispatch sequence the orchestrator follows. `critic` runs at
+ * Hop 4.5 (between Hop 4 review and Hop 5 ship); the new
+ * {@link FLOW_STAGES} entry `"critic"` is the stage value the
+ * orchestrator stamps while the critic dispatch is in flight.
+ */
 export const SPECIALISTS = [
   ...DISCOVERY_SPECIALISTS,
   "reviewer",
   "security-reviewer",
+  "critic",
   "slice-builder"
 ] as const;
 export type SpecialistId = (typeof SPECIALISTS)[number];
@@ -77,6 +101,34 @@ export type InstallableAgentId = SpecialistId | ResearchAgentId;
 export type ReviewerMode = "code" | "text-review" | "integration" | "release" | "adversarial";
 export type SecurityReviewerMode = "threat-model" | "sensitive-change";
 export type SliceBuilderMode = "build" | "fix-only";
+
+/**
+ * v8.42 — critic dispatch modes. `gap` is the default and runs the full
+ * critic protocol minus the adversarial scaffold (§3 of
+ * `.cclaw/lib/agents/critic.md`). `adversarial` enables §3 (assumption
+ * violation, composition failures, cascade construction, abuse cases)
+ * plus the per-D-N devil's-advocate sweep; it is selected automatically
+ * when at least one escalation trigger from §8 of the contract fires.
+ */
+export type CriticMode = "gap" | "adversarial";
+
+/**
+ * v8.42 — verdict the critic returns in its slim summary. Drives Hop 4.5
+ * routing: `pass` → continue to Hop 5 ship; `iterate` → continue to
+ * ship with the iterate-severity gaps carried over to `ship.md > Risks
+ * carried over`; `block-ship` → orchestrator pauses and surfaces the
+ * block-ship picker (`fix and re-review` / `accept-and-ship`).
+ */
+export type CriticVerdict = "pass" | "iterate" | "block-ship";
+
+/**
+ * v8.42 — escalation level stamped in `critic.md > frontmatter >
+ * escalation_level`. `none` = pure gap mode; `light` = one adversarial
+ * technique enabled (soft mode with exactly one trigger firing);
+ * `full` = all four adversarial techniques plus the §5 devil's-advocate
+ * sweep (strict mode with any trigger firing).
+ */
+export type CriticEscalation = "none" | "light" | "full";
 
 export type ArtifactStatus = "active" | "shipped";
 export type AcceptanceCriterionStatus = "pending" | "committed";

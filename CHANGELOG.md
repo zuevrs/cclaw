@@ -1,5 +1,60 @@
 # Changelog
 
+## 8.42.0 — Adversarial critic specialist (Hop 4.5)
+
+### TL;DR
+
+v8.42 adds the **adversarial critic** — a new on-demand specialist that runs at Hop 4.5, between the reviewer's final `clear` and the ship gate. The reviewer asks "does the code meet the AC?"; the critic asks "is the AC the right AC, what could we have missed, and what would I predict goes wrong?" The critic walks what's **missing** (gap analysis + pre-commitment predictions + AC self-audit + slug-level goal-backward verification + mandatory realist check) rather than re-walking the reviewer's eight axes. In `adversarial` mode it also runs the four-technique scaffold (assumption violation, composition failures, cascade construction, abuse cases).
+
+The critic is **always-on, gated by `acMode` only** (no `config.yaml` opt-out): `inline` skips it entirely; `soft` runs `gap` mode (5-7k tokens); `strict` runs `gap` (full) by default and auto-escalates to `adversarial` (10-15k, hard cap 20k) when any of the five §8 escalation triggers fire (architectural-tier change / test-first + zero failing tests / large surface / security flag / `reviewIterations >= 4`). The artifact (`critic.md`) is **single-shot per dispatch** — re-runs overwrite, no append-only ledger.
+
+This is the implementation of **D from the v8.x architecture roadmap**: a falsificationist counterpart to the evaluative reviewer, calibrated to cclaw's slug abstraction (per-AC posture + acMode-driven mode), bounded by hard token caps + 1 critic re-run per slug.
+
+### What changed (added)
+
+- **New specialist** — `src/content/specialist-prompts/critic.ts` (~360 LOC). On-demand activation; two modes (`gap` default + `adversarial` on escalation). Implements the 5-section investigation protocol from spec §3 (pre-commitment predictions → gap analysis → adversarial findings → AC self-audit → goal-backward verification → realist check → verdict), posture-scaled depth per spec §6, the §8 escalation triggers OR-set, and the §2 token budgets.
+- **New artifact template** — `CRITIC_TEMPLATE` in `src/content/artifact-templates.ts` (~120 LOC). Frontmatter (`slug`, `stage: critic`, `posture_inherited`, `ac_mode`, `mode`, `predictions_made`, `gaps_found`, `escalation_level`, `escalation_triggers`, `verdict`, `token_budget_used`, `critic_iteration`); body has the eight investigation sections + summary. Installed to `.cclaw/lib/templates/critic.md` and copied into `.cclaw/flows/<slug>/critic.md` on every critic dispatch.
+- **New on-demand runbook** — `critic-stage.md` in `src/content/runbooks-on-demand.ts` (~120 LOC). Carries the full Hop 4.5 contract (acMode gating, escalation triggers, cap rules, verdict-handling routing table, flow-state patches, legacy pre-v8.42 migration, Q4 dogfood note); the orchestrator opens it on every `review → critic` transition and at every block-ship picker resolution. The orchestrator body keeps only a 5-bullet pointer.
+- **New `FlowState` fields** — `criticIteration?`, `criticVerdict?`, `criticGapsCount?`, `criticEscalation?` in `src/flow-state.ts`. All optional (legacy v8.41 state files validate without them). The reader treats `currentStage == "review"` + `lastSpecialist == "reviewer"` + absent `criticVerdict` as a pre-v8.42 intermediate state and dispatches critic before advancing to ship.
+- **New `FlowStage` value** — `"critic"` inserted between `"review"` and `"ship"` in `FLOW_STAGES`. The orchestrator stamps `currentStage: "critic"` while the critic dispatch is in flight; advances to `"ship"` on `pass` / `iterate` (without user gate) or rewinds to `"review"` on `block-ship` + user picks `fix and re-review`.
+- **New `SpecialistId`** — `"critic"` joins the SPECIALISTS roster (now six total: design / ac-author / reviewer / security-reviewer / critic / slice-builder). Registered in `core-agents.ts`, `specialist-prompts/index.ts`, and `artifact-paths.ts`.
+
+### What changed (orchestrator body)
+
+- `src/content/start-command.ts` — adds `#### critic (v8.42+, Hop 4.5)` stage section between `#### review` and `#### ship` (5-bullet block; ~95% of the new content lifted to `critic-stage.md` runbook). Adds `"critic"` to the canonical stage list. Updates the resume summary's `Last specialist` enum, the auto-mode option's stage chain, the triage example's `triage.path`, and the v8.42 acMode-gating footnote.
+- Tripwire budgets bumped to absorb the new stage:
+  - **v8.22 body**: 480 → 485 lines; 46k → 48k chars; combined 100k → 110k chars (the critic-stage runbook adds ~7k chars for the dedicated dispatch contract).
+  - **v8.31 body**: 450 → 485 lines; 44500 → 48000 chars; v8.30-baseline ratio ceiling 0.98 → 1.06 (the cost of one new stage).
+  - **v8.31 path budgets**: inline 44500 → 48000; small-medium 105000 → 115000 (+ critic-stage); large-risky 145000 → 155000 (+ critic-stage).
+  - **v8.22 expected runbook list**: 12 → 13 (`critic-stage.md` added).
+
+### Decisions accepted (v8.42 Q1-Q5)
+
+The implementation locks in the spec's five resolved open questions as fixed behaviour — no user-facing flags expose any of these:
+
+- **Q1.** Critic runs in `gap` mode on `acMode: soft`; skipped only on `inline`.
+- **Q2.** `critic.md` is single-shot per dispatch (NOT append-only ledger); re-runs overwrite.
+- **Q3.** Critic is always-on, gated by `acMode` only (no `config.yaml` opt-out toggle).
+- **Q4.** This v8.42 implementation slug **dogfoods** — runs through its own critic stage during its review. Block-ship verdicts trigger `[2] accept-and-ship` manual override (`triage.criticOverride: true`) per the dogfood runbook section.
+- **Q5.** Escalation trigger #2 stays narrow ("test-first + zero failing tests in build.md") — explicitly NOT widened to "missing RED excerpt".
+
+### Tests
+
+- **+37 critic-specialist unit tests** (`tests/unit/critic-specialist.test.ts`) covering registry membership, agent registration, investigation protocol sections, posture awareness, acMode gating, escalation triggers (including the Q5 narrow-trigger anchor), token budgets, read-only contract, Q2 single-shot artifact behaviour, slim summary contract, and CRITIC artifact template frontmatter + sections.
+- **+22 critic-hop integration tests** (`tests/integration/critic-hop.test.ts`) covering install-layer writes (`templates/critic.md` + `agents/critic.md` + `runbooks/critic-stage.md`), orchestrator body Hop 4.5 dispatch path reachability, verdict-routing runbook coverage (block-ship picker shape, cap rules, legacy migration, Q4 dogfood), the five §10 known-bad scenarios (gap-axis vocabulary check), and the six-specialist end-to-end count.
+- **Tripwire updates** to reflect the v8.42 specialist count (5 → 6) and stage count (4 → 5): `types.test.ts`, `core-agents.test.ts`, `v814-cleanup.test.ts`, `v828-rename-planner-to-ac-author.test.ts`, `specialist-prompts.test.ts` (now requires `## Modes` for the critic), `artifact-paths.test.ts`, `v822-orchestrator-slim.test.ts`, `v831-path-aware-trimming.test.ts`.
+- **Smoke test** (`scripts/smoke-init.mjs`) asserts `critic.md` template + `critic.md` agent file land on disk after `init`.
+- Test count: 1022 → 1060 (+38 across 2 new files; 36 updated assertions in existing tripwires).
+
+### Release Notes Draft
+
+- Added adversarial critic specialist (`critic`) running at new Hop 4.5 between reviewer and ship; acMode-gated (inline skip / soft gap / strict gap-or-adversarial); single-shot `critic.md` artifact; hard 20k token cap + 1 critic re-run per slug.
+- Added `critic-stage.md` on-demand runbook documenting the full Hop 4.5 dispatch contract (gating, escalation triggers, cap rules, verdict routing, legacy migration, Q4 dogfood note).
+- Added `criticIteration`, `criticVerdict`, `criticGapsCount`, `criticEscalation` fields to `FlowState` (all optional; legacy v8.41 state files migrate forward without rewriting).
+- Specialist roster grows from 5 to 6: `design` / `ac-author` / `reviewer` / `security-reviewer` / `critic` / `slice-builder`.
+- Flow stages grow from 4 to 5: `plan` / `build` / `review` / `critic` / `ship`.
+- 38 new tests (37 unit + 22 integration; -21 tripwire updates), zero new dependencies, zero hook changes.
+
 ## 8.41.0 — Test cleanup: cut 1 redundant v8.38 tripwire file (9 tests, 97 LOC)
 
 ### TL;DR

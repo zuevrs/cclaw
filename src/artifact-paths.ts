@@ -8,6 +8,7 @@ export const ARTIFACT_FILE_NAMES: Record<ArtifactStage, string> = {
   plan: "plan.md",
   build: "build.md",
   review: "review.md",
+  critic: "critic.md",
   ship: "ship.md",
   decisions: "decisions.md",
   learnings: "learnings.md",

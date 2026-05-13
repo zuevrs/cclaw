@@ -2,6 +2,7 @@ import { DESIGN_PROMPT } from "./design.js";
 import { AC_AUTHOR_PROMPT } from "./ac-author.js";
 import { REVIEWER_PROMPT } from "./reviewer.js";
 import { SECURITY_REVIEWER_PROMPT } from "./security-reviewer.js";
+import { CRITIC_PROMPT } from "./critic.js";
 import { SLICE_BUILDER_PROMPT } from "./slice-builder.js";
 import { LEARNINGS_RESEARCH_PROMPT } from "../research-prompts/learnings-research.js";
 import { REPO_RESEARCH_PROMPT } from "../research-prompts/repo-research.js";
@@ -12,6 +13,7 @@ export const SPECIALIST_PROMPTS: Record<SpecialistId, string> = {
   "ac-author": AC_AUTHOR_PROMPT,
   reviewer: REVIEWER_PROMPT,
   "security-reviewer": SECURITY_REVIEWER_PROMPT,
+  critic: CRITIC_PROMPT,
   "slice-builder": SLICE_BUILDER_PROMPT
 };
 
@@ -20,6 +22,7 @@ export {
   AC_AUTHOR_PROMPT,
   REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
+  CRITIC_PROMPT,
   SLICE_BUILDER_PROMPT
 };
 

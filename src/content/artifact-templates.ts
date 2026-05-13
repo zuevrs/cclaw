@@ -5,6 +5,7 @@ export interface ArtifactTemplate {
     | "build"
     | "build-soft"
     | "review"
+    | "critic"
     | "ship"
     | "decisions"
     | "learnings"
@@ -393,6 +394,145 @@ Tie-breaker: if iteration 5 closes the last block row, return \`clear\` (signal 
 - **cap-reached** — signal #3. Stop; orchestrator surfaces remaining open rows to the user; user picks \`/cc-cancel\` or \`accept warns and ship\` (only valid if every open row is severity=warn).
 `;
 
+const CRITIC_TEMPLATE = `---
+slug: SLUG-PLACEHOLDER
+stage: critic
+status: active
+posture_inherited: PLAN-POSTURE-PLACEHOLDER  # most-restrictive AC posture from plan.md frontmatter
+ac_mode: AC-MODE-PLACEHOLDER                  # inline | soft | strict (mirrors flow-state.json > triage.acMode)
+generated_at: GENERATED-AT-PLACEHOLDER        # ISO timestamp at dispatch time
+mode: gap                                     # gap | adversarial
+predictions_made: 0                           # count of pre-commitment predictions in §1
+gaps_found: 0                                 # count of gaps in §2 + §3 + §4 + §5
+escalation_level: none                        # none | light | full
+escalation_triggers: []                       # list of trigger strings — see critic prompt body §8
+verdict: pending                              # pending | pass | iterate | block-ship
+token_budget_used: 0                          # orchestrator stamps this from the sub-agent return
+critic_iteration: 1                           # 1 on first dispatch; only ever 2 on a single rerun (hard cap)
+---
+
+# Critic — SLUG-PLACEHOLDER
+
+This artifact captures the adversarial critic pass over the slug. The critic runs in Hop 4.5 — after the reviewer clears, before the ship gate begins. The critic is a **separate stance** from the reviewer: the reviewer asks "does the code meet the AC?"; the critic asks "is the AC the right AC, what could we have missed, and what would I predict goes wrong?"
+
+The critic is read-only on the codebase. Every finding cites a \`file:line\` or a backtick-quoted excerpt from \`plan.md\` / \`build.md\` / \`review.md\`.
+
+> **Iron Law (critic):** EVIDENCE BEFORE CLAIMS. A prediction without a citation is speculation; a gap without a cited absence is hand-waving. The critic must show its work.
+
+## 1. Pre-commitment predictions
+
+_(Authored BEFORE the critic reads \`build.md\` and \`review.md\` in detail. 3-5 predictions in gap mode; 5-7 in adversarial mode. Each prediction names a verification path and a final outcome.)_
+
+| # | Prediction | Rationale (from plan.md / prompt / priors) | Verified-against-build | Outcome |
+| --- | --- | --- | --- | --- |
+| P-1 | _e.g. "AC-2's edge case 'empty input' is not exercised by any test"_ | _e.g. "plan.md AC-2 verification line names handle_empty but build.md TDD log has no AC-2 RED for empty input"_ | _file:line citation from build.md_ | _confirmed / refuted / partial_ |
+| P-2 | _e.g. "AC-1 commits include a drive-by edit to an adjacent file"_ | _e.g. "plan.md touchSurface lists 2 files; design Phase 4 D-1 ruled out broader refactor"_ | _git diff --stat citation_ | _confirmed / refuted / partial_ |
+| P-3 | _e.g. "Pre-mortem from design Phase 5 was skipped; high-irreversibility decisions exist without failure-mode coverage"_ | _e.g. "frontmatter \`posture: guided\`; D-2 introduces a schema change with no rollback line"_ | _plan.md \`## Pre-mortem\` absence / D-2 body_ | _confirmed / refuted / partial_ |
+
+## 2. Gap analysis (what's missing)
+
+_(The OMC "What's Missing" section. Walk the slug and ask, for each item, "what is absent?" — AC-coverage gaps, edge-case coverage gaps, NFR coverage gaps, decision implementation gaps, scope creep, untested edge cases, false assumptions.)_
+
+| G-N | Class | Severity | Anchor | Description | Suggested patch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| G-1 | _AC-coverage / edge-case / NFR / decision / scope-creep / untested / false-assumption_ | _block-ship / iterate / fyi_ | _plan.md > AC-N \\| build.md row \\| file:line_ | _what is missing and why it matters_ | _smallest correct change to close the gap_ | _open / closed-by-iteration_ |
+
+**Severity definitions** (critic's own vocabulary; do NOT merge with reviewer's \`critical\`/\`required\`/\`consider\`/\`nit\`/\`fyi\` ledger):
+
+- **\`block-ship\`** — closing this gap requires re-opening build or review. The slug is structurally not done.
+- **\`iterate\`** — gap is real but addressable in a fix-only iteration after ship (captured in learnings.md, carried as a follow-up).
+- **\`fyi\`** — gap is information-only; no action expected.
+
+## 3. Adversarial findings (gap + adversarial mode only)
+
+_(Skipped in gap mode unless escalation fires. Emitted in full in adversarial mode. Four techniques: assumption violation, composition failures, cascade construction, abuse cases.)_
+
+### 3a. Assumption violation
+
+| F-N | Assumption | Violation scenario | Code path that breaks | Severity |
+| --- | --- | --- | --- | --- |
+| F-1 | _e.g. "src/api/list.ts:14 assumes the upstream API returns non-empty JSON"_ | _e.g. "API returns 204 No Content during deployment"_ | _e.g. "src/api/list.ts:18 — \`JSON.parse(empty)\` throws; no try/catch"_ | _block-ship / iterate / fyi_ |
+
+### 3b. Composition failures
+
+| F-N | Boundary | Mismatch | Failure consequence | Severity |
+| --- | --- | --- | --- | --- |
+| F-2 | _e.g. "src/auth/middleware.ts ↔ src/api/list.ts"_ | _e.g. "middleware throws AuthError, caller catches Error (parent), error message leaks"_ | _e.g. "internal stack trace returned to user"_ | _block-ship / iterate / fyi_ |
+
+### 3c. Cascade construction
+
+| F-N | Trigger | Chain | Final failure state | Severity |
+| --- | --- | --- | --- | --- |
+| F-3 | _e.g. "src/cache/refresh.ts:42 — initial fetch times out"_ | _e.g. "retry logic at :47 → 5 retries → all timeout → fallback to stale → stale returned for 5min"_ | _e.g. "5min window of stale data during real outage"_ | _block-ship / iterate / fyi_ |
+
+### 3d. Abuse cases
+
+| F-N | Pattern | Trigger | Bad outcome | Severity |
+| --- | --- | --- | --- | --- |
+| F-4 | _e.g. "user submits same form rapidly"_ | _e.g. "no debounce, no idempotency key"_ | _e.g. "duplicate orders created"_ | _block-ship / iterate / fyi_ |
+
+## 4. Self-audit on AC quality (is the AC the right AC, not is it met?)
+
+_(Goal-backward, per-AC. Re-read the user's original prompt and verify each AC actually solves the user-stated problem.)_
+
+| AC | User asked for | AC promises | Aligned? | Drift note (if any) |
+| --- | --- | --- | --- | --- |
+| AC-1 | _e.g. "make the invite list refresh when a user clicks Refresh"_ | _e.g. "InviteList component re-fetches /api/invites on click of the Refresh button"_ | _yes / partial / no_ | _e.g. "AC asks for re-fetch; user said 'refresh' which could mean re-render with cached data."_ |
+
+## 5. Goal-backward verification (slug-level)
+
+1. **Goal stated** (from \`plan.md > ## Frame\`): _<one sentence>_
+2. **What shipped** (from \`build.md > ## TDD cycle log\` + \`review.md > Concern Ledger\` closed rows): _<one sentence>_
+3. **Outcome:** _\`solved\` / \`partial\` / \`drifted\`_
+4. **Gap (if partial or drifted):** _<one sentence; emit a G-N finding in §2 — class=AC-coverage for partial, class=scope-creep for drifted>_
+
+## 6. Realist check (mandatory)
+
+_(Pressure-test the severity of every \`block-ship\` and \`iterate\` finding. Downgrade only with a real-world \`Mitigated by\` — NEVER downgrade data loss, security breach, or financial impact findings.)_
+
+For each \`block-ship\` and \`iterate\` finding (G-N and F-N alike):
+
+1. **Realistic worst case.** What would actually happen — not the theoretical maximum?
+2. **Mitigating factors.** Existing tests, deployment gates, monitoring, feature flags, prior shipped slugs — do any substantially contain the blast radius?
+3. **Detection time.** Immediately, within hours, or silently?
+4. **Hunting-mode bias check.** "Am I inflating severity because I found momentum during the review?"
+
+Recalibrations (cite verbatim — "G-2 downgraded block-ship → iterate (Mitigated by: ...)"):
+
+- _<list>_
+
+## 7. Verdict
+
+\`\`\`text
+Verdict: <pass | iterate | block-ship>
+Predictions: <N made; N_confirmed confirmed, N_refuted refuted, N_partial partial>
+Gaps found: <N total; N_block_ship block-ship, N_iterate iterate, N_fyi fyi>
+Adversarial findings: <N total (gap mode: 0); N_block_ship / N_iterate / N_fyi>
+Goal-backward: <solved | partial | drifted>
+Escalation: <none | light | full>; <triggers cited verbatim>
+Realist recalibrations: <list, e.g. "G-2 downgraded block-ship → iterate (Mitigated by: ...)">
+Confidence: <high | medium | low>
+Confidence rationale: <one line; required when Confidence != high>
+\`\`\`
+
+## 8. Summary — critic
+
+### Changes made
+
+- _N predictions recorded (M confirmed, K refuted, L partial)._
+- _N gaps catalogued (M block-ship, K iterate, L fyi)._
+- _N adversarial findings (gap mode: skipped this section)._
+- _Goal-backward verdict: <one word>._
+
+### Things I noticed but didn't touch
+
+- _Anything observed during reading that is outside the critic's lane (e.g. "the review.md Concern Ledger has a closed row whose citation looks weak; flagging for next reviewer pass, not raising as gap here")._
+
+### Potential concerns
+
+- _Anything the critic could not verify and the orchestrator may want to surface to the user (e.g. "P-3 was about a runtime path I could not exercise from read-only context; recommend manual verification before ship")._
+`;
+
 const SHIP_TEMPLATE = `---
 slug: SLUG-PLACEHOLDER
 stage: ship
@@ -686,6 +826,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "build", fileName: "build.md", description: "Strict-mode build log (six-column TDD table, RED proofs, GREEN suite evidence).", body: BUILD_TEMPLATE },
   { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
+  { id: "critic", fileName: "critic.md", description: "v8.42 critic template — Hop 4.5 falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ac_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), AC self-audit, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },

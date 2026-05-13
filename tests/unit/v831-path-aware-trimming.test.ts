@@ -65,6 +65,9 @@ function pathBudget(runbookFiles: string[]): number {
 
 const INLINE_RUNBOOKS: string[] = [];
 
+// v8.42 — critic-stage.md is opened on every `review → critic` transition
+// when triage.path includes "critic" (every non-inline path). Both
+// small-medium and large-risky open it.
 const SMALL_MEDIUM_RUNBOOKS: string[] = [
   "dispatch-envelope.md",
   "handoff-artifacts.md",
@@ -72,7 +75,8 @@ const SMALL_MEDIUM_RUNBOOKS: string[] = [
   "ship-gate.md",
   "compound-refresh.md",
   "pause-resume.md",
-  "plan-small-medium.md"
+  "plan-small-medium.md",
+  "critic-stage.md"
 ];
 
 const LARGE_RISKY_RUNBOOKS: string[] = [
@@ -84,56 +88,56 @@ const LARGE_RISKY_RUNBOOKS: string[] = [
 ];
 
 describe("v8.31 path-aware orchestrator trimming — body-only budget", () => {
-  it("AC-1 — orchestrator body alone is ≤ 44500 chars (was 45212 on v8.30; v8.34 toggle docs absorbed)", () => {
+  it("AC-1 — orchestrator body alone is ≤ 48000 chars (was 45212 on v8.30; v8.42 lifted to absorb the Hop 4.5 critic stage pointer)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 44500). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; v8.34 added ~2K chars for the mid-flight runMode toggle (orchestrator-wide, NOT path-conditional, so it stays in the body). Net cut vs v8.30 (45212): ~1.5K chars (~3.3%). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31/v8.34 stop here to keep v8.24 / v8.21 tripwires unmodified.`
-    ).toBeLessThanOrEqual(44500);
+      `start-command body is ${charCount} chars (budget 48000). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; v8.34 added ~2K chars for the mid-flight runMode toggle; v8.42 added ~2K chars for the new critic stage pointer (~95% of the new content is lifted to critic-stage.md runbook). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31/v8.34/v8.42 stop here to keep v8.24 / v8.21 tripwires unmodified.`
+    ).toBeLessThanOrEqual(48000);
   });
 
-  it("AC-1 — orchestrator body alone is ≤ 450 lines (was 472 on v8.30; v8.34 toggle docs absorbed)", () => {
+  it("AC-1 — orchestrator body alone is ≤ 485 lines (was 472 on v8.30; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer)", () => {
     const lineCount = renderStartCommand().split("\n").length;
     expect(
       lineCount,
-      `start-command body is ${lineCount} lines (budget 450). v8.22 budget was 480; v8.31 tightened to 435; v8.34 lifted to 450 to absorb the mid-flight runMode toggle section (~14 lines, orchestrator-wide).`
-    ).toBeLessThanOrEqual(450);
+      `start-command body is ${lineCount} lines (budget 485). v8.22 budget was 480; v8.31 tightened to 435; v8.34 lifted to 450 to absorb the mid-flight runMode toggle section (~14 lines, orchestrator-wide); v8.42 lifted to 485 for the new Hop 4.5 critic stage pointer (~5-bullet block; remainder is in critic-stage.md).`
+    ).toBeLessThanOrEqual(485);
   });
 
-  it("AC-1 — orchestrator body alone still meaningfully smaller vs v8.30 baseline (≤98% char ratio)", () => {
+  it("AC-1 — orchestrator body alone stays within ≤106% of v8.30 baseline (the cost of one new stage)", () => {
     const v830CharBaseline = 45212;
     const charCount = renderStartCommand().length;
     const ratio = charCount / v830CharBaseline;
     expect(
       ratio,
-      `body is ${charCount} chars, ratio ${ratio.toFixed(3)} of v8.30 baseline (${v830CharBaseline}). v8.31's win was ~7.8% cut; v8.34 spent some on mid-flight runMode toggle docs; v8.40 spent more replacing commit-helper invocations with the equivalent git-log-inspection prose in Hop 3. The body should still sit under 98% of v8.30; future re-growth past this ratio is a signal to lift more content to runbooks.`
-    ).toBeLessThanOrEqual(0.98);
+      `body is ${charCount} chars, ratio ${ratio.toFixed(3)} of v8.30 baseline (${v830CharBaseline}). v8.31's win was ~7.8% cut; v8.34 + v8.40 spent some on the runMode toggle and git-log inspection prose; v8.42 added the new critic stage (~2K chars body + ~7K chars runbook). The body should stay within ~6% of v8.30 (one new stage costs ~5% growth, leaving ~1% slack). Future re-growth past this ratio is a signal to lift more content to runbooks.`
+    ).toBeLessThanOrEqual(1.06);
   });
 });
 
 describe("v8.31 path-aware orchestrator trimming — per-path budget envelopes", () => {
-  it("AC-2 — inline-path budget = body only; ≤ 44500 chars (v8.34 lifted to absorb the mid-flight runMode toggle docs)", () => {
+  it("AC-2 — inline-path budget = body only; ≤ 48000 chars (v8.42 lifted to absorb the Hop 4.5 critic stage pointer)", () => {
     const budget = pathBudget(INLINE_RUNBOOKS);
     expect(
       budget,
-      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 44500 (v8.31 = 42500 + v8.34 toggle docs).`
-    ).toBeLessThanOrEqual(44500);
+      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 48000 (v8.31 = 42500 + v8.34 toggle docs + v8.42 critic stage pointer; inline does NOT open critic-stage.md since triage.path == ["build"] on inline).`
+    ).toBeLessThanOrEqual(48000);
   });
 
-  it("AC-2 — small-medium-path budget = body + 7 runbooks; ≤ 105000 chars", () => {
+  it("AC-2 — small-medium-path budget = body + 8 runbooks; ≤ 115000 chars (v8.42 added critic-stage.md)", () => {
     const budget = pathBudget(SMALL_MEDIUM_RUNBOOKS);
     expect(
       budget,
-      `small-medium path reads the body + dispatch-envelope, handoff-artifacts, self-review-gate, ship-gate, compound-refresh, pause-resume, plan-small-medium. budget = ${budget} chars; ceiling 105000.`
-    ).toBeLessThanOrEqual(105000);
+      `small-medium path reads the body + dispatch-envelope, handoff-artifacts, self-review-gate, ship-gate, compound-refresh, pause-resume, plan-small-medium, critic-stage (v8.42). budget = ${budget} chars; ceiling 115000.`
+    ).toBeLessThanOrEqual(115000);
   });
 
-  it("AC-2 — large-risky-path budget = body + 10 runbooks; ≤ 145000 chars", () => {
+  it("AC-2 — large-risky-path budget = body + 11 runbooks; ≤ 155000 chars (v8.42 added critic-stage.md)", () => {
     const budget = pathBudget(LARGE_RISKY_RUNBOOKS);
     expect(
       budget,
-      `large-risky path reads the body + small-medium's set (minus plan-small-medium) + discovery, parallel-build, cap-reached-recovery, adversarial-rerun. budget = ${budget} chars; ceiling 145000.`
-    ).toBeLessThanOrEqual(145000);
+      `large-risky path reads the body + small-medium's set (minus plan-small-medium) + discovery, parallel-build, cap-reached-recovery, adversarial-rerun + critic-stage (v8.42). budget = ${budget} chars; ceiling 155000.`
+    ).toBeLessThanOrEqual(155000);
   });
 
   it("AC-2 — strict ordering: large-risky > small-medium > inline", () => {

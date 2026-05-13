@@ -24,8 +24,8 @@ function runbookBody(id: string): string {
  */
 describe("v8.14 strong-design + streamlined-gate", () => {
   describe("D1 — design specialist replaces brainstormer + architect", () => {
-    it("ships exactly five specialists, design among them, brainstormer + architect retired", () => {
-      expect([...SPECIALISTS]).toEqual(["design", "ac-author", "reviewer", "security-reviewer", "slice-builder"]);
+    it("ships exactly six specialists (v8.42 added critic between security-reviewer and slice-builder), design among them, brainstormer + architect retired", () => {
+      expect([...SPECIALISTS]).toEqual(["design", "ac-author", "reviewer", "security-reviewer", "critic", "slice-builder"]);
       for (const legacy of LEGACY_DISCOVERY_SPECIALISTS) {
         expect(SPECIALISTS as readonly string[]).not.toContain(legacy);
       }
@@ -38,8 +38,8 @@ describe("v8.14 strong-design + streamlined-gate", () => {
       expect(design?.prompt).toMatch(/main orchestrator context/iu);
     });
 
-    it("every other specialist remains on-demand (sub-agent)", () => {
-      for (const id of ["ac-author", "slice-builder", "reviewer", "security-reviewer"] as const) {
+    it("every other specialist remains on-demand (sub-agent) — v8.42 added critic as on-demand", () => {
+      for (const id of ["ac-author", "slice-builder", "reviewer", "security-reviewer", "critic"] as const) {
         const agent = CORE_AGENTS.find((entry) => entry.id === id);
         expect(agent).toBeDefined();
         expect(agent?.activation).toBe("on-demand");

@@ -580,6 +580,100 @@ Notes: lessons={<count or summary>}, topology=<inline | parallel-build>, prior-l
 The orchestrator reads only this; the full plan.md stays in \`flows/<slug>/plan.md\` for the next stage's slice-builder dispatch. The five report fields the orchestrator uses are: condition / AC count, max \`touchSurface\` value, parallel-build flag, recommended-next, prior-lesson count.
 `;
 
+const CRITIC_STAGE = `# On-demand runbook — critic stage (Hop 4.5, v8.42+)
+
+The orchestrator opens this runbook **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the v8.42 on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + AC self-audit + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this runbook covers what the orchestrator does *around* the dispatch.
+
+## acMode gating (Q1, no flag exposed)
+
+| \`triage.acMode\` | does critic run? | mode | typical token budget |
+| --- | --- | --- | --- |
+| \`inline\` | **no — skipped** (\`triage.path\` never includes \`critic\` on inline) | — | 0 |
+| \`soft\` | **yes** | \`gap\` (light) — predictions ≤3, §3 adversarial skipped, §5 goal-backward collapsed to one paragraph | 5-7k |
+| \`strict\` | **yes** | \`gap\` (full) by default; auto-escalates to \`adversarial\` (\§3 emitted in full + per-D-N devil's-advocate sweep) when any §8 trigger fires | 10-15k (gap) / 12-18k (adversarial), hard cap 20k |
+
+## Escalation triggers (§8, OR-conditions — any one fires escalation on \`acMode: strict\`)
+
+1. **Architectural-tier change** — touchSurface includes ≥2 files marked \`tier: architectural\` in plan.md OR the build introduced one.
+2. **Test-first + zero failing tests in build.md** — slug posture is \`test-first\` AND the TDD log shows zero \`RED\` rows (v8.42 Q5: narrow trigger, do NOT widen to "missing RED excerpt"; the difference matters — a slug with \`RED\` rows that lack a captured excerpt is a build.md audit-trail gap to be flagged, not a critic escalator).
+3. **Large surface size** — \`git diff --stat\` reports ≥10 files OR ≥500 net lines changed since the plan committed.
+4. **\`security_flag: true\`** OR security-reviewer ran during Hop 4.
+5. **\`reviewIterations >= 4\`** — the slug needed near-cap iterations to converge; hidden complexity signal.
+
+The orchestrator computes the trigger set deterministically from \`flow-state.json\` + \`plan.md\` frontmatter + \`build.md\` table + \`git diff --stat\` BEFORE dispatching critic. The dispatch envelope stamps the firing triggers verbatim so the prompt copies them into \`critic.md > frontmatter > escalation_triggers\`.
+
+Mapping fired-triggers count to \`criticEscalation\`:
+
+- \`acMode: soft\` AND exactly one trigger fired → \`light\` (still \`gap\` mode; one extra technique permitted).
+- \`acMode: strict\` AND any trigger fired → \`full\` (\`adversarial\` mode; all four §3 techniques + devil's-advocate sweep).
+- Otherwise → \`none\` (\`gap\` mode unchanged).
+
+## Cap & rerun rules
+
+- **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — surfacing the critic-cap-reached picker (same shape as the v8.20 5-iteration reviewer cap).
+- **Re-run trigger:** ONLY when the user picks \`[1] fix and re-review\` at the block-ship picker. The orchestrator re-dispatches \`slice-builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the v8.20 cap still applies), then re-runs \`critic\` (increments \`criticIteration\`).
+- **Independence:** critic dispatches do NOT increment \`reviewIterations\`. The two counters are independent; the critic-cap-reached picker fires only on a third critic dispatch, even if the reviewer-cap is far from reached.
+
+## Verdict handling (slim summary → orchestrator routing)
+
+| critic \`Verdict:\` | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
+| --- | --- | --- | --- |
+| \`pass\` | \`"ship"\` | step pauses end-of-stage; auto chains to Hop 5 | no user gate; advance straight to ship |
+| \`iterate\` | \`"ship"\` | step pauses end-of-stage; auto chains to Hop 5 | open critic gaps with severity \`iterate\` are copied verbatim into \`ship.md > ## Risks carried over\`; one line to the user ("Critic returned iterate (\<N\> gaps carried over). Continuing to ship.") |
+| \`block-ship\` | stays \`"critic"\` | both modes hard-gate | surface the block-ship picker: \`[1] fix and re-review\` (consumes the one allowed rerun), \`[2] accept-and-ship\` (strict-mode escape hatch; stamps \`triage.criticOverride: true\` for audit trail), \`[3] /cc-cancel\` (out-of-band). Single-line summary cites the \`block-ship\` G-N / F-N anchors verbatim. |
+
+**Confidence: low** in the critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator offers \`Expand critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard Hop 4 invariants.
+
+## FlowState patches
+
+**Immediately before dispatching critic:**
+
+\`\`\`json
+{
+  "currentStage": "critic",
+  "lastSpecialist": null
+}
+\`\`\`
+
+**After critic returns slim summary (orchestrator has read it, BEFORE user-gate decision):**
+
+\`\`\`json
+{
+  "currentStage": "critic",
+  "lastSpecialist": "critic",
+  "criticIteration": 1,
+  "criticVerdict": "pass | iterate | block-ship",
+  "criticGapsCount": <integer; open gaps with severity != fyi>,
+  "criticEscalation": "none | light | full"
+}
+\`\`\`
+
+**After ship begins (user approved continue or auto-chain fired):** \`currentStage\` advances to \`"ship"\`. The critic fields stay; they are immutable for the rest of the flow.
+
+## Q4 dogfood — when this is the v8.42 implementation slug
+
+The v8.42 slug introduces the critic itself. The acceptance criterion (Q4) is that *this* slug runs through *its own* critic stage during review. If the critic returns \`block-ship\` on its own implementation, the orchestrator records the block-ship reason in \`learnings.md\` and the user invokes \`[2] accept-and-ship\` (manual override; \`triage.criticOverride: true\`). The override is documented in the slug's PR body under \`## Critic self-dogfood findings\` per the v8.42 process checklist. This is a one-time bootstrap exception — every subsequent slug treats \`block-ship\` as a hard gate by default.
+
+## Legacy migration (pre-v8.42 \`flow-state.json\`)
+
+A state file with \`currentStage: "review"\` AND \`lastSpecialist: "reviewer"\` AND no \`criticVerdict\` field is treated as **pre-critic intermediate**:
+
+- If the slug directory is \`flows/<slug>/\` (still active, not yet shipped): on the next \`/cc\`, the orchestrator emits the one-line migration note (\`Legacy state (pre-v8.42) detected; the critic stage will run on next /cc.\`) and dispatches critic before advancing to ship.
+- If the slug directory is \`flows/shipped/<slug>/\` (post-v8.41 ship already completed): the state is left alone. The shipped artifact set is immutable; the orchestrator does NOT retroactively run critic on a shipped slug.
+
+The migration is one-pass and idempotent — a slug whose critic has already run shows \`criticVerdict\` set, so the legacy branch is never re-entered.
+
+## What the critic CANNOT do (read this before authoring the envelope)
+
+- Edit any source file (\`src/**\`, \`tests/**\`, \`.cclaw/state/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\`.
+- Commit, push, rebase, or merge. The critic owns no git operations.
+- Dispatch other specialists. Composition is the orchestrator's job.
+- Exceed 20k input+output tokens. Approaching the cap is itself a finding (\`Confidence: low\`, recommend split).
+- Re-walk the reviewer's eight axes. The critic reads \`review.md > ## Concern Ledger\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
+
+The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see v8.42 Q2).
+`;
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -652,6 +746,12 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "plan-small-medium.md",
     title: "Plan stage on small/medium",
     body: PLAN_SMALL_MEDIUM
+  },
+  {
+    id: "critic-stage",
+    fileName: "critic-stage.md",
+    title: "Critic stage (Hop 4.5, v8.42+)",
+    body: CRITIC_STAGE
   }
 ];
 

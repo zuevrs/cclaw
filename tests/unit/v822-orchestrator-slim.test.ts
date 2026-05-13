@@ -50,13 +50,13 @@ async function seedRunbookOrphan(projectRoot: string, fileName: string): Promise
 }
 
 describe("v8.22 orchestrator-slim — `/cc` body line budget", () => {
-  it("AC-1 — `start-command.ts` body stays ≤480 lines (was 901 on v8.21)", () => {
+  it("AC-1 — `start-command.ts` body stays ≤485 lines (was 901 on v8.21; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer)", () => {
     const body = renderStartCommand();
     const lineCount = body.split("\n").length;
     expect(
       lineCount,
-      `start-command body is ${lineCount} lines (budget 480). If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
-    ).toBeLessThanOrEqual(480);
+      `start-command body is ${lineCount} lines (budget 485). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md and kept only a five-bullet pointer in the orchestrator body (one new stage entry, one new table row, one trimmed acMode-gating sentence under triage.path, one v8.42 footnote on the triage example). If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
+    ).toBeLessThanOrEqual(485);
   });
 
   it("AC-1 — the body is meaningfully smaller than the legacy v8.21 size (≥30% cut)", () => {
@@ -77,6 +77,9 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
   // The list grows; the v8.22 invariant (every runbook is reachable
   // from the body and has a `# On-demand runbook —` heading) is
   // preserved.
+  // v8.42 extends the set with `critic-stage.md` — the on-demand runbook
+  // for Hop 4.5 critic dispatch (acMode gating, escalation triggers,
+  // verdict routing, flow-state patches, legacy migration).
   const expectedRunbookFiles = [
     "dispatch-envelope.md",
     "parallel-build.md",
@@ -90,9 +93,10 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
     "discovery.md",
     "pause-resume.md",
     "plan-small-medium.md",
+    "critic-stage.md",
   ];
 
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the twelve expected files (v8.22 ten + v8.31 two)", () => {
+  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the thirteen expected files (v8.22 ten + v8.31 two + v8.42 one)", () => {
     const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
     expect(fileNames).toEqual([...expectedRunbookFiles].sort());
   });
@@ -150,26 +154,26 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
 });
 
 describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", () => {
-  it("AC-4 — body alone is ≤46k chars (was ~52k on v8.21; a meaningful cut)", () => {
+  it("AC-4 — body alone is ≤48k chars (was ~52k on v8.21; v8.42 lifted to absorb the Hop 4.5 critic pointer)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 46000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth, documented in those slugs' CHANGELOGs). Do not raise this further without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(46000);
+      `start-command body is ${charCount} chars (budget 48000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth); v8.42 added ~2k chars for the new critic stage pointer (5-bullet block; ~95% of the new content is in critic-stage.md runbook). Do not raise this further without a CHANGELOG note.`
+    ).toBeLessThanOrEqual(48000);
   });
 
   it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {
     expect(renderStartCommand()).toBe(START_COMMAND_BODY);
   });
 
-  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 100k-char ceiling", () => {
+  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 110k-char ceiling (v8.42 lifted to absorb the critic-stage runbook)", () => {
     const combined =
       renderStartCommand().length +
       ON_DEMAND_RUNBOOKS.reduce((acc, r) => acc + r.body.length, 0);
     expect(
       combined,
-      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 100000). The pre-v8.22 body alone was ~50k; expanding past 100k means a block belongs on disk, not inlined and not in a runbook.`
-    ).toBeLessThanOrEqual(100000);
+      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 110000). The pre-v8.22 body alone was ~50k; the v8.42 critic-stage runbook adds ~7k chars for the dedicated Hop 4.5 dispatch contract; expanding past 110k means a block belongs on disk, not inlined and not in a runbook.`
+    ).toBeLessThanOrEqual(110000);
   });
 });
 

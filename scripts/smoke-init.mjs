@@ -83,10 +83,20 @@ try {
   // path (template is preserved for back-compat) but the runtime no longer
   // writes `manifest.md` by default — `ship.md` carries the manifest data
   // in its frontmatter.
-  for (const tpl of ["plan.md", "build.md", "review.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
+  // v8.42 — `critic.md` template was added alongside the new adversarial
+  // critic specialist. Hop 4.5 dispatches `critic` between `reviewer` and
+  // `ship`; the template is the artifact's source-of-truth shape and
+  // ships unconditionally (acMode-gated on dispatch, not install).
+  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "templates", tpl))) {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }
+  }
+  // v8.42 — assert the critic specialist's agent file is written too.
+  // CORE_AGENTS now includes `critic` (6 total: design, ac-author,
+  // reviewer, security-reviewer, critic, slice-builder).
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "critic.md"))) {
+    throw new Error("smoke check failed: v8.42 critic.md agent file missing after init");
   }
   // v8.17: derive the expected list from `AUTO_TRIGGER_SKILLS` so future
   // thematic merges / splits don't require touching this script. Assert
