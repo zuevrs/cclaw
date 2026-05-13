@@ -34,7 +34,7 @@ Flow control (`plan`, `build`, `review`, `ship`) intentionally does **not** live
 
 Every stage is a fresh sub-agent dispatch that reads its own contract from `.cclaw/lib/agents/<id>.md`, writes one artifact under `.cclaw/flows/<slug>/`, and returns a six-line summary with an explicit `Confidence: high | medium | low` line. The orchestrator chains, pauses, or loops back to a fix-only iteration based on that summary.
 
-**Build is a TDD cycle.** In strict mode every Acceptance Criterion goes RED → GREEN → REFACTOR with one commit per phase via `commit-helper.mjs`; ship is gated on every AC having a real SHA. Soft mode runs the cycle once for the whole feature; inline skips it.
+**Build is a TDD cycle.** In strict mode every Acceptance Criterion goes RED → GREEN → REFACTOR with one commit per phase, using posture-driven subject prefixes (`red(AC-N): ...` / `green(AC-N): ...` / `refactor(AC-N): ...`). The reviewer reads `git log --grep="(AC-N):"` at handoff and at ship to verify the chain. Soft mode runs the cycle once for the whole feature with a plain `git commit`; inline skips it.
 
 When `ac-author` declares topology `parallel-build` (≥4 AC across ≥2 disjoint touch surfaces, every AC `parallelSafe: true`), strict-mode build fans out into git worktrees — capped at five slices, never split into "wave 2". Integration review reads each branch before the orchestrator merges. Harnesses without sub-agent dispatch fall back to inline-sequential with an explicit user accept-fallback step.
 
@@ -52,7 +52,7 @@ Five on-demand specialists plus two read-only research helpers:
 | --- | --- |
 | `design` | large-risky discovery: clarify, frame, approaches, decisions inline, optional pre-mortem, sign-off. Multi-turn in main context. |
 | `ac-author` | breaks the task into Acceptance Criteria, picks topology (sequential vs parallel-build), writes `plan.md`. |
-| `slice-builder` | implements one slice with TDD; commits per AC via `commit-helper.mjs`. |
+| `slice-builder` | implements one slice with TDD; commits per AC with posture-driven `red(AC-N): ...` / `green(AC-N): ...` / `refactor(AC-N): ...` prefixes that the reviewer verifies via `git log --grep`. |
 | `reviewer` | seven-axis review (correctness / test-quality / readability / architecture / complexity-budget / security / performance). Per-iteration dedup, five-iteration cap. |
 | `security-reviewer` | threat-model + sensitive-change pass; auto-fires when the diff touches auth, secrets, crypto, or migrations. |
 | `repo-research` (helper) | brownfield scan; called by `ac-author` before authoring. |
@@ -75,16 +75,24 @@ cclaw --non-interactive version | help         # CI: print version / help and ex
 
 `--non-interactive` is the CI / scripts escape hatch — bare `cclaw init` / `cclaw sync` etc. error in v8.29 and point at the TUI. The non-interactive surface is five commands: **install**, **knowledge**, **uninstall**, **version**, **help**. `--non-interactive install` is the single idempotent installer — calling it on an already-installed project re-applies cclaw assets and runs orphan cleanup, which is what `--non-interactive sync` / `--non-interactive upgrade` did before v8.37; those names exit 1 with a migration hint pointing at `install`. The TUI menu keeps its `Sync` / `Upgrade` rows so a human reading the menu sees the right intent. `--non-interactive knowledge` is the read-side of the compound loop; it groups entries by tag, sorts by recency, and accepts `--tag=<tag>` / `--surface=<substring>` filters or `--json` for piping into `jq`.
 
-## AC traceability via `commit-helper`
+## AC traceability via per-AC commit prefixes (v8.40+)
 
-In strict mode, `commit-helper.mjs` is the only supported way to commit during `/cc`:
+In strict mode, every commit during `/cc` carries a posture-driven subject-line prefix that the reviewer reads at handoff time:
 
 ```bash
-git add path/to/changed/file
-node .cclaw/hooks/commit-helper.mjs --ac=AC-1 --message="implement approval pill"
+git add tests/path/to/new.test.ts
+git commit -m "red(AC-1): tooltip shows email when permission set"
+
+git add src/path/to/implementation.ts
+git commit -m "green(AC-1): hasViewEmail check + branch in tooltip"
+
+git add src/path/to/implementation.ts
+git commit -m "refactor(AC-1): extract hasViewEmail to permissions.ts"
 ```
 
-The hook checks that `AC-1` is declared in `plan.md`, writes the new SHA back into `flow-state.json`, and refuses to run when the state schema is out of date. Ship is blocked unless every AC has a real SHA chain. Soft and inline modes use plain `git commit` and skip the gate.
+The reviewer runs `git log --grep="(AC-N):" --oneline` against the plan's AC list and verifies the per-posture sequence (`red` before `green` for `test-first`; just `refactor(AC-N): ...` for `refactor-only`; etc.). Missing or mis-ordered commits land as A-1 findings (severity `required`, axis `correctness`). Soft and inline modes use plain `git commit` without the AC prefix.
+
+This is a prompt-only contract — there is no `.cclaw/hooks/` directory, no `commit-helper.mjs`, no mechanical pre-commit gate. cclaw v8.40 retired the hook in favour of the obra-superpowers / mattpocock / addy pattern: the discipline lives in the prompt, and the reviewer's ex-post inspection is the gate.
 
 ## Compound learnings (automatic, gated)
 
