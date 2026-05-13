@@ -226,7 +226,7 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 13. **\`dependsOn\` and \`rollback\` are present on every AC** in strict mode. \`dependsOn\` may be empty (leaf AC); \`rollback\` may be "Same as AC-N" but must not be empty or \`none\`.
 14. **\`dependsOn\` graph is acyclic** and references only AC ids that exist in this plan. A cycle or dangling reference is a self-review failure — fix it before returning.
 15. **\`feasibility_stamp\` is set** in frontmatter to one of \`green\` / \`yellow\` / \`red\` (strict mode). A \`red\` stamp requires you to also surface the blockers in slim-summary Notes and recommend re-decomposition or that the user re-enters the design phase — do not return a \`red\` plan with \`Recommended next: continue\`.
-16. **\`posture\` is set on every AC** (v8.36, strict mode). One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table above; a \`docs-only\` posture with a source file in \`touchSurface\` is the most common contradiction — fix it here, before slice-builder hits the \`commit-helper.mjs\` double-check.
+16. **\`posture\` is set on every AC** (v8.36, strict mode). One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table above; a \`docs-only\` posture with a source file in \`touchSurface\` is the most common contradiction — fix it here, because v8.40+ the reviewer's git-log + \`src/posture-validation.ts\` cross-check will flag the mismatch as an A-1 finding (severity=required, axis=correctness).
 
 ### Phase 8 — Return slim summary
 
@@ -314,7 +314,7 @@ Apply this heuristic table after enumerating the AC. Read the AC verb + \`touchS
 | --- | --- | --- |
 | add contract test \| integration test \| e2e test \| snapshot test \| fuzz test \| property test | \`tests-as-deliverable\` | The test IS the AC's deliverable; there is no separate "production code" to write first. One commit captures the test + its passing outcome. |
 | rename \| extract \| inline \| move file \| reorganize (with no observable behaviour change) | \`refactor-only\` | The AC is a pure structural change; existing tests are the safety net. No new RED test needed. |
-| document \| describe \| add ADR \| update README \| write tutorial | \`docs-only\` | Markdown / docs edits only. The slice-builder's \`commit-helper.mjs\` refuses the commit if \`touchSurface\` includes a source file. |
+| document \| describe \| add ADR \| update README \| write tutorial | \`docs-only\` | Markdown / docs edits only. The reviewer's posture-validation (\`src/posture-validation.ts\`) treats a \`docs-only\` AC whose touchSurface includes a source file as an A-1 finding (severity=required). |
 | set up \| bootstrap \| install (test framework / runner / lint config) | \`bootstrap\` | The test framework does not yet exist; AC-1 commits the runner + one passing example test, AC-2+ uses the standard cycle. |
 | add characterization test \| pin existing behaviour \| add safety net before refactor | \`characterization-first\` | Legacy code is the unit under test; RED-first is still the discipline, but the test pins existing behaviour rather than describing new behaviour. |
 | (anything else — new feature, bug fix, behaviour change) | \`test-first\` (default) | Standard RED → GREEN → REFACTOR cycle. |
@@ -322,7 +322,7 @@ Apply this heuristic table after enumerating the AC. Read the AC verb + \`touchS
 Hard rules:
 
 - **The default is \`test-first\`.** When the AC verb is ambiguous, the right answer is \`test-first\`; the slice-builder pays a small ceremony tax to gain the watched-RED proof. Drift the other way only when the heuristic table clearly fires.
-- **Posture annotation matches the touchSurface.** A \`docs-only\` posture with \`src/**\` in \`touchSurface\` is a contradiction; the \`commit-helper.mjs\` predicate-as-double-check will refuse the commit. Either downgrade \`touchSurface\` (true docs slug) or upgrade the posture (real source change).
+- **Posture annotation matches the touchSurface.** A \`docs-only\` posture with \`src/**\` in \`touchSurface\` is a contradiction; v8.40+ the reviewer's posture-validation helper (\`src/posture-validation.ts\`) flags the mismatch as an A-1 finding. Either downgrade \`touchSurface\` (true docs slug) or upgrade the posture (real source change).
 - **Bootstrap is rare.** Use only when AC-1 literally installs the test runner or the lint config; do NOT use it as an escape hatch for "I cannot write a RED test for this AC". The latter is a sign the AC is not testable as written — split or rewrite.
 - **If the user disputes the posture, change it.** Posture is the slice-builder's contract for ceremony; the user owns the call. Cite the heuristic table row that triggered your pick in the slim summary's Notes line so a disagreement surfaces with the rationale visible.
 
@@ -473,7 +473,7 @@ Add a status pill to the approvals dashboard with permission-aware tooltip.
 \`src/components/dashboard/StatusPill.tsx\`, \`src/lib/permissions.ts\`, \`tests/unit/StatusPill.test.tsx\`.
 \`\`\`
 
-In soft mode there is no AC table, no \`parallelSafe\`, no \`touchSurface\` per condition, no \`commit\` column. Topology is always \`inline-sequential\`. The slice-builder runs **one** TDD cycle that exercises every listed condition; commits are plain \`git commit\` (the commit-helper is advisory in soft mode and does not require \`--phase\`).
+In soft mode there is no AC table, no \`parallelSafe\`, no \`touchSurface\` per condition, no \`commit\` column. Topology is always \`inline-sequential\`. The slice-builder runs **one** TDD cycle that exercises every listed condition; commits are plain \`git commit\` (no per-AC prefix — soft mode produces a single feature-level cycle the reviewer reads from \`build.md\`, not from \`git log --grep\`).
 
 The frontmatter stays minimal in soft mode — no \`ac\` array, just \`slug\`, \`stage\`, \`status\`. The orchestrator wrote \`triage.acMode: soft\` into \`flow-state.json\` already.
 

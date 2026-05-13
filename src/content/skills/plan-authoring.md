@@ -19,7 +19,7 @@ Use this skill whenever you create or modify any `.cclaw/flows/<slug>/plan.md`.
 1. **Frontmatter is mandatory.** Every plan starts with the YAML block from `.cclaw/lib/templates/plan.md`. Required keys: `slug`, `stage`, `status`, `ac`, `last_specialist`, `refines`, `shipped_at`, `ship_commit`, `review_iterations`, `security_flag`.
 2. **AC ids are sequential** starting at `AC-1`. They must match the AC table inside the body.
 3. **Each AC is observable.** Verification line is mandatory. If you cannot write the verification, the AC is not real.
-4. **The traceability block at the end** is rebuilt by `commit-helper.mjs`. Do not edit it by hand once a commit was recorded.
+4. **The traceability block at the end** is reconstructed by the reviewer via `git log --grep="(AC-N):" --oneline` at handoff and at ship time. The plan author writes the AC table and the `commit:` column may be left empty (or pre-filled with the expected commit message shape, e.g. `red(AC-N): ... → green(AC-N): ... → refactor(AC-N): ...`); the slice-builder appends actual SHAs to `build.md` and the reviewer cross-references them against the plan's AC list.
 5. **Out-of-scope items** stay in the body. Do not let them leak into AC.
 
 ## When refining a shipped slug

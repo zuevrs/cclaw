@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
  * - `plan`     — design + ac-author (Hop 2.5 / 3)
  * - `build`    — slice-builder (Hop 4)
  * - `review`   — reviewer / security-reviewer (Hop 5)
- * - `ship`     — commit-helper + compound-and-ship (Hop 6+)
+ * - `ship`     — reviewer release + compound-and-ship (Hop 6+)
  * - `compound` — runCompoundAndShip's knowledge write loop
  * - `always`   — relevant at every hop; rendered into every stage block.
  */
@@ -125,7 +125,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "ac-discipline",
     fileName: "ac-discipline.md",
-    description: "v8.16 merge of ac-quality + ac-traceability. Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the commit-helper invocation + AC↔commit chain contract. AC-quality always-on for AC authoring; AC-traceability active only when ac_mode=strict, advisory in soft / inline modes.",
+    description: "v8.16 merge of ac-quality + ac-traceability (revised for v8.40 — hook removed). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the posture-driven commit-prefix contract (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies ex-post via git log --grep. AC-quality always-on for AC authoring; AC-traceability active only when ac_mode=strict, no chain enforced in soft / inline modes.",
     triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:ac-author", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ac_mode:strict"],
     stages: ["plan", "build", "review"],
     body: readSkill("ac-discipline.md")
@@ -173,8 +173,8 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "commit-hygiene",
     fileName: "commit-hygiene.md",
-    description: "v8.16 merge of commit-message-quality + surgical-edit-hygiene. Enforces commit-message conventions for commit-helper.mjs AND the always-on rules for slice-builder commits: no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
-    triggers: ["before:commit-helper", "always-on", "specialist:slice-builder", "before:git-commit"],
+    description: "v8.16 merge of commit-message-quality + surgical-edit-hygiene (revised for v8.40 — hook removed). Enforces commit-message conventions AND the always-on rules for slice-builder commits: posture-driven subject-line prefix in strict mode (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):); no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
+    triggers: ["always-on", "specialist:slice-builder", "before:git-commit"],
     stages: ["build", "ship"],
     body: readSkill("commit-hygiene.md")
   },

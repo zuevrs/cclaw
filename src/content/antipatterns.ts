@@ -6,23 +6,25 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 ## A-1 — TDD phase integrity broken
 
-**Symptom (any of):**
+**Symptom (any of) — detected by reviewer via \`git log --grep="(AC-N):" --oneline\` inspection:**
 
-- Build commits land for AC-N with \`--phase=green\` but no \`--phase=red\` recorded earlier.
-- AC has RED + GREEN commits but no \`--phase=refactor\` (skipped or applied) entry in flow-state.
-- A \`--phase=red\` commit touches \`src/\`, \`lib/\`, or \`app/\` — production code slipped into RED.
-- Tests for AC-N appear in a separate commit a few minutes after the AC-N implementation lands.
+- \`green(AC-N): ...\` commit lands without a prior \`red(AC-N): ...\` commit by git-log order (for postures \`test-first\` / \`characterization-first\`).
+- AC has \`red(AC-N): ...\` + \`green(AC-N): ...\` but no \`refactor(AC-N): ...\` (real or empty-marker \`refactor(AC-N) skipped: ...\`) anywhere in the log.
+- A \`red(AC-N): ...\` commit's \`git show --stat\` lists files under \`src/\`, \`lib/\`, or \`app/\` — production code slipped into RED.
+- Tests for AC-N appear in a separate commit a few minutes after the AC-N implementation lands (out-of-order chain).
+- A strict-mode commit's subject line lacks the \`(AC-N):\` prefix entirely — the reviewer's \`git log --grep\` scan misses it and the AC reads as missing.
+- An AC declared in \`plan.md\` has zero matching commits in the log (the slice was never built or every commit's subject lacks the prefix).
 
-**Underlying mistake.** The TDD cycle was treated as ceremony, not as the contract. The cycle exists so the failing test encodes the AC; skipping or scrambling phases produces an audit trail that nobody can trust.
+**Underlying mistake.** The TDD cycle was treated as ceremony, not as the contract. The cycle exists so the failing test encodes the AC; skipping or scrambling phases produces an audit trail that nobody can trust. v8.40 retired the mechanical pre-commit gate cclaw used to ship; the contract is now prompt-enforced (slice-builder writes the right prefix) and reviewer-verified ex-post (\`git log\` inspection per posture).
 
-**Correction.** \`commit-helper.mjs\` enforces RED → GREEN → REFACTOR per AC. Write a failing test first and commit under \`--phase=red\` (test files only). Implement the smallest production change that turns it green; commit under \`--phase=green\`. Either commit a refactor under \`--phase=refactor\` or skip it explicitly with \`--phase=refactor --skipped --message="refactor(AC-N) skipped: <reason>"\`. The reviewer cites this entry whenever the chain is incomplete.
+**Correction.** Write a failing test first and commit \`git add tests/<path>.test.ts && git commit -m "red(AC-N): <assertion>"\` (test files only — \`git show <SHA> --stat\` must not include production files). Implement the smallest production change that turns it green; commit \`git commit -m "green(AC-N): <minimal impl>"\`. Either commit a real refactor (\`git commit -m "refactor(AC-N): <one-line>"\`) or land an explicit empty marker (\`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\`). The reviewer's posture-aware chain check (using \`src/posture-validation.ts:POSTURE_COMMIT_PREFIXES\`) cites this entry whenever the expected sequence is missing or mis-ordered. For \`tests-as-deliverable\` posture the expected commit is \`test(AC-N): ...\`; for \`refactor-only\`, \`refactor(AC-N): ...\`; for \`docs-only\`, \`docs(AC-N): ...\` — see the posture-mapping table in \`tdd-and-verification.md\`.
 
 ## A-2 — Work outside the AC
 
 **Symptom (any of):**
 
 - A small AC commit also restructures an unrelated module.
-- A commit produced by \`commit-helper.mjs\` contains files that are unrelated to the AC.
+- A commit whose subject says \`(AC-N): ...\` contains files that are unrelated to the AC (verified via \`git show <SHA> --stat\` against the plan's \`touchSurface\` for AC-N).
 - \`git add -A\` appears in shell history inside \`/cc\`.
 
 **Underlying mistake.** Slice-builder absorbed unrelated edits or silently expanded scope. The AC commit no longer maps cleanly to the AC.

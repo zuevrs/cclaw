@@ -1,6 +1,6 @@
 ---
 name: commit-hygiene
-trigger: before every commit-helper.mjs invocation; always-on for slice-builder; auto-applies to every commit produced inside a flow
+trigger: before every git commit produced inside an active cclaw flow; always-on for slice-builder
 ---
 
 # Skill: commit-hygiene
@@ -9,8 +9,8 @@ This merged skill covers both kinds of "what lands in a commit" discipline: how 
 
 ## When NOT to apply
 
-- **Inline / trivial flows commit with plain `git commit`.** `commit-helper.mjs` is the strict-mode contract; on inline / soft modes the AC↔commit chain is not enforced.
-- **Amending a commit whose SHA is already recorded in `flow-state.json`.** Amend rewrites the SHA, breaks the AC chain, and orphans the recorded reference. Write a note in `build.md` and move on; the messaging is recoverable in review.
+- **Inline / trivial flows commit with plain `git commit`.** In inline / soft modes there is no AC↔commit chain; the per-AC prefix rules below apply only in strict mode.
+- **Amending the most recent commit before push.** Amend is acceptable when the commit has not been pushed AND the amend fixes the message (e.g. correcting a mis-prefixed subject so the reviewer's `git log --grep="(AC-N):"` scan picks it up). Avoid amending once another commit is layered on top.
 - **Cleaning up pre-existing dead code outside the AC's `touchSurfaces`.** Surfaced under `## Summary → Noticed but didn't touch`; never deleted in-scope. The audit trail breaks regardless of whether the dead code was real.
 - **Writing co-author trailers on solo commits.** Anti-pattern call-out — co-author trailers belong on collaborative commits.
 - **`git add -A` for "convenience".** Forbidden. Stage explicitly (`git add <path>` or `git add -p`); shell history with `-A` is an A-2 finding.
@@ -18,25 +18,28 @@ This merged skill covers both kinds of "what lands in a commit" discipline: how 
 
 ## commit-message-quality
 
-`commit-helper.mjs` accepts any non-empty message, but the AC traceability chain only stays useful if the messages stay readable.
+The reviewer's posture-aware chain check keys off the subject-line prefix. The AC traceability chain only stays usable if every commit's subject is readable AND prefixed correctly.
 
 ## Rules
 
 1. **Imperative voice** — "Add StatusPill component", not "Added" or "Adding".
 2. **Subject ≤72 characters** — long subjects truncate in `git log --oneline` and CI signals.
-3. **Subject does not repeat the AC id** — the hook already appends `refs: AC-N`.
-4. **Body when needed** — second-line blank, then a short rationale paragraph and any non-obvious context. Use `--message` for the subject; if the message must be multi-line, write it to a file and pass `--file`.
-5. **Cite finding ids in fix commits** — `fix: F-2 separate rejected token`.
+3. **Strict-mode subject starts with the posture-driven prefix.** One of `red(AC-N):` / `green(AC-N):` / `refactor(AC-N):` / `refactor(AC-N) skipped:` / `test(AC-N):` / `docs(AC-N):`. The prefix is the contract the reviewer's `git log --grep="(AC-N):"` scan reads. In soft / inline modes use plain `<feat|fix|refactor|docs>: <one-line>` without an AC id.
+4. **Body when needed** — second-line blank, then a short rationale paragraph and any non-obvious context. Use `-m` for the subject; for multi-line messages use `git commit -F <file>` or repeat `-m` per paragraph.
+5. **Cite finding ids in fix commits** — `red(AC-1): fix F-2 — separate rejected token`. The `fix F-N` token in the body or subject is what cross-references the review-block finding at handoff time.
 
 ## Anti-patterns
 
 - "WIP", "fixes", "stuff", "more". The reviewer rejects these as F-1 `block`.
 - Subject lines that paraphrase the diff. Diff is the diff; the message is the why.
 - Co-author trailers in solo commits.
+- Strict-mode commits without the `(AC-N):` token — the reviewer's chain scan misses them and the AC reads as incomplete (A-1, severity=required, axis=correctness).
 
 ## When to amend
 
-Never amend a commit produced by `commit-helper.mjs` after the SHA is recorded in `flow-state.json`. Amend changes the SHA and breaks the AC chain. If the message is wrong, write a short note in `flows/<slug>/build.md` and move on; it is recoverable in review.
+In strict mode it is OK to amend the most recent commit when (a) the commit has NOT been pushed, AND (b) the amend fixes the subject prefix (e.g. correcting `fix bug` → `red(AC-3): reproduce off-by-one`). Once another commit has landed on top, do NOT amend — write a fixup commit instead: `git commit --allow-empty -m "<prefix>(AC-N): re-record subject for <orig-SHA>"`. Both paths keep the reviewer's `git log --grep` scan honest.
+
+After a push, never amend (it requires force-push, which the slice-builder never does — that is the orchestrator's ship-stage call).
 
 ## surgical-edit-hygiene
 
@@ -123,6 +126,7 @@ Always `required` (even when the deletion is "obviously dead"): the audit trail 
 - **Your-orphan cleanup is mandatory.** An import your change made unused stays in the same commit chain as the change.
 - **The diff scope test:** for every changed line in your commit, you must be able to point at an AC verification line that justifies the change. If you cannot, the line is a drive-by — revert it or split the slug.
 - **`git add -A` is forbidden.** Stage files explicitly (`git add <path>` per file or `git add -p` to pick hunks). The reviewer cites `git add -A` in shell history as A-2 (work outside AC).
+- **Strict-mode commits carry the `(AC-N):` token in the subject.** The reviewer's `git log --grep="(AC-N):"` scan is the chain check; missing prefixes break it.
 
 ## Worked example — RIGHT
 
@@ -132,6 +136,14 @@ AC-1 says "Fix off-by-one in `paginate()` so the last page renders". Your diff:
 src/lib/paginate.ts: -2 lines, +2 lines (the off-by-one fix)
 src/lib/paginate.ts: -1 line (an import made unused by your change)
 tests/unit/paginate.test.ts: +14 lines (the RED test, then GREEN verification)
+```
+
+Commits:
+
+```
+red(AC-1): paginate returns last page on integer divisor   (tests/unit/paginate.test.ts only)
+green(AC-1): fix off-by-one in last-page boundary         (src/lib/paginate.ts only)
+refactor(AC-1) skipped: 2-line fix, no extraction warranted
 ```
 
 Build summary:
@@ -176,10 +188,10 @@ The drive-by reflex and the dead-code-cleanup reflex are how scope discipline br
 | "This dead code is obviously unused, I'll just delete it." | Pre-existing dead code is A-5, severity `required` — the audit trail breaks regardless of whether the deletion was "obviously safe". Surface under `Noticed but didn't touch` instead. |
 | "`git add -A` is fine, I know what changed." | Forbidden. Stage explicitly (`git add <path>` per file, or `git add -p` for hunks). Shell history with `-A` is itself an A-2 finding. |
 | "The message will say `WIP` for now; I'll fix it in review." | The reviewer rejects `WIP` / `fixes` / `stuff` as F-1 `block`. The cost to write a real subject is 30 seconds; the cost to fix later is a review iteration. |
-| "Amending the last commit is faster than a new one." | Amend rewrites the SHA. The SHA is recorded in `flow-state.json` and downstream traceability blocks; amending breaks the chain. Write a note in `build.md` and move on. |
+| "I'll amend the last commit since I already pushed." | Once pushed, do not amend — the orchestrator's ship stage owns force-push. Write a fixup commit (`git commit --allow-empty -m "<prefix>(AC-N): re-record subject for <orig-SHA>"`) and surface the mis-record in your slim summary. |
 | "Subject 80 characters is fine, `git log --oneline` will truncate it nicely." | 72-char hard cap. Past that, CI signals truncate in unhelpful places and `git log --oneline` becomes unreadable. |
 | "The diff has 5 files outside touchSurfaces but they're trivial." | If you cannot point at an AC verification line that justifies a changed line, the line is a drive-by. Revert it or split the slug; "trivial" is not a justification. |
-| "I'll bundle the rename and the bug fix into one commit; they're related." | They're not. The rename is a refactor (`--phase=refactor`); the bug fix is `red` + `green`. Mixing them defeats the audit trail and makes the diff unreviewable. |
+| "I'll bundle the rename and the bug fix into one commit; they're related." | They're not. The rename is a `refactor(AC-N): ...` commit; the bug fix is `red(AC-N): ...` + `green(AC-N): ...`. Mixing them defeats the audit trail and makes the diff unreviewable. |
 
 ## Composition
 

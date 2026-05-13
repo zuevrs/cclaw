@@ -9,7 +9,7 @@ export const EXAMPLES: ExampleArtifact[] = [];
 
 export const EXAMPLES_INDEX = `# .cclaw/lib/examples/
 
-Worked examples of cclaw artefacts (plan / build / review / ship / decision / learning / commit-helper sessions).
+Worked examples of cclaw artefacts (plan / build / review / ship / decision / learning).
 
 > **v8.12 cleanup.** Earlier versions shipped 8 worked examples. Audit found **zero explicit per-file citations** in any specialist or orchestrator-prompt — only a directory-level pointer in the retired \`architect.md\` (now folded into \`design.md\`) that said "see \`.cclaw/lib/examples/\` for prior decisions". The 8 example files were never named in any spec line; agents could grep for them but the spec never said "read \`plan-small.md\` before X".
 

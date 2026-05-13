@@ -110,13 +110,13 @@ _(AC author authors this. AC-aligned, not horizontal-layer. Each unit ships an e
 | AC-1 | _Replace with the first observable outcome._ | pending | true | _none_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | test-first | — |
 | AC-2 | _Replace or delete._ | pending | true | _AC-1_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | test-first | — |
 
-The AC block is the source of truth. Every commit produced by \`commit-helper.mjs\` references exactly one AC id.
+The AC block is the source of truth. Every strict-mode commit produced inside the flow references exactly one AC id via a posture-driven subject-line prefix (\`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` / \`test(AC-N): ...\` / \`docs(AC-N): ...\`); the reviewer reconstructs the AC↔commit chain ex-post via \`git log --grep="(AC-N):" --oneline\` at handoff and ship time.
 
 - \`parallelSafe: false\` opts the AC out of parallel-build dispatch.
 - \`dependsOn\` is a list of AC ids that must be \`status: committed\` before this AC enters slice-builder. Use \`none\` (or empty) when the AC has no predecessors. The reviewer cross-checks the dependency graph against the AC commit order — out-of-order commits are a \`required\` finding.
 - \`touchSurface\` is the list of repo-relative paths the AC is allowed to modify.
 - \`rollback\` is the explicit revert / disable / migration-rollback strategy if this AC ships and breaks in production. Required in strict mode; one short sentence per AC. "Same as AC-N" is acceptable for siblings that share the same rollback path. \`none\` is **not** acceptable — every AC has a rollback story, even if it is "revert the single commit".
-- \`posture\` (v8.36) is one of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The slice-builder reads this field to select the commit ceremony; \`commit-helper.mjs\` uses it as the routing key for the per-phase gate. See \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle).
+- \`posture\` (v8.36) is one of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The slice-builder reads this field to select the commit ceremony (which posture-driven prefix sequence to write); the reviewer's \`src/posture-validation.ts:POSTURE_COMMIT_PREFIXES\` mapping is the canonical source for which prefixes are expected per posture, and \`src/posture-validation.ts:validatePostureTouchSurface\` cross-checks the \`docs-only\` and \`tests-as-deliverable\` postures against the touchSurface. See \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle).
 
 Each AC must point at a real \`file:line\` or destination path.
 
@@ -149,7 +149,7 @@ _(AC author topology mode. Default: \`inline\`. \`parallel-build\` is opt-in; se
 - AC-1 → commit pending
 - AC-2 → commit pending
 
-This block is rebuilt by \`commit-helper.mjs\` after every AC commit. Do not edit by hand once a commit is recorded.
+This block is filled in by the slice-builder as each AC's commits land (one SHA per phase: \`red\` → \`green\` → \`refactor\`); the reviewer's posture-aware \`git log --grep="(AC-N):" --oneline\` scan reconciles it against the actual git history at handoff and ship time. Do not edit by hand once an AC's row in \`build.md\` carries SHAs.
 `;
 
 const PLAN_TEMPLATE_SOFT = `---
@@ -211,7 +211,7 @@ tdd_cycle: enforced
 
 # Build log — SLUG-PLACEHOLDER
 
-This is the TDD implementation journal. Every AC goes through RED → GREEN → REFACTOR; every phase is a separate commit recorded by \`commit-helper.mjs --phase=…\`.
+This is the TDD implementation journal. Every AC goes through RED → GREEN → REFACTOR (or its posture-specific shape); every phase is a separate commit with a posture-driven subject-line prefix (\`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` / \`refactor(AC-N) skipped: ...\` / \`test(AC-N): ...\` / \`docs(AC-N): ...\`) the reviewer reads via \`git log --grep="(AC-N):" --oneline\`.
 
 > **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
 
@@ -268,11 +268,11 @@ _(Append one fix-iteration block per review iteration that returned \`block\`. S
 | F-2 | AC-1 | green | _SHA_ | _src/...:line_ | _minimal fix_ |
 | F-2 | AC-1 | refactor (skipped) | — | — | _reason_ |
 
-## Hooks invoked
+## Commits
 
-- \`commit-helper.mjs --ac=AC-1 --phase=red --message="red(AC-1): …"\` → _SHA_
-- \`commit-helper.mjs --ac=AC-1 --phase=green --message="green(AC-1): …"\` → _SHA_
-- \`commit-helper.mjs --ac=AC-1 --phase=refactor --message="refactor(AC-1): …"\` → _SHA_ or _skipped_
+- \`git commit -m "red(AC-1): …"\` → _SHA_ (test files only)
+- \`git commit -m "green(AC-1): …"\` → _SHA_ (production diff)
+- \`git commit -m "refactor(AC-1): …"\` → _SHA_  OR  \`git commit --allow-empty -m "refactor(AC-1) skipped: <reason>"\` → _SHA_ (empty marker)
 
 ## Notes
 
@@ -289,7 +289,7 @@ last_commit: null
 
 # Build log — SLUG-PLACEHOLDER
 
-This is the soft-mode build log. One TDD cycle covers all listed conditions; commits are plain \`git commit\` (the commit-helper is advisory in soft mode).
+This is the soft-mode build log. One TDD cycle covers all listed conditions; commits are plain \`git commit -m "<feat|fix|...>: <one-line>"\` with no per-AC prefix (the reviewer reads this file plus the feature-level commit at ship time).
 
 > **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
 
@@ -456,7 +456,7 @@ If \`N > 0\` and any of those commits touch this slug's \`touchSurface\`, rebase
 | --- | --- | --- | --- | --- | --- |
 | AC-1 | _AC text_ | _sha_ | _sha_ | _sha or skipped_ | _short description_ |
 
-This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > Acceptance Criteria\` with the final SHAs from \`flow-state.ac[].phases\`. The orchestrator refuses to run \`runCompoundAndShip()\` if any AC still shows \`status: pending\`.
+This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > Acceptance Criteria\` with the final SHAs reconstructed from \`git log --grep="(AC-N):" --oneline\` for every AC in the plan. The ship-stage reviewer (\`mode=release\`) is the canonical gate: a missing or incomplete posture-driven commit sequence is reported as an A-1 finding (severity=required, axis=correctness) and blocks ship until the slice-builder produces the missing commits in a fix-only iteration.
 
 ## Rollback plan (mandatory)
 
