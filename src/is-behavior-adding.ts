@@ -11,19 +11,18 @@
  * exclusion set; that single non-excluded file is enough to trigger
  * the full RED → GREEN → REFACTOR ceremony for the AC.
  *
- * The predicate is intentionally a small pure function: it lives here
- * (source of truth, unit-tested) AND is inlined into the
- * `commit-helper.mjs` hook body in `src/content/node-hooks.ts` because
- * hooks run as standalone .mjs scripts inside the user's project with
- * no shared imports. Any future change to the rule MUST be applied in
- * both places; the `tests/unit/v836-cleanup.test.ts` tripwire pins the
- * two copies to the same exclusion set.
+ * v8.36–v8.39: the predicate was inlined into the `commit-helper.mjs`
+ * hook body for mechanical enforcement. v8.40 retired the hook;
+ * enforcement is now ex-post via the reviewer's git-log inspection,
+ * and this is the only copy of the rule. The reviewer cites this
+ * helper (via `src/posture-validation.ts`) when validating posture
+ * declarations against actual `touchSurface` contents.
  *
  * The posture field (set by ac-author in plan.md AC frontmatter) is
- * the **annotation** that drives ceremony selection in
- * commit-helper.mjs; the predicate is the **double-check** —
- * `posture=docs-only` combined with a `touchSurface` that contains a
- * source file is a contradiction and the commit is refused.
+ * the **annotation** that declares the ceremony; the predicate is the
+ * **double-check** — `posture=docs-only` combined with a `touchSurface`
+ * that contains a source file is a contradiction, and the reviewer
+ * surfaces it as an A-1 finding (severity=required, axis=correctness).
  */
 
 /**
