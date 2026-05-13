@@ -1,5 +1,64 @@
 # Changelog
 
+## 8.39.0 — TUI menu cleanup + lag fix
+
+### Why
+
+The v8.37 CLI consolidation collapsed `--non-interactive sync` and `--non-interactive upgrade` into `--non-interactive install`, but **the TUI menu was left untouched**: running bare `cclaw` still surfaced seven rows (Install / Sync / Upgrade / Uninstall / Browse knowledge / Show version / Quit) where Sync and Upgrade dispatched the same idempotent installer Install did. Three rows, one behaviour. Knowledge and Show version were read-only utilities that a power user would just as readily reach via `cclaw --non-interactive knowledge` / `cclaw --version`; surfacing them in the TUI added noise without a write-side use case.
+
+A user-reported a second issue alongside the menu staleness: a perceptible delay between pressing Enter on a menu choice and the action handler starting its first visible work — described as "TUI lags somehow in terminal with logo". Investigation (instrumented dispatch path with `performance.now()` markers + byte-count of the writes between menu confirm and action start) ruled out lazy module loading (everything is eagerly imported at cold start, ~24ms cumulative, well before the menu opens) and ruled out sync IO in the dispatch path (`isInstalled()` + `detectHarnesses()` together take <1ms). The root cause was a **duplicate banner emission**: the no-arg TUI path emitted the 6-line Unicode logo above the menu, the menu rows below it; after the operator pressed Enter, the menu rows were erased and `dispatchInstallAction` / `dispatchUninstall` then emitted **the same banner again** below the surviving first banner. The 349-byte ANSI / Unicode payload was re-rendered by the terminal — fast in JS (~0.05ms to write the bytes) but perceptible to the operator as the terminal re-drew six lines of box-drawing characters, especially on slower renderers (Terminal.app over SSH, Retina with low-power GPU, etc.).
+
+v8.39 ships both fixes in one slug: the menu collapses to three rows, and the banner is emitted exactly once per invocation.
+
+### What changed
+
+- **AC-1 — `MENU_ACTIONS` collapsed from 7 rows to 3** (`src/main-menu.ts`):
+  - `MENU_ACTIONS` is now `["install", "uninstall", "quit"]`. `sync`, `upgrade`, `knowledge`, `version` are gone from the TUI surface.
+  - `MENU_LABELS` and `MENU_DESCRIPTIONS` reshaped to match. Install's description now reads `first-time setup OR idempotent reapply (covers former sync/upgrade)` so a re-running operator on an installed project knows Install is the right row.
+  - `createMenuState` lands the cursor on `install` regardless of `installed` flag (both fresh and re-run land on the same row; the flag drives only the smart-default hint line above the rows). Pre-v8.39 the cursor on `installed=true` landed on `sync` — that row no longer exists, so the cursor moves up to `install` which now carries the former Sync reading.
+  - Smart-default hint text rewritten: `no .cclaw/ found — Install for first-time setup` (fresh) / `found existing .cclaw/ — Install will reapply assets idempotently` (re-run).
+  - Hotkey legend renders `1-${MENU_ACTIONS.length} to jump` (currently `1-3`) instead of the previously-hardcoded `1-7`. v8.37 collapsed the CLI but left `1-7` lying about the menu; v8.39 ties the legend to the actual array length so a future menu tweak doesn't strand the legend.
+  - `q` / `Esc` / `Ctrl-C` shortcuts unchanged (still hand-rolled in `applyMenuKey`).
+
+- **AC-2 — duplicate banner emission removed** (`src/cli.ts`):
+  - `dispatchInstallAction` and `dispatchUninstall` no longer call `emitBanner` inside their bodies. The TUI no-arg path emits the banner ONCE above the menu (line 407 of post-v8.39 `cli.ts`); the menu rows are written below it; on confirm, the menu rows are erased and the action progress flows under the surviving banner.
+  - The non-interactive path emits the banner explicitly in the `install` / `uninstall` switch arms before dispatching (so those CI paths still get exactly one banner on the way to first progress line). `knowledge` and `version` stay banner-less (their output is the primary signal; a banner would just push it down).
+  - `dispatchInstallAction`'s action union narrowed from `"install" | "sync" | "upgrade"` to a single shape (no `action` parameter). The runner ternary that used to select `initCclaw` / `syncCclaw` / `upgradeCclaw` is gone — only `initCclaw` is called now. `syncCclaw` / `upgradeCclaw` are still exported from `src/install.ts` (tests reference them) but no longer imported into `src/cli.ts`.
+  - `SUBCOMMAND_TO_MENU_ACTION` renamed to `SUBCOMMAND_TO_ACTION` and re-typed as `Record<string, NonInteractiveAction>` where `NonInteractiveAction = "install" | "uninstall" | "knowledge" | "version"`. The `sync` and `upgrade` keys (kept in v8.37 only because the TUI menu's Sync / Upgrade rows routed through this lookup) are gone — the `COLLAPSED_NON_INTERACTIVE_COMMANDS` gate above this map filters them with a migration hint before they reach the lookup.
+
+- **AC-2 diagnosis** — instrumented before / after measurement (kept here as the "why" for future readers):
+  - **Bytes written between menu confirm and action start:** v8.38 → 587 bytes (349-byte banner re-render + 238-byte welcome card on first run); v8.39 → 238 bytes (welcome card only). **59% reduction**.
+  - **JS-side timing:** identical in both (~0.13ms) — proving the lag was never computational. It was the terminal renderer drawing the second banner.
+  - Hypothesis 1 (lazy module imports) ruled out: every content module is eagerly imported at `cclaw` cold start; the dispatch path triggers no further imports.
+  - Hypothesis 3 (sync IO at install startup) ruled out: `isInstalled()` is one `fs.stat`; `detectHarnesses()` is four `fs.stat` calls at the project root. Combined ~0.84ms.
+  - Hypothesis 4 (smoke-init / git commands) ruled out: the dispatch path doesn't shell out.
+  - Hypothesis 2 (banner double-render) confirmed: structural source-grep tripwires in `tests/unit/v839-cleanup.test.ts` now pin the fix so a regression flips a named assertion, not a user bug report.
+
+- **AC-3 — tests** (`tests/unit/main-menu.test.ts` rewritten, `tests/unit/v839-cleanup.test.ts` new):
+  - `tests/unit/main-menu.test.ts`: every assertion that referenced the seven-action layout, the `sync` smart default, the `1-7` legend, or the retired labels (`Sync`, `Upgrade`, `Browse knowledge`, `Show version`) now asserts the three-row v8.39 shape. New tests cover the `Q`-capital shortcut and the `4` / number-key-out-of-range edge case.
+  - `tests/unit/v839-cleanup.test.ts`: 12 tripwires covering both ACs. AC-1 tripwires assert (a) `MENU_ACTIONS` length + order, (b) retired ids absent, (c) `MENU_LABELS` / `MENU_DESCRIPTIONS` keys equal `MENU_ACTIONS` set in source text, (d) rendered frame contains no retired labels, (e) Install description signals the dual reading. AC-2 tripwires assert (a) `dispatchInstallAction` body has no `emitBanner(` call, (b) `dispatchUninstall` body has no `emitBanner(` call, (c) non-interactive switch emits banner inside install/uninstall arms exactly once, (d) `dispatchInstallAction` action-union signature is gone, (e) `cli.ts` no longer imports `syncCclaw` / `upgradeCclaw`. A hotkey-legend tripwire pins `1-3` and forbids the stale `1-7`.
+
+### LOC totals
+
+- Source-only (`src/cli.ts`, `src/main-menu.ts`): **45 insertions, 64 deletions** — net `-19` LOC (the dispatchInstallAction simplification removed more than the v8.39 comment additions added).
+- Tests: **140 insertions, 49 deletions** — net `+91` LOC (the new `v839-cleanup.test.ts` is 130 LOC of tripwires; main-menu.test.ts grew by ~14 LOC for the new edge-case assertions).
+- Overall (excluding lockfile): **185 insertions, 113 deletions** — net `+72` LOC, production code shrinks while test surface grows.
+
+### Migration
+
+- **Existing installs** are not affected. The runtime `.cclaw/` layout is unchanged; only the TUI shell around the installer collapses. Re-running `cclaw` against an installed project now lands on the `Install` row (instead of `Sync`); pressing Enter runs the same idempotent installer with orphan cleanup that `Sync` used to invoke.
+- **CI / scripts** are unaffected. `--non-interactive sync` and `--non-interactive upgrade` already error with a migration hint as of v8.37; that behaviour is unchanged.
+- **Operators with muscle memory for `Browse knowledge` / `Show version`** must use `cclaw --non-interactive knowledge` / `cclaw --version` (or the `-v` short flag). These commands still work and are documented in `cclaw --help`.
+- **No flow-state schema bump**, no harness plugin file changes, no config-file shape changes.
+
+### Files changed
+
+- `src/main-menu.ts` — `MENU_ACTIONS` shrunk to 3 entries, labels / descriptions / smart-default text / cursor default / hotkey legend updated.
+- `src/cli.ts` — top doc-comment v8.39 paragraph; `HELP_NOTES` TUI default rewritten; `dispatchInstallAction` no longer emits banner, action union dropped, runner ternary collapsed; `dispatchUninstall` no longer emits banner; `dispatchMenuAction` switch narrowed to install/uninstall/quit; `SUBCOMMAND_TO_MENU_ACTION` → `SUBCOMMAND_TO_ACTION` with new `NonInteractiveAction` type; non-interactive switch emits banner per arm.
+- `tests/unit/main-menu.test.ts` — rewritten for the 3-row layout (was 9 tests for the 7-row layout; now 18 tests for the 3-row layout including new edge cases).
+- `tests/unit/v839-cleanup.test.ts` — NEW, 12 tripwires (one named assertion per AC outcome so a regression flips a single test).
+- `package.json` — bumped to `8.39.0`.
+
 ## 8.38.0 — hooks cleanup
 
 ### Why
