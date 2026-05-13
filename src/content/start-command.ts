@@ -194,7 +194,7 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 ### Hop 1 — git-check sub-step (v8.23)
 
-Before triage patches, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), force \`triage.acMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. Surface a one-sentence warning to the user at triage time. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale, behaviour, downstream consequences (commit-helper no-op, parallel-build suppression, inline path \`git commit\` skip) live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
+Before triage patches, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), force \`triage.acMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. Surface a one-sentence warning to the user at triage time. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale, behaviour, downstream consequences (reviewer's git-log inspection skipped, parallel-build suppression, inline path \`git commit\` skip) live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
 
 ## Hop 2 — Triage (fresh starts only)
 
@@ -347,7 +347,7 @@ The full sub-phase procedure — discovery auto-skip heuristic, posture selectio
 - Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/lib/templates/build.md\`, \`.cclaw/lib/skills/tdd-and-verification.md\`.
 - Output: \`.cclaw/flows/<slug>/build.md\` with TDD evidence at the granularity dictated by \`acMode\`.
 - Soft mode: one TDD cycle for the whole feature; tests under \`tests/\` mirroring the production module path; plain \`git commit\`. Sequential, single dispatch, no worktrees.
-- Strict mode, sequential: full RED → GREEN → REFACTOR per AC, every commit through \`commit-helper.mjs\`. Single \`slice-builder\` dispatch in the main working tree.
+- Strict mode, sequential: full RED → GREEN → REFACTOR per AC; plain \`git commit -m "<prefix>(AC-N): ..."\` with posture-driven message prefixes (\`red\` / \`green\` / \`refactor\` / \`test\` / \`docs\`). Single \`slice-builder\` dispatch in the main working tree. The reviewer enforces ordering at handoff via \`git log --grep="(AC-N):" --oneline\`.
 - Strict mode, parallel: see \`.cclaw/lib/runbooks/parallel-build.md\` — only when ac-author declared \`topology: parallel-build\` AND ≥4 AC AND ≥2 disjoint touchSurface clusters.
 - Inline mode: not dispatched here — handled in the trivial path of Hop 2.
 - Slim summary: AC committed (strict) or conditions verified (soft), suite-status (passed / failed), open follow-ups.

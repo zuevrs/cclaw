@@ -12,9 +12,10 @@ import { isBehaviorAdding } from "../../src/is-behavior-adding.js";
  * behaviour and the standard TDD ceremony applies.
  *
  * The predicate is exported from `src/is-behavior-adding.ts` so it
- * can be unit-tested as a pure function; the same logic is inlined
- * into the `commit-helper.mjs` hook body (`src/content/node-hooks.ts`)
- * so the hook runs as a standalone .mjs file with no imports.
+ * can be unit-tested as a pure function; v8.40 retired the
+ * `commit-helper.mjs` hook that inlined the same logic, so the
+ * predicate is now consumed only by `src/posture-validation.ts`
+ * (reviewer-side ex-post cross-check).
  */
 describe("v8.36 — is_behavior_adding predicate", () => {
   it("returns false for an empty touchSurface (nothing to verify; treat as non-behaviour)", () => {

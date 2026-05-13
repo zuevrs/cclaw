@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { COMMIT_HELPER_HOOK_SPEC, NODE_HOOKS } from "../../src/content/node-hooks.js";
 import {
   IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION,
   isBehaviorAdding
@@ -8,20 +7,25 @@ import {
 import { DEFAULT_POSTURE, POSTURES } from "../../src/types.js";
 import { AC_AUTHOR_PROMPT, REVIEWER_PROMPT, SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/index.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
+import {
+  POSTURE_COMMIT_PREFIXES,
+  expectedCommitsForPosture,
+  validatePostureTouchSurface
+} from "../../src/posture-validation.js";
 
 /**
  * v8.36 — `is_behavior_adding` predicate + `posture` field.
  *
  * Tripwires that guard the cross-cutting integration: a single change
- * to the predicate or the posture enum must keep all six surfaces in
- * sync (TS module / commit-helper hook body / ac-author prompt /
- * slice-builder prompt / reviewer prompt / tdd-and-verification skill).
+ * to the predicate or the posture enum must keep five surfaces in sync
+ * (TS module / ac-author prompt / slice-builder prompt / reviewer
+ * prompt / tdd-and-verification skill). v8.40 retired the commit-helper
+ * hook; the cross-check that used to live in the .mjs body now lives in
+ * `src/posture-validation.ts` (reviewer-side, ex-post).
  *
  * If any single surface drifts, ONE of the tests below lights up — the
  * "cleanup" tag is the convention for these v8.<N>-cleanup test files.
  */
-
-const COMMIT_HELPER_BODY = COMMIT_HELPER_HOOK_SPEC.body;
 
 const TDD_SKILL = (() => {
   const skill = AUTO_TRIGGER_SKILLS.find((s) => s.fileName === "tdd-and-verification.md");
@@ -31,8 +35,6 @@ const TDD_SKILL = (() => {
 
 describe("v8.36 — predicate exports + cross-surface alignment", () => {
   it("predicate exclusion description names every protected category at least once", () => {
-    // The description is documentation but anchored by the test so a
-    // partial update (e.g. dropping `.toml`) flips this assertion.
     for (const token of [
       "*.md",
       "*.json",
@@ -59,14 +61,11 @@ describe("v8.36 — predicate exports + cross-surface alignment", () => {
   });
 
   it("predicate exclusion description matches the spec exactly (no silent additions)", () => {
-    // Lock the description string to its canonical body so a future
-    // edit MUST be accompanied by an explicit Decisions.md entry.
     expect(IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION).toMatch(/^\*\.md \/ /);
     expect(IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION).toMatch(/\.github\/\*\*$/);
   });
 
   it("predicate behaves consistently with the prose: pure docs → false, source-only → true", () => {
-    // Spot-check the canonical cases that the description names.
     expect(isBehaviorAdding(["README.md"])).toBe(false);
     expect(isBehaviorAdding(["src/index.ts"])).toBe(true);
   });
@@ -107,7 +106,6 @@ describe("v8.36 — POSTURES enum is documented in user-facing prompts", () => {
         `tdd-and-verification.md must mention "${posture}" — it owns the canonical posture map`
       ).toContain(posture);
     }
-    // The mapping table title is fixed so the file stays greppable.
     expect(TDD_SKILL).toMatch(/posture/i);
   });
 
@@ -116,73 +114,78 @@ describe("v8.36 — POSTURES enum is documented in user-facing prompts", () => {
   });
 });
 
-describe("v8.36 — commit-helper hook body carries the posture-aware gate", () => {
-  it("hook body inlines an is_behavior_adding predicate identical in spirit to the TS module", () => {
-    // We can't import from a sibling .mjs string, but we can assert
-    // the function name + key extension rules live in the body so
-    // any future divergence is caught here.
-    expect(COMMIT_HELPER_BODY).toContain("isBehaviorAdding");
-    for (const ext of [".md", ".json", ".yml", ".yaml", ".toml", ".ini", ".cfg", ".conf"]) {
-      expect(
-        COMMIT_HELPER_BODY,
-        `hook predicate must consider "${ext}" as an exclusion`
-      ).toContain(ext);
-    }
-    expect(COMMIT_HELPER_BODY).toContain("tests/");
-    expect(COMMIT_HELPER_BODY).toContain("__tests__");
-    expect(COMMIT_HELPER_BODY).toContain("docs/");
-    expect(COMMIT_HELPER_BODY).toContain(".cclaw/");
-    expect(COMMIT_HELPER_BODY).toContain(".github/");
-    expect(COMMIT_HELPER_BODY).toMatch(/\.env/);
-  });
-
-  it("hook body reads the AC's `posture` field (with a default fallback)", () => {
-    expect(COMMIT_HELPER_BODY).toMatch(/posture/);
-    // The default branch must literally name `test-first` so a future
-    // refactor that drops it surfaces here.
-    expect(COMMIT_HELPER_BODY).toContain("test-first");
-  });
-
-  it("hook body documents the six posture values in its header comment so a user reading the .mjs file alone can self-correct", () => {
+describe("v8.40 — posture-validation helper owns the predicate-as-cross-check", () => {
+  it("POSTURE_COMMIT_PREFIXES has an entry for every posture", () => {
     for (const posture of POSTURES) {
-      expect(
-        COMMIT_HELPER_BODY,
-        `hook body must mention "${posture}" — the .mjs file is installed standalone and must be readable on its own`
-      ).toContain(posture);
+      expect(POSTURE_COMMIT_PREFIXES[posture]).toBeDefined();
+      expect(POSTURE_COMMIT_PREFIXES[posture].length).toBeGreaterThan(0);
     }
   });
 
-  it("hook body has a tests-as-deliverable branch that accepts a single `test(AC-N)` commit", () => {
-    expect(COMMIT_HELPER_BODY).toContain("tests-as-deliverable");
-    // The hook must accept the `test` phase as the single commit for
-    // this posture; the recorded SHA goes under `green` per the spec.
-    expect(COMMIT_HELPER_BODY).toMatch(/\btest\b/);
+  it("test-first posture expects red → green → refactor commit prefixes", () => {
+    expect(POSTURE_COMMIT_PREFIXES["test-first"]).toEqual(["red", "green", "refactor"]);
   });
 
-  it("hook body has a refactor-only branch that skips the RED requirement", () => {
-    expect(COMMIT_HELPER_BODY).toContain("refactor-only");
+  it("docs-only posture expects a single docs commit prefix", () => {
+    expect(POSTURE_COMMIT_PREFIXES["docs-only"]).toEqual(["docs"]);
   });
 
-  it("hook body has a docs-only branch that accepts a single `docs(AC-N)` commit + refuses source files", () => {
-    expect(COMMIT_HELPER_BODY).toContain("docs-only");
-    expect(COMMIT_HELPER_BODY).toMatch(/docs\(AC|docs phase|--phase=docs/);
-    // The cross-check error message names the contradiction.
-    expect(COMMIT_HELPER_BODY).toMatch(/contradicts|source file/i);
+  it("tests-as-deliverable posture expects a single test commit prefix", () => {
+    expect(POSTURE_COMMIT_PREFIXES["tests-as-deliverable"]).toEqual(["test"]);
   });
 
-  it("hook body promotes bootstrap from the legacy `buildProfile` field into a posture branch", () => {
-    expect(COMMIT_HELPER_BODY).toContain("bootstrap");
-    // Backward compat: the legacy `buildProfile === "bootstrap"`
-    // override is still recognised so in-flight projects with the
-    // pre-v8.36 field continue to work.
-    expect(COMMIT_HELPER_BODY).toContain("buildProfile");
+  it("refactor-only posture expects a single refactor commit prefix", () => {
+    expect(POSTURE_COMMIT_PREFIXES["refactor-only"]).toEqual(["refactor"]);
   });
 
-  it("hook body still hard-fails strict mode when git is unavailable (regression-guard for v8.23)", () => {
-    expect(COMMIT_HELPER_BODY).toMatch(/strict[\s\S]*?process\.exit\(2\)/);
+  it("bootstrap posture expects green → refactor (AC-1 escape; AC-2+ uses test-first)", () => {
+    // The bootstrap entry covers AC-1's reduced ceremony (no preceding
+    // RED). The reviewer prompt handles the AC-2+ promotion to the
+    // standard test-first sequence.
+    expect(POSTURE_COMMIT_PREFIXES["bootstrap"]).toEqual(["green", "refactor"]);
   });
 
-  it("hook body still rejects production files in the RED commit (regression-guard for test-first posture)", () => {
-    expect(COMMIT_HELPER_BODY).toContain("RED phase rejects production files");
+  it("expectedCommitsForPosture builds full prefix strings like 'red(AC-3):'", () => {
+    expect(expectedCommitsForPosture("test-first", "AC-3")).toEqual([
+      "red(AC-3):",
+      "green(AC-3):",
+      "refactor(AC-3):"
+    ]);
+    expect(expectedCommitsForPosture("docs-only", "AC-7")).toEqual(["docs(AC-7):"]);
+  });
+
+  it("validatePostureTouchSurface flags docs-only AC with src/ in touchSurface", () => {
+    const error = validatePostureTouchSurface("docs-only", ["src/index.ts", "README.md"]);
+    expect(error).not.toBeNull();
+    expect(error).toMatch(/docs-only/i);
+  });
+
+  it("validatePostureTouchSurface accepts docs-only AC with pure docs touchSurface", () => {
+    const error = validatePostureTouchSurface("docs-only", ["README.md", "docs/getting-started.md"]);
+    expect(error).toBeNull();
+  });
+
+  it("validatePostureTouchSurface flags tests-as-deliverable AC with src/ in touchSurface", () => {
+    const error = validatePostureTouchSurface("tests-as-deliverable", [
+      "tests/unit/api.test.ts",
+      "src/api.ts"
+    ]);
+    expect(error).not.toBeNull();
+    expect(error).toMatch(/tests-as-deliverable/i);
+  });
+
+  it("validatePostureTouchSurface accepts tests-as-deliverable AC with test-only touchSurface", () => {
+    const error = validatePostureTouchSurface("tests-as-deliverable", [
+      "tests/unit/api.test.ts",
+      "tests/integration/api.spec.ts"
+    ]);
+    expect(error).toBeNull();
+  });
+
+  it("validatePostureTouchSurface returns null for postures it doesn't cross-check (test-first / refactor-only / characterization-first / bootstrap)", () => {
+    expect(validatePostureTouchSurface("test-first", ["src/foo.ts"])).toBeNull();
+    expect(validatePostureTouchSurface("refactor-only", ["src/foo.ts"])).toBeNull();
+    expect(validatePostureTouchSurface("characterization-first", ["src/foo.ts"])).toBeNull();
+    expect(validatePostureTouchSurface("bootstrap", ["src/foo.ts"])).toBeNull();
   });
 });

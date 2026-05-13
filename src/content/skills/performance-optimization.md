@@ -13,7 +13,7 @@ The skill is stage-windowed on `["build", "review"]`: build-stage TDD's REFACTOR
 
 - **When implementing a `touchSurface: ui` AC.** The Core Web Vitals targets (LCP, INP, CLS) gate the AC's "verifiable" check. The build-stage's verification line is "LCP ≤ 2.5s on a `Slow 4G` Lighthouse run" or equivalent — not "looks fast on my machine".
 - **When the AC text mentions latency, throughput, query time, render budget, or "performance".** The AC must have a numeric target; if it does not, surface as `ac-discipline > verifiable` finding before writing code.
-- **In the REFACTOR step of `tdd-and-verification`** when the GREEN commit introduced a perf regression. The REFACTOR is the audit-trailed place to restore the perf budget; commit under `--phase=refactor` with the measurement before/after in the message body.
+- **In the REFACTOR step of `tdd-and-verification`** when the GREEN commit introduced a perf regression. The REFACTOR is the audit-trailed place to restore the perf budget; commit as `refactor(AC-N): <perf-shape change>` with the measurement before/after in the message body.
 - **In fix-only** when the reviewer cited a `perf` finding. The fix is RED (a perf test or benchmark that pins the budget) → GREEN (the optimisation that passes the budget) → REFACTOR (clean up).
 - **Reviewer-side** when scoring a `perf` finding: cite this skill body. The finding's severity is bounded by whether the change is measurable. `nit` = no measurement attached but suspicious pattern; `consider` = measurement shows a real but small regression; `required` = measurement shows a budget violation.
 

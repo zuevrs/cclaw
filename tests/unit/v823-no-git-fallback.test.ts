@@ -1,33 +1,27 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { renderStartCommand } from "../../src/content/start-command.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
-import { NODE_HOOKS } from "../../src/content/node-hooks.js";
 import { initCclaw, syncCclaw } from "../../src/install.js";
 import { readFlowState, writeFlowState } from "../../src/run-persistence.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
 /**
- * v8.23 — no-git fallback. Without git, three surfaces broke silently on
- * v8.22: strict-mode build (commit-helper.mjs `git diff --cached` crashed
- * with "git not available"), inline path's terminal `git commit`, and
- * parallel-build worktrees. v8.23 adds a Hop 1 git-check, auto-downgrades
- * `triage.acMode` `strict → soft` with `triage.downgradeReason: "no-git"`,
- * and makes `commit-helper.mjs` a graceful no-op (warning to stderr, exit
- * 0) in soft mode when git is absent.
+ * v8.23 — no-git fallback. The original v8.23 had three surfaces that
+ * broke without git: strict-mode commit-helper (now retired in v8.40),
+ * the inline path's terminal `git commit`, and parallel-build worktrees.
  *
- * Each tripwire pins one invariant so a regression — re-enabling a
- * git-call without a fallback, dropping the warning, or letting a strict
- * AC mode survive a no-git triage — lights up immediately.
+ * v8.40 reframes the fallback: with the commit-helper hook gone, the
+ * strict-mode chain is now reviewer-enforced ex-post via
+ * `git log --grep="(AC-N):"`. Without `.git/` the reviewer cannot scan
+ * the chain, and the parallel-build worktree path is still unavailable —
+ * so the auto-downgrade `strict → soft` (with `triage.downgradeReason:
+ * "no-git"`) stays the right call. These tripwires pin that contract
+ * survives the v8.40 hook removal.
  */
-
-const COMMIT_HELPER_BODY = (() => {
-  const hook = NODE_HOOKS.find((h) => h.id === "commit-helper");
-  if (!hook) throw new Error("commit-helper hook not found");
-  return hook.body;
-})();
 
 const TRIAGE_GATE_SKILL = (() => {
   const skill = AUTO_TRIGGER_SKILLS.find((s) => s.fileName === "triage-gate.md");
@@ -84,33 +78,30 @@ describe("v8.23 no-git fallback — triage-gate skill documents the auto-downgra
       "skill should at least mention parallel-build can't run without git, so the user knows why the orchestrator chose soft mode"
     ).toMatch(/parallel.?build|worktree/i);
   });
+
+  it("AC-2 (v8.40) — `triage-gate.md` no longer references the retired commit-helper hook", () => {
+    expect(TRIAGE_GATE_SKILL).not.toContain("commit-helper");
+  });
 });
 
-describe("v8.23 no-git fallback — commit-helper.mjs graceful no-op in soft mode", () => {
-  it("AC-3 — commit-helper body has a soft-mode no-git branch that exits 0", () => {
-    expect(
-      COMMIT_HELPER_BODY,
-      "soft mode should not exit 2 when git is missing — it should write a one-line warning and exit 0"
-    ).toMatch(/no.?git|git.*not.*available|git.*missing/i);
-    expect(COMMIT_HELPER_BODY).toMatch(/process\.exit\(0\)/);
+describe("v8.40 no-git fallback — strict-mode chain check is skipped when no .git/", () => {
+  it("AC-3 — `triage-gate.md` notes that strict mode requires per-AC commits the reviewer reads via git log", () => {
+    expect(TRIAGE_GATE_SKILL).toMatch(/strict mode requires per-AC commits/i);
+    expect(TRIAGE_GATE_SKILL).toMatch(/git log/i);
   });
 
-  it("AC-3 — commit-helper writes the no-git warning to stderr (not stdout)", () => {
-    expect(
-      COMMIT_HELPER_BODY,
-      "warning should go to stderr so it does not contaminate machine-readable stdout in a CI / scripted run"
-    ).toMatch(/console\.(error|warn)[\s\S]*?(no.?git|not.*available|missing)/i);
-  });
-
-  it("AC-3 — commit-helper still hard-fails in strict mode when git is unavailable", () => {
-    expect(
-      COMMIT_HELPER_BODY,
-      "strict mode must NOT silently no-op without git — strict implies AC trace, which requires SHAs"
-    ).toMatch(/strict[\s\S]*?(process\.exit\(2\)|git not available)/);
-  });
-
-  it("AC-3 — commit-helper notes the soft-mode no-op writes no AC trace and no commit", () => {
-    expect(COMMIT_HELPER_BODY).toMatch(/no.?op|skipped|advisory/i);
+  it("AC-3 — reviewer prompt notes that the chain check is skipped when triage.downgradeReason is no-git", () => {
+    // The reviewer's posture-aware git-log inspection only fires for
+    // strict-mode flows that have a `.git/` directory; when the triage
+    // recorded downgradeReason=no-git, the chain check is structurally
+    // impossible (nothing to grep) and the reviewer should skip it.
+    const reviewerPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../src/content/specialist-prompts/reviewer.ts"
+    );
+    return fs.readFile(reviewerPath, "utf8").then((source) => {
+      expect(source).toMatch(/no-git/u);
+    });
   });
 });
 

@@ -170,7 +170,7 @@ Before the triage decision is patched into `flow-state.json`, the orchestrator r
 
 The downgrade is structural, not stylistic:
 
-- **strict mode requires per-AC commits.** `commit-helper.mjs` invokes `git commit` and records each SHA in `flow-state.json > ac[i].commit`. Without `.git/`, there is no SHA to record. v8.23 makes `commit-helper.mjs` a graceful no-op (one-line stderr warning, exit 0) in soft mode without git, but strict mode would still crash on the first commit attempt — the downgrade prevents that.
+- **strict mode requires per-AC commits.** The slice-builder writes one commit per posture-phase (e.g. `red(AC-N): ...`, `green(AC-N): ...`, `refactor(AC-N): ...`) and the reviewer reconstructs the chain ex-post via `git log --grep="(AC-N):"`. Without `.git/`, there is nothing to commit and nothing to grep — the chain cannot exist. Soft mode is git-optional (the build still works without commits, just without an audit trail); strict mode is not.
 - **parallel-build relies on `git worktree add`.** v8.13's parallel fan-out clones the working tree into `.cclaw/worktrees/<slug>-s-N` via `git worktree`; without `.git/`, the dispatch envelope can't construct the worktree. Soft mode falls back to sequential slice dispatch; the slice-builder reads `triage.downgradeReason == "no-git"` and suppresses the parallel envelope.
 - **inline path's terminal `git commit`** is gracefully suppressed too — the orchestrator surfaces "no-git: change applied, no commit recorded" instead of crashing.
 
@@ -287,7 +287,7 @@ The triage gate is the easiest place to skip "because the task is obvious". When
 - **Asking the gate on a trivial / high-confidence request.** The zero-question fast path exists for exactly this case; surfacing a form for a typo-fix is friction without value. If you are about to ask, double-check the confidence is not `high`.
 - **Splitting the combined form into two separate structured-ask calls when the harness supports multi-question.** v8.13's double round-trip is now a regression; pack both questions into one form on every supporting harness (Cursor `AskQuestion`, Claude Code `AskUserQuestion`, OpenCode "ask", Codex `prompt`).
 - Forgetting that the run-mode answer is **ignored on the inline path**. `triage.runMode` is `null` on inline; do not write `"step"` or `"auto"` there.
-- Forgetting to write `triage` into `flow-state.json`. The hook check `commit-helper.mjs` and the resume detector both read it; an absent triage breaks both.
+- Forgetting to write `triage` into `flow-state.json`. The resume detector reads it; an absent triage breaks resume and the reviewer's posture-aware git-log inspection (which needs `triage.acMode` to know whether to run the strict-mode chain check at all).
 - Re-running the gate on resume. Resume reads the saved triage (path + runMode + autoExecuted) and continues from `currentStage`; it never re-prompts.
 
 ## Next step

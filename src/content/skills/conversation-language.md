@@ -43,15 +43,16 @@ Mechanical tokens stay in their original form regardless of conversation languag
 - AC ids (`AC-1`, `AC-2`).
 - Decision ids (`D-1`, `D-2`).
 - Slugs (`add-approval-page`, never "добавить-страницу-одобрения").
-- Commands and CLI flags (`/cc`, `--phase=red`, `commit-helper.mjs`).
-- Hook output and machine-readable JSON.
+- Commands and CLI flags (`/cc`, `/cc-cancel`, `/cc-review`).
+- Machine-readable JSON.
 - Specialist names (`design`, `ac-author`, `reviewer`, `security-reviewer`, `slice-builder`).
 - Mode names (`code`, `text-review`, `integration`, `release`, `adversarial`, `fix-only`).
-- Frontmatter keys (`slug`, `stage`, `status`, `ac`, `phases`).
+- Frontmatter keys (`slug`, `stage`, `status`, `ac`, `posture`).
 - Stage names (`plan`, `build`, `review`, `ship`).
 - TDD phase names (`red`, `green`, `refactor`).
+- Commit-message subject prefixes (`red(AC-N):`, `green(AC-N):`, `refactor(AC-N):`, `test(AC-N):`, `docs(AC-N):`) — the reviewer's `git log --grep` scan keys off them.
 
-These tokens are the wire protocol of cclaw. Translating them breaks tool calls, AC matching, frontmatter parsing, and the commit-helper hook. They are identifiers, not vocabulary.
+These tokens are the wire protocol of cclaw. Translating them breaks tool calls, AC matching, frontmatter parsing, and the reviewer's posture-aware chain check. They are identifiers, not vocabulary.
 
 ## What MAY be in either language
 
@@ -103,7 +104,7 @@ JSON keys (`specialist`, `posture`, `selected_direction`, `checkpoint_question`,
 
 For artifact bodies (`flows/<slug>/plan.md` etc.), the same rule applies: frontmatter keys are English, AC ids and slugs are English, the prose body is in the user's language. Slugs follow the mandatory `YYYYMMDD-<semantic-kebab>` format and are always ASCII kebab-case regardless of conversation language.
 
-Commit messages: the `AC-N:` prefix is English (commit-helper parses it); the rest of the message body may follow the artifact-body language.
+Commit messages: the posture-driven prefix (`red(AC-N):` / `green(AC-N):` / `refactor(AC-N):` / `test(AC-N):` / `docs(AC-N):`) stays English — it is the wire protocol the reviewer's `git log --grep` scan reads. The rest of the message subject and body may follow the artifact-body language.
 
 ## Common pitfalls
 
@@ -113,7 +114,7 @@ Commit messages: the `AC-N:` prefix is English (commit-helper parses it); the re
 - Writing `checkpoint_question`, `What changed`, `Notes`, or `open_questions` string values in a language other than the user's. These are user-facing prose values; the JSON / slim-summary keys are English but the values match the user.
 - Restating the same status update twice in two languages. Pick one. Match the user.
 - Switching to English when the answer is "complicated". The user's complexity tolerance is not your language tolerance.
-- Translating hook output (the strings `commit-helper.mjs` and the session hooks emit). Hook output is read by the harness; leave it in its original form. Your own commentary above or below hook output may be in the user's language.
+- Translating mechanical tool / command output (git output, npm output, tsc errors, etc.). Tool output is read by humans AND parsed by downstream agents; leave it in its original (usually English) form. Your own commentary above or below the output may be in the user's language.
 
 ## How to detect language
 

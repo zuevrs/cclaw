@@ -11,13 +11,13 @@ This skill is cclaw's canonical home for the simplification slot that pre-v8.27 
 
 ## When to use
 
-- **Inside the REFACTOR step of `tdd-and-verification`** (per-AC in strict mode; per-feature in soft mode). After GREEN passes the full relevant suite, walk the diff against this skill's five principles + four-step process. If a simplification is warranted, apply it and commit under `--phase=refactor`. If none is warranted, commit `--phase=refactor --skipped` with a one-line reason citing this skill (e.g. "code-simplification: already clean, no rename/extract/inline opportunities").
+- **Inside the REFACTOR step of `tdd-and-verification`** (per-AC in strict mode; per-feature in soft mode). After GREEN passes the full relevant suite, walk the diff against this skill's five principles + four-step process. If a simplification is warranted, apply it and commit with `git commit -m "refactor(AC-N): <one-line shape change>"`. If none is warranted, commit `git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"` with a one-line reason citing this skill (e.g. "refactor(AC-N) skipped: code-simplification — already clean, no rename/extract/inline opportunities").
 - **In the fix-only loop** when the reviewer cited a `complexity-budget` or `readability` finding (severity `consider` or higher). The simplification is the F-N fix; the same RED → GREEN → REFACTOR cycle applies, with the RED being the pre-existing test plus the new finding's "did this break adjacent behaviour?" check.
 - **Reviewer-side** when scoring a `complexity-budget` / `readability` finding: cite this skill body for the canonical "is this a real simplification or a stylistic preference?" rubric. The finding's severity is bounded by the rubric — pure-preference renames are `nit`, abstraction-without-consumer is `consider`, abstraction-that-actively-impedes-comprehension is `required`.
 
 ## When NOT to apply
 
-- **The code is already clean.** Do not simplify for the sake of producing a REFACTOR diff. Explicit `--phase=refactor --skipped` with a one-line reason is the correct outcome.
+- **The code is already clean.** Do not simplify for the sake of producing a REFACTOR diff. Explicit `git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"` with a one-line reason is the correct outcome.
 - **You do not yet understand what the code does.** Comprehend before simplifying. Apply Chesterton's Fence (see Process step 1); ask before removing a "redundant" guard whose history you have not read.
 - **The code is performance-critical** and a "simpler" version would be measurably slower. Cite a benchmark or a prior-review `perf` finding before reverting the simplification.
 - **A rewrite is imminent** (the next slug touches this surface end-to-end). Simplifying throwaway code wastes effort and conflicts with the upcoming diff.
@@ -100,7 +100,7 @@ After the REFACTOR pass, compare before/after holistically:
 - Would the verification gate pass (`tdd-and-verification > verification-loop`)? Run it explicitly — `build → typecheck → lint → test` must all be green.
 - Would a reviewer approve this as a net improvement, or would they cite it as `commit-hygiene` A-4 (drive-by) or `complexity-budget` (preference disguised as simplification)?
 
-If the answer to any of these is "no" — revert. Not every simplification attempt succeeds; explicit revert + `--phase=refactor --skipped: attempt reverted, reason=<...>` is the honest record.
+If the answer to any of these is "no" — revert. Not every simplification attempt succeeds; explicit revert + `git commit --allow-empty -m "refactor(AC-N) skipped: attempt reverted, reason=<...>"` is the honest record.
 
 ## Common rationalizations
 
@@ -132,7 +132,7 @@ Stop and reconsider if any of these appear during a simplification pass:
 
 ## Verification
 
-After a simplification pass, before committing under `--phase=refactor`:
+After a simplification pass, before committing the `refactor(AC-N): ...` commit:
 
 - [ ] All existing tests pass without modification (re-run the **full relevant suite**, not just affected).
 - [ ] `npm run build` (or project equivalent) succeeds with no new warnings.
@@ -144,13 +144,13 @@ After a simplification pass, before committing under `--phase=refactor`:
 - [ ] No dead code left behind (no unused imports, no unreachable branches introduced by an extract that wasn't followed through).
 - [ ] A reviewer (or you, re-reading the diff cold) would approve this as a net improvement.
 
-If any box is unchecked → either fix the gap or revert to the GREEN state and commit `--phase=refactor --skipped: <reason>`.
+If any box is unchecked → either fix the gap or revert to the GREEN state and commit `git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"`.
 
 ## Anti-pattern catalogue cross-reference
 
 These cclaw antipatterns interact with simplification — cite them by id when the simplification pass uncovers one (per `tdd-and-verification > Anti-patterns` and `commit-hygiene`):
 
-- **A-1 (TDD phase integrity)** — simplification disguised as a GREEN commit fails the audit trail. Always commit under `--phase=refactor`.
+- **A-1 (TDD phase integrity)** — simplification disguised as a `green(AC-N): ...` commit fails the audit trail (reviewer's git-log scan flags it). Always commit simplifications as `refactor(AC-N): ...`.
 - **A-4 (drive-by edits)** — unscoped simplification (touching files outside the AC's touchSurfaces) is the canonical case. The reviewer cites A-4 with severity bounded by the size of the drive-by; pure-formatting drift is `nit`, semantic-change in adjacent code is `required`.
 - **A-5 (deleted pre-existing dead code)** — dead-code removal during simplification is allowed when the dead code is your own GREEN leftover; pre-existing dead code is surfaced under "noticed but didn't touch" (per `commit-hygiene > surgical-edit-hygiene`).
 

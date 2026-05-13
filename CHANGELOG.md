@@ -1,5 +1,83 @@
 # Changelog
 
+## 8.40.0 — Full hooks removal (BREAKING — prompt-only TDD)
+
+### TL;DR
+
+v8.40 retires the entire `.cclaw/hooks/` directory. `session-start.mjs` (~28 LOC advisory ping) and `commit-helper.mjs` (~217 LOC mechanical TDD gate) are gone. cclaw's TDD enforcement moves from a runtime pre-commit hook to a **prompt-only contract** verified by the reviewer via `git log --grep="(AC-N):"`. The Iron Law stays as a prompt rule; the reviewer's ex-post inspection becomes the only gate. This is the [obra-superpowers / mattpocock / addy](https://github.com/anthropics/claude-plugins-official) discipline model.
+
+This is a **BREAKING CHANGE**: cclaw v8.40 will no longer enforce TDD at commit time. Projects upgrading from v8.39 (or earlier) get an automatic orphan-cleanup pass that removes `.cclaw/hooks/` and every per-harness hook config (`.claude/hooks/hooks.json`, `.cursor/hooks.json`, `.codex/hooks.json`, `.opencode/plugins/cclaw-plugin.mjs`); no manual migration required.
+
+### Why
+
+The v8.39 audit confirmed what the v8.38 cleanup half-suggested: **the hooks were carrying their weight only inside the cclaw conversation loop**, not for the broader ecosystem cclaw targets. Three observations sealed the call:
+
+1. **Prompt-only TDD works** in obra-superpowers / mattpocock-pattern / addy plugins shipping today. Anthropic's own `claude-plugins-official` repo has no equivalent of `commit-helper.mjs`; the agents follow RED → GREEN → REFACTOR because the prompt says so and the reviewer reads the audit trail at handoff. cclaw was the outlier.
+2. **Hook output is invisible** in two of the four harnesses cclaw supports. `session-start.mjs`'s `[cclaw] active: <slug>` line is suppressed by Claude Code and Codex by default; only Cursor and OpenCode surface stderr from session.start hooks to the conversation. The mechanical refusal in `commit-helper.mjs` IS visible (a non-zero exit blocks `git commit` regardless of harness), but the visibility came at the cost of `.mjs` files in the project tree, harness-config wiring in four directories, and the schema field in `flow-state.json` for the AC↔SHA chain.
+3. **The chain was redundant**. The reviewer at handoff time reads `build.md` AND inspects `git log` anyway; the `flow-state.json:ac[N].phases.{red,green,refactor}.sha` chain was a third source of truth for the same data. Git itself is the canonical commit log; `build.md` is the canonical audit; the chain in `flow-state.json` was a cache that occasionally drifted from both.
+
+### What's removed
+
+- **`src/content/node-hooks.ts`** (the entire file, ~480 LOC including bodies). `SESSION_START_HOOK`, `SESSION_START_HOOK_SPEC`, `COMMIT_HELPER_HOOK`, `COMMIT_HELPER_HOOK_SPEC`, `NODE_HOOKS`, `NodeHookSpec` interface — gone.
+- **`.cclaw/hooks/`** directory write logic in `src/install.ts`. `writeHookFile()` helper deleted; `ensureRuntimeRoot()` no longer creates `.cclaw/hooks/`; existing `.cclaw/hooks/*.mjs` files are listed in `RETIRED_HOOK_FILES` and scrubbed on every install, then the now-empty directory itself is removed.
+- **Per-harness hook wiring**: `.claude/hooks/hooks.json`, `.cursor/hooks.json`, `.codex/hooks.json`, `.opencode/plugins/cclaw-plugin.mjs` — listed in `RETIRED_HARNESS_HOOK_FILES`, scrubbed on every install. The hook bodies under `scripts/build-plugin-manifests.mjs` are gone.
+- **`AcceptanceCriterionState.phases?`** is still readable for backwards compat (legacy v8.36–v8.39 `flow-state.json` files keep loading) but is annotated `@deprecated`; v8.40+ never writes it.
+- **`runCompoundAndShip` "refuse to ship on pending AC" gate** — dropped entirely. The reviewer's release pass is the only ship gate now. `runCompoundAndShip` still throws on missing artifacts / missing currentSlug, but no longer on pending AC.
+- **Resume picker "committed N/M" indicator** — replaced with a simple `AC: N` (total only). The `ExistingPlanMatch.acProgress` shape went from `{ committed, pending, total }` to `{ total }`. Reading `git log` per resume to reconstruct the N/M split was rejected as too much overhead (>100ms on slugs with 5+ AC) for a feature that mostly served the cclaw developer's own ergonomic curiosity.
+
+### What's kept
+
+- **The Iron Law** as a prompt rule in `tdd-and-verification.md` and in slice-builder's Hard Rules. "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST."
+- **The anti-rationalization table** in `tdd-and-verification.md`. Two new rows added for the v8.40 transition ("The mechanical TDD hook is gone; I can write production code without a test first." → reviewer git-log inspection finds the gap; "I'll commit production and tests together because there's no helper to stop me." → A-1 finding on the next reviewer pass).
+- **Per-AC commit message shapes**. The slice-builder now writes `git commit -m "red(AC-N): ..."` / `green(AC-N): ...` / `refactor(AC-N): ...` directly. The posture-driven prefix is what the reviewer's `git log --grep="(AC-N):"` scan keys off.
+- **The reviewer's ex-post check** of watched-RED proof in `build.md`. This becomes the only enforcement.
+- **The `posture` field** on `plan.md` ACs — now an annotation the reviewer cross-checks (via `src/posture-validation.ts`), not a hook-input.
+
+### What replaces the mechanical gate
+
+The reviewer's prompt was rewritten to teach a posture-aware git-log inspection:
+
+- For postures `test-first` / `characterization-first`: assert `red(AC-N): ...` exists before `green(AC-N): ...` in commit order; assert the `red` commit's `git show --stat` does not include production files; assert `refactor(AC-N): ...` (or `refactor(AC-N) skipped: ...`) closes the chain.
+- For `tests-as-deliverable`: assert a single `test(AC-N): ...` commit; assert `touchSurface` is test/spec files only (cross-checked via `src/posture-validation.ts:validatePostureTouchSurface`).
+- For `refactor-only`: assert a single `refactor(AC-N): ...` commit; the commit body must include a `No-behavioural-delta:` evidence block.
+- For `docs-only`: assert a single `docs(AC-N): ...` commit; `touchSurface` matches the exclusion set (docs / config / `.cclaw/**` / `.github/**`).
+- For `bootstrap`: AC-1 may have `green(AC-1): ...` without prior RED; AC-2+ uses the full `test-first` chain.
+
+The predicate logic that used to live inline in `commit-helper.mjs` (the `is_behavior_adding` exclusion set) is now in `src/posture-validation.ts` and re-exported from `src/is-behavior-adding.ts`. Same shape, different invocation surface — the reviewer calls the helper at handoff time instead of the hook calling it at commit time.
+
+### Migration notes for existing projects
+
+Run `cclaw install` (or `cclaw upgrade`) once after the v8.40 jump. The installer:
+
+1. Removes `.cclaw/hooks/session-start.mjs`, `.cclaw/hooks/commit-helper.mjs`, and `.cclaw/hooks/stop-handoff.mjs` if they exist.
+2. Removes the now-empty `.cclaw/hooks/` directory.
+3. Removes `.claude/hooks/hooks.json` (if cclaw owned it), `.cursor/hooks.json`, `.codex/hooks.json`, and `.opencode/plugins/cclaw-plugin.mjs`.
+4. Emits one `Removed retired hook — <file>` progress line per file (audit trail in the install output).
+
+Existing `flow-state.json` files with `ac[N].phases.{red,green,refactor}.sha` data keep loading. The fields go unused; new flows do not populate them. No data migration required, no risk of read errors.
+
+Existing slugs in flight (`build` stage with partial AC commits) continue to work. The reviewer's release pass is now the gate — when you reach `cc continue` after the v8.40 upgrade, the reviewer reads `git log` and `build.md` rather than `flow-state.json:ac[N].phases`. If a slug's commit chain is intact (the agent followed the discipline pre-v8.40), the reviewer accepts it. If the chain is broken, the reviewer files an A-1 finding the same way it would for a v8.40-native slug.
+
+### Files touched
+
+- **Deleted**: `src/content/node-hooks.ts`, `tests/unit/node-hooks.test.ts`.
+- **Major rewrites**: `src/install.ts` (~150 LOC down), `src/content/specialist-prompts/slice-builder.ts` (~12 commit-helper invocations replaced with `git commit -m "..."`), `src/content/specialist-prompts/reviewer.ts` (~6 commit-helper mentions replaced with posture-aware git-log inspection), `src/content/start-command.ts` (Hop 3 dispatch envelope rewritten), `src/content/stage-playbooks.ts` (build runbook).
+- **New file**: `src/posture-validation.ts` (~120 LOC; centralises the posture cross-check logic the reviewer reads).
+- **Skills updated**: `tdd-and-verification.md`, `ac-discipline.md`, `commit-hygiene.md`, `triage-gate.md`, `plan-authoring.md`, `conversation-language.md`, `code-simplification.md`, `performance-optimization.md`, `flow-resume.md`.
+- **Content modules updated**: `antipatterns.ts` (A-1 reframed around git-log inspection), `artifact-templates.ts` (BUILD_TEMPLATE replaces "Hooks invoked" with "Commits"), `core-agents.ts` (slice-builder description), `examples.ts` (removed "commit-helper sessions" mention), `meta-skill.ts`, `runbooks-on-demand.ts`, `skills.ts`.
+- **Types**: `src/types.ts` (`AcceptanceCriterionState.phases?` marked `@deprecated`; JSDoc for `Posture` and `AC_MODES` updated).
+- **State / orchestration**: `src/orchestrator-routing.ts` (`acProgress: { total }`), `src/compound.ts` (pending-AC gate removed from `runCompoundAndShip`).
+- **Smoke + harness**: `scripts/smoke-init.mjs` (asserts `.cclaw/hooks/` absent on fresh install; verifies retired-hook cleanup for all three files), `scripts/build-plugin-manifests.mjs` (no hook wiring emitted).
+- **Tests**: `tests/unit/v840-cleanup.test.ts` (new — pins every v8.40 invariant); `tests/unit/tdd-cycle.test.ts`, `tests/unit/v823-no-git-fallback.test.ts`, `tests/unit/v838-cleanup.test.ts` migrated; `tests/unit/v836-cleanup.test.ts`, `tests/unit/v816-cleanup.test.ts`, `tests/unit/v88-cleanup.test.ts`, `tests/unit/v89-cleanup.test.ts` updated for the migrated `commit-helper` references; `tests/unit/install.test.ts`, `tests/integration/install-smoke.test.ts`, `tests/integration/install-harness-isolation.test.ts` updated.
+- **Release artefacts**: `package.json` (`8.39.0` → `8.40.0`).
+
+### Decision points surfaced
+
+- **`runCompoundAndShip` ship gate** — **dropped entirely**. The reviewer's `mode=release` pass at the ship stage reads `build.md` + `git log`; mechanically re-checking the same data inside `runCompoundAndShip` would be duplication. If the reviewer signs off, the slug is ready to ship; if not, the slug doesn't reach ship.
+- **Resume picker "committed N/M" indicator** — **dropped** in favour of "Total AC: N". Reading `git log` per resume to reconstruct the N/M split (without the hook-populated chain) measured at >100ms on a slug with 5 AC, which we judged too much overhead for an indicator that mostly served developer ergonomic curiosity. The reviewer is the source of truth for "did every AC ship?".
+- **`AcceptanceCriterionState.phases` field** — **kept as `@deprecated optional`**. Legacy `flow-state.json` files load cleanly; new flows don't write to it. Full removal could land in a future minor as a follow-up, once every shipping cclaw project has rolled past the v8.40 cliff.
+- **Migration vs deletion for tests pinning `commit-helper` behaviour** — **migrated** (`tdd-cycle.test.ts`, `v823-no-git-fallback.test.ts`, `v838-cleanup.test.ts`). The structural tests now assert v8.40 invariants (`no commit-helper string in prompts`, `git log --grep mentioned in reviewer`) instead of the old hook-body shape. `tests/unit/node-hooks.test.ts` was deleted entirely (no more hooks to test).
+
 ## 8.39.0 — TUI menu cleanup + lag fix
 
 ### Why

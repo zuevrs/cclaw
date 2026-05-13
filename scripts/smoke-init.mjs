@@ -59,7 +59,7 @@ try {
   if (!existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command missing after init");
   }
-  for (const dir of ["state", "hooks", "flows"]) {
+  for (const dir of ["state", "flows"]) {
     if (!existsSync(join(tempDir, ".cclaw", dir))) {
       throw new Error(`smoke check failed: top-level .cclaw/${dir}/ missing after init`);
     }
@@ -134,16 +134,17 @@ try {
   if (!existsSync(join(tempDir, ".cclaw", "lib", "decision-protocol.md"))) {
     throw new Error("smoke check failed: lib/decision-protocol.md missing after init");
   }
-  // v8.38 — stop-handoff.mjs was retired; verify a fresh install no
-  // longer ships it. The only hook files under .cclaw/hooks/ should be
-  // session-start.mjs and commit-helper.mjs.
-  for (const hook of ["session-start.mjs", "commit-helper.mjs"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "hooks", hook))) {
-      throw new Error(`smoke check failed: hook ${hook} missing after init`);
-    }
+  // v8.40 — full hooks removal. session-start.mjs and commit-helper.mjs
+  // were retired alongside stop-handoff.mjs; .cclaw/hooks/ should not
+  // exist on a fresh install. TDD enforcement moved to a prompt-only
+  // contract verified by the reviewer via `git log --grep`.
+  if (existsSync(join(tempDir, ".cclaw", "hooks"))) {
+    throw new Error("smoke check failed: .cclaw/hooks/ was retired in v8.40 but is still present after init");
   }
-  if (existsSync(join(tempDir, ".cclaw", "hooks", "stop-handoff.mjs"))) {
-    throw new Error("smoke check failed: stop-handoff.mjs was retired in v8.38 but is still present after init");
+  for (const retired of ["session-start.mjs", "commit-helper.mjs", "stop-handoff.mjs"]) {
+    if (existsSync(join(tempDir, ".cclaw", "hooks", retired))) {
+      throw new Error(`smoke check failed: ${retired} was retired but is still present after init`);
+    }
   }
   if (existsSync(join(tempDir, "AGENTS.md"))) {
     throw new Error("smoke check failed: AGENTS.md should NOT be created by cclaw init");
@@ -198,21 +199,40 @@ try {
   }
   // Clean up the skip-flag fixture so the next install/uninstall passes are clean.
   rmSync(orphanSkipPath, { force: true });
-  // v8.38 — retired-hook cleanup smoke check. Plant a stale
-  // .cclaw/hooks/stop-handoff.mjs file (the retired v8.37-and-earlier
-  // hook) and assert the next install removes it and emits the
-  // `Removed retired hook` progress event. Mirrors the v8.17 skill /
-  // v8.22 runbook orphan-cleanup pattern.
-  const retiredHookPath = join(tempDir, ".cclaw", "hooks", "stop-handoff.mjs");
-  writeFileSync(retiredHookPath, "#!/usr/bin/env node\n// stale v8.37 stop-handoff fixture\nprocess.exit(0);\n", "utf8");
+  // v8.40 — retired-hook cleanup smoke check. Plant every retired hook
+  // file (session-start, commit-helper, stop-handoff) under .cclaw/hooks/
+  // and assert the next install removes each file plus the directory
+  // itself, and emits one `Removed retired hook` progress event per
+  // file. v8.40 retired the entire hook system: cclaw no longer ships
+  // any .mjs hook under .cclaw/hooks/.
+  await import("node:fs").then(({ mkdirSync }) =>
+    mkdirSync(join(tempDir, ".cclaw", "hooks"), { recursive: true })
+  );
+  const retiredHooks = ["session-start.mjs", "commit-helper.mjs", "stop-handoff.mjs"];
+  for (const hookName of retiredHooks) {
+    writeFileSync(
+      join(tempDir, ".cclaw", "hooks", hookName),
+      `#!/usr/bin/env node\n// stale ${hookName} fixture\nprocess.exit(0);\n`,
+      "utf8"
+    );
+  }
   const retiredHookOut = String(
     execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
   );
-  if (existsSync(retiredHookPath)) {
-    throw new Error("smoke check failed: v8.38 retired-hook cleanup did not remove .cclaw/hooks/stop-handoff.mjs after install");
+  for (const hookName of retiredHooks) {
+    if (existsSync(join(tempDir, ".cclaw", "hooks", hookName))) {
+      throw new Error(
+        `smoke check failed: v8.40 retired-hook cleanup did not remove .cclaw/hooks/${hookName} after install`
+      );
+    }
+    if (!retiredHookOut.includes(`Removed retired hook`) || !retiredHookOut.includes(hookName)) {
+      throw new Error(
+        `smoke check failed: v8.40 retired-hook cleanup did not print "Removed retired hook — ${hookName}" on install; got:\n${retiredHookOut}`
+      );
+    }
   }
-  if (!retiredHookOut.includes("Removed retired hook") || !retiredHookOut.includes("stop-handoff.mjs")) {
-    throw new Error(`smoke check failed: v8.38 retired-hook cleanup did not print "Removed retired hook — stop-handoff.mjs" on install; got:\n${retiredHookOut}`);
+  if (existsSync(join(tempDir, ".cclaw", "hooks"))) {
+    throw new Error("smoke check failed: v8.40 retired-hook cleanup left .cclaw/hooks/ directory behind after removing all files");
   }
   // Re-run install to assert idempotency: zero orphan output on a clean install.
   const idempotentOut = String(

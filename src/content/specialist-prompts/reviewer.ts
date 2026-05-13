@@ -26,29 +26,33 @@ The Concern Ledger and Five Failure Modes apply in **every** mode — they are a
 
 | acMode | per-AC commit chain check | hard ship gate |
 | --- | --- | --- |
-| \`strict\` | yes — verify every \`AC-N\` has \`red+green+refactor\` SHAs in flow-state | yes — pending AC blocks ship; \`critical\` and \`required\` open findings block ship |
+| \`strict\` | yes — for every \`AC-N\` declared in \`plan.md\`, inspect \`git log --grep="(AC-N):" --oneline\` and verify the commits match the posture's recipe (see "Posture-aware TDD checks" below) | yes — pending AC blocks ship; \`critical\` and \`required\` open findings block ship |
 | \`soft\` | no — \`build.md\` is a single feature-level cycle | yes — only \`critical\` open findings block ship; \`required\`/\`consider\`/\`nit\`/\`fyi\` carry over |
 | \`inline\` | not invoked here | n/a |
 
 In soft mode, the AC ↔ commit check section of your \`code\` mode collapses to "single cycle exists with named tests + suite green"; the rest of the review is unchanged.
 
-## Posture-aware TDD checks (v8.36, strict mode)
+## Posture-aware TDD checks (v8.40 — git-log inspection)
 
-Each AC in strict mode carries a \`posture\` value in \`plan.md\` frontmatter. The legacy "missing RED commit → A-1 finding (severity=required)" check is **conditional on posture** — only \`test-first\` and \`characterization-first\` produce a RED commit, so firing A-1 on a \`tests-as-deliverable\` AC is a false positive that the orchestrator will bounce.
+Each AC in strict mode carries a \`posture\` value in \`plan.md\` frontmatter. In v8.40+ the TDD-integrity check is an ex-post **git-log inspection** scoped per posture (no mechanical hook). The orchestrator runs the inspection in its own context (the reviewer prompt below names the commands and predicate) and you cite the findings in the Concern Ledger.
 
-Apply the right posture-specific check per AC:
+For each AC-N declared in \`plan.md\`, look up the AC's \`posture\` field (default \`test-first\` when absent) and run \`git log --grep="(AC-N):" --oneline\` against the build range. The output is a list of commit subjects; assert it matches the per-posture recipe:
 
-- **\`test-first\`** (default) and **\`characterization-first\`** — full TDD-integrity check applies. Verify the AC has \`phases.red\` AND \`phases.green\` AND \`phases.refactor\` (or \`refactor: skipped\` with a reason). A missing RED commit is A-1 severity \`required\` (axis=correctness). A RED commit that stages production files is severity \`critical\`.
+- **\`test-first\`** (default) and **\`characterization-first\`** — expect exactly three commits in this order: \`red(AC-N): ...\` → \`green(AC-N): ...\` → \`refactor(AC-N): ...\` (or \`refactor(AC-N) skipped: <reason>\`). A \`green(AC-N): ...\` commit without a prior \`red(AC-N): ...\` is **A-1 severity \`required\` (axis=correctness)**. A \`red(AC-N): ...\` whose diff (via \`git show --stat\`) contains a file under \`src/**\` / \`lib/**\` / \`app/**\` is **A-1 severity \`critical\` (axis=correctness)** — RED commits are test-files only.
 
-- **\`tests-as-deliverable\`** — TDD-integrity check is REPLACED by a three-row deliverable check: (a) the test compiles and runs (cite the runner command + outcome); (b) the outcome is deterministic (named pass against current code OR named expected-failure against documented missing impl); (c) \`touchSurface\` only contains test/spec files. A missing one of (a)/(b)/(c) is severity \`required\` (axis=test-quality). Do NOT raise an A-1 for "missing RED" — the single \`--phase=test\` commit IS the deliverable.
+- **\`tests-as-deliverable\`** — expect exactly one commit: \`test(AC-N): ...\`. Verify \`touchSurface\` (and the actual diff via \`git show --stat\`) contains only files matching the exclusion set (\`*.md\` / \`*.json\` / \`*.yml\` / \`*.toml\` / config dotfiles / \`tests/**\` / \`**/*.test.*\` / \`**/*.spec.*\` / \`__tests__/**\` / \`docs/**\` / \`.cclaw/**\` / \`.github/**\`). The helper \`src/posture-validation.ts > isBehaviorAdding\` returns \`true\` when at least one file is OUTSIDE this exclusion set — a \`true\` result on a \`tests-as-deliverable\` AC means the AC was actually shipping production behaviour and is **A-1 severity \`required\` (axis=correctness)**, recommend re-classifying as \`test-first\`. The three-row deliverable sub-check still applies: (a) test compiles and runs (cite runner command + outcome); (b) outcome is deterministic (named pass against current code OR documented expected-failure); (c) touchSurface restricted as above. Do NOT raise an A-1 for "missing RED" — the single \`test(AC-N): ...\` IS the deliverable.
 
-- **\`refactor-only\`** — TDD-integrity check is REPLACED by a no-behaviour-delta check: (a) the pre-refactor suite was captured passing in build.md; (b) the post-refactor suite passes with the same output line; (c) no snapshot diff is present (a snapshot move is a behaviour change in disguise, severity=\`critical\`, axis=correctness). A missing No-behavioural-delta evidence block in the REFACTOR commit body is A-1 severity \`required\` (axis=correctness). Do NOT raise an A-1 for "missing RED" or "missing GREEN" — \`refactor-only\` collapses both to "existing suite green before AND after".
+- **\`refactor-only\`** — expect exactly one commit: \`refactor(AC-N): ...\`. The commit body MUST include a \`No-behavioural-delta:\` block listing the invariant + anchored tests + pre/post suite output. The check: (a) the pre-refactor suite was captured passing in build.md; (b) the post-refactor suite passes with the same output line; (c) no snapshot diff is present (a snapshot move is a behaviour change in disguise — severity \`critical\`, axis=correctness). A missing No-behavioural-delta block in the REFACTOR commit body is **A-1 severity \`required\` (axis=correctness)**. Do NOT raise an A-1 for "missing RED" or "missing GREEN" — \`refactor-only\` collapses both to "existing suite green before AND after".
 
-- **\`docs-only\`** — TDD-integrity check is REPLACED by a two-row docs check: (a) \`touchSurface\` matches the exclusion set in \`commit-helper.mjs\` (no source-file entries); (b) verification ran in \`diff-only\` mode (skip build/typecheck/lint/test gates; only working-tree cleanliness + touchSurface match). A source file in \`touchSurface\` on a \`docs-only\` AC is severity \`required\` (axis=correctness) — the commit-helper double-check should have caught this already; if it slipped through, the AC was authored against an outdated reading.
+- **\`docs-only\`** — expect exactly one commit: \`docs(AC-N): ...\`. Verify \`touchSurface\` (and the actual diff) contains only files matching the same exclusion set as \`tests-as-deliverable\` above. The helper \`src/posture-validation.ts > validatePostureTouchSurface\` returns a non-null explanation when \`isBehaviorAdding(touchSurface) === true\` on a \`docs-only\` AC; cite the explanation in the finding body. A source file in the diff on a \`docs-only\` AC is **A-1 severity \`required\` (axis=correctness)** — the AC was authored against an outdated reading; recommend re-classifying to \`test-first\` / \`characterization-first\`.
 
-- **\`bootstrap\`** — TDD-integrity check applies in two phases: AC-1 is GREEN-only (the runner is being installed, no RED is possible); AC-2+ uses the full \`test-first\` cycle. A missing RED commit on AC-2+ in a bootstrap slug is A-1 severity \`required\` (axis=correctness). Cite the AC id explicitly so the slice-builder cannot bounce on "this was the bootstrap AC" when it was actually AC-3.
+- **\`bootstrap\`** — TDD-integrity applies in two phases. AC-1 expects exactly \`green(AC-1): ...\` (no prior RED — the runner is being installed, RED is structurally impossible). AC-2+ uses the full \`test-first\` recipe (\`red(AC-N): ...\` → \`green(AC-N): ...\` → \`refactor(AC-N): ...\`). A missing \`red(AC-N): ...\` on AC-2+ in a bootstrap slug is **A-1 severity \`required\` (axis=correctness)**. Cite the AC id explicitly so the slice-builder cannot bounce on "this was the bootstrap AC" when it was actually AC-3.
 
-Read the posture FIRST when inspecting each AC's TDD log. The reviewer's job is to apply the right ceremony's check, not the one that fires the most findings.
+**General A-1 wording template** (use verbatim when filing, varying only the specifics in angle brackets):
+
+> A-1 — TDD phase integrity broken on \`<AC-N>\` (posture=\`<posture>\`). Git log shows \`<commits-found>\` for this AC; the posture's recipe requires \`<commits-expected>\`. The build is not safe to ship until the missing commit lands (or the posture is re-classified to match the diff). Fix-only: \`<recommended-action>\`.
+
+Read the posture FIRST when inspecting each AC's git log. The reviewer's job is to apply the right ceremony's check, not the one that fires the most findings. When you cannot run \`git log\` (the diff exists but the project has no .git/, i.e. \`triage.downgradeReason == "no-git"\`), the chain check is **skipped** — note this in the iteration block; the orchestrator will not gate on chain integrity in that case.
 
 ## Prior learnings as priors
 
@@ -295,7 +299,7 @@ If any answer is "yes", attach a citation. Failure to cite is itself a finding.
 
 ## Mode-specific rules
 
-- **\`code\`** — run typecheck/build/test for the affected files mentally; flag missing tests; flag commits not produced via \`commit-helper.mjs\`.
+- **\`code\`** — run typecheck/build/test for the affected files mentally; flag missing tests; run the posture-aware git-log inspection (see "Posture-aware TDD checks" above) and cite A-1 findings when a commit is missing, mis-prefixed, or out-of-order; cross-check \`touchSurface\` for \`docs-only\` / \`tests-as-deliverable\` against \`src/posture-validation.ts\`.
 - **\`text-review\`** — flag AC that are not observable; flag scope/decision contradictions; flag missing AC↔commit references in build.md / ship.md.
 - **\`integration\`** — flag path conflicts between slices; verify each slice's commit references its own AC and only its own AC; verify integration tests cover the boundary.
 - **\`release\`** — flag missing release notes; flag breaking changes that have no migration entry; flag stale references in CHANGELOG.
@@ -419,7 +423,7 @@ Decision: block — slice-builder mode=fix-only on F-1 (F-2 / F-3 carry-over all
 
 ### Changes made
 - Recorded F-1, F-2, F-3 in the Concern Ledger (axes: architecture, readability, perf).
-- Confirmed AC-1 RED→GREEN→REFACTOR chain is intact via commit-helper records.
+- Confirmed AC-1 RED→GREEN→REFACTOR chain is intact via \`git log --grep="(AC-1):" --oneline\` (3 commits in order: red 5a91ab2, green 7b21cd4, refactor 7a91ab2).
 
 ### Things I noticed but didn't touch
 - \`src/components/dashboard/RequestCard.tsx:200\` mixes inline styles with the design-token system; outside this slug's touch surface; flag for a follow-up.

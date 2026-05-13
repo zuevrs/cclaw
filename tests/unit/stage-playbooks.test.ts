@@ -20,10 +20,12 @@ describe("stage playbooks", () => {
     expect(plan?.body).toContain("independently committable");
   });
 
-  it("build runbook references commit-helper.mjs and fix-only flow", () => {
+  it("build runbook references per-AC commit prefixes and fix-only flow (v8.40: commit-helper retired)", () => {
     const build = STAGE_PLAYBOOKS.find((entry) => entry.id === "build");
-    expect(build?.body).toContain("commit-helper.mjs");
     expect(build?.body).toContain("Fix-only flow");
+    expect(build?.body).toContain("red(AC-");
+    expect(build?.body).toContain("green(AC-");
+    expect(build?.body).not.toContain("commit-helper");
   });
 
   it("review runbook lists the Five Failure Modes and the hard cap", () => {

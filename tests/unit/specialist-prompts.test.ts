@@ -35,8 +35,13 @@ describe("specialist prompts", () => {
     expect(prompt).toContain("Tool misuse");
   });
 
-  it("slice-builder prompt enforces commit-helper.mjs invocation", () => {
-    expect(SPECIALIST_PROMPTS["slice-builder"]).toContain("commit-helper.mjs");
+  it("slice-builder prompt uses plain `git commit` with posture-driven prefixes (v8.40: commit-helper retired)", () => {
+    const prompt = SPECIALIST_PROMPTS["slice-builder"];
+    expect(prompt).toContain("git commit");
+    expect(prompt).toContain("red(AC-");
+    expect(prompt).toContain("green(AC-");
+    expect(prompt).toContain("refactor(AC-");
+    expect(prompt).not.toContain("commit-helper");
   });
 
   it("SPECIALIST_AGENTS use the deep specialist prompts", () => {

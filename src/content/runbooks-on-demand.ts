@@ -30,7 +30,7 @@ Dispatch <specialist>
     - DO NOT mutate flow-state.json — only the orchestrator touches it
 ─ Forbidden:
     - dispatch other specialists (composition is the orchestrator's job)
-    - run git commands besides commit-helper.mjs (and only when acMode=strict)
+    - run git commands other than \`git add\` / \`git commit -m "<prefix>(AC-N): ..."\` (no \`git push\`, no \`git rebase\`, no \`git reset\`)
     - read or modify files outside the slug's touch surface
 \`\`\`
 
@@ -43,8 +43,10 @@ If the harness does not support sub-agent dispatch, run the specialist inline in
 ## What the sub-agent must NOT do
 
 - dispatch other specialists (composition is the orchestrator's job, not theirs);
-- run \`git commit\` directly (only \`commit-helper.mjs\` in strict mode; plain \`git commit\` in inline / soft mode for a feature-level cycle);
+- push, rebase, force-update, or merge branches (the orchestrator owns the ship stage);
 - modify files outside the slug's touch surface.
+
+In strict mode the slice-builder commits each AC with the posture-driven prefix (\`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` / \`test(AC-N): ...\` / \`docs(AC-N): ...\`); the reviewer verifies the chain ex-post via \`git log --grep="(AC-N):"\`. In soft / inline mode plain \`git commit\` is fine (one cycle for the feature).
 `;
 
 const PARALLEL_BUILD = `# On-demand runbook — parallel-build fan-out

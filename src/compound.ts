@@ -76,10 +76,6 @@ export function shouldCaptureLearning(signals: CompoundQualitySignals): boolean 
   return false;
 }
 
-function pendingAc(ac: AcceptanceCriterionState[]): AcceptanceCriterionState[] {
-  return ac.filter((item) => item.status !== "committed");
-}
-
 async function moveIfExists(source: string, destination: string): Promise<boolean> {
   if (!(await exists(source))) return false;
   await ensureDir(path.dirname(destination));
@@ -218,13 +214,6 @@ export async function runCompoundAndShip(
   const state = await readFlowState(projectRoot);
   if (!state.currentSlug) throw new CompoundError("No active slug; cannot ship.");
   const slug = state.currentSlug;
-
-  const pending = pendingAc(state.ac);
-  if (pending.length > 0) {
-    throw new CompoundError(
-      `Cannot ship ${slug}: AC traceability gate failed. Pending AC: ${pending.map((item) => item.id).join(", ")}.`
-    );
-  }
 
   const shippedAt = new Date().toISOString();
   const learningCaptured = shouldCaptureLearning(options.signals);

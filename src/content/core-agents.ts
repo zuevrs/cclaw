@@ -81,7 +81,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     title: "Slice builder",
     activation: "on-demand",
     modes: ["build", "fix-only"],
-    description: "Implements AC slices and post-review scoped fixes. Always commits per AC via commit-helper.",
+    description: "Implements AC slices and post-review scoped fixes. In strict mode every commit carries a posture-driven subject-line prefix (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies via git log --grep.",
     prompt: SPECIALIST_PROMPTS["slice-builder"]
   }
 ];
