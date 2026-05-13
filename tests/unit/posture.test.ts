@@ -6,7 +6,6 @@ import {
 import {
   POSTURES,
   DEFAULT_POSTURE,
-  isPosture,
   type Posture
 } from "../../src/types.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
@@ -49,17 +48,6 @@ describe("v8.36 — posture enum + types", () => {
 
   it("AC-2 — DEFAULT_POSTURE is `test-first` (preserves current behaviour for legacy plans)", () => {
     expect(DEFAULT_POSTURE).toBe("test-first");
-  });
-
-  it("AC-2 — isPosture narrows to a known value", () => {
-    for (const value of POSTURES) {
-      expect(isPosture(value)).toBe(true);
-    }
-    expect(isPosture("unknown")).toBe(false);
-    expect(isPosture("")).toBe(false);
-    expect(isPosture(null)).toBe(false);
-    expect(isPosture(undefined)).toBe(false);
-    expect(isPosture(42)).toBe(false);
   });
 
   it("AC-2 — every posture value is a non-empty kebab-case string", () => {

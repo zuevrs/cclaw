@@ -98,20 +98,6 @@ export type ResearchAgentId = (typeof RESEARCH_AGENT_IDS)[number];
 
 export type InstallableAgentId = SpecialistId | ResearchAgentId;
 
-export type ReviewerMode = "code" | "text-review" | "integration" | "release" | "adversarial";
-export type SecurityReviewerMode = "threat-model" | "sensitive-change";
-export type SliceBuilderMode = "build" | "fix-only";
-
-/**
- * v8.42 — critic dispatch modes. `gap` is the default and runs the full
- * critic protocol minus the adversarial scaffold (§3 of
- * `.cclaw/lib/agents/critic.md`). `adversarial` enables §3 (assumption
- * violation, composition failures, cascade construction, abuse cases)
- * plus the per-D-N devil's-advocate sweep; it is selected automatically
- * when at least one escalation trigger from §8 of the contract fires.
- */
-export type CriticMode = "gap" | "adversarial";
-
 /**
  * v8.42 — verdict the critic returns in its slim summary. Drives Hop 4.5
  * routing: `pass` → continue to Hop 5 ship; `iterate` → continue to
@@ -187,10 +173,6 @@ export type Posture = (typeof POSTURES)[number];
  * unchanged.
  */
 export const DEFAULT_POSTURE: Posture = "test-first";
-
-export function isPosture(value: unknown): value is Posture {
-  return typeof value === "string" && (POSTURES as readonly string[]).includes(value);
-}
 
 export interface AcceptanceCriterionState {
   id: string;
@@ -268,8 +250,19 @@ export interface TriageDecision {
   rationale: string;
   /** ISO timestamp when triage was recorded. */
   decidedAt: string;
-  /** Did the user override the orchestrator's recommendation? */
-  userOverrode: boolean;
+  /**
+   * Did the user override the orchestrator's recommendation?
+   *
+   * @deprecated v8.44 — write-only audit telemetry has been relocated to
+   * `.cclaw/state/triage-audit.jsonl` (see `src/triage-audit.ts >
+   * appendTriageAudit`). New orchestrator prompts emit a per-decision
+   * audit line instead of stuffing the bit into the routing state. The
+   * field stays in the schema as optional so v8.0-v8.43 state files
+   * still validate on read; new flows should leave it absent and let
+   * the audit log carry the signal. Slated for removal once no
+   * supported flow-state.json schema version writes it.
+   */
+  userOverrode?: boolean;
   /**
    * Step-by-step (default) or autopilot. Persisted across resumes so the
    * user only picks once per flow.
@@ -327,6 +320,14 @@ export interface TriageDecision {
    *
    * `false` on every other path (combined-form ask answered, custom path,
    * legacy state). Optional for backward compat.
+   *
+   * @deprecated v8.44 — write-only audit telemetry relocated to
+   * `.cclaw/state/triage-audit.jsonl` (see `src/triage-audit.ts >
+   * appendTriageAudit`). The "did we take the zero-question fast path?"
+   * signal now lives in the audit log entry's `autoExecuted` column;
+   * downstream readers do not branch on this field, so leaving it
+   * absent on new flows is safe. Field kept in schema for backward
+   * compat with v8.14-v8.43 state files.
    */
   autoExecuted?: boolean | null;
   /**
@@ -362,6 +363,15 @@ export interface TriageDecision {
    * the moment the override picker fires; never cleared by ship.
    * Backward compat: v8.19 state files without the field validate
    * unchanged.
+   *
+   * @deprecated v8.44 — write-only audit telemetry relocated to
+   * `.cclaw/state/triage-audit.jsonl` (see `src/triage-audit.ts >
+   * appendTriageAudit`). The "did the user buy two extra review
+   * rounds?" signal now lives in the audit log entry's
+   * `iterationOverride` column. Field kept in schema for backward
+   * compat with v8.20-v8.43 state files; new orchestrator prompts
+   * append an audit line at the moment the override picker fires
+   * instead of writing here.
    */
   iterationOverride?: boolean | null;
   /**

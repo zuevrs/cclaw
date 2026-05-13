@@ -74,10 +74,21 @@ try {
       throw new Error(`smoke check failed: stale per-stage flow dir .cclaw/flows/${stale}/ should not exist after init`);
     }
   }
-  for (const dir of ["agents", "skills", "templates", "runbooks", "patterns", "research", "recovery", "examples"]) {
+  for (const dir of ["agents", "skills", "templates", "runbooks", "patterns", "research", "recovery"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", dir))) {
       throw new Error(`smoke check failed: .cclaw/lib/${dir}/ missing after init`);
     }
+  }
+  // v8.44 retired .cclaw/lib/examples/ — the directory should NOT exist on a fresh install.
+  if (existsSync(join(tempDir, ".cclaw", "lib", "examples"))) {
+    throw new Error("smoke check failed: .cclaw/lib/examples/ was retired in v8.44 but is still present after init");
+  }
+  // v8.44 added .cclaw/state/triage-audit.jsonl — the write-only audit log for
+  // triage telemetry that used to live on TriageDecision (userOverrode,
+  // autoExecuted, iterationOverride). Install touches the file empty so a
+  // fresh project has a defined append target.
+  if (!existsSync(join(tempDir, ".cclaw", "state", "triage-audit.jsonl"))) {
+    throw new Error("smoke check failed: .cclaw/state/triage-audit.jsonl was added in v8.44 but is not present after init");
   }
   // v8.12: artefact templates ship `manifest.md` for legacy-artifacts: true
   // path (template is preserved for back-compat) but the runtime no longer
@@ -131,9 +142,10 @@ try {
       throw new Error(`smoke check failed: deleted pattern ${stalePattern} should not be present after v8.12`);
     }
   }
-  // v8.12 deleted all 5 recovery, 3 research, 8 examples libraries.
-  // Each directory now ships only its index.md note explaining the cleanup.
-  for (const dir of ["recovery", "research", "examples"]) {
+  // v8.12 deleted all 5 recovery and 3 research library entries; each
+  // directory now ships only its `index.md` note. v8.44 removed
+  // `examples/` outright (no agent code path ever read from it).
+  for (const dir of ["recovery", "research"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", dir, "index.md"))) {
       throw new Error(`smoke check failed: ${dir}/index.md missing after init`);
     }
@@ -244,6 +256,25 @@ try {
   if (existsSync(join(tempDir, ".cclaw", "hooks"))) {
     throw new Error("smoke check failed: v8.40 retired-hook cleanup left .cclaw/hooks/ directory behind after removing all files");
   }
+  // v8.44 — retired-lib-dir cleanup smoke check. Plant a stale
+  // `.cclaw/lib/examples/` directory (the v8.43 install layer wrote
+  // this; v8.44 retired it) and assert the next install removes it +
+  // emits a `Removed retired lib dir` progress event.
+  const staleExamplesDir = join(tempDir, ".cclaw", "lib", "examples");
+  mkdirSync(staleExamplesDir, { recursive: true });
+  writeFileSync(join(staleExamplesDir, "stale.md"), "stale fixture\n", "utf8");
+  const retiredLibOut = String(
+    execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
+  );
+  if (existsSync(staleExamplesDir)) {
+    throw new Error("smoke check failed: v8.44 retired-lib-dir cleanup did not remove .cclaw/lib/examples/ after install");
+  }
+  if (!retiredLibOut.includes("Removed retired lib dir") || !retiredLibOut.includes(".cclaw/lib/examples")) {
+    throw new Error(
+      `smoke check failed: v8.44 retired-lib-dir cleanup did not print "Removed retired lib dir — .cclaw/lib/examples" on install; got:\n${retiredLibOut}`
+    );
+  }
+
   // Re-run install to assert idempotency: zero orphan output on a clean install.
   const idempotentOut = String(
     execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
@@ -253,6 +284,9 @@ try {
   }
   if (idempotentOut.includes("Removed retired hook")) {
     throw new Error(`smoke check failed: v8.38 retired-hook cleanup should be idempotent (zero retired-hook events on a clean install); got:\n${idempotentOut}`);
+  }
+  if (idempotentOut.includes("Removed retired lib dir")) {
+    throw new Error(`smoke check failed: v8.44 retired-lib-dir cleanup should be idempotent (zero retired-lib-dir events on a clean install); got:\n${idempotentOut}`);
   }
   // v8.37 — `sync` / `upgrade` non-interactive commands were collapsed
   // into `install`. The retired names now exit 1 with a migration hint;

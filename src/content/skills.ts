@@ -54,10 +54,14 @@ export interface AutoTriggerSkill {
  * `src/content/skills/<id>.md`. v8.16 merged 13 of those source files
  * into 6 thematic groups (ac-discipline, commit-hygiene,
  * tdd-and-verification, api-evolution, review-discipline,
- * debug-and-browser), leaving 17 skill bodies on disk. Each `.md` is
- * the single editable source of truth; this loader pulls them back in
- * so `AUTO_TRIGGER_SKILLS[i].body` keeps the same string contract for
- * `install.ts` and the test suite.
+ * debug-and-browser), leaving 17 skill bodies on disk. v8.27-v8.33
+ * added five frontier-aesthetic skills (code-simplification,
+ * context-engineering, performance-optimization, frontend-ui-engineering,
+ * ci-cd-and-automation); v8.44 retired all five — none of the specialist
+ * prompts referenced them, so the on-disk count is back to 17. Each
+ * `.md` is the single editable source of truth; this loader pulls them
+ * back in so `AUTO_TRIGGER_SKILLS[i].body` keeps the same string
+ * contract for `install.ts` and the test suite.
  *
  * Resolution mirrors the pattern in `src/constants.ts > readCclawVersion`:
  *
@@ -268,78 +272,6 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     ],
     stages: ["plan", "review"],
     body: readSkill("api-evolution.md")
-  },
-  {
-    id: "code-simplification",
-    fileName: "code-simplification.md",
-    description: "v8.27 adaptation of addy osmani's `code-simplification` skill. Canonical rubric for the simplification slot that pre-v8.27 was split between the REFACTOR step of `tdd-and-verification` and the reviewer's `complexity-budget` / `readability` axes. Five principles (preserve behaviour / follow conventions / clarity over cleverness / maintain balance / scope to touchSurfaces) + four-step process (Chesterton's Fence → identify patterns → apply incrementally → verify). Stage-windowed on build (REFACTOR step + fix-only) and review (citation for complexity-budget findings).",
-    triggers: [
-      "stage:build",
-      "specialist:slice-builder",
-      "specialist:reviewer",
-      "phase:refactor",
-      "finding:complexity-budget",
-      "finding:readability",
-      "task:simplification"
-    ],
-    stages: ["build", "review"],
-    body: readSkill("code-simplification.md")
-  },
-  {
-    id: "context-engineering",
-    fileName: "context-engineering.md",
-    description: "v8.32 adaptation of addy osmani's `context-engineering` skill. Canonical rubric for the dispatcher's context-window construction: a five-layer hierarchy (rules → specs → source → errors → conversation), three packing strategies (brain dump for inline / selective include for small-medium / hierarchical summary for large-risky), and three confusion-management sources (internal conflict / missing requirement / drift). Stage-windowed on `[\"always\"]`. Companion to `dispatch-envelope.md` (the runbook) — this skill is the rules, the runbook is the shape.",
-    triggers: ["always-on", "before:dispatch", "pack-context", "confusion-detected"],
-    stages: ["always"],
-    body: readSkill("context-engineering.md")
-  },
-  {
-    id: "performance-optimization",
-    fileName: "performance-optimization.md",
-    description: "v8.32 adaptation of addy osmani's `performance-optimization` skill. Iron rule: don't optimise without numbers. Core Web Vitals targets (LCP / INP / CLS / TTFB / FCP / TBT thresholds at the Lighthouse `Slow 4G + 4× CPU` profile), measurement-first workflow (baseline → RED → GREEN → REFACTOR triple), N+1 query anti-pattern catalogue with fixes, bundle budget table. Stage-windowed on `[\"build\", \"review\"]`. Triggers on `touch-surface:ui` OR reviewer `perf` axis finding.",
-    triggers: [
-      "stage:build",
-      "specialist:slice-builder",
-      "specialist:reviewer",
-      "touch-surface:ui",
-      "finding:perf",
-      "ac:performance",
-      "diff:hot-path"
-    ],
-    stages: ["build", "review"],
-    body: readSkill("performance-optimization.md")
-  },
-  {
-    id: "frontend-ui-engineering",
-    fileName: "frontend-ui-engineering.md",
-    description: "v8.33 adaptation of addy osmani's `frontend-ui-engineering` skill. Five rule sets for UI work: component architecture (composition over configuration, controlled vs uncontrolled — one mode per component), design-system adherence (use the system, don't invent tokens), AI-aesthetic anti-pattern table (purple gradient hero / rounded-2xl everywhere / oversized padding / center-everything / drop-shadow-on-everything / etc.), WCAG 2.1 AA accessibility baseline (focus indicators / semantic HTML / ARIA-only-when-needed / contrast / motion), responsive design (mobile-first, fluid before fixed, touch targets ≥ 44×44px). Stage-windowed on `[\"build\", \"review\"]`. Triggers on `touch-surface:ui` OR `.tsx` / `.jsx` / `.vue` / `.svelte` / `.html` / `.css` file pattern.",
-    triggers: [
-      "stage:build",
-      "specialist:slice-builder",
-      "specialist:reviewer",
-      "touch-surface:ui",
-      "diff:tsx|jsx|vue|svelte|html|css",
-      "finding:readability:ui",
-      "finding:accessibility"
-    ],
-    stages: ["build", "review"],
-    body: readSkill("frontend-ui-engineering.md")
-  },
-  {
-    id: "ci-cd-and-automation",
-    fileName: "ci-cd-and-automation.md",
-    description: "v8.33 adaptation of addy osmani's `ci-cd-and-automation` skill. The 8-stage quality-gate pipeline (setup → lint → typecheck → test → coverage → security-audit → bundle-check → optional E2E), GitHub Actions baseline template (Node / TypeScript reference; adapt for the stack), three optimisation patterns (caching / parallelism / path filters), and branch-protection essentials. Stage-windowed on `[\"ship\"]`. Triggers on `.github/workflows/` file pattern OR CI / CD / pipeline AC.",
-    triggers: [
-      "stage:ship",
-      "diff:.github/workflows",
-      "diff:.gitlab-ci|azure-pipelines|Jenkinsfile",
-      "ac:ci",
-      "ac:cd",
-      "task:fix-ci",
-      "task:speed-up-build"
-    ],
-    stages: ["ship"],
-    body: readSkill("ci-cd-and-automation.md")
   }
 ];
 

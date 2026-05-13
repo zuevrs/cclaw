@@ -20,8 +20,8 @@ Every new flow opens with a **triage gate**. The orchestrator analyses the user'
 
 - **Active flow detected** (`flow-state.json > currentSlug != null`). The saved triage is read as ground truth; `flow-resume.md` runs instead and the gate does NOT re-prompt.
 - **`/cc-cancel`** (shelves the active flow) and **`/cc-idea`** (one-shot idea capture). Neither opens a flow; the gate has no surface.
-- **User passed `--triage=<class>`** on the `/cc` invocation. The override is the audit-trailed skip; record `userOverrode: true` and proceed.
-- **User passed `--no-triage`.** Documented escape hatch (`complexity: small-medium`, `acMode: soft`, `userOverrode: true`, rationale "user disabled triage"). Do not re-render the form.
+- **User passed `--triage=<class>`** on the `/cc` invocation. The override is the audit-trailed skip; append a v8.44 audit-log entry with `userOverrode: true` to `.cclaw/state/triage-audit.jsonl` and proceed.
+- **User passed `--no-triage`.** Documented escape hatch (`complexity: small-medium`, `acMode: soft`, rationale "user disabled triage"; append audit-log entry with `userOverrode: true`). Do not re-render the form.
 - **Resume from a pre-v8.21 flow with populated `triage` already on disk.** The orchestrator reads the saved triage; the gate is not re-opened mid-flow.
 
 ## Zero-question fast path (trivial / high-confidence)
@@ -29,12 +29,12 @@ Every new flow opens with a **triage gate**. The orchestrator analyses the user'
 When the heuristic in §"Heuristics — how to pick" classifies the request as `trivial` **with confidence `high`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, **do not ask anything**. Instead:
 
 1. Print one short sentence in the user's language naming what is happening: complexity (`trivial`), AC mode (`inline`), the touched file(s), and a one-clause affordance: "say /cc-cancel to undo and re-triage".
-2. Patch `flow-state.json > triage` with `complexity: "trivial", acMode: "inline", path: ["build"], runMode: null, userOverrode: false, autoExecuted: true`. `runMode` is `null` because there are no stages to chain on the inline path.
+2. Patch `flow-state.json > triage` with `complexity: "trivial", acMode: "inline", path: ["build"], runMode: null`. `runMode` is `null` because there are no stages to chain on the inline path. Append a v8.44 audit-log entry to `.cclaw/state/triage-audit.jsonl` with `autoExecuted: true` (the fast-path bit lives in the audit log, not on the triage object; see `src/triage-audit.ts > appendTriageAudit`).
 3. Proceed straight to the inline edit + commit dispatch (Hop 3 — *Dispatch*; build stage). Pre-flight is skipped on inline by design.
 
 If confidence is `medium` or `low`, **fall through to the structured ask** even when the class is `trivial` — uncertainty wins.
 
-The auto-execute path exists because >80% of "trivial" requests are mechanical renames, comment fixes, and typo patches; surfacing a two-question gate for those is friction without value. The audit trail is preserved by the one-sentence announcement plus `flow-state.json > triage.autoExecuted: true`, which downstream tooling can grep for.
+The auto-execute path exists because >80% of "trivial" requests are mechanical renames, comment fixes, and typo patches; surfacing a two-question gate for those is friction without value. The audit trail is preserved by the one-sentence announcement plus the `autoExecuted: true` line in `.cclaw/state/triage-audit.jsonl`, which downstream tooling can grep for.
 
 ## Combined-form ask (one structured ask, two questions inside)
 
@@ -130,14 +130,12 @@ After the combined form returns (or after the zero-question fast path executes),
     "path": ["plan", "build", "review", "ship"],
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
-    "userOverrode": false,
-    "runMode": "step",
-    "autoExecuted": false
+    "runMode": "step"
   }
 }
 ```
 
-`userOverrode` is `true` only when the user picked option (2), (3), or a (4) custom that disagrees with the recommendation. `runMode` is `step` by default on non-inline paths; `auto` when the user explicitly opted into autopilot in Question 2; `null` on inline / trivial paths (no stages to chain). `autoExecuted` is `true` only on the zero-question fast path (trivial / high-confidence).
+`runMode` is `step` by default on non-inline paths; `auto` when the user explicitly opted into autopilot in Question 2; `null` on inline / trivial paths (no stages to chain). The `userOverrode` and `autoExecuted` bits (write-only telemetry) live in the v8.44 audit log at `.cclaw/state/triage-audit.jsonl`, NOT on the triage object — append the audit-log entry immediately after persisting the triage write. Pre-v8.44 state files retain these fields on `TriageDecision`; readers tolerate their presence, but new writes target the audit log.
 
 The triage block is **immutable for the lifetime of the flow** — with one v8.34 exception. `complexity` / `acMode` / `path` cannot change mid-flight; if the user wants to escalate (e.g. discovers it is bigger than thought), `/cc-cancel` and start a fresh flow with new triage. `runMode` is the **single mutable field**: the user passes `/cc --mode=auto` or `/cc --mode=step` to flip mid-flight (`flow-resume.md > Mid-flight runMode toggle` carries the full mechanics). The inline path rejects the toggle (no stages to chain).
 
@@ -184,9 +182,9 @@ Ship-gate's `no-vcs` finalization option remains available regardless of the dow
 
 The gate is **never skipped silently**. Three explicit forms of skip:
 
-1. User passed `--triage=trivial` (or `--triage=small-medium` / `--triage=large-risky`) on the `/cc` invocation — record `userOverrode: true`, skip the question, log the choice in the rationale: "user passed --triage=trivial".
+1. User passed `--triage=trivial` (or `--triage=small-medium` / `--triage=large-risky`) on the `/cc` invocation — append a v8.44 audit-log entry with `userOverrode: true`, skip the question, log the choice in the rationale: "user passed --triage=trivial".
 2. Active flow detected with a recorded triage — `flow-resume.md` resumes that triage; you do not re-prompt.
-3. User typed `/cc <task> --no-triage` — record `complexity: small-medium, acMode: soft, path: plan→build→review→ship, userOverrode: true`, rationale "user disabled triage". This is the documented escape hatch; surfacing it as a footnote on the help text is fine, but it should not be the default.
+3. User typed `/cc <task> --no-triage` — record `complexity: small-medium, acMode: soft, path: plan→build→review→ship`, rationale "user disabled triage"; append an audit-log entry with `userOverrode: true`. This is the documented escape hatch; surfacing it as a footnote on the help text is fine, but it should not be the default.
 
 ## Worked examples
 
@@ -200,7 +198,7 @@ The orchestrator **does not ask**. It prints one sentence and proceeds straight 
 Triage: trivial / inline — mechanical rename across ~12 call sites in 5 files; running inline now. Say /cc-cancel to undo and re-triage.
 ```
 
-Then it dispatches the edit + commit and stops. `flow-state.json > triage.autoExecuted: true` records the fast-path use.
+Then it dispatches the edit + commit and stops. A v8.44 audit-log line in `.cclaw/state/triage-audit.jsonl` with `autoExecuted: true` records the fast-path use (the bit no longer lives on `triage` itself).
 
 ### Trivial — medium confidence (combined form, single ask)
 
@@ -288,7 +286,7 @@ The triage gate is the easiest place to skip "because the task is obvious". When
 - **Splitting the combined form into two separate structured-ask calls when the harness supports multi-question.** v8.13's double round-trip is now a regression; pack both questions into one form on every supporting harness (Cursor `AskQuestion`, Claude Code `AskUserQuestion`, OpenCode "ask", Codex `prompt`).
 - Forgetting that the run-mode answer is **ignored on the inline path**. `triage.runMode` is `null` on inline; do not write `"step"` or `"auto"` there.
 - Forgetting to write `triage` into `flow-state.json`. The resume detector reads it; an absent triage breaks resume and the reviewer's posture-aware git-log inspection (which needs `triage.acMode` to know whether to run the strict-mode chain check at all).
-- Re-running the gate on resume. Resume reads the saved triage (path + runMode + autoExecuted) and continues from `currentStage`; it never re-prompts.
+- Re-running the gate on resume. Resume reads the saved triage (path + runMode) and continues from `currentStage`; it never re-prompts. (Pre-v8.44 state files may still carry `autoExecuted` / `userOverrode` on the triage object; readers tolerate them but resume does not re-stamp them.)
 
 ## Next step
 

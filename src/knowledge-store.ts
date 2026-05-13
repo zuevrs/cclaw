@@ -12,7 +12,7 @@ import { exists, writeFileSafe } from "./fs-utils.js";
  *   - `bug-only` ship (reviewer's `block` cleared by fix-only edits) → `bug`.
  *   - `hasArchitectDecision: true` AND design Phase 4 D-N inlines a decision → `decision`.
  *   - reviewer's `perf` axis finding cleared → `performance`.
- *   - `code-simplification` skill fired during REFACTOR AND no AC text changed → `refactor`.
+ *   - simplification rubric fired during REFACTOR AND no AC text changed → `refactor`.
  *   - everything else → `knowledge` (the prior implicit default).
  *
  * `findNearKnowledge` accepts an optional `problemType` filter; missing

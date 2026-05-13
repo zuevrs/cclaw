@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { ANTIPATTERNS } from "../../src/content/antipatterns.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import { DECISION_PROTOCOL } from "../../src/content/decision-protocol.js";
-import { EXAMPLES } from "../../src/content/examples.js";
 import { META_SKILL } from "../../src/content/meta-skill.js";
 import { RECOVERY_PLAYBOOKS } from "../../src/content/recovery.js";
 import { REFERENCE_PATTERNS } from "../../src/content/reference-patterns.js";
@@ -152,10 +151,6 @@ describe("v8.12 cleanup", () => {
       expect(RESEARCH_PLAYBOOKS).toEqual([]);
     });
 
-    it("worked examples empty by default", () => {
-      expect(EXAMPLES).toEqual([]);
-    });
-
     it("decision protocol no longer cites deleted worked examples", () => {
       expect(DECISION_PROTOCOL).not.toContain("decision-permission-cache");
       expect(DECISION_PROTOCOL).not.toContain("Worked examples");
@@ -202,9 +197,10 @@ describe("v8.12 cleanup", () => {
       expect(START_COMMAND_BODY).toMatch(/legacy-artifacts: true/u);
     });
 
-    it("meta-skill explains that recovery / research / examples are empty by default", () => {
+    it("meta-skill explains that recovery / research are empty by default (v8.44 removed examples entirely)", () => {
       expect(META_SKILL).toMatch(/empty.{0,40}v8\.12/u);
       expect(META_SKILL).toMatch(/legacy-artifacts/u);
+      expect(META_SKILL).toMatch(/v8\.44/u);
     });
   });
 });

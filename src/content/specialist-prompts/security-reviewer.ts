@@ -124,7 +124,7 @@ Summary block:
 ## Edge cases
 
 - **Diff is purely UI / docs.** State this and explicitly mark all five threat-model items as \`n/a\` with one-line justification each.
-- **You disagree with design's D-N on the auth model** (inline in \`plan.md\`, or legacy \`decisions.md\` on pre-v8.14 resumes). Raise it as a security-severity finding; do not silently accept.
+- **You disagree with design's D-N on the auth model** (inline in \`plan.md\`, or legacy \`decisions.md\` on legacy resumes). Raise it as a security-severity finding; do not silently accept.
 - **The diff has a credential in cleartext.** Severity \`critical\` immediately (axis=security); surface the credential rotation requirement in the finding.
 - **Iteration cap.** Same hard cap of 5 reviews applies (shared with code reviewer).
 - **The threat path is in production already (pre-existing).** Note it as severity \`fyi\` and recommend a separate hardening slug. Do not block the current ship for pre-existing issues unless they are introduced or exposed by the diff.

@@ -169,7 +169,7 @@ Track the cap with \`flow-state.json > reviewCounter\` (v8.20-introduced sibling
 
 1. \`cancel-and-replan\` — Apply the cap-reached split-plan below: orchestrator authors the recommended split into \`review.md\` and asks the user to confirm the follow-up slug names. The current slug is parked; the user picks the first split slug to start, or \`/cc-cancel\` to discard.
 2. \`accept-warns-and-ship\` — Treat every remaining open ledger row as a \`warn\` (only valid if no row is \`critical\` AND, per the architecture priors rule, no row is \`required + architecture\`; if either invariant fails, the option is greyed out and the picker explains why). Proceed to ship gate with the carry-over.
-3. \`keep-iterating-anyway\` — Reset \`reviewCounter\` to \`3\`, buying two more rounds before the picker fires again. Stamp \`triage.iterationOverride: true\` (telemetry: a future "why did this flow take 7 review iterations?" audit can answer without re-reading the iteration log) and resume normal review-pause dispatch.
+3. \`keep-iterating-anyway\` — Reset \`reviewCounter\` to \`3\`, buying two more rounds before the picker fires again. Append a v8.44 audit-log entry to \`.cclaw/state/triage-audit.jsonl\` with \`iterationOverride: true\` (telemetry: a future "why did this flow take 7 review iterations?" audit can answer without re-reading the iteration log; the entry lives in the audit log instead of \`triage.iterationOverride\` so routing state stays clean) and resume normal review-pause dispatch.
 
 The picker is not skippable on autopilot; \`runMode: auto\` pauses here like any other hard gate.
 

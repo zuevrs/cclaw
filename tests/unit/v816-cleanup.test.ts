@@ -129,11 +129,11 @@ const PROVENANCE_SNIPPETS: Record<(typeof MERGED_SKILL_IDS)[number], string[]> =
 
 describe("v8.16 thematic skills merge", () => {
   describe("Skill set shape after merge", () => {
-    it("ships 17 or more auto-trigger skills (down from 24 in v8.15; v8.27 added code-simplification → 18)", () => {
+    it("ships 17 or more auto-trigger skills (down from 24 in v8.15; v8.27-v8.33 added five frontier-aesthetic imports that v8.44 retired — back to 17)", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
-    it("skill count stays in the [15, 24] range — v8.16 brief was [15, 18]; v8.27 lifted the ceiling for the code-simplification import; v8.32 (context-engineering + performance-optimization) and v8.33 (frontend-ui-engineering + ci-cd-and-automation) extended the ceiling further", () => {
+    it("skill count stays in the [15, 24] range — v8.16 brief was [15, 18]; v8.27-v8.33 added five frontier-aesthetic skills (code-simplification, context-engineering, performance-optimization, frontend-ui-engineering, ci-cd-and-automation); v8.44 retired all five (zombie — never referenced by a specialist prompt), but the band is left wide so future additive skills don't need a count edit", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
       expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(24);
     });
@@ -307,7 +307,7 @@ describe("v8.16 thematic skills merge", () => {
   });
 
   describe("Install layer writes exactly the registered count", () => {
-    it("AUTO_TRIGGER_SKILLS.length stays ≥17, the basis for the install loop (v8.27 lifted floor from =17 to ≥17 for the code-simplification addition)", () => {
+    it("AUTO_TRIGGER_SKILLS.length stays ≥17, the basis for the install loop (v8.27 lifted floor from =17 to ≥17 for additive skill imports; v8.44 retired the five zombies but the floor stays ≥17 because the v8.16 merge core never shrank)", () => {
       // install.ts iterates AUTO_TRIGGER_SKILLS and writes one .md per entry
       // plus cclaw-meta.md; the resulting on-disk count is N+1.
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);

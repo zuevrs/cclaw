@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { FLOW_STATE_REL_PATH, RUNTIME_ROOT } from "./constants.js";
+import { FLOW_STATE_REL_PATH, RUNTIME_ROOT, TRIAGE_AUDIT_REL_PATH } from "./constants.js";
 import {
   assertFlowStateV82,
   createInitialFlowState,
@@ -18,6 +18,14 @@ export async function ensureRunSystem(projectRoot: string): Promise<void> {
   const statePath = flowStatePath(projectRoot);
   if (!(await exists(statePath))) {
     await writeFlowState(projectRoot, createInitialFlowState());
+  }
+  // v8.44 — touch the write-only triage audit log so the file exists
+  // on a fresh install (the orchestrator's `fs.appendFile` call would
+  // create it lazily, but the smoke test asserts the file is present
+  // after init for the v8.44 audit-log surface).
+  const auditPath = path.join(projectRoot, TRIAGE_AUDIT_REL_PATH);
+  if (!(await exists(auditPath))) {
+    await writeFileSafe(auditPath, "");
   }
 }
 

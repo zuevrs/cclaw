@@ -25,10 +25,12 @@ describe("install", () => {
     for (const stale of ["plans", "builds", "reviews", "ships", "decisions", "learnings"]) {
       await expect(fs.access(path.join(project, ".cclaw", "flows", stale))).rejects.toBeTruthy();
     }
-    for (const sub of ["agents", "skills", "templates", "runbooks", "patterns", "research", "recovery", "examples"]) {
+    for (const sub of ["agents", "skills", "templates", "runbooks", "patterns", "research", "recovery"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "lib", sub));
       expect(stat.isDirectory()).toBe(true);
     }
+    // v8.44 retired `lib/examples/` — directory should NOT exist after init.
+    await expect(fs.access(path.join(project, ".cclaw", "lib", "examples"))).rejects.toBeTruthy();
   });
 
   it("v8.40: does NOT write session-start or commit-helper hooks (full hook retirement)", async () => {

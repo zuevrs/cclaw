@@ -270,8 +270,11 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   }
   if (typeof triage.rationale !== "string") throw new Error("triage.rationale must be a string");
   if (typeof triage.decidedAt !== "string") throw new Error("triage.decidedAt must be a string");
-  if (typeof triage.userOverrode !== "boolean") {
-    throw new Error("triage.userOverrode must be a boolean");
+  if (
+    triage.userOverrode !== undefined &&
+    typeof triage.userOverrode !== "boolean"
+  ) {
+    throw new Error("triage.userOverrode must be a boolean or absent");
   }
   if (triage.runMode !== undefined && triage.runMode !== null && !isRunMode(triage.runMode)) {
     throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
@@ -351,23 +354,6 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
  */
 export function assumptionsOf(triage: TriageDecision | null | undefined): readonly string[] {
   const value = triage?.assumptions;
-  if (value === null || value === undefined) return [];
-  return value;
-}
-
-/**
- * Read a triage decision's interpretation forks (chosen reading sentence(s)
- * from the ambiguity-fork sub-step at Hop 2.5).
- *
- * Returns:
- * - `[]` when no fork sub-step ran (unambiguous prompt, trivial path, or
- *   legacy state). Callers treat this as "no surfaced ambiguity".
- * - the recorded array (typically a single sentence — the user's chosen
- *   interpretation; multi-element only when the user explicitly picked a
- *   compound reading).
- */
-export function interpretationForksOf(triage: TriageDecision | null | undefined): readonly string[] {
-  const value = triage?.interpretationForks;
   if (value === null || value === undefined) return [];
   return value;
 }

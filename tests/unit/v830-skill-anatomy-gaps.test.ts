@@ -32,11 +32,12 @@ import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
  *    past discipline:
  *
  *    `tdd-and-verification`, `review-discipline`, `commit-hygiene`,
- *    `ac-discipline`, `code-simplification`, `api-evolution`,
- *    `debug-and-browser`, `triage-gate`.
+ *    `ac-discipline`, `api-evolution`, `debug-and-browser`, `triage-gate`.
  *
- *    `tdd-and-verification` and `code-simplification` shipped the
- *    table in v8.13 / v8.27 respectively. v8.30 ships the other six.
+ *    `tdd-and-verification` shipped the table in v8.13; v8.30 ships
+ *    the other six. (v8.44 retired `code-simplification.md` along
+ *    with four other zombie additive skills — its table is no longer
+ *    in the floor set.)
  *
  * Both gaps are **additive-only**. Skill bodies are preserved verbatim
  * except for the new H2 sections appended in their canonical position.
@@ -62,7 +63,6 @@ const TOP_8_RATIONALIZATION_SKILLS = [
   "review-discipline.md",
   "commit-hygiene.md",
   "ac-discipline.md",
-  "code-simplification.md",
   "api-evolution.md",
   "debug-and-browser.md",
   "triage-gate.md",

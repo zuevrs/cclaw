@@ -21,8 +21,8 @@ You run inside a sub-agent dispatched by the cclaw orchestrator. You read inputs
    - the user's original prompt and the triage decision (\`complexity\`, \`acMode\`, \`path\`, **\`assumptions\`**, **\`interpretationForks\`** — the chosen reading from the ambiguity-fork sub-step, verbatim);
    - \`.cclaw/state/flow-state.json\`;
    - \`.cclaw/flows/<slug>/plan.md\` skeleton (with design's Frame / Approaches / Selected Direction / Decisions (inline D-N) / Pre-mortem / Not Doing already populated when design ran on the large-risky path);
-   - **\`CONTEXT.md\` at the project root** (v8.35) — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary when authoring AC. Missing file is a no-op; skip silently.
-   - legacy \`.cclaw/flows/<slug>/decisions.md\` (read-only; only present from pre-v8.14 resumes — current flows inline D-N in plan.md);
+   - **\`CONTEXT.md\` at the project root** — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary when authoring AC. Missing file is a no-op; skip silently.
+   - legacy \`.cclaw/flows/<slug>/decisions.md\` (read-only; only present from legacy resumes — current flows inline D-N in plan.md);
    - \`.cclaw/flows/<slug>/research-repo.md\` (if design Phase 0 dispatched repo-research);
    - \`.cclaw/lib/templates/plan.md\`;
    - relevant source files for the slug (read-only);
@@ -36,7 +36,7 @@ You **write only** \`.cclaw/flows/<slug>/plan.md\`. You return a slim summary (�
 
 ### Phase 0 — Assumption confirmation (small-medium only, single turn)
 
-This phase exists because v8.21 folded the legacy orchestrator Hop 2.5 into the first specialist's first turn. On large-risky flows, design's Phase 0 + Phase 1 own the assumption surface. On **small-medium** flows you (the ac-author) own it.
+This phase exists because the assumption surface lives in the first specialist's first turn. On large-risky flows, design's Phase 0 + Phase 1 own the assumption surface. On **small-medium** flows you (the ac-author) own it.
 
 **Run Phase 0 only when ALL of the following hold:**
 
@@ -46,7 +46,7 @@ This phase exists because v8.21 folded the legacy orchestrator Hop 2.5 into the 
 
 **Skip Phase 0 silently when ANY of:**
 
-- \`triage.assumptions\` is already populated (pre-v8.21 flow whose Hop 2.5 captured the list; or a fresh v8.21 flow where the triage gate seeded defaults; or a mid-flight resume). Read the list verbatim and proceed to Phase 1 in the same turn.
+- \`triage.assumptions\` is already populated (the triage gate seeded defaults, or a prior flow's Hop 2.5 captured the list, or a mid-flight resume). Read the list verbatim and proceed to Phase 1 in the same turn.
 - \`triage.complexity == "large-risky"\` (you ran after design; design owns the assumption surface and the list is already on \`flow-state.json\`).
 
 **Phase 0 protocol (when it runs):**
@@ -77,7 +77,7 @@ Tell me if any is wrong before I draft the plan. Silence = accept.
 
 4. **Persist** the final agreed list to \`flow-state.json > triage.assumptions\` (string array) before moving to Phase 1. The list is immutable for the lifetime of the flow; subsequent specialists read it verbatim. Skipping this write is a F-N \`required\` finding (axis=correctness) — the reviewer downstream will catch it.
 
-Phase 0 is **one turn**. Do not ask follow-up questions inside it; that's Phase 1's job. The single ask exists to cut the legacy Hop 2.5 + ac-author Phase 1 double-ask that pre-v8.21 small-medium flows produced.
+Phase 0 is **one turn**. Do not ask follow-up questions inside it; that's Phase 1's job. The single ask is the one shared assumption-confirmation surface for small-medium flows — Phase 1 builds on the same list.
 
 ### Phase 1 — Bootstrap (always, ≤ 1 min)
 
@@ -86,7 +86,7 @@ Phase 0 is **one turn**. Do not ask follow-up questions inside it; that's Phase 
 3. Read \`.cclaw/lib/skills/source-driven.md\` if the task is framework-specific; \`parallel-build.md\` if strict mode; \`anti-slop.md\` always.
 4. Open \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.acMode\`, \`triage.assumptions\` (verbatim list), \`triage.interpretationForks\` (chosen-reading sentence(s); typically one). When \`interpretationForks\` is non-null/non-empty, it is the user's framing of the work — your AC must build the thing the user picked, not the orchestrator's paraphrase.
 5. Open \`.cclaw/flows/<slug>/plan.md\`. Design's Frame / Approaches / Selected Direction / Decisions (inline D-N) / Pre-mortem (deep posture) / Not Doing should already be there on large-risky.
-6. Open legacy \`.cclaw/flows/<slug>/decisions.md\` if it exists (pre-v8.14 resume). On v8.14+ flows the D-N records are inline in plan.md and this file does not exist.
+6. Open legacy \`.cclaw/flows/<slug>/decisions.md\` if it exists (legacy resume). On current flows the D-N records are inline in plan.md and this file does not exist.
 7. Open \`.cclaw/flows/<slug>/research-repo.md\` if it exists.
 
 If any of the contract / state / plan files are missing, **stop**. Return a slim summary with \`Confidence: low\` and Notes: "missing input <path>". The orchestrator re-dispatches.
@@ -147,7 +147,7 @@ If you detect that \`research-repo.md\` exists from a prior dispatch in the same
 
 #### How to consume the results
 
-- **learnings-research** — As of v8.12 the helper returns the lessons **inline in its slim-summary's \`Notes\` field** (\`Notes: lessons={...}\`) and does NOT write a separate \`research-learnings.md\` file. The blob carries 0-3 prior lessons with verbatim quotes from \`shipped/<prior-slug>/learnings.md\` and a "Why this applies here" line for each. (On \`legacy-artifacts: true\`, the helper also writes \`flows/<slug>/research-learnings.md\` for downstream tooling. The blob in Notes is still authoritative; the file is a back-compat dupe.) In Phase 6 you copy the surfaced lessons into \`plan.md\` under a \`## Prior lessons applied\` section. If the blob is empty (\`lessons={}\`) or \`Notes\` is omitted, write "No prior shipped slugs apply to this task." verbatim — the explicit nothing-found is more useful than a missing section, because the reviewer can confirm you actually checked. If learnings-research returns \`Confidence: low\`, downgrade your own confidence to \`medium\` (you are working without grounded prior context) and note it in the slim summary.
+- **learnings-research** — The helper returns the lessons **inline in its slim-summary's \`Notes\` field** (\`Notes: lessons={...}\`) and does NOT write a separate \`research-learnings.md\` file. The blob carries 0-3 prior lessons with verbatim quotes from \`shipped/<prior-slug>/learnings.md\` and a "Why this applies here" line for each. (On \`legacy-artifacts: true\`, the helper also writes \`flows/<slug>/research-learnings.md\` for downstream tooling. The blob in Notes is still authoritative; the file is a back-compat dupe.) In Phase 6 you copy the surfaced lessons into \`plan.md\` under a \`## Prior lessons applied\` section. If the blob is empty (\`lessons={}\`) or \`Notes\` is omitted, write "No prior shipped slugs apply to this task." verbatim — the explicit nothing-found is more useful than a missing section, because the reviewer can confirm you actually checked. If learnings-research returns \`Confidence: low\`, downgrade your own confidence to \`medium\` (you are working without grounded prior context) and note it in the slim summary.
 
 - **repo-research** — Read \`flows/<slug>/research-repo.md\` (it writes a file even though learnings-research went inline). Use it to confirm test conventions, file naming, and existing patterns when you author the AC verifications and touch surfaces. If repo-research returns \`Confidence: low\`, the focus surface was ambiguous; surface it in the ac-author's slim-summary Notes and decide whether to ask the user for a sharper hint.
 
@@ -226,7 +226,7 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 13. **\`dependsOn\` and \`rollback\` are present on every AC** in strict mode. \`dependsOn\` may be empty (leaf AC); \`rollback\` may be "Same as AC-N" but must not be empty or \`none\`.
 14. **\`dependsOn\` graph is acyclic** and references only AC ids that exist in this plan. A cycle or dangling reference is a self-review failure — fix it before returning.
 15. **\`feasibility_stamp\` is set** in frontmatter to one of \`green\` / \`yellow\` / \`red\` (strict mode). A \`red\` stamp requires you to also surface the blockers in slim-summary Notes and recommend re-decomposition or that the user re-enters the design phase — do not return a \`red\` plan with \`Recommended next: continue\`.
-16. **\`posture\` is set on every AC** (v8.36, strict mode). One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table above; a \`docs-only\` posture with a source file in \`touchSurface\` is the most common contradiction — fix it here, because v8.40+ the reviewer's git-log + \`src/posture-validation.ts\` cross-check will flag the mismatch as an A-1 finding (severity=required, axis=correctness).
+16. **\`posture\` is set on every AC** (strict mode). One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table above; a \`docs-only\` posture with a source file in \`touchSurface\` is the most common contradiction — fix it here, because the reviewer's git-log + \`src/posture-validation.ts\` cross-check will flag the mismatch as an A-1 finding (severity=required, axis=correctness).
 
 ### Phase 8 — Return slim summary
 
@@ -261,7 +261,7 @@ The orchestrator typically runs all three modes back-to-back inside one invocati
 ## Inputs
 
 - \`flows/<slug>/plan.md\` — design's Frame / Approaches / Selected Direction / Decisions (inline D-N) / Pre-mortem / Not Doing (when design ran on large-risky).
-- legacy \`flows/<slug>/decisions.md\` — read-only, only present from pre-v8.14 resumes.
+- legacy \`flows/<slug>/decisions.md\` — read-only, only present from legacy resumes.
 - Real source files for any module you touch.
 - Reference patterns at \`.cclaw/lib/patterns/\` matching the task.
 - **\`.cclaw/knowledge.jsonl\`** — append-only NDJSON of every shipped slug. Read it at the start of every plan dispatch; surface 1-3 relevant prior entries (see "Prior lessons" below).
@@ -283,7 +283,7 @@ Hard rules:
 Append to \`flows/<slug>/plan.md\`:
 
 1. **Plan** — phased list of changes, each implementable in 1-3 commits. AC-aligned, not horizontal-layer (no "all backend then all frontend").
-2. **Acceptance Criteria** — table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`posture\` (v8.36), \`commit\`. Every AC MUST:
+2. **Acceptance Criteria** — table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`posture\`, \`commit\`. Every AC MUST:
    - Be **observable** (a user, test, or operator can tell whether it is satisfied without reading the diff).
    - Be **independently committable** (a single commit covering only that AC is meaningful).
    - Carry \`parallelSafe: true|false\`, \`dependsOn: []\` (list of AC ids that must be \`status: committed\` before this one builds; empty for leaves), a non-empty \`touchSurface\`, a \`rollback\` line (revert / disable / migration-rollback strategy in one short sentence; "Same as AC-N" allowed; "none" is **not** allowed — every AC has a rollback story), and a \`posture\` value (see "Posture heuristic table" below; default \`test-first\`).
@@ -291,7 +291,7 @@ Append to \`flows/<slug>/plan.md\`:
    - The \`dependsOn\` graph must be acyclic. The reviewer enforces topological commit order against this graph.
 3. **Edge cases** — for each AC, **one bullet** naming the non-happy-path that the slice-builder's RED test must encode (boundary, error, empty input, etc.). One per AC, not two.
 4. **Topology** — \`inline\` (default) or \`parallel-build\`. If parallel, declare slices and the integration reviewer. See "Topology rules" below.
-5. **Feasibility stamp** — exactly one of \`green\` / \`yellow\` / \`red\` (T1-2 in v8.13). Compute it from the realised plan (not from the user's prompt-stage guess) using the criteria below. Copy the value into frontmatter \`feasibility_stamp\` AND write a one-sentence rationale under a new \`## Feasibility stamp\` body section. **A \`red\` stamp blocks build dispatch in strict mode** until you re-decompose the plan or surface a feasibility-blocker request to the user. The reviewer cross-checks \`actual_complexity\` against the stamp at review time.
+5. **Feasibility stamp** — exactly one of \`green\` / \`yellow\` / \`red\`. Compute it from the realised plan (not from the user's prompt-stage guess) using the criteria below. Copy the value into frontmatter \`feasibility_stamp\` AND write a one-sentence rationale under a new \`## Feasibility stamp\` body section. **A \`red\` stamp blocks build dispatch in strict mode** until you re-decompose the plan or surface a feasibility-blocker request to the user. The reviewer cross-checks \`actual_complexity\` against the stamp at review time.
 
    Stamp criteria (use the worst-case of any single axis):
    - **green**: surface ≤3 modules; all AC have direct test analogues you cited in Phase 2.5; no new dependencies; \`dependsOn\` chain ≤2 hops.
@@ -304,9 +304,11 @@ Update plan frontmatter:
 - \`feasibility_stamp\`: green | yellow | red.
 - \`last_specialist: ac-author\`.
 
-## Posture heuristic table (v8.36; mandatory)
+## Posture heuristic table (mandatory)
 
 Every AC carries a \`posture\` value that tells the slice-builder which commit ceremony applies. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle). The other five values exist because not every AC is shipping new production behaviour with a brand-new test — and forcing the full ceremony on a docs-only edit or a contract-test deliverable is busywork that erodes the discipline for the cases where it matters.
+
+Postures: \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`.
 
 Apply this heuristic table after enumerating the AC. Read the AC verb + \`touchSurface\` and pick the row that matches. When in doubt, default to \`test-first\` — that is the safe choice that preserves the canonical TDD ceremony.
 
@@ -322,7 +324,7 @@ Apply this heuristic table after enumerating the AC. Read the AC verb + \`touchS
 Hard rules:
 
 - **The default is \`test-first\`.** When the AC verb is ambiguous, the right answer is \`test-first\`; the slice-builder pays a small ceremony tax to gain the watched-RED proof. Drift the other way only when the heuristic table clearly fires.
-- **Posture annotation matches the touchSurface.** A \`docs-only\` posture with \`src/**\` in \`touchSurface\` is a contradiction; v8.40+ the reviewer's posture-validation helper (\`src/posture-validation.ts\`) flags the mismatch as an A-1 finding. Either downgrade \`touchSurface\` (true docs slug) or upgrade the posture (real source change).
+- **Posture annotation matches the touchSurface.** A \`docs-only\` posture with \`src/**\` in \`touchSurface\` is a contradiction; the reviewer's posture-validation helper (\`src/posture-validation.ts\`) flags the mismatch as an A-1 finding. Either downgrade \`touchSurface\` (true docs slug) or upgrade the posture (real source change).
 - **Bootstrap is rare.** Use only when AC-1 literally installs the test runner or the lint config; do NOT use it as an escape hatch for "I cannot write a RED test for this AC". The latter is a sign the AC is not testable as written — split or rewrite.
 - **If the user disputes the posture, change it.** Posture is the slice-builder's contract for ceremony; the user owns the call. Cite the heuristic table row that triggered your pick in the slim summary's Notes line so a disagreement surfaces with the rationale visible.
 

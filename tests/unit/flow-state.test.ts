@@ -6,7 +6,6 @@ import {
   assertFlowStateV82,
   assumptionsOf,
   createInitialFlowState,
-  interpretationForksOf,
   isAcMode,
   isFlowStage,
   isRoutingClass,
@@ -174,27 +173,6 @@ describe("flow-state", () => {
       "Node 20",
       "Tailwind only"
     ]);
-  });
-
-  it("interpretationForksOf returns [] for null / undefined / absent; otherwise the chosen reading(s)", () => {
-    expect(interpretationForksOf(null)).toEqual([]);
-    expect(interpretationForksOf(undefined)).toEqual([]);
-    const triage: TriageDecision = {
-      complexity: "small-medium",
-      acMode: "soft",
-      path: ["plan", "build", "review", "ship"],
-      rationale: "x",
-      decidedAt: "2026-05-07T00:00:00Z",
-      userOverrode: false
-    };
-    expect(interpretationForksOf(triage)).toEqual([]);
-    expect(interpretationForksOf({ ...triage, interpretationForks: null })).toEqual([]);
-    expect(
-      interpretationForksOf({
-        ...triage,
-        interpretationForks: ["Make search faster via response caching, not vector search."]
-      })
-    ).toEqual(["Make search faster via response caching, not vector search."]);
   });
 
   it("validates triage.assumptions is array-of-strings or null", () => {
