@@ -1,5 +1,37 @@
 # Changelog
 
+## 8.41.0 — Test cleanup: cut 1 redundant v8.38 tripwire file (9 tests, 97 LOC)
+
+### TL;DR
+
+Slim the test suite by retiring `tests/unit/v838-cleanup.test.ts`. That file was a v8.38-era tripwire around the surviving hook-build infrastructure (`esbuild` devDep, `build:hook-bundle` script, `src/runtime/run-hook.entry.ts`, `vitest.config.ts` coverage exclude) plus a handful of `src/install.ts` source-grep assertions. v8.40 retired the entire hook system, so the build infrastructure those tripwires guarded **does not exist anymore**, and the `install.ts` source-grep assertions are subsumed by the more comprehensive `tests/unit/v840-cleanup.test.ts`.
+
+No production code touched. No other tests touched. 1031 → 1022 passing tests, 70 → 69 test files, zero new skips, zero failures.
+
+### What changed
+
+- **DELETED**: `tests/unit/v838-cleanup.test.ts` (97 LOC, 9 tests across 2 describes).
+  - Tests 1–6 (AC-1: dead run-hook loader removed) guard the absence of `src/runtime/run-hook.entry.ts`, the `src/runtime/` directory, `build:hook-bundle` script in `package.json`, the `npm run build:hook-bundle` chain in the `build` script, the `esbuild` devDependency, and the `vitest.config.ts` coverage exclude. Each of these protected the now-deleted hook-runtime build pipeline. With the hook system fully retired in v8.40, a regression that re-introduced any of these would require deliberately rebuilding the entire hook subsystem — which would fail `tests/unit/v840-cleanup.test.ts` loudly first.
+  - Tests 7–9 (AC-3: stop-handoff retired) source-grep `scripts/build-plugin-manifests.mjs` and `src/install.ts` for `session.stop`, `stop-handoff`, `STOP_HANDOFF_HOOK_SPEC`, `writeHookFile`, and `NODE_HOOKS`. The `install.ts` checks duplicate `tests/unit/v840-cleanup.test.ts`'s install-pipeline assertions (which also cover `writeHookFile`, `NODE_HOOKS`, `node-hooks` imports, and the full `RETIRED_HOOK_FILES` / `RETIRED_HARNESS_HOOK_FILES` exports). The plugin-manifests check is one-line source-grep against a script that itself stopped wiring hooks two releases ago.
+
+### What's kept
+
+- Every other `vNN-cleanup.test.ts` (`v89` / `v811` / `v812` / `v813` / `v814` / `v816` / `v836` / `v839` / `v840`) was inspected and **kept**. They all pin live, still-shipping behavior: knowledge-store near-duplicate detection (v8.9), `/cc-cancel` semantics (v8.11), enum normalisation + antipattern renumber (v8.12), design-specialist + inline D-N (v8.14), the 17-skill consolidation (v8.16), the predicate + posture cross-surface alignment (v8.36), the v8.39 TUI dispatcher banner-ownership, and the v8.40 hook-removal contract. None of these is a pure-tripwire "X is gone" file with no replacement to verify; deleting them would lose ongoing-behavior coverage.
+- No tests in `git status`'s modified set were touched (per v8.41 slug contract): `tests/integration/install-content-layer.test.ts`, `tests/integration/install-deep.test.ts`, `tests/unit/h4-content-depth.test.ts`, `tests/unit/skills.test.ts`, `tests/unit/tdd-cycle.test.ts`, `tests/unit/v813-cleanup.test.ts`, `tests/unit/v816-cleanup.test.ts`, `tests/unit/v88-cleanup.test.ts`.
+
+### What we noticed but didn't touch
+
+- The Category 2 "duplicate-assertion across 4+ files" hotspots the user prompt anticipated do **not** appear in this codebase. `SPECIALISTS` array membership is asserted only in `tests/unit/v814-cleanup.test.ts`, `tests/unit/v828-rename-planner-to-ac-author.test.ts`, `tests/unit/specialist-prompts.test.ts`, and `tests/unit/types.test.ts` — and each angle is distinct (v8.14 retirement, v8.28 rename audit, prompt-shape contract, type-level shape). Consolidation would shrink one file by 3 LOC and lose three different perspectives. Not worth it.
+- `AUTO_TRIGGER_SKILLS.length` is asserted in v816 / v817 / v819 / v827, but the assertions are intentionally **different** floors and ceilings tied to each release's skill-count contract — they form a regression ladder, not a duplicate.
+- `commit-helper` (the retired hook name) appears in many tests, but every appearance is either inside a `not.toContain("commit-helper")` tripwire that pins v8.40's scrubbing or inside a migration test that asserts the legacy name is still recognized for upgrade-path coverage. None is removable.
+
+### Before / After
+
+- Tests before: 1031 passing across 70 files.
+- Tests after: 1022 passing across 69 files (-9 tests, -1 file).
+- Test files removed: 1.
+- Production LOC touched: 0.
+
 ## 8.40.0 — Full hooks removal (BREAKING — prompt-only TDD)
 
 ### TL;DR
