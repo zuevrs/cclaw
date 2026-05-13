@@ -1,5 +1,53 @@
 # Changelog
 
+## 8.43.0 — Contract drift fix + dead-script removal
+
+### TL;DR
+
+Two unrelated micro-cleanups bundled into one patch release:
+
+1. **Contract drift fix (G-1 / G-2 from the v8.42 critic dogfood)** — the v8.42 critic prompt and `critic-stage.md` runbook both referenced `triage.criticOverride` (block-ship picker's `accept-and-ship` audit trail) and `triageNotes` (docs-only-trivial skip rationale) without declaring either field on `TriageDecision`. v8.43 lifts both into the canonical type + strict validator + unit-test round-trip.
+2. **Dead-script removal** — `scripts/build-plugin-manifests.mjs` has been a no-op back-compat shim since v8.40 retired all harness hooks. It emitted an empty JSON listing for downstream tooling that does not actually exist. v8.43 deletes it outright (and removes its npm script wiring + `release:check` invocation + three GitHub Actions `upload-artifact` steps).
+
+### What changed (G-1: `TriageDecision.criticOverride`)
+
+- **`src/types.ts`** — added `criticOverride?: boolean` field to `TriageDecision`. Optional, strict `boolean` only (rejects `null`); absent = the common path, `true` = the user picked `[2] accept-and-ship` at the Hop 4.5 block-ship picker. Pure audit-trail boolean — downstream readers do not branch on it. Pre-v8.43 flows without the field validate unchanged.
+- **`src/flow-state.ts > assertTriageOrNull`** — added validator entry: `if (triage.criticOverride !== undefined && typeof triage.criticOverride !== "boolean") throw …`. Rejects `null` and non-boolean explicitly so the audit-trail semantics stay unambiguous.
+
+### What changed (G-2: `TriageDecision.notes`, renamed from prose `triageNotes`)
+
+- **`src/types.ts`** — added `notes?: string` field to `TriageDecision`. Optional, strict `string` only (rejects `null`); absent = nothing to record, otherwise a free-text per-decision note (e.g. the critic's docs-only-trivial skip rationale). Pre-v8.43 flows without the field validate unchanged.
+- **`src/flow-state.ts > assertTriageOrNull`** — added validator entry: `if (triage.notes !== undefined && typeof triage.notes !== "string") throw …`.
+- **`src/content/specialist-prompts/critic.ts:79`** — renamed prose reference `flow-state.json > triageNotes` → `flow-state.json > triage.notes` so the prompt cites the declared field path rather than an undeclared top-level alias.
+
+### What changed (dead-script removal)
+
+- **DELETED**: `scripts/build-plugin-manifests.mjs` (~28 LOC). The script wrote an empty `release-artifacts/plugin-manifests/index.json` listing as back-compat for downstream consumers; v8.40 retired the harness hook subsystem this listing was meant to feed, and no actual consumer of the listing exists in the cclaw repo or its publish targets. Two releases (v8.40, v8.41) is enough soak time; the script comes out.
+- **`package.json`** — removed the `build:plugin-manifests` npm script entirely; removed `node scripts/build-plugin-manifests.mjs &&` from the `release:check` script chain.
+- **`.github/workflows/ci.yml`** — removed the `Upload plugin manifests artifact` step (no longer points at a directory the build produces).
+- **`.github/workflows/release-package.yml`** — same removal.
+- **`.github/workflows/release-publish.yml`** — same removal.
+
+### Tests
+
+- **+6 new unit tests** in `tests/unit/flow-state.test.ts` under a new `v8.43 — triage.criticOverride and triage.notes (composition-drift fix)` describe block:
+  - round-trips `criticOverride: true` through the validator;
+  - accepts absent `criticOverride` (the common path);
+  - rejects wrong-type `criticOverride` including the explicit `null`-rejection invariant;
+  - round-trips a representative `notes` string (the critic's docs-only-trivial skip rationale verbatim);
+  - accepts absent `notes`;
+  - rejects wrong-type `notes` including the explicit `null`-rejection invariant.
+- Test count: 1082 → 1088 (+6 net; zero existing tests touched).
+
+### Release Notes Draft
+
+- Added `triage.criticOverride?: boolean` to `TriageDecision` (audit trail for the Hop 4.5 block-ship picker's `accept-and-ship` arm; v8.42 prose reference now has a declared home).
+- Added `triage.notes?: string` to `TriageDecision` (canonical field for free-text per-decision notes; renamed from the v8.42 prose-only `triageNotes` reference in `critic.ts`).
+- Removed `scripts/build-plugin-manifests.mjs` and the `build:plugin-manifests` npm script — no-op since v8.40 hook removal.
+- Removed `node scripts/build-plugin-manifests.mjs` from the `release:check` script chain.
+- Removed three `Upload plugin manifests artifact` steps from `.github/workflows/{ci,release-package,release-publish}.yml`.
+- Both new fields validate strictly — `null` is explicitly rejected to keep audit-trail semantics unambiguous (absent = not stamped; the typed value = stamped).
+
 ## 8.42.0 — Adversarial critic specialist (Hop 4.5)
 
 ### TL;DR

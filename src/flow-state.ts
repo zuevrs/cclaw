@@ -331,6 +331,12 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
       }
     }
   }
+  if (triage.criticOverride !== undefined && typeof triage.criticOverride !== "boolean") {
+    throw new Error("triage.criticOverride must be a boolean or absent");
+  }
+  if (triage.notes !== undefined && typeof triage.notes !== "string") {
+    throw new Error("triage.notes must be a string or absent");
+  }
 }
 
 /**

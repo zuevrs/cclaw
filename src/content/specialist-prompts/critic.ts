@@ -76,7 +76,7 @@ The critic skips entirely when **all** of the following hold:
 - the AC's \`text\` is ≤200 characters, AND
 - the diff touches ≤2 files.
 
-This is the **docs-only-trivial** exemption — a one-line typo fix doesn't warrant a critic pass. Return one slim-summary line: \`Notes: skipped — docs-only-trivial (1 AC, ≤200 char text, ≤2 files).\` The orchestrator records the skip in \`flow-state.json > triageNotes\` so a future query can answer "why didn't critic run on slug X?".
+This is the **docs-only-trivial** exemption — a one-line typo fix doesn't warrant a critic pass. Return one slim-summary line: \`Notes: skipped — docs-only-trivial (1 AC, ≤200 char text, ≤2 files).\` The orchestrator records the skip in \`flow-state.json > triage.notes\` so a future query can answer "why didn't critic run on slug X?".
 
 ## Investigation protocol — execute in order
 
