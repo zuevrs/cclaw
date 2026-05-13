@@ -13,7 +13,6 @@ import {
 import { CORE_AGENTS, renderAgentMarkdown } from "./content/core-agents.js";
 import { ARTIFACT_TEMPLATES, planTemplateForSlug, templateBody } from "./content/artifact-templates.js";
 import { AUTO_TRIGGER_SKILLS } from "./content/skills.js";
-import { EXAMPLES, EXAMPLES_INDEX } from "./content/examples.js";
 import { REFERENCE_PATTERNS, REFERENCE_PATTERNS_INDEX } from "./content/reference-patterns.js";
 import { STAGE_PLAYBOOKS, STAGE_PLAYBOOKS_INDEX } from "./content/stage-playbooks.js";
 import {
@@ -181,8 +180,7 @@ export async function ensureRuntimeRoot(projectRoot: string): Promise<void> {
     path.join(LIB_ROOT, "runbooks"),
     path.join(LIB_ROOT, "patterns"),
     path.join(LIB_ROOT, "research"),
-    path.join(LIB_ROOT, "recovery"),
-    path.join(LIB_ROOT, "examples")
+    path.join(LIB_ROOT, "recovery")
   ]) {
     await ensureDir(path.join(projectRoot, dir));
   }
@@ -358,14 +356,6 @@ async function writeRecoveryPlaybooks(projectRoot: string): Promise<void> {
   await writeFileSafe(path.join(dir, "index.md"), RECOVERY_INDEX);
 }
 
-async function writeExamples(projectRoot: string): Promise<void> {
-  const dir = path.join(projectRoot, LIB_ROOT, "examples");
-  for (const example of EXAMPLES) {
-    await writeFileSafe(path.join(dir, example.fileName), example.body);
-  }
-  await writeFileSafe(path.join(dir, "index.md"), EXAMPLES_INDEX);
-}
-
 async function writeAntipatterns(projectRoot: string): Promise<void> {
   await writeFileSafe(path.join(projectRoot, LIB_ROOT, "antipatterns.md"), ANTIPATTERNS);
 }
@@ -401,6 +391,31 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
   await ensureDir(path.join(projectRoot, layout.skillsDir));
   for (const skill of AUTO_TRIGGER_SKILLS) {
     await writeFileSafe(path.join(projectRoot, layout.skillsDir, skill.fileName), skill.body);
+  }
+}
+
+/**
+ * v8.44 — retired `.cclaw/lib/` subdirectories. The installer removes
+ * each on every `cclaw install` (and emits one progress event per
+ * removed dir) so existing v8.43 / earlier projects upgrade cleanly.
+ *
+ * v8.44 retired `examples` — the `.cclaw/lib/examples/` directory was
+ * written by install since v8.0 but no agent code path programmatically
+ * read from it. The v8.12 cleanup already emptied the EXAMPLES content
+ * module; v8.44 takes out the directory + writer + smoke assertion.
+ */
+const RETIRED_LIB_DIRS: readonly string[] = ["examples"];
+
+async function removeRetiredLibDirs(
+  projectRoot: string,
+  emit: (step: string, detail?: string) => void
+): Promise<void> {
+  for (const dirName of RETIRED_LIB_DIRS) {
+    const target = path.join(projectRoot, LIB_ROOT, dirName);
+    if (await exists(target)) {
+      await fs.rm(target, { recursive: true, force: true });
+      emit("Removed retired lib dir", `${LIB_ROOT}/${dirName}`);
+    }
   }
 }
 
@@ -572,10 +587,7 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     emit("Wrote recovery", `${RECOVERY_PLAYBOOKS.length} recovery playbooks → .cclaw/lib/recovery/`);
   }
 
-  await writeExamples(projectRoot);
-  if (EXAMPLES.length > 0) {
-    emit("Wrote examples", `${EXAMPLES.length} worked examples → .cclaw/lib/examples/`);
-  }
+  await removeRetiredLibDirs(projectRoot, emit);
 
   await writeAntipatterns(projectRoot);
   await writeDecisionProtocol(projectRoot);
@@ -610,7 +622,7 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     patterns: REFERENCE_PATTERNS.length,
     research: RESEARCH_PLAYBOOKS.length,
     recovery: RECOVERY_PLAYBOOKS.length,
-    examples: EXAMPLES.length,
+    examples: 0,
     hooks: 0,
     commands: 3
   };

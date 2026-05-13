@@ -1,5 +1,117 @@
 # Changelog
 
+## 8.44.0 — Mechanical cleanup (dead code, zombie skills, audit fields)
+
+### TL;DR
+
+Seven mechanical cleanups bundled into one minor release. No end-user behaviour change for the orchestrator's mainline routing, but installs running this version will get five orphaned skill files removed from `.cclaw/lib/skills/` and the `lib/examples/` directory removed entirely. The cleanups remove ~1.7k LOC of unused TypeScript + content and add a tripwire that catches future posture-table drift across specialists.
+
+1. **Delete 4 dead specialist-mode types** — `ReviewerMode`, `SecurityReviewerMode`, `SliceBuilderMode`, `CriticMode` were declared in `src/types.ts` but never imported anywhere. Removed along with their assertion entries in `tests/unit/types.test.ts`.
+2. **Delete unused exports** — `isPosture` function (`src/types.ts`) and `interpretationForksOf` helper (`src/flow-state.ts`) were exported but never imported outside their own test cases. The frontmatter parser does its own inline `POSTURES.includes()` check; the legacy interpretation-fork field has no production caller. Both gone + the tests that exercised them.
+3. **Strip ~50 inline version annotations from specialist prompts** — `design.ts`, `ac-author.ts`, `reviewer.ts`, `critic.ts`, `slice-builder.ts`, `security-reviewer.ts` had parenthetical historical annotations (`(v8.21 fold)`, `(v8.25 added)`, `(v8.36 mandatory)`, `(v8.40 prompt-only)`, etc.) — removed. Substantive rule statements that need a version anchor (e.g. "the 5-iteration cap", "pre-v8.14 resumes carry a legacy `decisions.md`") are kept. The prompts now describe current behaviour rather than narrating historical evolution, which is what the LLM consumer needs.
+4. **Delete `lib/examples/` directory + install path** — `lib/examples/` was written by `install.ts` during init but no agent code path programmatically read from it. Removed `src/content/examples.ts` (content module), the `mkdir`/`writeFile` calls in `install.ts`, the directory from the smoke-test assertion list. Added `examples` to a new `RETIRED_LIB_DIRS` list so existing installs running v8.44+ will see the orphan directory removed on next `cclaw install`.
+5. **Delete 5 zombie skills** — `code-simplification.md`, `context-engineering.md`, `performance-optimization.md`, `frontend-ui-engineering.md`, `ci-cd-and-automation.md` were registered in `AUTO_TRIGGER_SKILLS` (`src/content/skills.ts`) but never explicitly referenced by any specialist prompt or orchestrator instruction. They were "halfway state" — installed but unused. Verified via `rg` that no specialist prompt cites them; lifted the one stray reference in `tdd-and-verification.md` (which mentioned `code-simplification.md`) into the skill body verbatim so the rubric stays accessible. `AUTO_TRIGGER_SKILLS` is back to its v8.16 baseline of 17 skills; the existing `cleanupOrphans` install step will scrub the five `.md` files from existing installs on next sync. Net ~95k chars of skill content removed.
+6. **Move audit fields out of `TriageDecision`** — `userOverrode`, `autoExecuted`, `iterationOverride` were write-only telemetry stuffed into the routing state. v8.44 introduces `.cclaw/state/triage-audit.jsonl` (one JSON line per triage decision and per iteration-override picker firing) and a small `appendTriageAudit()` helper in `src/triage-audit.ts`. The fields stay on `TriageDecision` as `@deprecated` optional for backward compat with v8.0-v8.43 state files (~28 fixture references across 9 test files keep validating); new orchestrator writes target the audit log instead. `userOverrode` is now optional on the type (was required); the validator was softened accordingly. `notes` stays on `TriageDecision` (v8.43 added it with a real consumer in `critic.ts`).
+7. **Posture-table byte-identical tripwire** — the canonical posture enumeration line (`` `test-first` (default) | `characterization-first` | `tests-as-deliverable` | `refactor-only` | `docs-only` | `bootstrap` ``) now appears verbatim in each of the four specialist prompts that reference postures (`ac-author`, `slice-builder`, `reviewer`, `critic`). `tests/unit/posture-table-consistency.test.ts` asserts byte-identical presence; if anyone renames, reorders, or drops a posture in one specialist without updating the others, the test fails with a diff. Per-posture *bodies* in each prompt are intentionally NOT pinned (they describe different aspects — selection, ceremony, git-log check, escalation), so this is the load-bearing tripwire without forcing unrelated content into lockstep.
+
+### What changed (Cleanup 1 — dead specialist-mode types)
+
+- **`src/types.ts`** — removed `ReviewerMode`, `SecurityReviewerMode`, `SliceBuilderMode`, `CriticMode` type declarations (~14 LOC). `CriticVerdict` and `CriticEscalation` were KEPT (active use in `flow-state.ts > assertCriticVerdict`).
+- **`tests/unit/types.test.ts`** — removed the 4 corresponding assertion entries from the type-set declaration test (the test still asserts the surviving unions).
+
+### What changed (Cleanup 2 — unused exports)
+
+- **`src/types.ts`** — removed `isPosture` function export (~3 LOC). The frontmatter parser inlines `POSTURES.includes()` itself; no other call site existed.
+- **`src/flow-state.ts`** — removed `interpretationForksOf` helper (~13 LOC). The field `triage.interpretationForks` is a legacy artifact retained for state migration; the helper had no production caller.
+- **`tests/unit/posture.test.ts`** — removed the `isPosture narrows to a known value` test case and its import.
+- **`tests/unit/flow-state.test.ts`** — removed the `interpretationForksOf returns [] …` test case and its import.
+
+### What changed (Cleanup 3 — version annotations)
+
+- **`src/content/specialist-prompts/design.ts`** — stripped 6 inline parenthetical annotations (e.g. `(v8.35)` after `CONTEXT.md`, `(v8.21 fold)` on the assumption-surface ownership rule, `(v8.25 — Non-functional requirements …)`). Kept substantive references (`pre-v8.14 resume`, `v8.14+ flows`, `the v8.20 5-iteration cap`).
+- **`src/content/specialist-prompts/ac-author.ts`** — stripped 9 inline parenthetical annotations (e.g. `(v8.36, strict mode)` on posture declaration, `(v8.36; mandatory)` heading, `(v8.36)` table-cell column hint, `(T1-2 in v8.13)` on feasibility stamp). Rewrote prose narration of how the assumption surface evolved into a present-tense statement of how it works now.
+- **`src/content/specialist-prompts/reviewer.ts`** — stripped 7 inline parenthetical annotations (e.g. `(v8.40 — git-log inspection)` heading, `(v8.13 introduced seven, v8.25 added the eighth)` heading aside, `(v8.16 merge …)`, `(v8.25)` axis tag, `(v8.12)` pre-mortem section move). Kept substantive `pre-v8.14 resume` and `v8.20 5-iteration cap` mentions.
+- **`src/content/specialist-prompts/slice-builder.ts`** — stripped 6 inline parenthetical annotations (e.g. `(v8.40, posture-driven)` heading, `(v8.36, strict mode)` posture section heading, `(v8.36)` enumeration line). Kept substantive `v8.14+ flows` / `pre-v8.14 resumes` paths.
+- **`src/content/specialist-prompts/critic.ts`** — stripped 5 inline parenthetical annotations (e.g. `(v8.35)` on `CONTEXT.md`, `(v8.36)` on the canonical posture line, `(v8.25 gating)` on the NFR coverage gap rule, `(v8.20 5-iteration cap)` → just `the 5-iteration cap`, `(Narrow trigger by v8.42 design — …)` → `Narrow trigger by design — …`).
+- **`src/content/specialist-prompts/security-reviewer.ts`** — stripped 1 inline annotation (`pre-v8.14 resumes` → `legacy resumes`).
+- **`src/content/start-command.ts`** — not touched for this cleanup (saved for v8.45's prompt content pass); Cleanup 6's audit-log integration was the only edit to this file.
+
+No new file was created — the brief authorised either a separate `CHANGELOG-specialists.md` or a `## Specialist prompt history` section inside `CHANGELOG.md`, but the substantive history was already captured by per-slug release entries in the existing `CHANGELOG.md` body, so a new section would have been duplicative. This cleanup-3 sub-section IS the specialist prompt history for v8.44; future renames / lifts will follow the same pattern.
+
+### What changed (Cleanup 4 — `lib/examples/` retirement)
+
+- **DELETED**: `src/content/examples.ts` (~16 LOC — empty `EXAMPLES = []` array + an `EXAMPLES_INDEX` template; the runtime-empty defaults left over from v8.12's orphan-content cleanup).
+- **`src/install.ts`** — removed the `EXAMPLES` / `EXAMPLES_INDEX` import; dropped `path.join(LIB_ROOT, "examples")` from `ensureRuntimeRoot`'s ensureDir loop; removed the `writeExamples()` function and its `emit("Wrote examples", …)` call; updated `SummaryCounts.examples` to `0`. Added a `RETIRED_LIB_DIRS: readonly string[] = ["examples"]` constant and a `removeRetiredLibDirs(projectRoot, emit)` helper that runs alongside the existing orphan-cleanup passes and `fs.rm`-s any directory in the list that exists, emitting `Removed retired lib dir — .cclaw/lib/examples` per cleanup.
+- **`src/constants.ts > LIB_DIRS`** — removed `"examples"`.
+- **`src/content/meta-skill.ts`** — updated text to note `.cclaw/lib/examples/` was removed entirely in v8.44 (was previously described as "empty index files in v8.12").
+- **`scripts/smoke-init.mjs`** — removed `lib/examples` from the expected install-dir assertion list and the recovery/research/examples index.md loop; added an explicit `existsSync(.cclaw/lib/examples)` negative check; added a retired-lib-dir cleanup smoke test that plants a stale `.cclaw/lib/examples/stale.md`, runs `cclaw --non-interactive install`, asserts the directory is removed + the `Removed retired lib dir — .cclaw/lib/examples` progress event is emitted; idempotency check confirms re-running install on a clean install emits zero retired-lib-dir events.
+- **`tests/unit/install.test.ts`** — removed `examples` from the `LIB_DIRS` iteration loop; added explicit `expect(fs.access(.cclaw/lib/examples)).rejects.toBeTruthy()` to lock the retirement.
+- **`tests/integration/install-content-layer.test.ts`** — updated two existing test descriptions to drop the `lib/examples` mention; added a new test case `install removes a pre-existing .cclaw/lib/examples/ directory left over from v8.43 (orphan cleanup)` that verifies `removeRetiredLibDirs` cleans up.
+- **`tests/unit/v812-cleanup.test.ts`** — removed the `EXAMPLES` import and the `worked examples empty by default` test case; updated the meta-skill assertion description to reflect v8.44's full removal.
+
+### What changed (Cleanup 5 — zombie skills)
+
+- **DELETED**: `src/content/skills/code-simplification.md` (~17.4k chars), `context-engineering.md` (~18.4k chars), `performance-optimization.md` (~17.6k chars), `frontend-ui-engineering.md` (~21.8k chars), `ci-cd-and-automation.md` (~18.2k chars). Total content removed: ~93.5k chars.
+- **`src/content/skills.ts`** — removed the 5 corresponding entries from the `AUTO_TRIGGER_SKILLS` array. Updated the file-level docstring to note v8.27-v8.33 added five frontier-aesthetic skills that v8.44 retired (back to 17 skills).
+- **`src/content/skills/tdd-and-verification.md`** — the REFACTOR step previously cited `code-simplification.md` as the canonical rubric for the simplification slot. Lifted the rubric inline (five principles + four-step process) so the discipline is preserved without the cross-skill dependency.
+- **`src/knowledge-store.ts`** — updated one docstring line that mentioned the `code-simplification` skill firing during REFACTOR.
+- **DELETED**: `tests/unit/v827-code-simplification.test.ts` (~8k chars, 8 ACs all asserting properties of the deleted `code-simplification` skill), `tests/unit/v832-additive-skills-batch-1.test.ts` (~10.6k chars), `tests/unit/v833-additive-skills-batch-2.test.ts` (~13.3k chars).
+- **`tests/unit/v816-cleanup.test.ts`, `tests/unit/v819-skill-windowing.test.ts`** — softened the test descriptions to reflect v8.44 retiring the five additive skills. All assertions in these files use `>= 17` ranges so they continue to pass with the new count.
+- **`tests/unit/v830-skill-anatomy-gaps.test.ts`** — removed `code-simplification.md` from the `TOP_8_RATIONALIZATION_SKILLS` floor list (now a top-7 list) and updated the docstring.
+
+The cleanup leans on the existing `cleanupOrphans` install step (`src/install.ts > cleanupOrphanSkills`, lifted to generic `cleanupOrphans` in v8.22): any `.md` file in `.cclaw/lib/skills/` that is not in `AUTO_TRIGGER_SKILLS ∪ {cclaw-meta.md}` is removed on every install pass. By dropping the five from `AUTO_TRIGGER_SKILLS`, existing installs running v8.44 will see them cleaned up automatically — no separate `RETIRED_SKILLS` list needed.
+
+### What changed (Cleanup 6 — audit-field relocation)
+
+- **`src/types.ts`** — marked `userOverrode`, `autoExecuted`, `iterationOverride` `@deprecated` on `TriageDecision`. Made `userOverrode` optional (was required boolean → now `boolean | undefined`). The fields are KEPT in the schema for backward compatibility with v8.0-v8.43 state files; the `@deprecated` block points readers at `.cclaw/state/triage-audit.jsonl` + `src/triage-audit.ts > appendTriageAudit` for new writes.
+- **`src/flow-state.ts > assertTriageOrNull`** — softened the `userOverrode` validator from "must be boolean" to "must be boolean or absent". Validators for `autoExecuted` and `iterationOverride` are unchanged (they were already optional).
+- **NEW**: `src/triage-audit.ts` — defines `TriageAuditEntry` (decidedAt + slug + complexity + finalComplexity + acMode + userOverrode + autoExecuted + iterationOverride + notes) and `appendTriageAudit(projectRoot, entry)` which appends one JSONL line to `.cclaw/state/triage-audit.jsonl`. Creates the parent directory on demand. Best-effort telemetry; callers can wrap in try/catch to suppress filesystem errors.
+- **`src/constants.ts`** — added `TRIAGE_AUDIT_REL_PATH = ".cclaw/state/triage-audit.jsonl"` with an explanatory docblock pinning the write/read contract.
+- **`src/run-persistence.ts > ensureRunSystem`** — touches an empty `.cclaw/state/triage-audit.jsonl` on init so the file exists for the orchestrator's first append (the `fs.appendFile` would create it lazily, but the smoke test asserts existence after init).
+- **`src/content/start-command.ts`** — updated `TRIAGE_PERSIST_EXAMPLE` to remove `userOverrode` / `autoExecuted` from the JSON triage object; added a new **Audit log** section instructing the orchestrator to append the audit entry to `.cclaw/state/triage-audit.jsonl` immediately after persisting the triage write (best-effort, log + continue on failure). Updated the Hop 2 fast-path narration to cite the audit log for the `autoExecuted: true` bit instead of the triage object.
+- **`src/content/skills/triage-gate.md`** — updated four references that previously instructed the agent to stamp `userOverrode` / `autoExecuted` on `triage` to instead append an audit-log entry. Pre-v8.44 state files retain these fields on the triage object; the skill's `Worked examples` and `Common mistakes` sections note the read-side tolerance.
+- **`src/content/runbooks-on-demand.ts`** — updated the `keep-iterating-anyway` picker arm to append an `iterationOverride: true` audit-log entry instead of stamping `triage.iterationOverride`.
+- **`scripts/smoke-init.mjs`** — added an existence check for `.cclaw/state/triage-audit.jsonl` after init.
+
+### What changed (Cleanup 7 — posture-table tripwire)
+
+- **`src/content/specialist-prompts/ac-author.ts`** — inserted a single canonical posture-enumeration line (`Postures: \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`.`) at the start of the `## Posture heuristic table` section.
+- **`src/content/specialist-prompts/slice-builder.ts`** — inserted the same canonical line at the start of the `## Posture-driven ceremony` section (immediately before `The six postures and their ceremony selectors:`).
+- **`src/content/specialist-prompts/reviewer.ts`** — inserted the same canonical line at the start of the `## Posture-aware TDD checks` section.
+- **`src/content/specialist-prompts/critic.ts`** — reformatted the existing inline posture enumeration in the `## Posture awareness` section to match the canonical line exactly (added `(default)` annotation after `test-first`).
+- **NEW**: `tests/unit/posture-table-consistency.test.ts` — three tests:
+  - AC-1: each of the four specialist prompts contains the canonical posture enumeration verbatim;
+  - AC-2: the canonical line agrees with the `POSTURES` tuple in `src/types.ts` (enumeration order pin);
+  - AC-3: every specialist prompt mentions each individual posture value at least once.
+- Failing the tripwire surfaces the per-prompt diff so the offending specialist is named in the error.
+
+### Tests
+
+- **+3 new tests** in `tests/unit/posture-table-consistency.test.ts` (Cleanup 7).
+- **+1 new test** in `tests/integration/install-content-layer.test.ts` (Cleanup 4: orphan-directory cleanup).
+- **−28 tests** from the three deleted v827 / v832 / v833 suites (Cleanup 5: their assertion targets no longer exist).
+- **−2 tests** from `tests/unit/posture.test.ts` and `tests/unit/flow-state.test.ts` (Cleanup 2: the helpers they tested are gone).
+- Net test count delta: −26 (was 1088 in v8.43 / 1044 visible to v3.2.4 vitest; v8.44 is 1018).
+- All 1018 tests green; `npm run smoke:runtime` green.
+
+### Migration notes
+
+- **No flow-state migration needed.** Pre-v8.44 state files with `userOverrode` / `autoExecuted` / `iterationOverride` on the triage object continue to validate (the schema accepts the fields as `@deprecated` optional). New flows leave them absent and write to the audit log instead.
+- **Existing installs get a one-time cleanup.** On the first `cclaw install` after upgrading to v8.44, the install layer will: (a) remove `.cclaw/lib/examples/` if present, emitting `Removed retired lib dir — .cclaw/lib/examples`; (b) remove the five zombie skill `.md` files via the standard orphan-cleanup pass, emitting `Removed orphan skill — code-simplification.md` etc.; (c) touch `.cclaw/state/triage-audit.jsonl` empty. Both passes are idempotent — a second install emits zero retirement events.
+- **No specialist-prompt behaviour change.** The version-annotation strip is cosmetic (the rules themselves are unchanged); the posture-table line was either already present or is being added as an explicit reference.
+
+### Release Notes Draft
+
+- Removed four dead specialist-mode types (`ReviewerMode`, `SecurityReviewerMode`, `SliceBuilderMode`, `CriticMode`) from `src/types.ts` — declared but never imported.
+- Removed `isPosture` (`src/types.ts`) and `interpretationForksOf` (`src/flow-state.ts`) — exported but never imported outside their own tests.
+- Stripped ~50 inline parenthetical version annotations from the six specialist prompts (`design`, `ac-author`, `reviewer`, `critic`, `slice-builder`, `security-reviewer`). Substantive version anchors kept; historical "(vX.Y added)" annotations removed.
+- Removed `.cclaw/lib/examples/` directory entirely (no agent code path read from it). Existing installs running v8.44 will see the directory removed on next sync, with a `Removed retired lib dir` progress event.
+- Removed five zombie auto-trigger skills (`code-simplification`, `context-engineering`, `performance-optimization`, `frontend-ui-engineering`, `ci-cd-and-automation`). They were registered in `AUTO_TRIGGER_SKILLS` but never referenced by any specialist prompt. Existing installs will see the orphaned `.md` files cleaned up via the standard install-layer orphan scan.
+- Moved write-only triage telemetry (`userOverrode`, `autoExecuted`, `iterationOverride`) to a new audit log at `.cclaw/state/triage-audit.jsonl`. Routing state stays clean; the fields are kept on `TriageDecision` as `@deprecated` optional for v8.0-v8.43 backward compat.
+- Added `src/triage-audit.ts > appendTriageAudit(projectRoot, entry)` helper for the audit-log write contract.
+- Added a posture-table byte-identical tripwire (`tests/unit/posture-table-consistency.test.ts`) that asserts the canonical posture enumeration line appears verbatim in `ac-author`, `slice-builder`, `reviewer`, and `critic` prompts. Drift fails loudly.
+- Net LOC delta: −1.7k LOC (TS + content combined), excluding the 4 deleted skill `.md` files (~95k chars) and 3 deleted test files (~32k chars).
+
 ## 8.43.0 — Contract drift fix + dead-script removal
 
 ### TL;DR

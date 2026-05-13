@@ -73,14 +73,20 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
     "path": ["plan", "build", "review", "critic", "ship"],
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
-    "userOverrode": false,
-    "runMode": "step",
-    "autoExecuted": false
+    "runMode": "step"
   }
 }
 \`\`\`
 
-\`autoExecuted: true\` is set **only** on the zero-question fast path (trivial / high-confidence, no structured ask shown). On every other path \`autoExecuted: false\`. \`runMode\` is \`null\` on inline (whether reached via fast path or via Question 1 option "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.
+\`runMode\` is \`null\` on inline (fast path or "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.
+
+**Audit log** (\`.cclaw/state/triage-audit.jsonl\`). Write-only telemetry (\`userOverrode\`, \`autoExecuted\`, \`iterationOverride\`) appends to this JSONL log instead of the triage object. Append one line per triage decision immediately after persisting the triage write (best-effort; if the write fails, log and continue). Append a second line with \`iterationOverride: true\` when \`keep-iterating-anyway\` fires at the 5-iteration review cap. Schema mirrors \`TriageAuditEntry\` in \`src/triage-audit.ts\`:
+
+\`\`\`json
+{"decidedAt":"2026-05-08T12:34:56Z","slug":"<slug>","complexity":"small-medium","acMode":"soft","userOverrode":false,"autoExecuted":false}
+\`\`\`
+
+\`autoExecuted: true\` ONLY on the zero-question fast path. \`userOverrode: true\` when the user picked complexity / AC mode different from the recommendation; omit / \`false\` otherwise.
 
 **v8.42:** \`triage.path\` includes the \`"critic"\` stage between \`"review"\` and \`"ship"\` whenever \`acMode != "inline"\`. On \`acMode: "inline"\` the path stays \`["build"]\`. See \`runbooks/critic-stage.md\` for the full contract.
 
@@ -202,7 +208,7 @@ Before triage patches, check \`<projectRoot>/.git/\`. If absent (plain working t
 
 Run the \`triage-gate.md\` skill. The gate has **two modes** in v8.14+:
 
-1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), AC mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`autoExecuted: true\`, \`runMode: null\`; proceed straight to the inline edit (Hop 3 — *Dispatch* on the build stage). The inline path has no assumption surface (v8.21 fold: design Phase 0 owns large-risky, ac-author Phase 0 owns small-medium; inline gets neither).
+1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), AC mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`runMode: null\` (the v8.44 audit log records the fast-path bit as \`autoExecuted: true\` — see "Hop 2 §2 audit log"); proceed straight to the inline edit (Hop 3 — *Dispatch* on the build stage). The inline path has no assumption surface (v8.21 fold: design Phase 0 owns large-risky, ac-author Phase 0 owns small-medium; inline gets neither).
 
 2. **Combined-form structured ask** — for every other classification (and for trivial when confidence is \`medium\` or \`low\`), use the harness's structured question tool (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code / OpenCode do); fall back to two sequential calls only when the harness genuinely only supports single-question structured ask. Combining saves one user round-trip on every non-inline flow start.
 

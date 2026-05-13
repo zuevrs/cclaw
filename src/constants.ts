@@ -54,6 +54,21 @@ export const FLOWS_ROOT = `${RUNTIME_ROOT}/flows`;
 export const LIB_ROOT = `${RUNTIME_ROOT}/lib`;
 
 export const FLOW_STATE_REL_PATH = `${STATE_REL_PATH}/flow-state.json`;
+/**
+ * v8.44 — append-only audit log for write-only triage telemetry.
+ *
+ * One JSONL line per triage decision capturing fields that used to be
+ * stuffed into `flow-state.json > triage` (userOverrode, autoExecuted,
+ * iterationOverride). Routing state stays clean; downstream "why did
+ * this slug take 7 review iterations / take the fast path / override
+ * the orchestrator's recommendation?" audits read the log instead of
+ * re-scanning the flow state.
+ *
+ * Write contract: `appendTriageAudit` in `src/triage-audit.ts`. Reader
+ * contract: none — the log is write-only by design (the orchestrator
+ * never branches on its contents).
+ */
+export const TRIAGE_AUDIT_REL_PATH = `${STATE_REL_PATH}/triage-audit.jsonl`;
 export const KNOWLEDGE_LOG_REL_PATH = `${RUNTIME_ROOT}/knowledge.jsonl`;
 export const IDEAS_REL_PATH = `${RUNTIME_ROOT}/ideas.md`;
 
@@ -67,6 +82,5 @@ export const LIB_DIRS = [
   "runbooks",
   "patterns",
   "research",
-  "recovery",
-  "examples"
+  "recovery"
 ] as const;

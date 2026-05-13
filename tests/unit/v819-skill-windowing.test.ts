@@ -26,7 +26,7 @@ import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice
  */
 describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
   describe("AC-1 — data shape", () => {
-    it("AUTO_TRIGGER_SKILLS ships ≥17 entries (stage tagging is additive; v8.27 added code-simplification → 18)", () => {
+    it("AUTO_TRIGGER_SKILLS ships ≥17 entries (stage tagging is additive; v8.27-v8.33 added five frontier-aesthetic skills, v8.44 retired all five — back to 17)", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
@@ -222,7 +222,7 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
   });
 
   describe("AC-7 — install-time behaviour unchanged", () => {
-    it("AUTO_TRIGGER_SKILLS array length is ≥17 (install loop writes N + cclaw-meta; v8.27 added code-simplification → 18)", () => {
+    it("AUTO_TRIGGER_SKILLS array length is ≥17 (install loop writes N + cclaw-meta; v8.27-v8.33 added five additive skills, v8.44 retired them — back to 17)", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
