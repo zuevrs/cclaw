@@ -10,55 +10,48 @@
  * The menu is single-shot: the operator picks one action, that action
  * runs to completion, and the process exits. The menu does NOT re-open
  * after each action. Rationale: every action either (a) writes to the
- * project (`install` / `sync` / `upgrade` / `uninstall`), (b) prints a
- * data dump (`knowledge` / `version`), or (c) quits. After any (a) or
- * (b) the operator's next intent is "look at the output and decide", not
- * "pick something else from the menu". Re-opening after a write would
- * also re-render the banner over the install progress lines, which is
- * ugly.
+ * project (`install` / `uninstall`) or (b) quits. After (a) the
+ * operator's next intent is "look at the output and decide", not "pick
+ * something else from the menu". Re-opening after a write would also
+ * re-render the banner over the install progress lines, which is ugly.
+ *
+ * v8.39 — collapsed from 7 actions to 3 (`install` / `uninstall` /
+ * `quit`). `sync` and `upgrade` were functionally aliases for `install`
+ * (all three routed through the same idempotent installer with orphan
+ * cleanup); the intent-naming benefit didn't justify the cognitive
+ * overhead of three near-identical rows that did the same thing.
+ * `knowledge` and `version` were read-only utilities power users invoke
+ * via `cclaw --non-interactive knowledge` / `cclaw --version`; surfacing
+ * them in the TUI added noise without a write-side use case.
  */
 
 import process from "node:process";
 import { colorize, shouldUseColor } from "./ui.js";
 
-export const MENU_ACTIONS = [
-  "install",
-  "sync",
-  "upgrade",
-  "uninstall",
-  "knowledge",
-  "version",
-  "quit"
-] as const;
+export const MENU_ACTIONS = ["install", "uninstall", "quit"] as const;
 
 export type MenuAction = (typeof MENU_ACTIONS)[number];
 
 const MENU_LABELS: Record<MenuAction, string> = {
   install: "Install",
-  sync: "Sync",
-  upgrade: "Upgrade",
   uninstall: "Uninstall",
-  knowledge: "Browse knowledge",
-  version: "Show version",
   quit: "Quit"
 };
 
 const MENU_DESCRIPTIONS: Record<MenuAction, string> = {
-  install: "first-time setup — write .cclaw/ + wire harness",
-  sync: "reapply assets to match the installed cclaw-cli version",
-  upgrade: "post-package-update sync (alias for sync)",
+  install: "first-time setup OR idempotent reapply (covers former sync/upgrade)",
   uninstall: "remove .cclaw/ + harness assets",
-  knowledge: "list captured learnings from .cclaw/state/knowledge.jsonl",
-  version: "print the cclaw-cli version and exit",
   quit: "exit without doing anything"
 };
 
 export interface MenuState {
   cursor: number;
   /**
-   * Whether `.cclaw/config.yaml` exists. Drives the "smart default"
-   * highlight: when missing, `install` is the initial cursor row; when
-   * present, `sync` is the initial row.
+   * Whether `.cclaw/config.yaml` exists. Drives the smart-default hint
+   * line above the menu rows. Both states land the cursor on `install`
+   * (v8.39 collapse): on a fresh project `install` is first-time setup,
+   * on an installed project `install` is the idempotent reapply that
+   * used to be called `sync` / `upgrade`. The same row, two readings.
    */
   installed: boolean;
 }
@@ -71,17 +64,15 @@ export interface MenuUpdate {
 }
 
 /**
- * Build the initial menu state. When `installed` is false (no
- * `.cclaw/config.yaml`), the cursor lands on `install`. When true, the
- * cursor lands on `sync` — the most likely action when re-invoking
- * `cclaw` against a project that already has cclaw wired.
- *
- * The smart default is a hint, not a constraint: the operator can still
- * arrow up/down to any row before pressing Enter.
+ * Build the initial menu state. The cursor always lands on `install`:
+ * on a fresh project it's first-time setup, on an existing install it's
+ * the idempotent reapply (the v8.37 collapse renamed sync/upgrade to
+ * install at the CLI surface; v8.39 finishes the rename at the TUI
+ * surface). The `installed` flag drives only the smart-default hint
+ * line above the menu rows — the row itself is the same in both cases.
  */
 export function createMenuState(installed: boolean): MenuState {
-  const target: MenuAction = installed ? "sync" : "install";
-  const cursor = MENU_ACTIONS.indexOf(target);
+  const cursor = MENU_ACTIONS.indexOf("install");
   return { cursor, installed };
 }
 
@@ -136,8 +127,8 @@ export function renderMenuFrame(state: MenuState, options: RenderMenuOptions): s
   const lines: string[] = [];
   lines.push(colorize("cyan", "cclaw — what would you like to do?", useColor));
   const smartDefault = state.installed
-    ? "found existing .cclaw/ — default action is Sync"
-    : "no .cclaw/ found — default action is Install";
+    ? "found existing .cclaw/ — Install will reapply assets idempotently"
+    : "no .cclaw/ found — Install for first-time setup";
   lines.push(colorize("dim", smartDefault, useColor));
   lines.push("");
 
@@ -153,10 +144,16 @@ export function renderMenuFrame(state: MenuState, options: RenderMenuOptions): s
   }
 
   lines.push("");
+  // Hotkey range stays in sync with MENU_ACTIONS.length so future tweaks
+  // to the action list don't leave the legend stale (v8.39 lesson:
+  // hardcoded `1-7` survived the v8.37 collapse and lied to users until
+  // someone noticed). 3 actions → "1-3"; if the menu grows again the
+  // legend updates automatically.
+  const numberRange = `1-${MENU_ACTIONS.length}`;
   lines.push(
     colorize(
       "dim",
-      "Up/Down or k/j to move  ·  1-7 to jump  ·  Enter to confirm  ·  q/Esc/Ctrl-C to quit",
+      `Up/Down or k/j to move  ·  ${numberRange} to jump  ·  Enter to confirm  ·  q/Esc/Ctrl-C to quit`,
       useColor
     )
   );

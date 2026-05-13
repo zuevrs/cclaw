@@ -3,7 +3,7 @@ import path from "node:path";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
-import { initCclaw, syncCclaw, uninstallCclaw, upgradeCclaw } from "./install.js";
+import { initCclaw, uninstallCclaw } from "./install.js";
 import {
   configureLogger,
   error as logError,
@@ -42,10 +42,8 @@ const TAGLINE = "harness-first flow toolkit for coding agents";
 
 /**
  * v8.29 — `cclaw` is TUI-first. The canonical invocation is
- * `npx cclaw-cli@latest` (no args), which opens a top-level menu
- * (Install / Sync / Upgrade / Uninstall / Browse knowledge / Show
- * version / Quit) with a smart default highlight based on whether
- * `.cclaw/config.yaml` exists.
+ * `npx cclaw-cli@latest` (no args), which opens a top-level menu with a
+ * smart default highlight based on whether `.cclaw/config.yaml` exists.
  *
  * The bare subcommand surface (`cclaw init`, `cclaw sync`, …) was
  * dropped in v8.29 — those error out and point at the no-arg
@@ -58,9 +56,21 @@ const TAGLINE = "harness-first flow toolkit for coding agents";
  * `upgradeCclaw()` (themselves thin wrappers around the same idempotent
  * installer with orphan cleanup). The non-interactive surface now
  * matches the code path: ONE installer (`install`), the read-only
- * commands (`knowledge`, `version`, `help`), and `uninstall`. The TUI
- * menu keeps `Sync` / `Upgrade` rows because a human reading the menu
- * benefits from intent-named items; in CI the rename was overhead.
+ * commands (`knowledge`, `version`, `help`), and `uninstall`.
+ *
+ * v8.39 — the TUI menu finishes the v8.37 collapse: rows are now just
+ * `Install` / `Uninstall` / `Quit`. `Sync` and `Upgrade` were intent
+ * aliases that confused the picture (three rows, one behaviour);
+ * `Install` now carries both readings via its description
+ * ("first-time setup OR idempotent reapply"). `Browse knowledge` and
+ * `Show version` were moved off the menu — power users invoke them as
+ * `cclaw --non-interactive knowledge` / `cclaw --version`. v8.39 also
+ * fixes a perceptible-on-slow-terminals double-render of the 6-line
+ * Unicode logo: the no-arg TUI path used to emit the banner above the
+ * menu AND again inside the action dispatcher; the second emission is
+ * gone (the original banner stays in scrollback while menu rows are
+ * erased, so the install progress flows under the banner the operator
+ * already saw).
  *
  * `--help` / `-h` / `--version` / `-v` are preserved as flags regardless
  * of mode (standard CLI convention).
@@ -72,11 +82,10 @@ const HELP_USAGE = `Usage:
 
 const HELP_NOTES = `TUI default:
   Running \`cclaw\` (or \`npx cclaw-cli@latest\`) with no arguments opens a
-  top-level menu — Install / Sync / Upgrade / Uninstall / Browse
-  knowledge / Show version / Quit. The smart default highlights Install
-  when no .cclaw/ exists, Sync when it does. Requires a real TTY. The
-  Sync / Upgrade menu items are kept for intent-named UX; both call the
-  same idempotent installer that \`Install\` does.
+  top-level menu — Install / Uninstall / Quit. The cursor always lands on
+  Install: on a fresh project it's first-time setup, on an installed
+  project it's the idempotent reapply that covers former sync / upgrade.
+  Requires a real TTY.
 
 Non-interactive (CI / scripts):
   \`cclaw --non-interactive <command>\` runs the named command without
@@ -328,31 +337,38 @@ function truncate(value: string, max: number): string {
 }
 
 /**
- * Run a named install action (install / sync / upgrade / uninstall).
- * Shared between the TUI menu dispatch path and the
- * `--non-interactive <cmd>` path so the two surfaces stay byte-for-byte
- * identical in their write behaviour.
+ * Run the install action. Shared between the TUI menu dispatch path
+ * and the `--non-interactive install` path so the two surfaces stay
+ * byte-for-byte identical in their write behaviour.
  *
  * `interactive: true` lets the harness picker fire when needed (TTY +
  * no `--harness` + no existing config). `interactive: false` is the
  * non-interactive escape hatch — picker is skipped, auto-detect falls
  * through, hard error if no harness can be resolved.
+ *
+ * v8.39 — does NOT emit the banner. Callers emit it once at the right
+ * moment: the TUI no-arg path emits it above the menu (one banner, one
+ * render); the non-interactive path emits it right before dispatching.
+ * Emitting inside this function as well used to double-render the
+ * 6-line Unicode logo right after the menu closed, which presented as
+ * perceptible "lag" on terminals where redrawing box-drawing characters
+ * is slow.
+ *
+ * v8.39 — the `action` parameter was dropped. v8.37 collapsed
+ * sync / upgrade into install at the CLI surface; v8.39 finishes the
+ * collapse at the TUI surface, so the only legitimate call shape is
+ * the install path.
  */
 async function dispatchInstallAction(
-  action: "install" | "sync" | "upgrade",
   context: CliContext,
   args: ParsedArgs,
   interactive: boolean,
   useColor: boolean
 ): Promise<number> {
-  emitBanner(useColor);
-  if (action === "install") {
-    const firstRun = !(await isInstalled(context.cwd));
-    const detected = firstRun ? await detectHarnesses(context.cwd) : [];
-    if (firstRun) writeOut(renderWelcome({ detected, useColor }));
-  }
-  const runner = action === "install" ? initCclaw : action === "sync" ? syncCclaw : upgradeCclaw;
-  const result = await runner({
+  const firstRun = !(await isInstalled(context.cwd));
+  const detected = firstRun ? await detectHarnesses(context.cwd) : [];
+  if (firstRun) writeOut(renderWelcome({ detected, useColor }));
+  const result = await initCclaw({
     cwd: context.cwd,
     harnesses: args.harnesses,
     interactive,
@@ -361,17 +377,22 @@ async function dispatchInstallAction(
     onProgress: makeProgressPrinter(useColor)
   });
   writeOut(renderSummary(result.counts, useColor));
-  info(`[cclaw] ${action} complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
+  info(`[cclaw] install complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
   return 0;
 }
 
+/**
+ * Run the uninstall action. Same banner-ownership rule as
+ * `dispatchInstallAction`: the caller emits the banner exactly once;
+ * this function does not. See the v8.39 paragraph there for the lag
+ * fix rationale.
+ */
 async function dispatchUninstall(
   context: CliContext,
   useColor: boolean
 ): Promise<number> {
   const config = await readConfig(context.cwd);
   const harnesses = config?.harnesses ?? [];
-  emitBanner(useColor);
   await uninstallCclaw({ cwd: context.cwd });
   info(
     `[cclaw] uninstall complete.${harnesses.length > 0 ? ` Removed: ${harnesses.join(", ")}` : ""}`
@@ -380,12 +401,13 @@ async function dispatchUninstall(
 }
 
 /**
- * Dispatcher for the TUI menu's resolved action. Maps the menu's seven
- * actions to the same code paths the `--non-interactive` mode uses,
- * with `interactive: true` so the harness picker fires when appropriate.
+ * Dispatcher for the TUI menu's resolved action. The v8.39 menu is
+ * three rows: install / uninstall / quit. Banner has already been
+ * emitted above the menu by the no-arg caller in `runCli` — see the
+ * v8.39 paragraph on `dispatchInstallAction` for why we do not emit
+ * it again here.
  *
- * `version` and `quit` are terminal — they print and exit without
- * touching the project.
+ * `quit` is terminal — exits without touching the project.
  */
 async function dispatchMenuAction(
   action: MenuAction,
@@ -395,39 +417,38 @@ async function dispatchMenuAction(
 ): Promise<number> {
   switch (action) {
     case "install":
-    case "sync":
-    case "upgrade":
-      return dispatchInstallAction(action, context, args, true, useColor);
+      return dispatchInstallAction(context, args, true, useColor);
     case "uninstall":
       return dispatchUninstall(context, useColor);
-    case "knowledge":
-      return runKnowledgeCommand(context.cwd, args.flags);
-    case "version":
-      info(CCLAW_VERSION);
-      return 0;
     case "quit":
       return 0;
   }
 }
 
-const SUBCOMMAND_TO_MENU_ACTION: Record<string, MenuAction> = {
+/**
+ * Non-interactive subcommand surface. Disjoint from `MenuAction` after
+ * v8.39 — the TUI menu shrank to install / uninstall / quit, but the
+ * non-interactive path still accepts `knowledge` and `version` (the two
+ * read-only utilities that were dropped from the TUI rows but kept as
+ * CI-friendly commands).
+ */
+type NonInteractiveAction = "install" | "uninstall" | "knowledge" | "version";
+
+const SUBCOMMAND_TO_ACTION: Record<string, NonInteractiveAction> = {
   // `init` is kept as a backwards-compatible alias for `install` in the
   // non-interactive path; saves the muscle-memory tax for CI scripts
   // that pinned `cclaw init` between v8.0 and v8.28. The TUI menu
-  // surfaces the new canonical name (`Install`).
+  // surfaces the canonical name (`Install`).
   init: "install",
   install: "install",
-  // v8.37 — `sync` and `upgrade` remain in the map so the TUI menu
-  // dispatch (which routes menu items through this map) still works;
-  // the non-interactive path branches BEFORE this lookup and refuses
-  // sync/upgrade with a migration message. Removing them here would
-  // also remove them from the TUI menu, which is the opposite of what
-  // we want (the menu's Sync / Upgrade rows survive).
-  sync: "sync",
-  upgrade: "upgrade",
   uninstall: "uninstall",
   knowledge: "knowledge",
   version: "version"
+  // v8.39 — `sync` and `upgrade` are filtered earlier by
+  // `COLLAPSED_NON_INTERACTIVE_COMMANDS` (with a one-line migration
+  // hint), so they never reach this lookup. v8.37 kept them here so
+  // the TUI menu's Sync / Upgrade rows could dispatch through this
+  // map; v8.39 collapsed those rows so the map no longer carries them.
 };
 
 /**
@@ -563,8 +584,8 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     return 2;
   }
 
-  const menuAction = SUBCOMMAND_TO_MENU_ACTION[args.command];
-  if (!menuAction) {
+  const subcommandAction = SUBCOMMAND_TO_ACTION[args.command];
+  if (!subcommandAction) {
     logError(`[cclaw] unknown command: ${args.command}`);
     emitHelp(useColor);
     return 2;
@@ -574,25 +595,21 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
   // interactive: false so the harness picker doesn't fire even when a
   // TTY happens to be attached. Auto-detect + --harness fall-through
   // unchanged from v8.28. Note: sync/upgrade cases were stripped above
-  // by the COLLAPSED_NON_INTERACTIVE_COMMANDS gate.
-  switch (menuAction) {
+  // by the COLLAPSED_NON_INTERACTIVE_COMMANDS gate. install/uninstall
+  // emit the banner here (their dispatchers no longer do — v8.39 lag
+  // fix); knowledge / version stay banner-less (their output is the
+  // primary signal, the banner would just push it down).
+  switch (subcommandAction) {
     case "install":
-      return dispatchInstallAction(menuAction, context, args, false, useColor);
+      emitBanner(useColor);
+      return dispatchInstallAction(context, args, false, useColor);
     case "uninstall":
+      emitBanner(useColor);
       return dispatchUninstall(context, useColor);
     case "knowledge":
       return runKnowledgeCommand(context.cwd, args.flags);
     case "version":
       info(CCLAW_VERSION);
-      return 0;
-    // The `sync`, `upgrade`, and `quit` cases are unreachable from
-    // the non-interactive path: sync/upgrade are filtered by
-    // COLLAPSED_NON_INTERACTIVE_COMMANDS above; `quit` is a TUI-only
-    // action that never enters this dispatcher. Listed here so the
-    // TypeScript exhaustiveness check stays happy.
-    case "sync":
-    case "upgrade":
-    case "quit":
       return 0;
   }
 }
