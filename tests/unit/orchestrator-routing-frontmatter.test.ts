@@ -12,7 +12,12 @@ describe("orchestrator-routing surfaces frontmatter", () => {
     if (project) await removeProject(project);
   });
 
-  it("returns last_specialist and AC progress for an active plan", async () => {
+  it("v8.40: returns last_specialist and AC total for an active plan (committed/pending split dropped)", async () => {
+    // v8.40 dropped the "N committed / M total" split from the resume
+    // picker because the commit-helper hook that populated the
+    // `flow-state.json` ac[N].phases chain was retired. `acProgress`
+    // now exposes only the total AC count; the reviewer's release
+    // pass is the canonical "did every AC ship?" check.
     project = await createTempProject();
     await ensureRuntimeRoot(project);
     const planPath = activeArtifactPath(project, "plan", "approval-page");
@@ -28,7 +33,7 @@ describe("orchestrator-routing surfaces frontmatter", () => {
     const top = matches[0];
     expect(top.slug).toBe("approval-page");
     expect(top.lastSpecialist).toBe("architect");
-    expect(top.acProgress).toEqual({ committed: 1, pending: 1, total: 2 });
+    expect(top.acProgress).toEqual({ total: 2 });
   });
 
   it("detects shipped slugs and exposes refines linkage", async () => {

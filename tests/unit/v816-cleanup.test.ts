@@ -47,16 +47,19 @@ const PROVENANCE_SNIPPETS: Record<(typeof MERGED_SKILL_IDS)[number], string[]> =
     "Three checks per AC:",
     "Independently committable",
     'tests/unit/search.test.ts: \'returns BM25-ranked hits\'',
-    // from ac-traceability
-    "commit-helper.mjs",
-    "node .cclaw/hooks/commit-helper.mjs --ac=AC-N --message=",
-    "runCompoundAndShip` refuses to ship a strict-mode slug with any pending AC",
+    // from ac-traceability — v8.40 retired commit-helper; ac-discipline
+    // now anchors the prompt-only commit-prefix contract enforced by
+    // reviewer git-log inspection.
+    "git log --grep",
+    "red(AC-",
+    "green(AC-",
   ],
   "commit-hygiene": [
     // from commit-message-quality
     "Imperative voice",
     "Subject ≤72 characters",
-    'fix: F-2 separate rejected token',
+    // v8.40 reshaped the fix-commit prefix: `fix: F-2 ...` → `red(AC-N): fix F-2 — ...`.
+    "fix F-2 — separate rejected token",
     // from surgical-edit-hygiene
     "Surgical Changes",
     "A-4 — Drive-by edits to adjacent comments / formatting / imports",
@@ -185,16 +188,17 @@ describe("v8.16 thematic skills merge", () => {
       }
     });
 
-    it("commit-hygiene inherits commit-message-quality + surgical-edit-hygiene triggers", () => {
+    it("commit-hygiene inherits commit-message-quality + surgical-edit-hygiene triggers (v8.40: before:commit-helper removed with the retired hook)", () => {
       const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "commit-hygiene")!;
       for (const trigger of [
-        "before:commit-helper",
         "always-on",
         "specialist:slice-builder",
         "before:git-commit",
       ]) {
         expect(skill.triggers).toContain(trigger);
       }
+      // v8.40 tripwire: ensure the retired hook trigger does not creep back in.
+      expect(skill.triggers).not.toContain("before:commit-helper");
     });
 
     it("tdd-and-verification inherits tdd-cycle + verification-loop + refactor-safety triggers", () => {

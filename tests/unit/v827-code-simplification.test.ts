@@ -113,7 +113,9 @@ describe("v8.27 — code-simplification body adapted to cclaw conventions (not v
 
   it("AC-4: body is NOT a verbatim copy of addy's source — cclaw adaptation markers present", () => {
     expect(body).toMatch(/cclaw/u);
-    expect(body).toMatch(/--phase=refactor/u);
+    // v8.40: the previous `--phase=refactor` invocation hook is gone;
+    // cclaw-native commits use `refactor(AC-N): ...` subject prefixes.
+    expect(body).toMatch(/refactor\(AC-/u);
     expect(body).not.toMatch(/CLAUDE\.md/u);
   });
 });

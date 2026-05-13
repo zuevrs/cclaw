@@ -117,21 +117,31 @@ describe("v8.8 cleanup", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // B3 — slice-builder commit-helper rule explicitly scopes strict vs soft
+  // B3 — slice-builder commit rule scopes strict vs soft (v8.40: prompt-only)
+  //
+  // v8.8 originally scoped a "commit-helper, never git commit directly" rule
+  // to strict mode. v8.40 retired the commit-helper hook entirely; the rule
+  // now reads "per-AC commits with posture-driven prefixes in strict mode;
+  // plain git commit in soft mode". This block guards that the v8.8
+  // separation of concerns (strict ≠ soft) survived the v8.40 migration.
   // ─────────────────────────────────────────────────────────────────────
-  describe("B3 — slice-builder commit-helper rule scoped to strict; soft uses git commit", () => {
+  describe("B3 — slice-builder strict/soft separation survives v8.40 hook removal", () => {
     const sb = SPECIALIST_PROMPTS["slice-builder"];
 
-    it("hard rule 6 mentions strict mode", () => {
-      expect(sb).toMatch(/In strict mode.{0,120}commit-helper, never `git commit` directly/s);
+    it("strict mode rule mentions posture-driven per-AC commit prefixes", () => {
+      expect(sb).toMatch(/In strict mode/);
+      expect(sb).toMatch(/red\(AC-/);
+      expect(sb).toMatch(/green\(AC-/);
+      expect(sb).toMatch(/refactor\(AC-/);
     });
 
-    it("hard rule 6 mentions soft mode allows plain git commit", () => {
-      expect(sb).toMatch(/In soft mode.{0,120}plain `git commit` is fine/s);
+    it("soft mode rule mentions plain git commit (no per-AC prefix)", () => {
+      expect(sb).toMatch(/soft mode/i);
+      expect(sb).toMatch(/plain `git commit`/);
     });
 
-    it("rule 6 does not unconditionally forbid plain git commit", () => {
-      expect(sb).not.toMatch(/^6\. \*\*commit-helper, never `git commit` directly\.\*\* Bypass/m);
+    it("v8.40 tripwire: no reference to the retired commit-helper hook", () => {
+      expect(sb).not.toContain("commit-helper");
     });
   });
 

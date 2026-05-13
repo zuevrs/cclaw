@@ -10,13 +10,14 @@ describe("install", () => {
     if (project) await removeProject(project);
   });
 
-  it("installs runtime root with state, hooks, flows/{shipped,cancelled} and lib/* layout", async () => {
+  it("installs runtime root with state, flows/{shipped,cancelled} and lib/* layout (v8.40: no hooks dir)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const sub of ["state", "hooks", "flows"]) {
+    for (const sub of ["state", "flows"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", sub));
       expect(stat.isDirectory()).toBe(true);
     }
+    await expect(fs.access(path.join(project, ".cclaw", "hooks"))).rejects.toBeTruthy();
     for (const sub of ["shipped", "cancelled"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "flows", sub));
       expect(stat.isDirectory()).toBe(true);
@@ -30,30 +31,40 @@ describe("install", () => {
     }
   });
 
-  it("writes session-start and commit-helper hooks (stop-handoff retired in v8.38)", async () => {
+  it("v8.40: does NOT write session-start or commit-helper hooks (full hook retirement)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const fileName of ["session-start.mjs", "commit-helper.mjs"]) {
-      const body = await fs.readFile(path.join(project, ".cclaw", "hooks", fileName), "utf8");
-      expect(body).toContain("#!/usr/bin/env node");
+    for (const fileName of ["session-start.mjs", "commit-helper.mjs", "stop-handoff.mjs"]) {
+      await expect(
+        fs.access(path.join(project, ".cclaw", "hooks", fileName))
+      ).rejects.toBeTruthy();
     }
-    await expect(
-      fs.access(path.join(project, ".cclaw", "hooks", "stop-handoff.mjs"))
-    ).rejects.toBeTruthy();
   });
 
-  it("install cleans up an existing .cclaw/hooks/stop-handoff.mjs from pre-v8.38 installs", async () => {
+  it("install cleans up an existing .cclaw/hooks/* from pre-v8.40 installs (session-start, commit-helper, stop-handoff)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    const retiredPath = path.join(project, ".cclaw", "hooks", "stop-handoff.mjs");
-    await fs.writeFile(retiredPath, "#!/usr/bin/env node\nprocess.exit(0);\n", "utf8");
-    await fs.access(retiredPath);
+    await fs.mkdir(path.join(project, ".cclaw", "hooks"), { recursive: true });
+    const retiredFiles = ["session-start.mjs", "commit-helper.mjs", "stop-handoff.mjs"];
+    for (const fileName of retiredFiles) {
+      const filePath = path.join(project, ".cclaw", "hooks", fileName);
+      await fs.writeFile(filePath, "#!/usr/bin/env node\nprocess.exit(0);\n", "utf8");
+      await fs.access(filePath);
+    }
     const events: { step: string; detail?: string }[] = [];
     await initCclaw({ cwd: project, onProgress: (event) => events.push(event) });
-    await expect(fs.access(retiredPath)).rejects.toBeTruthy();
-    const removalEvent = events.find((event) => event.step === "Removed retired hook");
-    expect(removalEvent).toBeDefined();
-    expect(removalEvent?.detail).toBe("stop-handoff.mjs");
+    for (const fileName of retiredFiles) {
+      await expect(
+        fs.access(path.join(project, ".cclaw", "hooks", fileName))
+      ).rejects.toBeTruthy();
+    }
+    await expect(fs.access(path.join(project, ".cclaw", "hooks"))).rejects.toBeTruthy();
+    const removalDetails = events
+      .filter((event) => event.step === "Removed retired hook")
+      .map((event) => event.detail);
+    for (const fileName of retiredFiles) {
+      expect(removalDetails).toContain(fileName);
+    }
   });
 
   it("auto-detects cursor harness when .cursor/ marker exists and no --harness is passed", async () => {

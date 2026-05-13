@@ -84,7 +84,7 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
       expect(stagesById("tdd-and-verification")).toEqual(["build", "review", "ship"]);
     });
 
-    it("commit-hygiene rides build + ship (slice-builder commits + commit-helper)", () => {
+    it("commit-hygiene rides build + ship (slice-builder commits + reviewer release pass)", () => {
       expect(stagesById("commit-hygiene")).toEqual(["build", "ship"]);
     });
 

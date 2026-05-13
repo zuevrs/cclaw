@@ -18,7 +18,6 @@ import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
-import { SESSION_START_HOOK_SPEC } from "../../src/content/node-hooks.js";
 
 async function tempProject(): Promise<string> {
   return mkdtemp(path.join(tmpdir(), "cclaw-v89-"));
@@ -379,17 +378,9 @@ describe("v8.9 cleanup", () => {
     });
   });
 
-  describe("B2 — session-start hook is the slug ping (v8.38: pressure advisory dropped)", () => {
-    it("hook body prints the [cclaw] active: line for active flows", () => {
-      expect(SESSION_START_HOOK_SPEC.body).toContain("[cclaw] active:");
-    });
-
-    it("hook body prints the no-active-flow line when state is missing or empty", () => {
-      expect(SESSION_START_HOOK_SPEC.body).toContain("[cclaw] no active flow. Use /cc <task> to start.");
-    });
-
-    it("the hook is shipped as session-start (not a new file)", () => {
-      expect(SESSION_START_HOOK_SPEC.fileName).toBe("session-start.mjs");
-    });
-  });
+  // B2 — session-start hook (retired entirely in v8.40 along with
+  // commit-helper.mjs). The v8.9 pressure-advice work was already trimmed
+  // to a one-line ping in v8.38; v8.40 retires the hook itself. The
+  // tripwires that pinned the ping body now live in `v840-cleanup.test.ts`,
+  // which asserts the hook file no longer ships at all.
 });

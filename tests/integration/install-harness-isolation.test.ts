@@ -58,7 +58,15 @@ const HARNESS_TO_SKILLS_DIR: Record<HarnessId, string> = {
   codex: ".codex/skills/cclaw"
 };
 
-const HARNESS_TO_HOOKS_FILE: Record<HarnessId, string> = {
+/**
+ * v8.40 — earlier cclaw releases wrote per-harness hook config files
+ * (`.claude/hooks/hooks.json`, `.cursor/hooks.json`,
+ * `.opencode/plugins/cclaw-plugin.mjs`, `.codex/hooks.json`) wiring
+ * `session-start.mjs` into the harness session.start event. v8.40
+ * retired all hooks and these wiring files; every entry below MUST
+ * stay absent regardless of which harnesses the operator selects.
+ */
+const RETIRED_HARNESS_HOOK_FILES: Record<HarnessId, string> = {
   claude: ".claude/hooks/hooks.json",
   cursor: ".cursor/hooks.json",
   opencode: ".opencode/plugins/cclaw-plugin.mjs",
@@ -78,29 +86,24 @@ async function assertHarnessFootprint(
   const selectedSet = new Set(selected);
   for (const harness of HARNESS_IDS) {
     if (selectedSet.has(harness)) {
-      // Commands present
       for (const fileName of ["cc.md", "cc-cancel.md", "cc-idea.md"]) {
         const stat = await fs.stat(path.join(project, HARNESS_TO_COMMANDS_DIR[harness], fileName));
         expect(stat.isFile(), `${harness} should have ${fileName}`).toBe(true);
       }
-      // Every specialist present
       for (const agent of CORE_AGENTS) {
         const stat = await fs.stat(
           path.join(project, HARNESS_TO_AGENTS_DIR[harness], `${agent.id}.md`)
         );
         expect(stat.isFile(), `${harness} should have agents/${agent.id}.md`).toBe(true);
       }
-      // Skills mirror present
       const skillsEntries = await fs.readdir(path.join(project, HARNESS_TO_SKILLS_DIR[harness]));
       expect(skillsEntries.length, `${harness} skills dir should not be empty`).toBeGreaterThan(0);
-      // Hooks config present
-      const hooksStat = await fs.stat(path.join(project, HARNESS_TO_HOOKS_FILE[harness]));
-      expect(hooksStat.isFile(), `${harness} should have hooks config`).toBe(true);
+      // v8.40: hooks config files are NOT written for any harness.
+      await expect(
+        fs.access(path.join(project, RETIRED_HARNESS_HOOK_FILES[harness])),
+        `${harness} hooks config must NOT exist in v8.40 (hooks retired)`
+      ).rejects.toBeTruthy();
     } else {
-      // Tripwire: no cclaw-written files exist under the NON-selected
-      // harness's roots. The harness's own marker dir is permitted to
-      // exist (the temp-project helper creates it for auto-detect), but
-      // the cclaw-managed subpaths must all be absent.
       for (const fileName of ["cc.md", "cc-cancel.md", "cc-idea.md"]) {
         await expect(
           fs.access(path.join(project, HARNESS_TO_COMMANDS_DIR[harness], fileName)),
@@ -118,8 +121,8 @@ async function assertHarnessFootprint(
         `${harness} skills/cclaw dir must NOT exist when not selected`
       ).rejects.toBeTruthy();
       await expect(
-        fs.access(path.join(project, HARNESS_TO_HOOKS_FILE[harness])),
-        `${harness} hooks config must NOT exist when not selected`
+        fs.access(path.join(project, RETIRED_HARNESS_HOOK_FILES[harness])),
+        `${harness} retired hooks config must NOT exist (v8.40)`
       ).rejects.toBeTruthy();
     }
   }
@@ -172,9 +175,13 @@ describe("install — harness isolation tripwires (v8.29)", () => {
 
   it("shared `.cclaw/` runtime root is written identically regardless of which harness was selected", async () => {
     // Whatever combination of harnesses an operator picks, the shared
-    // `.cclaw/lib/`, `.cclaw/hooks/`, and `.cclaw/state/` payloads should
-    // be byte-identical — these are the runtime contracts every harness
-    // reads from, and per-harness drift would silently break /cc.
+    // `.cclaw/lib/` and `.cclaw/state/` payloads should be byte-identical
+    // — these are the runtime contracts every harness reads from, and
+    // per-harness drift would silently break /cc.
+    //
+    // v8.40 — `.cclaw/hooks/` is gone (full hook retirement); spot-check
+    // only the surviving payloads. The companion install.test.ts asserts
+    // the hooks directory itself does not exist on disk.
     const projects: string[] = [];
     try {
       for (const selection of [["cursor"], ["claude"], ["cursor", "claude"]] as HarnessId[][]) {
@@ -182,11 +189,10 @@ describe("install — harness isolation tripwires (v8.29)", () => {
         projects.push(p);
         await initCclaw({ cwd: p, harnesses: selection });
       }
-      // Spot-check three high-signal files:
       const checkFiles = [
-        ".cclaw/hooks/commit-helper.mjs",
         ".cclaw/lib/agents/slice-builder.md",
-        ".cclaw/lib/skills/tdd-and-verification.md"
+        ".cclaw/lib/skills/tdd-and-verification.md",
+        ".cclaw/lib/runbooks/build.md"
       ];
       for (const f of checkFiles) {
         const bodies = await Promise.all(

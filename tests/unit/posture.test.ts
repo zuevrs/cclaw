@@ -27,8 +27,10 @@ import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
  *
  * Posture is the **annotation**; the `is_behavior_adding` predicate is
  * the **gate**. Posture lives in `plan.md` AC frontmatter; the
- * predicate lives in `commit-helper.mjs` and double-checks that the
- * declared posture is consistent with the AC's `touchSurface`.
+ * predicate lives in `src/posture-validation.ts` (v8.40+; previously
+ * inlined in the retired `commit-helper.mjs`) and double-checks that
+ * the declared posture is consistent with the AC's `touchSurface` at
+ * reviewer time.
  */
 
 const PLAN_TEMPLATE = ARTIFACT_TEMPLATES.find((t) => t.id === "plan")!;

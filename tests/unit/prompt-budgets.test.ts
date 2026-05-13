@@ -64,8 +64,16 @@ const PROMPT_BUDGETS: PromptBudget[] = [
   {
     id: "slice-builder",
     body: SLICE_BUILDER_PROMPT,
-    maxLines: 700,
-    maxChars: 56000
+    // v8.40 raised the slice-builder budget from 56000 to 60000 chars.
+    // The full hooks removal moved mechanical commit-helper enforcement
+    // out of the .mjs file and into prompt-level discipline: the prompt
+    // now teaches the posture-driven commit-prefix recipe, the reviewer's
+    // git-log inspection contract, the strict-mode commit-shape table,
+    // and the v8.40-specific anti-rationalization rows that previously
+    // lived in the hook's error messages. The growth is justified in
+    // CHANGELOG.md (v8.40 — full hooks removal).
+    maxLines: 720,
+    maxChars: 60000
   }
 ];
 

@@ -33,7 +33,13 @@ describe("compound", () => {
     expect(shouldCaptureLearning({ hasArchitectDecision: false, reviewIterations: 1, securityFlag: false, userRequestedCapture: false })).toBe(false);
   });
 
-  it("blocks ship if AC are not committed", async () => {
+  it("v8.40: no longer blocks ship on pending AC — reviewer's release pass is the sole gate", async () => {
+    // v8.40 dropped the mechanical "pending AC blocks ship" check from
+    // runCompoundAndShip; the reviewer's release-mode pass reads
+    // `build.md` and `plan.md` and is the only ship gate now. The
+    // CompoundError surface still exists for other failure modes (e.g.
+    // missing currentSlug, missing artifacts) but pending-AC alone is
+    // no longer one of them.
     project = await createTempProject();
     await writeFlowState(project, {
       schemaVersion: 3,
@@ -46,12 +52,18 @@ describe("compound", () => {
       securityFlag: false,
       triage: null
     });
-    await expect(
-      runCompoundAndShip(project, {
-        shipCommit: "deadbeef",
-        signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: false }
-      })
-    ).rejects.toBeInstanceOf(CompoundError);
+    await writeFileSafe(activeArtifactPath(project, "plan", "demo"), "plan body");
+    await writeFileSafe(activeArtifactPath(project, "build", "demo"), "build body");
+    await writeFileSafe(activeArtifactPath(project, "review", "demo"), "review body");
+    await writeFileSafe(activeArtifactPath(project, "ship", "demo"), "ship body");
+
+    // Should NOT throw: v8.40 trusts the reviewer's release pass to have
+    // already verified that every AC has a matching commit chain.
+    const result = await runCompoundAndShip(project, {
+      shipCommit: "deadbeef",
+      signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: false }
+    });
+    expect(result.movedArtifacts.sort()).toEqual(["build", "plan", "review", "ship"]);
   });
 
   it("moves active artifacts to shipped/<slug>/ when AC are committed", async () => {
