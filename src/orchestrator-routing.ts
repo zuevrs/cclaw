@@ -25,7 +25,15 @@ export interface ExistingPlanMatch {
   filePath: string;
   score: number;
   frontmatter?: ArtifactFrontmatter;
-  acProgress?: { committed: number; pending: number; total: number };
+  /**
+   * v8.40+ — total AC declared in the plan (not "committed N of M"). The
+   * legacy "committed N / M" indicator depended on the retired commit-helper
+   * hook writing `status: committed` back to flow-state on each AC; v8.40
+   * dropped the hook and the resume picker no longer renders progress.
+   * Total stays so the resume picker can show "AC: N" as a coarse-grain
+   * sizing signal.
+   */
+  acProgress?: { total: number };
   lastSpecialist?: ArtifactFrontmatter["last_specialist"];
   refines?: string | null;
   securityFlag?: boolean;
@@ -89,10 +97,9 @@ async function readBody(filePath: string): Promise<string> {
   }
 }
 
-function summariseAc(ac?: AcceptanceCriterionState[]): { committed: number; pending: number; total: number } {
-  if (!Array.isArray(ac)) return { committed: 0, pending: 0, total: 0 };
-  const committed = ac.filter((item) => item.status === "committed").length;
-  return { committed, pending: ac.length - committed, total: ac.length };
+function summariseAc(ac?: AcceptanceCriterionState[]): { total: number } {
+  if (!Array.isArray(ac)) return { total: 0 };
+  return { total: ac.length };
 }
 
 async function tryParseFrontmatter(filePath: string): Promise<ArtifactFrontmatter | null> {

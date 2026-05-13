@@ -57,12 +57,14 @@ The slots inside `<...>` (relative time, next step, option text) render in the u
 | currentStage | progress condition | next step |
 | --- | --- | --- |
 | `plan` | not yet committed | "review the plan in `flows/<slug>/plan.md`, then send `/cc` to dispatch slice-builder" |
-| `build` | strict mode, AC committed > 0, AC pending > 0 | "continue with AC-<next pending>" |
+| `build` | strict mode, `build.md` exists but reviewer not yet dispatched | "continue building (next AC per `plan.md`)" — orchestrator runs `git log --grep="(AC-N):" --oneline` per AC if it needs a precise "next AC" pointer |
 | `build` | soft mode, build.md exists | "review build evidence in `flows/<slug>/build.md`, then send `/cc` to enter review" |
-| `build` | strict mode, all AC committed | "ready for review; send `/cc` to dispatch reviewer" |
+| `build` | strict mode, every AC has matching posture-driven commits visible in `git log --grep` | "ready for review; send `/cc` to dispatch reviewer" |
 | `review` | open block findings exist | "fix-only loop: send `/cc` to dispatch slice-builder mode=fix-only against open ledger rows" |
 | `review` | clear / warn-only convergence | "ready for ship; send `/cc` to dispatch ship" |
 | `ship` | compound complete | "flow already shipped; start a new task or invoke `/cc-cancel` to clear state" |
+
+> **v8.40+** — the resume picker shows the total AC count (`AC: N`) as a coarse sizing signal, not "N committed / M total". The legacy "committed N of M" indicator depended on a hook writing `status: committed` back to `flow-state.json` after each AC's REFACTOR commit; v8.40 drops that hook and the chain is reconstructed ex-post via `git log --grep="(AC-N):" --oneline` only when the orchestrator actually needs a precise pointer (e.g. to dispatch the next AC's slice-builder).
 
 ## Resume rules
 

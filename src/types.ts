@@ -83,6 +83,15 @@ export type AcceptanceCriterionStatus = "pending" | "committed";
 
 export type TddPhase = "red" | "green" | "refactor";
 
+/**
+ * @deprecated v8.40+ — legacy v8.36-v8.39 record shape populated by the
+ * (now-retired) commit-helper hook. The phase SHA was recorded under
+ * `AcceptanceCriterionState.phases[phase]`; v8.40 dropped the mechanical
+ * gate and the AC↔SHA chain is no longer written. The interface stays so
+ * old `flow-state.json` files (with `phases` data) still validate on
+ * read; readers MUST treat the field as advisory only and prefer
+ * `git log --grep="(AC-N):" --oneline` for the canonical chain view.
+ */
 export interface TddPhaseRecord {
   sha?: string;
   skipped?: boolean;
@@ -94,11 +103,11 @@ export interface TddPhaseRecord {
  *
  * The ac-author stamps one of these six values on every AC stanza in
  * `plan.md` frontmatter. Slice-builder reads `posture` and selects the
- * commit ceremony; commit-helper.mjs uses it as the routing key for
- * the per-phase gate; reviewer uses it to scope posture-specific
- * checks (e.g. tests-as-deliverable skips the strict TDD-integrity
- * check because tests ARE the deliverable, not a precondition for
- * production code).
+ * commit ceremony (which posture-driven subject-line prefix sequence to
+ * write); reviewer reads `src/posture-validation.ts:POSTURE_COMMIT_PREFIXES`
+ * to scope posture-specific checks (e.g. tests-as-deliverable skips the
+ * strict TDD-integrity check because tests ARE the deliverable, not a
+ * precondition for production code).
  *
  * The order is the canonical heuristic order from the v8.36 spec:
  *   - test-first (default) is first so legacy plans pick it up;
@@ -136,6 +145,14 @@ export interface AcceptanceCriterionState {
   text: string;
   commit?: string;
   status: AcceptanceCriterionStatus;
+  /**
+   * @deprecated v8.40+ — legacy v8.36 + v8.39 field populated by the
+   * (now-retired) commit-helper hook. v8.40+ no longer reads or writes
+   * this field; the AC↔SHA chain is reconstructed ex-post by the
+   * reviewer via `git log --grep="(AC-N):" --oneline`. The field stays
+   * on the type so old `flow-state.json` files validate on read; new
+   * flows leave it absent.
+   */
   phases?: Partial<Record<TddPhase, TddPhaseRecord>>;
   /**
    * v8.36 — per-AC posture annotation. Absent means
@@ -151,14 +168,19 @@ export const ROUTING_CLASSES = ["trivial", "small-medium", "large-risky"] as con
 export type RoutingClass = (typeof ROUTING_CLASSES)[number];
 
 /**
- * AC traceability and TDD enforcement modes (v8.2+).
+ * AC traceability and TDD enforcement modes (v8.2+; reviewer-enforced
+ * since v8.40).
  *
- * - `inline`: trivial change. No AC table, no commit hook, optional tests.
+ * - `inline`: trivial change. No AC table, no per-AC prefixes, optional tests.
  * - `soft`: small/medium feature work. Bullet-list testable conditions in
- *   `plan.md` (no AC IDs); commit-helper does not block; one TDD cycle per
- *   feature is enough. Default for small/medium routing.
- * - `strict`: large/risky / security-flagged. AC IDs with commit trace,
- *   ship gate, RED → GREEN → REFACTOR per AC. Same as v8.1 behaviour.
+ *   `plan.md` (no AC IDs); one TDD cycle per feature is enough.
+ *   Default for small/medium routing.
+ * - `strict`: large/risky / security-flagged. AC IDs with posture-driven
+ *   commit-message prefixes (`red(AC-N): ...` / `green(AC-N): ...` /
+ *   `refactor(AC-N): ...` / `test(AC-N): ...` / `docs(AC-N): ...`); the
+ *   reviewer ex-post verifies ordering via `git log --grep="(AC-N):"`.
+ *   Ship gate is the reviewer's release pass (no separate `runCompoundAndShip`
+ *   pending-AC gate).
  *
  * Selected at the triage gate; user can override.
  */
