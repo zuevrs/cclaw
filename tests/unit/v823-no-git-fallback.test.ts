@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { renderStartCommand } from "../../src/content/start-command.js";
@@ -95,7 +96,7 @@ describe("v8.40 no-git fallback — strict-mode chain check is skipped when no .
     // recorded downgradeReason=no-git, the chain check is structurally
     // impossible (nothing to grep) and the reviewer should skip it.
     const reviewerPath = path.resolve(
-      path.dirname(new URL(import.meta.url).pathname),
+      path.dirname(fileURLToPath(import.meta.url)),
       "../../src/content/specialist-prompts/reviewer.ts"
     );
     return fs.readFile(reviewerPath, "utf8").then((source) => {
