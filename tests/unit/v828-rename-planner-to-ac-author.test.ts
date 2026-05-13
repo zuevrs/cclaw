@@ -56,12 +56,13 @@ describe("v8.28 — SPECIALISTS array carries `ac-author`, not `planner`", () =>
     expect((SPECIALISTS as readonly string[]).includes("planner")).toBe(false);
   });
 
-  it("AC-1: SPECIALISTS order is design, ac-author, reviewer, security-reviewer, slice-builder", () => {
+  it("AC-1: SPECIALISTS order is design, ac-author, reviewer, security-reviewer, critic, slice-builder (v8.42 inserted critic between security-reviewer and slice-builder)", () => {
     expect([...SPECIALISTS]).toEqual([
       "design",
       "ac-author",
       "reviewer",
       "security-reviewer",
+      "critic",
       "slice-builder",
     ]);
   });
@@ -73,10 +74,11 @@ describe("v8.28 — SPECIALIST_PROMPTS keyed at `ac-author`", () => {
     expect(SPECIALIST_PROMPTS["ac-author"].length).toBeGreaterThan(1000);
   });
 
-  it("AC-2: SPECIALIST_PROMPTS has no `planner` key (type-level guarantee + runtime check)", () => {
+  it("AC-2: SPECIALIST_PROMPTS has no `planner` key (type-level guarantee + runtime check; v8.42 added critic key)", () => {
     expect(Object.keys(SPECIALIST_PROMPTS)).not.toContain("planner");
     expect(Object.keys(SPECIALIST_PROMPTS).sort()).toEqual([
       "ac-author",
+      "critic",
       "design",
       "reviewer",
       "security-reviewer",
@@ -151,8 +153,8 @@ describe("v8.28 — LEGACY_PLANNER_ID + rewriteLegacyPlanner migration", () => {
     expect(migrated.lastSpecialist).toBe("ac-author");
   });
 
-  it("AC-5: migrateFlowState does NOT rewrite valid `lastSpecialist` values", () => {
-    for (const id of ["ac-author", "design", "reviewer", "security-reviewer", "slice-builder", null] as const) {
+  it("AC-5: migrateFlowState does NOT rewrite valid `lastSpecialist` values (v8.42 added critic)", () => {
+    for (const id of ["ac-author", "design", "reviewer", "security-reviewer", "critic", "slice-builder", null] as const) {
       const state = {
         schemaVersion: FLOW_STATE_SCHEMA_VERSION,
         currentSlug: null,
@@ -189,11 +191,12 @@ describe("v8.28 — no orphan `planner` references in shipped source / tests", (
     expect(AC_AUTHOR_PROMPT).not.toMatch(/\bplanner\b/iu);
   });
 
-  it("AC-6: every other specialist prompt body has zero `planner` references", () => {
+  it("AC-6: every other specialist prompt body has zero `planner` references (v8.42 added critic)", () => {
     expect(DESIGN_PROMPT).not.toMatch(/\bplanner\b/iu);
     expect(REVIEWER_PROMPT).not.toMatch(/\bplanner\b/iu);
     expect(SECURITY_REVIEWER_PROMPT).not.toMatch(/\bplanner\b/iu);
     expect(SLICE_BUILDER_PROMPT).not.toMatch(/\bplanner\b/iu);
+    expect(SPECIALIST_PROMPTS.critic).not.toMatch(/\bplanner\b/iu);
   });
 
   it("AC-6: every skill body has zero `planner` references (prose ↔ specialist references all renamed)", () => {

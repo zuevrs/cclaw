@@ -7,12 +7,25 @@ import {
   type AcMode,
   type AcceptanceCriterionState,
   type BuildProfile,
+  type CriticEscalation,
+  type CriticVerdict,
   type FlowStage,
   type RoutingClass,
   type RunMode,
   type SpecialistId,
   type TriageDecision
 } from "./types.js";
+
+const CRITIC_VERDICTS = ["pass", "iterate", "block-ship"] as const;
+const CRITIC_ESCALATIONS = ["none", "light", "full"] as const;
+
+function isCriticVerdict(value: unknown): value is CriticVerdict {
+  return typeof value === "string" && (CRITIC_VERDICTS as readonly string[]).includes(value);
+}
+
+function isCriticEscalation(value: unknown): value is CriticEscalation {
+  return typeof value === "string" && (CRITIC_ESCALATIONS as readonly string[]).includes(value);
+}
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
 
@@ -51,6 +64,45 @@ export interface FlowStateV82 {
    * which is the intentionally permissive fallback.
    */
   reviewCounter?: number;
+  /**
+   * v8.42 — counts critic dispatches for the active flow.
+   *
+   * Hard-capped at 2 (initial dispatch + at-most-one rerun when the user
+   * picks `fix and re-review` at the block-ship picker). A third dispatch
+   * is structurally not supported and triggers the critic-cap-reached
+   * picker, mirroring the v8.20 5-iteration cap for reviewer.
+   *
+   * Optional in TypeScript so v8.41 state files (which lack the field)
+   * still validate; readers MUST default to `0` on absent. Distinct from
+   * {@link reviewIterations} — critic dispatches do not increment the
+   * reviewer counter, by design (see `.cclaw/flows/v842-critic-design/
+   * design.md §9.0`).
+   */
+  criticIteration?: number;
+  /**
+   * v8.42 — verdict returned by the most-recent critic dispatch.
+   *
+   * `pass`/`iterate` allow the orchestrator to advance to Hop 5 (ship);
+   * `block-ship` pauses for the user's block-ship picker. Absence means
+   * critic has not run yet (legacy pre-v8.42 state or a freshly-created
+   * flow). The flow-state reader uses absence + `currentStage: "review"`
+   * + `lastSpecialist: "reviewer"` as the pre-v8.42 migration signal.
+   */
+  criticVerdict?: CriticVerdict;
+  /**
+   * v8.42 — open-gap count (severity != `fyi`) from the most-recent
+   * critic dispatch. Surfaced in `ship.md > Risks carried over` for
+   * `iterate` verdicts; otherwise advisory.
+   */
+  criticGapsCount?: number;
+  /**
+   * v8.42 — escalation level from the most-recent critic dispatch.
+   *
+   * `none` = pure gap mode; `light` = one §8 trigger fired in soft mode;
+   * `full` = `adversarial` mode (strict mode + any §8 trigger). The
+   * orchestrator stamps this for telemetry / compound-learning audit.
+   */
+  criticEscalation?: CriticEscalation;
   /**
    * Triage decision for the active flow. Null while no flow is running.
    * Persisted so resume never re-prompts the user.
@@ -362,6 +414,22 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     if (typeof state.reviewCounter !== "number" || state.reviewCounter < 0) {
       throw new Error("flow-state.reviewCounter must be a non-negative number when present");
     }
+  }
+  if (state.criticIteration !== undefined) {
+    if (typeof state.criticIteration !== "number" || state.criticIteration < 0) {
+      throw new Error("flow-state.criticIteration must be a non-negative number when present");
+    }
+  }
+  if (state.criticVerdict !== undefined && !isCriticVerdict(state.criticVerdict)) {
+    throw new Error(`Invalid criticVerdict: ${String(state.criticVerdict)}`);
+  }
+  if (state.criticGapsCount !== undefined) {
+    if (typeof state.criticGapsCount !== "number" || state.criticGapsCount < 0) {
+      throw new Error("flow-state.criticGapsCount must be a non-negative number when present");
+    }
+  }
+  if (state.criticEscalation !== undefined && !isCriticEscalation(state.criticEscalation)) {
+    throw new Error(`Invalid criticEscalation: ${String(state.criticEscalation)}`);
   }
   if (typeof state.securityFlag !== "boolean") {
     throw new Error("flow-state.securityFlag must be a boolean");

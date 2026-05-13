@@ -32,7 +32,7 @@ askUserQuestion(
       prompt: <one sentence asking which run mode to use>,
       options: [
         <option label conveying: step mode — pause after each stage; next /cc advances (default)>,
-        <option label conveying: auto mode — chain plan → build → review → ship; stop only on hard gates>
+        <option label conveying: auto mode — chain plan → build → review → critic → ship; stop only on hard gates>
       ],
       allow_multiple: false
     }
@@ -47,7 +47,7 @@ askUserQuestion(
 const TRIAGE_FALLBACK_EXAMPLE = `\`\`\`
 <Triage block in the user's language; lines are:>
 ─ Complexity: <trivial | small/medium | large-risky>  (confidence: <high | medium | low>)
-─ Recommended path: <inline | plan → build → review → ship>
+─ Recommended path: <inline | plan → build → review → critic → ship>
 ─ Why: <one short sentence in the user's language; cite file count / LOC / sensitive-surface flag>
 ─ AC mode: <inline | soft | strict>
 
@@ -70,7 +70,7 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
   "triage": {
     "complexity": "small-medium",
     "acMode": "soft",
-    "path": ["plan", "build", "review", "ship"],
+    "path": ["plan", "build", "review", "critic", "ship"],
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
     "userOverrode": false,
@@ -82,6 +82,8 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 
 \`autoExecuted: true\` is set **only** on the zero-question fast path (trivial / high-confidence, no structured ask shown). On every other path \`autoExecuted: false\`. \`runMode\` is \`null\` on inline (whether reached via fast path or via Question 1 option "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.
 
+**v8.42:** \`triage.path\` includes the \`"critic"\` stage between \`"review"\` and \`"ship"\` whenever \`acMode != "inline"\`. On \`acMode: "inline"\` the path stays \`["build"]\`. See \`runbooks/critic-stage.md\` for the full contract.
+
 After triage is persisted, the orchestrator runs the **v8.18 prior-learnings lookup** (see "Hop 2 §3 — prior-learnings lookup" below) and stamps \`triage.priorLearnings\` when matches are found.`;
 
 const RESUME_SUMMARY_EXAMPLE = `\`\`\`
@@ -89,7 +91,7 @@ Active flow: <slug>
 ─ Stage: <stage>  (last touched <relative-time, in the user's language>)
 ─ Triage: <complexity> / acMode=<acMode>
 ─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
-─ Last specialist: <none | design | ac-author | reviewer | security-reviewer | slice-builder>
+─ Last specialist: <none | design | ac-author | reviewer | security-reviewer | critic | slice-builder>
 ─ Open findings: <K>
 ─ Next step: <one sentence in the user's language describing what /cc will do next>
 
@@ -297,20 +299,21 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 3. **Hand off** in a sub-agent. Do not run the specialist's work in your own context.
 4. When the sub-agent returns, read its slim summary, do not re-read its artifact.
 5. Patch \`flow-state.json\` **after every dispatch** (not only at end-of-stage):
-   - \`lastSpecialist\` = the id of the specialist that just returned or just signed off (\`design\` / \`ac-author\` / \`slice-builder\` / \`reviewer\` / \`security-reviewer\`). The \`design\` specialist runs in **main context** (v8.14+): the orchestrator patches \`lastSpecialist: "design"\` only after Phase 7 sign-off returns \`approve & proceed\`. This is the ONLY way checkpoint-based resume works mid-discovery.
+   - \`lastSpecialist\` = the id of the specialist that just returned or just signed off (\`design\` / \`ac-author\` / \`slice-builder\` / \`reviewer\` / \`security-reviewer\` / \`critic\`). The \`design\` specialist runs in **main context** (v8.14+): the orchestrator patches \`lastSpecialist: "design"\` only after Phase 7 sign-off returns \`approve & proceed\`. This is the ONLY way checkpoint-based resume works mid-discovery. The \`critic\` specialist (v8.42+) is on-demand: \`lastSpecialist: "critic"\` is stamped only after the critic's slim summary has been read and the orchestrator has patched \`criticVerdict\` / \`criticIteration\` / \`criticGapsCount\` / \`criticEscalation\` into the same write — see Hop 4.5.
    - \`currentStage\` = the **next** stage in \`triage.path\` only when the **whole stage** is complete. While the discovery sub-phase is in progress (design is still in Phase 0-6, or ac-author just returned but the user has not yet seen the plan), \`currentStage\` stays \`"plan"\` and \`lastSpecialist\` rotates through \`design\` then \`ac-author\`.
    - \`reviewIterations\`, \`securityFlag\`, AC progress — patched in the same write whenever the slim summary reports a change.
 6. Render the pause summary and wait (Hop 4).
 
 ### Stage → specialist mapping
 
-\`triage.path\` only ever holds the four canonical stages: \`plan\`, \`build\`, \`review\`, \`ship\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → ac-author) — see \`runbooks/discovery.md\`.
+\`triage.path\` only ever holds the five canonical stages: \`plan\`, \`build\`, \`review\`, \`critic\`, \`ship\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → ac-author) — see \`runbooks/discovery.md\`. The \`critic\` stage (v8.42+) is **acMode-gated**: \`inline\` skips it entirely; \`soft\` runs \`gap\` mode; \`strict\` runs gap-or-adversarial with §8 escalation. Full gating + escalation + verdict-routing contract lives in \`runbooks/critic-stage.md\`.
 
 | Stage | Specialist | Mode | Wrapper skill | Inline allowed? |
 | --- | --- | --- | --- | --- |
 | \`plan\` | \`ac-author\` (small/medium); design → ac-author (large-risky) | — | plan-authoring (ac-author); design.md is read in main context (no wrapper skill) | yes for trivial; no for any path that includes plan |
 | \`build\` | \`slice-builder\` | \`build\` (or \`fix-only\` after a review with block findings) | tdd-and-verification | yes for trivial only |
 | \`review\` | \`reviewer\` | \`code\` (default) or \`integration\` (after parallel-build) | review-discipline, anti-slop | no, always sub-agent |
+| \`critic\` (v8.42+) | \`critic\` | \`gap\` (default, soft + strict-no-trigger) or \`adversarial\` (strict + §8 trigger fires) | — (the critic prompt body is self-contained; no wrapper) | no, never inline (skipped on \`acMode: inline\`) |
 | \`ship\` | \`reviewer\` (mode=release) + \`reviewer\` (mode=adversarial, strict) + \`security-reviewer\` if \`security_flag\` | parallel fan-out, then merge | release-checklist | no, always sub-agent |
 
 The wrapper-skill column is what you put in the dispatch envelope's "Required second read" line. If multiple wrappers apply (ac-author reads both \`plan-authoring.md\` and \`source-driven.md\` in strict mode), list both — sub-agent reads them in order.
@@ -363,6 +366,14 @@ The full sub-phase procedure — discovery auto-skip heuristic, posture selectio
 - Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user. **Cap-reached recovery is not silent** — the full picker + split-plan procedure lives in \`.cclaw/lib/runbooks/cap-reached-recovery.md\`. The runbook also covers the v8.20 architecture-severity ship gate (\`required + architecture\` findings gate ship in every acMode, not just strict).
 - **Self-review gate before reviewer dispatch.** Every slice-builder strict-mode return carries a \`self_review\` array; the orchestrator inspects it before deciding whether to dispatch reviewer or bounce the slice back. The full gate procedure (decision rule, fix-only bounce envelope, escalation, parallel-build behaviour) lives in \`.cclaw/lib/runbooks/self-review-gate.md\`. Open that runbook on every reviewer-stage exit before the dispatch decision.
 - Slim summary: decision (clear / warn / block / cap-reached), open findings count, recommended next (continue / fix-only / cancel).
+
+#### critic (v8.42+, Hop 4.5)
+
+- Specialist: \`critic\`. On-demand sub-agent; runs at Hop 4.5 — after the reviewer's final iteration returns \`clear\` (or \`warn\` with the architecture-severity gate satisfied), before ship begins. **Skipped on \`acMode: inline\`** (the path is just \`["build"]\`).
+- Inputs (read-only): user's original \`/cc <task>\`, \`flow-state.json > triage\`, \`.cclaw/flows/<slug>/{plan,build,review}.md\`, diff since plan, \`CONTEXT.md\` if present. Output: \`.cclaw/flows/<slug>/critic.md\` — single-shot per dispatch (re-runs overwrite; v8.42 Q2).
+- The critic walks what's **missing** (pre-commitment predictions, gap analysis, AC self-audit, slug-level goal-backward verification, realist check) rather than re-walking the reviewer's eight axes. In \`adversarial\` mode it also runs the four-technique scaffold (assumption violation, composition failures, cascade construction, abuse cases).
+- Slim summary: verdict (\`pass\` / \`iterate\` / \`block-ship\`), predictions/gaps/adversarial-findings counts, goal-backward verdict, escalation level + triggers, realist recalibrations, confidence + rationale.
+- Full procedure — acMode gating table (\`inline\` skip / \`soft\` gap-light / \`strict\` gap-or-adversarial), the five §8 escalation triggers (architectural tier / test-first+zero-RED / large surface / security flag / reviewIterations≥4), 1-rerun cap rules, verdict-handling routing table, \`flow-state.json\` patches, legacy pre-v8.42 migration, dogfood note for the v8.42 slug — lives in \`.cclaw/lib/runbooks/critic-stage.md\`. Open that runbook on every transition from \`review\` to \`critic\` and at every block-ship picker resolution.
 
 #### ship
 
