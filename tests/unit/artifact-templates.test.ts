@@ -39,12 +39,12 @@ describe("artifact-templates", () => {
     expect(parsed.frontmatter.shipped_at).toBe("2026-05-07T00:00:00Z");
   });
 
-  it("review template includes Five Failure Modes block and Concern Ledger", () => {
+  it("review template includes Five Failure Modes block and Findings table", () => {
     const body = templateBody("review", { "SLUG-PLACEHOLDER": "alpha" });
     expect(body).toContain("Five Failure Modes");
     expect(body).toContain("Hallucinated actions");
     expect(body).toContain("Tool misuse");
-    expect(body).toContain("Concern Ledger");
+    expect(body).toContain("Findings");
     expect(body).toContain("Convergence detector");
   });
 

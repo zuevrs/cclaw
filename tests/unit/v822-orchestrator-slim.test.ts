@@ -322,11 +322,11 @@ describe("v8.22 orchestrator-slim — pointer integrity (body → runbook)", () 
     }
   });
 
-  it("AC-7 — Hop 6 finalize is no longer a body section (only a pointer paragraph)", () => {
+  it("AC-7 — finalize is no longer a body section (only a pointer paragraph)", () => {
     const body = renderStartCommand();
-    expect(body).toMatch(/## Hop 6 — Finalize \(ship-finalize/);
+    expect(body).toMatch(/^## Finalize \(ship-finalize/m);
     expect(body).toContain("runbooks/finalize.md");
-    expect(body, "Hop 6 body should be short — full procedure lives in finalize.md").not.toMatch(
+    expect(body, "finalize body should be short — full procedure lives in finalize.md").not.toMatch(
       /\*\*Pre-condition check\.\*\* `flows\/<slug>\/ship\.md` exists with `status: shipped`/
     );
   });

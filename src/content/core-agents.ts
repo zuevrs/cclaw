@@ -82,7 +82,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["gap", "adversarial"],
     description:
-      "v8.42 adversarial critic. Runs at Hop 4.5 (after reviewer, before ship). Falsificationist stance: walks what's MISSING (gap analysis + pre-commitment predictions + goal-backward verification + AC self-audit + realist check). gap mode is default; adversarial mode (assumption violation / composition failures / cascade construction / abuse cases) auto-escalates on the §8 trigger set. acMode-gated: inline skip, soft gap, strict full + escalation. Writes single-shot critic.md (overwrites on re-dispatch).",
+      "v8.42 adversarial critic. Runs at the critic step (after reviewer, before ship). Falsificationist stance: walks what's MISSING (gap analysis + pre-commitment predictions + goal-backward verification + AC self-audit + realist check). gap mode is default; adversarial mode (assumption violation / composition failures / cascade construction / abuse cases) auto-escalates on the §8 trigger set. acMode-gated: inline skip, soft gap, strict full + escalation. Writes single-shot critic.md (overwrites on re-dispatch).",
     prompt: SPECIALIST_PROMPTS.critic
   },
   {

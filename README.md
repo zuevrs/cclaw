@@ -1,117 +1,195 @@
 # cclaw
 
-**A harness-first flow toolkit for coding agents.** `cclaw` wraps each `/cc <task>` in a small opinionated loop — triage, optionally co-design, plan with AC, build with TDD, review, ship — running inside Claude Code, Cursor, OpenCode, or Codex. Under 1 KLOC of orchestrator runtime; everything else lives as on-disk Markdown the agent reads on demand.
+**A TDD harness for coding agents. Type `/cc <task>` and walk away.**
 
-## Install
+cclaw drops a `/cc` slash command into Claude Code, Cursor, OpenCode, or Codex. It triages the task, picks the right amount of ceremony, and runs the work through a multi-specialist pipeline: design → plan → build → review → critic → ship. Every commit comes from a failing test. Every review has a falsificationist second pass. Every shipped task leaves a learning behind.
 
-Requirements: Node.js 20+ and a git project.
+## Why cclaw
+
+- **TDD by default.** Build is RED → GREEN → REFACTOR, one commit per acceptance criterion (strict mode) or one cycle per feature (soft mode).
+- **Two-model review.** Reviewer writes; critic falsifies. Both run as separate sub-agents so you get fresh eyes on every change.
+- **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Risky migrations get a five-axis review with adversarial pre-mortem. The triage step picks for you.
+- **Multi-harness.** Same `.cclaw/` directory works for Claude Code, Cursor, OpenCode, and Codex. Pick one or install for all of them.
+- **Compound learnings.** Non-trivial tasks emit a `learnings.md`. Future runs read prior lessons before authoring a plan.
+
+## Quickstart
 
 ```bash
+# 1. Install into your repo (interactive picker; auto-detects harness)
 cd /path/to/your/repo
-npx cclaw-cli@latest                                              # interactive TUI menu
-npx cclaw-cli --non-interactive install --harness=claude,cursor   # CI / scripts: explicit
+npx cclaw-cli init
+
+# 2. Open your harness (Claude Code, Cursor, OpenCode, or Codex)
+#    and type:
+/cc add caching to the search endpoint
+
+# 3. Watch the orchestrator work. When it pauses, type /cc to resume.
+#    Outputs land in .cclaw/flows/<task-name>/
+ls .cclaw/flows/20260513-search-caching/
+# plan.md  build.md  review.md  critic.md  ship.md
 ```
 
-Running `npx cclaw-cli@latest` with no args opens a top-level menu — Install / Sync / Upgrade / Uninstall / Browse knowledge / Show version / Quit — with a smart default (Install when no `.cclaw/`, Sync when there is one). For CI use `--non-interactive <command>`; bare `cclaw init` / `cclaw sync` were dropped in v8.29 and point at the TUI. Install is idempotent and auto-detects existing harnesses from `.claude/`, `.cursor/`, `.opencode/`, `.codex/` markers when no `--harness=` is passed.
+That's it. No `cclaw plan`, no `cclaw ship`, no `cclaw status`. Flow control lives in `/cc` inside the harness.
 
-Three slash commands then become available in your harness:
+## Worked example
 
-- `/cc <task>` — start a new flow, or resume the active one
-- `/cc-cancel` — abandon the active flow (artifacts move to `.cclaw/flows/cancelled/<slug>/`)
-- `/cc-idea` — drop a half-formed idea into `.cclaw/ideas.md` without starting a flow
+You type:
 
-Flow control (`plan`, `build`, `review`, `ship`) intentionally does **not** live in the CLI — it is the orchestrator's job inside the harness.
+```text
+/cc add caching to the search endpoint
+```
 
-## The four-stage flow
+The orchestrator runs through these stages, pausing at each gate so you can review:
 
-`/cc <task>` runs a triage gate, picks a path, and then dispatches one stage at a time:
+```text
+┌─ Triage ─────────────────────────────────────────────────┐
+│ complexity: small-medium · review level: soft            │
+│ path: plan → build → review → ship                       │
+│ task name: 20260513-search-caching                       │
+└──────────────────────────────────────────────────────────┘
 
-| Path | When | Stages |
-| --- | --- | --- |
-| `inline` | trivial: one file, low risk | edit + commit |
-| `soft` | small / medium: a few files, no migrations | `plan → build → review → ship` |
-| `strict` | large / risky: structural change, auth, schema, migrations | `design → plan → build → review → ship` |
+┌─ Plan ───────────────────────────────────────────────────┐
+│ ac-author wrote .cclaw/flows/20260513-search-caching/    │
+│   plan.md (3 AC, 2 prior lessons, repo signals: hit)     │
+│ Confidence: high                                         │
+└──────────────────────────────────────────────────────────┘
 
-Every stage is a fresh sub-agent dispatch that reads its own contract from `.cclaw/lib/agents/<id>.md`, writes one artifact under `.cclaw/flows/<slug>/`, and returns a six-line summary with an explicit `Confidence: high | medium | low` line. The orchestrator chains, pauses, or loops back to a fix-only iteration based on that summary.
+┌─ Build ──────────────────────────────────────────────────┐
+│ slice-builder ran the TDD cycle for each AC:             │
+│   AC-1: red → green → refactor (3 commits)               │
+│   AC-2: red → green (2 commits, no refactor needed)      │
+│   AC-3: red → green → refactor (3 commits)               │
+│ Tests: 14 passing (was 11). Coverage delta: +2.3%.       │
+└──────────────────────────────────────────────────────────┘
 
-**Build is a TDD cycle.** In strict mode every Acceptance Criterion goes RED → GREEN → REFACTOR with one commit per phase, using posture-driven subject prefixes (`red(AC-N): ...` / `green(AC-N): ...` / `refactor(AC-N): ...`). The reviewer reads `git log --grep="(AC-N):"` at handoff and at ship to verify the chain. Soft mode runs the cycle once for the whole feature with a plain `git commit`; inline skips it.
+┌─ Review ─────────────────────────────────────────────────┐
+│ reviewer (7-axis) opened 2 findings:                     │
+│   F-1: cache key collision on case-sensitive queries     │
+│         (correctness, severity: required)                │
+│   F-2: missing TTL refresh on stale entries              │
+│         (architecture, severity: consider)               │
+│ After fix-only re-review: both findings closed.          │
+└──────────────────────────────────────────────────────────┘
 
-When `ac-author` declares topology `parallel-build` (≥4 AC across ≥2 disjoint touch surfaces, every AC `parallelSafe: true`), strict-mode build fans out into git worktrees — capped at five slices, never split into "wave 2". Integration review reads each branch before the orchestrator merges. Harnesses without sub-agent dispatch fall back to inline-sequential with an explicit user accept-fallback step.
+┌─ Critic ─────────────────────────────────────────────────┐
+│ Falsificationist pass: what could go wrong in production?│
+│ Verdict: pass (1 pre-commitment prediction logged)       │
+└──────────────────────────────────────────────────────────┘
 
-## What makes it different
+┌─ Ship ───────────────────────────────────────────────────┐
+│ All 3 AC committed. Release notes drafted in ship.md.    │
+│ Ready to push? [y]es / [n]o                              │
+└──────────────────────────────────────────────────────────┘
+```
 
-- **Cross-flow memory is a closed loop.** Every shipped slug appends a deduped entry to `.cclaw/state/knowledge.jsonl`. The next `/cc` reads it at triage, surfaces the top three nearby slugs as `triage.priorLearnings`, and feeds them to `design`, `ac-author`, and `reviewer` as context. `cclaw --non-interactive knowledge` (or the TUI's "Browse knowledge") lists the catalogue.
-- **Stage-windowed skill loading.** A `build` dispatch sees only the skills tagged for build; a `review` dispatch sees only the skills tagged for review. Seventeen skills live on disk, but each specialist sees its slice.
-- **Calibrated confidence is a routing signal.** `Confidence: low` is a hard pause even in autopilot. `Confidence: medium` requires a `Notes:` line. The orchestrator routes on the calibration, not on its own memory of the dispatch.
+After `y`, cclaw moves the artifacts into `.cclaw/flows/shipped/20260513-search-caching/` and (if the task earned it) appends one row to `.cclaw/knowledge.jsonl` so the next run can read this lesson.
 
-## Specialists
+## What you get
 
-Five on-demand specialists plus two read-only research helpers:
-
-| id | role |
+| Feature | Detail |
 | --- | --- |
-| `design` | large-risky discovery: clarify, frame, approaches, decisions inline, optional pre-mortem, sign-off. Multi-turn in main context. |
-| `ac-author` | breaks the task into Acceptance Criteria, picks topology (sequential vs parallel-build), writes `plan.md`. |
-| `slice-builder` | implements one slice with TDD; commits per AC with posture-driven `red(AC-N): ...` / `green(AC-N): ...` / `refactor(AC-N): ...` prefixes that the reviewer verifies via `git log --grep`. |
-| `reviewer` | seven-axis review (correctness / test-quality / readability / architecture / complexity-budget / security / performance). Per-iteration dedup, five-iteration cap. |
-| `security-reviewer` | threat-model + sensitive-change pass; auto-fires when the diff touches auth, secrets, crypto, or migrations. |
-| `repo-research` (helper) | brownfield scan; called by `ac-author` before authoring. |
-| `learnings-research` (helper) | scans `knowledge.jsonl` for prior shipped slugs that overlap. |
+| **Specialists** | 6 sub-agents: design, ac-author, slice-builder, reviewer, critic, security-reviewer. Each runs in isolation with a mandatory contract read. |
+| **Research helpers** | `repo-research` (brownfield scan) and `learnings-research` (prior shipped lessons) dispatched before every plan. |
+| **TDD modes** | `strict` (per-AC RED → GREEN → REFACTOR), `soft` (one cycle per feature), `inline` (single commit, no plan). |
+| **Review** | 7-axis pass (correctness · test-quality · readability · architecture · complexity-budget · security · performance) with append-only findings table and convergence detector. |
+| **Critic step** | Adversarial falsificationist pass: gap analysis, pre-commitment predictions, goal-backward verification. Runs after reviewer clears. |
+| **Compound learnings** | Gated by signal (architect decision, ≥3 review iterations, security flag, explicit `--capture-learnings`). `knowledge.jsonl` is the durable index. |
+| **Auto-trigger skills** | 17 skills (e.g., `triage-gate`, `tdd-and-verification`, `review-discipline`, `source-driven`). Auto-applied per stage, not user-invoked. |
+| **Parallel build** | Up to 5 slices on git worktrees when AC are independent and ≥2 touch-surface clusters. |
+| **Multi-harness install** | Claude Code, Cursor, OpenCode, Codex — same `.cclaw/` runtime, different harness adapters. |
 
-Strict-mode review additionally runs an adversarial pre-mortem pass at ship gate. An unresolved `severity=required + axis=architecture` finding blocks ship across every AC mode until the user explicitly accepts.
+## Harnesses supported
 
-Each prompt is 200-600 lines with an output schema, worked examples, and hard rules. After `install` they live at `.cclaw/lib/agents/*.md` (shared) and mirrored under your harness's agents directory.
+| Harness | Detection | Status |
+| --- | --- | --- |
+| Claude Code | `CLAUDE.md` or `.claude/` | Supported |
+| Cursor | `.cursor/` | Supported |
+| OpenCode | `opencode.json[c]` or `.opencode/` | Supported |
+| Codex | `.codex/` or `.agents/skills/` | Supported |
 
-## CLI
+Run `npx cclaw-cli init` and the picker pre-selects whatever it detects. Pass `--harness=claude,cursor` to skip the picker.
 
-```bash
-cclaw                                          # open the TUI menu (interactive default)
-cclaw --version | --help                       # version / help flags
-cclaw --non-interactive install                # CI: install / reapply assets (idempotent + orphan cleanup)
-cclaw --non-interactive knowledge              # CI: list captured learnings (--tag, --surface, --json, --all)
-cclaw --non-interactive uninstall              # CI: remove cclaw assets
-cclaw --non-interactive version | help         # CI: print version / help and exit
+## Configuration
+
+`.cclaw/config.yaml` is optional. Defaults are good. See [docs/config.md](docs/config.md) for the full schema. Common knobs:
+
+```yaml
+harnesses: [claude, cursor]
+reviewerTwoPass: false              # opt-in: spec-review + code-quality-review split
+compoundRefreshEvery: 5             # how often to dedup knowledge.jsonl
+compoundRefreshFloor: 10            # minimum entries before refresh kicks in
+captureLearningsBypass: false       # true = silent skip on non-trivial slugs
+legacy-artifacts: false             # true brings back v8.11-era extra artifacts
 ```
 
-`--non-interactive` is the CI / scripts escape hatch — bare `cclaw init` / `cclaw sync` etc. error in v8.29 and point at the TUI. The non-interactive surface is five commands: **install**, **knowledge**, **uninstall**, **version**, **help**. `--non-interactive install` is the single idempotent installer — calling it on an already-installed project re-applies cclaw assets and runs orphan cleanup, which is what `--non-interactive sync` / `--non-interactive upgrade` did before v8.37; those names exit 1 with a migration hint pointing at `install`. The TUI menu keeps its `Sync` / `Upgrade` rows so a human reading the menu sees the right intent. `--non-interactive knowledge` is the read-side of the compound loop; it groups entries by tag, sorts by recency, and accepts `--tag=<tag>` / `--surface=<substring>` filters or `--json` for piping into `jq`.
+## Architecture deep dive
 
-## AC traceability via per-AC commit prefixes (v8.40+)
+The runtime is under 1 KLOC. The prompt content is where the work lives. If you want to understand how `/cc` actually works:
 
-In strict mode, every commit during `/cc` carries a posture-driven subject-line prefix that the reviewer reads at handoff time:
+- [`src/content/start-command.ts`](src/content/start-command.ts) — the orchestrator body (detect, triage, dispatch, pause/resume, compound, finalize)
+- [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 6 specialist contracts (design, ac-author, slice-builder, reviewer, critic, security-reviewer)
+- [`src/content/skills/`](src/content/skills/) — 17 auto-trigger skill bodies
+- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 13 on-demand runbooks the orchestrator opens by trigger
+- [`src/content/artifact-templates.ts`](src/content/artifact-templates.ts) — plan / build / review / critic / ship / learnings templates
 
-```bash
-git add tests/path/to/new.test.ts
-git commit -m "red(AC-1): tooltip shows email when permission set"
+Or read the docs:
 
-git add src/path/to/implementation.ts
-git commit -m "green(AC-1): hasViewEmail check + branch in tooltip"
+- [docs/scheme-of-work.md](docs/scheme-of-work.md) — flow walkthrough with all checkpoints
+- [docs/skills.md](docs/skills.md) — what each auto-trigger skill enforces
+- [docs/harnesses.md](docs/harnesses.md) — what each harness install layer ships
+- [docs/quality-gates.md](docs/quality-gates.md) — AC traceability + Five Failure Modes
+- [CHANGELOG.md](CHANGELOG.md) — release history (v8.45 back to v8.0)
 
-git add src/path/to/implementation.ts
-git commit -m "refactor(AC-1): extract hasViewEmail to permissions.ts"
+## Artifact tree (after install)
+
+```
+.cclaw/
+  config.yaml               flow defaults
+  ideas.md                  /cc-idea drops land here
+  knowledge.jsonl           compound learnings index
+  state/
+    flow-state.json         active flow state (~500 bytes)
+  flows/
+    <task-name>/            one folder per active task
+      plan.md
+      build.md
+      review.md
+      critic.md             (v8.42+)
+      ship.md
+    shipped/<task-name>/    finalized tasks
+    cancelled/<task-name>/  /cc-cancel destination
+  lib/
+    agents/                 6 specialist contracts
+    skills/                 17 auto-trigger skill bodies
+    templates/              artifact templates
+    runbooks/               13 on-demand runbooks
+    patterns/               2 reference patterns
 ```
 
-The reviewer runs `git log --grep="(AC-N):" --oneline` against the plan's AC list and verifies the per-posture sequence (`red` before `green` for `test-first`; just `refactor(AC-N): ...` for `refactor-only`; etc.). Missing or mis-ordered commits land as A-1 findings (severity `required`, axis `correctness`). Soft and inline modes use plain `git commit` without the AC prefix.
+## CLI commands
 
-This is a prompt-only contract — there is no `.cclaw/hooks/` directory, no `commit-helper.mjs`, no mechanical pre-commit gate. cclaw v8.40 retired the hook in favour of the obra-superpowers / mattpocock / addy pattern: the discipline lives in the prompt, and the reviewer's ex-post inspection is the gate.
+```bash
+cclaw init        # install into the current project (interactive picker by default)
+cclaw sync        # reapply assets after a package upgrade
+cclaw upgrade     # same as sync, with version check
+cclaw uninstall   # remove .cclaw/ assets
+cclaw version     # print version
+cclaw help        # short help
+```
 
-## Compound learnings (automatic, gated)
+Flow control (`plan`, `status`, `ship`, `build`, `review`) is intentionally **not** in the CLI. It lives in `/cc` inside the harness.
 
-After ship, cclaw checks whether the run produced something worth remembering — a non-trivial decision was recorded by `design` or `ac-author`, review needed three or more iterations, a security review ran, or the user asked to capture. If yes, `flows/<slug>/learnings.md` is written and one deduped line is appended to `.cclaw/state/knowledge.jsonl`. If no, silently skipped so the index stays signal-rich. Every fifth capture triggers a knowledge-refresh pass (dedup / consolidate / supersede) so the index does not bloat.
+## Contributing
 
-## When to use cclaw, and when not to
+cclaw is dogfooded — every release is shipped via `/cc` against itself. To contribute:
 
-cclaw is opinionated: discovery on risky work, planning, TDD-enforced builds, multi-iteration review, ship gate, automatic compounding. The price is process — even a small task pays for one triage ask.
+1. Fork and clone.
+2. `npm install && npm test` (the test suite is the spec; PRs without test updates are rare).
+3. Run `/cc <your change>` inside a cclaw-installed harness, or write tests + code directly.
+4. Open a PR. CI runs lint, typecheck, unit tests, integration tests, and a smoke runtime test.
 
-- **Reach for cclaw** when you want a structured loop with cross-flow memory and a real review pass on every shipped change, especially on a codebase you will come back to next week.
-- **Reach for something lighter** (a vanilla `CLAUDE.md`, [`andrej-karpathy-skills`](https://github.com/forrestchang/andrej-karpathy-skills)) for one-off edits, throwaway prototypes, or scripts where ceremony costs more than it returns.
-- **Reach for a broader harness** ([`gstack`](https://github.com/garrytan/gstack), [`superpowers`](https://github.com/obra/superpowers)) for browser-driven QA, design generation, parallel-sprint workflows, or a much larger specialist catalogue. cclaw's small surface is intentional; it is not trying to replace those.
-
-## More
-
-- [CHANGELOG.md](CHANGELOG.md) — full release history (v8.0 onward; v7→v8 migration notes at the bottom)
-- `.cclaw/lib/skills/*.md` after install — the seventeen auto-trigger skills + cclaw-meta, each with its trigger and depth sections
-- `.cclaw/config.yaml` after install — harness selection + opt-in flags
+The runtime stays under 1 KLOC; new behavior usually means new prompt content under `src/content/`, not new code under `src/`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Contributions welcome.
+MIT. See [LICENSE](LICENSE).

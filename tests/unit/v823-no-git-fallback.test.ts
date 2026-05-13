@@ -29,13 +29,13 @@ const TRIAGE_GATE_SKILL = (() => {
   return skill.body;
 })();
 
-describe("v8.23 no-git fallback — Hop 1 git-check + auto-downgrade", () => {
-  it("AC-1 — `start-command.ts` Hop 1 documents the git-check sub-step", () => {
+describe("v8.23 no-git fallback — detect step git-check + auto-downgrade", () => {
+  it("AC-1 — `start-command.ts` detect step documents the git-check sub-step", () => {
     const body = renderStartCommand();
     expect(
       body,
-      "Hop 1 should explicitly mention a git-check sub-step so a maintainer can find the v8.23 fallback path"
-    ).toMatch(/Hop 1[\s\S]+?git[- ]check/i);
+      "detect should explicitly mention a git-check sub-step so a maintainer can find the v8.23 fallback path"
+    ).toMatch(/Detect[\s\S]+?git[- ]check/i);
   });
 
   it("AC-1 — body names the auto-downgrade rule (strict → soft when no .git/)", () => {
@@ -43,7 +43,7 @@ describe("v8.23 no-git fallback — Hop 1 git-check + auto-downgrade", () => {
     expect(body).toMatch(/no.?git/i);
     expect(
       body,
-      "body should name the downgrade target so a future maintainer reading Hop 1 knows what acMode the orchestrator settles on"
+      "body should name the downgrade target so a future maintainer reading detect knows what acMode the orchestrator settles on"
     ).toMatch(/strict.*soft|soft.*downgrade|acMode.*soft/);
   });
 

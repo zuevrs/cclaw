@@ -17,7 +17,7 @@ Invoked on `/cc` with no task argument (the canonical resume gesture), and on `/
 - **`/cc-cancel`.** The cancel verb shelves the active flow into `flows/cancelled/<slug>/` and resets `flow-state.json`; resume is structurally meaningless after.
 - **`/cc-idea`.** Idea capture writes a single artifact and exits without touching `flow-state.json`; no resumable state is produced.
 - **Mid-stage tool output.** Resume summarises *at* a stage boundary (the saved `currentStage` is canonical); rendering a resume summary mid-dispatch leaks half-finished work into the picker.
-- **Pre-v8 state files** (`schemaVersion < 2`). Hop 1 hard-stops on those with the migration prompt; resume never runs against unmigrated state.
+- **Pre-v8 state files** (`schemaVersion < 2`). detect hard-stops on those with the migration prompt; resume never runs against unmigrated state.
 
 ## Detection
 

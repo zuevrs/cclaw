@@ -447,7 +447,7 @@ If the orchestrator dispatches a fix-only loop or an additional review iteration
 
 - \`review_iterations\` — frontmatter and any body reference must reflect the final count.
 - AC ↔ commit map — re-emit with the latest fix-only commit SHAs.
-- Risks carried over — re-pull from the now-updated Concern Ledger.
+- Risks carried over — re-pull from the now-updated Findings table.
 - Victory Detector — re-evaluate against the latest review verdict.
 - Test counts ("16 tests" → "22 tests") — re-pull from the build artefact.
 

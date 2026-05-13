@@ -342,7 +342,7 @@ This is the review log. \`reviewer\` (and \`security-reviewer\`, when relevant) 
 
 Hard cap: 5 iterations. After the 5th, stop and surface what remains in the ledger.
 
-## Concern Ledger (append-only)
+## Findings (append-only)
 
 Stable global ids per slug. Rows are never edited or deleted, only appended. Closing a row requires a citation to the fix evidence (commit SHA, test name, or new file:line).
 
@@ -413,7 +413,7 @@ critic_iteration: 1                           # 1 on first dispatch; only ever 2
 
 # Critic — SLUG-PLACEHOLDER
 
-This artifact captures the adversarial critic pass over the slug. The critic runs in Hop 4.5 — after the reviewer clears, before the ship gate begins. The critic is a **separate stance** from the reviewer: the reviewer asks "does the code meet the AC?"; the critic asks "is the AC the right AC, what could we have missed, and what would I predict goes wrong?"
+This artifact captures the adversarial critic pass over the slug. The critic runs at the critic step — after the reviewer clears, before the ship gate begins. The critic is a **separate stance** from the reviewer: the reviewer asks "does the code meet the AC?"; the critic asks "is the AC the right AC, what could we have missed, and what would I predict goes wrong?"
 
 The critic is read-only on the codebase. Every finding cites a \`file:line\` or a backtick-quoted excerpt from \`plan.md\` / \`build.md\` / \`review.md\`.
 
@@ -482,7 +482,7 @@ _(Goal-backward, per-AC. Re-read the user's original prompt and verify each AC a
 ## 5. Goal-backward verification (slug-level)
 
 1. **Goal stated** (from \`plan.md > ## Frame\`): _<one sentence>_
-2. **What shipped** (from \`build.md > ## TDD cycle log\` + \`review.md > Concern Ledger\` closed rows): _<one sentence>_
+2. **What shipped** (from \`build.md > ## TDD cycle log\` + \`review.md > Findings\` closed rows): _<one sentence>_
 3. **Outcome:** _\`solved\` / \`partial\` / \`drifted\`_
 4. **Gap (if partial or drifted):** _<one sentence; emit a G-N finding in §2 — class=AC-coverage for partial, class=scope-creep for drifted>_
 
@@ -526,7 +526,7 @@ Confidence rationale: <one line; required when Confidence != high>
 
 ### Things I noticed but didn't touch
 
-- _Anything observed during reading that is outside the critic's lane (e.g. "the review.md Concern Ledger has a closed row whose citation looks weak; flagging for next reviewer pass, not raising as gap here")._
+- _Anything observed during reading that is outside the critic's lane (e.g. "the review.md Findings table has a closed row whose citation looks weak; flagging for next reviewer pass, not raising as gap here")._
 
 ### Potential concerns
 
@@ -826,7 +826,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "build", fileName: "build.md", description: "Strict-mode build log (six-column TDD table, RED proofs, GREEN suite evidence).", body: BUILD_TEMPLATE },
   { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
-  { id: "critic", fileName: "critic.md", description: "v8.42 critic template — Hop 4.5 falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ac_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), AC self-audit, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
+  { id: "critic", fileName: "critic.md", description: "v8.42 critic template — critic step falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ac_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), AC self-audit, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },

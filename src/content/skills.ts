@@ -8,13 +8,13 @@ import { fileURLToPath } from "node:url";
  * {@link buildAutoTriggerBlock} to render a stage-scoped subset of skills
  * inside each specialist prompt.
  *
- * - `triage`   — Hop 1-2 (gate + persistence)
- * - `plan`     — design + ac-author (Hop 2.5 / 3)
- * - `build`    — slice-builder (Hop 4)
- * - `review`   — reviewer / security-reviewer (Hop 5)
- * - `ship`     — reviewer release + compound-and-ship (Hop 6+)
+ * - `triage`   — detect + triage steps (gate + persistence)
+ * - `plan`     — design + ac-author (preflight / dispatch)
+ * - `build`    — slice-builder (dispatch)
+ * - `review`   — reviewer / security-reviewer (dispatch)
+ * - `ship`     — reviewer release + compound-and-ship
  * - `compound` — runCompoundAndShip's knowledge write loop
- * - `always`   — relevant at every hop; rendered into every stage block.
+ * - `always`   — relevant at every step; rendered into every stage block.
  */
 export type AutoTriggerStage =
   | "triage"
@@ -153,7 +153,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "review-discipline",
     fileName: "review-discipline.md",
-    description: "v8.16 merge of review-loop + security-review. Wraps every reviewer / security-reviewer invocation with the shared Concern Ledger, Five-axis pass, Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
+    description: "v8.16 merge of review-loop + security-review. Wraps every reviewer / security-reviewer invocation with the shared Findings table, Five-axis pass, Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
     triggers: ["specialist:reviewer", "specialist:security-reviewer", "security-flag:true", "diff:auth|secrets|supply-chain|pii"],
     stages: ["review"],
     body: readSkill("review-discipline.md")
@@ -224,7 +224,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "documentation-and-adrs",
     fileName: "documentation-and-adrs.md",
-    description: "Repo-wide ADR catalogue at docs/decisions/ADR-NNNN-<slug>.md. Design (Phase 6.5, deep posture) proposes (PROPOSED); orchestrator promotes to ACCEPTED at Hop 6 after ship; supersession is in-place. Triggers when a Phase 4 D-N introduces a public interface, persistence shape, security boundary, or new dependency.",
+    description: "Repo-wide ADR catalogue at docs/decisions/ADR-NNNN-<slug>.md. Design (Phase 6.5, deep posture) proposes (PROPOSED); orchestrator promotes to ACCEPTED at the finalize step after ship; supersession is in-place. Triggers when a Phase 4 D-N introduces a public interface, persistence shape, security boundary, or new dependency.",
     triggers: [
       "specialist:design",
       "tier:product-grade",

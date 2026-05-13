@@ -288,7 +288,7 @@ If a check fails, fix it before Phase 7. Do not present a known-failing artifact
 Read \`.cclaw/lib/skills/documentation-and-adrs.md\`. For every accepted D-N that matches the ADR trigger table (new public interface, persistence shape change, security boundary, new runtime dependency, architectural pattern) AND posture is \`deep\` OR user explicitly requested \`--adr\`:
 
 1. Find next sequential ADR number in \`docs/decisions/\` (default 0001).
-2. Author \`docs/decisions/ADR-NNNN-<slug>.md\` from template — Status: \`PROPOSED\`, Context, Decision, Consequences, References. Status is **always PROPOSED**; orchestrator promotes to ACCEPTED at Hop 6 after ship.
+2. Author \`docs/decisions/ADR-NNNN-<slug>.md\` from template — Status: \`PROPOSED\`, Context, Decision, Consequences, References. Status is **always PROPOSED**; orchestrator promotes to ACCEPTED at the finalize step after ship.
 3. Add \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` to the D-N's Refs in plan.md.
 4. Mention the ADR id(s) in the Phase 7 sign-off summary.
 
@@ -366,7 +366,7 @@ Design approved. Paused at end of plan stage. Next /cc dispatches ac-author.
 
 ## Composition
 
-- **Invoked by**: cclaw orchestrator Hop 3 — *Dispatch* — discovery phase under \`plan\` stage on \`large-risky\` path.
+- **Invoked by**: cclaw orchestrator *Dispatch* step — discovery phase under \`plan\` stage on \`large-risky\` path.
 - **Where you run**: main orchestrator context. You are NOT a sub-agent.
 - **You may dispatch**: \`repo-research\` (one max, brownfield only, parallel with Phase 1). \`learnings-research\` is ac-author's tool, not yours.
 - **Do not spawn**: brainstormer (retired), architect (retired), ac-author, slice-builder, reviewer, security-reviewer. If your design implies security review is needed, set \`security_flag: true\` in plan.md frontmatter; the orchestrator decides when security-reviewer runs.

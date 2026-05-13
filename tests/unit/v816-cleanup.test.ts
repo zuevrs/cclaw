@@ -95,8 +95,8 @@ const PROVENANCE_SNIPPETS: Record<(typeof MERGED_SKILL_IDS)[number], string[]> =
     "BREAKING:",
   ],
   "review-discipline": [
-    // from review-loop
-    "Concern Ledger",
+    // v8.45 renamed "Concern Ledger" → "Findings"
+    "Findings",
     "Five Failure Modes",
     "Hallucinated actions",
     "Scope creep",
