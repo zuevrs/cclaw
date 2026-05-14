@@ -227,6 +227,7 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 14. **\`dependsOn\` graph is acyclic** and references only AC ids that exist in this plan. A cycle or dangling reference is a self-review failure — fix it before returning.
 15. **\`feasibility_stamp\` is set** in frontmatter to one of \`green\` / \`yellow\` / \`red\` (strict mode). A \`red\` stamp requires you to also surface the blockers in slim-summary Notes and recommend re-decomposition or that the user re-enters the design phase — do not return a \`red\` plan with \`Recommended next: continue\`.
 16. **\`posture\` is set on every AC** (strict mode). One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table above; a \`docs-only\` posture with a source file in \`touchSurface\` is the most common contradiction — fix it here, because the reviewer's git-log + \`src/posture-validation.ts\` cross-check will flag the mismatch as an A-1 finding (severity=required, axis=correctness).
+17. **\`## Spec\` section is present and filled** (v8.46, both strict and soft modes). All four bullets — Objective, Success, Out of scope, Boundaries — carry concrete content or an explicit \`none\` / \`n/a\`. \`<TBD>\`, an empty section, or pasting the prompt verbatim are not acceptable. On large-risky plans where design Phase 2 already wrote the Spec, read it; do not rewrite it. Reviewer flags a missing or empty Spec as a \`required\` finding (axis=correctness).
 
 ### Phase 8 — Return slim summary
 
@@ -278,20 +279,36 @@ Hard rules:
 - Do not let prior lessons override the user's explicit request. If a surfaced lesson recommends pattern A and the user asked for pattern B, surface the conflict in slim summary Notes; do not silently override the user.
 - Do not fabricate a lesson. If the helper returned "no prior slugs apply", write that line and stop — do not invent context to fill the section.
 
+## Spec section (v8.46, mandatory on every plan.md you author)
+
+\`plan.md\` carries a \`## Spec\` section above \`## Acceptance Criteria\`. The Spec section is the requirement-side contract: it captures what AC alone do not carry — intent, high-level success indicators, explicit non-goals, and per-slug constraints. It is mandatory on every plan.md you produce (strict AND soft), with one exception: the inline / trivial path has no plan.md and therefore no Spec.
+
+**Authoring the Spec section is your job on the small-medium path.** On large-risky, design Phase 2 (Frame) writes it before you run; you read it verbatim and do not rewrite. If you arrive on a large-risky plan whose \`## Spec\` section is missing or empty, surface that in slim-summary Notes as "missing Spec section" and stop — do not silently invent the four bullets.
+
+Compose four bullets, each one short line:
+
+- **Objective** — what we are building and why, in one short line. Derive from the user's prompt + the triage decision + repo signals (Frame paragraph, if on large-risky). Example: "Add server-side caching to /api/search so dashboard loads stay under p95 = 200ms."
+- **Success** — high-level indicators that we are done. **NOT the AC bullets** — those go in the AC table. The Success line is something a stakeholder reads to know the slug solved the user-stated problem. Example: "/api/search p95 latency drops from 800ms to under 200ms on the dashboard's worst page." A good test: if a non-engineer reads only this line, can they tell whether the slug shipped?
+- **Out of scope** — explicit non-goals derived from triage + framing. Examples: "no client-side caching", "no cache invalidation work — handled in a separate slug", "no schema changes". Write "none" if genuinely no non-goals — every plan has at least an implicit "no scope creep" but Out of scope is for **specific** named exclusions. The reviewer treats a bullet that just says "none" as the explicit-acknowledgement that no concrete non-goals were identified.
+- **Boundaries** — per-slug "ask first" / "never do" constraints layered **on top of** the iron-laws. Examples: "do not break the public API \`/v1/search\`", "preserve existing cache keys so warm caches survive deploy", "do not introduce a new runtime dependency without surfacing back". Write "none" when iron-laws (RED-first, no scope creep, no unrelated drive-by edits, …) already cover everything — Boundaries is for the **slug-specific** constraints that wouldn't be obvious from the iron-laws alone.
+
+Each bullet MUST be filled. \`<TBD>\`, empty values, or pasting the user's prompt verbatim are not acceptable. If genuinely nothing applies, write "none" or "n/a" — the explicit nothing is the acknowledgement that the question was answered.
+
 ## Output (strict mode)
 
 Append to \`flows/<slug>/plan.md\`:
 
 1. **Plan** — phased list of changes, each implementable in 1-3 commits. AC-aligned, not horizontal-layer (no "all backend then all frontend").
-2. **Acceptance Criteria** — table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`posture\`, \`commit\`. Every AC MUST:
+2. **Spec** — four-bullet requirement-side contract per the "Spec section" rules above (Objective / Success / Out of scope / Boundaries). On large-risky this is already filled by design Phase 2; you read it and do not rewrite. Reviewer flags an empty / \`<TBD>\` / missing Spec section as a \`required\` finding (axis=correctness).
+3. **Acceptance Criteria** — table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`posture\`, \`commit\`. Every AC MUST:
    - Be **observable** (a user, test, or operator can tell whether it is satisfied without reading the diff).
    - Be **independently committable** (a single commit covering only that AC is meaningful).
    - Carry \`parallelSafe: true|false\`, \`dependsOn: []\` (list of AC ids that must be \`status: committed\` before this one builds; empty for leaves), a non-empty \`touchSurface\`, a \`rollback\` line (revert / disable / migration-rollback strategy in one short sentence; "Same as AC-N" allowed; "none" is **not** allowed — every AC has a rollback story), and a \`posture\` value (see "Posture heuristic table" below; default \`test-first\`).
    - Cite at least one verification target (test file:test-name or manual step).
    - The \`dependsOn\` graph must be acyclic. The reviewer enforces topological commit order against this graph.
-3. **Edge cases** — for each AC, **one bullet** naming the non-happy-path that the slice-builder's RED test must encode (boundary, error, empty input, etc.). One per AC, not two.
-4. **Topology** — \`inline\` (default) or \`parallel-build\`. If parallel, declare slices and the integration reviewer. See "Topology rules" below.
-5. **Feasibility stamp** — exactly one of \`green\` / \`yellow\` / \`red\`. Compute it from the realised plan (not from the user's prompt-stage guess) using the criteria below. Copy the value into frontmatter \`feasibility_stamp\` AND write a one-sentence rationale under a new \`## Feasibility stamp\` body section. **A \`red\` stamp blocks build dispatch in strict mode** until you re-decompose the plan or surface a feasibility-blocker request to the user. The reviewer cross-checks \`actual_complexity\` against the stamp at review time.
+4. **Edge cases** — for each AC, **one bullet** naming the non-happy-path that the slice-builder's RED test must encode (boundary, error, empty input, etc.). One per AC, not two.
+5. **Topology** — \`inline\` (default) or \`parallel-build\`. If parallel, declare slices and the integration reviewer. See "Topology rules" below.
+6. **Feasibility stamp** — exactly one of \`green\` / \`yellow\` / \`red\`. Compute it from the realised plan (not from the user's prompt-stage guess) using the criteria below. Copy the value into frontmatter \`feasibility_stamp\` AND write a one-sentence rationale under a new \`## Feasibility stamp\` body section. **A \`red\` stamp blocks build dispatch in strict mode** until you re-decompose the plan or surface a feasibility-blocker request to the user. The reviewer cross-checks \`actual_complexity\` against the stamp at review time.
 
    Stamp criteria (use the worst-case of any single axis):
    - **green**: surface ≤3 modules; all AC have direct test analogues you cited in Phase 2.5; no new dependencies; \`dependsOn\` chain ≤2 hops.
@@ -394,6 +411,13 @@ After ac-author runs (excerpt):
 - Phase 2 — Tooltip wiring (AC-2, AC-3)
   - Branch on \`hasViewEmail\` in \`src/components/dashboard/RequestCard.tsx:90\`; RED tests asserting both branches.
 
+## Spec
+
+- **Objective**: Show approver email in the request-row tooltip when the viewer has the \`view-email\` permission so reviewers can contact the approver without leaving the dashboard.
+- **Success**: Reviewers with the permission see the email on hover; reviewers without it see the display-name fallback. No PII leaks to unauthorised viewers.
+- **Out of scope**: bulk approver lookup, exporting reviewer contact info, request-history surface.
+- **Boundaries**: do not touch the \`/api/requests\` response shape; reuse the existing 250ms hover-delay token (no new design-system primitive).
+
 ## Acceptance Criteria
 
 | id | text | status | parallelSafe | touchSurface | posture | commit |
@@ -452,12 +476,19 @@ For an 8-AC search overhaul (backend index + ranker + frontend badge + integrati
 
 ## Output (soft mode)
 
-In \`soft\` mode the plan is shorter, faster to read, and skips the AC IDs entirely. \`flows/<slug>/plan.md\` body looks like:
+In \`soft\` mode the plan is shorter, faster to read, and skips the AC IDs entirely. The \`## Spec\` section still applies — it is mandatory on every plan.md regardless of mode. \`flows/<slug>/plan.md\` body looks like:
 
 \`\`\`markdown
 ## Plan
 
 Add a status pill to the approvals dashboard with permission-aware tooltip.
+
+## Spec
+
+- **Objective**: Surface request status (Pending / Approved / Denied) in the approvals dashboard so reviewers don't open the row to find it.
+- **Success**: Reviewers see status at a glance from the dashboard; permission-gated tooltip reveals the approver email when allowed.
+- **Out of scope**: notification redesign, mobile breakpoints, bulk-action surface.
+- **Boundaries**: do not change \`/api/approvals\` response shape; preserve existing \`StatusPill\` accessibility tokens.
 
 ## Testable conditions
 
