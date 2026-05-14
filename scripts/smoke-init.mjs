@@ -98,16 +98,27 @@ try {
   // critic specialist. Hop 4.5 dispatches `critic` between `reviewer` and
   // `ship`; the template is the artifact's source-of-truth shape and
   // ships unconditionally (acMode-gated on dispatch, not install).
-  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
+  // v8.51 — `plan-critic.md` template was added alongside the new
+  // pre-implementation plan-critic specialist. Runs between `ac-author`
+  // and `slice-builder` on the tight gate {acMode=strict, complexity=
+  // large-risky, problemType!=refines, AC count>=2}; the template is
+  // the artifact's source-of-truth shape and ships unconditionally
+  // (gate-gated on dispatch, not install).
+  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "plan-critic.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "templates", tpl))) {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }
   }
   // v8.42 — assert the critic specialist's agent file is written too.
-  // CORE_AGENTS now includes `critic` (6 total: design, ac-author,
-  // reviewer, security-reviewer, critic, slice-builder).
+  // v8.51 — assert the plan-critic specialist's agent file is written
+  // too. CORE_AGENTS now includes `plan-critic` (7 specialists total:
+  // design, ac-author, reviewer, security-reviewer, critic, plan-critic,
+  // slice-builder).
   if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "critic.md"))) {
     throw new Error("smoke check failed: v8.42 critic.md agent file missing after init");
+  }
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "plan-critic.md"))) {
+    throw new Error("smoke check failed: v8.51 plan-critic.md agent file missing after init");
   }
   // v8.17: derive the expected list from `AUTO_TRIGGER_SKILLS` so future
   // thematic merges / splits don't require touching this script. Assert
@@ -130,6 +141,13 @@ try {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", runbook))) {
       throw new Error(`smoke check failed: runbook ${runbook} missing after init`);
     }
+  }
+  // v8.51 — `plan-critic-stage.md` on-demand runbook was added alongside
+  // the new pre-implementation plan-critic specialist. The runbook is
+  // lazy-loaded by the orchestrator when the v8.51 gate fires; install
+  // writes the file unconditionally (gate-gated on dispatch).
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "plan-critic-stage.md"))) {
+    throw new Error("smoke check failed: v8.51 plan-critic-stage.md runbook missing after init");
   }
   // v8.12 trimmed reference patterns 8 → 2.
   for (const pattern of ["auth-flow.md", "security-hardening.md"]) {
