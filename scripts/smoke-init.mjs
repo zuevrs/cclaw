@@ -74,7 +74,7 @@ try {
       throw new Error(`smoke check failed: stale per-stage flow dir .cclaw/flows/${stale}/ should not exist after init`);
     }
   }
-  for (const dir of ["agents", "skills", "templates", "runbooks", "patterns", "research", "recovery"]) {
+  for (const dir of ["agents", "skills", "templates", "runbooks", "patterns"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", dir))) {
       throw new Error(`smoke check failed: .cclaw/lib/${dir}/ missing after init`);
     }
@@ -82,6 +82,14 @@ try {
   // v8.44 retired .cclaw/lib/examples/ — the directory should NOT exist on a fresh install.
   if (existsSync(join(tempDir, ".cclaw", "lib", "examples"))) {
     throw new Error("smoke check failed: .cclaw/lib/examples/ was retired in v8.44 but is still present after init");
+  }
+  // v8.54 retired .cclaw/lib/research/ and .cclaw/lib/recovery/ — both modules
+  // exported empty arrays since v8.12 and no specialist or runbook ever
+  // read from them. The directories should NOT exist on a fresh install.
+  for (const retiredDir of ["research", "recovery"]) {
+    if (existsSync(join(tempDir, ".cclaw", "lib", retiredDir))) {
+      throw new Error(`smoke check failed: .cclaw/lib/${retiredDir}/ was retired in v8.54 but is still present after init`);
+    }
   }
   // v8.44 added .cclaw/state/triage-audit.jsonl — the write-only audit log for
   // triage telemetry that used to live on TriageDecision (userOverrode,
@@ -110,10 +118,16 @@ try {
   // ui/web AND acMode != inline); the template is the artifact's
   // source-of-truth shape and ships unconditionally (gate-gated on
   // dispatch, not install).
-  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "plan-critic.md", "qa.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
+  // v8.54: decisions.md is gated behind config.legacyArtifacts; default install
+  // does NOT write the legacy decisions template (v8.14+ inlines D-N rows in
+  // plan.md > ## Decisions).
+  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "plan-critic.md", "qa.md", "ship.md", "learnings.md", "manifest.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "templates", tpl))) {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }
+  }
+  if (existsSync(join(tempDir, ".cclaw", "lib", "templates", "decisions.md"))) {
+    throw new Error("smoke check failed: decisions.md template was gated behind config.legacyArtifacts in v8.54 but is still present on default install");
   }
   // v8.42 — assert the critic specialist's agent file is written too.
   // v8.51 — assert the plan-critic specialist's agent file is written
@@ -156,12 +170,22 @@ try {
       throw new Error(`smoke check failed: runbook ${runbook} missing after init`);
     }
   }
-  // v8.51 — `plan-critic-stage.md` on-demand runbook was added alongside
-  // the new pre-implementation plan-critic specialist. The runbook is
-  // lazy-loaded by the orchestrator when the v8.51 gate fires; install
-  // writes the file unconditionally (gate-gated on dispatch).
-  if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "plan-critic-stage.md"))) {
-    throw new Error("smoke check failed: v8.51 plan-critic-stage.md runbook missing after init");
+  // v8.54 — `plan-critic-stage.md` and `critic-stage.md` were merged into
+  // `critic-steps.md` (one runbook covers both the pre-impl plan-critic
+  // and post-impl critic dispatches). Assert the merged runbook exists
+  // and the source runbooks do NOT.
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "critic-steps.md"))) {
+    throw new Error("smoke check failed: v8.54 critic-steps.md runbook missing after init");
+  }
+  for (const retired of ["plan-critic-stage.md", "critic-stage.md", "self-review-gate.md", "ship-gate.md", "discovery.md", "plan-small-medium.md"]) {
+    if (existsSync(join(tempDir, ".cclaw", "lib", "runbooks", retired))) {
+      throw new Error(`smoke check failed: v8.54 retired runbook ${retired} is still present after init`);
+    }
+  }
+  // v8.54 — `self-review-gate.md` and `ship-gate.md` were merged into
+  // `handoff-gates.md`. Assert the merged runbook exists.
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "handoff-gates.md"))) {
+    throw new Error("smoke check failed: v8.54 handoff-gates.md runbook missing after init");
   }
   // v8.52 — `qa-stage.md` on-demand runbook was added alongside the new
   // behavioural-QA qa-runner specialist. The runbook is lazy-loaded by
@@ -183,14 +207,10 @@ try {
       throw new Error(`smoke check failed: deleted pattern ${stalePattern} should not be present after v8.12`);
     }
   }
-  // v8.12 deleted all 5 recovery and 3 research library entries; each
-  // directory now ships only its `index.md` note. v8.44 removed
-  // `examples/` outright (no agent code path ever read from it).
-  for (const dir of ["recovery", "research"]) {
-    if (!existsSync(join(tempDir, ".cclaw", "lib", dir, "index.md"))) {
-      throw new Error(`smoke check failed: ${dir}/index.md missing after init`);
-    }
-  }
+  // v8.54 removed lib/recovery/ and lib/research/ outright — both modules
+  // exported empty arrays since v8.12 and the orphan index.md files were
+  // unused. Directories must not exist on a fresh install (asserted
+  // above) and on upgrade the retired-lib-dir cleanup removes them.
   if (!existsSync(join(tempDir, ".cclaw", "lib", "antipatterns.md"))) {
     throw new Error("smoke check failed: lib/antipatterns.md missing after init");
   }
