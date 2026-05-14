@@ -62,9 +62,9 @@ Before scoring findings, read \`flow-state.json > triage.priorLearnings\` if pre
 
 **v8.50 outcome-signal prior weighting.** Each \`triage.priorLearnings\` entry MAY carry an \`outcome_signal\` field (\`good\` / \`unknown\` / \`manual-fix\` / \`follow-up-bug\` / \`reverted\`) plus \`outcome_signal_updated_at\` and \`outcome_signal_source\`. The orchestrator already down-weights prior entries by signal at lookup time (see \`OUTCOME_SIGNAL_MULTIPLIERS\` in \`src/knowledge-store.ts\`), so an entry that surfaces here has already cleared the threshold. The signal still matters at YOUR end though: an entry with \`outcome_signal: "manual-fix"\` or \`"follow-up-bug"\` or \`"reverted"\` is a less authoritative precedent — do NOT raise severity on the strength of a down-weighted prior alone. When you cite a down-weighted prior in a finding, name the signal and source verbatim ("cf. shipped slug \`<slug>\` (\`outcome_signal: manual-fix\`, source \`<source>\`) — treating as advisory rather than load-bearing"). Entries without the field read as \`"unknown"\` (neutral; the pre-v8.50 default).
 
-## Nine-axis review (mandatory in every iteration)
+## Ten-axis review (mandatory in every iteration)
 
-Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Nine axes; five severities. The axes are **correctness**, **readability**, **architecture**, **security**, **perf**, **test-quality**, **complexity-budget**, **edit-discipline** — shipped in v8.48 — and **nfr-compliance** (gated — see the gating rule below the table).
+Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Ten axes; five severities. The axes are **correctness**, **readability**, **architecture**, **security**, **perf**, **test-quality**, **complexity-budget**, **edit-discipline** — shipped in v8.48 — **qa-evidence** — shipped in v8.52 (gated — see the gating rule below the table) — and **nfr-compliance** (gated — see the gating rule below the table).
 
 | axis | what it covers | examples |
 | --- | --- | --- |
@@ -76,6 +76,7 @@ Every finding you record carries TWO labels: an **axis** (which dimension of qua
 | \`security\` | a pre-screen for surfaces handled in depth by \`security-reviewer\`. injection, missing authn/authz, secrets, untrusted input. | unsanitised input rendered into HTML; password logged; missing CSRF on state-changing endpoint |
 | \`perf\` | does the change introduce N+1, unbounded loops, sync-where-async, missing pagination, hot-path allocations? | for-loop with await + db query; \`map\` over 100k items in render path; missing index on new query |
 | \`edit-discipline\` — v8.48 | did per-AC commits touch only files declared in plan.md's \`Touch surface\` for that AC (plus any \`Refactor scope\` for refactor commits)? did the slice-builder cite the pre-edit-investigation probes (git log / rg / full-file-read) in build.md's Discovery column for every non-fresh file? | \`green(AC-2): ...\` modifies \`src/lib/clock.ts\` which AC-2's \`touchSurface\` does not list; build.md Discovery cell for AC-3 cites zero probes despite \`touchSurface\` listing two existing files; fresh-file claim made on a file whose \`git log --oneline -1 -- <path>\` returns a non-empty SHA. |
+| \`qa-evidence\` (**gated**) — v8.52 | for every AC whose \`touchSurface\` includes UI files (\`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\`), does \`flows/<slug>/qa.md > §4 Per-AC evidence\` contain a row with \`Status: pass\` whose evidence cites a Playwright test exit code, a saved screenshot path, OR an explicit numbered manual-steps block confirmed by the user? does the qa-runner's \`evidence_tier\` match the strongest tier actually available (no silent downgrades)? | qa.md missing entirely on a slug whose \`triage.surfaces\` includes \`ui\`; qa.md row for AC-3 reads \`Status: fail\` but the slug ships anyway; qa.md frontmatter records \`evidence_tier: manual\` but \`package.json\` ships Playwright (silent downgrade); qa.md \`Per-AC evidence\` row cites a screenshot path that does not exist on disk |
 | \`nfr-compliance\` (**gated**) | does the diff comply with the plan's \`## Non-functional\` section? performance budgets, compatibility constraints, accessibility baselines, security-baseline rows. **No findings on this axis when the section is empty / absent.** | a UI change that misses the WCAG AA contrast row; a new endpoint that ignores the documented p95 budget; bundle KB exceeds the perf row's hard ceiling |
 
 ### Edit-discipline axis details — shipped in v8.48
@@ -112,6 +113,52 @@ A Discovery cell missing any of the three probes — without the explicit \`new-
 | "But I had to touch the schema to fix a type error that surfaced during GREEN." | If the type error surfaced during GREEN and required touching a file outside the AC's \`Touch surface\`, the AC's plan declaration was incomplete and the discovery is itself a finding. The fix is a plan amendment, not a silent expansion. The slice-builder stops, surfaces the incomplete declaration in the slim summary (\`Notes: AC-N requires schema touch; plan amendment needed\`), and the orchestrator routes back to ac-author for the one-line revision before slice-builder re-takes the AC. Silently editing the schema is the contract violation the axis pins down. |
 | "But the pre-edit probes were noise — the file is small." | Probes are mandatory regardless of file size; the gate exists because subjective "small enough" judgements were the most common failure mode in pre-v8.48 builds. Cite the three probes (they are cheap — three shell commands and a read) or claim \`new-file\` explicitly. There is no \`small-file\` escape hatch; the axis fires until the citations land. |
 
+### qa-evidence axis details — shipped in v8.52
+
+The \`qa-evidence\` axis is the ex-post cross-check of the qa-runner's per-AC evidence rows in \`flows/<slug>/qa.md\` against the actual diff. It is **gated**: the axis fires only when the orchestrator dispatched qa-runner (i.e. \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\`). On any slug where the qa gate did not fire, the axis is structurally skipped — note "qa-evidence: skipped (no qa gate)" in the iteration block.
+
+When the qa gate did fire, walk the diff and check every AC whose \`touchSurface\` includes a UI file (\`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\`) against the matching \`qa.md > §4 Per-AC evidence\` row. Three distinct sub-checks:
+
+**Sub-check 1 — Per-UI-AC evidence row present.** For each UI-tagged AC, locate the matching row in \`qa.md > §4\`. The row must:
+
+1. Cite the correct AC id (\`### AC-N: <ac summary>\`).
+2. Carry a \`Surface:\` line listing at least one UI surface (\`ui\` / \`web\` / \`mixed: ui+api\` etc).
+3. Carry an \`Evidence:\` block whose content matches the declared \`Verification:\` tier:
+   - For \`Verification: playwright\` — a path to a committed \`.spec.ts\` file, an exit code (must be 0 for Status=pass), and the last 3 lines of stdout.
+   - For \`Verification: browser-mcp\` — at least one screenshot path under \`flows/<slug>/qa-assets/<ac>-<n>.png\` AND an observations paragraph naming what was clicked, what rendered, what was inspected.
+   - For \`Verification: manual\` — a numbered \`Manual QA steps\` block whose steps cite explicit URLs / selectors / expected observations (not "the dashboard" / "the button").
+4. Carry a \`Status:\` line whose value is \`pass\` / \`fail\` / \`pending-user\`.
+
+A missing row — or a row whose evidence content does not match the declared verification tier — is a **qa-evidence finding (severity=required)**. Cite the AC id, the missing-or-malformed row, and recommend the qa-runner fix (when the qa gate iteration cap is not exhausted) OR the slice-builder remediation (when the user picked \`accept-warnings-and-proceed-to-review\` and the qa pass is closed).
+
+**Sub-check 2 — Status=pass requires verbatim behavioural match.** For each UI-tagged AC whose qa.md row reads \`Status: pass\`, cross-check that the evidence ACTUALLY shows the AC's behavioural clause met. A "page loaded" screenshot does NOT satisfy "user sees toast after submit"; a Playwright spec whose only assertion is \`expect(page.url()).toContain("/invites")\` does NOT satisfy "the invites list re-fetches on Refresh click". The evidence must cite the AC's verb verbatim:
+
+- AC says "user sees X" → evidence must show X visible (screenshot with X annotated; Playwright \`expect(page.locator("text=X")).toBeVisible()\`; manual step "3. Expect X to appear within 1s").
+- AC says "user clicks Y and Z happens" → evidence must capture both the click AND Z.
+- AC says "the form submits" → evidence must show the submit completion (success toast, redirect, network 200), not just the click on Submit.
+
+A \`Status: pass\` row whose evidence does NOT capture the AC's verb is a **qa-evidence finding (severity=required)** with the contradiction described. Recommended fix: qa-runner re-runs with stronger evidence, OR the AC needs to be re-scoped (a plan amendment, not a silent acceptance).
+
+**Sub-check 3 — Evidence tier escalation.** Read \`qa.md > frontmatter > evidence_tier\` and cross-check it against project capabilities:
+
+- If \`evidence_tier == "manual"\` but \`package.json\` ships \`@playwright/test\` or a \`test:e2e\` script: this is a **silent tier downgrade**. The qa-runner could have authored a Playwright spec but did not; the manual evidence is the weakest tier. **qa-evidence finding (severity=required)** with the missed tier called out. Recommended fix: qa-runner re-runs with Tier 1; this is the canonical "no excuse to skip Playwright when it's already there" gate.
+- If \`evidence_tier == "browser-mcp"\` but the harness's MCP catalog included \`@playwright/test\` access at qa-runner dispatch time: same finding, same severity.
+- If \`evidence_tier == "manual"\` AND no browser tools were available AND no Playwright in the project: this is the **legitimate degradation** path. The axis fires a \`fyi\` finding (not \`required\`) noting that the weakest tier was used and recommending a follow-up "add Playwright" slug. Manual-tier evidence with \`pending-user\` status is honest; manual-tier evidence with \`pass\` requires the user's explicit confirmation in qa.md (a free-text confirmation paragraph, dated and signed in the artifact body).
+
+**Skip rules:**
+
+- The qa gate did not fire (no UI / web surface, or \`acMode: inline\`) — the axis is structurally skipped; emit zero findings; note "qa-evidence: skipped (no qa gate)" in the iteration block.
+- The qa gate fired but the user picked \`[skip-qa]\` at the blocked picker — the axis fires a single \`fyi\` finding citing the user override and stops; do not synthesize per-AC findings on top of the user's deliberate skip.
+- The qa gate fired and the qa-runner returned \`iterate\` (currently iterating with slice-builder fix-only) — the axis is **deferred** to the next reviewer iteration after qa-runner re-runs; emit zero findings this iteration, note "qa-evidence: deferred (qa iterate in flight)".
+
+**Common rationalizations the qa-runner / slice-builder may surface — and the reviewer's rebuttal** _(cross-cutting rows for verification / completion live in \`.cclaw/lib/anti-rationalizations.md\`; the three rows below are qa-evidence-axis-specific to this gate):_
+
+| rationalization | rebuttal |
+| --- | --- |
+| "But the AC was so small, a Playwright spec is overkill — manual was fine." | Tier selection is about evidence durability, not diff size. A 15-line Playwright spec stays in CI as a regression guard for every future slug; a screenshot dated today is irrelevant by next slug. When Tier 1 is available, Tier 1 is the only correct pick — diff size is not a tier-downgrade rationale. (Same row as \`qa-and-browser.md\` anti-rationalization #2.) |
+| "But the manual steps were confirmed by the user — that's stronger than a Playwright spec." | User confirmation is point-in-time. The next slug that lands on the same UI surface has no way to re-confirm without re-asking the user. Playwright re-runs in CI on every PR; that durability is what the axis tier ranks for. User-confirmed manual evidence is acceptable when no automation is available; it is NOT a substitute for Playwright when Playwright is available. |
+| "But qa.md frontmatter says \`verdict: pass\` — why are you firing findings?" | The qa-runner's verdict is its own slim-summary call; the reviewer's qa-evidence axis is the **independent cross-check** that the evidence rows actually substantiate that verdict. A \`verdict: pass\` with a \`Status: fail\` row in §4 is a self-contradicting artifact; the reviewer's job is to surface the contradiction, not to defer to the qa-runner's verdict on faith. |
+
 **nfr-compliance gating rule.** The \`nfr-compliance\` axis fires only when \`flows/<slug>/plan.md\` contains a non-empty \`## Non-functional\` section. **When the section is empty, absent, or contains only \`none specified\` rows across every NFR, emit zero findings on this axis** — do not synthesize budgets, do not check against external defaults, do not warn that NFRs were not authored. Legacy plan.md files without a \`## Non-functional\` section at all are explicitly tolerated under this rule: skip the axis silently, do not flag the absence as a finding. The gating is intentional — NFR authoring is a design Phase 2 decision, not a reviewer responsibility, and forcing the reviewer to invent NFRs on plans that didn't author them creates false positives. When the section IS populated, cross-check each AC's diff against the relevant NFR row (performance ↔ benchmark commands / latency claims, compatibility ↔ runtime version checks, accessibility ↔ a11y test invocations, security ↔ posture rows). NFR-compliance findings cite the specific NFR row that was violated plus the file:line where the violation occurs.
 
 | severity | what it means for the author | gate behaviour |
@@ -122,7 +169,7 @@ A Discovery cell missing any of the three probes — without the explicit \`new-
 | \`nit\` | minor (formatting, naming preference). Author may ignore. | does not block; not carried to learnings |
 | \`fyi\` | informational; explains future-relevant context. No action expected. | never blocks |
 
-Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N ed=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The eight-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf, **ed** edit-discipline. \`nfr-compliance\` is intentionally excluded from the slim counter (it is a gated axis; when it fires, name the violated NFR row inline in \`What changed\` instead).
+Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The nine-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf, **ed** edit-discipline, **qae** qa-evidence. \`qae=N\` is **only** present when the qa gate fired (\`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\`); omit the token entirely on slugs where qa-evidence is structurally skipped. \`nfr-compliance\` is intentionally excluded from the slim counter (it is a gated axis; when it fires, name the violated NFR row inline in \`What changed\` instead).
 
 ## Modes
 
@@ -137,6 +184,7 @@ Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summ
 - The active artifact for the chosen mode (\`plan.md\` for text-review, the latest commit range for code, etc.).
 - \`flows/<slug>/plan.md\` AC list — this is the contract you are checking against.
 - \`flows/<slug>/plan.md > ## Decisions\` (the inline D-N records from design Phase 4); legacy \`flows/<slug>/decisions.md\` if a legacy resume.
+- \`flows/<slug>/qa.md\` (when present) — the qa-runner's per-AC evidence artifact; cross-check it via the \`qa-evidence\` axis. **v8.52**.
 - The Five Failure Modes block (always part of your output).
 - \`.cclaw/lib/antipatterns.md\` — cite entries when they apply.
 
