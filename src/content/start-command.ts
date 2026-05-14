@@ -251,9 +251,13 @@ On same-day collision (rare), append \`-2\`, \`-3\`, etc. until the slug is uniq
 
 After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Pause and resume. Before the first dispatch, run the **v8.18 prior-learnings lookup** (Prior-learnings lookup). The assumption-confirmation surface (formerly the preflight step) is now owned by the first dispatched specialist's Phase 0 — see the **Preflight (folded)** section below for the v8.21 fold.
 
+### Follow-up-bug detection (v8.50; runs on every fresh \`/cc\`)
+
+Between triage persistence and the prior-learnings lookup, call \`applyFollowUpBugSignals(projectRoot, triage.taskSummary, <iso-now>)\` (in \`src/outcome-detection.ts\`). The helper reads \`.cclaw/knowledge.jsonl\`, scans \`taskSummary\` for slug-cased references to prior shipped slugs paired with a bug keyword (\`bug\` / \`fix\` / \`broken\` / \`regression\` / \`crash\` / \`hotfix\` / \`hot-fix\` / \`revert\` / \`rollback\`), and stamps \`outcome_signal: "follow-up-bug"\` on every match. Both signals (slug-cased reference AND bug keyword) are required so refinement / rephrase tasks that mention a prior without bug intent don't false-positive. Missing / empty / unreadable file is a no-op. Sister capture paths (\`reverted\`, \`manual-fix\`) run at compound time — see Compound below.
+
 ### Prior-learnings lookup (v8.18; runs on every fresh \`/cc\`)
 
-Between triage persistence and the first specialist dispatch, the orchestrator calls:
+Between triage persistence (and the v8.50 follow-up-bug capture path above) and the first specialist dispatch, the orchestrator calls:
 
 \`\`\`ts
 findNearKnowledge(triage.taskSummary, projectRoot, {
@@ -261,10 +265,14 @@ findNearKnowledge(triage.taskSummary, projectRoot, {
 })
 \`\`\`
 
-The lookup tokenises \`triage.taskSummary\` and runs Jaccard against each recent entry's \`tags\` and \`touchSurface\` value tokens. Persistence rules:
+The lookup tokenises \`triage.taskSummary\` and runs Jaccard against each recent entry's \`tags\` and \`touchSurface\` value tokens.
+
+**v8.50 outcome-signal down-weight.** \`findNearKnowledge\` multiplies raw Jaccard by the entry's \`outcome_signal\` weight (\`good\`/\`unknown\`=\`1.0\`, \`manual-fix\`=\`0.75\`, \`follow-up-bug\`=\`0.5\`, \`reverted\`=\`0.2\`; see \`OUTCOME_SIGNAL_MULTIPLIERS\` in \`src/knowledge-store.ts\`). Adjusted score gates the threshold AND drives sort order. Absent field reads as \`"unknown"\` (neutral; pre-v8.50 behaviour).
+
+Persistence rules:
 
 - **Empty results → omit \`priorLearnings\` from \`flow-state.json\` entirely** (the absence of the field is the canonical "no prior learnings"; do not write \`priorLearnings: []\`).
-- **Non-empty results → stamp them verbatim under \`triage.priorLearnings\`** as \`KnowledgeEntry\` objects (\`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`, …). Downstream specialists read entries directly; do not re-paraphrase.
+- **Non-empty results → stamp them verbatim under \`triage.priorLearnings\`** as \`KnowledgeEntry\` objects (\`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`, \`outcome_signal\` / \`outcome_signal_updated_at\` / \`outcome_signal_source\` when stamped, …). Downstream specialists read entries directly; do not re-paraphrase.
 - **Missing / empty / unreadable \`knowledge.jsonl\` → empty result, no stamp, no crash.**
 
 The stamp is **immutable for the lifetime of the flow**; \`/cc-cancel\` + fresh \`/cc\` triggers a new lookup.
@@ -417,6 +425,8 @@ After ship, check the compound quality gate:
 - the user explicitly asked to capture (\`/cc <task> --capture-learnings\`).
 
 If any signal fires, dispatch the learnings sub-agent (small one-shot): write \`flows/<slug>/learnings.md\` from \`.cclaw/lib/templates/learnings.md\`, append a line to \`.cclaw/knowledge.jsonl\`. Otherwise honour the **learnings hard-stop** (T1-13; see ship runbook §7a) — surface a structured ask rather than skipping silently when the slug is non-trivial.
+
+**v8.50 outcome-loop capture (inside \`runCompoundAndShip\`).** Two additive capture paths fire after the new entry is appended: (1) **revert** — scan \`git log --grep="^revert" --oneline -30\` and stamp \`outcome_signal: "reverted"\` on any prior entry whose slug appears in the revert subject; (2) **manual-fix** — scan \`git log --since="24 hours ago"\` over the current slug's \`touchSurface\` for \`fix(AC-N):\` / \`fix:\` / \`hotfix:\` / \`fixup!\` commits and stamp \`outcome_signal: "manual-fix"\` on the current slug (self-reporting). The third path (**follow-up-bug**) runs at Hop 1, not here. All three are best-effort — missing \`.git/\` or unreadable jsonl degrades to no-op; compound never throws on the outcome loop.
 
 After a capture, the **compound-refresh** sub-step may fire (every 5th capture; T2-4, everyinc pattern). The refresh actions (dedup / keep / update / consolidate / replace), trigger thresholds, the manual \`/cc-compound-refresh\` route, and the downstream **discoverability self-check** (T2-12) all live in \`.cclaw/lib/runbooks/compound-refresh.md\`.
 
