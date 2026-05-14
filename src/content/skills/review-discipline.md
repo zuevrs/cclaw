@@ -144,6 +144,8 @@ Decision: clear (signal #2). F-2 carries to ships/<slug>.md and learnings/<slug>
 
 ## Common rationalizations
 
+**Cross-cutting rationalizations:** the canonical completion / verification rows (sycophancy, "should pass", "the full suite is slow") live in `.cclaw/lib/anti-rationalizations.md` under categories `completion` and `verification` (v8.49). The rows below stay here because they cover reviewer-discipline-specific framings (convergence signal #2, five-axis silence, severity padding, soft-mode architecture bypass).
+
 The reviewer's discipline is the first thing the slug shape pressures an agent to skip when iterations get long. Catch yourself thinking the left column; do the right column instead. Surface the rationalization verbatim in the iteration's slim-summary `Notes:` when you obey the right column anyway, so the audit trail records the discipline.
 
 | rationalization | truth |

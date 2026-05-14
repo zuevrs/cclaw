@@ -107,6 +107,8 @@ When the slice-builder declares an exception (fresh file with no history, test f
 
 ## Common rationalizations
 
+**Cross-cutting rationalizations:** the canonical "I read this file last week" / "AC names the exact line" / "touchSurface is enough" / drive-by rows live in `.cclaw/lib/anti-rationalizations.md` under category `edit-discipline` (v8.49). The rows below stay here because they cover investigation-specific framings (Probe 1/2/3 filter rules, post-edit-recorded probes, generic-symbol scope rule); the catalog covers the cross-cutting "investigate before edit" prose.
+
 The "I already know this file" reflex is how pre-edit-investigation breaks. The table below names every excuse a slice-builder will produce; pair it with the rebuttal and pick the right column.
 
 | rationalization | truth |

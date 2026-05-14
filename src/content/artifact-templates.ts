@@ -246,7 +246,7 @@ For every AC, append one row with **all six columns filled** before the AC is co
 
 | AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
 | --- | --- | --- | --- | --- | --- |
-| AC-1 | _file:path:line refs from discovery_ | _failing test name + 1-3 line failure excerpt_ | _full-suite command + PASS summary_ | _shape change or "skipped: reason"_ | _red SHA, green SHA, refactor SHA (or "skipped")_ |
+| AC-1 | _file:path:line refs from discovery_ | _failing test name + 1-3 line failure excerpt_ | _full-suite command + PASS summary_ | _shape change applied, or "Refactor: skipped — <reason>" (v8.49 default; no empty commit needed)_ | _red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped")_ |
 
 ## Watched-RED proofs
 
@@ -265,9 +265,10 @@ _AC-1: npm test src/lib/__       47 passed, 0 failed (in 1.8s)_
 
 ## REFACTOR notes
 
-_(Per AC: one-line shape change applied, or explicit "skipped: <reason>". Silence is not acceptable; the gate forces the question.)_
+_(Per AC: one-line shape change applied, or explicit "Refactor: skipped — <reason>" (v8.49 default — no empty commit needed; the reviewer reads this row), or legacy "skipped: <reason>" empty-commit marker. Silence is not acceptable; the gate forces the question.)_
 
 - AC-1: extracted \`hasViewEmail\` helper from inline check.
+- AC-2: Refactor: skipped — 8-line addition, idiomatic; nothing to extract.
 
 ## Coverage assessment
 
@@ -293,7 +294,7 @@ _(Append one fix-iteration block per review iteration that returned \`block\`. S
 
 - \`git commit -m "red(AC-1): …"\` → _SHA_ (test files only)
 - \`git commit -m "green(AC-1): …"\` → _SHA_ (production diff)
-- \`git commit -m "refactor(AC-1): …"\` → _SHA_  OR  \`git commit --allow-empty -m "refactor(AC-1) skipped: <reason>"\` → _SHA_ (empty marker)
+- \`git commit -m "refactor(AC-1): …"\` → _SHA_ (real refactor) **OR** omit the refactor commit entirely and declare \`Refactor: skipped — <reason>\` in the AC's REFACTOR notes column above (v8.49 default). The legacy \`git commit --allow-empty -m "refactor(AC-1) skipped: <reason>"\` empty-marker is still accepted for backwards compat on already-shipped slugs.
 
 ## Notes
 
@@ -325,7 +326,7 @@ _(One paragraph mirroring \`flows/SLUG-PLACEHOLDER/plan.md\` Plan section.)_
 - **RED**: _\`<runner command>\` → N failing (expected). Cite the assertion that fails (≤3 lines)._
 - **GREEN**: _One sentence on the minimal change. \`<full-suite command>\` → all passing._
 - **Coverage**: _Verdict \`full\` / \`partial\` / \`refactor-only\` + which branches are anchored by which test file:line. \`partial\` is valid (name the uncovered branch + reason); absent line is not._
-- **REFACTOR**: _One-line shape change applied, or "skipped: <reason>"._
+- **REFACTOR**: _One-line shape change applied, or "Refactor: skipped — <reason>" (v8.49 default; no empty commit needed). Legacy "skipped: <reason>" empty-marker commit is still accepted._
 - **Commit**: _\`<one-line message>\` (\`<SHA>\`)._
 - **Follow-ups**: _\`info\` items deferred to a separate slug, or "none"._
 

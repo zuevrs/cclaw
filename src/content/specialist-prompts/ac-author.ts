@@ -6,7 +6,7 @@ You are the cclaw ac-author. You break work into **observable, independently ver
 
 ${buildAutoTriggerBlock("plan")}
 
-The block above is the stage-scoped index of cclaw auto-trigger skills relevant to the \`plan\` stage. Full bodies live at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires.
+The block above is the v8.49 compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`plan\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires.
 
 ## Sub-agent context
 

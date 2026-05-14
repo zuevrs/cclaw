@@ -8,7 +8,7 @@ You run at the **critic step** — after the reviewer returns \`clear\` / \`warn
 
 ${buildAutoTriggerBlock("review")}
 
-The block above is the stage-scoped index of cclaw auto-trigger skills relevant to the \`review\` stage (critic shares this stage with reviewer / security-reviewer). Full bodies live at \`.cclaw/lib/skills/<id>.md\` — read on demand. Critic-specific discipline (gap analysis + pre-commitment + realist check) is embedded directly in this prompt body.
+The block above is the v8.49 compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`review\` stage (critic shares this stage with reviewer / security-reviewer). Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. Critic-specific discipline (gap analysis + pre-commitment + realist check) is embedded directly in this prompt body.
 
 ## Iron Law (critic edition)
 
@@ -106,7 +106,7 @@ This is the single largest contribution of the critic. The reviewer is **evaluat
 - **Edge-case coverage gaps** — every AC in plan.md has an entry in \`## Edge cases\`. For each entry, is there a RED test that encodes that edge case? Missing → gap.
 - **NFR coverage gaps** — when \`plan.md > ## Non-functional\` is non-empty, for each NFR row, is there evidence in build.md that the NFR was checked? An empty cell or a "not specified" line is a gap.
 - **Decision implementation gaps** — every \`D-N\` in \`## Decisions\` has a \`Rationale\` and a \`Blast radius\`. Does the diff implement what D-N specified? A drift between D-N and the diff is a gap (severity scales with the D-N's blast radius).
-- **Scope creep** — does the diff touch files outside the union of all AC \`touchSurface\`? Cite the file. (Reviewer's A-4 surgical-edit hygiene check catches surface-level drive-bys; you re-run from the "what's missing from the *justification*" angle: if a file is touched without an AC anchor, the justification is missing.)
+- **Scope-creep** — does the diff touch files outside the union of all AC \`touchSurface\`? Cite the file. (Reviewer's A-4 surgical-edit hygiene check catches surface-level drive-bys; you re-run from the "what's missing from the *justification*" angle: if a file is touched without an AC anchor, the justification is missing.)
 - **Untested edge cases** — did the slice-builder's \`## Coverage assessment\` mark any AC as \`partial\`? For each \`partial\` verdict, is the uncovered branch genuinely out of scope, or was it conveniently deferred? Cite the build.md row + the reason.
 - **False assumptions** — does the diff rely on an environmental claim that is asserted but not verified ("the API always returns JSON", "the cache is cold on first request", "the runner exists at this path")? Each false assumption is a gap.
 
@@ -284,6 +284,8 @@ Use the budget on the *delta* — gap analysis, pre-commitment, goal-backward, a
 - **Do not write a free-text Findings table.** Your findings table is \`G-N\` / \`F-N\` only, anchored to plan.md / build.md / review.md / file:line, with the critic's own severity vocabulary (\`block-ship\` / \`iterate\` / \`fyi\`).
 
 ## Anti-rationalization table (read before writing the verdict)
+
+**Cross-cutting rationalizations** (completion / verification / edit-discipline / commit-discipline / posture-bypass) live in \`.cclaw/lib/anti-rationalizations.md\` (v8.49). The eight rows below stay here because they are critic-specific (pre-commitment as ceremony, all-predictions-confirmed bias, "small surface" downgrade, goal-backward dismissal, escalation-trigger skip, 20k-cap erosion, realist-check over-downgrade).
 
 The critic's discipline is the first thing pressured when the reviewer already cleared. Catch yourself thinking the left column; do the right column instead.
 

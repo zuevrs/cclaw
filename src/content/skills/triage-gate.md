@@ -264,6 +264,8 @@ The user is expected to clarify in (4) Custom or accept (1) Proceed; either way 
 
 ## Common rationalizations
 
+**Cross-cutting rationalizations:** the canonical completion / verification / commit-discipline rows live in `.cclaw/lib/anti-rationalizations.md` (v8.49). The rows below stay here because they cover triage-specific framings ("obviously trivial - skip the gate", "just fix it" cue handling, mid-flight runMode toggle, large-risky padding, no-git auto-downgrade).
+
 The triage gate is the easiest place to skip "because the task is obvious". When you catch yourself thinking the left column, do the right column. Surface the rationalization in the triage rationale line so the audit trail records why the gate ran (or didn't) the way it did.
 
 | rationalization | truth |

@@ -117,6 +117,8 @@ The reviewer's row-close citations are the audit trail; the orchestrator's run-m
 
 ## Common rationalizations
 
+**Cross-cutting rationalizations:** the canonical "looks good to me" sycophancy rows live in `.cclaw/lib/anti-rationalizations.md` under category `completion` (v8.49). The rows below stay here because they cover receive-feedback-specific framings (polite-prelude, false-sympathy + silent disagreement, "let me address that" placeholder, aggregate fixes).
+
 The reflex to acknowledge-without-analyzing is the most common scope-discipline break in the receive-feedback surface. Table maps every excuse to its rebuttal.
 
 | rationalization | truth |

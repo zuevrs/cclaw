@@ -159,7 +159,7 @@ git add src/path/to/refactored.ts
 git commit -m "refactor(AC-N): <one-line shape change>"
 \`\`\`
 
-Otherwise commit an empty marker so the reviewer's git-log scan still finds the decision: \`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\`. The literal \`skipped:\` token after \`(AC-N)\` is what the reviewer recognises; a row that omits the marker commit is treated as missing-refactor (A-1, severity=required).
+If no refactor lands, **v8.49 default is the build.md row declaration** (no empty commit needed): write \`Refactor: skipped — <one-line reason>\` in the AC row's REFACTOR notes column. The reviewer reads the literal \`Refactor: skipped\` token from the row and treats the refactor slot as satisfied. The legacy path — \`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\` — is still accepted for backwards compat on already-shipped slugs. A row that records neither a SHA, the build.md \`Refactor: skipped\` token, nor the empty marker is treated as missing-refactor (A-1, severity=required).
 
 ## 6. Append the AC row to builds/<slug>.md
 
@@ -167,7 +167,7 @@ After REFACTOR, the AC row in \`.cclaw/flows/<slug>/build.md\` carries:
 
 | AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
 | --- | --- | --- | --- | --- | --- |
-| AC-N | tests/path:line, fixtures... | test name + failure excerpt | command + PASS summary | one-line shape change or "skipped: reason" | red SHA, green SHA, refactor SHA (or "skipped") |
+| AC-N | tests/path:line, fixtures... | test name + failure excerpt | command + PASS summary | one-line shape change applied **or** "Refactor: skipped — <reason>" (v8.49 default; no empty commit) | red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped") |
 
 The build is complete for this AC only when all six columns are filled.
 
@@ -193,9 +193,9 @@ Before transitioning to review, every AC must satisfy:
 3. **red_test_written** — failing test exists, recorded with watched-RED proof.
 4. **red_fails_for_right_reason** — RED captured a real assertion failure, not a syntax error.
 5. **green_full_suite** — full relevant suite green after GREEN, not the single test.
-6. **refactor_completed_or_skipped_with_reason** — REFACTOR ran, or was explicitly skipped with a one-line reason.
+6. **refactor_completed_or_skipped_with_reason** — REFACTOR ran, or was explicitly skipped with a one-line reason. The skip declaration may live in the AC's \`build.md\` row REFACTOR notes column (v8.49 default — literal token \`Refactor: skipped — <reason>\`) OR as a legacy \`refactor(AC-N) skipped: <reason>\` empty-marker commit; either satisfies the gate.
 7. **traceable_to_plan** — AC commits reference plan AC ids and the plan's file set.
-8. **commit_chain_intact** — \`git log --grep="(AC-N):" --oneline\` shows the posture-appropriate commit sequence (e.g. \`red(AC-N)\` before \`green(AC-N)\` for \`test-first\` / \`characterization-first\` postures; \`refactor(AC-N)\` only for \`refactor-only\`; \`test(AC-N)\` only for \`tests-as-deliverable\`; \`docs(AC-N)\` only for \`docs-only\`).
+8. **commit_chain_intact** — \`git log --grep="(AC-N):" --oneline\` shows the posture-appropriate commit sequence (e.g. \`red(AC-N)\` before \`green(AC-N)\` for \`test-first\` / \`characterization-first\` postures; \`refactor(AC-N)\` only for \`refactor-only\`; \`test(AC-N)\` only for \`tests-as-deliverable\`; \`docs(AC-N)\` only for \`docs-only\`). For \`test-first\` / \`characterization-first\` postures the refactor slot may be satisfied by EITHER a \`refactor(AC-N)\` commit OR the v8.49 build.md \`Refactor: skipped — <reason>\` row token; chain integrity is preserved across both representations.
 
 All eight gates are now reviewer-enforced ex-post via prompt + git log + \`build.md\` inspection (v8.40 retired the mechanical pre-commit gate cclaw used to ship). The slice-builder's \`self_review[]\` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running \`git log --grep\` against the plan's AC list.
 
@@ -203,7 +203,7 @@ All eight gates are now reviewer-enforced ex-post via prompt + git log + \`build
 
 - Skipping RED because "the implementation is obvious". The cycle is the contract; obvious code still gets a test.
 - Single test passes, full suite fails, but commit anyway. That is not GREEN; it is a regression.
-- REFACTOR phase silently skipped. Always emit the explicit "skipped: reason" note.
+- REFACTOR phase silently skipped. v8.49 default: write \`Refactor: skipped — <reason>\` in the AC's build.md row REFACTOR notes column (no empty commit needed). The legacy empty-marker commit is still accepted; absence of both is the missing-refactor finding.
 - Writing production code in the RED commit. Stage and commit test files only in the RED phase.
 - Skipping the per-AC prefix (\`red(AC-N): ...\`) "just this once" or committing without an AC id. The reviewer's \`git log --grep\` scan misses it and the AC reads as missing → A-1 finding, fix-only bounce.
 - \`git add -A\` inside build. Stage AC-related files only.
