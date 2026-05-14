@@ -83,9 +83,14 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // git-log inspection contract, the strict-mode commit-shape table,
     // and the v8.40-specific anti-rationalization rows that previously
     // lived in the hook's error messages. The growth is justified in
-    // CHANGELOG.md (v8.40 — full hooks removal).
+    // CHANGELOG.md (v8.40 — full hooks removal). v8.48 raised the budget
+    // from 60000 to 62000 chars to absorb the pre-edit-investigation
+    // gate (hard rule #18 cites the three probes + new-file exception),
+    // the per-AC `AC verified:` slim-summary line + its semantics
+    // paragraph, and the RED-phase Discovery probe block (~500 chars).
+    // Growth justified in CHANGELOG.md (v8.48 — discipline skills triad).
     maxLines: 720,
-    maxChars: 60000
+    maxChars: 62000
   }
 ];
 

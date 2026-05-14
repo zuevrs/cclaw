@@ -158,8 +158,8 @@ describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", 
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 49000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth); v8.42 added ~2k chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare the new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook, only the orchestrator's dispatch envelope reference was bumped). Do not raise this further without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(49000);
+      `start-command body is ${charCount} chars (budget 51000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth); v8.42 added ~2k chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare the new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook); v8.48 added ~600 chars for the per-AC \`AC verified\` slim-summary line, its semantics paragraph, and the finalize-precondition pointer (the full Per-AC verified gate procedure lives in runbooks/finalize.md). Do not raise this further without a CHANGELOG note.`
+    ).toBeLessThanOrEqual(51000);
   });
 
   it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {
@@ -172,8 +172,8 @@ describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", 
       ON_DEMAND_RUNBOOKS.reduce((acc, r) => acc + r.body.length, 0);
     expect(
       combined,
-      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 110000). The pre-v8.22 body alone was ~50k; the v8.42 critic-stage runbook adds ~7k chars for the dedicated Hop 4.5 dispatch contract; expanding past 110k means a block belongs on disk, not inlined and not in a runbook.`
-    ).toBeLessThanOrEqual(110000);
+      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 115000). The pre-v8.22 body alone was ~50k; the v8.42 critic-stage runbook adds ~7k chars for the dedicated Hop 4.5 dispatch contract; v8.48 added ~3.5k chars total (600 chars body + ~3k chars in finalize.md for the Per-AC verified gate procedure). Expanding past 115k means a block belongs on disk, not inlined and not in a runbook.`
+    ).toBeLessThanOrEqual(115000);
   });
 });
 

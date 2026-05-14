@@ -112,9 +112,9 @@ describe("v8.13 power-and-economy", () => {
   });
 
   describe("T1 Review stage power", () => {
-    it("reviewer uses 7 axes including test-quality + complexity-budget (T1-6, T1-8; v8.25 expands to 8 axes total)", () => {
+    it("reviewer uses 7+ axes including test-quality + complexity-budget (T1-6, T1-8; v8.25 expanded to 8 axes; v8.48 expanded to 9 axes by adding edit-discipline)", () => {
       const r = SPECIALIST_PROMPTS["reviewer"];
-      expect(r).toMatch(/Eight-axis review|Seven-axis review/u);
+      expect(r).toMatch(/Nine-axis review|Eight-axis review|Seven-axis review/u);
       expect(r).toMatch(/test-quality/u);
       expect(r).toMatch(/complexity-budget/u);
     });

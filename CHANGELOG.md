@@ -1,5 +1,79 @@
 # Changelog
 
+## 8.48.0 — discipline skills triad + edit-discipline reviewer axis + per-AC verified flag
+
+### Why
+
+Three failure modes had been showing up across slugs in the v8.40-v8.47 baseline:
+
+1. **Completion claims without fresh verification evidence.** Slice-builder slim summaries shipped `Stage: build ✅ complete` with no cited command output, no test result, no SHA proof. The rule "no completion claim without fresh evidence" was distributed across `iron-laws.ts`, `anti-slop.ts`, `tdd-and-verification.md`, and `summary-format.md` — when the rule lives in four places, it doesn't live anywhere.
+2. **Sycophantic responses to review and critic findings.** "good point, you're right, let me address that" arrived as a one-line response to a `severity=required` row, followed by a fix attempt that re-opened the same finding on the next iteration. Anti-slop banned the bare token but did not install a structured response shape.
+3. **Edits landing without the slice-builder having understood the target file.** The most common `axis=correctness` finding in v8.40-v8.47 was "the GREEN diff missed an invariant defined in the rest of the file" — the slice-builder had read the edit window, not the file. There was no pre-edit gate.
+
+v8.48 ships three new auto-trigger skills (a "discipline skills triad"), an eighth reviewer axis to enforce one of them ex-post, and a per-AC verification flag that closes the loop at finalize.
+
+### What changed
+
+**Three new skills in `AUTO_TRIGGER_SKILLS` (17 → 20 skills).**
+
+- **`completion-discipline.md` (always-on)** — single-purpose Iron Law concentrating "no completion claim without fresh verification evidence". Bans the sycophantic-completion vocabulary (`should work`, `looks good`, `probably works`, `I think this is done`) as the **whole** of a completion claim. Mandates that every `✅ complete` slim summary, every `Recommended next: continue`, every Findings row close, and every `ship.md > status: shipped` is paired with one of five fresh evidence shapes (command + exit code + log lines, test output excerpt, git-log proof, file:line citation, or row-close citation). Fires on `stages: ["always"]` because the rule applies to every specialist and every stage exit.
+- **`receiving-feedback.md` (build / review / ship)** — anti-sycophancy gate for receiving review.md findings, critic.md gaps, security-reviewer findings, and user-named defects. Bans the bare-acknowledgement vocabulary (`good point`, `you're right`, `let me address that`, `I see your concern`, `great catch`) as the **whole** of a response. Installs a four-step response pattern: **Restate** the finding in own words, **Classify** it against the ship gate (block-ship / iterate / fyi), declare a **Plan** (fix / push-back-with-evidence / accept-warning), cite **Evidence**. The pattern is the durable record — it lands in `build.md`, `review.md`, or `ship.md`, not buried in a slim summary's `Notes:` line.
+- **`pre-edit-investigation.md` (build only)** — GateGuard-style fact-forcing gate that fires before the slice-builder's FIRST `Write` / `Edit` / `MultiEdit` on any file. Three mandatory probes per file: `git log --oneline -10 -- <path>` (recent edits), `rg "<symbol>" --type <lang>` (usage sites), and a **full file read** (not just the edit window). Probe outputs land in `build.md`'s Discovery column. Fresh files (no git history) skip the gate with the literal token `new-file`. The reviewer's new `edit-discipline` axis enforces the rule ex-post — a Discovery cell missing any of the three probes (without the `new-file` token) is severity=required.
+
+**Reviewer prompt grows from eight axes to nine** (the gated `nfr-compliance` axis stays gated; the new axis is the eighth non-gated axis). The new axis is **`edit-discipline`**:
+
+- **Sub-check 1 — Touch-surface compliance.** Per-AC, the set of files touched by the AC's commits (`git log --grep="^[a-z]+(AC-[0-9]+)" --name-only`) must be a subset of the plan's `Touch surface` declaration for that AC. Files outside the declared surface fire severity=iterate findings; three or more open `edit-discipline` rows escalate to severity=required (the umbrella concern "build is drifting from declared scope"). Refactor commits may touch additional files only if the plan declares a `Refactor scope` for the AC.
+- **Sub-check 2 — Pre-edit-investigation evidence.** Per non-fresh file in the AC's `touchSurface`, the Discovery cell must cite all three probes from `pre-edit-investigation.md`. Missing or partial probe citations fire severity=iterate findings.
+- **Skip rules** — `acMode: inline` skips both sub-checks (no AC tracking); `acMode: soft` skips sub-check 1 (no AC commit prefixes); `triage.downgradeReason == "no-git"` skips both (no git log to inspect).
+- The axis ships with two anti-rationalization rebuttals: "new helper files DO count toward Touch surface" and "schema touch during GREEN requires a plan amendment, not silent expansion".
+
+The slim-summary axes counter format grows from seven letters to eight: `c=N tq=N r=N a=N cb=N s=N p=N ed=N`.
+
+**Per-AC `AC verified:` line in every slim summary.** Each sub-agent returns one extra line:
+
+- **slice-builder** — emits the truthful per-AC state (`AC-N=yes` only when RED+GREEN+REFACTOR landed, suite passes, Coverage line written, all five `self_review[]` rules attest `verified:true`; otherwise `=no`). Soft mode emits `feature=yes|no`.
+- **reviewer** — restates slice-builder's claim, downgrading any AC with an open `required`/`critical` finding to `=no`. Reviewer's verdict is authoritative (slice-builder's claim is self-reported).
+- **other specialists** (ac-author, design, critic, security-reviewer) emit `AC verified: n/a` (their stages don't change AC verification state).
+- **inline mode** always emits `n/a`.
+
+**Per-AC verified gate before finalize (orchestrator-only).** Before opening `runbooks/finalize.md`, the orchestrator parses the `AC verified:` line from both the latest slice-builder and reviewer slim summaries. Any `=no` outside `acMode: inline` refuses finalize and surfaces a structured ask (Bounce to slice-builder fix-only / Show slim summaries / Stay paused). There is no `accept-unverified-and-finalize` escape hatch — the slug stays active until every AC is `=yes` or the user types `/cc-cancel` to discard the flow.
+
+### Skill anatomy compliance
+
+Every new skill follows the v8.26 + v8.30 anatomy rubric: frontmatter (`name:` + `trigger:`), `# Skill: <id>` H1, Overview body, `When to use` heading, `When NOT to apply` heading, ≥2 depth sections (each new skill carries all four: Process, Common rationalizations, Red flags, Verification), worked examples. The v8.30 top-8 rationalizations-table rubric is not extended to these three new skills (the rubric is opt-in for skills outside the load-bearing top-8); each new skill carries the rationalization table anyway because the failure modes they catch are concretely rationalization-driven.
+
+### Files touched
+
+- `src/content/skills/completion-discipline.md` (new, ~145 lines) — always-on skill body.
+- `src/content/skills/receiving-feedback.md` (new, ~193 lines) — build/review/ship skill body.
+- `src/content/skills/pre-edit-investigation.md` (new, ~178 lines) — build skill body.
+- `src/content/skills.ts` — three new `AUTO_TRIGGER_SKILLS` entries (id, fileName, description, triggers, stages, body via `readSkill`); skill count 17 → 20.
+- `src/content/specialist-prompts/slice-builder.ts` — Hard rule #18 added (pre-edit-investigation gate mandatory; cites `.cclaw/lib/skills/pre-edit-investigation.md`; names the three probes + new-file token); RED phase Discovery section reshaped to require the three probes; slim summary template grows the `AC verified:` line + semantics paragraph (~600 chars).
+- `src/content/specialist-prompts/reviewer.ts` — header bumped "Eight-axis review" → "Nine-axis review"; new `edit-discipline` axis added to the axis table with examples; new `### Edit-discipline axis details` H3 section with both sub-checks + skip rules + anti-rationalization rows; per-axis checklist gains `[edit-discipline]` block; axes counter format gains `ed=N`; dedup key axis list extended; slim summary grows the `AC verified:` line + semantics paragraph; JSON example updated.
+- `src/content/start-command.ts` — `SUMMARY_RETURN_EXAMPLE` grows the `AC verified:` line; canonical `AC verified` semantics paragraph; hard-gate logic mentions the v8.48 finalize gate; Finalize section gains a one-paragraph pointer to the runbook's full Per-AC verified gate procedure.
+- `src/content/runbooks-on-demand.ts > FINALIZE` — full Per-AC verified gate procedure lifted to the runbook (~1.7K chars): gate steps, edge cases, structured-ask shape, no-escape-hatch rationale. Step 1 of the standard finalize sequence cites the gate as a precondition.
+- `tests/unit/v848-discipline-skills.test.ts` (new, ~365 lines, 61 tripwires) — pins every invariant of the v8.48 contract: three skills registered with correct stages; total count is 20; forbidden-phrase lists per skill match the brief verbatim; receiving-feedback four-step pattern + three classification values + three plan shapes; pre-edit-investigation three probes + fresh-file exception + Discovery surface; slice-builder cites pre-edit-investigation + names the three probes + names the `new-file` token; reviewer header bumped to "Nine-axis review" + edit-discipline axis row + `[edit-discipline]` checklist + `ed=N` counter + anti-rationalization rows; per-AC `AC verified:` line in start-command + slice-builder + reviewer + the three shapes (strict/soft/inline); orchestrator pre-finalize gate cites both summaries + skips on inline + refuses + no auto-rescue; new skills pass the v8.26 anatomy rubric (frontmatter, H1, Overview, When-to-use, When-NOT-to-apply, ≥2 depth sections); install layer references resolve.
+- `tests/unit/v813-cleanup.test.ts` — axis-count regex extended `/Nine-axis review|Eight-axis review|Seven-axis review/` (was `/Eight-axis review|Seven-axis review/`).
+- `tests/unit/prompt-budgets.test.ts` — slice-builder `maxChars` raised 60000 → 62000 (~3% growth) to absorb the pre-edit-investigation rule, the RED-phase Discovery probe block, and the `AC verified:` slim-summary line + semantics paragraph.
+- `tests/unit/v822-orchestrator-slim.test.ts` (AC-4) — start-command body `maxChars` raised 49000 → 51000 (~4% growth) to absorb the `AC verified:` slim-summary line + semantics paragraph + finalize-precondition pointer; combined body + runbooks soft ceiling raised 110000 → 115000 (~4.5% growth) to absorb the full Per-AC verified gate procedure in `runbooks/finalize.md`.
+- `tests/unit/v831-path-aware-trimming.test.ts` (AC-1, AC-2) — same start-command body 49000 → 51000 bump for body-only + inline-path budgets; baseline ratio raised 1.07 → 1.13 to give one slug of headroom past v8.30.
+- `package.json` — version 8.47.0 → 8.48.0.
+- `CHANGELOG.md` — this entry.
+
+### Tests
+
+1131 tests across 72 files, all green (+61 net from `v848-discipline-skills.test.ts`; +1 file count). Smoke runtime green (the 20 skill files mirror correctly into `.cclaw/lib/skills/` + `cclaw-meta.md`). TypeScript strict mode green throughout.
+
+### Migration notes
+
+- **No schema changes.** No new TypeScript types, no new YAML frontmatter keys, no new `flow-state.json` fields. The `AC verified:` line is prose in the slim summary; the orchestrator parses it at finalize time. The reviewer's `edit-discipline` axis is a new value in the existing `axis` column of the Findings table; no migration needed for in-flight `review.md` files.
+- **In-flight flows continue.** Resuming a pre-v8.48 slug mid-build: slice-builder picks up the v8.48 pre-edit-investigation rule on its next dispatch (Discovery cells from prior iterations stay as they are; the reviewer flags missing probes if `edit-discipline` would have fired). The `AC verified:` line is missing from prior slim summaries — the orchestrator's gate treats this as `every AC = no` and surfaces a structured ask before finalize. The user picks fix-only (re-emit the slim summary with the line) or stay-paused (read the prior summaries first).
+- **No new specialists; no changes to ac-author / critic / security-reviewer.** Only slice-builder and reviewer prompts changed; the new skills auto-inject via `buildAutoTriggerBlock(stage)`.
+- **Budget tripwires bumped, not removed.** Six bumps total (prompt-budgets slice-builder 60k → 62k; v8.22 body 49k → 51k; v8.22 combined 110k → 115k; v8.31 body 49k → 51k; v8.31 inline 49k → 51k; v8.31 ratio 1.07 → 1.13). Each has an explicit `v8.48` rationale-in-message; the broader char-budget discipline is preserved.
+- **No knowledge CLI.** Explicitly out of v8.48 scope.
+- **No caveman / density changes.** Separate slug later.
+- **Anti-rationalization consolidation deferred.** The brief explicitly scopes anti-rationalization consolidation to v8.49; the two anti-rationalization rows added to the reviewer in v8.48 are the edit-discipline-specific rows, not a consolidation pass.
+
 ## 8.47.0 — design phases UX collapse (6-10 user turns → 1-2 turns)
 
 ### Why
