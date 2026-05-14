@@ -1,5 +1,107 @@
 # Changelog
 
+## 8.50.0 — knowledge outcome loop (outcome_signal + down-weight in findNearKnowledge)
+
+### Why
+
+`knowledge.jsonl` was **forward-only** pre-v8.50. Entries got written at compound time (gated on the four v8.18 quality signals) and read by `findNearKnowledge` at triage time (Jaccard over `tags ∪ touchSurface`), but there was no feedback path: once an entry shipped, nothing ever down-weighted it — not when the slug it captured was later reverted, not when a follow-up bug task referenced it, not when the same surface needed a hot-fix within the 24-hour-after-ship window. The result was that **bad knowledge stayed equally prominent to good knowledge**: a slug whose direction turned out to be wrong kept surfacing as a precedent for every nearby task, with the same Jaccard ranking it had on the day it shipped.
+
+Findings from the cross-reference audit (compound / affaan-m-ecc / gstack patterns all converged on the same gap) flagged this as the highest-value closed-loop item left after v8.49's overcomplexity sweep. v8.50 closes the loop with automatic outcome telemetry and a multiplier that bites at the threshold gate.
+
+### What changed
+
+**Item #1 — `OUTCOME_SIGNALS` enum + three optional `KnowledgeEntry` fields** (new exports in `src/knowledge-store.ts`).
+
+- New constant `OUTCOME_SIGNALS = ["unknown", "good", "manual-fix", "follow-up-bug", "reverted"] as const` (worst → best ordering is the array tail; multiplier ordering is the inverse).
+- New type `OutcomeSignal = (typeof OUTCOME_SIGNALS)[number]`.
+- New fields on `KnowledgeEntry` (all optional for back-compat):
+  - `outcome_signal?: OutcomeSignal`
+  - `outcome_signal_updated_at?: string` — ISO timestamp of the most recent signal write.
+  - `outcome_signal_source?: string` — short free-text reason (`"revert detected on <sha>"`, `"follow-up-bug task references slug <slug> with keyword 'fix'"`, `"manual-fix detected: <subject> (sha <sha>, surface <path>)"`).
+- `assertEntry` validates the three fields when present; absent fields validate cleanly (pre-v8.50 entries pass without migration).
+- New helpers `outcomeSignalOf(entry)` and `outcomeMultiplier(entry)` default absent `outcome_signal` to `"unknown"` (neutral; multiplier `1.0`). Read sites use these helpers instead of open-coding the fallback.
+
+**Item #2 — `findNearKnowledge` applies the outcome-signal multiplier** (updated scoring in `src/knowledge-store.ts > findNearKnowledge`).
+
+- New exported constant `OUTCOME_SIGNAL_MULTIPLIERS: Readonly<Record<OutcomeSignal, number>>` with the tuned values: `good`=`1.0`, `unknown`=`1.0`, `manual-fix`=`0.75`, `follow-up-bug`=`0.5`, `reverted`=`0.2`. Frozen via `Object.freeze` so accidental mutation in callers is a no-op.
+- The scoring loop now computes `adjusted = similarity * outcomeMultiplier(entry)` AFTER the Jaccard pass. The adjusted score gates the threshold (`adjusted < threshold` → excluded) AND drives sort order (`b.adjusted - a.adjusted`, tie-break on raw `b.similarity - a.similarity`). Pre-v8.50 entries without `outcome_signal` get multiplier `1.0` (no behaviour change at the gate; the absence-as-`"unknown"` rule is honoured by `outcomeMultiplier`).
+- At the v8.18 baseline `threshold: 0.4`, the multipliers translate to: `manual-fix` → light down-weight (a candidate that would have scored exactly `0.4` now scores `0.3` and falls below); `follow-up-bug` → heavy down-weight (needs raw `0.8` to clear); `reverted` → near-exclusion (a perfect raw `1.0` lands at `0.2`, well below `0.4` — the only way a reverted entry surfaces is if the caller drops the threshold).
+- New helper `setOutcomeSignal(projectRoot, targetSlug, signal, source, updatedAt)` — reads the whole `knowledge.jsonl` into memory, mutates the matched entry's three outcome fields, writes back via `writeFileSafe` (the existing atomic-rename pattern). Returns `true` on stamp, `false` on no-match / missing file. Other entries in the log are preserved verbatim — only the matched entry's three outcome fields are overwritten.
+
+**Item #3 — Three automatic capture paths** (new module `src/outcome-detection.ts` + integration in `src/compound.ts` + orchestrator wiring in `src/content/start-command.ts`).
+
+The pure detection helpers in `src/outcome-detection.ts` take serialised inputs (git-log strings, task-description strings, shipped-slug lists) and return match candidates. None touch the filesystem; integration helpers (`apply*` and `runCompoundAndShip > captureOutcomeSignals`) compose them with `readKnowledgeLog` + `setOutcomeSignal`. The pure/integration split makes every detector unit-testable with synthetic strings and no live repo.
+
+**#3a — Revert detection** (`parseRevertCommits` + `findRevertedSlugs` + integration in `compound.ts > captureOutcomeSignals`).
+
+- Runs at ship-compound time, AFTER the new entry is appended and BEFORE the artifact move.
+- Pre-condition: `.git/` exists at projectRoot (the v8.23 no-git path skips silently).
+- Probe: `git log --grep="^revert" --oneline -30 -i` (case-insensitive grep so both `Revert` and `revert:` surface).
+- Parse heuristic: first line token = SHA; rest = subject; subject must start with `revert` or `Revert` (followed by `:`, whitespace, or quote). Quoted-original is extracted from the conventional `Revert "<original>"` shape.
+- Match heuristic: each revert's `revertedSubject` (or raw `subject`) is scanned for slug-cased token references against the shipped-slug list. The current slug is excluded (a slug cannot revert itself — causality).
+- On match, `setOutcomeSignal(slug, "reverted", "revert detected on <sha>", <iso-now>)` stamps the prior entry.
+- The new entry CAN itself be flagged later (a future compound pass detects this slug's revert). Stamps are last-write-wins on the three outcome fields.
+
+**#3b — Follow-up-bug detection** (`findFollowUpBugSlugs` + `applyFollowUpBugSignals`).
+
+- Runs at **Hop 1 Detect (fresh `/cc` start)**, NOT at compound time. Wired into the start-command body so the orchestrator invokes `applyFollowUpBugSignals(projectRoot, triage.taskSummary, <iso-now>)` between triage persistence and the v8.18 prior-learnings lookup.
+- Match heuristic (TWO signals required, AND):
+  1. A slug-cased reference to a prior shipped slug (word-boundary match on the verbatim slug; case-sensitive). Slug-cased tokens (`20260514-foo`, `auth-bypass`) rarely appear in normal prose, so the false-positive rate is low.
+  2. At least one bug keyword from the conservative `BUG_KEYWORDS` list: `bug`, `fix`, `broken`, `regression`, `crash`, `hotfix`, `hot-fix`, `revert`, `rollback`. Keyword match is word-boundary, case-insensitive.
+- Both signals must fire — a refinement / rephrase task that names a prior slug WITHOUT bug intent does not stamp, and a generic bug task that does NOT name a prior slug has nothing to down-weight.
+- On match, `setOutcomeSignal(slug, "follow-up-bug", "follow-up-bug task references slug <slug> with keyword '<keyword>'", <iso-now>)` stamps the referenced entry. Multiple keyword hits on the same slug stamp once (first-match-wins; `BUG_KEYWORDS` ordering puts the strongest signals first).
+- The bug-keyword list is intentionally short. Adding `issue` or `problem` risks false-positives on framing prose ("the problem this slug solves is…"). Tune conservatively — under-detection is preferred to over-down-weighting good knowledge.
+
+**#3c — Manual-fix detection** (`parseCommitLog` + `looksLikeFixCommit` + `findManualFixCandidates` + integration in `compound.ts > captureOutcomeSignals`).
+
+- Runs at ship-compound time, alongside #3a.
+- Probe: `git log --oneline --since="24 hours ago" -50` paired with `git log --name-only --pretty=format:"%H" --since="24 hours ago" -50` for the per-SHA touched-files map.
+- Parse heuristic: each commit subject is matched against the regex `^(fix(\(AC-\d+\))?|hot-?fix|fixup!)([:!\s]|$)` (case-insensitive). Accepted shapes: `fix(AC-N): ...`, `fix: ...`, `hotfix: ...`, `hot-fix: ...`, `fixup! ...`.
+- Surface match: each candidate commit's touched files are scanned against the slug's `touchSurface` declaration (path-prefix match — `src/auth/` catches `src/auth/oauth.ts`). Trailing slash is optional on surface declarations; the normaliser strips one if present.
+- On match (any commit), `setOutcomeSignal(currentSlug, "manual-fix", "manual-fix detected: <subject> (sha <sha>, surface <path>)", <iso-now>)` stamps THIS slug (the one being captured).
+- **Self-reporting limitation (honest):** the slug being shipped marks ITSELF when post-ship fixes land within the trailing 24h on its declared surface. We cannot tell from the commit alone whether the fix was a real defect (the slug shipped a bug) or a stylistic follow-up (the same author kept improving the module post-ship). The `manual-fix` multiplier (`0.75`) is deliberately a light down-weight to reflect this ambiguity — calling out the noise level rather than pretending the signal is decisive.
+
+**Item #4 — `priorLearnings` payload surfaces `outcome_signal`** (specialist-prompt updates in `reviewer.ts`, `design.ts`, `ac-author.ts`, `critic.ts`).
+
+- Every entry returned by `findNearKnowledge` carries its `outcome_signal` / `outcome_signal_updated_at` / `outcome_signal_source` fields verbatim (already part of the `KnowledgeEntry` shape; no extra serialisation work needed).
+- Reviewer / design / ac-author / critic prompts now name `outcome_signal` in their `triage.priorLearnings` read section. The pattern: "the orchestrator already down-weighted these at lookup; their surface here means the raw similarity was strong enough to clear the down-weight. Treat down-weighted priors as cautionary precedent — name the signal verbatim when you cite the slug ('cf. shipped slug `<slug>` (`outcome_signal: reverted`) — treating as cautionary rather than precedent')."
+- Critic's `## §8 escalation triggers` section adds a v8.50 note to the "High prior-learning density" trigger: an entry's `outcome_signal` of `reverted` / `follow-up-bug` / `manual-fix` is itself a known-bad marker.
+
+### Metrics
+
+- **Files touched:** 8 modified, 2 new (`src/outcome-detection.ts` + `tests/unit/v850-outcome-loop.test.ts`). +1097 insertions across modified files; +312 + +617 = +929 across the new files.
+- **Tests added:** 56 tripwires in `tests/unit/v850-outcome-loop.test.ts` (7 AC-1, 11 AC-2 across the multiplier + setOutcomeSignal, 9 AC-3a + isSlugReference, 9 AC-3b, 7 AC-3c, 4 start-command + specialist prompts, 2 cross-item invariants, 3 runCompoundAndShip integration, 3 environment sanity). Total suite 1153 → 1209 tests, all green. Smoke green.
+- **Body-budget cost:** start-command body grew ~1500 chars / +10 lines (~3.4% relative to v8.30 baseline). Three on-demand-runbook tripwires lifted with v8.50 notes: v8.22 body-only budget `51000 → 52500`; v8.22 combined body+runbooks ceiling `115000 → 117000`; v8.31 inline-path budget `51000 → 52500`; v8.31 ratio cap `1.13 → 1.16`.
+- **Down-weight calibration at threshold = 0.4** (the v8.18 default): `manual-fix` bites at the threshold margin; `follow-up-bug` requires raw similarity ≥ 0.8 to clear; `reverted` requires raw similarity ≥ 2.0 (effectively excluded). Numbers tuned around how compound's knowledge writer populates `tags` / `touchSurface` and how the prior-learnings lookup tokenises `triage.taskSummary`.
+
+### Files touched
+
+- `src/knowledge-store.ts` — new `OUTCOME_SIGNALS` const + `OutcomeSignal` type + `OUTCOME_SIGNAL_MULTIPLIERS` const + `outcomeSignalOf` + `outcomeMultiplier` + `setOutcomeSignal` helpers. `KnowledgeEntry` gains three optional fields; `assertEntry` validates them. `findNearKnowledge` multiplies Jaccard by the entry's multiplier before threshold + sort.
+- `src/outcome-detection.ts` (**new**, 312 lines) — pure detection helpers `parseRevertCommits` / `findRevertedSlugs` / `isSlugReference` / `findFollowUpBugSlugs` / `parseCommitLog` / `looksLikeFixCommit` / `findManualFixCandidates`, plus the integration helper `applyFollowUpBugSignals` that the orchestrator calls at Hop 1.
+- `src/compound.ts` — new `CompoundOutcomeProbes` option type on `CompoundRunOptions` (synthetic git outputs for tests; absent in production = live git probes). New `captureOutcomeSignals` helper runs revert + manual-fix detection AFTER the new entry is appended; matches surface on `CompoundRunResult.revertedSlugMatches` / `manualFixMatches` for audit / test visibility. Live git probes (`runRevertProbe` / `runManualFixProbe`) shell out via `execFileSync` and degrade to `""` on any failure (missing `.git/`, binary not on PATH, non-zero exit).
+- `src/content/start-command.ts` — new `### Follow-up-bug detection` section between triage persistence and prior-learnings lookup; `### Prior-learnings lookup` section updated with the v8.50 outcome-signal down-weight prose; `## Compound` section updated with the revert + manual-fix capture-path documentation.
+- `src/content/specialist-prompts/reviewer.ts` — `## Prior learnings as priors` section adds the v8.50 outcome-signal weighting paragraph.
+- `src/content/specialist-prompts/design.ts` — Phase 1 `triage.priorLearnings` read updates the field list to include `outcome_signal` and adds the v8.50 weighting paragraph.
+- `src/content/specialist-prompts/ac-author.ts` — Phase 2 `triage.priorLearnings` read updates the field list and adds the v8.50 weighting paragraph.
+- `src/content/specialist-prompts/critic.ts` — `## §8 escalation triggers > High prior-learning density` gains a v8.50 note that an `outcome_signal` of `reverted` / `follow-up-bug` / `manual-fix` is itself a known-bad marker.
+- `tests/unit/v850-outcome-loop.test.ts` (**new**, 617 lines, 56 tripwires) — pins every v8.50 invariant.
+- `tests/unit/v822-orchestrator-slim.test.ts` — body-only char budget `51000 → 52500`; combined body+runbooks ceiling `115000 → 117000`.
+- `tests/unit/v831-path-aware-trimming.test.ts` — body-only char budget `51000 → 52500`; ratio cap `1.13 → 1.16`; inline-path budget `51000 → 52500`.
+- `package.json` — version `8.49.0` → `8.50.0`.
+
+### Backwards compatibility
+
+- **Pre-v8.50 `knowledge.jsonl` entries without `outcome_signal` read cleanly.** `outcomeSignalOf(entry)` defaults absent to `"unknown"` (neutral; multiplier `1.0`). No migration required; the field is optional on `KnowledgeEntry` and `assertEntry` validates absence as valid.
+- **`findNearKnowledge` behaviour on legacy entries is unchanged.** Every entry without `outcome_signal` gets multiplier `1.0`, so adjusted score == raw similarity (the pre-v8.50 ranking). The new signal-driven down-weight only fires on entries the capture paths have stamped.
+- **CLI surface unchanged.** No new commands, no flag additions. The closed loop is fully automatic — revert detection and manual-fix detection at compound time, follow-up-bug detection at Hop 1. The user-explicitly-rejected CRUD CLI is intentionally absent.
+- **Compound's primary contract is preserved.** All three capture paths are best-effort: missing `.git/` (the v8.23 no-git path), an unreadable `knowledge.jsonl`, or a per-entry `setOutcomeSignal` write failure degrade to "no signal stamped" rather than blocking ship. `runCompoundAndShip` never throws on the outcome loop.
+
+### Known limitations (honest)
+
+- **Manual-fix detection is self-reporting.** The slug being shipped marks itself if post-ship fix-prefix commits land within 24h on its `touchSurface`. We cannot distinguish a real defect (the slug shipped a bug) from a stylistic follow-up (the author kept improving the module). The `0.75` multiplier is deliberately a light down-weight to reflect this ambiguity. A future slug could promote this to a stronger signal once we have a way to classify post-ship fixes by intent.
+- **No `good` capture path in v8.50.** The signal value exists in the enum for completeness, but no automatic path writes it — that would require active validation telemetry (e.g. "no fixes touched this slug's surface within 30 days post-ship") which we do not have yet. Entries default to `"unknown"` rather than `"good"`; the two carry the same multiplier (`1.0`) so the distinction is purely audit-trail.
+- **Detection windows are deliberate point-in-time decisions.** Revert detection scans the last 30 commits at compound time; manual-fix detection scans the trailing 24h. Both miss late-binding signals (a revert 2 weeks later, a hot-fix at 25h post-ship). The cost of bigger windows is `git log` runtime; the calibration favours fast compounds over total recall.
+
 ## 8.49.0 — overcomplexity sweep (anti-rationalization consolidation + auto-trigger dedup + empty-commit elimination)
 
 ### Why

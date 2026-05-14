@@ -32,6 +32,89 @@ function isProblemType(value: unknown): value is ProblemType {
   return typeof value === "string" && (PROBLEM_TYPES as readonly string[]).includes(value);
 }
 
+/**
+ * v8.50 — outcome telemetry stamped on each `KnowledgeEntry` after the
+ * slug is shipped. Closes the half-real loop in `knowledge.jsonl`: pre-
+ * v8.50 entries were forward-only — captured at compound time, read at
+ * triage time, never down-weighted when the slug they recorded turned
+ * out to be a bad reference. v8.50 adds three automatic capture paths
+ * (revert detection, follow-up-bug detection, manual-fix detection)
+ * that stamp this signal on the affected entry, and routes the signal
+ * through `findNearKnowledge` as a Jaccard-score multiplier so down-
+ * weighted entries fall below the threshold sooner.
+ *
+ * The signal values are deliberately ordered worst → best:
+ *
+ * - `reverted` — the slug was reverted (commit message starts with
+ *   `revert:` or `Revert "<slug-ref>"` matched a shipped slug). Heavy
+ *   down-weight (near-exclusion) because the slug's authored direction
+ *   is no longer trusted.
+ * - `follow-up-bug` — a later slug's task description named this slug
+ *   in a bug-fix context (e.g. `/cc fix the auth bug from v8.42`).
+ *   Heavy down-weight; the slug's authored solution didn't hold.
+ * - `manual-fix` — the slug's `touchSurface` saw a `fix(AC-N)` or
+ *   hot-fix-style commit within the 24h after ship. Self-reported (the
+ *   slug being captured marks itself), so be honest: this slug is now
+ *   a less authoritative reference even though we cannot tell whether
+ *   the manual fix was a real defect or a stylistic follow-up.
+ * - `good` — the slug shipped clean and stayed clean. Reserved value;
+ *   no automatic capture path writes it in v8.50 (would require
+ *   active validation telemetry that we do not have yet).
+ * - `unknown` — explicit "no signal recorded". Same multiplier as
+ *   `good` (neutral, no weighting impact); the value exists so the
+ *   field is non-`undefined` when a capture path runs but finds
+ *   nothing actionable.
+ *
+ * Backwards compat: pre-v8.50 entries without the field are treated
+ * exactly like `outcome_signal: "unknown"` (neutral). The field is
+ * `?` optional on the type and `outcomeMultiplier(entry)` reads the
+ * absent / `undefined` case as `1.0`.
+ */
+export const OUTCOME_SIGNALS = [
+  "unknown",
+  "good",
+  "manual-fix",
+  "follow-up-bug",
+  "reverted"
+] as const;
+export type OutcomeSignal = (typeof OUTCOME_SIGNALS)[number];
+
+function isOutcomeSignal(value: unknown): value is OutcomeSignal {
+  return typeof value === "string" && (OUTCOME_SIGNALS as readonly string[]).includes(value);
+}
+
+/**
+ * v8.50 — Jaccard-score multipliers per outcome signal. Applied in
+ * {@link findNearKnowledge} AFTER the raw Jaccard similarity is
+ * computed; the candidate's effective ranking score is
+ * `similarity * OUTCOME_SIGNAL_MULTIPLIERS[signal]`. If the adjusted
+ * score drops below the caller-supplied `threshold`, the candidate is
+ * excluded (same gate the pre-v8.50 raw-similarity code used).
+ *
+ * The numbers are tuned for the v8.18 baseline threshold of `0.4`:
+ *
+ * - `good` / `unknown` → `1.0` (neutral; pre-v8.50 behaviour).
+ * - `manual-fix` → `0.75` (light down-weight; a candidate that
+ *   would have scored exactly `0.4` now scores `0.3` and falls
+ *   below the threshold, so the down-weight bites at the margin).
+ * - `follow-up-bug` → `0.5` (heavy down-weight; the candidate
+ *   needs a raw similarity of `0.8` to clear the `0.4` threshold).
+ * - `reverted` → `0.2` (near-exclusion; even a perfect raw
+ *   similarity of `1.0` lands at `0.2`, well below `0.4` — the
+ *   only way a reverted entry surfaces is if the caller drops
+ *   the threshold or removes it).
+ *
+ * Exported so tests can assert the exact numbers and so future
+ * tuning lives in one place (don't open-code the constants).
+ */
+export const OUTCOME_SIGNAL_MULTIPLIERS: Readonly<Record<OutcomeSignal, number>> = Object.freeze({
+  unknown: 1.0,
+  good: 1.0,
+  "manual-fix": 0.75,
+  "follow-up-bug": 0.5,
+  reverted: 0.2
+});
+
 export interface KnowledgeEntry {
   slug: string;
   ship_commit: string;
@@ -67,6 +150,35 @@ export interface KnowledgeEntry {
    * compound-stamping rules.
    */
   problemType?: ProblemType | null;
+  /**
+   * v8.50 — outcome telemetry stamped after ship by one of the three
+   * automatic capture paths (revert detection, follow-up-bug detection,
+   * manual-fix detection). Drives the {@link OUTCOME_SIGNAL_MULTIPLIERS}
+   * down-weight applied in {@link findNearKnowledge}.
+   *
+   * Optional for backwards compat: pre-v8.50 entries without the field
+   * are treated as `"unknown"` (neutral; multiplier `1.0`). See
+   * {@link OUTCOME_SIGNALS} for the value enum and capture-path
+   * semantics.
+   */
+  outcome_signal?: OutcomeSignal;
+  /**
+   * v8.50 — ISO 8601 timestamp of the most recent
+   * {@link outcome_signal} write. Stamped at the moment a capture path
+   * (revert / follow-up-bug / manual-fix) updates the entry. Optional
+   * for backwards compat and on entries whose signal is still
+   * `"unknown"` / absent.
+   */
+  outcome_signal_updated_at?: string;
+  /**
+   * v8.50 — short free-text explanation of why the {@link outcome_signal}
+   * has its current value, e.g. `"revert detected on a1b2c3d"`,
+   * `"follow-up-bug slug 20260514-auth-fix"`, `"post-ship fix(AC-2) at
+   * 5f2e7c1"`. The reviewer / specialists surface this string when they
+   * cite a down-weighted prior so the user sees WHY a candidate was
+   * pushed down. Optional; absent on entries with no signal recorded.
+   */
+  outcome_signal_source?: string;
 }
 
 /**
@@ -122,6 +234,36 @@ function assertEntry(value: unknown): asserts value is KnowledgeEntry {
       `Knowledge entry \`problemType\` must be one of ${JSON.stringify(PROBLEM_TYPES)} when present; got ${JSON.stringify(entry.problemType)}.`
     );
   }
+  if (entry.outcome_signal !== undefined && !isOutcomeSignal(entry.outcome_signal)) {
+    throw new KnowledgeStoreError(
+      `Knowledge entry \`outcome_signal\` must be one of ${JSON.stringify(OUTCOME_SIGNALS)} when present; got ${JSON.stringify(entry.outcome_signal)}.`
+    );
+  }
+  if (entry.outcome_signal_updated_at !== undefined && typeof entry.outcome_signal_updated_at !== "string") {
+    throw new KnowledgeStoreError("Knowledge entry `outcome_signal_updated_at` must be a string when present.");
+  }
+  if (entry.outcome_signal_source !== undefined && typeof entry.outcome_signal_source !== "string") {
+    throw new KnowledgeStoreError("Knowledge entry `outcome_signal_source` must be a string when present.");
+  }
+}
+
+/**
+ * v8.50 — read an entry's outcome signal, defaulting absent / `undefined`
+ * to `"unknown"` (the neutral value). Exists so callers don't repeat
+ * the `entry.outcome_signal ?? "unknown"` fallback at every read site.
+ */
+export function outcomeSignalOf(entry: KnowledgeEntry): OutcomeSignal {
+  return entry.outcome_signal ?? "unknown";
+}
+
+/**
+ * v8.50 — Jaccard-score multiplier for an entry, derived from
+ * {@link outcomeSignalOf}. Absent / `undefined` signals read as
+ * `"unknown"` and return `1.0` (no weighting impact). See
+ * {@link OUTCOME_SIGNAL_MULTIPLIERS} for the numbers.
+ */
+export function outcomeMultiplier(entry: KnowledgeEntry): number {
+  return OUTCOME_SIGNAL_MULTIPLIERS[outcomeSignalOf(entry)];
 }
 
 function jaccard(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
@@ -391,17 +533,30 @@ export async function findNearKnowledge(
   }
 
   const recent = all.slice(-Math.max(0, window));
-  const scored: Array<{ entry: KnowledgeEntry; similarity: number }> = [];
+  const scored: Array<{ entry: KnowledgeEntry; similarity: number; adjusted: number }> = [];
   for (const entry of recent) {
     if (excludeSlug && entry.slug === excludeSlug) continue;
     if (problemType !== undefined && !matchesProblemType(entry, problemType)) continue;
     const entryTokens = entryTokensForSummaryMatch(entry);
     if (entryTokens.size === 0) continue;
     const similarity = jaccard(taskTokens, entryTokens);
-    if (similarity < threshold) continue;
-    scored.push({ entry, similarity });
+    // v8.50 — apply outcome-signal multiplier BEFORE the threshold gate,
+    // so a down-weighted prior (e.g. `reverted: 0.2`) is excluded the
+    // moment its adjusted score drops below the caller's threshold,
+    // even if the raw similarity would have passed. Pre-v8.50 entries
+    // without `outcome_signal` get multiplier `1.0` (no behaviour
+    // change at the gate; the absence-as-`unknown` rule is honoured by
+    // {@link outcomeMultiplier}).
+    const adjusted = similarity * outcomeMultiplier(entry);
+    if (adjusted < threshold) continue;
+    scored.push({ entry, similarity, adjusted });
   }
-  scored.sort((a, b) => b.similarity - a.similarity);
+  // Sort by adjusted score so the multiplier shapes ranking (a perfect
+  // raw match with a `reverted` signal MUST land below a 0.5-raw match
+  // with a `good` signal). Tie-break on raw similarity to keep two
+  // entries with equal adjusted scores ordered the way pre-v8.50 would
+  // have ordered them (the higher-overlap one first).
+  scored.sort((a, b) => b.adjusted - a.adjusted || b.similarity - a.similarity);
   return scored.slice(0, Math.max(0, limit)).map((row) => row.entry);
 }
 
@@ -421,6 +576,68 @@ export function matchesProblemType(entry: KnowledgeEntry, filter: ProblemType): 
     return filter === "knowledge";
   }
   return value === filter;
+}
+
+/**
+ * v8.50 — write an outcome signal back to the entry whose `slug` matches
+ * `targetSlug`. Reads the whole `knowledge.jsonl` into memory, mutates
+ * the matched entry, writes the file back via `writeFileSafe` (the
+ * existing atomic-rename pattern compound uses). Pure append semantics
+ * are preserved for OTHER entries; only the matched entry's
+ * `outcome_signal`, `outcome_signal_updated_at`, and
+ * `outcome_signal_source` fields are overwritten.
+ *
+ * Behaviour:
+ *
+ * - **No match (`targetSlug` not present in the log)** → returns
+ *   `false`. The capture paths log a warning and move on; we do not
+ *   crash compound or block ship because a revert / follow-up-bug
+ *   reference pointed at a slug we never recorded.
+ * - **Missing / empty `knowledge.jsonl`** → returns `false` (same
+ *   reason; treat the absent log as "nothing to update").
+ * - **Match found** → updates the entry's three outcome fields,
+ *   re-serialises the whole file, returns `true`. The stamp at
+ *   `outcome_signal_updated_at` is the caller-supplied ISO string —
+ *   the function does not call `new Date()` so tests are
+ *   deterministic.
+ *
+ * The function is NOT a generic CRUD: it only touches the three
+ * outcome fields and only on the slug match. Other shape changes
+ * (e.g. backfilling `problemType`) need their own helper. This keeps
+ * v8.50's "automatic loop closure" boundary tight: capture paths can
+ * only stamp signals; they cannot rewrite slugs / tags / surfaces /
+ * notes.
+ */
+export async function setOutcomeSignal(
+  projectRoot: string,
+  targetSlug: string,
+  signal: OutcomeSignal,
+  source: string,
+  updatedAt: string
+): Promise<boolean> {
+  if (!isOutcomeSignal(signal)) {
+    throw new KnowledgeStoreError(
+      `setOutcomeSignal: signal must be one of ${JSON.stringify(OUTCOME_SIGNALS)}; got ${JSON.stringify(signal)}.`
+    );
+  }
+  if (typeof targetSlug !== "string" || targetSlug.length === 0) {
+    throw new KnowledgeStoreError("setOutcomeSignal: targetSlug must be a non-empty string.");
+  }
+  const target = knowledgeLogPath(projectRoot);
+  if (!(await exists(target))) return false;
+  const entries = await readKnowledgeLog(projectRoot);
+  const idx = entries.findIndex((entry) => entry.slug === targetSlug);
+  if (idx === -1) return false;
+  const next: KnowledgeEntry = {
+    ...entries[idx]!,
+    outcome_signal: signal,
+    outcome_signal_updated_at: updatedAt,
+    outcome_signal_source: source
+  };
+  entries[idx] = next;
+  const body = `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
+  await writeFileSafe(target, body);
+  return true;
 }
 
 export async function findRefiningChain(projectRoot: string, slug: string): Promise<KnowledgeEntry[]> {
