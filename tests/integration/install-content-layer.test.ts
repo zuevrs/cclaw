@@ -10,15 +10,18 @@ describe("install — deep content layer", () => {
     if (project) await removeProject(project);
   });
 
-  it("installs lib/runbooks, lib/patterns, lib/research, lib/recovery (v8.44 retired lib/examples)", async () => {
+  it("installs lib/runbooks + lib/patterns; v8.44 retired lib/examples; v8.54 retired lib/research + lib/recovery", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const dir of ["runbooks", "patterns", "research", "recovery"]) {
+    for (const dir of ["runbooks", "patterns"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "lib", dir));
       expect(stat.isDirectory()).toBe(true);
     }
-    // v8.44 retired `lib/examples/`. Directory must not be present on fresh installs.
-    await expect(fs.access(path.join(project, ".cclaw", "lib", "examples"))).rejects.toBeTruthy();
+    for (const retired of ["examples", "research", "recovery"]) {
+      await expect(
+        fs.access(path.join(project, ".cclaw", "lib", retired))
+      ).rejects.toBeTruthy();
+    }
   });
 
   it("ships only the v8.12 trimmed pattern set under .cclaw/lib/patterns/", async () => {
@@ -64,30 +67,26 @@ describe("install — deep content layer", () => {
     expect(meta).toContain("trigger: always-on");
   });
 
-  it("recovery / research directories ship only their index notes (v8.44 removed examples entirely)", async () => {
+  it("install removes pre-existing `.cclaw/lib/{examples,research,recovery}/` left over from earlier installs", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const dir of ["recovery", "research"]) {
-      const entries = await fs.readdir(path.join(project, ".cclaw", "lib", dir));
-      expect(entries.sort()).toEqual(["index.md"]);
-      const indexBody = await fs.readFile(path.join(project, ".cclaw", "lib", dir, "index.md"), "utf8");
-      expect(indexBody).toMatch(/v8\.12/u);
-      expect(indexBody).toMatch(/legacy-artifacts/u);
-    }
-    await expect(fs.access(path.join(project, ".cclaw", "lib", "examples"))).rejects.toBeTruthy();
-  });
-
-  it("install removes a pre-existing `.cclaw/lib/examples/` directory left over from v8.43 (orphan cleanup)", async () => {
-    project = await createTempProject();
-    await initCclaw({ cwd: project });
-    const examplesDir = path.join(project, ".cclaw", "lib", "examples");
-    await fs.mkdir(examplesDir, { recursive: true });
-    await fs.writeFile(path.join(examplesDir, "stale.md"), "old content\n", "utf8");
     const events: { step: string; detail?: string }[] = [];
+    for (const dirName of ["examples", "research", "recovery"]) {
+      const dir = path.join(project, ".cclaw", "lib", dirName);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(path.join(dir, "stale.md"), "old content\n", "utf8");
+    }
     await initCclaw({ cwd: project, onProgress: (event) => events.push(event) });
-    await expect(fs.access(examplesDir)).rejects.toBeTruthy();
+    for (const dirName of ["examples", "research", "recovery"]) {
+      await expect(
+        fs.access(path.join(project, ".cclaw", "lib", dirName))
+      ).rejects.toBeTruthy();
+    }
     const retired = events.filter((e) => e.step === "Removed retired lib dir");
-    expect(retired.map((e) => e.detail)).toContain(".cclaw/lib/examples");
+    const details = retired.map((e) => e.detail);
+    for (const dirName of ["examples", "research", "recovery"]) {
+      expect(details).toContain(`.cclaw/lib/${dirName}`);
+    }
   });
 
   it("ships the merged-thematic skill set (v8.16) including meta", async () => {

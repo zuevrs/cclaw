@@ -370,11 +370,11 @@ describe("v8.9 cleanup", () => {
       expect(template!.body).toMatch(/\*\*Coverage\*\*:/);
     });
 
-    it("orchestrator self-review gate counts five rules, including coverage-assessed (v8.22: in self-review-gate runbook)", () => {
-      const selfReview = ON_DEMAND_RUNBOOKS.find((r) => r.id === "self-review-gate")!.body;
+    it("orchestrator self-review gate counts five rules, including coverage-assessed (v8.54: in handoff-gates runbook)", () => {
+      const selfReview = ON_DEMAND_RUNBOOKS.find((r) => r.id === "handoff-gates")!.body;
       expect(selfReview).toMatch(/five rule attestations per AC/);
       expect(selfReview).toMatch(/coverage-assessed/);
-      expect(START_COMMAND_BODY).toContain("self-review-gate.md");
+      expect(START_COMMAND_BODY).toContain("handoff-gates.md");
     });
   });
 

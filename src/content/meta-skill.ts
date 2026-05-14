@@ -19,7 +19,7 @@ When \`/cc\` runs, the harness has access to:
 - \`.cclaw/lib/patterns/*.md\` — two task patterns (auth-flow, security-hardening). Earlier versions shipped 8; v8.12 deleted 6 orphan patterns that no spec line ever named. Re-enable with \`legacy-artifacts: true\`.
 - \`.cclaw/lib/decision-protocol.md\` — D-N record format.
 - \`.cclaw/lib/antipatterns.md\` — seven wired failure modes (A-1..A-7, renumbered in v8.12 from the old A-2/A-3/A-15/A-16/A-17/A-21/A-22 set).
-- \`.cclaw/lib/research/\`, \`.cclaw/lib/recovery/\` — empty index files in v8.12 (orphan content was deleted; re-enable with \`legacy-artifacts: true\`). \`.cclaw/lib/examples/\` was removed entirely in v8.44 (no agent code path read from it).
+- \`.cclaw/lib/research/\`, \`.cclaw/lib/recovery/\`, \`.cclaw/lib/examples/\` — removed entirely. Research and recovery shipped empty index files between v8.12 and v8.53; v8.54 removed the directories themselves (no agent code path ever read from them). Examples was removed in v8.44 (same rationale).
 
 ## How to read this content efficiently
 
@@ -31,7 +31,7 @@ You do not need to read everything. The right loading pattern:
 4. **Read the specialist prompt** when you invoke a specialist (\`.cclaw/lib/agents/<id>.md\`).
 5. **Read the antipattern catalogue** as a reference when the reviewer cites a finding.
 
-Don't read recovery / research directories proactively — they are empty in v8.12 unless legacy-artifacts is on. (\`lib/examples/\` was removed in v8.44.) Don't read antipatterns proactively for general guidance; the reviewer cites them as findings, and the slice-builder reads only the ones referenced in its hard rules.
+Don't read \`recovery\` / \`research\` / \`examples\` directories proactively — they were retired in v8.12 (research/recovery shipped empty until v8.53), v8.44 (examples), and v8.54 (research/recovery dropped outright). Don't read antipatterns proactively for general guidance; the reviewer cites them as findings, and the slice-builder reads only the ones referenced in its hard rules.
 
 ## Your responsibilities as orchestrator
 

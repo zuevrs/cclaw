@@ -13,7 +13,10 @@ describe("install — deep content", () => {
   it("populates .cclaw/lib/templates with every artifact template", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const fileName of ["plan.md", "build.md", "review.md", "ship.md", "decisions.md", "learnings.md", "manifest.md", "ideas.md", "iron-laws.md"]) {
+    // v8.54: `decisions.md` is gated behind config.legacyArtifacts; on the
+    // default install the template is intentionally absent (the design
+    // phase inlines D-N rows into plan.md > ## Decisions).
+    for (const fileName of ["plan.md", "build.md", "review.md", "ship.md", "learnings.md", "manifest.md", "ideas.md", "iron-laws.md"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "lib", "templates", fileName));
       expect(stat.isFile()).toBe(true);
     }

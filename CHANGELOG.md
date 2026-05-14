@@ -1,5 +1,78 @@
 # Changelog
 
+## 8.54.0 — consolidation pass: content cleanup + test slim + plan-critic gate widening + CI matrix simplification
+
+### Why
+
+Two audits (test redundancy + content footprint) flagged the same pattern: cclaw's prompt-content + test-suite surface had grown faster than its contract count, with redundant runbooks, zombie tests, and a CI matrix that no longer earns its keep after the v8.40 hooks removal. Rather than fragment the cleanup into many slugs, v8.54 lands one coherent consolidation pass with four deliverables that share a single theme — **make cclaw leaner without dropping coverage of contracts**.
+
+A fifth driver: references (chachamaru's `plan_critic` Phase 0, gsd-v1's plan-checker) run plan-critic-style passes wider than cclaw. Pre-v8.54 cclaw's plan-critic gate (`complexity == "large-risky"`) was the narrowest in the reference cohort and under-fired on strict small-medium flows. v8.54 widens the gate to match the reference cohort while keeping trivial flows skipped.
+
+### What changed
+
+**Deliverable 1 — content consolidation** (`src/content/runbooks-on-demand.ts`, `src/content/stage-playbooks.ts`, `src/content/start-command.ts`, `src/content/specialist-prompts/plan-critic.ts`, `src/content/meta-skill.ts`, `src/install.ts`, `scripts/smoke-init.mjs`):
+
+- **Merged `critic-stage.md` + `plan-critic-stage.md` → `critic-steps.md`.** Two runbooks that shared dispatch envelope and falsificationist pass shape are now one runbook with two sections: `## Pre-implementation pass (plan-critic, v8.51)` and `## Post-implementation pass (critic, v8.42)`. Shared content (predictions pattern, anti-rationalization pointer, iteration cap, slim summary format) lifts to top-level prose.
+- **Merged `self-review-gate.md` + `ship-gate.md` → `handoff-gates.md`.** Two pre-handoff inspection gates fold into one runbook with sections `## Pre-reviewer dispatch gate (self-review)` and `## Pre-ship dispatch gate (ship-gate)`.
+- **Lifted `discovery.md` + `plan-small-medium.md` into `PLAN_PLAYBOOK`.** Both plan-stage helpers for different complexity tiers now live as `## Path: small/medium` and `## Path: large-risky` sections inside the existing `plan` stage playbook. The two on-demand runbooks are retired; references in `start-command.ts` point at the stage playbook.
+- **Retired dead directories.** `src/content/research-playbooks.ts` and `src/content/recovery.ts` exported empty arrays since v8.12 (no specialist or runbook consumer). Both source files are deleted; `RETIRED_LIB_DIRS` adds `research` and `recovery` so install upgrade removes the empty `.cclaw/lib/research/` and `.cclaw/lib/recovery/` directories from legacy projects.
+- **Gated `decisions.md` template install behind `config.legacyArtifacts`.** v8.14+ flows inline D-N rows into `plan.md`; `decisions.md` was dead bytes on every fresh install. The artifact template now writes only when `config.legacyArtifacts == true`.
+- **Tracked retired runbook filenames in `RETIRED_RUNBOOK_FILES`** so the orphan-cleanup pass removes the six retired runbook files from legacy `.cclaw/lib/runbooks/` directories on the next `cclaw sync` / install upgrade.
+
+**Deliverable 2 — test slim aggressive** (`tests/unit/**`, `tests/helpers/counts.ts`, `tests/unit/retired-tokens.test.ts`):
+
+- **Deleted zombie file `tests/unit/h4-content-depth.test.ts`** (-18 tests). All assertions were tied to v7-era ceremony retired in v8.14 (9 months prior); positive assertions duplicated in v8.46 / v8.47 tests.
+- **Deleted `tests/unit/research-recovery-antipatterns.test.ts`** (tied to retired directories from deliverable 1).
+- **Consolidated retired-tokens sweep into `tests/unit/retired-tokens.test.ts`.** The duplicate `.not.toContain("commit-helper")` / `.not.toContain("--phase=")` assertions previously scattered across `v840-cleanup`, `v823-no-git-fallback`, `tdd-cycle`, `stage-playbooks`, `specialist-prompts`, `skills`, etc. now live in a single parameterized sweep over every shipped LLM-facing surface (skills, specialists, runbooks, playbooks, agents, antipatterns, artifact templates, start-command). One entry in `RETIRED_TOKENS` extends the sweep automatically.
+- **Lifted hardcoded counts to `tests/helpers/counts.ts`.** `COUNTS.specialists`, `COUNTS.agents`, `COUNTS.skills`, `COUNTS.postures`, `COUNTS.outcomeSignals`, `COUNTS.flowStages`, `COUNTS.harnesses`, `COUNTS.surfaces` are derived from the structural source-of-truth arrays in `src/types.ts` etc. Tests that previously asserted `length === 8` now assert `length === COUNTS.specialists`, removing the per-slug count-edit friction.
+- **Aggressively slimmed recent vNN-files** to "1-2 anchors per contract, not per sentence":
+  - `v8.52-qa-and-browser` 132 → 23 tests
+  - `v8.53-critic-enhancements` 72 → 11 tests
+  - `v8.51-plan-critic` 76 → 25 tests (already in earlier pass)
+  - `v8.48-discipline-skills` 61 → 10 tests
+  - `v8.47-design-phases-collapse` 32 → 12 tests (already in earlier pass)
+  - `v8.88-cleanup` 38 → 6 tests
+  - `v8.28-rename-planner-to-ac-author` 21 → 5 tests
+  - `v8.13-cleanup` 32 → 13 tests
+  - `v8.14-cleanup` 15 → 3 tests
+  - `v8.11-cleanup` 22 → 4 tests
+- **Net suite reduction: 1492 → 1077 tests (-415).**
+
+**Deliverable 3 — plan-critic gate widening** (`src/content/start-command.ts`, `src/content/specialist-prompts/plan-critic.ts`, `src/content/runbooks-on-demand.ts` > `critic-steps.md`):
+
+- Pre-v8.54 gate: `acMode == "strict"` AND `triage.complexity == "large-risky"` AND `triage.problemType != "refines"` AND AC count ≥ 2.
+- **v8.54 gate**: `acMode == "strict"` AND `triage.complexity != "trivial"` AND `triage.problemType != "refines"` AND AC count ≥ 2.
+- Rationale: chachamaru's `plan_critic` runs on every Phase 0; gsd-v1's plan-checker runs across complexity tiers. cclaw's prior `complexity == "large-risky"` requirement was the narrowest in the reference cohort and under-fired on strict small-medium flows. Trivial flows still skipped (no plan to critique).
+
+**Deliverable 4 — CI matrix simplification** (`.github/workflows/ci.yml`):
+
+- Pre-v8.54 matrix: `[ubuntu-latest, windows-latest, macos-latest] × [20.x, 22.x]` = 6 matrix runs (with macOS and Windows pinned to 20.x only, so 4 effective).
+- **v8.54 matrix**: `ubuntu-latest × 20.x` + `windows-latest × 20.x` = 2 jobs.
+- Rationale: hooks were retired in v8.40. The remaining platform-sensitive surface is path resolution (Windows backslashes), filesystem ops, and process spawn. Linux Node 20 covers 90% of users; Windows Node 20 catches the path-portability failures we've hit twice on the roadmap. macOS and Node 22 dropped — re-adding them requires a deliberate decision documented in this changelog.
+
+### Metrics
+
+- **Files touched:** 35 modified, 3 new (`tests/unit/v854-consolidation-pass.test.ts`, `tests/unit/retired-tokens.test.ts`, `tests/helpers/counts.ts`).
+- **Test count:** 1492 → 1077 tests (-415, -28%).
+- **Runbook count:** 19 → 11 on-demand runbooks (`-4` from consolidation + retirement, `-4` from lifts to PLAN_PLAYBOOK).
+- **CI run-time:** halved (4 jobs → 2 jobs on matrix; the one-shot stages — coverage, audit, smoke, release-bundle — are unchanged).
+- **Behavior tests preserved:** every Band A test (flow-state, knowledge-store, install, cli, harness-prompt, outcome-detection, compound) is green and unchanged.
+- **Smoke green** end-to-end (init + sync + upgrade + uninstall) on the build.
+
+### Migration
+
+- Existing `.cclaw/` directories with old runbook filenames (`critic-stage.md`, `plan-critic-stage.md`, `self-review-gate.md`, `ship-gate.md`, `discovery.md`, `plan-small-medium.md`): `RETIRED_RUNBOOK_FILES` causes them to be removed on the next `cclaw sync` / install upgrade pass.
+- Existing `.cclaw/lib/research/` and `.cclaw/lib/recovery/` directories: `RETIRED_LIB_DIRS` causes them to be removed on the same pass.
+- Existing `decisions.md` artifact templates installed under fresh projects: unaffected (the template only stopped being written for NEW installs; the file on disk is untouched).
+- Strict small-medium flows with ≥2 ACs: now trigger plan-critic where they previously did not. Iteration cap (1 revise loop max) is unchanged. The picker arms when revise iteration 1 fires are unchanged.
+- CI: any branch protection rules referencing the dropped `Build and Test (macOS Node 20.x)` or `Build and Test (Node 22.x)` checks must be updated to reference only the kept checks.
+
+### Constraints
+
+- **CI simplification is one-way** — once the matrix shrinks, re-adding macOS / Node 22 requires an explicit decision documented here.
+- **Anatomical tripwires preserved** — `posture-table-consistency`, skills anatomy (v8.26), iron-laws set, specialist-prompts shape all kept.
+- **No bundling with rules surface** — that's v8.55+ scope (requires per-harness path design).
+
 ## 8.53.0 — critic enhancements: multi-perspective lenses + design ambiguity score (closes the v8.48-v8.53 roadmap)
 
 ### Why

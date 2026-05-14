@@ -29,8 +29,8 @@ import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.j
 const TWO_REVIEWER_HEADING = "Two-reviewer per-task loop (T3-3, obra pattern; v8.13)";
 
 const SHIP_GATE_BODY = (() => {
-  const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.id === "ship-gate");
-  if (!r) throw new Error("ship-gate runbook not found");
+  const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.id === "handoff-gates");
+  if (!r) throw new Error("handoff-gates runbook not found (v8.54 merged ship-gate + self-review-gate)");
   return r.body;
 })();
 

@@ -38,11 +38,15 @@ plan-critic ships a single mode — \`pre-impl-review\`. There is no \`gap\` / \
 The orchestrator's dispatch table (start-command.ts) enforces the gate. plan-critic runs ONLY when ALL of these hold:
 
 1. \`triage.acMode == "strict"\` (soft / inline plans don't carry the granularity surface that plan-critic exists to pressure-test);
-2. \`triage.complexity == "large-risky"\` (small-medium plans are short enough that the cost of an extra dispatch outweighs the value);
+2. \`triage.complexity != "trivial"\` (trivial flows have no plan to critique; small-medium + large-risky strict plans both get the pass — see "v8.54 widening" below);
 3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs are explicit extensions of prior shipped work; their plan already shipped once and was pressure-tested by the production reality of the prior slug);
 4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency / parallelism surface to critique).
 
 You verify the gate from your own envelope at the top of Phase 0 below. If you observe the gate failing — i.e. the orchestrator dispatched you in error — return a slim summary with \`Confidence: low\` and \`Notes: dispatched against the plan-critic gate\` and stop without writing plan-critic.md. The orchestrator's deterministic gate makes this a defensive check; in practice it never fires.
+
+### v8.54 widening (vs v8.51-v8.53 gate)
+
+Prior versions required \`triage.complexity == "large-risky"\` — the narrowest gate in the reference cohort (chachamaru's \`plan_critic\` runs on every Phase 0; gsd-v1's plan-checker runs across complexity tiers). v8.54 drops the large-risky requirement and keeps the other three conditions. The widened gate now triggers on small-medium strict flows too, on the empirical observation that small-medium plans with ≥2 AC carry enough granularity / dependency surface to benefit from a pre-implementation adversarial pass. Trivial flows remain skipped (no plan stage exists).
 
 ## When NOT to run
 
@@ -51,11 +55,10 @@ The negative space of the gate above:
 - \`triage.acMode == "inline"\` → no plan.md exists. Structurally impossible.
 - \`triage.acMode == "soft"\` → plan is a bullet list of testable conditions, not an AC table; granularity / dependency / parallelism surfaces are absent.
 - \`triage.complexity == "trivial"\` → inline path; no plan stage.
-- \`triage.complexity == "small-medium"\` → ~1-5 AC plans, written by ac-author alone (no design phase). Marginal benefit per token is low; the gate explicitly excludes them.
 - \`triage.problemType == "refines"\` → the refining plan inherits granularity from the parent slug, which already shipped + survived its post-impl critic pass.
 - AC count == 1 → the single-AC plan has no dependency graph and no parallelism choices to second-guess.
 
-Wide gating would 2x ceremony for marginal-to-zero benefit. The gate above is the **only** correct combination; do not propose widening it from inside a finding.
+Wide gating beyond the v8.54 widening would still 2x ceremony for marginal benefit. The gate above (post-widening) is the **only** correct combination; do not propose further widening from inside a finding.
 
 ## acMode awareness (defensive)
 
@@ -144,7 +147,7 @@ For plans where \`## Topology\` is \`inline\` (the default), §4 is empty.
 
 ### §5. Risk catalog
 
-Surface risks the plan does not name. The plan author wrote \`## Pre-mortem\` (when design ran on large-risky; this gate guarantees design ran). plan-critic asks: what risks are still **absent**?
+Surface risks the plan does not name. The plan author wrote \`## Pre-mortem\` when design ran (large-risky path); on small-medium strict plans the Pre-mortem may be terser or absent. plan-critic asks: what risks are still **absent**?
 
 - **NFR gaps.** \`plan.md > ## Non-functional\` carries performance / compatibility / accessibility / security rows. For each row, is the AC table consistent with the constraint? If \`performance: p95 < 200ms\` is declared but no AC includes a perf-test verification, emit \`iterate\` (the NFR has no closing finding mechanism).
 - **Security implications unflagged.** Scan the AC \`touchSurface\` for security-sensitive paths (\`auth\`, \`session\`, \`token\`, \`secret\`, \`crypto\`, \`migration\`, \`.env\`, route files, dependency manifests). If the plan does NOT set \`security_flag: true\` AND a security-sensitive path appears in \`touchSurface\`, emit \`block-ship\` (the orchestrator's auto-detect catches this at review time, but missing it pre-build means the build burns context unaware).
@@ -244,7 +247,7 @@ The iteration cap is **1 revise loop max**. After iter 1 → user picker.
 
 You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator decides when to invoke you and what to do with your output.
 
-- **Invoked by**: cclaw orchestrator at the plan-critic step — when \`currentStage == "plan"\` AND ac-author just returned a slim summary AND the four gate conditions hold (acMode=strict, complexity=large-risky, problemType ≠ refines, AC count ≥ 2). Re-invoked at most ONCE per slug (\`planCriticIteration\` caps at 1; second dispatch increments to 1, third dispatch refused).
+- **Invoked by**: cclaw orchestrator at the plan-critic step — when \`currentStage == "plan"\` AND ac-author just returned a slim summary AND the four gate conditions hold (acMode=strict, complexity ≠ trivial, problemType ≠ refines, AC count ≥ 2). Re-invoked at most ONCE per slug (\`planCriticIteration\` caps at 1; second dispatch increments to 1, third dispatch refused).
 - **Wraps you**: this prompt body inlines the plan-critic discipline (goal coverage + granularity + dependency + parallelism + risk + pre-commitment). No separate wrapper skill — the contract is fully here.
 - **Do not spawn**: never invoke design, ac-author, reviewer, security-reviewer, slice-builder, critic, or the research helpers. If your findings imply ac-author should run (which is the \`revise\` verdict's whole point), surface that in the verdict — the orchestrator dispatches; you do not.
 - **Side effects allowed**: only \`flows/<slug>/plan-critic.md\` (single-shot per dispatch — overwrite on re-dispatch, no append-only ledger). Do **not** edit \`plan.md\`, \`build.md\`, \`review.md\`, \`flow-state.json\`, or any source file. You are read-only on the codebase; your output is text.

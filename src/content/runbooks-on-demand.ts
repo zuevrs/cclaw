@@ -257,22 +257,29 @@ Record the rerun reason in \`review.md\`: \`Adversarial reran because fix-only c
 - In \`soft\` mode the adversarial pass (and its rerun) are skipped by default — the lighter-weight regular reviewer is enough for small/medium work. The user can opt in with \`/cc <task> --adversarial\` if they want the extra sweep regardless.
 `;
 
-const SELF_REVIEW_GATE = `# On-demand runbook — self-review gate (mandatory before reviewer dispatch)
+const HANDOFF_GATES = `# On-demand runbook — handoff gates (self-review before reviewer, ship before push)
 
-Open this runbook **after every slice-builder return, before deciding whether to dispatch the reviewer**. Cheap to run (you already have the JSON in context) and saves one full reviewer cycle per failed attestation.
+Open this runbook on **two** pre-handoff inspections:
 
-## What slice-builder returns
+- After every slice-builder return, **before deciding whether to dispatch the reviewer** (see \`## Pre-reviewer dispatch gate (self-review)\` below). Cheap to run (you already have the JSON in context) and saves one full reviewer cycle per failed attestation.
+- After the review stage is clear / warn, **before any push / PR action** (see \`## Pre-ship dispatch gate (ship-gate)\` below). The ship gate is where the orchestrator surfaces a structured ask to the user.
+
+Both surfaces share a pre-handoff inspection shape: read the latest slim summary or ledger, evaluate a deterministic rule, and either advance or bounce. The two sections below carry the per-gate procedure.
+
+## Pre-reviewer dispatch gate (self-review)
+
+### What slice-builder returns
 
 slice-builder's strict-mode JSON summary returns a \`self_review\` array with five rule attestations per AC: \`tests-fail-then-pass\`, \`build-clean\`, \`no-shims\`, \`touch-surface-respected\`, \`coverage-assessed\`. (Soft mode: one block per rule with \`ac: "feature"\`.) Each entry carries \`verified: true|false\` and a non-empty \`evidence\` string.
 
 Before you dispatch the reviewer, **inspect \`self_review\`** in your own context. The reviewer never sees this field; it is your gate.
 
-## Decision rule
+### Decision rule
 
 - **All entries \`verified: true\` AND \`evidence\` non-empty** → dispatch reviewer normally.
 - **Any \`verified: false\`** OR **any empty/missing \`evidence\`** OR **\`self_review\` array missing entirely** → **bounce the slice straight back to slice-builder with mode=fix-only**, citing the failed rule(s) and the slice-builder's own evidence string in the dispatch envelope. Do NOT dispatch reviewer.
 
-## Fix-only bounce envelope
+### Fix-only bounce envelope
 
 The fix-only bounce envelope reuses the slice-builder dispatch envelope shape; the "Inputs" line names the failed rules instead of a Findings fix list:
 
@@ -286,20 +293,17 @@ Dispatch slice-builder
 ─ Then: re-emit the strict-mode JSON summary with self_review[] re-attested
 \`\`\`
 
-## Escalation on repeated failures
+### Escalation on repeated failures
 
 Repeated self-review failures (third bounce) escalate to user: render the failed evidence and ask whether to continue or split the AC.
 
-## Parallel-build behaviour
+### Parallel-build behaviour
 
 In parallel-build the gate runs **per slice**: a slice whose self-review fails bounces back; **healthy slices proceed** to integration review independently. Do not block a clean slice waiting on a sibling's fix-only loop.
-`;
 
-const SHIP_GATE = `# On-demand runbook — ship gate (finalization + adversarial pre-mortem)
+## Pre-ship dispatch gate (ship-gate)
 
-Open this runbook **only when the review stage is clear / warn and the next step is ship-stage dispatch**. The ship gate is where the orchestrator surfaces a structured ask to the user before any push / PR action.
-
-## Ship-stage parallel fan-out
+### Ship-stage parallel fan-out
 
 The ship stage uses **parallel fan-out + merge** (the canonical cclaw fan-out). Dispatch all specialists in the same message; merge their summaries in your context.
 
@@ -317,7 +321,7 @@ Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit 
 
 After ship, run the compound learning gate.
 
-## Ship-gate user ask (finalization mode)
+### Ship-gate user ask (finalization mode)
 
 When the ship gate is passed (Victory Detector green) and finalization is required, the orchestrator surfaces a structured ask to the user. The options are the five \`finalization_mode\` enum values; **\`Cancel\` is NOT one of them**. \`/cc-cancel\` remains the explicit user-typed command for discarding a flow; structured asks for finalization MUST NOT include a "Cancel" row, because choosing "Cancel" mid-finalization leaves shipped artefacts in a half-moved state with no defined recovery.
 
@@ -339,7 +343,7 @@ If the user wants to abandon the flow at this point, they type \`/cc-cancel\` (o
 1. The flow has already passed code-mode review + adversarial pre-mortem; cancelling here is unusual.
 2. The shipped artefacts may have already been partially written (manifest-as-frontmatter, learnings.md); cancelling mid-finalize requires a different recovery path than \`/cc-cancel\` from earlier stages.
 
-## Adversarial pre-mortem (strict mode only)
+### Adversarial pre-mortem (strict mode only)
 
 Before the ship gate finalises, the orchestrator dispatches \`reviewer\` mode=\`adversarial\` against the diff produced for this slug. The adversarial reviewer's specific job is to **think like the failure**: how would this break in production a week from now?
 
@@ -356,7 +360,7 @@ Failure classes the adversarial pass MUST consider (mark each as "covered" / "no
 
 The adversarial reviewer treats every "not covered" as a finding (axis varies; severity \`required\` by default, escalated to \`critical\` for data-loss / security-edge). Findings go into the existing Findings table in \`review.md\`; the same file gets a \`## Pre-mortem (adversarial)\` section summarising the adversarial pass's reasoning so the user can read a one-page rationale. (On \`legacy-artifacts: true\` the section is mirrored into a standalone \`pre-mortem.md\` for downstream tooling.)
 
-## Ship-gate decision matrix
+### Ship-gate decision matrix
 
 | reviewer:release | reviewer:adversarial | security-reviewer | gate |
 | --- | --- | --- | --- |
@@ -474,51 +478,6 @@ This makes the catalogue discoverable to future agents/humans who don't already 
 The discoverability check runs **once per slug** (only when ship completes), and respects the user's \`never\` choice for the rest of the session.
 `;
 
-const DISCOVERY = `# On-demand runbook — discovery sub-phase (large-risky plan stage)
-
-Open this runbook **only when \`triage.complexity == "large-risky"\` and the path includes \`plan\`**. For small/medium plan, see start-command's "Plan stage on small/medium".
-
-The discovery sub-phase runs a **two-step** chain: \`design\` (main context, multi-turn) → \`ac-author\` (sub-agent). \`currentStage\` stays \`"plan"\` for both; \`lastSpecialist\` rotates through \`design\` then \`ac-author\`.
-
-## v8.14 collapse context
-
-Pre-v8.14 ran a three-step \`brainstormer → architect → ac-author\` chain of one-shot sub-agents, with a checkpoint-question between each. That ceremony was thin — the brainstormer's "Frame" and the architect's "decisions" both came from one shot of the model with no user dialog. v8.14 replaces the first two steps with a **single \`design\` specialist that runs in main context** across seven multi-turn phases (Bootstrap, Clarify, Frame, Approaches, Decisions inline, Pre-mortem, Compose, Sign-off), so framing and structural decisions emerge from a real user-collaborative pass instead of two short summaries.
-
-## Discovery auto-skip (low-ambiguity fast path)
-
-Before activating \`design\`, run the **discovery-needed heuristic** against the triage and pre-flight state. Skip directly to \`ac-author\` (single dispatch, no design phase) when **all** of the following hold:
-
-1. \`triage.confidence\` is \`high\` (the heuristic produced an unambiguous large-risky classification).
-2. \`triage.assumptions\` is non-empty AND the user accepted them in pre-flight without edits (\`pre_flight_edits == 0\`).
-3. The user's \`/cc <task>\` prompt names ≥1 concrete file path or module (i.e. the focus surface is already given, not yet to be discovered).
-4. There is no security-sensitive keyword (\`auth\`, \`token\`, \`secret\`, \`oauth\`, \`saml\`, \`encryption\`, \`pii\`, \`gdpr\`, \`pci\`, \`hipaa\`, \`soc2\`) in the prompt **AND** \`security_flag\` is not preset by triage.
-
-When all four hold, the orchestrator surfaces a one-sentence skip notice in the user's language ("Discovery skipped: triage is high-confidence and the surface is named — going straight to ac-author. Reply with \`/cc-cancel\` if you want a design pass instead.") and dispatches \`ac-author\` directly with the same envelope as small/medium plus \`fast_path: skipped-discovery\` in flow-state. \`lastSpecialist\` stays \`null\` until ac-author returns.
-
-When **any** of the four fails, run the full two-step discovery as below.
-
-The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=force\` (always run the full design phase) or \`/cc <task> --discovery=skip\` (always skip, even if the heuristic would not have skipped — they take responsibility).
-
-## Full two-step discovery (default; auto-skip declined or its conditions failed)
-
-> **Discovery never auto-chains across stages.** \`design\` runs in main context with the **v8.47+ two-turn-max** pacing: design pauses at MOST twice per flow — Phase 1 (Clarify, conditional) and Phase 7 (Sign-off, mandatory) — regardless of \`triage.runMode\`. \`auto\` runMode applies to plan→build→review→ship transitions only, **not** inside design's internal phase chain. The ac-author dispatch that follows the design's Phase 7 sign-off is a step-mode pause unless \`triage.runMode == auto\`.
-
-1. **Activate \`design\` in main context** (read \`.cclaw/lib/agents/design.md\` as a skill the orchestrator itself follows; do NOT dispatch as a sub-agent).
-   - The orchestrator picks the **posture** before activation: \`deep\` when any of (security-sensitive keyword, \`security_flag\` preset, irreversibility / migration / schema / breaking-change / data-loss / payment / gdpr / pci in the prompt, \`refines:\` points to a slug with \`security_flag: true\`); \`guided\` otherwise. The design prompt may escalate to \`deep\` mid-flight if Phase 3 surfaces irreversibility the orchestrator missed.
-   - The orchestrator follows the design.md prompt phases 0-7 directly in this conversation. **v8.47+ pacing:** only **Phase 1** (Clarify, when 0-3 clarifying questions are needed — one batched \`askUserQuestion\` call) and **Phase 7** (Sign-off, always — three-option picker: \`approve\` / \`request-changes\` / \`reject\`) emit user-facing output and end the turn. Phases 0 (Bootstrap), 2 (Frame), 3 (Approaches), 4 (Decisions), 5 (Pre-mortem, deep only), 6 (Compose + self-review), and 6.5 (ADR proposal) all execute SILENTLY in the same orchestrator turn — append plan.md sections as you go; do not pause.
-   - Output: appends Frame, Spec (v8.46), optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, and Summary — design block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires. **No separate \`decisions.md\` is written; v8.14 inlined that file into the Decisions section of plan.md.**
-   - On Phase 7 \`approve\`: orchestrator patches \`lastSpecialist: "design"\` and \`plan.md\` frontmatter (\`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`) → **ends the turn**. The next \`/cc\` continues with ac-author.
-   - On Phase 7 \`request-changes\`: design re-runs the affected silent phases (Phase 2 / 3 / 4 / 5 / 6) internally and re-emits Phase 7 with the revised plan.md. **Revise cap = 3 iterations**; on the 4th request, design escalates explicitly (\`approve as-is\` / \`reject\` / \`revise one more time\`). Orchestrator does not patch \`lastSpecialist\` until the user picks \`approve\`.
-   - On Phase 7 \`reject\`: design appends a brief \`## Design rejected\` note to plan.md and surfaces the rejection. Orchestrator does NOT patch \`lastSpecialist: design\`; the user is routed to \`/cc-cancel\` or re-triage.
-2. **Dispatch \`ac-author\`** as a normal sub-agent with the same contract as small/medium plan, plus an extra input: the design sections already in \`flows/<slug>/plan.md\`.
-   - AC author now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The Frame / Approaches / Selected Direction / Decisions / Pre-mortem sections from design remain at the top of \`plan.md\`; ac-author appends its own sections below.
-   - Orchestrator reads slim summary → patches \`lastSpecialist: "ac-author"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`). At this point the orchestrator follows \`triage.runMode\` for the plan→build transition: \`step\` ends the turn; \`auto\` chains immediately into the build dispatch.
-
-Resume after a design or ac-author checkpoint: \`flow-state.lastSpecialist\` tells the orchestrator which discovery step to skip. If \`lastSpecialist == "design"\` and \`currentStage == "plan"\`, the resume dispatches \`ac-author\` directly. The user can also \`/cc <task> --skip-discovery\` to drop straight into a single ac-author dispatch when the design phase already happened in a prior session.
-
-**Legacy migration:** state files written by pre-v8.14 cclaw with \`lastSpecialist: "brainstormer"\` or \`lastSpecialist: "architect"\` are rewritten to \`null\` on read; the orchestrator re-runs the unified design phase from scratch on those resumes. Shipped slugs with \`flows/shipped/<old-slug>/decisions.md\` keep that file untouched for historical reference.
-`;
-
 const PAUSE_RESUME = `# On-demand runbook — pause and resume mechanics (step / auto / Confidence gate)
 
 The orchestrator opens this runbook on every stage exit when \`triage.path\` is **non-inline** (i.e., the path contains any of \`plan\` / \`review\` / \`ship\`, not just \`build\`). Inline / trivial paths set \`runMode: null\` and never pause — they skip pause/resume entirely, so they never open this runbook.
@@ -569,175 +528,40 @@ Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused 
 \`/cc-cancel\` is the **only** way to discard an active flow; it is never offered as a clickable option in any structured question. The orchestrator surfaces it as plain prose ("send \`/cc-cancel\` to discard this flow") only when the user appears stuck — not as the default.
 `;
 
-const PLAN_SMALL_MEDIUM = `# On-demand runbook — plan stage on small/medium
+const CRITIC_STEPS = `# On-demand runbook — critic steps (pre-implementation + post-implementation)
 
-The orchestrator opens this runbook when \`triage.complexity == "small-medium"\` AND \`plan\` is in \`triage.path\`. For large-risky plan, open \`discovery.md\` instead. For trivial / inline (\`triage.path == ["build"]\`) the plan stage is skipped entirely — this runbook is never opened on the inline path.
-
-## Specialist + wrappers
-
-- Specialist: \`ac-author\`.
-- Wrapper skills: \`plan-authoring.md\` (always) + \`source-driven.md\` (framework-specific tasks; strict mode only by default — soft opts in).
-
-## Pre-author research order (ac-author dispatches BEFORE writing the plan)
-
-- \`learnings-research\` — **always**, on small/medium + large-risky. Reads \`.cclaw/knowledge.jsonl\`. Returns 0-3 prior lessons inline in slim-summary's \`Notes\` as \`lessons={...}\`; the ac-author copies verbatim quotes into \`plan.md\`'s \`## Prior lessons\` section. No separate \`research-learnings.md\` artifact unless \`legacy-artifacts: true\`.
-- \`repo-research\` — **brownfield only** (manifest at repo root AND populated source root). Skipped on greenfield. Writes \`flows/<slug>/research-repo.md\`.
-
-Both research helpers run as sub-agent dispatches with their own \`.cclaw/lib/agents/<id>.md\` contracts; they never become \`lastSpecialist\` and never appear in \`triage.path\`.
-
-## Inputs (ac-author reads after the contract + wrappers)
-
-- triage decision (with \`assumptions\` from triage.assumptions)
-- the user's original \`/cc <task>\` prompt
-- \`.cclaw/lib/templates/plan.md\`
-- the \`learnings-research\` blob (returned inline in its slim-summary \`Notes\`)
-- \`flows/<slug>/research-repo.md\` (when brownfield)
-- \`.cclaw/knowledge.jsonl\` for cross-check (independent of the learnings-research blob)
-- the matching shipped slug if the flow is refining one (\`triage.refines\` is set)
-
-## Output
-
-\`flows/<slug>/plan.md\` with:
-
-- frontmatter \`status: active\`, \`slug\`, \`stage: plan\`, \`acMode\` (\`soft\` or \`strict\`), \`ac: [...]\` (id + status), \`last_specialist: ac-author\`, \`refines\` (if applicable), \`security_flag\`.
-- \`## Assumptions\` section, **verbatim** from \`triage.assumptions\` — do not paraphrase.
-- \`## Prior lessons\` section from the learnings-research blob, **verbatim** quotes (no summary).
-- Body shape depends on acMode:
-  - **soft-mode body** = a bullet list of testable conditions (3-7 items typical).
-  - **strict-mode body** = an AC table with \`AC-N\`, verification line (test name / manual step / command), \`touchSurface\`, and \`parallelSafe\` per row; \`## Topology\` block with \`inline\` (default) or \`parallel-build\` (only when the topology gate from \`plan.md\` stage runbook §5 fires).
-
-## Slim summary (ac-author → orchestrator)
-
-\`\`\`
-Stage: plan  ✅ complete  |  ⏸ paused  |  ❌ blocked
-Artifact: flows/<slug>/plan.md
-What changed: <one sentence; e.g. "5 testable conditions" or "AC-1 … AC-7, parallel-build (3 slices)">
-Open findings: 0
-Confidence: <high | medium | low>
-Recommended next: continue
-Notes: lessons={<count or summary>}, topology=<inline | parallel-build>, prior-lesson-count=<N>
-\`\`\`
-
-The orchestrator reads only this; the full plan.md stays in \`flows/<slug>/plan.md\` for the next stage's slice-builder dispatch. The five report fields the orchestrator uses are: condition / AC count, max \`touchSurface\` value, parallel-build flag, recommended-next, prior-lesson count.
-`;
-
-const CRITIC_STAGE = `# On-demand runbook — critic step (v8.42+)
-
-The orchestrator opens this runbook **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the v8.42 on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + AC self-audit + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this runbook covers what the orchestrator does *around* the dispatch.
-
-## acMode gating (Q1, no flag exposed)
-
-| \`triage.acMode\` | does critic run? | mode | typical token budget |
-| --- | --- | --- | --- |
-| \`inline\` | **no — skipped** (\`triage.path\` never includes \`critic\` on inline) | — | 0 |
-| \`soft\` | **yes** | \`gap\` (light) — predictions ≤3, §3 adversarial skipped, §5 goal-backward collapsed to one paragraph | 5-7k |
-| \`strict\` | **yes** | \`gap\` (full) by default; auto-escalates to \`adversarial\` (\§3 emitted in full + per-D-N devil's-advocate sweep) when any §8 trigger fires | 10-15k (gap) / 12-18k (adversarial), hard cap 20k |
-
-## Escalation triggers (§8, OR-conditions — any one fires escalation on \`acMode: strict\`)
-
-1. **Architectural-tier change** — touchSurface includes ≥2 files marked \`tier: architectural\` in plan.md OR the build introduced one.
-2. **Test-first + zero failing tests in build.md** — slug posture is \`test-first\` AND the TDD log shows zero \`RED\` rows (v8.42 Q5: narrow trigger, do NOT widen to "missing RED excerpt"; the difference matters — a slug with \`RED\` rows that lack a captured excerpt is a build.md audit-trail gap to be flagged, not a critic escalator).
-3. **Large surface size** — \`git diff --stat\` reports ≥10 files OR ≥500 net lines changed since the plan committed.
-4. **\`security_flag: true\`** OR security-reviewer ran during review.
-5. **\`reviewIterations >= 4\`** — the slug needed near-cap iterations to converge; hidden complexity signal.
-
-The orchestrator computes the trigger set deterministically from \`flow-state.json\` + \`plan.md\` frontmatter + \`build.md\` table + \`git diff --stat\` BEFORE dispatching critic. The dispatch envelope stamps the firing triggers verbatim so the prompt copies them into \`critic.md > frontmatter > escalation_triggers\`.
-
-Mapping fired-triggers count to \`criticEscalation\`:
-
-- \`acMode: soft\` AND exactly one trigger fired → \`light\` (still \`gap\` mode; one extra technique permitted).
-- \`acMode: strict\` AND any trigger fired → \`full\` (\`adversarial\` mode; all four §3 techniques + devil's-advocate sweep).
-- Otherwise → \`none\` (\`gap\` mode unchanged).
-
-## Cap & rerun rules
-
-- **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — surfacing the critic-cap-reached picker (same shape as the v8.20 5-iteration reviewer cap).
-- **Re-run trigger:** ONLY when the user picks \`[1] fix and re-review\` at the block-ship picker. The orchestrator re-dispatches \`slice-builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the v8.20 cap still applies), then re-runs \`critic\` (increments \`criticIteration\`).
-- **Independence:** critic dispatches do NOT increment \`reviewIterations\`. The two counters are independent; the critic-cap-reached picker fires only on a third critic dispatch, even if the reviewer-cap is far from reached.
-
-## Verdict handling (slim summary → orchestrator routing)
-
-| critic \`Verdict:\` | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
-| --- | --- | --- | --- |
-| \`pass\` | \`"ship"\` | step pauses end-of-stage; auto chains to ship | no user gate; advance straight to ship |
-| \`iterate\` | \`"ship"\` | step pauses end-of-stage; auto chains to ship | open critic gaps with severity \`iterate\` are copied verbatim into \`ship.md > ## Risks carried over\`; one line to the user ("Critic returned iterate (\<N\> gaps carried over). Continuing to ship.") |
-| \`block-ship\` | stays \`"critic"\` | both modes hard-gate | surface the block-ship picker: \`[1] fix and re-review\` (consumes the one allowed rerun), \`[2] accept-and-ship\` (strict-mode escape hatch; stamps \`triage.criticOverride: true\` for audit trail), \`[3] /cc-cancel\` (out-of-band). Single-line summary cites the \`block-ship\` G-N / F-N anchors verbatim. |
-
-**Confidence: low** in the critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator offers \`Expand critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
-
-## FlowState patches
-
-**Immediately before dispatching critic:**
-
-\`\`\`json
-{
-  "currentStage": "critic",
-  "lastSpecialist": null
-}
-\`\`\`
-
-**After critic returns slim summary (orchestrator has read it, BEFORE user-gate decision):**
-
-\`\`\`json
-{
-  "currentStage": "critic",
-  "lastSpecialist": "critic",
-  "criticIteration": 1,
-  "criticVerdict": "pass | iterate | block-ship",
-  "criticGapsCount": <integer; open gaps with severity != fyi>,
-  "criticEscalation": "none | light | full"
-}
-\`\`\`
-
-**After ship begins (user approved continue or auto-chain fired):** \`currentStage\` advances to \`"ship"\`. The critic fields stay; they are immutable for the rest of the flow.
-
-## Q4 dogfood — when this is the v8.42 implementation slug
-
-The v8.42 slug introduces the critic itself. The acceptance criterion (Q4) is that *this* slug runs through *its own* critic stage during review. If the critic returns \`block-ship\` on its own implementation, the orchestrator records the block-ship reason in \`learnings.md\` and the user invokes \`[2] accept-and-ship\` (manual override; \`triage.criticOverride: true\`). The override is documented in the slug's PR body under \`## Critic self-dogfood findings\` per the v8.42 process checklist. This is a one-time bootstrap exception — every subsequent slug treats \`block-ship\` as a hard gate by default.
-
-## Legacy migration (pre-v8.42 \`flow-state.json\`)
-
-A state file with \`currentStage: "review"\` AND \`lastSpecialist: "reviewer"\` AND no \`criticVerdict\` field is treated as **pre-critic intermediate**:
-
-- If the slug directory is \`flows/<slug>/\` (still active, not yet shipped): on the next \`/cc\`, the orchestrator emits the one-line migration note (\`Legacy state (pre-v8.42) detected; the critic stage will run on next /cc.\`) and dispatches critic before advancing to ship.
-- If the slug directory is \`flows/shipped/<slug>/\` (post-v8.41 ship already completed): the state is left alone. The shipped artifact set is immutable; the orchestrator does NOT retroactively run critic on a shipped slug.
-
-The migration is one-pass and idempotent — a slug whose critic has already run shows \`criticVerdict\` set, so the legacy branch is never re-entered.
-
-## What the critic CANNOT do (read this before authoring the envelope)
-
-- Edit any source file (\`src/**\`, \`tests/**\`, \`.cclaw/state/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\`.
-- Commit, push, rebase, or merge. The critic owns no git operations.
-- Dispatch other specialists. Composition is the orchestrator's job.
-- Exceed 20k input+output tokens. Approaching the cap is itself a finding (\`Confidence: low\`, recommend split).
-- Re-walk the reviewer's eight axes. The critic reads \`review.md > ## Findings\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
-
-The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see v8.42 Q2).
-`;
-
-const PLAN_CRITIC_STAGE = `# On-demand runbook — plan-critic step (v8.51+)
-
-The orchestrator opens this runbook **on every \`ac-author\` slim-summary return** when the v8.51 gate evaluates to true. plan-critic is the v8.51 pre-implementation adversarial specialist that runs between \`ac-author\` and \`slice-builder\` on a tight subset of flows. It walks what is **missing or wrong** in the plan itself (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + pre-commitment predictions) rather than the post-impl critic's "did we build the right thing well?" pass. The contract that drives the dispatch lives in \`.cclaw/lib/agents/plan-critic.md\`; this runbook covers what the orchestrator does *around* the dispatch.
-
-Distinct from \`critic-stage.md\` (v8.42, post-implementation, Hop 4.5). Both stages ship together because they catch different problem classes:
+cclaw has **two** critic specialists that share a dispatch envelope shape and the falsificationist pass discipline but fire at different points in the flow:
 
 | stage | when | reads | output | verdicts |
 | --- | --- | --- | --- | --- |
 | **plan-critic** (v8.51) | between ac-author and slice-builder | plan.md only (read-only on the codebase) | flows/<slug>/plan-critic.md | \`pass\` / \`revise\` / \`cancel\` |
 | **critic** (v8.42) | between reviewer-clear and ship | plan.md + build.md + review.md + diff | flows/<slug>/critic.md | \`pass\` / \`iterate\` / \`block-ship\` |
 
-## Gating (the four AND conditions — orchestrator enforces deterministically)
+Both stages ship together because they catch different problem classes — plan-critic walks the plan itself ("is this plan structurally buildable?"); the post-impl critic walks the built diff ("did we build the right thing well?"). The orchestrator opens the matching section below for the transition in flight.
+
+## Shared cross-stage rules
+
+- **Pre-commitment predictions** are authored BEFORE the rest of the protocol runs (plan-critic §6; post-impl critic §1). Same discipline shape: 3-5 predictions naming verification paths and final outcomes (\`confirmed\` / \`refuted\` / \`partial\`); the discipline activates deliberate search instead of passive reading.
+- **Anti-rationalization pointer.** Both specialists reference the shared \`.cclaw/lib/anti-rationalizations.md\` catalog (v8.49) for cross-cutting rationalizations; only specialist-unique rows live inline in the prompt body.
+- **Iteration cap = 1.** Each specialist dispatches at most twice per slug (iteration 0 + one allowed retry). A third dispatch is structurally forbidden — the orchestrator surfaces a cap-reached user picker instead.
+- **Slim summary shape.** Both return a ≤7-line slim summary with \`specialist\`, \`verdict\`, severity-bucketed findings count, \`iteration\`, \`confidence\`, and an optional \`notes\` line (required when confidence != high).
+
+## Pre-implementation pass (plan-critic, v8.51)
+
+The orchestrator opens this section **on every \`ac-author\` slim-summary return** when the v8.51 gate evaluates to true. plan-critic is the v8.51 pre-implementation adversarial specialist that runs between \`ac-author\` and \`slice-builder\` on a tight subset of flows. It walks what is **missing or wrong** in the plan itself (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + pre-commitment predictions) rather than the post-impl critic's "did we build the right thing well?" pass. The contract that drives the dispatch lives in \`.cclaw/lib/agents/plan-critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+
+### plan-critic gating (the four AND conditions — orchestrator enforces deterministically)
 
 plan-critic runs ONLY when ALL of these hold:
 
 1. \`triage.acMode == "strict"\` (soft / inline plans don't carry the granularity surface to critique).
-2. \`triage.complexity == "large-risky"\` (small-medium plans are too small to amortize the dispatch cost).
+2. \`triage.complexity != "trivial"\` (trivial flows have no plan stage; small-medium and large-risky plans are both eligible).
 3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs extend prior shipped work; the parent slug already shipped + survived its post-impl critic).
 4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency surface).
 
-For any other combination, plan-critic is **structurally skipped**. The orchestrator advances directly from ac-author's slim summary to slice-builder dispatch, as today. The gate is **AND** across all four; widening any condition is a v8.52+ scope decision, not a within-slug runtime call.
+For any other combination, plan-critic is **structurally skipped**. The orchestrator advances directly from ac-author's slim summary to slice-builder dispatch, as today. The gate is **AND** across all four; the v8.54 widening dropped the prior \`complexity == "large-risky"\` requirement (reference patterns — chachamaru \`plan_critic\` runs on every Phase 0, gsd-v1 plan-checker runs across complexity tiers — showed cclaw's prior gate was the narrowest in the cohort and likely under-fired on strict small-medium flows; trivial flows still skipped because they have no plan to critique). Further widening any condition is a v8.55+ scope decision, not a within-slug runtime call.
 
-## Dispatch envelope
+### plan-critic dispatch envelope
 
 \`\`\`
 Dispatch plan-critic
@@ -764,7 +588,7 @@ Dispatch plan-critic
     - exceed 7k tokens (input + output combined; itself a finding when approached)
 \`\`\`
 
-## Verdict handling (slim summary → orchestrator routing)
+### plan-critic verdict handling (slim summary → orchestrator routing)
 
 The plan-critic returns one of three verdicts. The orchestrator branches on (verdict, iteration):
 
@@ -777,7 +601,7 @@ The plan-critic returns one of three verdicts. The orchestrator branches on (ver
 
 **Confidence: low** in the plan-critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The plan-critic MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator offers \`Expand plan-critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
 
-## Iteration cap enforcement
+### plan-critic iteration cap enforcement
 
 - \`planCriticIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return.
 - The orchestrator dispatches plan-critic **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`revise\` from iter 0). A third dispatch is structurally not allowed — the orchestrator surfaces the revise-cap-reached picker instead.
@@ -785,7 +609,7 @@ The plan-critic returns one of three verdicts. The orchestrator branches on (ver
 - A \`cancel\` verdict at any iteration immediately surfaces the cancel picker; iteration does not advance.
 - The iteration cap is independent of \`reviewIterations\` (post-impl review loop) and \`criticIteration\` (post-impl critic). All three counters are tracked separately.
 
-## FlowState patches
+### plan-critic FlowState patches
 
 **Immediately before dispatching plan-critic (iteration 0 OR iteration 1):**
 
@@ -816,7 +640,7 @@ The plan-critic returns one of three verdicts. The orchestrator branches on (ver
 
 **After cancel verdict / revise-cap picker resolution:** the user's pick drives the next state transition (\`/cc-cancel\` clears the flow; \`[re-design]\` resets to design Phase 1; \`[accept-warnings-and-proceed]\` advances to slice-builder despite the \`revise\` verdict). The plan-critic fields stay verbatim as the audit trail.
 
-## What plan-critic CANNOT do (read this before authoring the envelope)
+### What plan-critic CANNOT do (read this before authoring the envelope)
 
 - Edit any source file (\`src/**\`, \`tests/**\`, \`.cclaw/state/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\`. The only file plan-critic writes is \`.cclaw/flows/<slug>/plan-critic.md\`.
 - Commit, push, rebase, or merge. plan-critic owns no git operations.
@@ -825,14 +649,107 @@ The plan-critic returns one of three verdicts. The orchestrator branches on (ver
 - Propose alternative approaches. The design phase chose; plan-critic catches mistakes in the chosen plan, not relitigates the choice.
 - Emit multi-perspective lens findings (security / a11y / perf as parallel sweeps). That is v8.53 scope for the post-impl critic; plan-critic stays focused on the five dimensions.
 
-## Legacy migration (pre-v8.51 \`flow-state.json\`)
+### plan-critic legacy migration (pre-v8.51 \`flow-state.json\`)
 
 A state file with \`currentStage: "plan"\` AND \`lastSpecialist: "ac-author"\` AND no \`planCriticVerdict\` field is treated as **pre-plan-critic intermediate**:
 
-- If the slug satisfies the v8.51 gate (acMode=strict + complexity=large-risky + problemType!=refines + AC count>=2): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.51) detected; plan-critic will run on next /cc.\`) and dispatches plan-critic before advancing to slice-builder.
+- If the slug satisfies the v8.54 gate (acMode=strict + complexity!=trivial + problemType!=refines + AC count>=2): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.51) detected; plan-critic will run on next /cc.\`) and dispatches plan-critic before advancing to slice-builder.
 - If the slug does NOT satisfy the gate (any combination that fails any of the four AND-conditions): no migration; plan-critic was structurally never going to run on this slug, advance to slice-builder as today.
 
 The migration is one-pass and idempotent — a slug whose plan-critic has already run shows \`planCriticVerdict\` set, so the legacy branch is never re-entered.
+
+## Post-implementation pass (critic, v8.42)
+
+The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the v8.42 on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + AC self-audit + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+
+### critic acMode gating (Q1, no flag exposed)
+
+| \`triage.acMode\` | does critic run? | mode | typical token budget |
+| --- | --- | --- | --- |
+| \`inline\` | **no — skipped** (\`triage.path\` never includes \`critic\` on inline) | — | 0 |
+| \`soft\` | **yes** | \`gap\` (light) — predictions ≤3, §3 adversarial skipped, §5 goal-backward collapsed to one paragraph | 5-7k |
+| \`strict\` | **yes** | \`gap\` (full) by default; auto-escalates to \`adversarial\` (\§3 emitted in full + per-D-N devil's-advocate sweep) when any §8 trigger fires | 10-15k (gap) / 12-18k (adversarial), hard cap 20k |
+
+### critic escalation triggers (§8, OR-conditions — any one fires escalation on \`acMode: strict\`)
+
+1. **Architectural-tier change** — touchSurface includes ≥2 files marked \`tier: architectural\` in plan.md OR the build introduced one.
+2. **Test-first + zero failing tests in build.md** — slug posture is \`test-first\` AND the TDD log shows zero \`RED\` rows (v8.42 Q5: narrow trigger, do NOT widen to "missing RED excerpt"; the difference matters — a slug with \`RED\` rows that lack a captured excerpt is a build.md audit-trail gap to be flagged, not a critic escalator).
+3. **Large surface size** — \`git diff --stat\` reports ≥10 files OR ≥500 net lines changed since the plan committed.
+4. **\`security_flag: true\`** OR security-reviewer ran during review.
+5. **\`reviewIterations >= 4\`** — the slug needed near-cap iterations to converge; hidden complexity signal.
+
+The orchestrator computes the trigger set deterministically from \`flow-state.json\` + \`plan.md\` frontmatter + \`build.md\` table + \`git diff --stat\` BEFORE dispatching critic. The dispatch envelope stamps the firing triggers verbatim so the prompt copies them into \`critic.md > frontmatter > escalation_triggers\`.
+
+Mapping fired-triggers count to \`criticEscalation\`:
+
+- \`acMode: soft\` AND exactly one trigger fired → \`light\` (still \`gap\` mode; one extra technique permitted).
+- \`acMode: strict\` AND any trigger fired → \`full\` (\`adversarial\` mode; all four §3 techniques + devil's-advocate sweep).
+- Otherwise → \`none\` (\`gap\` mode unchanged).
+
+### critic cap & rerun rules
+
+- **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — surfacing the critic-cap-reached picker (same shape as the v8.20 5-iteration reviewer cap).
+- **Re-run trigger:** ONLY when the user picks \`[1] fix and re-review\` at the block-ship picker. The orchestrator re-dispatches \`slice-builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the v8.20 cap still applies), then re-runs \`critic\` (increments \`criticIteration\`).
+- **Independence:** critic dispatches do NOT increment \`reviewIterations\`. The two counters are independent; the critic-cap-reached picker fires only on a third critic dispatch, even if the reviewer-cap is far from reached.
+
+### critic verdict handling (slim summary → orchestrator routing)
+
+| critic \`Verdict:\` | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
+| --- | --- | --- | --- |
+| \`pass\` | \`"ship"\` | step pauses end-of-stage; auto chains to ship | no user gate; advance straight to ship |
+| \`iterate\` | \`"ship"\` | step pauses end-of-stage; auto chains to ship | open critic gaps with severity \`iterate\` are copied verbatim into \`ship.md > ## Risks carried over\`; one line to the user ("Critic returned iterate (\<N\> gaps carried over). Continuing to ship.") |
+| \`block-ship\` | stays \`"critic"\` | both modes hard-gate | surface the block-ship picker: \`[1] fix and re-review\` (consumes the one allowed rerun), \`[2] accept-and-ship\` (strict-mode escape hatch; stamps \`triage.criticOverride: true\` for audit trail), \`[3] /cc-cancel\` (out-of-band). Single-line summary cites the \`block-ship\` G-N / F-N anchors verbatim. |
+
+**Confidence: low** in the critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator offers \`Expand critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
+
+### critic FlowState patches
+
+**Immediately before dispatching critic:**
+
+\`\`\`json
+{
+  "currentStage": "critic",
+  "lastSpecialist": null
+}
+\`\`\`
+
+**After critic returns slim summary (orchestrator has read it, BEFORE user-gate decision):**
+
+\`\`\`json
+{
+  "currentStage": "critic",
+  "lastSpecialist": "critic",
+  "criticIteration": 1,
+  "criticVerdict": "pass | iterate | block-ship",
+  "criticGapsCount": <integer; open gaps with severity != fyi>,
+  "criticEscalation": "none | light | full"
+}
+\`\`\`
+
+**After ship begins (user approved continue or auto-chain fired):** \`currentStage\` advances to \`"ship"\`. The critic fields stay; they are immutable for the rest of the flow.
+
+### Q4 dogfood — when this is the v8.42 implementation slug
+
+The v8.42 slug introduces the critic itself. The acceptance criterion (Q4) is that *this* slug runs through *its own* critic stage during review. If the critic returns \`block-ship\` on its own implementation, the orchestrator records the block-ship reason in \`learnings.md\` and the user invokes \`[2] accept-and-ship\` (manual override; \`triage.criticOverride: true\`). The override is documented in the slug's PR body under \`## Critic self-dogfood findings\` per the v8.42 process checklist. This is a one-time bootstrap exception — every subsequent slug treats \`block-ship\` as a hard gate by default.
+
+### critic legacy migration (pre-v8.42 \`flow-state.json\`)
+
+A state file with \`currentStage: "review"\` AND \`lastSpecialist: "reviewer"\` AND no \`criticVerdict\` field is treated as **pre-critic intermediate**:
+
+- If the slug directory is \`flows/<slug>/\` (still active, not yet shipped): on the next \`/cc\`, the orchestrator emits the one-line migration note (\`Legacy state (pre-v8.42) detected; the critic stage will run on next /cc.\`) and dispatches critic before advancing to ship.
+- If the slug directory is \`flows/shipped/<slug>/\` (post-v8.41 ship already completed): the state is left alone. The shipped artifact set is immutable; the orchestrator does NOT retroactively run critic on a shipped slug.
+
+The migration is one-pass and idempotent — a slug whose critic has already run shows \`criticVerdict\` set, so the legacy branch is never re-entered.
+
+### What the critic CANNOT do (read this before authoring the envelope)
+
+- Edit any source file (\`src/**\`, \`tests/**\`, \`.cclaw/state/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\`.
+- Commit, push, rebase, or merge. The critic owns no git operations.
+- Dispatch other specialists. Composition is the orchestrator's job.
+- Exceed 20k input+output tokens. Approaching the cap is itself a finding (\`Confidence: low\`, recommend split).
+- Re-walk the reviewer's eight axes. The critic reads \`review.md > ## Findings\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
+
+The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see v8.42 Q2).
 `;
 
 const QA_STAGE = `# On-demand runbook — qa step (v8.52+)
@@ -1009,16 +926,10 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     body: ADVERSARIAL_RERUN
   },
   {
-    id: "self-review-gate",
-    fileName: "self-review-gate.md",
-    title: "Self-review gate",
-    body: SELF_REVIEW_GATE
-  },
-  {
-    id: "ship-gate",
-    fileName: "ship-gate.md",
-    title: "Ship gate + adversarial pre-mortem",
-    body: SHIP_GATE
+    id: "handoff-gates",
+    fileName: "handoff-gates.md",
+    title: "Handoff gates (self-review + ship)",
+    body: HANDOFF_GATES
   },
   {
     id: "handoff-artifacts",
@@ -1033,34 +944,16 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     body: COMPOUND_REFRESH
   },
   {
-    id: "discovery",
-    fileName: "discovery.md",
-    title: "Discovery sub-phase (large-risky plan)",
-    body: DISCOVERY
-  },
-  {
     id: "pause-resume",
     fileName: "pause-resume.md",
     title: "Pause / resume mechanics (step / auto / Confidence gate)",
     body: PAUSE_RESUME
   },
   {
-    id: "plan-small-medium",
-    fileName: "plan-small-medium.md",
-    title: "Plan stage on small/medium",
-    body: PLAN_SMALL_MEDIUM
-  },
-  {
-    id: "critic-stage",
-    fileName: "critic-stage.md",
-    title: "Critic step (v8.42+)",
-    body: CRITIC_STAGE
-  },
-  {
-    id: "plan-critic-stage",
-    fileName: "plan-critic-stage.md",
-    title: "Plan-critic step (v8.51+)",
-    body: PLAN_CRITIC_STAGE
+    id: "critic-steps",
+    fileName: "critic-steps.md",
+    title: "Critic steps (plan-critic + post-impl critic)",
+    body: CRITIC_STEPS
   },
   {
     id: "qa-stage",

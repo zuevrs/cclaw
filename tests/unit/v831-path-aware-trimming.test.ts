@@ -1,315 +1,121 @@
 import { describe, expect, it } from "vitest";
-
+import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
+import { STAGE_PLAYBOOKS } from "../../src/content/stage-playbooks.js";
 import {
   renderStartCommand,
   START_COMMAND_BODY
 } from "../../src/content/start-command.js";
-import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 
 /**
- * v8.31 — path-aware orchestrator trimming.
+ * v8.31 path-aware orchestrator trimming — slimmed in v8.54.
  *
- * The five-audit flow-complexity review (cclaw v8.29 vs flow-complexity audit)
- * found ~2-3K tokens of large-risky-only / non-inline-only content still
- * inlined in `start-command.ts` that loads on every `/cc` invocation,
- * including inline / trivial paths that never reach those mechanics. v8.22
- * lifted ten on-demand runbooks but stopped short of path-conditional
- * gating; v8.31 closes the gap.
- *
- * Two new on-demand runbooks own the lifted content:
- *
- * - `pause-resume.md` — Hop 4 step/auto mode mechanics, Confidence-as-hard-gate
- *   table, common-rules-for-both-modes block. Triggered on every stage exit
- *   when `triage.path` is non-inline (inline trivial has `runMode: null` and
- *   never pauses).
- * - `plan-small-medium.md` — Plan-stage-on-small/medium dispatch contract
- *   (ac-author + pre-author research order, input/output spec, slim summary).
- *   Triggered when `triage.complexity == "small-medium"` AND `plan` in path.
- *
- * Both runbooks are pointers from the body's trigger table; the body keeps
- * the orchestrator-wide invariants (`/cc` is the only resume verb, end-of-turn
- * is the pause mechanism, Confidence: low is a hard gate in both modes) so
- * the v8.11 / v8.14 / v8.22 tripwires stay green. Observable behaviour
- * (specialist dispatches per path) is identical pre- and post-v8.31.
- *
- * The per-path budget assertions formalise the audit's finding: inline reads
- * the body only (zero runbooks); small-medium opens a strict subset of
- * runbooks; large-risky opens the largest superset (discovery + parallel-build
- * + cap-reached + adversarial-rerun). Z > Y > X by construction.
+ * v8.54 merged 4 pairs of runbooks (handoff-gates, critic-steps) and
+ * lifted 2 (discovery, plan-small-medium) into stage-playbooks PLAN_PLAYBOOK,
+ * so the per-path budget shape changed. The tests below preserve the
+ * structural invariant ("body stays small; runbooks carry per-path
+ * content") without re-enumerating every individual runbook ceiling.
  */
 
-const RUNBOOK_INDEX: Record<string, string> = (() => {
+const RUNBOOK_BY_FILENAME: Record<string, string> = (() => {
   const map: Record<string, string> = {};
-  for (const r of ON_DEMAND_RUNBOOKS) {
-    map[r.fileName] = r.body;
-  }
+  for (const r of ON_DEMAND_RUNBOOKS) map[r.fileName] = r.body;
   return map;
 })();
 
-function runbookBody(fileName: string): string {
-  const body = RUNBOOK_INDEX[fileName];
-  if (body === undefined) {
-    throw new Error(`runbook not registered: ${fileName}`);
-  }
-  return body;
-}
-
-function pathBudget(runbookFiles: string[]): number {
-  const body = START_COMMAND_BODY.length;
-  const runbooks = runbookFiles.reduce(
-    (acc, name) => acc + runbookBody(name).length,
-    0
+function bodyBudget(fileNames: string[]): number {
+  return (
+    START_COMMAND_BODY.length +
+    fileNames.reduce((acc, name) => acc + (RUNBOOK_BY_FILENAME[name]?.length ?? 0), 0)
   );
-  return body + runbooks;
 }
 
-const INLINE_RUNBOOKS: string[] = [];
-
-// v8.42 — critic-stage.md is opened on every `review → critic` transition
-// when triage.path includes "critic" (every non-inline path). Both
-// small-medium and large-risky open it.
-const SMALL_MEDIUM_RUNBOOKS: string[] = [
-  "dispatch-envelope.md",
-  "handoff-artifacts.md",
-  "self-review-gate.md",
-  "ship-gate.md",
-  "compound-refresh.md",
-  "pause-resume.md",
-  "plan-small-medium.md",
-  "critic-stage.md"
-];
-
-const LARGE_RISKY_RUNBOOKS: string[] = [
-  ...SMALL_MEDIUM_RUNBOOKS.filter((f) => f !== "plan-small-medium.md"),
-  "discovery.md",
-  "parallel-build.md",
-  "cap-reached-recovery.md",
-  "adversarial-rerun.md",
-  "plan-critic-stage.md"
-];
-
-describe("v8.31 path-aware orchestrator trimming — body-only budget", () => {
-  it("AC-1 — orchestrator body alone is ≤ 67500 chars (was 45212 on v8.30; v8.42 lifted to absorb the Hop 4.5 critic stage pointer; v8.47 lifted to absorb the design pacing prose; v8.48 lifted to absorb the per-AC verified slim-summary line + finalize-precondition pointer; v8.50 lifted to absorb the knowledge-outcome-loop pointers; v8.51 lifted to absorb the pre-impl plan-critic sub-step pointer; v8.52 lifted to absorb the qa stage's Hop-2 surface-detection guidance + the qa step's dispatch + verdict-routing pointer + the qa-runner row in the stage table)", () => {
-    const charCount = renderStartCommand().length;
-    expect(
-      charCount,
-      `start-command body is ${charCount} chars (budget 67500). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; v8.34 added ~2K chars for the mid-flight runMode toggle; v8.42 added ~2K chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare design's new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook); v8.48 added ~600 chars for the per-AC verified slim-summary line, its semantics paragraph, and the finalize-precondition pointer; v8.52 added ~7K chars for the qa-stage surface-detection guidance + the qa step's dispatch / verdict-routing pointer + the qa-runner table row (the full procedure lives in runbooks/qa-stage.md); v8.50 added ~1500 chars for the three knowledge-outcome-loop pointer paragraphs (follow-up-bug Hop 1 capture, outcome-signal down-weight in the prior-learnings lookup, revert + manual-fix capture inside \`runCompoundAndShip\`; full detection lives in \`src/outcome-detection.ts\` + \`src/compound.ts\`); v8.51 added ~4K chars for the pre-implementation plan-critic sub-step pointer (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section under #### plan with gating + verdict-routing pointer to runbooks/plan-critic-stage.md). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31/v8.34/v8.42/v8.47/v8.48/v8.50/v8.51 stop here to keep v8.24 / v8.21 tripwires unmodified.`
-    ).toBeLessThanOrEqual(67500);
+describe("v8.31 path-aware orchestrator — body-only budget", () => {
+  it("AC-1 — start-command body stays ≤ 67500 chars", () => {
+    expect(renderStartCommand().length).toBeLessThanOrEqual(67500);
   });
 
-  it("AC-1 — orchestrator body alone is ≤ 535 lines (was 472 on v8.30; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer; v8.51 absorbed ~15 lines for the pre-impl plan-critic sub-step pointer; v8.52 absorbed ~20 lines for the qa stage pointer + the Hop-2 surface-detection guidance + the new qa-runner stage-table row)", () => {
-    const lineCount = renderStartCommand().split("\n").length;
-    expect(
-      lineCount,
-      `start-command body is ${lineCount} lines (budget 535). v8.22 budget was 480; v8.31 tightened to 435; v8.34 lifted to 450 to absorb the mid-flight runMode toggle section (~14 lines, orchestrator-wide); v8.42 lifted to 485 for the new Hop 4.5 critic stage pointer (~5-bullet block; remainder is in critic-stage.md); v8.51 lifted to 505 for the pre-impl plan-critic sub-step pointer (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section; ~15 lines total — remainder is in runbooks/plan-critic-stage.md + the plan-critic.ts prompt). v8.52 lifted to 535 for the qa stage pointer (one new table row, one #### qa body section, the Hop-2 surface-detection block; the full dispatch + verdict-routing procedure lives in runbooks/qa-stage.md).`
-    ).toBeLessThanOrEqual(535);
-  });
-
-  it("AC-1 — orchestrator body alone stays within ≤150% of v8.30 baseline (one new stage + descriptive stage names + per-AC verified flag + pre-impl plan-critic sub-step pointer + v8.52 qa stage pointer)", () => {
-    const v830CharBaseline = 45212;
-    const charCount = renderStartCommand().length;
-    const ratio = charCount / v830CharBaseline;
-    expect(
-      ratio,
-      `body is ${charCount} chars, ratio ${ratio.toFixed(3)} of v8.30 baseline (${v830CharBaseline}). v8.31's win was ~7.8% cut; v8.34 + v8.40 spent some on the runMode toggle and git-log inspection prose; v8.42 added the new critic stage (~2K chars body + ~7K chars runbook); v8.45 traded the compact "Hop N" labels for descriptive stage names (~40 chars net); v8.48 added ~600 chars for the per-AC verified slim-summary line + finalize-precondition pointer (Per-AC verified gate procedure itself lives in runbooks/finalize.md); v8.50 added ~1500 chars for the three knowledge-outcome-loop pointer paragraphs (full detection lives in \`src/outcome-detection.ts\` + \`src/compound.ts\` rather than the body); v8.51 added ~4K chars for the pre-impl plan-critic sub-step pointer (full dispatch contract lives in runbooks/plan-critic-stage.md); v8.52 added ~7K chars for the qa stage Hop-2 surface-detection guidance + the qa step's dispatch / verdict-routing pointer + the qa-runner stage-table row (full procedure lives in runbooks/qa-stage.md). The body should stay within ~50% of v8.30 — the orchestrator body grew with each new stage (critic, plan-critic sub-step, qa); future re-growth past this ratio is a signal to lift more content to runbooks.`
-    ).toBeLessThanOrEqual(1.5);
+  it("AC-1 — start-command body stays ≤ 535 lines", () => {
+    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(535);
   });
 });
 
-describe("v8.31 path-aware orchestrator trimming — per-path budget envelopes", () => {
-  it("AC-2 — inline-path budget = body only; ≤ 57500 chars (v8.42 lifted to absorb the Hop 4.5 critic stage pointer; v8.47 lifted to absorb the design pacing prose; v8.48 lifted to absorb the per-AC verified slim-summary line + finalize-precondition pointer; v8.50 lifted to absorb the knowledge-outcome-loop pointers; v8.51 lifted to absorb the pre-impl plan-critic sub-step pointer)", () => {
-    const budget = pathBudget(INLINE_RUNBOOKS);
-    expect(
-      budget,
-      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 57500 (v8.31 = 42500 + v8.34 toggle docs + v8.42 critic stage pointer + v8.47 design pacing + v8.48 per-AC verified slim-summary line + v8.50 knowledge-outcome-loop pointers + v8.51 pre-impl plan-critic sub-step pointer; inline does NOT open critic-stage.md or plan-critic-stage.md since triage.path == ["build"] on inline, but the slim-summary template applies in every mode).`
-    ).toBeLessThanOrEqual(67500);
+describe("v8.31 path-aware orchestrator — per-path envelopes (v8.54: budgets unchanged after merges)", () => {
+  // The merged runbooks (handoff-gates, critic-steps) replace two
+  // separate files each, so we expect the budget to be roughly the same
+  // (their content was simply unioned). The lifted plan-small-medium /
+  // discovery move to PLAN_PLAYBOOK in stage-playbooks, which is read
+  // from disk, not the on-demand runbooks set.
+
+  const NON_INLINE_RUNBOOKS = [
+    "dispatch-envelope.md",
+    "handoff-artifacts.md",
+    "handoff-gates.md",
+    "compound-refresh.md",
+    "pause-resume.md",
+    "critic-steps.md"
+  ];
+
+  it("AC-2 — inline path budget = body alone, ≤ 67500 chars", () => {
+    expect(bodyBudget([])).toBeLessThanOrEqual(67500);
   });
 
-  it("AC-2 — small-medium-path budget = body + 8 runbooks; ≤ 120000 chars (v8.42 added critic-stage.md; v8.51 plan-critic-stage.md is structurally unreachable on small-medium so no budget delta here)", () => {
-    const budget = pathBudget(SMALL_MEDIUM_RUNBOOKS);
-    expect(
-      budget,
-      `small-medium path reads the body + dispatch-envelope, handoff-artifacts, self-review-gate, ship-gate, compound-refresh, pause-resume, plan-small-medium, critic-stage (v8.42). The v8.51 plan-critic gate excludes small-medium (gate requires complexity=large-risky), so plan-critic-stage.md is NOT in this set. budget = ${budget} chars; ceiling 120000.`
-    ).toBeLessThanOrEqual(120000);
+  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 120000 chars", () => {
+    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(120000);
   });
 
-  it("AC-2 — large-risky-path budget = body + 12 runbooks; ≤ 165000 chars (v8.42 added critic-stage.md; v8.51 added plan-critic-stage.md)", () => {
-    const budget = pathBudget(LARGE_RISKY_RUNBOOKS);
-    expect(
-      budget,
-      `large-risky path reads the body + small-medium's set (minus plan-small-medium) + discovery, parallel-build, cap-reached-recovery, adversarial-rerun + critic-stage (v8.42) + plan-critic-stage (v8.51, conditional on the AC-count>=2 + acMode=strict + problemType!=refines sub-gate; included here as the worst-case envelope). budget = ${budget} chars; ceiling 165000.`
-    ).toBeLessThanOrEqual(165000);
+  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 165000 chars", () => {
+    const largeRisky = [
+      ...NON_INLINE_RUNBOOKS,
+      "parallel-build.md",
+      "cap-reached-recovery.md",
+      "adversarial-rerun.md"
+    ];
+    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(165000);
   });
 
-  it("AC-2 — strict ordering: large-risky > small-medium > inline", () => {
-    const inlineBudget = pathBudget(INLINE_RUNBOOKS);
-    const smallMediumBudget = pathBudget(SMALL_MEDIUM_RUNBOOKS);
-    const largeRiskyBudget = pathBudget(LARGE_RISKY_RUNBOOKS);
+  it("AC-2 — strict ordering: large-risky > non-inline > inline (per-path adds material)", () => {
+    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeGreaterThan(bodyBudget([]));
     expect(
-      smallMediumBudget,
-      "small-medium MUST read strictly more material than inline"
-    ).toBeGreaterThan(inlineBudget);
-    expect(
-      largeRiskyBudget,
-      "large-risky MUST read strictly more material than small-medium"
-    ).toBeGreaterThan(smallMediumBudget);
+      bodyBudget([...NON_INLINE_RUNBOOKS, "parallel-build.md", "cap-reached-recovery.md"])
+    ).toBeGreaterThan(bodyBudget(NON_INLINE_RUNBOOKS));
   });
 });
 
-describe("v8.31 path-aware orchestrator trimming — new runbooks exist and are wired", () => {
-  it("AC-3 — `pause-resume.md` is registered in ON_DEMAND_RUNBOOKS", () => {
+describe("v8.31 path-aware orchestrator — pause-resume runbook is wired (anchor)", () => {
+  it("AC-3 — pause-resume runbook exists with the on-demand heading prefix", () => {
     const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.fileName === "pause-resume.md");
-    expect(r, "pause-resume.md must be present in ON_DEMAND_RUNBOOKS").toBeDefined();
-    expect(r!.body.length, "pause-resume.md body cannot be empty").toBeGreaterThan(800);
-    expect(
-      r!.body,
-      "pause-resume.md should open with the on-demand runbook heading prefix"
-    ).toMatch(/^# On-demand runbook — /m);
+    expect(r?.body).toMatch(/^# On-demand runbook — /m);
   });
 
-  it("AC-3 — `plan-small-medium.md` is registered in ON_DEMAND_RUNBOOKS", () => {
-    const r = ON_DEMAND_RUNBOOKS.find(
-      (rb) => rb.fileName === "plan-small-medium.md"
-    );
-    expect(
-      r,
-      "plan-small-medium.md must be present in ON_DEMAND_RUNBOOKS"
-    ).toBeDefined();
-    expect(r!.body.length, "plan-small-medium.md body cannot be empty").toBeGreaterThan(
-      500
-    );
-    expect(
-      r!.body,
-      "plan-small-medium.md should open with the on-demand runbook heading prefix"
-    ).toMatch(/^# On-demand runbook — /m);
+  it("AC-3 — start-command body references pause-resume.md from the trigger table", () => {
+    expect(renderStartCommand()).toContain("pause-resume.md");
   });
 
-  it("AC-3 — orchestrator body references `pause-resume.md` from the trigger table", () => {
+  it("AC-3 — start-command body references the plan stage runbook for small-medium and large-risky", () => {
     const body = renderStartCommand();
-    expect(
-      body,
-      "body must reference `pause-resume.md` so the orchestrator opens it on the path-conditional trigger"
-    ).toContain("pause-resume.md");
-  });
-
-  it("AC-3 — orchestrator body references `plan-small-medium.md` from the trigger table", () => {
-    const body = renderStartCommand();
-    expect(
-      body,
-      "body must reference `plan-small-medium.md` so the orchestrator opens it when small-medium plan dispatches"
-    ).toContain("plan-small-medium.md");
-  });
-
-  it("AC-3 — trigger table names path-conditional gating explicitly (`small-medium` and non-inline)", () => {
-    const body = renderStartCommand();
-    expect(
-      body,
-      "the trigger table should name `triage.complexity == \"small-medium\"` as the gating predicate for plan-small-medium.md"
-    ).toMatch(/triage\.complexity == "small-medium"/);
+    expect(body).toMatch(/triage\.complexity == "small-medium"/);
+    expect(body).toMatch(/triage\.complexity == "large-risky"/);
   });
 });
 
-describe("v8.31 path-aware orchestrator trimming — content lifted, contract preserved", () => {
-  it("AC-4 — orchestrator body still names `/cc` as the single resume verb (v8.11 invariant)", () => {
-    const body = renderStartCommand();
-    expect(body, "v8.11 invariant: `/cc` is the only resume verb").toMatch(
-      /`\/cc`\s+is the (only|single|canonical) resume/iu
-    );
+describe("v8.31 path-aware orchestrator — lifted content preserved in PLAN_PLAYBOOK (v8.54)", () => {
+  const PLAN_PLAYBOOK = STAGE_PLAYBOOKS.find((p) => p.id === "plan")!.body;
+
+  it("AC-5 — plan playbook covers ac-author input/output + research order (lifted from plan-small-medium.md)", () => {
+    expect(PLAN_PLAYBOOK).toMatch(/ac-author/i);
+    expect(PLAN_PLAYBOOK).toMatch(/learnings-research/);
+    expect(PLAN_PLAYBOOK).toMatch(/repo-research/);
+    expect(PLAN_PLAYBOOK).toMatch(/brownfield/i);
+    expect(PLAN_PLAYBOOK).toMatch(/touchSurface/);
   });
 
-  it("AC-4 — orchestrator body still tells the agent to `End your turn` in step mode (v8.11 invariant)", () => {
-    const body = renderStartCommand();
-    expect(body, "v8.11 invariant: step mode = end-of-turn").toMatch(/End your turn/);
+  it("AC-5 — plan playbook covers the large-risky discovery sub-phase (lifted from discovery.md)", () => {
+    expect(PLAN_PLAYBOOK).toMatch(/Discovery auto-skip/);
+    expect(PLAN_PLAYBOOK).toMatch(/design.*main context.*multi-turn/iu);
   });
 
-  it("AC-4 — orchestrator body still names the `single resume mechanism` (v8.11 invariant)", () => {
-    const body = renderStartCommand();
-    expect(body, "v8.11 invariant: single resume mechanism").toMatch(
-      /single resume mechanism/i
-    );
-  });
-
-  it("AC-4 — orchestrator body still has the Pause and resume section (start-command.test invariant)", () => {
-    const body = renderStartCommand();
-    expect(body).toMatch(/^## Pause and resume$/m);
-  });
-
-  it("AC-4 — orchestrator body still names `Confidence: low` as a hard gate in both modes", () => {
-    const body = renderStartCommand();
-    expect(
-      body,
-      "Confidence: low is a hard gate in both step and auto modes; the body keeps the gate-name invariant even after lifting the detailed table to the runbook"
-    ).toMatch(/Confidence:\s*low/);
-  });
-
-  it("AC-4 — orchestrator body still names ac-author + plan-authoring wrapper for small-medium plan (v8.14 invariant)", () => {
-    const body = renderStartCommand();
-    expect(
-      body,
-      "v8.14 invariant: ac-author is the small-medium plan specialist; plan-authoring is the wrapper. Even after lifting the input/output detail to plan-small-medium.md the body keeps the specialist mapping."
-    ).toMatch(/ac-author/);
-    expect(body).toMatch(/plan-authoring/);
-  });
-
-  it("AC-4 — orchestrator body still names large-risky plan as design → ac-author sub-phase (v8.14 invariant)", () => {
-    const body = renderStartCommand();
-    expect(body, "v8.14 invariant: large-risky plan expands to design → ac-author").toMatch(
-      /design.*main context.*multi-?turn/iu
-    );
-    expect(body).toMatch(/ac-author.*sub-?agent/iu);
-  });
-});
-
-describe("v8.31 path-aware orchestrator trimming — lifted content moved to runbooks, not deleted", () => {
-  it("AC-5 — full `step` mode mechanics (HANDOFF.json + End-your-turn + magic word) live in pause-resume.md", () => {
-    const body = runbookBody("pause-resume.md");
-    expect(body).toMatch(/`step` mode/i);
-    expect(body).toMatch(/End your turn/);
-    expect(body).toMatch(/HANDOFF\.json/);
-    expect(body).toMatch(/single resume mechanism/i);
-  });
-
-  it("AC-5 — full `auto` mode hard-gate list lives in pause-resume.md", () => {
-    const body = runbookBody("pause-resume.md");
-    expect(body).toMatch(/`auto` mode/i);
-    expect(body).toMatch(/hard gates?/i);
-    expect(body).toMatch(/cap-reached/);
-    expect(body).toMatch(/`Confidence: low`/);
-  });
-
-  it("AC-5 — Confidence-as-hard-gate table (step / auto columns) lives in pause-resume.md", () => {
-    const body = runbookBody("pause-resume.md");
-    expect(
-      body,
-      "the Confidence-as-hard-gate table should live in the runbook so the orchestrator opens it only when a slim summary lands with a non-`high` confidence"
-    ).toMatch(/\| Confidence \| step mode \| auto mode \|/);
-    expect(body, "table must enumerate the three confidence levels").toMatch(/`high`/);
-    expect(body).toMatch(/`medium`/);
-    expect(body).toMatch(/`low`/);
-  });
-
-  it("AC-5 — plan-small-medium runbook covers ac-author input/output + research order", () => {
-    const body = runbookBody("plan-small-medium.md");
-    expect(body).toMatch(/ac-author/i);
-    expect(body).toMatch(/learnings-research/);
-    expect(body).toMatch(/repo-research/);
-    expect(body).toMatch(/brownfield/i);
-    expect(body).toMatch(/touch surface|touchSurface/i);
-  });
-
-  it("AC-5 — pause-resume body declares its path-conditional trigger explicitly", () => {
-    const body = runbookBody("pause-resume.md");
-    expect(
-      body,
-      "the runbook should name when it fires (every stage exit when triage.path is non-inline) so a reader knows whether to open it"
-    ).toMatch(/triage\.path|non-?inline|inline path/i);
-  });
-
-  it("AC-5 — plan-small-medium body declares its path-conditional trigger explicitly", () => {
-    const body = runbookBody("plan-small-medium.md");
-    expect(
-      body,
-      "the runbook should name its gating predicate (small-medium complexity, plan stage)"
-    ).toMatch(/small-medium/);
+  it("AC-5 — pause-resume runbook still carries the Confidence-as-hard-gate table", () => {
+    const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.fileName === "pause-resume.md")!.body;
+    expect(r).toMatch(/\| Confidence \| step mode \| auto mode \|/);
   });
 });

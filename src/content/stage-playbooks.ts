@@ -78,6 +78,101 @@ Then the orchestrator transitions to build-stage.
 - Inventing AC that mirror sub-tasks instead of outcomes. AC are outcomes.
 - Skipping the security_flag in plans that touch authn / authz / secrets / supply chain / data exposure.
 - Authoring more than 12 AC. Above 12 the request is two requests; ask the user to split.
+
+## Path: small/medium
+
+Open this section when \`triage.complexity == "small-medium"\` AND \`plan\` is in \`triage.path\`. For large-risky plan, see the "Path: large-risky" section below. For trivial / inline (\`triage.path == ["build"]\`) the plan stage is skipped entirely — this section is never read on the inline path.
+
+### Specialist + wrappers
+
+- Specialist: \`ac-author\`.
+- Wrapper skills: \`plan-authoring.md\` (always) + \`source-driven.md\` (framework-specific tasks; strict mode only by default — soft opts in).
+
+### Pre-author research order (ac-author dispatches BEFORE writing the plan)
+
+- \`learnings-research\` — **always**, on small/medium + large-risky. Reads \`.cclaw/knowledge.jsonl\`. Returns 0-3 prior lessons inline in slim-summary's \`Notes\` as \`lessons={...}\`; the ac-author copies verbatim quotes into \`plan.md\`'s \`## Prior lessons\` section. No separate \`research-learnings.md\` artifact unless \`legacy-artifacts: true\`.
+- \`repo-research\` — **brownfield only** (manifest at repo root AND populated source root). Skipped on greenfield. Writes \`flows/<slug>/research-repo.md\`.
+
+Both research helpers run as sub-agent dispatches with their own \`.cclaw/lib/agents/<id>.md\` contracts; they never become \`lastSpecialist\` and never appear in \`triage.path\`.
+
+### Inputs (ac-author reads after the contract + wrappers)
+
+- triage decision (with \`assumptions\` from triage.assumptions)
+- the user's original \`/cc <task>\` prompt
+- \`.cclaw/lib/templates/plan.md\`
+- the \`learnings-research\` blob (returned inline in its slim-summary \`Notes\`)
+- \`flows/<slug>/research-repo.md\` (when brownfield)
+- \`.cclaw/knowledge.jsonl\` for cross-check (independent of the learnings-research blob)
+- the matching shipped slug if the flow is refining one (\`triage.refines\` is set)
+
+### Output (small/medium)
+
+\`flows/<slug>/plan.md\` with:
+
+- frontmatter \`status: active\`, \`slug\`, \`stage: plan\`, \`acMode\` (\`soft\` or \`strict\`), \`ac: [...]\` (id + status), \`last_specialist: ac-author\`, \`refines\` (if applicable), \`security_flag\`.
+- \`## Assumptions\` section, **verbatim** from \`triage.assumptions\` — do not paraphrase.
+- \`## Prior lessons\` section from the learnings-research blob, **verbatim** quotes (no summary).
+- Body shape depends on acMode:
+  - **soft-mode body** = a bullet list of testable conditions (3-7 items typical).
+  - **strict-mode body** = an AC table with \`AC-N\`, verification line (test name / manual step / command), \`touchSurface\`, and \`parallelSafe\` per row; \`## Topology\` block with \`inline\` (default) or \`parallel-build\` (only when the topology gate from §5 above fires).
+
+### Slim summary (ac-author → orchestrator)
+
+\`\`\`
+Stage: plan  ✅ complete  |  ⏸ paused  |  ❌ blocked
+Artifact: flows/<slug>/plan.md
+What changed: <one sentence; e.g. "5 testable conditions" or "AC-1 … AC-7, parallel-build (3 slices)">
+Open findings: 0
+Confidence: <high | medium | low>
+Recommended next: continue
+Notes: lessons={<count or summary>}, topology=<inline | parallel-build>, prior-lesson-count=<N>
+\`\`\`
+
+The orchestrator reads only this; the full plan.md stays in \`flows/<slug>/plan.md\` for the next stage's slice-builder dispatch. The five report fields the orchestrator uses are: condition / AC count, max \`touchSurface\` value, parallel-build flag, recommended-next, prior-lesson count.
+
+## Path: large-risky
+
+Open this section **only when \`triage.complexity == "large-risky"\` and the path includes \`plan\`**. For small/medium plan, see "Path: small/medium" above.
+
+The discovery sub-phase runs a **two-step** chain: \`design\` (main context, multi-turn) → \`ac-author\` (sub-agent). \`currentStage\` stays \`"plan"\` for both; \`lastSpecialist\` rotates through \`design\` then \`ac-author\`.
+
+### v8.14 collapse context
+
+Pre-v8.14 ran a three-step \`brainstormer → architect → ac-author\` chain of one-shot sub-agents, with a checkpoint-question between each. That ceremony was thin — the brainstormer's "Frame" and the architect's "decisions" both came from one shot of the model with no user dialog. v8.14 replaces the first two steps with a **single \`design\` specialist that runs in main context** across seven multi-turn phases (Bootstrap, Clarify, Frame, Approaches, Decisions inline, Pre-mortem, Compose, Sign-off), so framing and structural decisions emerge from a real user-collaborative pass instead of two short summaries.
+
+### Discovery auto-skip (low-ambiguity fast path)
+
+Before activating \`design\`, run the **discovery-needed heuristic** against the triage and pre-flight state. Skip directly to \`ac-author\` (single dispatch, no design phase) when **all** of the following hold:
+
+1. \`triage.confidence\` is \`high\` (the heuristic produced an unambiguous large-risky classification).
+2. \`triage.assumptions\` is non-empty AND the user accepted them in pre-flight without edits (\`pre_flight_edits == 0\`).
+3. The user's \`/cc <task>\` prompt names ≥1 concrete file path or module (i.e. the focus surface is already given, not yet to be discovered).
+4. There is no security-sensitive keyword (\`auth\`, \`token\`, \`secret\`, \`oauth\`, \`saml\`, \`encryption\`, \`pii\`, \`gdpr\`, \`pci\`, \`hipaa\`, \`soc2\`) in the prompt **AND** \`security_flag\` is not preset by triage.
+
+When all four hold, the orchestrator surfaces a one-sentence skip notice in the user's language ("Discovery skipped: triage is high-confidence and the surface is named — going straight to ac-author. Reply with \`/cc-cancel\` if you want a design pass instead.") and dispatches \`ac-author\` directly with the same envelope as small/medium plus \`fast_path: skipped-discovery\` in flow-state. \`lastSpecialist\` stays \`null\` until ac-author returns.
+
+When **any** of the four fails, run the full two-step discovery as below.
+
+The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=force\` (always run the full design phase) or \`/cc <task> --discovery=skip\` (always skip, even if the heuristic would not have skipped — they take responsibility).
+
+### Full two-step discovery (default; auto-skip declined or its conditions failed)
+
+> **Discovery never auto-chains across stages.** \`design\` runs in main context with the **v8.47+ two-turn-max** pacing: design pauses at MOST twice per flow — Phase 1 (Clarify, conditional) and Phase 7 (Sign-off, mandatory) — regardless of \`triage.runMode\`. \`auto\` runMode applies to plan→build→review→ship transitions only, **not** inside design's internal phase chain. The ac-author dispatch that follows the design's Phase 7 sign-off is a step-mode pause unless \`triage.runMode == auto\`.
+
+1. **Activate \`design\` in main context** (read \`.cclaw/lib/agents/design.md\` as a skill the orchestrator itself follows; do NOT dispatch as a sub-agent).
+   - The orchestrator picks the **posture** before activation: \`deep\` when any of (security-sensitive keyword, \`security_flag\` preset, irreversibility / migration / schema / breaking-change / data-loss / payment / gdpr / pci in the prompt, \`refines:\` points to a slug with \`security_flag: true\`); \`guided\` otherwise. The design prompt may escalate to \`deep\` mid-flight if Phase 3 surfaces irreversibility the orchestrator missed.
+   - The orchestrator follows the design.md prompt phases 0-7 directly in this conversation. **v8.47+ pacing:** only **Phase 1** (Clarify, when 0-3 clarifying questions are needed — one batched \`askUserQuestion\` call) and **Phase 7** (Sign-off, always — three-option picker: \`approve\` / \`request-changes\` / \`reject\`) emit user-facing output and end the turn. Phases 0 (Bootstrap), 2 (Frame), 3 (Approaches), 4 (Decisions), 5 (Pre-mortem, deep only), 6 (Compose + self-review), and 6.5 (ADR proposal) all execute SILENTLY in the same orchestrator turn — append plan.md sections as you go; do not pause.
+   - Output: appends Frame, Spec (v8.46), optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, and Summary — design block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires. **No separate \`decisions.md\` is written; v8.14 inlined that file into the Decisions section of plan.md.**
+   - On Phase 7 \`approve\`: orchestrator patches \`lastSpecialist: "design"\` and \`plan.md\` frontmatter (\`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`) → **ends the turn**. The next \`/cc\` continues with ac-author.
+   - On Phase 7 \`request-changes\`: design re-runs the affected silent phases (Phase 2 / 3 / 4 / 5 / 6) internally and re-emits Phase 7 with the revised plan.md. **Revise cap = 3 iterations**; on the 4th request, design escalates explicitly (\`approve as-is\` / \`reject\` / \`revise one more time\`). Orchestrator does not patch \`lastSpecialist\` until the user picks \`approve\`.
+   - On Phase 7 \`reject\`: design appends a brief \`## Design rejected\` note to plan.md and surfaces the rejection. Orchestrator does NOT patch \`lastSpecialist: design\`; the user is routed to \`/cc-cancel\` or re-triage.
+2. **Dispatch \`ac-author\`** as a normal sub-agent with the same contract as small/medium plan, plus an extra input: the design sections already in \`flows/<slug>/plan.md\`.
+   - AC author now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The Frame / Approaches / Selected Direction / Decisions / Pre-mortem sections from design remain at the top of \`plan.md\`; ac-author appends its own sections below.
+   - Orchestrator reads slim summary → patches \`lastSpecialist: "ac-author"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`). At this point the orchestrator follows \`triage.runMode\` for the plan→build transition: \`step\` ends the turn; \`auto\` chains immediately into the build dispatch.
+
+Resume after a design or ac-author checkpoint: \`flow-state.lastSpecialist\` tells the orchestrator which discovery step to skip. If \`lastSpecialist == "design"\` and \`currentStage == "plan"\`, the resume dispatches \`ac-author\` directly. The user can also \`/cc <task> --skip-discovery\` to drop straight into a single ac-author dispatch when the design phase already happened in a prior session.
+
+**Legacy migration:** state files written by pre-v8.14 cclaw with \`lastSpecialist: "brainstormer"\` or \`lastSpecialist: "architect"\` are rewritten to \`null\` on read; the orchestrator re-runs the unified design phase from scratch on those resumes. Shipped slugs with \`flows/shipped/<old-slug>/decisions.md\` keep that file untouched for historical reference.
 `;
 
 const BUILD_PLAYBOOK = `# Stage runbook — build (TDD cycle)

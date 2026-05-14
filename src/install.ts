@@ -20,8 +20,6 @@ import {
   ON_DEMAND_RUNBOOKS,
   ON_DEMAND_RUNBOOKS_INDEX_SECTION
 } from "./content/runbooks-on-demand.js";
-import { RESEARCH_PLAYBOOKS, RESEARCH_PLAYBOOKS_INDEX } from "./content/research-playbooks.js";
-import { RECOVERY_PLAYBOOKS, RECOVERY_INDEX } from "./content/recovery.js";
 import { ANTIPATTERNS } from "./content/antipatterns.js";
 import { DECISION_PROTOCOL } from "./content/decision-protocol.js";
 import { META_SKILL } from "./content/meta-skill.js";
@@ -179,9 +177,7 @@ export async function ensureRuntimeRoot(projectRoot: string): Promise<void> {
     path.join(LIB_ROOT, "skills"),
     path.join(LIB_ROOT, "templates"),
     path.join(LIB_ROOT, "runbooks"),
-    path.join(LIB_ROOT, "patterns"),
-    path.join(LIB_ROOT, "research"),
-    path.join(LIB_ROOT, "recovery")
+    path.join(LIB_ROOT, "patterns")
   ]) {
     await ensureDir(path.join(projectRoot, dir));
   }
@@ -280,11 +276,17 @@ async function cleanupOrphanSkills(
 
 /**
  * v8.22 wrapper: orphan-clean `.cclaw/lib/runbooks/`. Expected set is
- * the 4 `STAGE_PLAYBOOKS` filenames + `index.md` + the 10
+ * the 4 `STAGE_PLAYBOOKS` filenames + `index.md` + the surviving
  * `ON_DEMAND_RUNBOOKS` filenames. Loud-and-idempotent like the v8.17
  * skill scan; emits `Removed orphan runbook` and `Cleaned orphan
  * runbooks` so callers can distinguish runbook events from skill
  * events.
+ *
+ * v8.54 — the merged-away runbook files (self-review-gate.md,
+ * ship-gate.md, discovery.md, plan-small-medium.md, critic-stage.md,
+ * plan-critic-stage.md) are not in the expected set, so the orphan
+ * scan removes them on upgrade. The `RETIRED_RUNBOOK_FILES` constant
+ * documents the closed list for the smoke check and tests.
  */
 async function cleanupOrphanRunbooks(
   projectRoot: string,
@@ -304,10 +306,19 @@ async function cleanupOrphanRunbooks(
   );
 }
 
-async function writeTemplates(projectRoot: string): Promise<void> {
+async function writeTemplates(projectRoot: string, legacyArtifacts: boolean): Promise<void> {
   for (const template of ARTIFACT_TEMPLATES) {
+    if (template.id === "decisions" && !legacyArtifacts) {
+      continue;
+    }
     const target = path.join(projectRoot, LIB_ROOT, "templates", template.fileName);
     await writeFileSafe(target, template.body);
+  }
+  if (!legacyArtifacts) {
+    const decisionsLegacyPath = path.join(projectRoot, LIB_ROOT, "templates", "decisions.md");
+    if (await exists(decisionsLegacyPath)) {
+      await fs.rm(decisionsLegacyPath, { force: true });
+    }
   }
   await writeFileSafe(
     path.join(projectRoot, LIB_ROOT, "templates", "iron-laws.md"),
@@ -339,22 +350,6 @@ async function writeReferencePatterns(projectRoot: string): Promise<void> {
     await writeFileSafe(path.join(dir, pattern.fileName), pattern.body);
   }
   await writeFileSafe(path.join(dir, "index.md"), REFERENCE_PATTERNS_INDEX);
-}
-
-async function writeResearchPlaybooks(projectRoot: string): Promise<void> {
-  const dir = path.join(projectRoot, LIB_ROOT, "research");
-  for (const playbook of RESEARCH_PLAYBOOKS) {
-    await writeFileSafe(path.join(dir, playbook.fileName), playbook.body);
-  }
-  await writeFileSafe(path.join(dir, "index.md"), RESEARCH_PLAYBOOKS_INDEX);
-}
-
-async function writeRecoveryPlaybooks(projectRoot: string): Promise<void> {
-  const dir = path.join(projectRoot, LIB_ROOT, "recovery");
-  for (const playbook of RECOVERY_PLAYBOOKS) {
-    await writeFileSafe(path.join(dir, playbook.fileName), playbook.body);
-  }
-  await writeFileSafe(path.join(dir, "index.md"), RECOVERY_INDEX);
 }
 
 async function writeAntipatterns(projectRoot: string): Promise<void> {
@@ -443,8 +438,29 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
  * written by install since v8.0 but no agent code path programmatically
  * read from it. The v8.12 cleanup already emptied the EXAMPLES content
  * module; v8.44 takes out the directory + writer + smoke assertion.
+ *
+ * v8.54 retired `research` and `recovery` — both modules exported empty
+ * arrays since v8.12 (no specialist or runbook ever read from
+ * `.cclaw/lib/research/` or `.cclaw/lib/recovery/`). The cleanup pass
+ * removes the lingering empty directories on upgrade.
  */
-const RETIRED_LIB_DIRS: readonly string[] = ["examples"];
+const RETIRED_LIB_DIRS: readonly string[] = ["examples", "research", "recovery"];
+
+/**
+ * v8.54 — retired on-demand runbook files. Earlier installs wrote these
+ * under `.cclaw/lib/runbooks/`. v8.54 merged or lifted their content
+ * into surviving runbooks (handoff-gates.md, critic-steps.md, plan.md
+ * "Path: small/medium" / "Path: large-risky" sections). The orphan
+ * cleaner removes the stale `.md` files on upgrade.
+ */
+const RETIRED_RUNBOOK_FILES: readonly string[] = [
+  "self-review-gate.md",
+  "ship-gate.md",
+  "discovery.md",
+  "plan-small-medium.md",
+  "critic-stage.md",
+  "plan-critic-stage.md"
+];
 
 async function removeRetiredLibDirs(
   projectRoot: string,
@@ -605,8 +621,12 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     await cleanupOrphanSkills(projectRoot, emit);
   }
 
-  await writeTemplates(projectRoot);
-  emit("Wrote templates", `${ARTIFACT_TEMPLATES.length + 1} templates → .cclaw/lib/templates/`);
+  const legacyArtifacts = Boolean(config.legacyArtifacts);
+  await writeTemplates(projectRoot, legacyArtifacts);
+  const templateCount = legacyArtifacts
+    ? ARTIFACT_TEMPLATES.length + 1
+    : ARTIFACT_TEMPLATES.length; // -1 decisions.md skipped, +1 iron-laws.md added
+  emit("Wrote templates", `${templateCount} templates → .cclaw/lib/templates/`);
 
   await writeStageRunbooks(projectRoot);
   emit(
@@ -625,16 +645,6 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
 
   await writeReferencePatterns(projectRoot);
   emit("Wrote patterns", `${REFERENCE_PATTERNS.length} reference patterns → .cclaw/lib/patterns/`);
-
-  await writeResearchPlaybooks(projectRoot);
-  if (RESEARCH_PLAYBOOKS.length > 0) {
-    emit("Wrote research", `${RESEARCH_PLAYBOOKS.length} research playbooks → .cclaw/lib/research/`);
-  }
-
-  await writeRecoveryPlaybooks(projectRoot);
-  if (RECOVERY_PLAYBOOKS.length > 0) {
-    emit("Wrote recovery", `${RECOVERY_PLAYBOOKS.length} recovery playbooks → .cclaw/lib/recovery/`);
-  }
 
   await removeRetiredLibDirs(projectRoot, emit);
 
@@ -666,11 +676,11 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     harnesses: [...harnesses],
     agents: CORE_AGENTS.length,
     skills: AUTO_TRIGGER_SKILLS.length + 1,
-    templates: ARTIFACT_TEMPLATES.length + 1,
+    templates: templateCount,
     runbooks: STAGE_PLAYBOOKS.length + ON_DEMAND_RUNBOOKS.length,
     patterns: REFERENCE_PATTERNS.length,
-    research: RESEARCH_PLAYBOOKS.length,
-    recovery: RECOVERY_PLAYBOOKS.length,
+    research: 0,
+    recovery: 0,
     examples: 0,
     hooks: 0,
     commands: 3
@@ -724,4 +734,9 @@ export function planSeedForSlug(slug: string): string {
 }
 
 export const HARNESS_LAYOUT_TABLE = HARNESS_LAYOUTS;
-export { RETIRED_HOOK_FILES, RETIRED_HARNESS_HOOK_FILES };
+export {
+  RETIRED_HOOK_FILES,
+  RETIRED_HARNESS_HOOK_FILES,
+  RETIRED_LIB_DIRS,
+  RETIRED_RUNBOOK_FILES
+};

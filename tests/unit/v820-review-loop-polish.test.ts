@@ -182,8 +182,8 @@ describe("v8.20 review-loop polish", () => {
   describe("AC-4 — two-reviewer mode stays default (no removal)", () => {
     it("orchestrator still mentions the parallel reviewer + security-reviewer dispatch (v8.22: in review section + ship-gate runbook)", () => {
       const inBody = START_COMMAND_BODY.includes("parallel reviewer + security-reviewer");
-      const inRunbook = runbookBody("ship-gate").includes("security-reviewer") ||
-        runbookBody("ship-gate").includes("security_flag");
+      const inRunbook = runbookBody("handoff-gates").includes("security-reviewer") ||
+        runbookBody("handoff-gates").includes("security_flag");
       expect(inBody || inRunbook).toBe(true);
     });
 
