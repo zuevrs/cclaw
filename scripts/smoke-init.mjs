@@ -270,6 +270,34 @@ try {
   if (existsSync(join(tempDir, "CLAUDE.md"))) {
     throw new Error("smoke check failed: CLAUDE.md should NOT be created by cclaw init");
   }
+  if (existsSync(join(tempDir, "GEMINI.md"))) {
+    throw new Error("smoke check failed: GEMINI.md should NOT be created by cclaw init (v8.55 ambient rules live ONLY in harness-namespaced paths)");
+  }
+  // v8.55 — harness-embedded ambient rules surface. cclaw writes a
+  // compact rules file (Iron Laws + 5 anti-rat categories + A-1..A-5
+  // + /cc activation pointer) to each enabled harness's native rules
+  // location. Cursor takes the MDC variant with `alwaysApply: true`;
+  // the other three harnesses take plain markdown at
+  // `.harness/cclaw-rules.md`. Auto-detect on the smoke project picks
+  // Cursor (seeded via `.cursor/` marker), so the smoke asserts the
+  // Cursor MDC contract.
+  const cursorRulesPath = join(tempDir, ".cursor", "rules", "cclaw.mdc");
+  if (!existsSync(cursorRulesPath)) {
+    throw new Error("smoke check failed: v8.55 .cursor/rules/cclaw.mdc missing after init");
+  }
+  const cursorRulesBody = readFileSync(cursorRulesPath, "utf8");
+  if (!cursorRulesBody.startsWith("---\n")) {
+    throw new Error("smoke check failed: v8.55 .cursor/rules/cclaw.mdc must open with an MDC `---` fence");
+  }
+  if (!cursorRulesBody.match(/^alwaysApply:\s*true\s*$/m)) {
+    throw new Error("smoke check failed: v8.55 .cursor/rules/cclaw.mdc must carry `alwaysApply: true` in its frontmatter");
+  }
+  if (!cursorRulesBody.includes("Iron Laws (Karpathy)")) {
+    throw new Error("smoke check failed: v8.55 .cursor/rules/cclaw.mdc must carry the Iron Laws section");
+  }
+  if (!cursorRulesBody.includes("/cc <task description>")) {
+    throw new Error("smoke check failed: v8.55 .cursor/rules/cclaw.mdc must carry the /cc activation pointer");
+  }
   if (!existsSync(join(tempDir, ".gitignore"))) {
     throw new Error("smoke check failed: .gitignore not created by init");
   }
@@ -398,6 +426,16 @@ try {
   }
   if (existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command still exists after uninstall");
+  }
+  // v8.55 — uninstall must remove the harness-namespaced rules file
+  // AND the (now-empty) `.cursor/rules/` parent dir cclaw owned. The
+  // `.cursor/` root dir itself survives because the user may keep
+  // other Cursor state there.
+  if (existsSync(join(tempDir, ".cursor", "rules", "cclaw.mdc"))) {
+    throw new Error("smoke check failed: v8.55 .cursor/rules/cclaw.mdc still exists after uninstall");
+  }
+  if (existsSync(join(tempDir, ".cursor", "rules"))) {
+    throw new Error("smoke check failed: v8.55 uninstall left empty .cursor/rules/ behind");
   }
   process.stdout.write(`[smoke] success in ${tempDir}\n`);
 } finally {
