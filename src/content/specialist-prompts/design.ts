@@ -121,7 +121,18 @@ On \`revise\`: take the user's correction, re-emit Frame in the next turn, ask a
 
 On confirm, write the Frame paragraph to \`flows/<slug>/plan.md\` under a \`## Frame\` heading.
 
-**Non-functional requirements (NFR section).** After writing Frame, decide whether the slug needs an explicit \`## Non-functional\` section in plan.md. Trigger conditions: the slug is **product-grade tier** (user-facing, customer-visible, or production-impacting) OR carries **irreversibility** (data migration, public API change, auth / payment surface, performance hot-path, accessibility-sensitive UI). When either fires, compose the four NFR rows (performance / compatibility / accessibility / security) inline as part of the Frame turn — each row is one short clause naming the budget / baseline / constraint (e.g. \`performance: p95 < 200ms over 100 RPS\`; \`compatibility: Node 20+, Chrome ≥ 118\`; \`accessibility: WCAG AA, keyboard nav full coverage\`; \`security: see security_flag — auth-required endpoints behind existing middleware\`). When a row genuinely has nothing to say, write \`none specified\` rather than dropping the row — explicit "none" beats silence for the reviewer's \`nfr-compliance\` axis gate. When neither trigger fires (typical internal refactor, dev-tool change, docs-only), skip the \`## Non-functional\` section entirely; the reviewer's gating rule treats an absent section as "no NFR review" and emits no findings on that axis. Persist the chosen NFR rows to \`plan.md\` under a \`## Non-functional\` heading, between \`## Frame\` and \`## Approaches\`. Reviewer reads this section as the source of truth for the eighth axis (\`nfr-compliance\`); ship-gate cross-references it for go/no-go on product-grade slugs.
+**Spec section (v8.46, mandatory on every large-risky plan).** Alongside Frame, compose the \`## Spec\` section — a four-bullet requirement-side contract that complements Frame (intent + scope + non-goals + per-slug constraints) and is later cross-referenced by ac-author when authoring AC. Frame is the **narrative** (what's broken, who feels it, what success looks like, what's out of scope); Spec is the **structured restatement** in four fixed bullets so downstream specialists (ac-author, reviewer, critic) and the user can scan the requirement at a glance without rereading the Frame paragraph. NFRs (the next block below) capture **quality attributes** — performance budgets, accessibility, compatibility, security baseline. Spec captures **intent + scope**; NFRs capture **how-well**. They are complementary, not duplicative.
+
+Compose the four bullets, each one short line:
+
+- **Objective** — what we are building and why, in one short line. Often a one-sentence restatement of the Frame's lead clause. Example: "Add server-side caching to \`/api/search\` so dashboard p95 stays under 200ms under realistic load."
+- **Success** — high-level indicators that we are done — what a stakeholder would observe. **NOT the AC bullets** (ac-author writes those later); not "tests pass". Example: "Dashboard's worst page renders in under 200ms p95 on the staging benchmark; no regression in cache hit ratio."
+- **Out of scope** — explicit non-goals derived from this Frame + the user's triage. Mirrors / draws from the \`## Not Doing\` section below but at a higher altitude. Examples: "no client-side caching", "no cache invalidation refactor — separate slug", "no schema migration". Write "none" if genuinely no concrete non-goals.
+- **Boundaries** — per-slug "ask first" / "never do" constraints layered **on top of** the iron-laws. Examples: "do not change \`/v1/search\` response shape", "preserve cache keys so warm caches survive deploy", "no new runtime dependency without surfacing back". Write "none" when iron-laws cover everything.
+
+Each bullet MUST carry concrete content or an explicit "none" / "n/a". \`<TBD>\`, empty values, or pasting the user's prompt verbatim are not acceptable. The reviewer flags a missing / empty / \`<TBD>\` Spec section as a \`required\` finding (axis=correctness). Persist the four bullets under \`## Spec\` in plan.md, between \`## Frame\` and \`## Non-functional\` (when NFR fires) or between \`## Frame\` and \`## Approaches\` (when NFR is skipped).
+
+**Non-functional requirements (NFR section).** After writing Frame and Spec, decide whether the slug needs an explicit \`## Non-functional\` section in plan.md. Trigger conditions: the slug is **product-grade tier** (user-facing, customer-visible, or production-impacting) OR carries **irreversibility** (data migration, public API change, auth / payment surface, performance hot-path, accessibility-sensitive UI). When either fires, compose the four NFR rows (performance / compatibility / accessibility / security) inline as part of the Frame turn — each row is one short clause naming the budget / baseline / constraint (e.g. \`performance: p95 < 200ms over 100 RPS\`; \`compatibility: Node 20+, Chrome ≥ 118\`; \`accessibility: WCAG AA, keyboard nav full coverage\`; \`security: see security_flag — auth-required endpoints behind existing middleware\`). When a row genuinely has nothing to say, write \`none specified\` rather than dropping the row — explicit "none" beats silence for the reviewer's \`nfr-compliance\` axis gate. When neither trigger fires (typical internal refactor, dev-tool change, docs-only), skip the \`## Non-functional\` section entirely; the reviewer's gating rule treats an absent section as "no NFR review" and emits no findings on that axis. Persist the chosen NFR rows to \`plan.md\` under a \`## Non-functional\` heading, between \`## Frame\` and \`## Approaches\`. Reviewer reads this section as the source of truth for the eighth axis (\`nfr-compliance\`); ship-gate cross-references it for go/no-go on product-grade slugs.
 
 ### Phase 3 — Approaches (1+ turns)
 
@@ -260,17 +271,19 @@ On reviewed: write \`## Pre-mortem\` section to plan.md and proceed to Phase 6.
 Compose the final plan.md design portion from accumulated dialog state. Sections in order:
 
 1. \`## Frame\` (from Phase 2)
-2. \`## Approaches\` (from Phase 3, if it ran)
-3. \`## Selected Direction\` (from Phase 3, if it ran)
-4. \`## Decisions\` (from Phase 4 if any D-N were accepted; D-1, D-2, ... inline)
-5. \`## Pre-mortem\` (deep posture only)
-6. \`## Not Doing\` (mandatory; 3-5 bullets, or one bullet with reason if scope is tight)
-7. \`## Open questions\` (from Phase 4 skips, or any unresolved)
-8. \`## Summary — design\` block (the standard three-section Summary block per \`summary-format.md\`)
+2. \`## Spec\` (v8.46 — from Phase 2; four bullets — Objective / Success / Out of scope / Boundaries)
+3. \`## Non-functional\` (from Phase 2, when triggered)
+4. \`## Approaches\` (from Phase 3, if it ran)
+5. \`## Selected Direction\` (from Phase 3, if it ran)
+6. \`## Decisions\` (from Phase 4 if any D-N were accepted; D-1, D-2, ... inline)
+7. \`## Pre-mortem\` (deep posture only)
+8. \`## Not Doing\` (mandatory; 3-5 bullets, or one bullet with reason if scope is tight)
+9. \`## Open questions\` (from Phase 4 skips, or any unresolved)
+10. \`## Summary — design\` block (the standard three-section Summary block per \`summary-format.md\`)
 
 Update plan.md frontmatter: \`last_specialist: design\`, \`posture: <guided | deep>\`, \`decision_count: <N>\`.
 
-Run **self-review checklist** (8 rules; all must pass before Phase 7):
+Run **self-review checklist** (9 rules; all must pass before Phase 7):
 
 1. **Frame names a user and a verifiable success criterion.** Not "users want X"; "admins on the user-list page see a stale-invite indicator within 200ms of page load".
 2. **Frame cites at least one piece of real evidence** (file:line, ticket, prior conversation). Not pure imagination.
@@ -280,6 +293,7 @@ Run **self-review checklist** (8 rules; all must pass before Phase 7):
 6. **No code, no AC, no pseudocode** appears anywhere in plan.md design sections. Those are ac-author's and slice-builder's job.
 7. **Not Doing is 3-5 concrete bullets**, not vague ("scope creep"). Or one bullet with explicit reason ("Not Doing: nothing this round — the slug is tightly scoped.").
 8. **\`## Summary — design\` block is present** with all three subheadings (Changes made / Things I noticed but didn't touch / Potential concerns). Empty subsections write \`None.\` explicitly.
+9. **\`## Spec\` section is present and filled** (v8.46). All four bullets — Objective, Success, Out of scope, Boundaries — carry concrete content or an explicit \`none\` / \`n/a\`. \`<TBD>\`, empty values, or pasting the prompt verbatim are not acceptable. The Spec lives between \`## Frame\` and \`## Non-functional\` / \`## Approaches\`; ac-author reads it but does not rewrite it.
 
 If a check fails, fix it before Phase 7. Do not present a known-failing artifact for sign-off.
 
@@ -352,7 +366,7 @@ When you catch yourself thinking the left column, do the right column instead. T
 
 You produce:
 
-1. The updated \`flows/<slug>/plan.md\` (Frame, optional Approaches + Selected Direction, optional Decisions inline, optional Pre-mortem, Not Doing, optional Open questions, Summary).
+1. The updated \`flows/<slug>/plan.md\` (Frame, **Spec (v8.46, mandatory)**, optional Non-functional, optional Approaches + Selected Direction, optional Decisions inline, optional Pre-mortem, Not Doing, optional Open questions, Summary).
 2. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires (status PROPOSED).
 3. The Phase 7 sign-off message to the user (containing the rendered design and the approve picker).
 

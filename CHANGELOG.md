@@ -1,5 +1,60 @@
 # Changelog
 
+## 8.46.0 — Spec section in plan.md + README accuracy rewrite
+
+### Why
+
+Two unrelated issues had been compounding on the small-medium path. **One:** Acceptance Criteria were silently doing double duty as both the requirement contract (what we're building) AND the pass/fail contract (how we know it's done). The Frame paragraph captured intent narratively, but downstream specialists (reviewer, critic) and the user had no single structured place to scan the requirement at a glance — they had to reread the Frame prose to answer "what was this slug supposed to do?". Large-risky plans had Frame + NFR rows, but small-medium plans had neither — just a Plan paragraph and an AC table. **Two:** the README had accreted multiple factual inaccuracies through v8.29-v8.45 — `npx cclaw-cli init` referenced after `init` was retired in v8.29, "five-axis review" in one paragraph contradicted "7-axis pass" two paragraphs later, `architect` decisions referenced after architect was retired in v8.14, and four `docs/*` links pointing to a directory that was removed in v8.29.
+
+v8.46 closes both gaps in one slug.
+
+### What changed
+
+**Change 1 — `## Spec` section in `plan.md` (above `## Acceptance Criteria`).** Every plan.md now carries a four-bullet Spec section: Objective (what we're building and why, one short line), Success (high-level indicators a stakeholder would observe — not the AC bullets), Out of scope (explicit non-goals), Boundaries (per-slug "ask first" / "never do" notes layered on top of the iron-laws). The section is mandatory on every plan.md regardless of mode — both strict (large-risky) and soft (small-medium) — with one exception: the inline / trivial path has no plan.md, so no Spec. Each bullet MUST carry content or an explicit `none` / `n/a`; `<TBD>`, empty values, or pasting the user's prompt verbatim are not acceptable. The reviewer treats a missing / empty / `<TBD>` Spec section as a `required` finding (axis=correctness). On large-risky plans, `design` Phase 2 (Frame) authors the Spec alongside the existing NFR rows (Spec captures intent + scope; NFRs capture quality attributes — complementary, not duplicative). On small-medium plans, `ac-author` authors the Spec as part of its standard plan-body authoring. The 7-axis (+ gated `nfr-compliance`) review count is unchanged — Spec compliance is implicitly covered by the existing `correctness` / `architecture` / `complexity-budget` axes (build doesn't match Objective => correctness; scope creep past Out of scope => architecture / complexity-budget). No new schema fields, no new YAML keys, no new reviewer axis.
+
+**Change 2 — README rewrite.** Audited every command, file path, and link in `README.md` against the live source. Fixed:
+
+- **"five-axis review" → "seven-axis review"** in the Why section, matching the long-standing 7-axis claim (correctness · test-quality · readability · architecture · complexity-budget · security · perf) in the same file two paragraphs lower. The gated eighth axis (`nfr-compliance`, v8.25) is named explicitly when the table mentions it.
+- **`npx cclaw-cli init` → `npx cclaw-cli@latest`** throughout the Quickstart and Harnesses sections. `init` was retired in v8.29 (TUI menu replaced bare subcommands). CI / scripted installs documented as `npx cclaw-cli@latest --non-interactive install [--harness=<id>[,<id>]]`.
+- **"6 sub-agents" → "5 sub-agents + 1 main-context coordinator (design)"** in the Specialists row. `design` runs in main orchestrator context (multi-turn, user-collaborative) since v8.14 and is not a sub-agent.
+- **"architect decision" → "design decision"** in the Compound learnings row. `architect` was retired in v8.14 and replaced by `design`. (The internal frontmatter field `has_architect_decision` is kept as a stable name across the rename; the user-facing prose now matches the v8.14+ specialist name.)
+- **Four `docs/*` links removed.** `docs/scheme-of-work.md`, `docs/skills.md`, `docs/harnesses.md`, `docs/quality-gates.md`, `docs/config.md` — all references retired in v8.29 when the directory was removed. Replaced with pointers into `src/content/start-command.ts`, `src/content/specialist-prompts/`, `src/content/skills/`, `src/content/runbooks-on-demand.ts`, `src/content/artifact-templates.ts`. CHANGELOG.md is now the canonical release-history reference.
+- **`cclaw init` / `cclaw sync` / `cclaw upgrade` / bare CLI subcommands removed.** The full CLI surface now shows two invocations — `npx cclaw-cli@latest` (TUI, default) and `npx cclaw-cli@latest --non-interactive <command>` (CI / scripts). The five non-interactive commands match `src/cli.ts > NON_INTERACTIVE_COMMANDS` exactly: `install`, `uninstall`, `knowledge`, `version`, `help`.
+- **Worked-example boxes** are now explicitly framed as "illustrative — the actual orchestrator output is a sequence of slim-summary blocks under section headers, not boxed UI". Honest about what cclaw renders versus what makes a useful README example.
+- **Skill count "17"** verified against `ls src/content/skills/ | wc -l` (17 .md files; v8.44 retired 5 unwired zombies — none of those were counted in the README anyway).
+- **`## Spec` mentioned in the "What you get" Plan template row** so new users see the v8.46 addition in the feature table.
+
+### Tests
+
+1038 tests across 70 files, all green (+20 net, +1 file). Test updates:
+
+- **New: `tests/unit/v846-spec-section.test.ts`** — 20 tripwires across the v8.46 contract: PLAN_TEMPLATE (strict + soft) carries `## Spec` with all four canonical bullets above `## Acceptance Criteria` / `## Testable conditions`; ac-author prompt declares Spec mandatory and gates its self-review on Spec presence; design Phase 2 authors the Spec and frames Spec vs NFR as complementary (intent vs quality); no new reviewer axis is introduced (7-axis count + gated `nfr-compliance` stable); no new frontmatter keys added.
+- **Updated: `tests/unit/h4-content-depth.test.ts`** — plan-template assertion now also checks for `## Spec` alongside the existing `## Frame` / `## Approaches` / `## Acceptance Criteria` / `## Edge cases` / `## Topology` / `## Traceability block` checks.
+
+### Files touched
+
+- `src/content/artifact-templates.ts` (+33 / -1) — `PLAN_TEMPLATE` and `PLAN_TEMPLATE_SOFT` both gain the `## Spec` block (four bullets + prose preamble + reviewer-axis cross-reference). Position: between `## Plan` (or after `## Plan` paragraph for soft) and `## Acceptance Criteria` (or `## Testable conditions` for soft).
+- `src/content/specialist-prompts/ac-author.ts` (+50 / -3) — new top-level "Spec section" subsection naming all four bullets with example shapes; strict-mode output schema reordered to list Spec between Plan and AC; soft-mode worked example carries a Spec block; strict-mode worked example carries a Spec block; self-review checklist gains rule #17 (Spec present and filled).
+- `src/content/specialist-prompts/design.ts` (+24 / -8) — Phase 2 (Frame) authors the Spec section alongside the existing NFR rows; explicit Spec-vs-NFR framing (intent + scope vs quality attributes); Phase 6 compose-order list reordered to put `## Spec` immediately after `## Frame` and above `## Non-functional`; self-review checklist grows from 8 to 9 rules (rule #9 covers Spec).
+- `tests/unit/v846-spec-section.test.ts` (new, +172) — 20 tripwires per the test plan above.
+- `tests/unit/h4-content-depth.test.ts` (+2 / -1) — additional Spec-section assertion in the existing plan-template lean-shape test.
+- `README.md` (+131 / -153, net -22) — accuracy rewrite per Change 2. 195 → 173 lines.
+- `CHANGELOG.md` — this section.
+- `package.json` — `8.45.0` → `8.46.0`.
+
+### Migration notes
+
+- **Backward compatible.** Existing in-flight `plan.md` files in user repos may not have `## Spec` — they continue to work. The template applies to new plan.md files going forward. If the user runs `/cc` on a resumed slug and `ac-author` edits the plan, it can add `## Spec` lazily (the prompt mentions this on the small-medium path).
+- **No schema changes.** No new frontmatter keys, no new TypeScript types, no new YAML fields. The Spec section is a body-only addition.
+- **No new reviewer axis.** 7-axis review (+ gated `nfr-compliance` from v8.25) is unchanged. Spec compliance is implicitly covered by the existing axes — a build that doesn't match the recorded Objective is a `correctness` finding; scope creep past `Out of scope` is an `architecture` / `complexity-budget` finding. The brief explicitly forbids adding an 8th un-gated axis.
+- **Inline / trivial path unaffected.** Trivial slugs (`acMode: inline`) do not produce a `plan.md` and therefore have no Spec section.
+- **design's 7-phase structure unchanged.** Phase 2 (Frame) gains one more sub-task (author the Spec section) but the seven phases (Bootstrap / Clarify / Frame / Approaches / Decisions / Pre-mortem / Compose+self-review / Sign-off) keep their boundaries.
+
+### Out of scope (deferred)
+
+- **`slug` → `task name` narrative rename.** Same reasoning as v8.45 — the term is the same identifier as the `slug:` frontmatter field; a surgical narrative-only rename produces inconsistent prose. Considered for a future vocabulary slug that addresses field names and prose together.
+- **`acMode` → `review level` and `posture` → `TDD style` narrative renames.** Same reasoning as v8.45.
+
 ## 8.45.0 — User-facing surface polish: descriptive stage names, plain-English vocabulary, quickstart README
 
 ### Why

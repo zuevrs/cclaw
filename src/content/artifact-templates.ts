@@ -104,6 +104,17 @@ _(AC author authors this. AC-aligned, not horizontal-layer. Each unit ships an e
 - **Phase 2 — Wiring (AC-2, AC-3).**
   - Concrete change with file:path:line reference.
 
+## Spec
+
+_(v8.46 — mandatory on every plan.md (strict and soft). Four bullets capture the requirement-side contract that AC alone do not carry: intent + scope + non-goals + per-slug constraints. On small-medium plans the ac-author fills this section; on large-risky plans design Phase 2 (Frame) fills it alongside the NFR rows. Each bullet MUST be filled — write "none" or "n/a" when genuinely nothing applies; \`<TBD>\` or empty values are not acceptable. Existing legacy plans without this section continue to work; the section appears only on plans authored on v8.46+.)_
+
+- **Objective**: _what we are building and why, in one short line._
+- **Success**: _how we know it is done — high-level indicators (e.g. "users can rename a task without losing comments"), NOT the AC bullets below._
+- **Out of scope**: _explicit non-goals derived from triage + framing. Write "none" if not applicable._
+- **Boundaries**: _per-slug "ask first" / "never do" notes layered on top of the iron-laws (e.g. "do not break public API", "preserve current cache keys"). Write "none" when iron-laws cover it._
+
+The reviewer's existing axes (correctness, architecture, complexity-budget) implicitly cover the Spec section — a build that does not match the recorded Objective is a \`correctness\` finding; scope creep past \`Out of scope\` is an \`architecture\` or \`complexity-budget\` finding. No new reviewer axis is introduced; the 7-axis (+ gated NFR) count is stable.
+
 ## Acceptance Criteria
 
 | id | text | status | parallelSafe | dependsOn | touchSurface | rollback | posture | commit |
@@ -173,6 +184,15 @@ security_flag: false
 ## Plan
 
 _(AC author authors this. One short paragraph describing the change end-to-end. No phases, no AC IDs.)_
+
+## Spec
+
+_(v8.46 — mandatory. Four bullets capturing the requirement-side contract. Each bullet MUST be filled — "none" or "n/a" are acceptable when genuinely nothing applies; \`<TBD>\` and empty values are not. The ac-author authors this on small-medium (soft) plans.)_
+
+- **Objective**: _what we are building and why, in one short line._
+- **Success**: _how we know it is done — high-level indicators, NOT the testable conditions below._
+- **Out of scope**: _explicit non-goals; "none" if not applicable._
+- **Boundaries**: _per-slug "ask first" / "never do" notes; "none" if iron-laws cover it._
 
 ## Testable conditions
 

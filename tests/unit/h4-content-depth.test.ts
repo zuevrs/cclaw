@@ -24,9 +24,10 @@ describe("v8 content depth — H4 + H5 trim", () => {
     expect(skill?.body).toContain("F-N");
   });
 
-  it("plan template is lean: Frame + Approaches + Not Doing + AC + Edge cases + Topology", () => {
+  it("plan template is lean: Frame + Spec (v8.46) + Approaches + Not Doing + AC + Edge cases + Topology", () => {
     const body = templateBody("plan", { "SLUG-PLACEHOLDER": "alpha" });
     expect(body).toContain("## Frame");
+    expect(body).toContain("## Spec");
     expect(body).toContain("## Approaches");
     expect(body).toContain("baseline");
     expect(body).toContain("challenger");
