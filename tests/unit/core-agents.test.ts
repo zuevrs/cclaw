@@ -7,15 +7,15 @@ import {
 } from "../../src/content/core-agents.js";
 
 describe("core agents", () => {
-  it("ships seven specialists (one main-context, six on-demand) and two research helpers — v8.42 added critic; v8.51 added plan-critic", () => {
-    expect(SPECIALIST_AGENTS).toHaveLength(7);
+  it("ships eight specialists (one main-context, seven on-demand) and two research helpers — v8.42 added critic; v8.51 added plan-critic; v8.52 added qa-runner", () => {
+    expect(SPECIALIST_AGENTS).toHaveLength(8);
     for (const agent of SPECIALIST_AGENTS) {
       expect(agent.kind).toBe("specialist");
     }
     const designAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "design")!;
     expect(designAgent.activation).toBe("main-context");
     const subAgentSpecialists = SPECIALIST_AGENTS.filter((agent) => agent.id !== "design");
-    expect(subAgentSpecialists).toHaveLength(6);
+    expect(subAgentSpecialists).toHaveLength(7);
     for (const agent of subAgentSpecialists) {
       expect(agent.activation).toBe("on-demand");
     }

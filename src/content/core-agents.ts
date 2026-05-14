@@ -96,6 +96,16 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     prompt: SPECIALIST_PROMPTS["plan-critic"]
   },
   {
+    id: "qa-runner",
+    kind: "specialist",
+    title: "QA runner",
+    activation: "on-demand",
+    modes: ["browser-verify"],
+    description:
+      "v8.52 behavioural-QA specialist for UI surfaces. Runs at the qa stage (between build and review) ONLY when triage.surfaces includes ui or web AND acMode != inline. Browser tool hierarchy: Playwright MCP (Tier 1, CI-runnable) > browser-MCP (Tier 2, cursor-ide-browser / chrome-devtools / browser-use; session-bound screenshots) > manual steps (Tier 3, user confirms numbered procedure). Per-UI-AC evidence rubric, 3-5 pre-commitment predictions before verification, qa-runner-specific anti-rationalizations. Verdicts: pass (advance to review), iterate (bounce to slice-builder once — max 1 loop), blocked (browser tools unavailable AND manual steps required; user picker). Read-only on production src; writes qa.md + optional tests/e2e/<slug>-<ac>.spec.ts + screenshots under flows/<slug>/qa-assets/. Reviewer cross-checks the artifact via the v8.52 qa-evidence axis.",
+    prompt: SPECIALIST_PROMPTS["qa-runner"]
+  },
+  {
     id: "slice-builder",
     kind: "specialist",
     title: "Slice builder",

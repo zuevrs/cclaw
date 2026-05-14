@@ -71,6 +71,7 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
     "complexity": "small-medium",
     "acMode": "soft",
     "path": ["plan", "build", "review", "critic", "ship"],
+    "surfaces": ["ui"],
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
     "runMode": "step"
@@ -79,6 +80,22 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 \`\`\`
 
 \`runMode\` is \`null\` on inline (fast path or "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.
+
+**v8.52 surfaces field.** \`triage.surfaces\` is a list of runtime surfaces the slug touches, populated by the orchestrator at this Hop from the task description + repo signals. The vocabulary is fixed: \`cli\` / \`library\` / \`api\` / \`ui\` / \`web\` / \`data\` / \`infra\` / \`docs\` / \`other\`. Multiple entries are expected on mixed slugs (e.g. an endpoint + a Vue component → \`["api", "ui"]\`). Detection rules:
+
+- **\`ui\`** — task mentions any of \`click\` / \`form\` / \`modal\` / \`page\` / \`screen\` / \`button\` / \`render\` / \`toast\` / \`dialog\` / \`viewport\` / \`responsive\` / \`a11y\` / \`accessibility\` / \`dark mode\` / \`hover\` / \`focus ring\`; OR the touched files include any of \`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\` / \`*.scss\`; OR \`package.json\` references a UI framework (\`react\` / \`vue\` / \`svelte\` / \`next\` / \`astro\` / \`solid\` / \`qwik\`) AND the touched files include any component-ish path.
+- **\`web\`** — task mentions \`http\` / \`html\` / \`browser\` / \`safari\` / \`chrome\` AND the surface is browser-rendered (i.e. NOT an API endpoint). Alias for \`ui\` from the qa-runner gate's perspective; both tokens are treated as equivalent. When in doubt, prefer \`ui\` — \`web\` is for slugs that touch the page but not a component framework (e.g. plain HTML / CSS edits to a static site).
+- **\`api\`** — task mentions \`endpoint\` / \`route\` / \`handler\` / \`request\` / \`response\` / \`webhook\` / \`graphql\` / \`rpc\` / \`http method\` (GET/POST/PUT/PATCH/DELETE); OR the touched files include \`routes/**\` / \`api/**\` / \`pages/api/**\` / \`controllers/**\` / \`handlers/**\` paths.
+- **\`cli\`** — task mentions \`command\` / \`flag\` / \`argument\` / \`stdout\` / \`stdin\` / \`bin\` / \`script\`; OR the touched files include \`bin/**\` / \`cli/**\` / \`src/cli.*\` paths.
+- **\`library\`** — task mentions \`exported\` / \`public API\` / \`SDK\` / \`module\` / \`import from\`; OR the touched files are inside a published npm package's exported surface.
+- **\`data\`** — task mentions \`schema\` / \`migration\` / \`table\` / \`fixture\` / \`seed\` / \`ORM\` / \`database\`; OR the touched files include \`migrations/**\` / \`prisma/schema.prisma\` / \`db/schema.*\` / \`*.sql\`.
+- **\`infra\`** — task mentions \`docker\` / \`ci\` / \`deploy\` / \`terraform\` / \`kubernetes\` / \`helm\` / \`github actions\`; OR the touched files include \`Dockerfile\` / \`.github/workflows/**\` / \`terraform/**\` / \`helm/**\`.
+- **\`docs\`** — task mentions \`README\` / \`docs\` / \`CHANGELOG\` / \`migration guide\`; OR the touched files are purely \`*.md\` outside \`.cclaw/\`.
+- **\`other\`** — fallback when no canonical surface fits. Also the default when \`surfaces\` is **absent** in a pre-v8.52 state file; the v8.52 reader treats absent-\`surfaces\` as \`["other"]\` (the no-QA-gating fallback).
+
+Detection is performed once per slug, at this Hop, AFTER the user confirms acMode + complexity but BEFORE the first specialist dispatch. The orchestrator writes the detected list verbatim to \`triage.surfaces\`; the value is **immutable** for the lifetime of the flow (same immutability story as \`complexity\` / \`acMode\` / \`path\`). When no signal fires, write \`["other"]\` rather than an empty array — explicit "other" beats absent for the qa gate's evaluation. The qa-runner gate (v8.52) reads this field at Hop 4.25 to decide whether to dispatch qa-runner between build and review.
+
+**v8.52 \`qa\` stage inclusion in \`triage.path\`.** When the detected \`surfaces\` includes \`"ui"\` or \`"web"\` AND \`acMode != "inline"\`, the orchestrator MUST insert \`"qa"\` between \`"build"\` and \`"review"\` in \`triage.path\` — yielding e.g. \`["plan", "build", "qa", "review", "critic", "ship"]\`. The \`qa\` token is the v8.52 stage that dispatches qa-runner. On any other surface combination (or on \`acMode: "inline"\`), the path stays pre-v8.52 verbatim: \`"qa"\` is structurally absent, and the orchestrator advances build → review as before. Pre-v8.52 state files (whose \`path\` cannot contain \`"qa"\` because the stage did not exist) validate unchanged.
 
 **Audit log** (\`.cclaw/state/triage-audit.jsonl\`). Write-only telemetry (\`userOverrode\`, \`autoExecuted\`, \`iterationOverride\`) appends to this JSONL log instead of the triage object. Append one line per triage decision immediately after persisting the triage write (best-effort; if the write fails, log and continue). Append a second line with \`iterationOverride: true\` when \`keep-iterating-anyway\` fires at the 5-iteration review cap. Schema mirrors \`TriageAuditEntry\` in \`src/triage-audit.ts\`:
 
@@ -97,7 +114,7 @@ Active flow: <slug>
 ─ Stage: <stage>  (last touched <relative-time, in the user's language>)
 ─ Triage: <complexity> / acMode=<acMode>
 ─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
-─ Last specialist: <none | design | ac-author | plan-critic | reviewer | security-reviewer | critic | slice-builder>
+─ Last specialist: <none | design | ac-author | plan-critic | reviewer | security-reviewer | critic | qa-runner | slice-builder>
 ─ Open findings: <K>
 ─ Next step: <one sentence in the user's language describing what /cc will do next>
 
@@ -159,6 +176,7 @@ The orchestrator body keeps only the always-needed hops. Open the matching runbo
 | \`triage.complexity == "large-risky"\` AND \`plan\` in path | \`discovery.md\` |
 | ac-author declares \`topology: parallel-build\` (≥2 slices, strict) | \`parallel-build.md\` |
 | every reviewer-stage exit before the reviewer dispatch | \`self-review-gate.md\` |
+| every slice-builder GREEN return when \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\` (v8.52 qa gate) | \`qa-stage.md\` |
 | \`reviewCounter\` reaches 5 without convergence | \`cap-reached-recovery.md\` |
 | fix-only commits intersect a prior adversarial finding | \`adversarial-rerun.md\` |
 | stage ship (every ship attempt) | \`ship-gate.md\` |
@@ -316,14 +334,14 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 3. **Hand off** in a sub-agent. Do not run the specialist's work in your own context.
 4. When the sub-agent returns, read its slim summary, do not re-read its artifact.
 5. Patch \`flow-state.json\` **after every dispatch** (not only at end-of-stage):
-   - \`lastSpecialist\` = the id of the specialist that just returned or just signed off (\`design\` / \`ac-author\` / \`plan-critic\` / \`slice-builder\` / \`reviewer\` / \`security-reviewer\` / \`critic\`). The \`design\` specialist runs in **main context** (v8.14+): the orchestrator patches \`lastSpecialist: "design"\` only after Phase 7 sign-off returns \`approve & proceed\`. This is the ONLY way checkpoint-based resume works mid-discovery. The \`critic\` specialist (v8.42+) is on-demand: \`lastSpecialist: "critic"\` is stamped only after the critic's slim summary has been read and the orchestrator has patched \`criticVerdict\` / \`criticIteration\` / \`criticGapsCount\` / \`criticEscalation\` into the same write — see the Critic step. The \`plan-critic\` specialist (v8.51+) is on-demand: \`lastSpecialist: "plan-critic"\` is stamped only after the plan-critic's slim summary has been read and the orchestrator has patched \`planCriticVerdict\` / \`planCriticIteration\` / \`planCriticDispatchedAt\` into the same write — see the Plan-critic step.
+   - \`lastSpecialist\` = the id of the specialist that just returned or just signed off (\`design\` / \`ac-author\` / \`plan-critic\` / \`slice-builder\` / \`qa-runner\` / \`reviewer\` / \`security-reviewer\` / \`critic\`). The v8.52 \`qa-runner\` specialist (on-demand) is stamped only after the qa-runner's slim summary has been read and the orchestrator has patched \`qaVerdict\` / \`qaIteration\` / \`qaEvidenceTier\` / \`qaDispatchedAt\` into the same write — see the qa step. The \`design\` specialist runs in **main context** (v8.14+): the orchestrator patches \`lastSpecialist: "design"\` only after Phase 7 sign-off returns \`approve & proceed\`. This is the ONLY way checkpoint-based resume works mid-discovery. The \`critic\` specialist (v8.42+) is on-demand: \`lastSpecialist: "critic"\` is stamped only after the critic's slim summary has been read and the orchestrator has patched \`criticVerdict\` / \`criticIteration\` / \`criticGapsCount\` / \`criticEscalation\` into the same write — see the Critic step. The \`plan-critic\` specialist (v8.51+) is on-demand: \`lastSpecialist: "plan-critic"\` is stamped only after the plan-critic's slim summary has been read and the orchestrator has patched \`planCriticVerdict\` / \`planCriticIteration\` / \`planCriticDispatchedAt\` into the same write — see the Plan-critic step.
    - \`currentStage\` = the **next** stage in \`triage.path\` only when the **whole stage** is complete. While the discovery sub-phase is in progress (design is still in Phase 0-6, or ac-author just returned but the user has not yet seen the plan), \`currentStage\` stays \`"plan"\` and \`lastSpecialist\` rotates through \`design\` then \`ac-author\`.
    - \`reviewIterations\`, \`securityFlag\`, AC progress — patched in the same write whenever the slim summary reports a change.
 6. Render the pause summary and wait (see Pause and resume).
 
 ### Stage → specialist mapping
 
-\`triage.path\` only ever holds the five canonical stages: \`plan\`, \`build\`, \`review\`, \`critic\`, \`ship\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → ac-author) — see \`runbooks/discovery.md\`. The \`critic\` stage (v8.42+) is **acMode-gated**: \`inline\` skips it entirely; \`soft\` runs \`gap\` mode; \`strict\` runs gap-or-adversarial with §8 escalation. Full gating + escalation + verdict-routing contract lives in \`runbooks/critic-stage.md\`.
+\`triage.path\` holds the canonical stages \`plan\`, \`build\`, \`review\`, \`critic\`, \`ship\`, plus the **v8.52 optional \`qa\`** stage inserted between \`build\` and \`review\` when \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → ac-author) — see \`runbooks/discovery.md\`. The \`critic\` stage (v8.42+) is **acMode-gated**: \`inline\` skips it entirely; \`soft\` runs \`gap\` mode; \`strict\` runs gap-or-adversarial with §8 escalation. Full gating + escalation + verdict-routing contract lives in \`runbooks/critic-stage.md\`. The \`qa\` stage (v8.52+) is **surface-gated**: only UI / web slugs in non-inline mode see \`qa\` in their path; CLI / library / API / data / infra / docs slugs skip it entirely. Full gating + verdict-routing contract lives in \`runbooks/qa-stage.md\`.
 
 **plan-critic (v8.51+) is a sub-step of \`plan\`, not a separate stage.** When \`acMode == "strict"\` AND \`triage.complexity == "large-risky"\` AND \`triage.problemType != "refines"\` AND the plan has ≥2 ACs, the orchestrator dispatches the \`plan-critic\` specialist immediately after ac-author and before slice-builder. Otherwise plan-critic is structurally skipped. \`currentStage\` stays \`"plan"\` for the plan-critic dispatch (the build stage only opens after the plan-critic returns \`pass\` or the user resolves a revise-cap / cancel picker). Full gating + verdict-routing contract lives in \`runbooks/plan-critic-stage.md\`.
 
@@ -332,6 +350,7 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 | \`plan\` | \`ac-author\` (small/medium); design → ac-author (large-risky) | — | plan-authoring (ac-author); design.md is read in main context (no wrapper skill) | yes for trivial; no for any path that includes plan |
 | \`plan\` *(sub-step, v8.51)* | \`plan-critic\` *(gated: acMode=strict + complexity=large-risky + problemType!=refines + AC count ≥ 2)* | \`pre-impl-review\` | — (plan-critic prompt body is self-contained; no wrapper) | no, never inline (gate forbids \`acMode: inline\`) |
 | \`build\` | \`slice-builder\` | \`build\` (or \`fix-only\` after a review with block findings) | tdd-and-verification | yes for trivial only |
+| \`qa\` (v8.52+) | \`qa-runner\` *(gated: \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\`)* | \`browser-verify\` | qa-and-browser | no, never inline (gate forbids \`acMode: inline\`) |
 | \`review\` | \`reviewer\` | \`code\` (default) or \`integration\` (after parallel-build) | review-discipline, anti-slop | no, always sub-agent |
 | \`critic\` (v8.42+) | \`critic\` | \`gap\` (default, soft + strict-no-trigger) or \`adversarial\` (strict + §8 trigger fires) | — (the critic prompt body is self-contained; no wrapper) | no, never inline (skipped on \`acMode: inline\`) |
 | \`ship\` | \`reviewer\` (mode=release) + \`reviewer\` (mode=adversarial, strict) + \`security-reviewer\` if \`security_flag\` | parallel fan-out, then merge | release-checklist | no, always sub-agent |
@@ -383,6 +402,15 @@ The full sub-phase procedure — discovery auto-skip heuristic, posture selectio
 - Strict mode, parallel: see \`.cclaw/lib/runbooks/parallel-build.md\` — only when ac-author declared \`topology: parallel-build\` AND ≥4 AC AND ≥2 disjoint touchSurface clusters.
 - Inline mode: not dispatched here — handled in the trivial path of triage.
 - Slim summary: AC committed (strict) or conditions verified (soft), suite-status (passed / failed), open follow-ups.
+
+#### qa (v8.52+, optional UI-surface stage)
+
+- Specialist: \`qa-runner\`. On-demand sub-agent; runs between \`build\` and \`review\` on the **v8.52 surface gate**: \`triage.surfaces\` includes \`"ui"\` or \`"web"\` AND \`acMode != "inline"\` AND \`qaIteration < 1\`. Any other combination skips qa — the orchestrator advances from slice-builder's GREEN slim summary directly to reviewer dispatch (current pre-v8.52 behaviour preserved verbatim). The gate is AND across all three conditions; widening any one is v8.53+ scope, not a within-slug runtime call.
+- **Why a separate specialist from the v8.42 \`critic\` and the v8.51 \`plan-critic\`.** plan-critic walks plan.md before code exists ("is the plan structurally buildable?"). slice-builder walks tests + diff during build ("does the code satisfy the AC's test?"). reviewer walks the diff after build ("does the diff meet the eight axes?"). critic walks the diff + reviewer output after review ("did we build the right thing well?"). None of those four touches the **rendered page**. qa-runner is the missing link: it walks the page through whichever browser tooling is available (Playwright > browser-MCP > manual) and confirms each UI AC's behavioural clause actually renders on screen. Different lens, different problem class.
+- Inputs (read-only on production source): \`flow-state.json > triage\` (the \`surfaces\` field gates), \`.cclaw/flows/<slug>/plan.md\` (AC table with \`touchSurface\` column), \`.cclaw/flows/<slug>/build.md\` (the slice-builder's GREEN evidence), \`.cclaw/flows/<slug>/qa.md\` from the prior dispatch (only on iteration 1). Output: \`.cclaw/flows/<slug>/qa.md\` (single-shot per dispatch — overwrite on re-dispatch), plus screenshots under \`.cclaw/flows/<slug>/qa-assets/\` and optional Playwright specs under \`tests/e2e/<slug>-<ac>.spec.ts\` (when the project already ships Playwright; qa-runner does NOT npm-install Playwright as a side effect).
+- The qa-runner picks the strongest available **evidence tier** (Tier 1 Playwright > Tier 2 browser-MCP > Tier 3 manual steps) and records it in \`qa.md\` frontmatter as \`evidence_tier\`. Each UI AC gets one evidence row: Playwright spec path + exit code + last 3 lines of stdout, OR screenshot path + observations paragraph, OR numbered manual-steps block. Pre-commitment predictions (3-5, written BEFORE running any verification) sit in §3 of qa.md; predictions activate deliberate search.
+- Slim summary: verdict (\`pass\` / \`iterate\` / \`blocked\`), evidence_tier, UI ACs breakdown (\`N_pass\` / \`N_fail\` / \`N_pending-user\`), findings totals broken down by severity (\`required\` / \`fyi\`), iteration (0 or 1; 1 iterate loop max), confidence + rationale.
+- Full procedure — gating (3 AND conditions), dispatch envelope, verdict-handling routing (\`pass\` → reviewer; \`iterate\` iter 0 → bounce to slice-builder fix-only with §7 hand-off prepended; \`iterate\` iter 1 → user picker; \`blocked\` → user picker [\`proceed-without-qa-evidence\` / \`pause-for-manual-qa\` / \`skip-qa\`]), iteration-cap enforcement (1 iterate loop max), \`flow-state.json\` patches (\`qaVerdict\` / \`qaIteration\` / \`qaEvidenceTier\` / \`qaDispatchedAt\`), reviewer cross-check via the v8.52 \`qa-evidence\` axis, legacy pre-v8.52 migration — lives in \`.cclaw/lib/runbooks/qa-stage.md\`. Open that runbook on every transition from \`slice-builder\` GREEN slim-summary return to either qa-runner dispatch or reviewer dispatch.
 
 #### review
 

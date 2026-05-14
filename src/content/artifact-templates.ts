@@ -7,6 +7,7 @@ export interface ArtifactTemplate {
     | "review"
     | "critic"
     | "plan-critic"
+    | "qa"
     | "ship"
     | "decisions"
     | "learnings"
@@ -698,6 +699,155 @@ _(For \`pass\`: write \`No hand-off required — slice-builder dispatches as tod
 - _Anything the plan-critic could not verify and the orchestrator may want to surface to the user (e.g. "P-2 relied on a project convention I could not confirm from plan.md alone; recommend the user verify before iteration 1")._
 `;
 
+const QA_TEMPLATE = `---
+slug: SLUG-PLACEHOLDER
+stage: qa
+status: active
+specialist: qa-runner
+dispatched_at: DISPATCHED-AT-PLACEHOLDER       # ISO timestamp at dispatch time
+iteration: 0                                    # 0 on first dispatch; 1 after one iterate loop (max)
+surfaces: []                                    # copied from triage.surfaces — list of "ui" / "web" tokens detected
+evidence_tier: pending                          # playwright | browser-mcp | manual | pending (pre-§2)
+ui_acs_total: 0                                 # count of UI-tagged ACs covered by this qa pass
+ui_acs_pass: 0                                  # count whose Status == pass
+ui_acs_fail: 0                                  # count whose Status == fail
+ui_acs_pending: 0                               # count whose Status == pending-user (manual tier)
+predictions_made: 0                             # count of §3 pre-commitment predictions
+findings: 0                                     # total §5 findings (failures only)
+verdict: pending                                # pending | pass | iterate | blocked
+token_budget_used: 0                            # orchestrator stamps this from the sub-agent return
+---
+
+# QA report — SLUG-PLACEHOLDER
+
+This artifact captures the qa-runner pass over the slug. qa-runner runs BETWEEN \`build\` and \`review\`, only when \`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.acMode != "inline"\`. It walks the **rendered page** with whichever browser tooling is available (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. Distinct from the reviewer (which walks the diff) and from \`debug-and-browser.md\` (which drives stop-the-line debugging on a live system).
+
+qa-runner is read-only on production source. Every \`Status: pass\` row cites a real test exit code, a saved screenshot path, or a numbered manual-steps block — never "looks good to me".
+
+> **Iron Law (qa-runner):** EVIDENCE FROM THE RENDERED PAGE ONLY. A \`Status: pass\` row without a citation is structurally invalid; the reviewer's \`qa-evidence\` axis fires \`required\` on it.
+
+## §1. Surfaces under QA
+
+_(Copy \`triage.surfaces\` from \`flow-state.json\`. Cite which AC ids carry each UI surface — read \`plan.md\` AC table > \`touchSurface\` column to assign. Non-UI surfaces from a mixed slug are out of scope for qa-runner; list them under "Out of scope".)_
+
+- _UI surfaces: e.g. \`ui\` (AC-1, AC-3), \`web\` (AC-2)_
+- _Out of scope (non-UI ACs covered by review only): e.g. AC-4 (\`api\`), AC-5 (\`library\`)_
+
+## §2. Browser tool detection
+
+_(Decide \`evidence_tier\` BEFORE authoring any evidence. Pick the strongest available tier; record the decision below and stamp it into the frontmatter \`evidence_tier\` field.)_
+
+| Tier | Tool | Detection signal | Decision |
+| --- | --- | --- | --- |
+| 1 | Playwright (\`@playwright/test\` or wrapper script) | \`package.json > devDependencies > @playwright/test\` OR \`scripts.test:e2e\` | _yes / no_ |
+| 2 | \`cursor-ide-browser\` MCP | dispatch envelope's MCP catalog | _yes / no_ |
+| 2 | \`chrome-devtools\` MCP | dispatch envelope's MCP catalog | _yes / no_ |
+| 2 | \`browser-use\` MCP | dispatch envelope's MCP catalog | _yes / no_ |
+| 3 | Manual steps | always available (last resort) | _yes (fallback)_ |
+
+**Selected tier:** _<playwright | browser-mcp | manual>_
+**Rationale:** _<one sentence — why this tier and not the next-stronger one (if Tier 1 was skipped despite being available, the reviewer's qa-evidence axis will fire required)>_
+
+## §3. Pre-commitment predictions (3-5)
+
+_(Authored BEFORE you run any verification. 3-5 predictions of what is most likely to fail when you actually render the page. Each prediction names a verification path and a final outcome. For \`evidence_tier == playwright\`, the spec's \`expect()\` calls are themselves structured predictions; you may declare "Predictions encoded as the four \`expect()\` calls in tests/e2e/<spec>.spec.ts; outcomes recorded inline" and skip rewriting them here.)_
+
+| # | Prediction | Rationale (from plan.md / build.md / prompt / priors) | Verification path | Outcome |
+| --- | --- | --- | --- | --- |
+| P-1 | _e.g. "AC-3's toast will not render because build.md GREEN cited only the click handler, not the toast component"_ | _e.g. "build.md TDD log shows the click handler unit-tested in isolation; no integration test exercises the toast"_ | _Playwright spec asserts toast text after submit click_ | _confirmed / refuted / partial_ |
+| P-2 | _e.g. "Dark-mode contrast on the new badge component will fail WCAG AA"_ | _e.g. "plan.md NFR > accessibility names WCAG AA; AC-2 added a new badge but build.md does not cite a contrast check"_ | _browser-mcp screenshot + a11y panel inspection_ | _confirmed / refuted / partial_ |
+| P-3 | _e.g. "Form submission will leak a console error because plan.md AC-1 rollback names a fetch error path that build.md did not exercise"_ | _e.g. "plan.md AC-1 rollback line vs build.md AC-1 GREEN evidence"_ | _DevTools Console tab observation_ | _confirmed / refuted / partial_ |
+
+## §4. Per-AC evidence
+
+_(One block per UI-tagged AC. Status semantics: \`pass\` requires evidence to ACTUALLY show the AC's behavioural clause met — verbatim verb match. A "page loaded" screenshot does NOT satisfy "user sees toast after submit". \`fail\` means evidence shows the behaviour not met; \`pending-user\` is reserved for \`evidence_tier == manual\` until the user confirms.)_
+
+### AC-1: _<ac summary copied verbatim from plan.md AC table>_
+
+- **Surface:** _<ui | web | mixed: ui+api | …>_
+- **Verification:** _<playwright | browser-mcp | manual>_
+- **Evidence:**
+  - For \`playwright\`: \`tests/e2e/<slug>-<ac>.spec.ts\` — exit code: 0 — last 3 lines:
+    \`\`\`text
+    Running 1 test using 1 worker
+      ✓ user sees toast after submitting form (1.4s)
+    1 passed (1.5s)
+    \`\`\`
+  - For \`browser-mcp\`: \`flows/<slug>/qa-assets/AC-1-1.png\` + observations: _<one paragraph: what was clicked, what rendered, what was inspected (console / network / a11y)>_
+  - For \`manual\`: numbered steps below
+    \`\`\`text
+    1. Open http://localhost:3000/invites.
+    2. Click the "Refresh" button in the top-right.
+    3. Expect the list to re-fetch within 1s; toast "Refreshed" appears at the bottom-right for 3s.
+    \`\`\`
+- **Status:** _<pass | fail | pending-user>_
+
+### AC-2: _<ac summary>_
+
+_(Repeat the block above for each UI-tagged AC. If a single AC has multiple UI behavioural clauses, you may number the Evidence rows AC-2-1, AC-2-2 — keep the Status row at the AC level (pass iff every numbered row is pass).)_
+
+## §5. Findings (failures only)
+
+_(One F-N row per AC whose \`Status\` is \`fail\`. \`required\` blocks the iterate hand-off — slice-builder MUST address; \`fyi\` rides into review as a secondary observation. Rows whose Status is \`pass\` produce NO findings; §4 evidence is the proof.)_
+
+| F-N | Severity | AC | What failed | Recommended fix | Status |
+| --- | --- | --- | --- | --- | --- |
+| F-1 | _required / fyi_ | AC-3 | _e.g. "Toast did not render after submit click; DevTools Console showed 'TypeError: showToast is not a function' at src/components/InviteForm.tsx:42"_ | _e.g. "Wire up the useToast() hook; the form imports the type but not the function. See plan.md AC-3 rollback line for the fallback UI."_ | _open_ |
+
+## §6. Verdict
+
+\`\`\`text
+Verdict: <pass | iterate | blocked>
+Evidence tier: <playwright | browser-mcp | manual>
+Predictions: <N made; N_confirmed confirmed, N_refuted refuted, N_partial partial>
+UI ACs verified: <N total; N_pass pass, N_fail fail, N_pending pending-user>
+Findings: <N total; N_required required, N_fyi fyi>
+Iteration: <N>/1
+Confidence: <high | medium | low>
+Confidence rationale: <one line; required when Confidence != high>
+\`\`\`
+
+**Verdict rules:**
+
+- **\`pass\`** — every UI AC has \`Status: pass\`; no \`required\` findings. Orchestrator advances to review. The reviewer's \`qa-evidence\` axis re-reads this artifact.
+- **\`iterate\`** — at least one UI AC has \`Status: fail\` AND the §5 \`Recommended fix\` column articulates what would make it pass. Orchestrator bounces to slice-builder with §7 Hand-off as additional context. Hard-capped at one iterate (\`qaIteration: 0 → 1\`); a second iterate surfaces the user picker.
+- **\`blocked\`** — browser tools unavailable AND at least one UI AC requires manual user action; OR every UI AC has \`Status: pending-user\` with \`evidence_tier: manual\`. Orchestrator surfaces the user picker (\`proceed-without-qa-evidence\` / \`pause-for-manual-qa\` / \`skip-qa\`).
+
+## §7. Hand-off
+
+_(For \`iterate\`: cite each \`required\` finding by F-N + AC + recommended fix. slice-builder reads this verbatim when re-dispatched in fix-only mode.)_
+
+_(For \`blocked\`: cite the picker arm the user should pick and what manual step they must run; OR what blocker must be lifted before qa can re-run.)_
+
+_(For \`pass\`: write \`No hand-off required; proceed to review.\`)_
+
+### For iterate verdict — slice-builder fix-only context
+
+- _F-1 (AC-3) → wire up the \`useToast()\` hook in \`src/components/InviteForm.tsx:42\`; rerun build, then re-dispatch qa-runner (iteration 1)._
+
+### For blocked verdict — user picker context
+
+- _No browser tools available; manual steps for AC-3 require a logged-in user session. Recommend the user pick \`[pause-for-manual-qa]\` and follow the §4 manual steps; once confirmed, the orchestrator stamps \`Status: pass\` on AC-3 and flips verdict to \`pass\`._
+
+## Summary — qa-runner
+
+### Changes made
+
+- _N UI ACs covered (M pass, K fail, L pending-user)._
+- _N predictions recorded (M confirmed, K refuted, L partial)._
+- _N findings catalogued (M required, K fyi)._
+- _Evidence tier: <playwright | browser-mcp | manual>._
+- _Verdict: pass | iterate | blocked._
+
+### Things I noticed but didn't touch
+
+- _Anything observed during the qa pass that is outside qa-runner's lane (e.g. "the dev server emitted a 'sourcemap missing' console warning unrelated to the slug; flagging for a future infra slug, not raising as F-N here")._
+
+### Potential concerns
+
+- _Anything the qa-runner could not verify and the orchestrator may want to surface to the user (e.g. "AC-2's mobile viewport behaviour was untested because the available browser MCP did not expose viewport resizing; recommend a manual phone check before ship")._
+`;
+
 const SHIP_TEMPLATE = `---
 slug: SLUG-PLACEHOLDER
 stage: ship
@@ -993,6 +1143,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
   { id: "critic", fileName: "critic.md", description: "v8.42 critic template — critic step falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ac_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), AC self-audit, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
   { id: "plan-critic", fileName: "plan-critic.md", description: "v8.51 plan-critic template — pre-implementation adversarial pass between ac-author and slice-builder. Frontmatter (slug, stage=plan-critic, posture_inherited, ac_mode, ac_count, dispatched_at, iteration, predictions_made, findings, verdict). Body: goal coverage, granularity, dependency accuracy, parallelism feasibility, risk catalog, pre-commitment predictions, verdict (pass | revise | cancel), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed revise loop. Verdict: pass (advance to slice-builder), revise (bounce to ac-author once), cancel (user picker).", body: PLAN_CRITIC_TEMPLATE },
+  { id: "qa", fileName: "qa.md", description: "v8.52 qa-runner template — behavioural-QA pass for UI surfaces between build and review. Frontmatter (slug, stage=qa, specialist=qa-runner, dispatched_at, iteration, surfaces, evidence_tier, ui_acs_total/pass/fail/pending, predictions_made, findings, verdict). Body: surfaces under QA, browser tool detection, §3 pre-commitment predictions (3-5), per-AC evidence (one block per UI-tagged AC with Status pass/fail/pending-user), findings (failures only), verdict (pass | iterate | blocked), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed iterate loop. Verdict: pass (advance to review), iterate (bounce to slice-builder once), blocked (user picker — browser tools unavailable AND manual steps required).", body: QA_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },

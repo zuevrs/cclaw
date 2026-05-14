@@ -835,6 +835,148 @@ A state file with \`currentStage: "plan"\` AND \`lastSpecialist: "ac-author"\` A
 The migration is one-pass and idempotent — a slug whose plan-critic has already run shows \`planCriticVerdict\` set, so the legacy branch is never re-entered.
 `;
 
+const QA_STAGE = `# On-demand runbook — qa step (v8.52+)
+
+The orchestrator opens this runbook **on every slice-builder GREEN slim-summary return** when the v8.52 qa gate evaluates to true. \`qa-runner\` is the v8.52 behavioural-acceptance specialist that runs between \`build\` and \`review\` on UI-touching slugs in non-inline mode. It walks the **rendered page** (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. The contract that drives the dispatch lives in \`.cclaw/lib/agents/qa-runner.md\`; this runbook covers what the orchestrator does *around* the dispatch.
+
+Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires on stop-the-line) and from \`reviewer.md > qa-evidence axis\` (post-qa cross-check that qa.md rows match the diff). The three together close the behavioural-QA gap that pre-v8.52 cclaw only handled implicitly through the reviewer's nine-axis pass.
+
+## Gating (the three AND conditions — orchestrator enforces deterministically)
+
+qa-runner runs ONLY when ALL of these hold:
+
+1. \`triage.surfaces\` includes at least one of \`"ui"\` or \`"web"\` (CLI / library / API / data / infra / docs-only slugs structurally skip qa).
+2. \`triage.acMode != "inline"\` (trivial / one-shot slugs skip qa; inline budget cannot afford a structured pass).
+3. \`qaIteration < 1\` (hard cap — a third dispatch is structurally not allowed; the orchestrator surfaces the iterate-cap-reached picker instead).
+
+For any other combination, qa-runner is **structurally skipped**. The orchestrator advances directly from slice-builder's GREEN slim summary to reviewer dispatch, as today. The gate is **AND** across all three; widening any condition (e.g. running qa on \`acMode: inline\`) is a v8.53+ scope decision, not a within-slug runtime call.
+
+Backwards compat: a pre-v8.52 flow whose \`triage.surfaces\` field is absent reads as \`["other"]\` and skips qa — the orchestrator does not retro-fit qa onto legacy slugs.
+
+## Dispatch envelope
+
+\`\`\`
+Dispatch qa-runner
+─ Required first read: .cclaw/lib/agents/qa-runner.md  (your contract — gate, browser-tool hierarchy, evidence rubric, verdict semantics, slim summary)
+─ Required second read: .cclaw/lib/skills/qa-and-browser.md  (the cross-cutting QA discipline; tier definitions, evidence requirements, anti-rationalizations)
+─ Stage: qa
+─ Slug: <slug>
+─ AC mode: <strict | soft>  (gate enforces non-inline; inline is structurally impossible here)
+─ Surfaces: <list from triage.surfaces — e.g. ["ui"], ["web"], ["ui", "api"]>
+─ UI ACs: <list of AC ids whose touchSurface includes UI files, computed from plan.md AC table>
+─ Iteration: <0 | 1>  (0 on first dispatch; 1 on the one allowed iterate loop)
+─ Findings to address (iteration 1 only): <verbatim §7 hand-off block from the iter-0 qa.md>
+─ Inputs the sub-agent reads after the contract + skill:
+    - .cclaw/state/flow-state.json (triage)
+    - .cclaw/flows/<slug>/plan.md (AC table with touchSurface column)
+    - .cclaw/flows/<slug>/build.md (GREEN evidence — what the slice-builder already verified)
+    - .cclaw/flows/<slug>/qa.md (iter-0 artifact, when re-dispatching at iter 1)
+    - .cclaw/lib/templates/qa.md
+    - CONTEXT.md at the project root, if it exists
+─ Output contract:
+    - .cclaw/flows/<slug>/qa.md (single-shot — overwrite on re-dispatch, no append-only ledger)
+    - .cclaw/flows/<slug>/qa-assets/<ac-id>-<n>.png (screenshots, only when evidence_tier == browser-mcp)
+    - tests/e2e/<slug>-<ac>.spec.ts (Playwright specs, only when evidence_tier == playwright AND project ships Playwright)
+    - return a slim summary block (≤7 lines)
+    - DO NOT mutate flow-state.json — only the orchestrator touches it
+─ Forbidden:
+    - edit production source (src/**) — qa-runner is read-only; slice-builder owns production fixes
+    - edit plan.md / build.md / review.md / flow-state.json
+    - dispatch other specialists (composition is the orchestrator's job)
+    - npm install Playwright as a side effect (downgrade to Tier 2 / 3 + surface a fyi finding instead)
+    - exceed 10k tokens (input + output combined; itself a finding when approached)
+\`\`\`
+
+## Verdict handling (slim summary → orchestrator routing)
+
+qa-runner returns one of three verdicts. The orchestrator branches on (verdict, iteration):
+
+| verdict | iteration | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
+| --- | --- | --- | --- | --- |
+| \`pass\` | 0 or 1 | \`"qa"\` → advance to \`"review"\` | step pauses end-of-stage; auto chains to review | no user gate; advance straight to reviewer dispatch. The reviewer's \`qa-evidence\` axis re-reads qa.md and cross-checks each row against the diff. \`fyi\` findings ride along as advisory notes. |
+| \`iterate\` | 0 | stays \`"qa"\`, \`lastSpecialist: "qa-runner"\` | both modes proceed silently | dispatch \`slice-builder\` again in **fix-only** mode, with qa.md §7 hand-off block prepended to the dispatch envelope's \`Inputs\` line. slice-builder addresses each \`required\` finding (RED → GREEN cycle for the failed UI behaviour), then the orchestrator re-runs the build verification cycle and re-dispatches qa-runner (iteration 1). |
+| \`iterate\` | 1 | stays \`"qa"\` | both modes hard-gate | surface the iterate-cap-reached user picker: \`[cancel]\` (out-of-band \`/cc-cancel\`), \`[accept-warnings-and-proceed-to-review]\` (advance to reviewer anyway; the surviving \`required\` findings ride into review.md as evidence the reviewer's \`qa-evidence\` axis will fire on), \`[re-design]\` (route back to design phase Phase 1 with the surfaced UI constraints). |
+| \`blocked\` | 0 or 1 | stays \`"qa"\` | both modes hard-gate | surface the blocked user picker IMMEDIATELY: \`[proceed-without-qa-evidence]\` (advance to reviewer with qa.md noting the gap; \`qa-evidence\` axis fires \`required\`), \`[pause-for-manual-qa]\` (user follows qa.md §4 manual-steps blocks, then the orchestrator stamps Status: pass on confirmed ACs and re-evaluates verdict), \`[skip-qa]\` (advance to reviewer; qa.md frontmatter records \`evidence_tier: manual\` + \`verdict: blocked\` for the audit trail). No silent fallback — \`blocked\` means qa could not actually run. |
+
+**Confidence: low** in the qa-runner's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The qa-runner MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator offers \`Expand qa-runner\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
+
+## Iteration cap enforcement
+
+- \`qaIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return.
+- The orchestrator dispatches qa-runner **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`iterate\` from iter 0). A third dispatch is structurally not allowed — the orchestrator surfaces the iterate-cap-reached picker instead.
+- A flow that goes \`iterate\` (iter 0) → slice-builder fix → \`iterate\` (iter 1) is the canonical "1 iterate loop max" path. After the second \`iterate\`, the user picker decides whether to cancel, accept warnings and proceed to review, or re-design.
+- A \`blocked\` verdict at any iteration immediately surfaces the blocked picker; iteration does not advance until the user makes a choice.
+- The iteration cap is independent of \`reviewIterations\` (post-impl review loop), \`criticIteration\` (post-impl critic), and \`planCriticIteration\` (pre-impl plan-critic). All four counters are tracked separately.
+
+## FlowState patches
+
+**Immediately before dispatching qa-runner (iteration 0 OR iteration 1):**
+
+\`\`\`json
+{
+  "currentStage": "qa",
+  "lastSpecialist": "slice-builder"
+}
+\`\`\`
+
+(\`currentStage\` advances to \`"qa"\` because qa is a real stage in the v8.52 \`FLOW_STAGES\` enum, sitting between \`"build"\` and \`"review"\`.)
+
+**After qa-runner returns slim summary (orchestrator has read it, BEFORE user-gate decision):**
+
+\`\`\`json
+{
+  "currentStage": "qa",
+  "lastSpecialist": "qa-runner",
+  "qaIteration": <0 if first dispatch returning; 1 if second dispatch returning>,
+  "qaVerdict": "pass | iterate | blocked",
+  "qaEvidenceTier": "playwright | browser-mcp | manual | null",
+  "qaDispatchedAt": "<iso timestamp>"
+}
+\`\`\`
+
+(\`qaEvidenceTier\` is \`null\` only on a \`blocked\` verdict where no tier was actually exercised — e.g. browser tools unavailable and manual steps queued for the user. On \`pass\` and \`iterate\`, the tier is always one of \`playwright\` / \`browser-mcp\` / \`manual\`.)
+
+**After pass verdict (advance to review):** \`currentStage\` advances to \`"review"\`. The qa fields stay; they are immutable for the rest of the flow. The reviewer's \`qa-evidence\` axis reads them.
+
+**After iterate verdict (iter 0, bounce to slice-builder fix-only):** \`currentStage\` stays \`"qa"\`; \`lastSpecialist\` is patched back to \`"slice-builder"\` only after slice-builder's fix-only dispatch returns its slim summary. qa.md stays on disk; slice-builder's next dispatch reads §7 hand-off. After the fix-only slice-builder returns GREEN, the orchestrator re-dispatches qa-runner (iteration 1) — \`qaIteration\` increments at that point.
+
+**After blocked verdict / iterate-cap picker resolution:** the user's pick drives the next state transition (\`/cc-cancel\` clears the flow; \`[re-design]\` resets to design Phase 1; \`[accept-warnings-and-proceed-to-review]\` advances \`currentStage\` to \`"review"\` despite the open findings; \`[skip-qa]\` or \`[proceed-without-qa-evidence]\` also advances to \`"review"\` with qa.md recording the gap). The qa fields stay verbatim as the audit trail.
+
+## Reviewer cross-check (qa-evidence axis)
+
+After the qa pass completes (or is overridden), the reviewer's v8.52 \`qa-evidence\` axis cross-checks the artifact against the diff:
+
+1. **For every AC whose \`touchSurface\` includes a UI file**: the reviewer expects a matching \`qa.md > §4 Per-AC evidence\` row.
+2. **Missing row** → reviewer fires a \`required\` finding (axis: \`qa-evidence\`, severity: \`required\`).
+3. **Row with \`Status: fail\`** (qa returned \`pass\` despite a failed AC — should never happen if qa-runner is correct, but the reviewer cross-checks defensively) → reviewer fires a \`required\` finding citing the contradiction.
+4. **Row with \`Status: pending-user\`** (manual tier, blocked verdict overridden) → reviewer fires a \`fyi\` finding flagging the weakest evidence tier.
+5. **Silent tier downgrade** (qa.md frontmatter records \`evidence_tier: manual\` but \`package.json\` ships Playwright; OR \`evidence_tier: browser-mcp\` but no MCP was actually exercised) → reviewer fires a \`required\` finding citing the missed tier.
+
+The axis is the 9th explicit axis (10th with the gated \`nfr-compliance\` axis). The reviewer's slim-summary axes counter includes \`qae=N\` for the qa-evidence finding count.
+
+## What qa-runner CANNOT do (read this before authoring the envelope)
+
+- Edit any production source file (\`src/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\` / \`flow-state.json\`. The only files qa-runner writes are: \`.cclaw/flows/<slug>/qa.md\`, screenshots under \`.cclaw/flows/<slug>/qa-assets/\`, and (optionally) Playwright specs under \`tests/e2e/<slug>-<ac>.spec.ts\` — and the last only when the project already ships Playwright.
+- Author production-code fixes for failed UI ACs. slice-builder owns production fixes; qa-runner surfaces failures in §5 Findings + §7 Hand-off and lets the orchestrator dispatch slice-builder.
+- Commit, push, rebase, or merge. qa-runner owns no git operations except the implicit commit that lands the Playwright spec it authored (if any) — the slice-builder picks that up at the next iterate cycle.
+- Dispatch other specialists. Composition is the orchestrator's job.
+- Exceed 10k input+output tokens. Approaching the cap is itself a finding (\`confidence: low\`, recommend split).
+- Pretend qa ran when it could not. \`blocked\` is the right verdict when browser tools are unavailable; never write \`pass\` against an AC you could not actually verify.
+- Silently install Playwright. If the project does not ship Playwright, downgrade to Tier 2 / 3 and surface a \`fyi\` finding recommending a follow-up "add Playwright" slug — do not grow the dependency footprint as a qa side effect.
+- Write findings about code quality. Quality belongs to the reviewer's nine-axis pass; qa-runner findings are strictly about behavioural verification of UI rendering.
+
+## Legacy migration (pre-v8.52 \`flow-state.json\`)
+
+A state file with \`currentStage: "build"\` AND \`lastSpecialist: "slice-builder"\` AND no \`qaVerdict\` field is treated as **pre-qa intermediate**:
+
+- If the slug satisfies the v8.52 gate (\`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.acMode != "inline"\`): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.52) detected; qa-runner will run on next /cc.\`) and dispatches qa-runner before advancing to reviewer.
+- If the slug does NOT satisfy the gate (\`triage.surfaces\` is absent / empty / non-UI, OR \`triage.acMode == "inline"\`): no migration; qa-runner was structurally never going to run on this slug, advance to reviewer as today. \`triage.surfaces\` absent is treated as \`["other"]\` (the canonical no-QA-gating fallback).
+
+The migration is one-pass and idempotent — a slug whose qa-runner has already run shows \`qaVerdict\` set, so the legacy branch is never re-entered.
+
+For slugs where \`triage.surfaces\` was never populated (the field was added in v8.52 and pre-v8.52 triage prompts did not emit it), the orchestrator does NOT retro-populate the field on read — leaving \`surfaces\` absent is the canonical "this was a pre-v8.52 slug, qa was never on the table" signal. The qa gate evaluates absent-surfaces as the empty list and skips dispatch.
+`;
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -919,6 +1061,12 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "plan-critic-stage.md",
     title: "Plan-critic step (v8.51+)",
     body: PLAN_CRITIC_STAGE
+  },
+  {
+    id: "qa-stage",
+    fileName: "qa-stage.md",
+    title: "QA step (v8.52+)",
+    body: QA_STAGE
   }
 ];
 

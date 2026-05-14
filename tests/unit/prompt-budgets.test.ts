@@ -64,8 +64,16 @@ const PROMPT_BUDGETS: PromptBudget[] = [
   {
     id: "reviewer",
     body: REVIEWER_PROMPT,
-    maxLines: 660,
-    maxChars: 62000
+    // v8.52 raised the reviewer budget from 660 lines / 62000 chars to
+    // 690 lines / 68000 chars to absorb the new qa-evidence axis
+    // (gated; sub-checks 1-3, anti-rationalizations, slim-summary
+    // counter update with `qae=N`, `qa.md` named in Inputs). The axis
+    // body itself is ~40 lines and ~4k chars; the surrounding axis-
+    // table row and slim-summary counter prose add ~5 lines and ~300
+    // chars. Growth is justified in CHANGELOG.md (v8.52 — qa-and-
+    // browser stage; reviewer axis).
+    maxLines: 690,
+    maxChars: 68000
   },
   {
     id: "security-reviewer",

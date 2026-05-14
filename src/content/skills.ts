@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
  * - `triage`   — detect + triage steps (gate + persistence)
  * - `plan`     — design + ac-author (preflight / dispatch)
  * - `build`    — slice-builder (dispatch)
+ * - `qa`       — qa-runner (v8.52, on-demand; UI surfaces only)
  * - `review`   — reviewer / security-reviewer (dispatch)
  * - `ship`     — reviewer release + compound-and-ship
  * - `compound` — runCompoundAndShip's knowledge write loop
@@ -20,6 +21,7 @@ export type AutoTriggerStage =
   | "triage"
   | "plan"
   | "build"
+  | "qa"
   | "review"
   | "ship"
   | "compound"
@@ -257,6 +259,25 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     body: readSkill("debug-and-browser.md")
   },
   {
+    id: "qa-and-browser",
+    fileName: "qa-and-browser.md",
+    description: "v8.52 — acceptance-discipline sibling of debug-and-browser. Drives the qa-runner specialist's per-UI-AC verification on the v8.52 qa stage. Browser tool hierarchy (Playwright > browser-MCP > manual), one-evidence-per-UI-AC rubric, 3-5 pre-commitment predictions before verification, manual-step fallback when no browser tools available. Verdict semantics: pass / iterate (max 1) / blocked (browser tools unavailable AND manual user step required). Reviewer cross-checks the artifact via the v8.52 qa-evidence axis.",
+    triggers: [
+      "stage:qa",
+      "specialist:qa-runner",
+      "triage.surfaces:ui",
+      "triage.surfaces:web",
+      "ac_mode:strict",
+      "ac_mode:soft",
+      "touch-surface:ui",
+      "diff:tsx|jsx|vue|svelte|html|css",
+      "specialist:slice-builder",
+      "specialist:reviewer"
+    ],
+    stages: ["build", "qa", "review"],
+    body: readSkill("qa-and-browser.md")
+  },
+  {
     id: "api-evolution",
     fileName: "api-evolution.md",
     description: "v8.16 merge of api-and-interface-design + breaking-changes. Design phase's checklist (Phase 4) for public interfaces (Hyrum's Law: pin shape / order / silence / timing; one-version rule; untrusted third-party validation; two-adapter rule; consistent error model) AND the breaking-change discipline that manages an existing interface's deprecation (Churn Rule, Strangler Pattern, Zombie Code lifecycle, coexistence rules, CHANGELOG template).",
@@ -332,6 +353,7 @@ export const AUTO_TRIGGER_DISPATCH_STAGES: ReadonlyArray<Exclude<AutoTriggerStag
   "triage",
   "plan",
   "build",
+  "qa",
   "review",
   "ship",
   "compound"
@@ -388,6 +410,7 @@ export function buildAutoTriggerBlock(stage?: AutoTriggerStage): string {
     "triage",
     "plan",
     "build",
+    "qa",
     "review",
     "ship",
     "compound",

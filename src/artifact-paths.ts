@@ -7,6 +7,7 @@ export type ArtifactStage = FlowStage | "decisions" | "learnings" | "pre-mortem"
 export const ARTIFACT_FILE_NAMES: Record<ArtifactStage, string> = {
   plan: "plan.md",
   build: "build.md",
+  qa: "qa.md",
   review: "review.md",
   critic: "critic.md",
   ship: "ship.md",
