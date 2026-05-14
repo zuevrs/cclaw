@@ -3,7 +3,7 @@ import path from "node:path";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
-import { initCclaw, uninstallCclaw } from "./install.js";
+import { initCclaw, renderHarnessRulesGuidance, uninstallCclaw } from "./install.js";
 import {
   configureLogger,
   error as logError,
@@ -377,6 +377,13 @@ async function dispatchInstallAction(
     onProgress: makeProgressPrinter(useColor)
   });
   writeOut(renderSummary(result.counts, useColor));
+  // v8.55 — per-harness ambient rules activation guidance. Cursor is
+  // auto-load; Claude Code / Codex / OpenCode need a one-line
+  // `@`-reference from the user's root memory file (CLAUDE.md /
+  // AGENTS.md). Emitting between the summary block and the final
+  // "install complete" line keeps the message in the post-install
+  // vertical rhythm without disrupting the existing counts table.
+  writeOut(renderHarnessRulesGuidance(result.installedHarnesses));
   info(`[cclaw] install complete. Harnesses: ${result.installedHarnesses.join(", ")}`);
   return 0;
 }
