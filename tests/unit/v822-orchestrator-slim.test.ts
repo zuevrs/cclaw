@@ -154,12 +154,12 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
 });
 
 describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", () => {
-  it("AC-4 — body alone is ≤48k chars (was ~52k on v8.21; v8.42 lifted to absorb the Hop 4.5 critic pointer)", () => {
+  it("AC-4 — body alone is ≤49k chars (was ~52k on v8.21; v8.42 lifted to absorb the Hop 4.5 critic pointer; v8.47 lifted by ~300 chars for the design pacing prose)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 48000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth); v8.42 added ~2k chars for the new critic stage pointer (5-bullet block; ~95% of the new content is in critic-stage.md runbook). Do not raise this further without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(48000);
+      `start-command body is ${charCount} chars (budget 49000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth); v8.42 added ~2k chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare the new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook, only the orchestrator's dispatch envelope reference was bumped). Do not raise this further without a CHANGELOG note.`
+    ).toBeLessThanOrEqual(49000);
   });
 
   it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {

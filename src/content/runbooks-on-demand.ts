@@ -332,7 +332,7 @@ In \`soft\` mode the adversarial pass is **skipped** by default — the lighter-
 
 const HANDOFF_ARTIFACTS = `# On-demand runbook — handoff artifacts (HANDOFF.json + .continue-here.md)
 
-Open this runbook **after every stage exit** — both at the end of plan / build / review / ship and at every design Phase 7 sign-off (which closes the discovery sub-phase under \`plan\`). Design's internal Phase 0-6 pauses are conversation-only and do NOT trigger a handoff rewrite (those are mid-turn, mid-dialog states inside the same orchestrator context; HANDOFF.json is for resume-across-sessions checkpoints).
+Open this runbook **after every stage exit** — both at the end of plan / build / review / ship and at every design Phase 7 sign-off (which closes the discovery sub-phase under \`plan\`). Design's Phase 1 batched-ask pause is conversation-only and does NOT trigger a handoff rewrite (it is a mid-turn, mid-dialog state inside the same orchestrator context; HANDOFF.json is for resume-across-sessions checkpoints).
 
 ## Why two files
 
@@ -461,14 +461,15 @@ The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=
 
 ## Full two-step discovery (default; auto-skip declined or its conditions failed)
 
-> **Discovery never auto-chains.** \`design\` runs in main context and pauses end-of-turn between each of its internal phases (Phase 0 through Phase 7) regardless of \`triage.runMode\`. \`auto\` runMode applies to the plan→build→review→ship transitions only, **not** inside the design phase. The ac-author dispatch that follows the design's Phase 7 sign-off is also a step-mode pause unless \`triage.runMode == auto\`.
+> **Discovery never auto-chains across stages.** \`design\` runs in main context with the **v8.47+ two-turn-max** pacing: design pauses at MOST twice per flow — Phase 1 (Clarify, conditional) and Phase 7 (Sign-off, mandatory) — regardless of \`triage.runMode\`. \`auto\` runMode applies to plan→build→review→ship transitions only, **not** inside design's internal phase chain. The ac-author dispatch that follows the design's Phase 7 sign-off is a step-mode pause unless \`triage.runMode == auto\`.
 
 1. **Activate \`design\` in main context** (read \`.cclaw/lib/agents/design.md\` as a skill the orchestrator itself follows; do NOT dispatch as a sub-agent).
    - The orchestrator picks the **posture** before activation: \`deep\` when any of (security-sensitive keyword, \`security_flag\` preset, irreversibility / migration / schema / breaking-change / data-loss / payment / gdpr / pci in the prompt, \`refines:\` points to a slug with \`security_flag: true\`); \`guided\` otherwise. The design prompt may escalate to \`deep\` mid-flight if Phase 3 surfaces irreversibility the orchestrator missed.
-   - The orchestrator follows the design.md prompt phases 0-7 directly in this conversation. Each phase that emits user-facing output (Phase 1 Clarify, Phase 2 Frame, Phase 3 Approaches, Phase 4 Decisions one D-N per turn, Phase 5 Pre-mortem deep only, Phase 7 Sign-off) ends the turn with an \`askUserQuestion\` picker; Phase 0 (Bootstrap) and Phase 6 (Compose + self-review) are silent and flow directly into the next user-facing phase.
-   - Output: appends Frame, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, and Summary — design block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires. **No separate \`decisions.md\` is written; v8.14 inlined that file into the Decisions section of plan.md.**
-   - On Phase 7 \`approve & proceed\`: orchestrator patches \`lastSpecialist: "design"\` and \`plan.md\` frontmatter (\`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`) → **ends the turn**. The next \`/cc\` continues with ac-author.
-   - On Phase 7 \`revise\` / \`save & cancel\`: orchestrator handles per the design prompt's instructions; it does not patch \`lastSpecialist\` until the user actually signs off.
+   - The orchestrator follows the design.md prompt phases 0-7 directly in this conversation. **v8.47+ pacing:** only **Phase 1** (Clarify, when 0-3 clarifying questions are needed — one batched \`askUserQuestion\` call) and **Phase 7** (Sign-off, always — three-option picker: \`approve\` / \`request-changes\` / \`reject\`) emit user-facing output and end the turn. Phases 0 (Bootstrap), 2 (Frame), 3 (Approaches), 4 (Decisions), 5 (Pre-mortem, deep only), 6 (Compose + self-review), and 6.5 (ADR proposal) all execute SILENTLY in the same orchestrator turn — append plan.md sections as you go; do not pause.
+   - Output: appends Frame, Spec (v8.46), optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, and Summary — design block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires. **No separate \`decisions.md\` is written; v8.14 inlined that file into the Decisions section of plan.md.**
+   - On Phase 7 \`approve\`: orchestrator patches \`lastSpecialist: "design"\` and \`plan.md\` frontmatter (\`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`) → **ends the turn**. The next \`/cc\` continues with ac-author.
+   - On Phase 7 \`request-changes\`: design re-runs the affected silent phases (Phase 2 / 3 / 4 / 5 / 6) internally and re-emits Phase 7 with the revised plan.md. **Revise cap = 3 iterations**; on the 4th request, design escalates explicitly (\`approve as-is\` / \`reject\` / \`revise one more time\`). Orchestrator does not patch \`lastSpecialist\` until the user picks \`approve\`.
+   - On Phase 7 \`reject\`: design appends a brief \`## Design rejected\` note to plan.md and surfaces the rejection. Orchestrator does NOT patch \`lastSpecialist: design\`; the user is routed to \`/cc-cancel\` or re-triage.
 2. **Dispatch \`ac-author\`** as a normal sub-agent with the same contract as small/medium plan, plus an extra input: the design sections already in \`flows/<slug>/plan.md\`.
    - AC author now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The Frame / Approaches / Selected Direction / Decisions / Pre-mortem sections from design remain at the top of \`plan.md\`; ac-author appends its own sections below.
    - Orchestrator reads slim summary → patches \`lastSpecialist: "ac-author"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`). At this point the orchestrator follows \`triage.runMode\` for the plan→build transition: \`step\` ends the turn; \`auto\` chains immediately into the build dispatch.
@@ -494,7 +495,7 @@ If the user wants \`fix-only\` or \`show\` semantics, they say so in plain text 
 
 ## \`auto\` mode (autopilot; faster; recommended for \`inline\` / \`soft\` work)
 
-After every dispatch returns: (1) render the slim summary; (2) immediately dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS inside the design phase (per-phase pauses fire regardless of runMode; see \`runbooks/discovery.md\`).
+After every dispatch returns: (1) render the slim summary; (2) immediately dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS inside the design phase (v8.47+ pacing: Phase 1 conditional + Phase 7 mandatory pauses fire regardless of runMode; see \`runbooks/discovery.md\`).
 
 Stop unconditionally only on these **hard gates** (autopilot **always** asks here):
 
@@ -503,7 +504,7 @@ Stop unconditionally only on these **hard gates** (autopilot **always** asks her
 - \`reviewer\` returned \`cap-reached\` → see \`runbooks/cap-reached-recovery.md\`.
 - A slim summary has \`Confidence: low\` → see "Confidence as a hard gate" below.
 - About to run \`ship\` (last stage) → ask "Ship now?" once. Ship always confirms in autopilot.
-- Inside the design phase — pauses managed by design.md.
+- Inside the design phase — Phase 1 (Clarify, conditional) + Phase 7 (Sign-off, mandatory) pauses fire regardless of runMode (v8.47+ two-turn-max pacing; see design.md).
 
 Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green non-discovery stages. \`Cancel\` is **never** a clickable option; \`Stay paused\` (end turn) is the always-present safe-out.
 

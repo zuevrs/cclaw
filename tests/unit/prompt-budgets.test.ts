@@ -40,8 +40,20 @@ const PROMPT_BUDGETS: PromptBudget[] = [
   {
     id: "design",
     body: DESIGN_PROMPT,
+    // v8.47 raised the design budget from 32000 to 42000 chars (~31% bump). The
+    // two-turn-max pacing rewrite added: explicit [SILENT] / [ENDS TURN] markers
+    // on every phase header, a new Iron rule subsection warning against
+    // silent-phase pauses, Phase 7 fully rewritten with a three-option picker
+    // (approve / request-changes / reject) + 3-iteration revise cap + explicit-
+    // escalation prose for the 4th request + Design rejected handling, the
+    // anti-rationalization table grew by 2 rows (pause-to-confirm-Frame /
+    // ask-mid-flight-about-D-2), and Common pitfalls grew by 2 bullets
+    // (pause-between-silent-phases / request-changes-not-free-retry). Current
+    // size ~41k chars; 42000 leaves ~2.5% headroom. The growth is justified in
+    // CHANGELOG.md (v8.47 — design phases UX collapse); see CHANGELOG.md >
+    // 8.47.0 for the bump rationale.
     maxLines: 460,
-    maxChars: 32000
+    maxChars: 42000
   },
   {
     id: "ac-author",

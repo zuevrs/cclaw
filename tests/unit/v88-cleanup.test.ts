@@ -46,16 +46,17 @@ describe("v8.8 cleanup", () => {
       );
     });
 
-    it("v8.14: design Phase 1 (Clarify) replaces the brainstormer/architect interpretation-fork reads with live clarifying questions", () => {
+    it("v8.14 + v8.47: design Phase 1 (Clarify) replaces the brainstormer/architect interpretation-fork reads with live clarifying questions (v8.47 batches them in one ask)", () => {
       // v8.14 retired brainstormer and architect. design's Phase 1
-      // (Clarify) asks <=3 one-at-a-time clarifying questions IN the
-      // running orchestrator context instead of reading a pre-baked
-      // interpretationForks array. AC author / slice-builder still consume
-      // the field for legacy state files, but the new discovery path no
-      // longer writes to it.
+      // (Clarify) asks <=3 clarifying questions IN the running
+      // orchestrator context instead of reading a pre-baked
+      // interpretationForks array. v8.47 collapsed the per-question
+      // turn pattern (1 question per turn) into ONE batched
+      // structured-ask call (0-3 questions in a single call) so the
+      // user sees at most one Phase 1 turn.
       expect(SPECIALIST_PROMPTS["design"]).toMatch(/Phase 1 — Clarify/);
       expect(SPECIALIST_PROMPTS["design"]).toMatch(/at most three.{0,200}clarifying questions/i);
-      expect(SPECIALIST_PROMPTS["design"]).toMatch(/ask one|ONE question per turn|Ask ONE/i);
+      expect(SPECIALIST_PROMPTS["design"]).toMatch(/batched|ONE batched|single batched|0-3 questions/i);
     });
   });
 

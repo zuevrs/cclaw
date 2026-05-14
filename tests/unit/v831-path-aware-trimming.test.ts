@@ -88,12 +88,12 @@ const LARGE_RISKY_RUNBOOKS: string[] = [
 ];
 
 describe("v8.31 path-aware orchestrator trimming — body-only budget", () => {
-  it("AC-1 — orchestrator body alone is ≤ 48000 chars (was 45212 on v8.30; v8.42 lifted to absorb the Hop 4.5 critic stage pointer)", () => {
+  it("AC-1 — orchestrator body alone is ≤ 49000 chars (was 45212 on v8.30; v8.42 lifted to absorb the Hop 4.5 critic stage pointer; v8.47 lifted to absorb the design pacing prose)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 48000). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; v8.34 added ~2K chars for the mid-flight runMode toggle; v8.42 added ~2K chars for the new critic stage pointer (~95% of the new content is lifted to critic-stage.md runbook). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31/v8.34/v8.42 stop here to keep v8.24 / v8.21 tripwires unmodified.`
-    ).toBeLessThanOrEqual(48000);
+      `start-command body is ${charCount} chars (budget 49000). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; v8.34 added ~2K chars for the mid-flight runMode toggle; v8.42 added ~2K chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare design's new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31/v8.34/v8.42/v8.47 stop here to keep v8.24 / v8.21 tripwires unmodified.`
+    ).toBeLessThanOrEqual(49000);
   });
 
   it("AC-1 — orchestrator body alone is ≤ 485 lines (was 472 on v8.30; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer)", () => {
@@ -116,12 +116,12 @@ describe("v8.31 path-aware orchestrator trimming — body-only budget", () => {
 });
 
 describe("v8.31 path-aware orchestrator trimming — per-path budget envelopes", () => {
-  it("AC-2 — inline-path budget = body only; ≤ 48000 chars (v8.42 lifted to absorb the Hop 4.5 critic stage pointer)", () => {
+  it("AC-2 — inline-path budget = body only; ≤ 49000 chars (v8.42 lifted to absorb the Hop 4.5 critic stage pointer; v8.47 lifted to absorb the design pacing prose)", () => {
     const budget = pathBudget(INLINE_RUNBOOKS);
     expect(
       budget,
-      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 48000 (v8.31 = 42500 + v8.34 toggle docs + v8.42 critic stage pointer; inline does NOT open critic-stage.md since triage.path == ["build"] on inline).`
-    ).toBeLessThanOrEqual(48000);
+      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 49000 (v8.31 = 42500 + v8.34 toggle docs + v8.42 critic stage pointer + v8.47 design pacing; inline does NOT open critic-stage.md since triage.path == ["build"] on inline).`
+    ).toBeLessThanOrEqual(49000);
   });
 
   it("AC-2 — small-medium-path budget = body + 8 runbooks; ≤ 115000 chars (v8.42 added critic-stage.md)", () => {

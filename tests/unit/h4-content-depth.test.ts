@@ -100,11 +100,13 @@ describe("v8 content depth — H4 + H5 trim", () => {
     expect(DESIGN_PROMPT).toContain("Phase 7 — Sign-off");
   });
 
-  it("design prompt runs in main context (multi-turn) with guided/deep postures and step-only run-mode", () => {
+  it("design prompt runs in main context (v8.47 two-turn-max pacing) with guided/deep postures", () => {
     expect(DESIGN_PROMPT).toContain("MAIN ORCHESTRATOR CONTEXT");
     expect(DESIGN_PROMPT).toContain("guided");
     expect(DESIGN_PROMPT).toContain("deep");
-    expect(DESIGN_PROMPT).toContain("ALWAYS step");
+    // v8.47: replaced "ALWAYS step" with two-turn-max pacing (Phase 1 conditional
+    // + Phase 7 mandatory) while keeping the 7-phase structure.
+    expect(DESIGN_PROMPT).toMatch(/two-turn-at-most|at MOST twice|two-turn-max/i);
   });
 
   it("design prompt forbids writing code, AC, pseudocode (those are ac-author / slice-builder jobs)", () => {
