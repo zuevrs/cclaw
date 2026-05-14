@@ -18,19 +18,30 @@ const skillBody = (id: string): string => {
   return found.body;
 };
 
-describe("v8.11+v8.14 — discovery phases pause within design; design pauses end-of-turn", () => {
-  it("start-command says discovery sub-phase pauses regardless of runMode", () => {
-    expect(startBody).toMatch(/discovery never auto-chains/i);
-    expect(startBody).toMatch(/regardless of\s+\\?`?triage\.runMode\\?`?/i);
+describe("v8.11+v8.14+v8.47 — discovery phases run inside design; v8.47 two-turn-max pacing", () => {
+  it("start-command says design's Phase 1 + Phase 7 pauses fire regardless of runMode (v8.47 collapse)", () => {
+    // v8.11 + v8.14 originally required "Discovery never auto-chains"
+    // + "regardless of triage.runMode" because design paused at every
+    // internal phase (Phase 1-7). v8.47 narrowed that contract: design
+    // pauses at MOST twice (Phase 1 conditional + Phase 7 mandatory),
+    // and those two pauses still fire regardless of runMode. The
+    // start-command body must teach both halves of the new invariant.
+    expect(startBody).toMatch(/v8\.47\+ pacing/);
+    expect(startBody).toMatch(/at MOST twice/);
+    expect(startBody).toMatch(/regardless of\s+\\?`?runMode\\?`?|fire regardless of runMode/i);
   });
 
-  it("v8.14: design runs in main context across multiple phases, each pauses for user reply", () => {
+  it("v8.14 + v8.47: design runs in main context with two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory)", () => {
     // v8.14: the brainstormer -> architect -> ac-author three-step chain
-    // collapsed to design (main context, multi-turn) -> acAuthor. Each
-    // design phase ends the turn waiting for user reply. The orchestrator
-    // does not auto-chain inside design even when runMode=auto.
-    expect(DESIGN_PROMPT).toMatch(/ALWAYS step/);
-    expect(DESIGN_PROMPT).toMatch(/wait for user reply/i);
+    // collapsed to design (main context, multi-turn) -> ac-author. v8.47
+    // tightened the user-facing pacing from 6-10 turns down to at most
+    // two: Phase 1 (Clarify, conditional batched ask) and Phase 7
+    // (Sign-off, mandatory). Phases 2-6 + 6.5 are silent. The
+    // orchestrator does not auto-chain across design's Phase 7
+    // sign-off even when runMode=auto (next /cc continues with
+    // ac-author).
+    expect(DESIGN_PROMPT).toMatch(/at MOST twice|two-turn-at-most|two-turn-max/i);
+    expect(DESIGN_PROMPT).toMatch(/SILENT/);
     expect(startBody).toMatch(/next\s+\\?`?\/cc\\?`?\s+(?:invocation\s+)?(?:dispatches|continues with)\s+ac-author/i);
   });
 

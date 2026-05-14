@@ -1,5 +1,68 @@
 # Changelog
 
+## 8.47.0 — design phases UX collapse (6-10 user turns → 1-2 turns)
+
+### Why
+
+The pre-v8.47 design specialist (`src/content/specialist-prompts/design.ts`) ran a 7-phase user-collaborative protocol on the large-risky path (Bootstrap silently → Clarify 0-3 turns one-question-at-a-time → Frame 1 turn confirm → Approaches 1 turn pick A/B/C → Decisions N turns one-D-N-at-a-time → Pre-mortem 1 turn review → Compose silently → Sign-off 1 turn approve). That added up to **6-10 user turns** for a single large-risky slug BEFORE ac-author could even run.
+
+Reference designs (gstack office-hours, superpowers brainstorming, addy spec-driven-development) achieve similar analytical depth in 1-3 user turns by batching clarifying questions and surfacing the full composed design only once for review. v8.47 imports that pacing into cclaw's design specialist without reducing conceptual depth — all 7 phases still execute, all plan.md sections still get written, the pre-mortem still runs on deep posture, ADR triggers still fire, prior learnings are still consulted.
+
+### What changed
+
+**Design specialist now pauses for user input at MOST twice per design flow:**
+
+- **Phase 1 (Clarify) — conditional, single batched ask.** When clarifying questions are needed (the prompt has a real ambiguity that triage didn't resolve), design enumerates up to 3 questions and emits them in ONE batched `askUserQuestion` call. The pre-v8.47 pattern asked one question per turn (so 3 questions = 3 user turns); v8.47 batches them into one turn. When zero questions are needed, Phase 1 is skipped entirely — the user sees no Phase 1 surface at all.
+- **Phase 7 (Sign-off) — mandatory, single review.** Design composes the full plan.md design portion (Frame, Spec, Non-functional when triggered, Approaches + Selected Direction, Decisions inline, Pre-mortem on deep, Not Doing, Open questions, Summary — design) and emits the rendered design with a three-option structured ask: `approve` / `request-changes` / `reject`.
+
+**Phases 2-6 + 6.5 execute SILENTLY in the same orchestrator turn.** No `askUserQuestion` mid-flight. The phases still happen — design composes the Frame, analyzes 2-3 approaches and picks one with rationale, enumerates D-N decisions, runs the pre-mortem on deep posture, runs the self-review checklist, proposes ADRs on triggers — but it does all of that in one orchestrator turn between (a) the Phase 1 reply landing (or Phase 0 finishing when Phase 1 is skipped) and (b) the Phase 7 emit.
+
+**`request-changes` revise loop is capped at 3 iterations.** The user describes what to change ("swap D-2 to use streaming", "Frame should mention the dashboard widget", "pre-mortem missed the rate-limit risk"); design re-runs the affected silent phase(s) internally, updates plan.md in place, re-runs the self-review checklist, and re-emits Phase 7 with the revised design plus a one-line diff summary. On the 4th revise request, design escalates explicitly — emits a picker with `approve as-is` / `reject` / `revise one more time` — to avoid silent infinite-loop dialogues.
+
+**`reject` writes a `## Design rejected` note to plan.md** and surfaces the rejection to the orchestrator, which routes the user to `/cc-cancel` or re-triage.
+
+### What's preserved (depth, not pacing)
+
+- All 7 phases (Bootstrap, Clarify, Frame, Approaches, Decisions, Pre-mortem, Compose) + Phase 6.5 ADR + Phase 7 Sign-off still execute conceptually. Phase headers carry an explicit `[SILENT]` or `[ENDS TURN]` marker so the agent knows which phases pause the user and which run in the same orchestrator turn.
+- All plan.md sections still get filled: `## Frame`, `## Spec` (v8.46 mandatory), `## Non-functional` when triggered, `## Approaches`, `## Selected Direction`, `## Decisions` (D-1..D-N inline), `## Pre-mortem` (deep posture only), `## Not Doing`, `## Open questions`, `## Summary — design`.
+- ADR proposal logic (Phase 6.5) still runs when triggers fire (new public interface, persistence shape change, security boundary, new runtime dependency, architectural pattern + deep posture OR explicit `--adr`); proposed ADRs land at `docs/decisions/ADR-NNNN-<slug>.md` with status PROPOSED.
+- Posture detection (guided vs deep) is unchanged. Pre-mortem still skips on guided posture.
+- `triage.assumptions` handling stays correct: design Phase 0 + Phase 1 own the assumption surface on the large-risky path; pre-seeded assumptions are read as ground truth without re-prompting.
+- Prior learnings (`triage.priorLearnings`) are still consulted in Phase 1 / Frame as background context.
+- `repo-research` parallel dispatch in Phase 0 still works (brownfield + no prior `research-repo.md`).
+- 9-rule self-review checklist still gates Phase 7 (including the v8.46 Spec rule).
+- The Iron rule still forbids writing code / AC / pseudocode in design; v8.47 added one more clause: "if you find yourself wanting to pause mid-flight between Phases 2 and 6, STOP — those phases are SILENT in v8.47+".
+
+### What's not preserved (intentional)
+
+- **Fine-grained per-phase user steering.** Pre-v8.47, the user could redirect at every phase (revise frame, ask follow-up about approach, revise D-2 alternatives, add a pre-mortem entry). v8.47 collapses all of that into a single Phase 7 `request-changes` ask. The trade-off is the design as a whole gets reviewed once with full context rather than piecemeal — analogous to a code review on the final diff rather than commit-by-commit.
+
+### Files touched
+
+- `src/content/specialist-prompts/design.ts` (+144 / -168 net; 390 → 365 file lines; runtime `DESIGN_PROMPT` body grew from ~31500 chars → 41075 chars after the buildAutoTriggerBlock substitution) — the main rewrite. Opening summary updated ("single, multi-turn, user-collaborative phase" → "single, mostly-silent, two-turn-at-most user-collaborative phase"). Run-mode rewritten (was "ALWAYS step"; now "at most twice per flow — Phase 1 + Phase 7"). Iron rule gained a paragraph warning against silent-phase pauses. Phase headers gained explicit `[SILENT]` / `[ENDS TURN]` markers. Phase 1 instructions rewritten for batched ask (0-3 questions in one call). Phases 2-6 + 6.5 rewritten to remove all `askUserQuestion` references; each phase now writes its plan.md section then flows silently to the next. Phase 7 fully rewritten — three-option picker (`approve` / `request-changes` / `reject`), explicit revise-loop semantics with 3-iteration cap, explicit 4th-request escalation prose, `## Design rejected` handling on reject. Anti-rationalization table grew by 2 rows (pause-to-confirm-Frame / ask-mid-flight-about-D-2). Common pitfalls grew by 2 bullets (pause-between-silent-phases / request-changes-not-free-retry). Output schema and Composition sections updated for the new turn semantics.
+- `src/content/start-command.ts` (+357 chars / 6 lines net) — large-risky plan section explicitly declares the v8.47+ two-turn-max pacing; Phase 1 reference updated to "batched 0-3 questions"; auto-mode hard-gate list mentions "Phase 1 conditional ask + Phase 7 mandatory sign-off fire regardless of runMode" instead of "per-phase pauses fire regardless of runMode".
+- `src/content/runbooks-on-demand.ts` — `discovery.md` runbook updated to describe the v8.47 pacing (Phase 1 conditional + Phase 7 mandatory + revise loop with 3-iteration cap + reject path) instead of "design pauses end-of-turn between each of its internal phases"; `pause-resume.md` runbook reference to "per-phase pauses" updated to "Phase 1 + Phase 7 pauses"; `handoff-artifacts.md` runbook note about design's internal pauses updated to mention only Phase 1.
+- `src/content/specialist-prompts/ac-author.ts` (no changes) — ac-author runs as a sub-agent AFTER design's Phase 7 `approve`; nothing about ac-author's contract changed. The plan.md it reads still has the same sections it had pre-v8.47.
+- `tests/unit/v847-design-phases-collapse.test.ts` (new, +291 lines, 32 tripwires) — pins every invariant of the v8.47 contract: two-turn-max pacing declared, Phases 2-6 explicitly marked SILENT, Phase 1 + Phase 7 are the only ENDS-TURN phases, legacy "one phase per turn" / "ALWAYS step" framing removed, Phase 1 batched-ask shape (0-3 questions in one call, conditional skip, 3-question cap), Phase 7 three-option picker (approve / request-changes / reject) + 3-iteration revise cap + 4th-request escalation + Design rejected note, all 7 phases + Phase 6.5 + Phase 7 still in the prompt, all plan.md sections still authored, posture detection preserved, ADR logic preserved, prior learnings still consulted, repo-research parallel dispatch preserved, 9-rule self-review checklist preserved, Iron rule warns against silent-phase pauses, anti-rationalization table includes the new temptation rows, start-command's dispatch envelope reflects new pacing, discovery.md runbook describes the revise loop + reject path, ac-author untouched.
+- `tests/unit/h4-content-depth.test.ts` (+5 / -2) — "ALWAYS step" assertion replaced with "two-turn-at-most" / "at MOST twice" assertion.
+- `tests/unit/v811-cleanup.test.ts` (+10 / -7) — discovery-pause assertion updated for v8.47 pacing prose; the renamed describe block now reads "v8.11+v8.14+v8.47 — discovery phases run inside design; v8.47 two-turn-max pacing".
+- `tests/unit/v88-cleanup.test.ts` (+5 / -2) — Phase 1 assertion updated for batched-ask language ("ONE batched" / "single batched" / "0-3 questions") instead of "ask one" / "ONE question per turn".
+- `tests/unit/prompt-budgets.test.ts` — design `maxChars` bumped from 32000 → 42000 (~31% growth). See the test file comment for the per-section rationale.
+- `tests/unit/v822-orchestrator-slim.test.ts` (AC-4) — start-command body `maxChars` bumped from 48000 → 49000 (~2% growth) to absorb v8.47's ~300-char addition to the large-risky plan section.
+- `tests/unit/v831-path-aware-trimming.test.ts` (AC-1, AC-2) — same 48000 → 49000 bumps for the body-only budget and the inline-path budget (inline path reads body alone).
+
+### Tests
+
+1070 tests across 71 files, all green (+32 net from `v847-design-phases-collapse.test.ts`; +1 file count). Smoke runtime green. TypeScript strict mode green throughout.
+
+### Migration notes
+
+- **In-flight large-risky flows continue.** Resuming a pre-v8.47 design flow mid-Phase-N continues with the v8.47+ contract: the next orchestrator turn batches whatever phases remain and emits at Phase 7. The flow-state schema is unchanged; no migration is needed for `flow-state.json` or in-flight `plan.md` files.
+- **New flows use the new pacing.** Any `/cc <task>` invocation post-v8.47 that triages to large-risky and dispatches design will pause for user input at most twice (Phase 1 if needed, Phase 7 always). The user observes a single sign-off review instead of six-to-ten per-phase confirmations.
+- **No schema changes.** No new TypeScript types, no new YAML frontmatter keys, no new `flow-state.json` fields, no changes to `TriageDecision` or `AcceptanceCriterionState`. Phase 7's revise iteration count is recorded inline in plan.md under `## Open questions > revise_iterations: <N>` (a simple line, not a frontmatter field).
+- **No new specialist; no changes to ac-author / slice-builder / reviewer / critic / security-reviewer.** Only design's prompt body changed. ac-author dispatch contract is identical post-v8.47.
+- **Budget tripwires bumped, not removed.** Three tripwires moved (prompt-budgets design 32k → 42k; v8.22 + v8.31 start-command body 48k → 49k) with explicit rationale-in-message; the broader char-budget discipline is preserved.
+
 ## 8.46.0 — Spec section in plan.md + README accuracy rewrite
 
 ### Why

@@ -284,7 +284,7 @@ Wait for r/s (and n on collision). On \`r\`, jump back into pause/resume with th
 
 As of v8.21 there is no separate preflight step. The assumption-confirmation surface is folded into the first specialist's first turn:
 
-- **\`triage.complexity == "large-risky"\`** → design Phase 0 (Bootstrap → Phase 1 Clarify) owns it. Phase 0 reads pre-seeded \`triage.assumptions\` (triage seed: repo signals + most recent shipped slug) and either confirms inline in the Frame draft (Phase 2) or asks one clarifying question (Phase 1) when an assumption is load-bearing.
+- **\`triage.complexity == "large-risky"\`** → design Phase 0 (Bootstrap → Phase 1 Clarify) owns it. Phase 0 reads pre-seeded \`triage.assumptions\` (triage seed: repo signals + most recent shipped slug) and either confirms inline in the Frame draft (Phase 2) or asks 0-3 clarifying questions in ONE batched structured-ask call (Phase 1, v8.47+) when assumptions are load-bearing.
 - **\`triage.complexity == "small-medium"\`** → ac-author Phase 0 (mini-section in \`agents/ac-author.md\`) opens with: "I'm working from these assumptions: …. Tell me if any is wrong before I draft the plan." Generates 3-7 items from triage summary + task descriptor, waits one turn; silence = accept.
 - **\`triage.path == ["build"]\`** (inline / trivial) → no assumption surface at all.
 
@@ -346,9 +346,9 @@ Specialist: \`ac-author\`. Wrapper skills: \`plan-authoring.md\` (always) + \`so
 
 ##### Plan stage on large-risky
 
-When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the plan stage **expands** into a two-step discovery sub-phase: \`design\` (main context, multi-turn, Phases 0-7) → \`ac-author\` (sub-agent). \`currentStage\` stays \`"plan"\` for both; \`lastSpecialist\` rotates through \`design\` then \`ac-author\`. Discovery never auto-chains: design pauses end-of-turn between each of its internal phases regardless of \`triage.runMode\`. The next \`/cc\` invocation continues with ac-author once Phase 7 sign-off has returned \`approve & proceed\`.
+When \`triage.complexity == "large-risky"\` and the path includes \`plan\`, the plan stage **expands** into a two-step discovery sub-phase: \`design\` (main context, multi-turn) → \`ac-author\` (sub-agent). \`currentStage\` stays \`"plan"\` for both; \`lastSpecialist\` rotates through \`design\` then \`ac-author\`. **v8.47+ pacing:** design pauses at MOST twice — Phase 1 (conditional, if 0-3 clarifying questions are needed) and Phase 7 (mandatory sign-off review). Phases 0, 2, 3, 4, 5, 6, 6.5 execute silently in the same orchestrator turn. The next \`/cc\` invocation continues with ac-author once Phase 7 returns \`approve\`. A \`request-changes\` verdict at Phase 7 re-runs the silent phases internally (revise cap = 3); a \`reject\` verdict surfaces to orchestrator for \`/cc-cancel\` / re-triage.
 
-The full sub-phase procedure — discovery auto-skip heuristic, posture selection (guided vs deep), Phase 0-7 pause rules, ac-author dispatch contract, legacy migration for pre-v8.14 \`brainstormer\` / \`architect\` state — lives in \`.cclaw/lib/runbooks/discovery.md\`. Open that file before activating \`design\`.
+The full sub-phase procedure — discovery auto-skip heuristic, posture selection (guided vs deep), Phase 1 + Phase 7 pause rules, revise-loop semantics, ac-author dispatch contract, legacy migration for pre-v8.14 \`brainstormer\` / \`architect\` state — lives in \`.cclaw/lib/runbooks/discovery.md\`. Open that file before activating \`design\`.
 
 #### build
 
@@ -398,7 +398,7 @@ After every stage exit (and every design Phase 7 sign-off) the orchestrator writ
 Orchestrator-wide invariants pause/resume enforces (per-mode procedures, table, and resume-from-fresh-session rules live in \`runbooks/pause-resume.md\`):
 
 - **\`step\` mode** (default; safer; recommended for \`strict\` work) — render slim summary, re-author handoff files, state the next stage, **End your turn**. The pause IS the end of the turn; \`flow-state.json\` + \`HANDOFF.json\` carry the resume point. This is cclaw's **single resume mechanism** — no "type continue" magic word, no clickable Continue button.
-- **\`auto\` mode** (autopilot; faster; recommended for \`inline\` / \`soft\` work) — chain to the next stage immediately; stop only on hard gates: \`reviewer\` returned \`block\` / \`cap-reached\`, \`security-reviewer\` finding, \`Confidence: low\`, about-to-run \`ship\`, or inside design (per-phase pauses fire regardless of runMode; see \`runbooks/discovery.md\`).
+- **\`auto\` mode** (autopilot; faster; recommended for \`inline\` / \`soft\` work) — chain to the next stage immediately; stop only on hard gates: \`reviewer\` returned \`block\` / \`cap-reached\`, \`security-reviewer\` finding, \`Confidence: low\`, about-to-run \`ship\`, or inside design (Phase 1 conditional ask + Phase 7 mandatory sign-off fire regardless of runMode; v8.47 pacing — see \`runbooks/discovery.md\`).
 - **\`Confidence: low\`** in any slim summary is a hard gate in **both** modes. Specialist MUST write a non-empty \`Notes:\` line; orchestrator offers \`Expand <stage>\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\`.
 - **\`/cc-cancel\`** is the only way to discard an active flow; never a clickable option in any structured question — the orchestrator surfaces it as plain prose only when the user appears stuck.
 
