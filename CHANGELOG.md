@@ -1,5 +1,91 @@
 # Changelog
 
+## 8.51.0 — pre-implementation plan-critic (chachamaru-style adversarial review before build)
+
+### Why
+
+cclaw's existing v8.42 `critic` specialist runs at Hop 4.5 — **after** the slice-builder writes code and the reviewer finishes its loop. By the time it speaks, the build has already consumed context implementing whatever the plan said to implement. If the plan itself was wrong (too-coarse ACs swallowing five concerns; a hidden dependency cycle the AC table doesn't surface; a parallel-build topology whose slices share files; a security-sensitive `touchSurface` the plan author didn't flag), the critic catches only the *consequence* — never the *cause*. The cause was already burnt into the build.
+
+chachamaru's `plan_analyst` / `plan_critic` (see `agents.plan_critic` in their setup script, `sandbox = "workspace-read-only"`) runs at Phase 0 — **before** any implementation begins. Different lens, different problem class. cclaw v8.51 adds the pre-implementation pass alongside the existing post-implementation one; both specialists ship together because they catch different problem classes, and the v8.51 work explicitly does NOT collapse the two into a merged "critic" because their verdict vocabularies and dispatch contracts are different.
+
+### What changed
+
+**Item #1 — new specialist `plan-critic`** (`src/content/specialist-prompts/plan-critic.ts`, ~265 lines).
+
+- Activation: `on-demand`. Single mode: `pre-impl-review` (no `gap` / `adversarial` split — that vocabulary belongs to the post-impl critic). Tools: Read + Bash (for git inspection); explicitly NOT Write/Edit/MultiEdit. Read-only on the codebase; the prompt body itself disallows source mutation. Token budget: 3-5k target, 7k hard cap.
+- Body structure: Iron Law ("EVIDENCE FROM THE PLAN ONLY"), `When to run` / `When NOT to run` blocks that mirror the orchestrator gate verbatim, acMode-awareness (defensive — the gate restricts to `strict`), posture-awareness (per-AC posture from plan.md frontmatter; most-restrictive value stamped into `plan-critic.md > frontmatter > posture_inherited`), five-dimension investigation protocol (§1 goal coverage / §2 granularity / §3 dependency accuracy with surface-overlap graph / §4 parallelism feasibility / §5 risk catalog with NFR / security / migration / irreversibility sweeps), §6 pre-commitment predictions (3-5 predictions authored BEFORE §1-§5 detailed pass), §7 verdict (`pass` / `revise` / `cancel`), §8 anti-rationalization referencing the shared `.cclaw/lib/anti-rationalizations.md` catalog plus four plan-critic-unique rows.
+- Output: exactly one artifact, `flows/<slug>/plan-critic.md`, single-shot per dispatch (overwrites on re-dispatch, never appends). Returns a slim summary (≤7 lines) with `specialist: plan-critic`, `verdict`, `findings` totals broken down by severity (block-ship / iterate / fyi), `iteration` (0 or 1), `confidence`, optional `notes`.
+- Composition footer: declares plan-critic as `on-demand specialist`, names the four `Do not spawn` lanes (no design / ac-author / reviewer / slice-builder / critic / research-helper dispatches; orchestrator routes verdicts, plan-critic does not), names the `Stop condition` (file written + verdict frontmatter set + slim summary returned).
+- The prompt explicitly names the **separation from the post-impl critic** (`block-ship` / `iterate` / `fyi` is the post-impl critic's vocabulary; plan-critic borrows those words as SEVERITY labels but the verdict enum is `pass` / `revise` / `cancel`; readers branch on which specialist is in flight, not on a merged verdict shape).
+
+**Item #2 — tight gate in the orchestrator** (`src/content/start-command.ts` dispatch table).
+
+- plan-critic runs ONLY when ALL of the following hold: `triage.acMode == "strict"` AND `triage.complexity == "large-risky"` AND `triage.problemType != "refines"` AND AC count ≥ 2. The gate is AND across all four; any other combination skips plan-critic and the orchestrator advances directly from ac-author's slim summary to slice-builder dispatch, as before v8.51.
+- Stage mapping: plan-critic is a **sub-step** of the `plan` stage, NOT a new entry in `FLOW_STAGES` or `triage.path` (which stay at `plan` / `build` / `review` / `critic` / `ship`). `currentStage` stays `"plan"` while plan-critic is in flight; `lastSpecialist` rotates through `ac-author` → `plan-critic` → `ac-author` (on revise bounce) → `plan-critic` (iteration 1) → `slice-builder` (on pass).
+- Verdict routing: `pass` → advance to slice-builder dispatch (no ceremony, `iterate` / `fyi` rows in plan-critic.md ride along as advisory notes). `revise` at iteration 0 → bounce to ac-author with the plan-critic.md §8 hand-off block prepended to the dispatch envelope's Inputs line; ac-author updates plan.md, then plan-critic is re-dispatched (iteration 1). `revise` at iteration 1 → surface user picker: `[cancel]` / `[accept-warnings-and-proceed]` / `[re-design]`. `cancel` at any iteration → surface user picker IMMEDIATELY: `[cancel-slug]` / `[re-design]` (no silent fallback). Iteration cap: 1 revise loop max (`planCriticIteration` ∈ {0, 1}; a third dispatch is structurally not allowed).
+
+**Item #3 — runbook `plan-critic-stage.md`** (`src/content/runbooks-on-demand.ts`).
+
+- New on-demand runbook (~6k chars) that the orchestrator opens on every `ac-author` slim-summary return when the gate evaluates to true. Documents the four AND conditions, the dispatch envelope (required reads, inputs, output contract, forbidden actions), the verdict-handling routing table (verdict × iteration → orchestrator action), iteration cap enforcement, `flow-state.json` patches (`currentStage` / `lastSpecialist` / `planCriticIteration` / `planCriticVerdict` / `planCriticDispatchedAt`), and the legacy migration for pre-v8.51 state files (a state file with `currentStage: "plan"` AND `lastSpecialist: "ac-author"` AND no `planCriticVerdict` field is treated as pre-plan-critic intermediate; on the next `/cc`, if the slug satisfies the gate, the orchestrator dispatches plan-critic before advancing to slice-builder).
+- Distinct from `critic-stage.md` (v8.42, post-implementation, Hop 4.5). The runbook header includes a comparison table making the two stages' different inputs / outputs / verdicts explicit, so a reader can't conflate them.
+- Registered in `ON_DEMAND_RUNBOOKS` and written to `.cclaw/lib/runbooks/plan-critic-stage.md` by install.
+
+**Item #4 — artifact template `plan-critic.md`** (`src/content/artifact-templates.ts`).
+
+- New template (~5k chars) registered in `ARTIFACT_TEMPLATES` with `id: "plan-critic"`, `fileName: "plan-critic.md"`. Frontmatter fields: `slug`, `stage: plan-critic`, `status: active`, `posture_inherited`, `ac_mode`, `ac_count`, `dispatched_at`, `iteration`, `predictions_made`, `findings`, `verdict`, `token_budget_used`.
+- Body sections: §1 Goal coverage / §2 Granularity / §3 Dependency accuracy (with optional ASCII dependency diagram) / §4 Parallelism feasibility / §5 Risk catalog / §6 Pre-commitment predictions / §7 Verdict (verdict + counts breakdown + confidence + rationale) / §8 Hand-off (revise: specific changes for ac-author; cancel: recommended next step; pass: explicit "No hand-off required") / Summary (Changes made / Things noticed but didn't touch / Potential concerns — mirrors the three-block pattern from the existing critic template).
+- The template explicitly names the severity vocabulary (`block-ship` / `iterate` / `fyi`) and the verdict enum (`pass` | `revise` | `cancel`), and labels both as plan-critic's OWN vocabulary (do not merge with the reviewer's `critical` / `required` / `consider` / `nit` / `fyi` ledger, and do not merge with the post-impl critic's verdict enum).
+
+**Item #5 — flow-state fields + validators** (`src/types.ts`, `src/flow-state.ts`).
+
+- New type `PlanCriticVerdict = "pass" | "revise" | "cancel"` exported from `src/types.ts`. Distinct from `CriticVerdict` on purpose (post-impl critic has `block-ship`; plan-critic has `cancel` because no build has run yet).
+- Three new optional fields on `FlowStateV82`: `planCriticVerdict?: PlanCriticVerdict | null` (null = explicit not-yet-run / skipped); `planCriticIteration?: number` (hard-capped at 1; absent = 0); `planCriticDispatchedAt?: string` (ISO timestamp; pure telemetry, no branch reads on it). All three are optional so pre-v8.51 state files validate without migration; readers default to `null` / `0` / undefined.
+- `assertFlowStateV82` validates the three fields when present and rejects: invalid verdict values (including `block-ship` and `iterate` from the post-impl critic's vocabulary), `planCriticIteration` ∉ {0, 1} (the 1-revise-loop cap is structural, not advisory), non-string `planCriticDispatchedAt`, and non-number `planCriticIteration`.
+
+**Item #6 — install path + smoke** (`src/content/core-agents.ts`, `scripts/smoke-init.mjs`).
+
+- `SPECIALIST_AGENTS` array grew from 6 to 7 (added `plan-critic` between `critic` and `slice-builder`). `CORE_AGENTS` grew from 8 to 9. Install path writes `.cclaw/lib/agents/plan-critic.md` alongside the other specialist contracts; install path also writes `.cclaw/lib/templates/plan-critic.md` and `.cclaw/lib/runbooks/plan-critic-stage.md`.
+- `scripts/smoke-init.mjs` asserts every new install file exists (`plan-critic.md` agent + template + runbook). Smoke runs `init → install → install → install → uninstall` and verifies the layout is clean at every step.
+
+### Metrics
+
+- **Files touched:** 12 modified, 2 new (`src/content/specialist-prompts/plan-critic.ts` + `tests/unit/v851-plan-critic.test.ts`). The plan-critic prompt is ~265 lines / ~22k chars; the plan-critic-stage runbook is ~6k chars; the plan-critic.md template is ~5k chars; combined v8.51 install-asset growth is ~33k chars (all of which lives on disk under `.cclaw/lib/`, NOT in the in-memory `/cc` body).
+- **Tests added:** 78 tripwires in `tests/unit/v851-plan-critic.test.ts` (10 registry membership, 6 prompt structural shape, 4 gate, 6 verdict routing, 6 read-only contract, 6 pre-commitment + token budget, 2 anti-rationalization, 6 artifact template, 7 runbook, 14 flow-state validators, 6 orchestrator wiring, 2 cross-specialist consistency, 3 environment sanity). Total suite 1209 → 1287 tests, all green. Smoke green.
+- **Body-budget cost:** start-command body grew ~4k chars / ~15 lines (~9% relative to v8.30 baseline, ~7.5% relative to v8.50). v8.22 body-only budget `52500 → 57500`; v8.22 combined body+runbooks ceiling `117000 → 130000`; v8.31 inline-path budget `52500 → 57500`; v8.31 ratio cap `1.16 → 1.28`. The body delta is intentionally small — ~95% of the new content lives in `runbooks/plan-critic-stage.md` (gating table, dispatch envelope, verdict routing, iteration cap, flow-state patches, legacy migration) + the plan-critic.ts prompt body, both lazy-loaded.
+- **Gate selectivity:** 4-AND conditions (acMode=strict, complexity=large-risky, problemType!=refines, AC count≥2). The intent is that plan-critic fires on the slug shape that benefits most (large-risky strict plans with multiple ACs, where granularity / dependency / parallelism are real surfaces) and is structurally skipped on every other shape. Widening any of the four conditions is v8.52+ scope and requires a CHANGELOG note.
+
+### Files touched
+
+- `src/content/specialist-prompts/plan-critic.ts` (**new**) — full plan-critic prompt with iron law, gate, 5-dimension protocol, §6 pre-commitment, §7 verdict + routing, §8 anti-rationalization, slim-summary contract.
+- `src/content/specialist-prompts/index.ts` — adds `PLAN_CRITIC_PROMPT` import + export and entry in the `SPECIALIST_PROMPTS` record.
+- `src/types.ts` — adds `plan-critic` to the `SPECIALISTS` const array (now length 7); adds `PlanCriticVerdict` type.
+- `src/flow-state.ts` — adds `PLAN_CRITIC_VERDICTS` const + `isPlanCriticVerdict` guard; adds three optional fields to `FlowStateV82`; updates `assertFlowStateV82` with the three new validators.
+- `src/content/core-agents.ts` — adds the `plan-critic` entry to `SPECIALIST_AGENTS` between `critic` and `slice-builder`.
+- `src/content/artifact-templates.ts` — adds `plan-critic` to the `ArtifactTemplate.id` union; adds the `PLAN_CRITIC_TEMPLATE` body; registers it in `ARTIFACT_TEMPLATES`.
+- `src/content/runbooks-on-demand.ts` — adds the `PLAN_CRITIC_STAGE` body (~6k chars) and registers it in `ON_DEMAND_RUNBOOKS` (now length 14).
+- `src/content/start-command.ts` — adds the plan-critic sub-step pointer (paragraph above the dispatch table, new `plan` sub-step table row, `#### plan-critic` body section between `#### plan` and `#### build`, `lastSpecialist` enum entry).
+- `scripts/smoke-init.mjs` — adds the v8.51 install-asset verifications (plan-critic.md template + agent + runbook).
+- `tests/unit/v851-plan-critic.test.ts` (**new**) — 78 tripwires covering registry, prompt structure, gate, verdict routing, read-only contract, pre-commitment + token budget, anti-rationalization, artifact template, runbook, flow-state validators, orchestrator wiring, cross-specialist consistency.
+- `tests/unit/v822-orchestrator-slim.test.ts`, `tests/unit/v831-path-aware-trimming.test.ts` — body-budget bumps with v8.51 notes (no semantic changes; the tests pin the new budgets).
+- `tests/unit/core-agents.test.ts`, `tests/unit/critic-specialist.test.ts`, `tests/unit/types.test.ts`, `tests/unit/v814-cleanup.test.ts`, `tests/unit/v828-rename-planner-to-ac-author.test.ts`, `tests/integration/critic-hop.test.ts` — specialist count bumps from 6 → 7 with v8.51 notes (no semantic changes).
+- `CHANGELOG.md` — this entry.
+- `package.json` — version bump `8.50.0 → 8.51.0`.
+
+### Backwards compatibility
+
+- Pre-v8.51 `flow-state.json` files lack `planCriticVerdict` / `planCriticIteration` / `planCriticDispatchedAt`. Validators treat absent fields as null/0/undefined; no migration is required. On the first `/cc` after v8.51 install, a state file with `currentStage: "plan"` AND `lastSpecialist: "ac-author"` AND no `planCriticVerdict` is treated as pre-plan-critic intermediate: if the slug satisfies the gate, plan-critic dispatches on the next step; if it does not, the orchestrator advances to slice-builder as today.
+- Existing shipped slugs (where `planCriticVerdict` is absent because plan-critic was never run) review-able and finalize-able as before; no field on the shipped artifact references plan-critic outputs.
+- The post-impl `critic` specialist (v8.42) is unchanged; its verdict enum (`pass` / `iterate` / `block-ship`) and its dispatch stage (the `critic` step at Hop 4.5) are preserved verbatim. plan-critic and critic coexist; both run when their respective gates fire.
+
+### Constraints honoured
+
+- **Tight gating.** plan-critic does NOT run on inline / soft / trivial / small-medium / refines / single-AC flows. Wide gating would 2x ceremony for marginal-to-zero benefit; the 4-AND gate captures the slug shape where the cost is amortised by the value.
+- **Read-only at prompt level.** The plan-critic frontmatter disallows Write / Edit / MultiEdit; the prompt body re-states the rule in `## What you do NOT do` and `## Composition`. Runtime sandbox enforcement is harness-level work for a future slug (the prompt-level discipline is the v8.51 boundary).
+- **Max 1 revise loop.** `planCriticIteration` validators reject ∉ {0, 1}; the orchestrator surfaces the revise-cap picker on the second `revise` rather than dispatching plan-critic a third time.
+- **No multi-perspective lenses.** That scope belongs to a future post-impl `critic.ts` expansion; plan-critic stays focused on the five dimensions.
+- **No bundling.** v8.51 ships plan-critic and only plan-critic.
+- **Anti-rationalization references.** plan-critic cites `.cclaw/lib/anti-rationalizations.md` (the shared catalog) by pointer for cross-cutting rationalizations and adds four plan-critic-unique rows in its §8 section. No duplication of catalog rows.
+
 ## 8.50.0 — knowledge outcome loop (outcome_signal + down-weight in findNearKnowledge)
 
 ### Why
