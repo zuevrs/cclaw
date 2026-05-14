@@ -155,6 +155,34 @@ Findings table shape (each F-N in this section):
 
 Confidence calibration: adversarial findings cap naturally at anchor 75 because falsification inherently resists full verification ("is this assumption wrong?" usually cannot be proven true in advance). Below anchor 25 (pure speculation, no traceable steps), **suppress** — do not emit.
 
+### Human-perspective lenses (adversarial mode only)
+
+In addition to the four adversarial techniques above, adversarial mode runs a **multi-perspective lens sweep**: stand in three concrete reader-shoes and re-scan plan.md + the diff from each shoe's angle. This catches finding classes the four techniques miss (notably "would a new engineer understand this?" and "are errors actionable when paged?"), borrowed from OMC's critic discipline. The lenses are **additive to §3a-§3d, not a replacement** — they share §3's adversarial budget and same anchor-25 suppression rule.
+
+**Lens sets** — pick the set matching the slug's primary artifact:
+
+- **Plan-stage lenses** (when critiquing \`plan.md\` content — Frame / Spec / AC / Decisions / Pre-mortem):
+  - **Executor lens** — "I'm the engineer who has to build this. Is the AC clear enough that I won't have to ask follow-up questions? Are the test inputs concrete? Are file paths exact?" Finding shape: ambiguous AC text, missing fixture, file path that does not exist or is too vague.
+  - **Stakeholder lens** — "I'm the person who asked for this. Does the shipped behavior match what I described? Or did interpretation drift?" Finding shape: AC drifted from prompt verb, NFR row paraphrases the user's words without measurable budget, "Selected Direction" picks an option the user did not endorse.
+  - **Skeptic lens** — "I'm trying to find a hole. Are there edge cases the plan glosses over? Are there 'we'll figure it out later' phrases that hide unresolved decisions?" Finding shape: a D-N whose Rationale is "obvious", an Edge case row that says "n/a" without justification, an Open question with no path to resolution.
+
+- **Code-stage lenses** (when critiquing \`build.md\` + the diff — what was actually built):
+  - **Security lens** — "I'm a security reviewer. Are there injection points? Auth/authz gaps? Secrets exposed? Data leakage risks?" Finding shape: user input flowing into a query / shell / template without obvious sanitisation; a new endpoint without an auth middleware citation; a log line that includes a token or PII. This is a **smoke check**, not a full audit — cross-reference security-reviewer's findings if available; do NOT duplicate them.
+  - **New-hire lens** — "I'm starting on this codebase tomorrow. Can I understand this change without context? Are the variable names self-documenting? Are comments explaining non-obvious intent?" Finding shape: a one-letter variable in non-trivial logic; a magic constant with no inline cite; a function whose name does not describe what it does; a comment that narrates the next line ("// increment i") instead of explaining intent.
+  - **Ops lens** — "I'm on-call when this breaks. Are errors actionable? Are logs informative? Are timeouts configured? Can I diagnose in production with what's logged?" Finding shape: a thrown error whose message is "error" / "failed"; a network call without a timeout; a retry loop without a max-attempt cite; a long-running operation with no progress / heartbeat log.
+
+**Output contract.** When adversarial mode runs, \`critic.md\` MUST include findings from **at least 3 lenses** out of the six (any combination across the two sets that applies — typically the three matching the slug's primary artifact, but cross-set findings are valid when the slug spans plan + code). Findings from this sub-section ride the same \`F-N\` numbering as §3a-§3d, with the lens cited in the \`axis\` column:
+
+\`\`\`text
+| F-N | Lens | Anchor | Description | Failure consequence | Severity |
+| --- | --- | --- | --- | --- | --- |
+| F-5 | human-perspective:new-hire | src/api/list.ts:42 | The single-letter \`u\` variable inside the reduce callback is the unauthorised-user count; rename to \`unauthorisedCount\` for self-documenting code | A new contributor reading the diff would misread the loop body as an iteration counter | iterate |
+\`\`\`
+
+The \`axis\` value is always \`human-perspective:<lens>\` so downstream readers (compound learning capture, ship.md Risks-carried-over) can filter by lens.
+
+**Gating recap** — lenses are part of \`adversarial\` mode only. In \`gap\` mode (acMode soft / strict-without-trigger) the lens sweep does NOT run and the §3a-§3d techniques are also skipped. The lenses do NOT activate adversarial mode independently; they ride the existing §8 trigger set. When \`light\` adversarial fires (soft + exactly one trigger) the lens sweep is capped at 3 lenses regardless of slug shape — same as the "ONE technique only" rule for §3a-§3d.
+
 ### §4. Self-audit on AC quality (is the AC the right AC, not is it met?)
 
 Goal-backward: re-read the user's original prompt and verify each AC actually solves the *user-stated* problem. This is GSD verifier's central move — \`gsd-v1/agents/gsd-verifier.md:62-69\` — combined with OMC's premise-skepticism approach.
@@ -269,7 +297,7 @@ You escalate to \`full\` adversarial mode when **any** of the following fire (th
 
 - **Gap mode (soft):** 5-7k tokens (input + output combined).
 - **Gap mode (strict):** 10-15k tokens.
-- **Adversarial mode (any acMode that allows it):** 12-18k tokens.
+- **Adversarial mode (any acMode that allows it):** 12-18k tokens. **v8.53 bumped the §3 adversarial sub-allowance by ~2k** (from ~6-8k to ~8-10k within the overall 12-18k cap) to accommodate the human-perspective lens sweep (≥3 lenses of output beyond §3a-§3d's four techniques). The overall mode cap (12-18k) and hard cap (20k) are unchanged.
 - **Hard cap:** 20k tokens. Exceeding the cap is itself a finding (\`Confidence: low\`, recommend split). The orchestrator stamps the actual usage in \`critic.md > frontmatter > token_budget_used\`.
 
 Use the budget on the *delta* — gap analysis, pre-commitment, goal-backward, adversarial scenarios. **Do NOT re-walk the reviewer's eight axes.** Read the Findings as already-walked context and spend your budget on what the reviewer's structural framing cannot see.
@@ -285,7 +313,7 @@ Use the budget on the *delta* — gap analysis, pre-commitment, goal-backward, a
 
 ## Anti-rationalization table (read before writing the verdict)
 
-**Cross-cutting rationalizations** (completion / verification / edit-discipline / commit-discipline / posture-bypass) live in \`.cclaw/lib/anti-rationalizations.md\` (v8.49). The eight rows below stay here because they are critic-specific (pre-commitment as ceremony, all-predictions-confirmed bias, "small surface" downgrade, goal-backward dismissal, escalation-trigger skip, 20k-cap erosion, realist-check over-downgrade).
+**Cross-cutting rationalizations** (completion / verification / edit-discipline / commit-discipline / posture-bypass) live in \`.cclaw/lib/anti-rationalizations.md\` (v8.49). The ten rows below stay here because they are critic-specific (pre-commitment as ceremony, all-predictions-confirmed bias, "small surface" downgrade, goal-backward dismissal, escalation-trigger skip, 20k-cap erosion, realist-check over-downgrade, and the v8.53 lens-sweep dodges).
 
 The critic's discipline is the first thing pressured when the reviewer already cleared. Catch yourself thinking the left column; do the right column instead.
 
@@ -299,6 +327,8 @@ The critic's discipline is the first thing pressured when the reviewer already c
 | "Escalation triggers say I should run adversarial, but the slug is small — skipping §3." | The triggers were calibrated against the slug shape, not the diff size. Surface size is one trigger; security flag is another; the trigger set is OR, not AND. If any fires, §3 runs. |
 | "20k tokens is a soft cap — I'll go a little over." | The 20k cap is hard. Exceeding it is the verdict \`Confidence: low\` with a "split this slug" recommendation. Sloppy bookkeeping on token budget is a known critic failure mode. |
 | "Realist check downgraded everything to \`iterate\` — looks like nothing blocks ship." | If realist check downgraded everything, double-check: did you apply the NEVER-downgrade rule (data loss / security breach / financial impact)? Did every downgrade cite a real-world \`Mitigated by\`? If the answer is "yes, yes", trust the realist check. If "no" anywhere, restore the severity. |
+| "I covered new-hire concerns in §1 already — no need to run the new-hire lens." | §1 pre-commitment is structural prediction ("what's most likely wrong?"); the v8.53 new-hire lens is a separate, lens-based investigation ("would someone unfamiliar with this codebase understand this change?"). The two surfaces find different finding classes. Run the lens. |
+| "Security is the security-reviewer's job, not mine — skip the security lens." | The security-reviewer ran a focused threat-modelling pass earlier; the critic's v8.53 security lens is a **smoke check** for surfaces the threat-model checklist did not enumerate (logging-leak, error-shape leak, retry-cost amplification). Cross-reference the security-reviewer's findings; if your lens surfaces a new class of risk, emit it as F-N (\`axis: human-perspective:security\`) and let the orchestrator route — do NOT defer because "someone else owns this lane". |
 
 ## Slim summary (returned to orchestrator)
 
