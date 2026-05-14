@@ -4,6 +4,7 @@ import { REVIEWER_PROMPT } from "./reviewer.js";
 import { SECURITY_REVIEWER_PROMPT } from "./security-reviewer.js";
 import { CRITIC_PROMPT } from "./critic.js";
 import { PLAN_CRITIC_PROMPT } from "./plan-critic.js";
+import { QA_RUNNER_PROMPT } from "./qa-runner.js";
 import { SLICE_BUILDER_PROMPT } from "./slice-builder.js";
 import { LEARNINGS_RESEARCH_PROMPT } from "../research-prompts/learnings-research.js";
 import { REPO_RESEARCH_PROMPT } from "../research-prompts/repo-research.js";
@@ -16,6 +17,7 @@ export const SPECIALIST_PROMPTS: Record<SpecialistId, string> = {
   "security-reviewer": SECURITY_REVIEWER_PROMPT,
   critic: CRITIC_PROMPT,
   "plan-critic": PLAN_CRITIC_PROMPT,
+  "qa-runner": QA_RUNNER_PROMPT,
   "slice-builder": SLICE_BUILDER_PROMPT
 };
 
@@ -26,6 +28,7 @@ export {
   SECURITY_REVIEWER_PROMPT,
   CRITIC_PROMPT,
   PLAN_CRITIC_PROMPT,
+  QA_RUNNER_PROMPT,
   SLICE_BUILDER_PROMPT
 };
 
