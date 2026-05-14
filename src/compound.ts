@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
@@ -16,10 +18,20 @@ import { manifestTemplate, templateBody } from "./content/artifact-templates.js"
 import {
   appendKnowledgeEntry,
   findNearDuplicate,
+  readKnowledgeLog,
+  setOutcomeSignal,
   type KnowledgeEntry,
   type NearDuplicateMatch,
   type NearDuplicateOptions
 } from "./knowledge-store.js";
+import {
+  findManualFixCandidates,
+  findRevertedSlugs,
+  parseCommitLog,
+  parseRevertCommits,
+  type ManualFixMatch,
+  type RevertedSlugMatch
+} from "./outcome-detection.js";
 import type { AcceptanceCriterionState } from "./types.js";
 
 export interface CompoundQualitySignals {
@@ -36,6 +48,37 @@ export interface CompoundQualitySignals {
   reviewIterations: number;
   securityFlag: boolean;
   userRequestedCapture: boolean;
+}
+
+/**
+ * v8.50 - synthetic git outputs and overrides for the outcome-loop
+ * capture paths. Pass these in tests to make detection deterministic
+ * without a live `git` repo; production callers leave the field absent
+ * and let `runCompoundAndShip` shell out to the real `git` binary.
+ *
+ * Field semantics:
+ *
+ * - `revertGitLog` - the verbatim output of
+ *   `git log --grep="^revert" --oneline -30`. When the value is `""`
+ *   (empty string), no reverts are detected (different from absent,
+ *   which falls through to a live `git` call). Use `""` to disable
+ *   revert detection without disabling the rest of the probe object.
+ * - `manualFixGitLog` - the verbatim output of a
+ *   `git log --oneline --since=<24h-ago>` over the slug's
+ *   `touchSurface`. Same `""` semantics as `revertGitLog`.
+ * - `manualFixFiles` - a map keyed by SHA listing the files each
+ *   commit in `manualFixGitLog` touched. Built upstream from
+ *   `git log --name-only --pretty=format:"%H" --since=...`. Absent
+ *   keys default to `[]` (no surface match, signal skipped).
+ * - `disable` - shortcut to disable BOTH detection paths in tests
+ *   that exercise non-outcome-loop behaviour. Equivalent to passing
+ *   `revertGitLog: ""` AND `manualFixGitLog: ""`.
+ */
+export interface CompoundOutcomeProbes {
+  revertGitLog?: string;
+  manualFixGitLog?: string;
+  manualFixFiles?: ReadonlyMap<string, readonly string[]>;
+  disable?: true;
 }
 
 export interface CompoundRunOptions {
@@ -55,6 +98,13 @@ export interface CompoundRunOptions {
   tags?: string[];
   /** Override or disable the near-duplicate scan (e.g. for tests). */
   dedupOptions?: NearDuplicateOptions | { disable: true };
+  /**
+   * v8.50 - synthetic git probes for the outcome-loop capture paths.
+   * Tests pass synthetic strings; production leaves this absent and
+   * lets `runCompoundAndShip` invoke the real `git` binary at the
+   * project root.
+   */
+  outcomeProbes?: CompoundOutcomeProbes;
 }
 
 export interface CompoundRunResult {
@@ -64,6 +114,20 @@ export interface CompoundRunResult {
   movedArtifacts: ArtifactStage[];
   knowledgeEntry?: KnowledgeEntry;
   dedupeMatch?: NearDuplicateMatch | null;
+  /**
+   * v8.50 - outcome signals stamped on prior shipped slugs as a result
+   * of revert detection during this compound pass. Empty array when no
+   * revert reference matched a known shipped slug, when the probe was
+   * disabled, or when no learning was captured this pass.
+   */
+  revertedSlugMatches?: RevertedSlugMatch[];
+  /**
+   * v8.50 - manual-fix candidates detected against THIS slug's
+   * `touchSurface` in the trailing 24h window. The first match (when
+   * any) is what `outcome_signal: "manual-fix"` was stamped from; the
+   * array is surfaced for audit / test visibility.
+   */
+  manualFixMatches?: ManualFixMatch[];
 }
 
 export class CompoundError extends Error {}
@@ -74,6 +138,114 @@ export function shouldCaptureLearning(signals: CompoundQualitySignals): boolean 
   if (signals.reviewIterations >= 3) return true;
   if (signals.securityFlag) return true;
   return false;
+}
+
+/**
+ * v8.50 - run `git log` for the revert-detection probe. Best-effort:
+ * a missing `.git/`, a binary that's not on PATH, or a non-zero exit
+ * code degrades to `""` (no detection). We never throw - compound
+ * MUST NOT fail because the outcome-loop probe couldn't run.
+ */
+function runRevertProbe(projectRoot: string): string {
+  if (!gitAvailable(projectRoot)) return "";
+  try {
+    return execFileSync(
+      "git",
+      ["log", "--grep=^revert", "--oneline", "-30", "-i"],
+      { cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * v8.50 - run `git log` for the manual-fix probe. Same best-effort
+ * rules as {@link runRevertProbe}; an empty `touchSurface` short-
+ * circuits the call so we don't pull the whole repo's last-24h log
+ * when the slug never declared a surface.
+ *
+ * Returns `{ log, files }`:
+ *
+ * - `log` is the `--oneline` shape the {@link parseCommitLog} helper
+ *   parses.
+ * - `files` is the per-SHA touched-files map the
+ *   {@link findManualFixCandidates} helper needs to confirm a
+ *   commit hit the slug's surface. Built from a second `git log
+ *   --name-only --pretty=format:"%H"` call so the two outputs share
+ *   the same set of commits.
+ */
+function runManualFixProbe(
+  projectRoot: string,
+  touchSurface: readonly string[]
+): { log: string; files: Map<string, string[]> } {
+  if (!gitAvailable(projectRoot) || touchSurface.length === 0) {
+    return { log: "", files: new Map() };
+  }
+  let oneline = "";
+  let nameOnly = "";
+  try {
+    oneline = execFileSync(
+      "git",
+      ["log", "--oneline", "--since=24 hours ago", "-50"],
+      { cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+  } catch {
+    return { log: "", files: new Map() };
+  }
+  try {
+    nameOnly = execFileSync(
+      "git",
+      ["log", "--name-only", "--pretty=format:%H", "--since=24 hours ago", "-50"],
+      { cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+  } catch {
+    return { log: oneline, files: new Map() };
+  }
+  return { log: oneline, files: parseNameOnlyLog(nameOnly) };
+}
+
+/**
+ * v8.50 - parse `git log --name-only --pretty=format:%H` output into a
+ * per-SHA file map. The format alternates SHA lines with file-list
+ * lines separated by blank lines; this is the shape git emits when
+ * `--name-only` is paired with a custom pretty-format.
+ *
+ * Exported only via internal use; the parsing is fragile enough that
+ * tests for it live alongside the integration tests rather than as a
+ * separately-exported helper.
+ */
+function parseNameOnlyLog(raw: string): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  if (typeof raw !== "string" || raw.length === 0) return out;
+  let currentSha: string | null = null;
+  for (const line of raw.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      currentSha = null;
+      continue;
+    }
+    if (currentSha === null) {
+      currentSha = trimmed;
+      if (!out.has(currentSha)) out.set(currentSha, []);
+      continue;
+    }
+    const bucket = out.get(currentSha);
+    if (bucket) bucket.push(trimmed);
+  }
+  return out;
+}
+
+/**
+ * v8.50 - does `<projectRoot>/.git/` exist? Cheap pre-check so we
+ * don't spawn `git` on plain working trees (the v8.23 no-git path).
+ */
+function gitAvailable(projectRoot: string): boolean {
+  try {
+    return existsSync(path.join(projectRoot, ".git"));
+  } catch {
+    return false;
+  }
 }
 
 async function moveIfExists(source: string, destination: string): Promise<boolean> {
@@ -249,6 +421,21 @@ export async function runCompoundAndShip(
     await appendKnowledgeEntry(projectRoot, knowledgeEntry);
   }
 
+  // v8.50 - run the three outcome-loop capture paths AFTER the new
+  // entry is appended (so the manual-fix path can stamp its own
+  // entry) but BEFORE the artifact move (so a downstream `readKnowledgeLog`
+  // sees the stamped signal immediately). We don't capture
+  // follow-up-bug here - that path runs at fresh-slug-start, not at
+  // ship-compound. See `src/content/start-command.ts` for the
+  // orchestrator wiring of #3b.
+  const { revertedSlugMatches, manualFixMatches } = await captureOutcomeSignals(
+    projectRoot,
+    slug,
+    options.touchSurface ?? [],
+    options.outcomeProbes,
+    shippedAt
+  );
+
   await writeFlowState(projectRoot, { ...state, currentStage: "ship" });
 
   const shippedDir = shippedArtifactDir(projectRoot, slug);
@@ -321,7 +508,108 @@ export async function runCompoundAndShip(
 
   await resetFlowState(projectRoot);
 
-  return { slug, shippedDir, learningCaptured, movedArtifacts: moved, knowledgeEntry, dedupeMatch };
+  return {
+    slug,
+    shippedDir,
+    learningCaptured,
+    movedArtifacts: moved,
+    knowledgeEntry,
+    dedupeMatch,
+    revertedSlugMatches,
+    manualFixMatches
+  };
+}
+
+/**
+ * v8.50 - run revert-detection and manual-fix-detection against the
+ * just-shipped slug. Stamps `outcome_signal` via `setOutcomeSignal`
+ * on every match found.
+ *
+ * Returns `{ revertedSlugMatches, manualFixMatches }` so the caller
+ * can surface the matches in {@link CompoundRunResult} for audit /
+ * test visibility. Empty arrays when probes are disabled OR when
+ * `knowledge.jsonl` is empty (no entries to stamp against).
+ *
+ * Failure handling: this function MUST NOT throw. If a probe call
+ * fails (git missing, jsonl unreadable, setOutcomeSignal write
+ * fails) the loop continues and the caller sees an empty match
+ * list. The outcome loop is additive telemetry; compound's primary
+ * contract (move artifacts, reset flow-state) is sacrosanct.
+ */
+async function captureOutcomeSignals(
+  projectRoot: string,
+  currentSlug: string,
+  touchSurface: readonly string[],
+  probes: CompoundOutcomeProbes | undefined,
+  shippedAt: string
+): Promise<{ revertedSlugMatches: RevertedSlugMatch[]; manualFixMatches: ManualFixMatch[] }> {
+  if (probes?.disable === true) {
+    return { revertedSlugMatches: [], manualFixMatches: [] };
+  }
+  let shippedSlugs: string[] = [];
+  try {
+    const entries = await readKnowledgeLog(projectRoot);
+    shippedSlugs = entries.map((entry) => entry.slug);
+  } catch {
+    return { revertedSlugMatches: [], manualFixMatches: [] };
+  }
+  if (shippedSlugs.length === 0) {
+    return { revertedSlugMatches: [], manualFixMatches: [] };
+  }
+
+  // Revert detection - matches reverts in the trailing git log to
+  // prior shipped slugs in knowledge.jsonl. The new entry we just
+  // appended is excluded by construction: a slug cannot revert
+  // itself (the revert commit would have to predate the slug's own
+  // ship, which is impossible in a single timeline).
+  let revertLog: string;
+  if (probes?.revertGitLog !== undefined) {
+    revertLog = probes.revertGitLog;
+  } else {
+    revertLog = runRevertProbe(projectRoot);
+  }
+  const reverts = parseRevertCommits(revertLog);
+  const revertedSlugMatches = findRevertedSlugs(
+    reverts,
+    shippedSlugs.filter((slug) => slug !== currentSlug)
+  );
+  for (const match of revertedSlugMatches) {
+    try {
+      await setOutcomeSignal(projectRoot, match.slug, "reverted", match.source, shippedAt);
+    } catch {
+      // Swallow per-entry write failures so one bad row doesn't kill
+      // the loop. The matches array still surfaces the attempted
+      // stamp for audit.
+    }
+  }
+
+  // Manual-fix detection - looks at THIS slug's touchSurface for
+  // post-ship fix(AC-N) / hotfix-shape commits in the trailing 24h.
+  // Self-reporting (the slug we just shipped marks itself), which is
+  // the honest-but-noisy v8.50 default - see the CHANGELOG entry's
+  // limitations section.
+  let manualFixLog: string;
+  let manualFixFiles: ReadonlyMap<string, readonly string[]>;
+  if (probes?.manualFixGitLog !== undefined) {
+    manualFixLog = probes.manualFixGitLog;
+    manualFixFiles = probes.manualFixFiles ?? new Map();
+  } else {
+    const probe = runManualFixProbe(projectRoot, touchSurface);
+    manualFixLog = probe.log;
+    manualFixFiles = probe.files;
+  }
+  const commits = parseCommitLog(manualFixLog);
+  const manualFixMatches = findManualFixCandidates(commits, touchSurface, manualFixFiles);
+  if (manualFixMatches[0]) {
+    const first = manualFixMatches[0];
+    try {
+      await setOutcomeSignal(projectRoot, currentSlug, "manual-fix", first.source, shippedAt);
+    } catch {
+      // Same swallow rationale as the revert loop above.
+    }
+  }
+
+  return { revertedSlugMatches, manualFixMatches };
 }
 
 export async function defaultPathsToCheck(projectRoot: string): Promise<string[]> {
