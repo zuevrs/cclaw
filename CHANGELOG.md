@@ -1,5 +1,86 @@
 # Changelog
 
+## 8.49.0 — overcomplexity sweep (anti-rationalization consolidation + auto-trigger dedup + empty-commit elimination)
+
+### Why
+
+Three converging-evidence cleanup items had been accumulating across v8.13-v8.48:
+
+1. **Anti-rationalization rows drifted across surfaces.** Cross-cutting rationalizations (`"I'll claim complete now, the reviewer will catch any gaps"`, `"while I'm here, I'll fix the adjacent thing"`, `"REFACTOR is unnecessary here"`) lived in 12+ files with diverging phrasings. The same conceptual rebuttal landed differently in `completion-discipline.md`, `commit-hygiene.md`, `tdd-and-verification.md`, the reviewer prompt, and the critic prompt — when the rebuttal lives in five places, the catalog has no source of truth.
+2. **`buildAutoTriggerBlock(stage)` injected every skill's full description into every dispatched specialist prompt.** Per-dispatch token cost grew with every new skill added under v8.13-v8.48 (17 → 20 skills). The orchestrator-to-specialist hop carried 2-7K characters of skill description prose that the specialist could have looked up on disk.
+3. **Empty `refactor(AC-N) skipped` commits polluted git log.** When REFACTOR had no opportunities for an AC, the slice-builder emitted a no-op commit (`git commit --allow-empty -m "refactor(AC-N) skipped: ..."`) to satisfy the per-AC chain check. The chain check needs a refactor signal, but the empty commit shape leaks "phase happened" semantics into git history that belongs in `build.md`.
+
+v8.49 collapses all three into a single overcomplexity sweep — one anti-rationalization catalog, one compact auto-trigger pointer block + central skill index, and one `build.md` row token that replaces the empty-commit pattern.
+
+### What changed
+
+**Item #1 — Anti-rationalization consolidation** (new module + install path + skill pointers).
+
+- New `src/content/anti-rationalizations.ts` exports `SHARED_ANTI_RATIONALIZATIONS: Record<Category, AntiRationalization[]>` keyed by five cross-cutting categories: `completion` (5 rows), `verification` (4 rows), `edit-discipline` (4 rows), `commit-discipline` (5 rows), `posture-bypass` (5 rows) — 23 canonical rows total. Each row pairs a quoted excuse with the conceptual rebuttal that previously drifted across surfaces.
+- New `renderAntiRationalizationsCatalog()` renders the catalog as a Markdown body (one H2 per category, two-column table per H2). Pre-rendered as `ANTI_RATIONALIZATIONS_BODY` constant.
+- `src/install.ts > writeAntiRationalizationsCatalog` writes the body to `.cclaw/lib/anti-rationalizations.md` during `syncCclaw`; the file is the single source of truth for cross-cutting rebuttals across every specialist + skill that previously inlined them.
+- Specialist prompts (`reviewer.ts`, `design.ts`, `critic.ts`) and ten cross-cutting skill `.md` files each get a one-line pointer at the top of their `## Common rationalizations` / `## Anti-rationalization table` section: `**Cross-cutting rationalizations:** see `.cclaw/lib/anti-rationalizations.md` (category: <cat>)`. Each surface keeps its specialist-specific rows (design's pause-mid-flow rows, critic's pre-commitment row, reviewer's three edit-discipline rows, every skill's discipline-specific framings) — those stay where the discipline lives. Only the cross-cutting rows defer to the catalog.
+
+**Item #2 — Auto-trigger index dedup** (compact pointer block + install-time index).
+
+- `src/content/skills.ts > renderSkillBullet` reduced from a multi-line per-skill block (triggers + description + composition prose, ~250-400 chars per skill) to a single-line `id → file` pointer (~60 chars per skill). Stage-filtered `buildAutoTriggerBlock(stage)` shrinks measured per-stage:
+  - `triage`: 2551 → 722 chars (72% reduction)
+  - `plan`: 4726 → 979 chars (79% reduction)
+  - `build`: 6447 → 1062 chars (84% reduction)
+  - `review`: 5670 → 932 chars (84% reduction)
+  - `ship`: 4472 → 813 chars (82% reduction)
+  - `compound`: 2019 → 541 chars (73% reduction)
+  - **Average per-dispatch reduction: ~79% (~6K → ~1K characters, ~1.5K → ~250 tokens at 4 chars/token).**
+- New `renderSkillsIndex()` generates a comprehensive Markdown index of every auto-trigger skill (stage map + alphabetical entries with file path, stages, triggers, description). Pre-rendered as `SKILLS_INDEX_BODY` constant.
+- `src/install.ts > writeSkillsIndex` writes the body to `.cclaw/lib/skills-index.md` during `syncCclaw`. Specialists now reference the index on-demand for full descriptions; the inline block carries only the compact pointer list.
+- Every specialist prompt that calls `buildAutoTriggerBlock(stage)` (`slice-builder.ts`, `reviewer.ts`, `design.ts`, `critic.ts`, `ac-author.ts`, `security-reviewer.ts`) gets updated descriptive text explaining the new v8.49 compact pointer-index shape and pointing at `.cclaw/lib/skills-index.md` for full details.
+
+**Item #3 — Empty `refactor(AC-N) skipped` commit elimination** (build.md row token + reviewer dual-accept).
+
+- New default for skipped REFACTOR phases: write `Refactor: skipped — <one-line reason>` in the AC's `build.md` row REFACTOR notes column. No empty commit. The reviewer's git-log scan reads the row token; the chain check is satisfied.
+- Legacy path (`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"`) is **still accepted** by the reviewer's TDD-integrity gate. Pre-v8.49 slugs with empty commits review cleanly without breakage.
+- Reviewer's `test-first` and `characterization-first` posture checks (in `reviewer.ts`) document three accepted shapes for the refactor slot: real `refactor(AC-N):` commit, v8.49 `build.md` declaration (preferred), legacy `refactor(AC-N) skipped:` empty commit.
+- Slice-builder prompt (`slice-builder.ts`) updates rule 4 (REFACTOR mandatory) to name all three paths; the worked example "REFACTOR explicitly skipped" leads with the `build.md` declaration form.
+- `tdd-and-verification.md` skill body's "REFACTOR — mandatory pass" section, `(f) refactor_run_or_skipped_with_reason` gate, and "Common rationalizations" table all carry the new build.md path as the v8.49 default.
+- `artifact-templates.ts > BUILD_TEMPLATE` shows the v8.49 row convention; "REFACTOR notes" + "Commits" sections explain the optional commit SHA when `Refactor: skipped` is declared in `build.md`. `BUILD_TEMPLATE_SOFT` carries the same v8.49 note.
+- `stage-playbooks.ts > build` runbook documents the row declaration as default; "Mandatory gates per AC" (`refactor_completed_or_skipped_with_reason`, `commit_chain_intact`) accept the row declaration.
+- `posture-validation.ts > POSTURE_COMMIT_PREFIXES` comment clarifies that the refactor slot can be satisfied by a build.md `Refactor: skipped` declaration (v8.49 default) in addition to `refactor(AC-N):` or legacy `refactor(AC-N) skipped:` commits.
+
+### Metrics
+
+- **Anti-rationalization consolidation:** 23 cross-cutting rows now live in one catalog (`src/content/anti-rationalizations.ts`, 249 lines). 13 surfaces (3 specialist prompts + 10 skill `.md` files) gained one-line pointers to the catalog instead of inlining the cross-cutting prose. The catalog is rendered to `.cclaw/lib/anti-rationalizations.md` at install (~7.8K chars).
+- **Auto-trigger per-dispatch token cost:** ~79% reduction across all six stage blocks (build stage: 6447 → 1062 chars; review stage: 5670 → 932 chars). Full skill descriptions moved to a single 11.8K-char `.cclaw/lib/skills-index.md` written once at install (zero per-dispatch cost; agents read it on demand when a trigger fires).
+- **Empty-commit elimination:** new flows record skipped REFACTOR phases in `build.md` rather than `git commit --allow-empty`. Reviewer accepts both shapes — no breakage for pre-v8.49 slugs already in flight or shipped.
+- **Files touched:** 23 modified, 2 new (`src/content/anti-rationalizations.ts`, `tests/unit/v849-overcomplexity-sweep.test.ts`). +267 insertions / -49 deletions in modified files; +607 new lines across the two new files.
+- **Tests added:** 22 tripwires in `tests/unit/v849-overcomplexity-sweep.test.ts` (5 AC-1, 6 AC-2, 7 AC-3, 4 cross-item invariants). Total suite 1131 → 1153 tests, all green.
+
+### Files touched
+
+- `src/content/anti-rationalizations.ts` (**new**, 249 lines) — shared catalog module: `SHARED_ANTI_RATIONALIZATIONS`, `renderAntiRationalizationsCatalog`, `ANTI_RATIONALIZATIONS_BODY`.
+- `src/content/skills.ts` — `renderSkillBullet` reduced to one-line pointer; `buildAutoTriggerBlock` summary line points at `.cclaw/lib/skills-index.md`; new `renderSkillsIndex` + `SKILLS_INDEX_BODY` for the central index.
+- `src/install.ts` — imports `ANTI_RATIONALIZATIONS_BODY` and `SKILLS_INDEX_BODY`; new `writeSkillsIndex` + `writeAntiRationalizationsCatalog` write the respective files to `.cclaw/lib/` during `syncCclaw`; progress events emitted for each.
+- `src/content/specialist-prompts/slice-builder.ts` — rule 4 documents the three accepted refactor paths (build.md row, real commit, legacy empty commit); worked example for skipped REFACTOR leads with build.md declaration; descriptive text after `buildAutoTriggerBlock("build")` cites the v8.49 compact pointer-index + `.cclaw/lib/skills-index.md`.
+- `src/content/specialist-prompts/reviewer.ts` — `test-first` and `characterization-first` posture checks accept all three refactor shapes; build.md row checked first; descriptive text cites `.cclaw/lib/skills-index.md`; anti-rationalization table cites `.cclaw/lib/anti-rationalizations.md`.
+- `src/content/specialist-prompts/design.ts` — descriptive text after `buildAutoTriggerBlock("plan")` cites `.cclaw/lib/skills-index.md`; anti-rationalization table cites `.cclaw/lib/anti-rationalizations.md`.
+- `src/content/specialist-prompts/critic.ts` — `Scope creep` → `Scope-creep` (aligns with the test regex pattern after auto-trigger block stripped the description prose carrying the hyphen); descriptive text after `buildAutoTriggerBlock("review")` cites `.cclaw/lib/skills-index.md`; anti-rationalization table cites `.cclaw/lib/anti-rationalizations.md`.
+- `src/content/specialist-prompts/ac-author.ts` — descriptive text after `buildAutoTriggerBlock("plan")` cites `.cclaw/lib/skills-index.md`.
+- `src/content/specialist-prompts/security-reviewer.ts` — descriptive text after `buildAutoTriggerBlock("review")` cites `.cclaw/lib/skills-index.md`.
+- `src/content/skills/tdd-and-verification.md` — anti-rationalization table cites `.cclaw/lib/anti-rationalizations.md` (category `posture-bypass`); REFACTOR row in the rationalization table documents the build.md declaration as v8.49 default; "REFACTOR — mandatory pass" section + `(f) refactor_run_or_skipped_with_reason` gate accept the row token.
+- `src/content/skills/completion-discipline.md`, `commit-hygiene.md`, `pre-edit-investigation.md`, `review-discipline.md`, `ac-discipline.md`, `receiving-feedback.md`, `debug-and-browser.md`, `triage-gate.md`, `api-evolution.md` — each gains a one-line catalog pointer at the top of its `## Common rationalizations` section.
+- `src/content/artifact-templates.ts > BUILD_TEMPLATE` — TDD cycle log row format documents the v8.49 row convention; REFACTOR notes + Commits sections explain the optional refactor SHA. `BUILD_TEMPLATE_SOFT` carries the same note.
+- `src/content/stage-playbooks.ts > build` runbook — "REFACTOR — keep behaviour, improve shape (mandatory)" + AC row table + "Common pitfalls" + "Mandatory gates per AC" all carry the v8.49 build.md path.
+- `src/posture-validation.ts` — `POSTURE_COMMIT_PREFIXES` comment clarifies the third accepted refactor shape.
+- `scripts/smoke-init.mjs` — asserts new install artifacts: `.cclaw/lib/skills-index.md` (with every `AUTO_TRIGGER_SKILL` id) and `.cclaw/lib/anti-rationalizations.md` (with all five category keys).
+- `tests/unit/v849-overcomplexity-sweep.test.ts` (**new**, 358 lines, 22 tripwires) — pins every v8.49 invariant: build.md `Refactor: skipped` row in slice-builder + reviewer + tdd-and-verification + BUILD_TEMPLATE + build runbook; legacy empty-commit acceptance; compact auto-trigger block + skills-index references; 50%+ block-size reduction; 5 catalog categories with ≥3 rows each; quoted-excuse + truth shape; H2-per-category + two-column table rendering; specialist + skill catalog pointers; v8.30 top-8 two-column-table tripwire still passes; cross-item invariant (posture-bypass row references the v8.49 build.md path).
+- `package.json` — version `8.48.0` → `8.49.0`.
+
+### Backwards compatibility
+
+- **Empty `refactor(AC-N) skipped` commits in pre-v8.49 slugs review cleanly.** The reviewer's TDD-integrity gate explicitly accepts the legacy path; no migration required for already-shipped slugs.
+- **Skill `.md` files keep their `## Common rationalizations` sections.** v8.30 top-8 two-column-table tripwire is still green; the catalog pointer is additive, not replacing the per-skill table.
+- **Specialist anti-rationalization tables preserve every specialist-specific row.** Design's 10 phase-skipping rows, critic's 8 pre-commitment / prediction rows, reviewer's 3 edit-discipline rows all stay in place. Only the catalog *cross-references* them.
+- **All existing test budgets** (`prompt-budgets.test.ts`, `v822-orchestrator-slim.test.ts`, `v831-path-aware-trimming.test.ts`) pass without bumps — the dedup actively shrinks prompts, so budget headroom grows rather than shrinks.
+
 ## 8.48.0 — discipline skills triad + edit-discipline reviewer axis + per-AC verified flag
 
 ### Why
