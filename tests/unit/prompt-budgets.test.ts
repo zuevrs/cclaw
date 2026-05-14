@@ -52,8 +52,19 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // size ~41k chars; 42000 leaves ~2.5% headroom. The growth is justified in
     // CHANGELOG.md (v8.47 — design phases UX collapse); see CHANGELOG.md >
     // 8.47.0 for the bump rationale.
-    maxLines: 460,
-    maxChars: 42000
+    //
+    // v8.53 raised the design budget from 460/42000 to 470/47000 to absorb the
+    // Phase 6 ambiguity-score sub-section (~4k chars) and the Phase 7 warning-
+    // prefix block (~700 chars). The new content includes the 3-dimension
+    // (greenfield) + 4-dimension (brownfield) scoring rubric, the weighted-
+    // sum formula, the frontmatter emission shape, the threshold lookup
+    // contract (config.yaml > design.ambiguity_threshold), and the soft-
+    // signal warning that fires when composite > threshold. Current size
+    // ~45k chars; 47000 leaves ~4% headroom. The growth is justified in
+    // CHANGELOG.md (v8.53 — critic enhancements: multi-perspective lenses +
+    // ambiguity score); see CHANGELOG.md > 8.53.0 for the bump rationale.
+    maxLines: 470,
+    maxChars: 47000
   },
   {
     id: "ac-author",
