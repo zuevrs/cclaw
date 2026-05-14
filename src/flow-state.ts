@@ -4,6 +4,7 @@ import {
   ROUTING_CLASSES,
   RUN_MODES,
   SPECIALISTS,
+  SURFACES,
   type AcMode,
   type AcceptanceCriterionState,
   type BuildProfile,
@@ -11,15 +12,20 @@ import {
   type CriticVerdict,
   type FlowStage,
   type PlanCriticVerdict,
+  type QaEvidenceTier,
+  type QaVerdict,
   type RoutingClass,
   type RunMode,
   type SpecialistId,
+  type Surface,
   type TriageDecision
 } from "./types.js";
 
 const CRITIC_VERDICTS = ["pass", "iterate", "block-ship"] as const;
 const CRITIC_ESCALATIONS = ["none", "light", "full"] as const;
 const PLAN_CRITIC_VERDICTS = ["pass", "revise", "cancel"] as const;
+const QA_VERDICTS = ["pass", "iterate", "blocked"] as const;
+const QA_EVIDENCE_TIERS = ["playwright", "browser-mcp", "manual"] as const;
 
 function isCriticVerdict(value: unknown): value is CriticVerdict {
   return typeof value === "string" && (CRITIC_VERDICTS as readonly string[]).includes(value);
@@ -31,6 +37,18 @@ function isCriticEscalation(value: unknown): value is CriticEscalation {
 
 function isPlanCriticVerdict(value: unknown): value is PlanCriticVerdict {
   return typeof value === "string" && (PLAN_CRITIC_VERDICTS as readonly string[]).includes(value);
+}
+
+function isQaVerdict(value: unknown): value is QaVerdict {
+  return typeof value === "string" && (QA_VERDICTS as readonly string[]).includes(value);
+}
+
+function isQaEvidenceTier(value: unknown): value is QaEvidenceTier {
+  return typeof value === "string" && (QA_EVIDENCE_TIERS as readonly string[]).includes(value);
+}
+
+function isSurface(value: unknown): value is Surface {
+  return typeof value === "string" && (SURFACES as readonly string[]).includes(value);
 }
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
@@ -152,6 +170,67 @@ export interface FlowStateV82 {
    * this slug.
    */
   planCriticDispatchedAt?: string;
+  /**
+   * v8.52 — verdict returned by the most-recent qa-runner dispatch.
+   *
+   * `pass` — every UI AC has evidence (Playwright / browser-MCP /
+   *   manual-confirmed); advance to review.
+   * `iterate` — at least one UI AC failed verification; bounce to
+   *   slice-builder with qa findings as additional context, max 1
+   *   iteration enforced by {@link qaIteration}.
+   * `blocked` — browser tooling unavailable AND manual steps required;
+   *   surface user picker (`proceed-without-qa-evidence` /
+   *   `pause-for-manual-qa` / `skip-qa`).
+   *
+   * Absence means qa-runner has not run yet (either pre-v8.52 state,
+   * gating excluded the flow on non-UI surface, acMode=inline, or the
+   * dispatch hasn't fired). `null` is explicitly accepted because the
+   * orchestrator may write `null` to mark "qa ran but the slim summary
+   * forgot the verdict" recovery cases — distinguishing absent-vs-null
+   * matters for the resume picker.
+   */
+  qaVerdict?: QaVerdict | null;
+  /**
+   * v8.52 — counts qa-runner dispatches for the active flow.
+   *
+   * Hard-capped at 1: initial dispatch (=0 before fire / =1 after the
+   * first return) and at-most-one rerun on an `iterate` verdict (=1
+   * after the second dispatch). A third dispatch is structurally not
+   * allowed — the orchestrator surfaces the user picker instead of
+   * running qa for the third time.
+   *
+   * Optional in TypeScript so pre-v8.52 state files (which lack the
+   * field) still validate; readers MUST default to `0` on absent.
+   * Distinct from {@link reviewIterations} and {@link criticIteration};
+   * qa dispatches do not increment any other counter.
+   */
+  qaIteration?: number;
+  /**
+   * v8.52 — ISO timestamp of the most-recent qa-runner dispatch.
+   *
+   * Stamped by the orchestrator immediately after the slim summary
+   * returns (alongside {@link qaVerdict} / {@link qaIteration} /
+   * {@link qaEvidenceTier}). Pure telemetry; downstream code does not
+   * branch on the value.
+   *
+   * Optional in TypeScript so pre-v8.52 state files (which lack the
+   * field) still validate; absent means qa-runner never ran for this
+   * slug.
+   */
+  qaDispatchedAt?: string;
+  /**
+   * v8.52 — evidence tier the qa-runner declared in its slim summary,
+   * mirrored from `qa.md` frontmatter. Drives the reviewer's
+   * `qa-evidence` axis: `playwright` is the strongest tier (CI-runnable
+   * test), `browser-mcp` is reviewable but session-bound, `manual` is
+   * the weakest tier (user-confirmed steps only).
+   *
+   * `null` is accepted because the orchestrator may write `null` on a
+   * `blocked` verdict where no tier was actually exercised (e.g.
+   * browser tools unavailable + manual steps queued for the user).
+   * Pre-v8.52 state files validate unchanged when absent.
+   */
+  qaEvidenceTier?: QaEvidenceTier | null;
   /**
    * Triage decision for the active flow. Null while no flow is running.
    * Persisted so resume never re-prompts the user.
@@ -389,6 +468,16 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   if (triage.notes !== undefined && typeof triage.notes !== "string") {
     throw new Error("triage.notes must be a string or absent");
   }
+  if (triage.surfaces !== undefined) {
+    if (!Array.isArray(triage.surfaces)) {
+      throw new Error("triage.surfaces must be an array of surface tokens or absent");
+    }
+    for (const entry of triage.surfaces) {
+      if (!isSurface(entry)) {
+        throw new Error(`Invalid triage.surfaces entry: ${String(entry)}`);
+      }
+    }
+  }
 }
 
 /**
@@ -491,6 +580,33 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
   }
   if (state.planCriticDispatchedAt !== undefined && typeof state.planCriticDispatchedAt !== "string") {
     throw new Error("flow-state.planCriticDispatchedAt must be a string or absent");
+  }
+  if (
+    state.qaVerdict !== undefined &&
+    state.qaVerdict !== null &&
+    !isQaVerdict(state.qaVerdict)
+  ) {
+    throw new Error(`Invalid qaVerdict: ${String(state.qaVerdict)}`);
+  }
+  if (state.qaIteration !== undefined) {
+    if (typeof state.qaIteration !== "number" || state.qaIteration < 0) {
+      throw new Error("flow-state.qaIteration must be a non-negative number when present");
+    }
+    if (state.qaIteration > 1) {
+      throw new Error(
+        `flow-state.qaIteration must be 0 or 1 when present (one iterate-loop cap); saw ${state.qaIteration}`
+      );
+    }
+  }
+  if (state.qaDispatchedAt !== undefined && typeof state.qaDispatchedAt !== "string") {
+    throw new Error("flow-state.qaDispatchedAt must be a string or absent");
+  }
+  if (
+    state.qaEvidenceTier !== undefined &&
+    state.qaEvidenceTier !== null &&
+    !isQaEvidenceTier(state.qaEvidenceTier)
+  ) {
+    throw new Error(`Invalid qaEvidenceTier: ${String(state.qaEvidenceTier)}`);
   }
   if (typeof state.securityFlag !== "boolean") {
     throw new Error("flow-state.securityFlag must be a boolean");

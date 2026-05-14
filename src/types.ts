@@ -12,7 +12,19 @@
  * orchestrator dispatches critic before advancing to ship. See
  * `src/flow-state.ts` for the migration shape.
  */
-export const FLOW_STAGES = ["plan", "build", "review", "critic", "ship"] as const;
+/**
+ * Canonical ordered set of stage tokens the orchestrator may emit in
+ * `triage.path` and {@link FlowState.currentStage}. The order also defines
+ * the canonical run sequence (each stage's `currentStage` mark is
+ * legal only after every prior stage's preconditions are met).
+ *
+ * v8.52 adds `"qa"` between `build` and `review`. It is the only stage
+ * the orchestrator dispatches conditionally: only when
+ * `triage.surfaces` includes `"ui"` or `"web"` AND `acMode != "inline"`.
+ * Non-UI slugs skip directly from `build` to `review`, preserving the
+ * pre-v8.52 path verbatim.
+ */
+export const FLOW_STAGES = ["plan", "build", "qa", "review", "critic", "ship"] as const;
 export type FlowStage = (typeof FLOW_STAGES)[number];
 
 export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
@@ -56,6 +68,7 @@ export const SPECIALISTS = [
   "reviewer",
   "security-reviewer",
   "critic",
+  "qa-runner",
   "slice-builder"
 ] as const;
 export type SpecialistId = (typeof SPECIALISTS)[number];
@@ -126,6 +139,99 @@ export type CriticVerdict = "pass" | "iterate" | "block-ship";
  * sweep (strict mode with any trigger firing).
  */
 export type CriticEscalation = "none" | "light" | "full";
+
+/**
+ * v8.52 — verdict the qa-runner specialist returns in its slim summary.
+ * Drives the qa stage routing (between `build` and `review` on the tight
+ * gate {triage.surfaces includes "ui" or "web" AND acMode != "inline"}):
+ *
+ * - `pass` — every UI AC has evidence (Playwright test result / browser
+ *   MCP screenshot / manual-steps confirmation); proceed to review.
+ * - `iterate` — at least one UI AC failed verification; bounce back to
+ *   slice-builder with qa findings as additional context, max 1 iteration
+ *   enforced by `qaIteration` (cap=1).
+ * - `blocked` — browser tooling unavailable AND manual steps required;
+ *   surface user picker (`proceed-without-qa-evidence` /
+ *   `pause-for-manual-qa` / `skip-qa`). Distinct from `iterate`: blocked
+ *   means qa could not run at all, not that it ran and failed.
+ *
+ * Distinct from {@link CriticVerdict} and {@link PlanCriticVerdict}: qa
+ * runs at a different stage (between build + review), against UI
+ * surfaces only, with its own evidence-tier rubric.
+ */
+export type QaVerdict = "pass" | "iterate" | "blocked";
+
+/**
+ * v8.52 — evidence tier captured by the qa-runner in `qa.md` frontmatter
+ * and mirrored to `flow-state.json > qaEvidenceTier`. Records which
+ * verification path the specialist took for the bulk of the UI ACs:
+ *
+ * - `playwright` — committed Playwright test that runs in CI;
+ *   machine-verifiable evidence. Preferred when the project already
+ *   ships Playwright or an equivalent e2e harness.
+ * - `browser-mcp` — exploratory verification via a browser MCP
+ *   (cursor-ide-browser, chrome-devtools, browser-use, etc.) with
+ *   captured screenshots / observations. Reviewable but not re-runnable
+ *   in CI without rerunning the MCP session.
+ * - `manual` — last resort. qa-runner emits a `## Manual QA steps`
+ *   block in qa.md and asks the user to confirm. The verdict is
+ *   `blocked` until the user confirms.
+ *
+ * Drives the reviewer's `qa-evidence` axis (v8.52) cross-check: for any
+ * AC with surface in {`ui`, `web`}, the reviewer expects `qa.md` with a
+ * matching evidence row.
+ */
+export type QaEvidenceTier = "playwright" | "browser-mcp" | "manual";
+
+/**
+ * v8.52 — runtime surfaces a task may touch. Populated by the
+ * orchestrator at triage (Hop 2) from the task description and the
+ * touched-files signal, stamped under `triage.surfaces`. Drives the
+ * v8.52 qa-runner gate (qa-runner dispatches only when `surfaces`
+ * includes `"ui"` or `"web"` AND `acMode != "inline"`).
+ *
+ * Multiple values per slug are expected — a /cc that builds an HTTP
+ * endpoint + a Vue component touches both `"api"` and `"ui"`. The
+ * orchestrator emits the union of detected surfaces, not a single
+ * primary classification.
+ *
+ * Backwards compat: when `surfaces` is absent or empty, the
+ * orchestrator treats the slug as `["other"]` (the no-QA-gating fallback);
+ * pre-v8.52 flow-state files validate unchanged.
+ *
+ * Surface vocabulary:
+ *
+ * - `cli` — command-line tool / bin scripts.
+ * - `library` — published code consumed by other code (npm package
+ *   internals, exported modules, SDK surface).
+ * - `api` — HTTP / RPC / GraphQL endpoint touched (request/response
+ *   shape, route handler, middleware).
+ * - `ui` — visual UI surface (React/Vue/Svelte component, HTML/CSS
+ *   diff, page rendering). Gates qa-runner dispatch in non-inline mode.
+ * - `web` — alias for `ui` when the diff is web-specific (kept as a
+ *   separate token because some authoring contexts emit "web" verbatim
+ *   from the prompt; the qa-runner gate treats both as equivalent).
+ * - `data` — persistence / migration / schema surface (SQL, ORM
+ *   models, fixtures).
+ * - `infra` — deployment / CI / runtime config (Dockerfile, GitHub
+ *   Actions, Terraform).
+ * - `docs` — markdown / docs-only diff with no runtime behaviour
+ *   change.
+ * - `other` — fallback when no canonical surface fits, and the
+ *   default value the validator applies when the field is absent.
+ */
+export const SURFACES = [
+  "cli",
+  "library",
+  "api",
+  "ui",
+  "web",
+  "data",
+  "infra",
+  "docs",
+  "other"
+] as const;
+export type Surface = (typeof SURFACES)[number];
 
 /**
  * v8.51 — verdict the pre-implementation plan-critic returns in its
@@ -468,6 +574,23 @@ export interface TriageDecision {
    * the field validate unchanged.
    */
   notes?: string;
+  /**
+   * v8.52 — surfaces this slug touches, populated by the orchestrator
+   * at Hop 2 from the task description plus the touched-files signal.
+   * Drives the v8.52 qa-runner gate: qa dispatches only when
+   * `surfaces` includes `"ui"` or `"web"` AND `acMode != "inline"`.
+   * See {@link Surface} for the vocabulary.
+   *
+   * Multiple values per slug are expected — a /cc that builds an HTTP
+   * endpoint plus a Vue component emits `["api", "ui"]`. The orchestrator
+   * writes the union of detected surfaces, not a single primary
+   * classification.
+   *
+   * Backwards compat: when absent or empty, the orchestrator and the
+   * qa gate treat the slug as `["other"]` (no QA gating). Pre-v8.52
+   * state files without this field validate unchanged.
+   */
+  surfaces?: Surface[];
 }
 
 export interface CliContext {
