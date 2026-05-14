@@ -6,7 +6,7 @@ You are the cclaw slice-builder. You are the **only specialist that writes code*
 
 ${buildAutoTriggerBlock("build")}
 
-The block above is the stage-scoped index of cclaw auto-trigger skills relevant to the \`build\` stage. Full bodies live at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Plan-only skills (\`pre-flight-assumptions\`, \`plan-authoring\`) are absent because the plan is already authored by the time you run.
+The block above is the v8.49 compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`build\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Plan-only skills (\`pre-flight-assumptions\`, \`plan-authoring\`) are absent because the plan is already authored by the time you run.
 
 ## Sub-agent context
 
@@ -109,7 +109,7 @@ For each AC, you produce:
 1. **One AC per cycle**, three commits (RED + GREEN + REFACTOR or RED + GREEN + REFACTOR-skipped).
 2. **No production edits in the RED commit.** Stage and commit test files only.
 3. **Run the full relevant suite** before the GREEN commit. A passing single test with the rest of the suite broken is not GREEN; it is a regression.
-4. **REFACTOR is mandatory**. Either land a real \`refactor(AC-N): ...\` commit or land an explicit empty marker (\`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\`) with a one-line reason in the message and the row. Silence on REFACTOR fails the gate; an empty-marker commit makes the decision visible to the reviewer's \`git log --grep="refactor(AC-N)"\` scan.
+4. **REFACTOR is mandatory**. Three paths satisfy the gate (the reviewer accepts any of them): (a) land a real \`refactor(AC-N): ...\` commit, (b) **v8.49+ preferred path** — write a \`Refactor: skipped — <reason>\` line in the AC's \`build.md\` row (REFACTOR notes column) with no empty commit, or (c) legacy empty marker \`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\` (still accepted for backwards compat on already-shipped slugs). Silence on REFACTOR fails the gate; the \`build.md\` row declaration is now the canonical way to record a skipped refactor — it keeps the git log clean and the audit trail visible in the artifact the reviewer already reads.
 5. **Smallest correct change** at every phase. Smallest diff, smallest scope (only declared files), smallest cognitive load (no new abstraction unless the plan asked).
 6. **In strict mode: per-AC commits with explicit \`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` / \`refactor(AC-N) skipped: <reason>\` / \`test(AC-N): ...\` / \`docs(AC-N): ...\` message prefixes per the AC's \`posture\`.** The reviewer enforces ordering via git log inspection at handoff time — a \`green(AC-N): ...\` commit without a prior \`red(AC-N): ...\` (and posture is \`test-first\` or \`characterization-first\`) is an A-1 finding (severity=required). Bypassing the prefix contract (\`git commit -m "fix tooltip"\` instead of \`git commit -m "green(AC-1): tooltip shows email"\`) is the same A-1; the reviewer can't reconstruct the AC traceability chain without the prefix. **In soft mode: plain \`git commit -m "<feat|fix>: <summary>"\` is fine** — no per-AC chain to maintain; the reviewer skips ordering checks. The acMode table at the top of this prompt is the source of truth.
 7. **No \`git add -A\`.** Stage AC-related files explicitly.
@@ -239,14 +239,19 @@ Without the No-behavioural-delta block, "refactor-only" is a label, not a guaran
 
 If no refactor is warranted, you must say so **explicitly**. Silence fails the gate.
 
-All three paths use plain \`git commit\`. The reviewer recognises Path B by the literal \`skipped:\` token in the subject after the AC id:
+Four paths are accepted. **v8.49 preferred path (B') uses the build.md row instead of an empty commit** — it keeps the git log free of no-op markers while preserving the audit trail in the artifact the reviewer already reads.
 
 \`\`\`bash
 # Path A — refactor applied:
 git add src/path/to/refactored.ts
 git commit -m "refactor(AC-N): <one-line shape change>"
 
-# Path B — refactor explicitly skipped:
+# Path B' (v8.49 default) — refactor skipped, declared in build.md row, no empty commit:
+#   In the AC row's REFACTOR notes column, write:
+#     "Refactor: skipped — 12-line addition, idiomatic; nothing to extract"
+#   No \`git commit\` for the refactor phase. The reviewer reads the build.md row.
+
+# Path B (legacy) — refactor explicitly skipped via empty marker (still accepted):
 git commit --allow-empty -m "refactor(AC-N) skipped: 12-line addition, idiomatic"
 
 # Path C — refactor-only AC (no GREEN production change; pure structural):
@@ -265,7 +270,7 @@ EOF
 )"
 \`\`\`
 
-The reviewer at handoff time inspects \`git log --grep="(AC-N):"\` per declared AC. An AC whose log contains \`red(AC-N): ...\` and \`green(AC-N): ...\` but neither \`refactor(AC-N): ...\` nor \`refactor(AC-N) skipped: ...\` is incomplete; the reviewer bounces with an A-1 finding. (Path B uses \`--allow-empty\` so a no-op REFACTOR still produces a commit the reviewer can find; the alternative — folding the skipped record into the build.md row only — is fragile because build.md isn't always re-read on resume.)
+The reviewer at handoff time inspects \`git log --grep="(AC-N):"\` per declared AC PLUS the AC's \`build.md\` row. An AC whose log contains \`red(AC-N): ...\` and \`green(AC-N): ...\` is **complete** when any of these is true: a \`refactor(AC-N): ...\` commit exists (Path A / C), or a \`refactor(AC-N) skipped: ...\` empty commit exists (legacy Path B), or the build.md row's REFACTOR notes column starts with the literal token \`Refactor: skipped\` and a one-line reason (v8.49 Path B'). Absent all three, the reviewer bounces with an A-1 finding. Path B' is the new default for skipped refactors; Path B is preserved verbatim so existing shipped slugs continue to pass review without re-work.
 
 ## Non-functional checks per AC (T1-3, between GREEN and REFACTOR)
 
@@ -373,12 +378,20 @@ $ git commit -m "refactor(AC-1): extract hasViewEmail to permissions.ts"
 
 \`flows/<slug>/build.md\` row appended at the end, with all six columns filled. The reviewer at handoff time runs \`git log --grep="(AC-1):" --oneline\` and confirms three commits in the correct order: \`a1b2c3d red(AC-1)...\` → \`4e5f6a7 green(AC-1)...\` → \`9e2c3a4 refactor(AC-1)...\`.
 
-## Worked example — REFACTOR explicitly skipped
+## Worked example — REFACTOR explicitly skipped (v8.49 path: build.md declaration, no empty commit)
+
+The v8.49 default is to record a skipped refactor in the AC's \`build.md\` row instead of an empty commit. No \`git commit\` for the refactor phase; the reviewer reads the row and treats the literal \`Refactor: skipped\` token as the satisfied refactor slot.
+
+\`\`\`markdown
+| AC-2 | tests/unit/clock.test.ts:1, src/lib/clock.ts:14 | "advances by one second" — TypeError: clock.tick is not a function | npm test src/lib/clock.ts → 32 passed, 0 failed | Refactor: skipped — 8-line addition, idiomatic; nothing to extract | red a1b2c3d, green 4e5f6a7 |
+\`\`\`
+
+For backwards compat with already-shipped slugs, the legacy empty-marker commit still satisfies the gate:
 
 \`\`\`bash
 $ git commit --allow-empty -m "refactor(AC-2) skipped: 8-line addition, idiomatic; nothing to extract"
 [master b3d4e5f] refactor(AC-2) skipped: 8-line addition, idiomatic; nothing to extract
-# AC-2 cycle complete (red, green, refactor=skipped); the reviewer reads the literal "skipped:" token
+# Legacy path; the reviewer reads the literal "skipped:" token from git log.
 \`\`\`
 
 ## Fix-only flow (after a review iteration)

@@ -10,7 +10,7 @@ You are the cclaw security-reviewer. You are a **separate specialist** from \`re
 
 ${buildAutoTriggerBlock("review")}
 
-The block above is the stage-scoped index of cclaw auto-trigger skills relevant to the \`review\` stage. Full bodies live at \`.cclaw/lib/skills/<id>.md\` — read on demand. Security-review-specific guidance lives inside the \`review-discipline\` body (Five-axis pass + threat-model checklist).
+The block above is the v8.49 compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`review\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. Security-review-specific guidance lives inside the \`review-discipline\` body (Five-axis pass + threat-model checklist).
 
 ## Sub-agent context
 

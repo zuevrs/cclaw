@@ -78,6 +78,8 @@ In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/c
 
 ## Common rationalizations
 
+**Cross-cutting rationalizations:** the canonical commit-prefix / amend-after-push / bundling rows live in `.cclaw/lib/anti-rationalizations.md` under category `commit-discipline` (v8.49). The rows below stay here because they cover AC-discipline-specific framings (bundling-under-AC-2, vague verification, mid-build AC addition, refinement renumbering); the catalog covers the cross-cutting commit-chain prose.
+
 AC discipline is the first thing that pressures an agent to "just commit something" when iteration is slow. Catch yourself thinking the left column; do the right column. Surface the rationalization in `## Summary → Potential concerns` when you obey the right column anyway.
 
 | rationalization | truth |

@@ -73,6 +73,8 @@ If a downstream stage finds an upstream claim lacked evidence, that is **F-N sev
 
 ## Common rationalizations
 
+**Cross-cutting rationalizations:** the canonical "should pass" / "looks good to me" / "I'll claim complete now" rows live in `.cclaw/lib/anti-rationalizations.md` under category `completion` (v8.49). The rows below stay here because they cover completion-specific framings (stale-evidence citation rule, `Confidence: high + Notes:` hedge, verification line transcription); the catalog covers the shared rebuttal prose so the cross-cutting set stays consistent across surfaces.
+
 The "claim now, evidence later" reflex is how completion-discipline breaks. The table below names every excuse a specialist will produce; pair it with the rebuttal and pick the right column.
 
 | rationalization | truth |

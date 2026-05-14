@@ -12,7 +12,8 @@ import {
 } from "./constants.js";
 import { CORE_AGENTS, renderAgentMarkdown } from "./content/core-agents.js";
 import { ARTIFACT_TEMPLATES, planTemplateForSlug, templateBody } from "./content/artifact-templates.js";
-import { AUTO_TRIGGER_SKILLS } from "./content/skills.js";
+import { AUTO_TRIGGER_SKILLS, SKILLS_INDEX_BODY } from "./content/skills.js";
+import { ANTI_RATIONALIZATIONS_BODY } from "./content/anti-rationalizations.js";
 import { REFERENCE_PATTERNS, REFERENCE_PATTERNS_INDEX } from "./content/reference-patterns.js";
 import { STAGE_PLAYBOOKS, STAGE_PLAYBOOKS_INDEX } from "./content/stage-playbooks.js";
 import {
@@ -374,6 +375,45 @@ async function writeMetaSkill(projectRoot: string): Promise<void> {
   );
 }
 
+/**
+ * v8.49 — write the auto-trigger skills index to `.cclaw/lib/skills-index.md`.
+ * v8.49 collapses the per-dispatch specialist prompt block to a compact
+ * one-line-per-skill pointer; the full per-skill description + trigger
+ * list lives in this index, written once at install time so specialists
+ * can read it on demand instead of the prompt carrying it verbatim.
+ *
+ * The index is grouped by stage (so a stage-dispatched specialist can
+ * read the relevant section) AND carries an alphabetical entry per
+ * skill (so an out-of-stage citation has somewhere to land). Both
+ * sections are derived from `AUTO_TRIGGER_SKILLS` so renaming /
+ * adding / removing a skill ripples through automatically.
+ */
+async function writeSkillsIndex(projectRoot: string): Promise<void> {
+  await writeFileSafe(
+    path.join(projectRoot, LIB_ROOT, "skills-index.md"),
+    SKILLS_INDEX_BODY
+  );
+}
+
+/**
+ * Write the shared anti-rationalization catalog (v8.49) to
+ * `.cclaw/lib/anti-rationalizations.md`. Specialists and skills reference
+ * rows from this file by category (`completion`, `verification`,
+ * `edit-discipline`, `commit-discipline`, `posture-bypass`) instead of
+ * inlining the cross-cutting rebuttals into every prompt.
+ *
+ * The body is sourced from `content/anti-rationalizations.ts` so adding /
+ * removing a category or row ripples through at install time.
+ */
+async function writeAntiRationalizationsCatalog(
+  projectRoot: string
+): Promise<void> {
+  await writeFileSafe(
+    path.join(projectRoot, LIB_ROOT, "anti-rationalizations.md"),
+    ANTI_RATIONALIZATIONS_BODY
+  );
+}
+
 async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): Promise<void> {
   await ensureDir(path.join(projectRoot, layout.commandsDir));
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc.md"), renderStartCommand());
@@ -546,6 +586,15 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   await writeRuntimeSkills(projectRoot);
   await writeMetaSkill(projectRoot);
   emit("Wrote skills", `${AUTO_TRIGGER_SKILLS.length + 1} skills → .cclaw/lib/skills/`);
+
+  await writeSkillsIndex(projectRoot);
+  emit("Wrote skills index", `skills-index.md → .cclaw/lib/`);
+
+  await writeAntiRationalizationsCatalog(projectRoot);
+  emit(
+    "Wrote anti-rationalizations catalog",
+    `anti-rationalizations.md → .cclaw/lib/`
+  );
 
   if (options.skipOrphanCleanup) {
     emit(

@@ -338,21 +338,31 @@ export const AUTO_TRIGGER_DISPATCH_STAGES: ReadonlyArray<Exclude<AutoTriggerStag
 ];
 
 /**
- * Format a skill into a compact bullet for embedding in a specialist prompt.
- * One line of `id` + `description`, one sub-line listing the skill's
- * triggers verbatim. The full skill body is NOT inlined — it lives in
- * `.cclaw/lib/skills/<id>.md` and is loaded by the harness's own skill
- * machinery; the block here is a stage-scoped *index* so the specialist
- * knows which skills apply to its current dispatch.
+ * v8.49 — compact one-line bullet for embedding in a specialist prompt.
+ *
+ * The v8.18 shape emitted three lines per skill (id + ~200-char
+ * description + comma-separated trigger list). With 20 skills and 6
+ * specialist dispatch surfaces, each per-dispatch prompt carried 4-6 KB
+ * of duplicated description prose. v8.49 collapses each bullet to a
+ * single line: id + on-disk path. Full descriptions and trigger lists
+ * are written once at install time to `.cclaw/lib/skills-index.md`
+ * (see {@link SKILLS_INDEX_BODY}); the per-dispatch block is now a
+ * pointer-index, not an inlined catalogue.
+ *
+ * The v8.19 `**<id>**` bold-token format is preserved verbatim — the
+ * windowing tripwire suite (`tests/unit/v819-skill-windowing.test.ts`)
+ * keys off it and continues to assert per-stage inclusion / exclusion.
  */
 function renderSkillBullet(skill: AutoTriggerSkill): string {
-  return `- **${skill.id}** — ${skill.description}\n  - triggers: ${skill.triggers.join(", ")}`;
+  return `- **${skill.id}** — \`.cclaw/lib/skills/${skill.fileName}\``;
 }
 
 /**
  * Render the stage-scoped block of auto-trigger skills suitable for
  * interpolation into a specialist prompt. v8.19 introduces the `stage`
- * parameter as the primary call shape.
+ * parameter; v8.49 collapses each bullet to a one-line pointer (id +
+ * on-disk path) and moves the full descriptions / trigger lists to
+ * `.cclaw/lib/skills-index.md` (written by install).
  *
  * - When `stage` is omitted, the legacy "all skills" block is returned
  *   (every entry in {@link AUTO_TRIGGER_SKILLS}). This keeps callers that
@@ -364,11 +374,14 @@ function renderSkillBullet(skill: AutoTriggerSkill): string {
  *   set — same as omitting the parameter — so a typo never silently
  *   strips every skill out of a dispatch.
  *
- * The token-budget win is real: a stage block is always strictly shorter
- * than the full block on this codebase (each dispatch stage drops at
- * least four out-of-scope skills). The v819-skill-windowing suite locks
- * a minimum 20% reduction at the test level so a future un-tag (every
- * skill regressing to `["always"]`) is caught.
+ * Two token-budget wins composed:
+ *
+ *  1. v8.19 stage filtering — out-of-scope skills are not emitted.
+ *  2. v8.49 compact bullet — emitted skills carry id + path only.
+ *
+ * The v819-skill-windowing suite asserts a 20%+ stage-vs-full ratio
+ * reduction; the v849 overcomplexity-sweep suite asserts the v8.18
+ * description prose no longer appears inline.
  */
 export function buildAutoTriggerBlock(stage?: AutoTriggerStage): string {
   const known = new Set<AutoTriggerStage>([
@@ -396,11 +409,88 @@ export function buildAutoTriggerBlock(stage?: AutoTriggerStage): string {
   const bullets = skills.map(renderSkillBullet);
 
   const summary = useStage
-    ? `_${skills.length} of ${AUTO_TRIGGER_SKILLS.length} skills active for stage \`${useStage}\`. The full body of each skill lives in \`.cclaw/lib/skills/<id>.md\` — read on demand, do not inline._`
-    : `_${AUTO_TRIGGER_SKILLS.length} skills total. The full body of each skill lives in \`.cclaw/lib/skills/<id>.md\` — read on demand, do not inline._`;
+    ? `_${skills.length} of ${AUTO_TRIGGER_SKILLS.length} skills active for stage \`${useStage}\`. Full descriptions + triggers: \`.cclaw/lib/skills-index.md\`. Each skill's body: \`.cclaw/lib/skills/<id>.md\` — read on demand, do not inline._`
+    : `_${AUTO_TRIGGER_SKILLS.length} skills total. Full descriptions + triggers: \`.cclaw/lib/skills-index.md\`. Each skill's body: \`.cclaw/lib/skills/<id>.md\` — read on demand, do not inline._`;
 
   return [heading, "", ...bullets, "", summary].join("\n");
 }
+
+/**
+ * v8.49 — render the full auto-trigger skills index. Written once at
+ * install time to `.cclaw/lib/skills-index.md` so specialists can
+ * reference it on demand instead of the per-dispatch prompt carrying
+ * every skill's description verbatim.
+ *
+ * The body groups skills by their dispatch stage (so a specialist
+ * dispatched at `build` can read the build section directly) AND
+ * carries one alphabetical entry per skill with the full description
+ * and trigger list. The alphabetical section is what gets cited when
+ * a skill's body needs context outside its stage.
+ *
+ * The format is markdown so it lives next to `.cclaw/lib/skills/*.md`
+ * and is grep-able by the same agent tooling that already reads those
+ * files.
+ */
+export function renderSkillsIndex(): string {
+  const heading = `# cclaw auto-trigger skills index`;
+  const preface = [
+    "Auto-generated by `cclaw install` from `src/content/skills.ts > AUTO_TRIGGER_SKILLS`. v8.49 moved the per-skill description + trigger prose out of every specialist prompt and into this single index — specialist prompts now embed a compact `id → file` pointer block (rendered via `buildAutoTriggerBlock(stage)`), and read this file when they need the full description / triggers / stage tags for a skill.",
+    "",
+    "Every skill's full body lives at `.cclaw/lib/skills/<id>.md`; this file is the index over those bodies, not a substitute for them."
+  ].join("\n");
+  const stageHeading = `## Stage map`;
+  const stageRows: string[] = [];
+  stageRows.push("| stage | skill ids |");
+  stageRows.push("| --- | --- |");
+  for (const stage of [
+    ...AUTO_TRIGGER_DISPATCH_STAGES,
+    "always" as const
+  ]) {
+    const ids = AUTO_TRIGGER_SKILLS.filter((skill) => {
+      const declared = skill.stages ?? (["always"] as const);
+      return declared.includes(stage);
+    }).map((skill) => `\`${skill.id}\``);
+    if (ids.length === 0) {
+      stageRows.push(`| \`${stage}\` | _(none)_ |`);
+    } else {
+      stageRows.push(`| \`${stage}\` | ${ids.join(", ")} |`);
+    }
+  }
+  const alphaHeading = `## All skills (alphabetical)`;
+  const sorted = [...AUTO_TRIGGER_SKILLS].sort((a, b) => a.id.localeCompare(b.id));
+  const entries = sorted.map((skill) => {
+    const stages = (skill.stages ?? (["always"] as const)).map((s) => `\`${s}\``).join(", ");
+    return [
+      `### \`${skill.id}\``,
+      "",
+      `- file: \`.cclaw/lib/skills/${skill.fileName}\``,
+      `- stages: ${stages}`,
+      `- triggers: ${skill.triggers.map((t) => `\`${t}\``).join(", ")}`,
+      `- description: ${skill.description}`
+    ].join("\n");
+  });
+  return [
+    heading,
+    "",
+    preface,
+    "",
+    stageHeading,
+    "",
+    stageRows.join("\n"),
+    "",
+    alphaHeading,
+    "",
+    entries.join("\n\n"),
+    ""
+  ].join("\n");
+}
+
+/**
+ * v8.49 — the rendered skills-index body. Written by `install.ts` to
+ * `.cclaw/lib/skills-index.md`. Computed once at module-import time
+ * since `AUTO_TRIGGER_SKILLS` is itself static after import.
+ */
+export const SKILLS_INDEX_BODY: string = renderSkillsIndex();
 
 /**
  * Strict-stage variant of {@link buildAutoTriggerBlock} for call-sites

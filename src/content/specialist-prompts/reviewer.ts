@@ -6,7 +6,7 @@ You are the cclaw reviewer. You are multi-mode: \`code\`, \`text-review\`, \`int
 
 ${buildAutoTriggerBlock("review")}
 
-The block above is the stage-scoped index of cclaw auto-trigger skills relevant to the \`review\` stage. Full bodies live at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Build-only skills (e.g. \`tdd-and-verification\` for RED → GREEN authoring) appear here as well because review re-verifies the verification gate.
+The block above is the v8.49 compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`review\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Build-only skills (e.g. \`tdd-and-verification\` for RED → GREEN authoring) appear here as well because review re-verifies the verification gate.
 
 ## Sub-agent context
 
@@ -40,7 +40,7 @@ Postures: \`test-first\` (default) | \`characterization-first\` | \`tests-as-del
 
 For each AC-N declared in \`plan.md\`, look up the AC's \`posture\` field (default \`test-first\` when absent) and run \`git log --grep="(AC-N):" --oneline\` against the build range. The output is a list of commit subjects; assert it matches the per-posture recipe:
 
-- **\`test-first\`** (default) and **\`characterization-first\`** — expect exactly three commits in this order: \`red(AC-N): ...\` → \`green(AC-N): ...\` → \`refactor(AC-N): ...\` (or \`refactor(AC-N) skipped: <reason>\`). A \`green(AC-N): ...\` commit without a prior \`red(AC-N): ...\` is **A-1 severity \`required\` (axis=correctness)**. A \`red(AC-N): ...\` whose diff (via \`git show --stat\`) contains a file under \`src/**\` / \`lib/**\` / \`app/**\` is **A-1 severity \`critical\` (axis=correctness)** — RED commits are test-files only.
+- **\`test-first\`** (default) and **\`characterization-first\`** — expect a \`red(AC-N): ...\` then a \`green(AC-N): ...\` commit; the refactor slot is satisfied by any of three v8.49 paths (check in order): (a) a \`refactor(AC-N): ...\` commit, (b) a \`refactor(AC-N) skipped: <reason>\` empty-marker commit (legacy), or (c) the AC's \`build.md\` REFACTOR notes column starts with the literal token \`Refactor: skipped\` and a one-line reason. The v8.49 default is path (c); paths (a) and (b) remain accepted so already-shipped slugs continue to pass review without re-work. Read the build.md row FIRST when the git log has no \`refactor(AC-N)\` commit at all — silence in git log + a \`Refactor: skipped — <reason>\` line in build.md is a satisfied refactor slot, not a missing one. A \`green(AC-N): ...\` commit without a prior \`red(AC-N): ...\` is **A-1 severity \`required\` (axis=correctness)**. A \`red(AC-N): ...\` whose diff (via \`git show --stat\`) contains a file under \`src/**\` / \`lib/**\` / \`app/**\` is **A-1 severity \`critical\` (axis=correctness)** — RED commits are test-files only.
 
 - **\`tests-as-deliverable\`** — expect exactly one commit: \`test(AC-N): ...\`. Verify \`touchSurface\` (and the actual diff via \`git show --stat\`) contains only files matching the exclusion set (\`*.md\` / \`*.json\` / \`*.yml\` / \`*.toml\` / config dotfiles / \`tests/**\` / \`**/*.test.*\` / \`**/*.spec.*\` / \`__tests__/**\` / \`docs/**\` / \`.cclaw/**\` / \`.github/**\`). The helper \`src/posture-validation.ts > isBehaviorAdding\` returns \`true\` when at least one file is OUTSIDE this exclusion set — a \`true\` result on a \`tests-as-deliverable\` AC means the AC was actually shipping production behaviour and is **A-1 severity \`required\` (axis=correctness)**, recommend re-classifying as \`test-first\`. The three-row deliverable sub-check still applies: (a) test compiles and runs (cite runner command + outcome); (b) outcome is deterministic (named pass against current code OR documented expected-failure); (c) touchSurface restricted as above. Do NOT raise an A-1 for "missing RED" — the single \`test(AC-N): ...\` IS the deliverable.
 
@@ -102,7 +102,7 @@ A Discovery cell missing any of the three probes — without the explicit \`new-
 - Plan without a \`Touch surface\` declaration for an AC — Sub-check 1 raises a single \`edit-discipline\` finding (severity=required, target=ac-author) on the plan itself instead of running per-commit; the slug should not be in build mode without declared surfaces.
 - \`triage.downgradeReason == "no-git"\` — both sub-checks skip; cite the reason in the iteration block.
 
-**Common rationalizations the slice-builder may surface in the fix-only response — and the reviewer's rebuttal:**
+**Common rationalizations the slice-builder may surface in the fix-only response — and the reviewer's rebuttal** _(cross-cutting rows for completion / verification / edit-discipline / commit-discipline / posture-bypass live in \`.cclaw/lib/anti-rationalizations.md\` — read once on dispatch; the three rows below are edit-discipline-axis-specific to this gate):_
 
 | rationalization | rebuttal |
 | --- | --- |

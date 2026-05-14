@@ -49,8 +49,14 @@ export { isBehaviorAdding, IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION };
  *  - `bootstrap` AC-1 omits the leading `red` prefix (the bootstrap
  *    escape). AC-2+ uses the full `test-first` recipe.
  *  - `refactor` commits may carry the literal `refactor(AC-N) skipped:`
- *    subject (Path B); the reviewer accepts that as a satisfied
- *    `refactor` slot.
+ *    subject (legacy Path B; still accepted for backwards compat); OR
+ *    the slot may be satisfied without any refactor commit when the
+ *    AC's `build.md` row's REFACTOR notes column starts with the
+ *    literal token `Refactor: skipped` and a one-line reason (v8.49
+ *    Path B' / default). The reviewer reads the build.md row and
+ *    accepts either representation as a satisfied `refactor` slot;
+ *    silence in BOTH the git log and the build.md row is the
+ *    missing-refactor A-1 finding.
  */
 export const POSTURE_COMMIT_PREFIXES: Readonly<Record<Posture, readonly string[]>> = {
   "test-first": ["red", "green", "refactor"],
