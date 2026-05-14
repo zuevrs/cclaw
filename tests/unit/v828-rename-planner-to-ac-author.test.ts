@@ -56,10 +56,11 @@ describe("v8.28 — SPECIALISTS array carries `ac-author`, not `planner`", () =>
     expect((SPECIALISTS as readonly string[]).includes("planner")).toBe(false);
   });
 
-  it("AC-1: SPECIALISTS order is design, ac-author, reviewer, security-reviewer, critic, slice-builder (v8.42 inserted critic between security-reviewer and slice-builder)", () => {
+  it("AC-1: SPECIALISTS order is design, ac-author, plan-critic, reviewer, security-reviewer, critic, slice-builder (v8.42 inserted critic between security-reviewer and slice-builder; v8.51 inserted plan-critic between ac-author and reviewer)", () => {
     expect([...SPECIALISTS]).toEqual([
       "design",
       "ac-author",
+      "plan-critic",
       "reviewer",
       "security-reviewer",
       "critic",
@@ -74,12 +75,13 @@ describe("v8.28 — SPECIALIST_PROMPTS keyed at `ac-author`", () => {
     expect(SPECIALIST_PROMPTS["ac-author"].length).toBeGreaterThan(1000);
   });
 
-  it("AC-2: SPECIALIST_PROMPTS has no `planner` key (type-level guarantee + runtime check; v8.42 added critic key)", () => {
+  it("AC-2: SPECIALIST_PROMPTS has no `planner` key (type-level guarantee + runtime check; v8.42 added critic key; v8.51 added plan-critic key)", () => {
     expect(Object.keys(SPECIALIST_PROMPTS)).not.toContain("planner");
     expect(Object.keys(SPECIALIST_PROMPTS).sort()).toEqual([
       "ac-author",
       "critic",
       "design",
+      "plan-critic",
       "reviewer",
       "security-reviewer",
       "slice-builder",

@@ -30,8 +30,8 @@ describe("v8.42 critic specialist — registry membership", () => {
     expect((SPECIALISTS as readonly string[]).includes("critic")).toBe(true);
   });
 
-  it("SPECIALISTS array now carries exactly six specialists (was 5 on v8.41)", () => {
-    expect(SPECIALISTS).toHaveLength(6);
+  it("SPECIALISTS array carries exactly seven specialists (v8.42 added critic; v8.51 added plan-critic)", () => {
+    expect(SPECIALISTS).toHaveLength(7);
   });
 
   it("critic sits between security-reviewer and slice-builder in the canonical specialist order", () => {
