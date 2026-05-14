@@ -86,6 +86,16 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     prompt: SPECIALIST_PROMPTS.critic
   },
   {
+    id: "plan-critic",
+    kind: "specialist",
+    title: "Plan critic",
+    activation: "on-demand",
+    modes: ["pre-impl-review"],
+    description:
+      "v8.51 pre-implementation plan-critic. Runs between ac-author and slice-builder ONLY on the tight gate {acMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}. Five-dimension protocol (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog) + §6 pre-commitment predictions before final review. Verdicts: pass (advance to slice-builder), revise (bounce to ac-author once — max 1 revise loop), cancel (user picker: cancel-slug / re-design). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
+    prompt: SPECIALIST_PROMPTS["plan-critic"]
+  },
+  {
     id: "slice-builder",
     kind: "specialist",
     title: "Slice builder",

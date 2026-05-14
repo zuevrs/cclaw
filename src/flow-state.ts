@@ -10,6 +10,7 @@ import {
   type CriticEscalation,
   type CriticVerdict,
   type FlowStage,
+  type PlanCriticVerdict,
   type RoutingClass,
   type RunMode,
   type SpecialistId,
@@ -18,6 +19,7 @@ import {
 
 const CRITIC_VERDICTS = ["pass", "iterate", "block-ship"] as const;
 const CRITIC_ESCALATIONS = ["none", "light", "full"] as const;
+const PLAN_CRITIC_VERDICTS = ["pass", "revise", "cancel"] as const;
 
 function isCriticVerdict(value: unknown): value is CriticVerdict {
   return typeof value === "string" && (CRITIC_VERDICTS as readonly string[]).includes(value);
@@ -25,6 +27,10 @@ function isCriticVerdict(value: unknown): value is CriticVerdict {
 
 function isCriticEscalation(value: unknown): value is CriticEscalation {
   return typeof value === "string" && (CRITIC_ESCALATIONS as readonly string[]).includes(value);
+}
+
+function isPlanCriticVerdict(value: unknown): value is PlanCriticVerdict {
+  return typeof value === "string" && (PLAN_CRITIC_VERDICTS as readonly string[]).includes(value);
 }
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
@@ -103,6 +109,49 @@ export interface FlowStateV82 {
    * orchestrator stamps this for telemetry / compound-learning audit.
    */
   criticEscalation?: CriticEscalation;
+  /**
+   * v8.51 — verdict returned by the most-recent plan-critic dispatch.
+   *
+   * `pass` — plan was approved; advance to slice-builder.
+   * `revise` — bounce to ac-author for one revise loop (max).
+   * `cancel` — structural plan problem; surface cancel/re-design picker.
+   *
+   * Absence means plan-critic has not run yet (either pre-v8.51 state,
+   * gating excluded the flow, or the dispatch hasn't fired). The
+   * orchestrator's deterministic gate (acMode=strict + complexity=
+   * large-risky + problemType!=refines + AC count>=2) is the canonical
+   * "should this slug have a verdict?" check; downstream code branches
+   * on presence + value, never on absence-as-implicit-pass.
+   */
+  planCriticVerdict?: PlanCriticVerdict | null;
+  /**
+   * v8.51 — counts plan-critic dispatches for the active flow.
+   *
+   * Hard-capped at 1: initial dispatch (=0 before fire / =1 after the
+   * first return), at-most-one rerun on a `revise` verdict (=1 after
+   * the second dispatch). A third dispatch is structurally not allowed
+   * — the orchestrator surfaces the user picker instead of running
+   * plan-critic for the third time.
+   *
+   * Optional in TypeScript so pre-v8.51 state files (which lack the
+   * field) still validate; readers MUST default to `0` on absent.
+   * Distinct from {@link criticIteration} — plan-critic dispatches do
+   * not increment the post-impl critic counter, by design (different
+   * stages, different verdicts).
+   */
+  planCriticIteration?: number;
+  /**
+   * v8.51 — ISO timestamp of the most-recent plan-critic dispatch.
+   *
+   * Stamped by the orchestrator immediately after the slim summary
+   * returns (alongside `planCriticVerdict` / `planCriticIteration`).
+   * Pure telemetry; downstream code does not branch on the value.
+   *
+   * Optional in TypeScript so pre-v8.51 state files (which lack the
+   * field) still validate; absent means plan-critic never ran for
+   * this slug.
+   */
+  planCriticDispatchedAt?: string;
   /**
    * Triage decision for the active flow. Null while no flow is running.
    * Persisted so resume never re-prompts the user.
@@ -422,6 +471,26 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
   }
   if (state.criticEscalation !== undefined && !isCriticEscalation(state.criticEscalation)) {
     throw new Error(`Invalid criticEscalation: ${String(state.criticEscalation)}`);
+  }
+  if (
+    state.planCriticVerdict !== undefined &&
+    state.planCriticVerdict !== null &&
+    !isPlanCriticVerdict(state.planCriticVerdict)
+  ) {
+    throw new Error(`Invalid planCriticVerdict: ${String(state.planCriticVerdict)}`);
+  }
+  if (state.planCriticIteration !== undefined) {
+    if (typeof state.planCriticIteration !== "number" || state.planCriticIteration < 0) {
+      throw new Error("flow-state.planCriticIteration must be a non-negative number when present");
+    }
+    if (state.planCriticIteration > 1) {
+      throw new Error(
+        `flow-state.planCriticIteration must be 0 or 1 when present (one revise-loop cap); saw ${state.planCriticIteration}`
+      );
+    }
+  }
+  if (state.planCriticDispatchedAt !== undefined && typeof state.planCriticDispatchedAt !== "string") {
+    throw new Error("flow-state.planCriticDispatchedAt must be a string or absent");
   }
   if (typeof state.securityFlag !== "boolean") {
     throw new Error("flow-state.securityFlag must be a boolean");
