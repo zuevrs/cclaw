@@ -39,9 +39,20 @@ export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
  * Hop 4.5 (between Hop 4 review and Hop 5 ship); the new
  * {@link FLOW_STAGES} entry `"critic"` is the stage value the
  * orchestrator stamps while the critic dispatch is in flight.
+ *
+ * v8.51 — `plan-critic` joins the roster between `ac-author` and
+ * `slice-builder`. plan-critic is a **pre-implementation** adversarial
+ * pass that runs only on the tight gate {acMode=strict, complexity=
+ * large-risky, problemType!=refines, AC count>=2}. It walks the plan
+ * itself (goal coverage / granularity / dependencies / parallelism /
+ * risk catalog) before any code is written, and writes a single
+ * `flows/<slug>/plan-critic.md` artifact. Distinct from the v8.42
+ * `critic` specialist (post-implementation, walks what was built);
+ * both ship in tandem because they catch different problem classes.
  */
 export const SPECIALISTS = [
   ...DISCOVERY_SPECIALISTS,
+  "plan-critic",
   "reviewer",
   "security-reviewer",
   "critic",
@@ -115,6 +126,32 @@ export type CriticVerdict = "pass" | "iterate" | "block-ship";
  * sweep (strict mode with any trigger firing).
  */
 export type CriticEscalation = "none" | "light" | "full";
+
+/**
+ * v8.51 — verdict the pre-implementation plan-critic returns in its
+ * slim summary. Drives the plan-critic step routing (between
+ * `ac-author` and `slice-builder` on the tight gate {acMode=strict,
+ * complexity=large-risky, problemType!=refines, AC count>=2}):
+ *
+ * - `pass` — advance to slice-builder dispatch (no ceremony).
+ * - `revise` (iteration 0) — bounce to ac-author with plan-critic
+ *   findings prepended; ac-author updates plan.md and the orchestrator
+ *   re-dispatches plan-critic (iteration 1).
+ * - `revise` (iteration 1) — orchestrator surfaces the user picker
+ *   (cancel / accept-warnings-and-proceed / re-design); no third
+ *   plan-critic dispatch is allowed (1 revise loop max).
+ * - `cancel` (any iteration) — structural plan problem (goal-coverage
+ *   gap requiring re-design, dependency cycle that can't be untangled);
+ *   orchestrator surfaces the cancel picker (cancel-slug / re-design)
+ *   immediately, no silent fallback.
+ *
+ * Distinct from {@link CriticVerdict} on purpose: the post-impl critic
+ * has a `block-ship` verdict (build/review already ran); plan-critic
+ * has `cancel` (build hasn't run yet so "block-ship" would be a
+ * category error). Both enums coexist; readers branch on which
+ * specialist is in flight, not on a merged verdict shape.
+ */
+export type PlanCriticVerdict = "pass" | "revise" | "cancel";
 
 export type ArtifactStatus = "active" | "shipped";
 export type AcceptanceCriterionStatus = "pending" | "committed";

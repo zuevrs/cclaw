@@ -50,13 +50,13 @@ async function seedRunbookOrphan(projectRoot: string, fileName: string): Promise
 }
 
 describe("v8.22 orchestrator-slim — `/cc` body line budget", () => {
-  it("AC-1 — `start-command.ts` body stays ≤485 lines (was 901 on v8.21; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer)", () => {
+  it("AC-1 — `start-command.ts` body stays ≤505 lines (was 901 on v8.21; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer; v8.51 absorbed ~15 lines for the pre-implementation plan-critic sub-step pointer)", () => {
     const body = renderStartCommand();
     const lineCount = body.split("\n").length;
     expect(
       lineCount,
-      `start-command body is ${lineCount} lines (budget 485). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md and kept only a five-bullet pointer in the orchestrator body (one new stage entry, one new table row, one trimmed acMode-gating sentence under triage.path, one v8.42 footnote on the triage example). If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
-    ).toBeLessThanOrEqual(485);
+      `start-command body is ${lineCount} lines (budget 505). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md and kept only a five-bullet pointer in the orchestrator body (one new stage entry, one new table row, one trimmed acMode-gating sentence under triage.path, one v8.42 footnote on the triage example). v8.51 added a parallel pointer for the pre-impl plan-critic sub-step (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section, gating + verdict-routing pointer to runbooks/plan-critic-stage.md); ~95% of the new content is in the runbook + the plan-critic.ts prompt. If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
+    ).toBeLessThanOrEqual(505);
   });
 
   it("AC-1 — the body is meaningfully smaller than the legacy v8.21 size (≥30% cut)", () => {
@@ -80,6 +80,11 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
   // v8.42 extends the set with `critic-stage.md` — the on-demand runbook
   // for Hop 4.5 critic dispatch (acMode gating, escalation triggers,
   // verdict routing, flow-state patches, legacy migration).
+  // v8.51 extends the set with `plan-critic-stage.md` — the on-demand
+  // runbook for the pre-implementation plan-critic sub-step (gating
+  // table: acMode=strict + complexity=large-risky + problemType!=refines
+  // + AC count>=2, verdict routing pass/revise/cancel, iteration cap,
+  // flow-state patches).
   const expectedRunbookFiles = [
     "dispatch-envelope.md",
     "parallel-build.md",
@@ -94,9 +99,10 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
     "pause-resume.md",
     "plan-small-medium.md",
     "critic-stage.md",
+    "plan-critic-stage.md",
   ];
 
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the thirteen expected files (v8.22 ten + v8.31 two + v8.42 one)", () => {
+  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the fourteen expected files (v8.22 ten + v8.31 two + v8.42 one + v8.51 one)", () => {
     const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
     expect(fileNames).toEqual([...expectedRunbookFiles].sort());
   });
@@ -154,26 +160,26 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
 });
 
 describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", () => {
-  it("AC-4 — body alone is ≤49k chars (was ~52k on v8.21; v8.42 lifted to absorb the Hop 4.5 critic pointer; v8.47 lifted by ~300 chars for the design pacing prose)", () => {
+  it("AC-4 — body alone is ≤57500 chars (v8.42 lifted to absorb the Hop 4.5 critic pointer; v8.47 lifted by ~300 chars for the design pacing prose; v8.51 lifted ~4k chars for the pre-impl plan-critic sub-step pointer)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 52500). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth); v8.42 added ~2k chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare the new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook); v8.48 added ~600 chars for the per-AC \`AC verified\` slim-summary line, its semantics paragraph, and the finalize-precondition pointer (the full Per-AC verified gate procedure lives in runbooks/finalize.md); v8.50 lifted ~1500 chars to absorb the knowledge outcome-loop pointers — three brief paragraphs describing the v8.50 follow-up-bug Hop 1 capture path, the outcome-signal down-weight applied to the prior-learnings lookup, and the revert + manual-fix capture paths inside \`runCompoundAndShip\`. Do not raise this further without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(52500);
+      `start-command body is ${charCount} chars (budget 57500). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth); v8.42 added ~2k chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare the new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook); v8.48 added ~600 chars for the per-AC \`AC verified\` slim-summary line, its semantics paragraph, and the finalize-precondition pointer (the full Per-AC verified gate procedure lives in runbooks/finalize.md); v8.50 lifted ~1500 chars to absorb the knowledge outcome-loop pointers — three brief paragraphs describing the v8.50 follow-up-bug Hop 1 capture path, the outcome-signal down-weight applied to the prior-learnings lookup, and the revert + manual-fix capture paths inside \`runCompoundAndShip\`; v8.51 added ~4k chars for the pre-implementation plan-critic sub-step pointer (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section under #### plan, gating + verdict-routing pointer to runbooks/plan-critic-stage.md). Do not raise this further without a CHANGELOG note.`
+    ).toBeLessThanOrEqual(57500);
   });
 
   it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {
     expect(renderStartCommand()).toBe(START_COMMAND_BODY);
   });
 
-  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 110k-char ceiling (v8.42 lifted to absorb the critic-stage runbook)", () => {
+  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 130k-char ceiling (v8.42 lifted to absorb the critic-stage runbook; v8.51 lifted to absorb the plan-critic-stage runbook)", () => {
     const combined =
       renderStartCommand().length +
       ON_DEMAND_RUNBOOKS.reduce((acc, r) => acc + r.body.length, 0);
     expect(
       combined,
-      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 117000). The pre-v8.22 body alone was ~50k; the v8.42 critic-stage runbook adds ~7k chars for the dedicated Hop 4.5 dispatch contract; v8.48 added ~3.5k chars total (600 chars body + ~3k chars in finalize.md for the Per-AC verified gate procedure); v8.50 added ~1500 chars to the body for the knowledge-outcome-loop pointer paragraphs (full detection lives in src/outcome-detection.ts + src/compound.ts, NOT in a runbook). Expanding past 117k means a block belongs on disk, not inlined and not in a runbook.`
-    ).toBeLessThanOrEqual(117000);
+      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 130000). The pre-v8.22 body alone was ~50k; the v8.42 critic-stage runbook adds ~7k chars for the dedicated Hop 4.5 dispatch contract; v8.48 added ~3.5k chars total (600 chars body + ~3k chars in finalize.md for the Per-AC verified gate procedure); v8.50 added ~1500 chars to the body for the knowledge-outcome-loop pointer paragraphs (full detection lives in src/outcome-detection.ts + src/compound.ts, NOT in a runbook); v8.51 added ~8k chars total (2k body + ~6k chars in runbooks/plan-critic-stage.md for the gating table, dispatch envelope, verdict routing, iteration cap, flow-state patches, and legacy migration). Expanding past 130k means a block belongs on disk, not inlined and not in a runbook.`
+    ).toBeLessThanOrEqual(130000);
   });
 });
 
