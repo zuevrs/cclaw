@@ -156,6 +156,41 @@ try {
   if (!existsSync(join(tempDir, ".cclaw", "lib", "decision-protocol.md"))) {
     throw new Error("smoke check failed: lib/decision-protocol.md missing after init");
   }
+  // v8.49 - the auto-trigger sweep moved per-skill descriptions out of every
+  // dispatched specialist prompt into a single central file
+  // `.cclaw/lib/skills-index.md`. Install must write the file; uninstall must
+  // remove it (covered by the .cclaw-tree wipe at the end of this script).
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "skills-index.md"))) {
+    throw new Error("smoke check failed: v8.49 added lib/skills-index.md but it is missing after init");
+  }
+  const skillsIndexBody = readFileSync(
+    join(tempDir, ".cclaw", "lib", "skills-index.md"),
+    "utf8"
+  );
+  for (const skill of AUTO_TRIGGER_SKILLS) {
+    if (!skillsIndexBody.includes("`" + skill.id + "`")) {
+      throw new Error(
+        `smoke check failed: v8.49 skills-index.md is missing the entry for skill \`${skill.id}\``
+      );
+    }
+  }
+  // v8.49 - the anti-rationalization consolidation moved cross-cutting
+  // rationalization rows into a single catalog. Install must write
+  // `.cclaw/lib/anti-rationalizations.md` with the five known categories.
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "anti-rationalizations.md"))) {
+    throw new Error("smoke check failed: v8.49 added lib/anti-rationalizations.md but it is missing after init");
+  }
+  const antiRatBody = readFileSync(
+    join(tempDir, ".cclaw", "lib", "anti-rationalizations.md"),
+    "utf8"
+  );
+  for (const category of ["completion", "verification", "edit-discipline", "commit-discipline", "posture-bypass"]) {
+    if (!antiRatBody.includes("`" + category + "`")) {
+      throw new Error(
+        `smoke check failed: v8.49 anti-rationalizations.md is missing category \`${category}\``
+      );
+    }
+  }
   // v8.40 — full hooks removal. session-start.mjs and commit-helper.mjs
   // were retired alongside stop-handoff.mjs; .cclaw/hooks/ should not
   // exist on a fresh install. TDD enforcement moved to a prompt-only
