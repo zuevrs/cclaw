@@ -1,5 +1,77 @@
 # Changelog
 
+## 8.55.0 — harness-embedded rules surface: cclaw ambient discipline in `.cursor/`, `.claude/`, `.codex/`, `.opencode/` namespaces
+
+### Why
+
+The cross-reference content-footprint audit (run between v8.53 and v8.54) flagged cclaw as the **only** reference among 11 that ships zero rules files. Every other reference (chachamaru, gsd-v1, OMC, compound, etc.) ships `CLAUDE.md` / `AGENTS.md` / `.cursor/rules/`. cclaw's deliberate `/cc`-only activation has a real cost: in projects where agents do not always invoke `/cc`, cclaw's Iron Laws, anti-rationalization catalog, and antipatterns DON'T apply — agents run "naked" with default harness behaviour.
+
+v8.55 closes the gap without compromising the user's no-project-root-AGENTS/CLAUDE constraint. Every cclaw rules file lives inside a harness-namespaced directory (`.cursor/`, `.claude/`, `.codex/`, `.opencode/`); cclaw never touches `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md` at the project root (the user owns those files). For Cursor the rules auto-load via MDC `alwaysApply: true`; for the other three harnesses the install summary surfaces a one-line `@`-reference the user adds to their root memory file to activate ambient discipline.
+
+### What changed
+
+**Deliverable 1 — per-harness rules audit** (research; reflected in `src/install.ts` rules-layout docstrings).
+
+Canonical rules locations confirmed against current 2026 docs:
+
+- **Cursor** — `.cursor/rules/*.mdc` with YAML frontmatter (`description`, `globs`, `alwaysApply`). `alwaysApply: true` activates on every session start without user action.
+- **Claude Code** — `./CLAUDE.md` (project root) or `./.claude/CLAUDE.md`. Subdirectory rules under `.claude/` load via `@path` reference from the root memory file. A standalone `.claude/cclaw-rules.md` requires the user to add `@.claude/cclaw-rules.md` to their CLAUDE.md.
+- **Codex** — `./AGENTS.md` (project root) or `~/.codex/AGENTS.md`. Subdirectory rules under `.codex/` require the user to add `@.codex/cclaw-rules.md` to their AGENTS.md (or to root-level instructions).
+- **OpenCode** — `./AGENTS.md` (project root) is auto-loaded; `.opencode/AGENTS.md` is also loaded as of PR #12096. Using `.opencode/cclaw-rules.md` keeps the file under cclaw's namespace and requires the user to add `@.opencode/cclaw-rules.md` to their AGENTS.md to avoid colliding with user-authored OpenCode rules.
+
+**Deliverable 2 — content module** (`src/content/cclaw-rules.ts`; new file).
+
+- Single source of truth for the harness-agnostic ambient rules body. Exports `CCLAW_RULES_MARKDOWN` (plain markdown for Claude / Codex / OpenCode) and `CCLAW_RULES_MDC` (the same body wrapped in Cursor's MDC frontmatter for `.cursor/rules/cclaw.mdc`).
+- Sections (compact-content contract, ~42 lines rendered): Iron Laws (5 laws, sourced structurally from `IRON_LAWS` in `src/content/iron-laws.ts`) → top anti-rationalization categories (5 one-line summaries keyed by `SHARED_ANTI_RATIONALIZATIONS` category) → top antipatterns A-1..A-5 (one-line each; cross-referenced against `## A-N — Title` headings in `ANTIPATTERNS` via `extractAntipatternHeadings()`) → orientation paragraph naming `/cc <task description>` as the activation affordance → footer naming `.cclaw/lib/anti-rationalizations.md` and `.cclaw/lib/antipatterns.md` as the `/cc`-only full catalogs.
+- Heavy content stays out of the ambient surface — full anti-rat rebuttals, A-1..A-7 full corrections, runbooks, specialist prompts, AC-trace commit-prefix enforcement all live in `.cclaw/lib/` and load only when `/cc` is invoked.
+
+**Deliverable 3 — per-harness install logic** (`src/install.ts`).
+
+- New `HarnessRulesLayout` interface on `HarnessLayout` (`path`, `format`, `autoLoad`, `activationHint`). Every harness layout gets a `rules` field naming its canonical path and activation contract.
+- `writeHarnessAssets` writes the rules file at the harness-namespaced path: `.cursor/rules/cclaw.mdc` (MDC) / `.claude/cclaw-rules.md` / `.codex/cclaw-rules.md` / `.opencode/cclaw-rules.md` (plain markdown).
+- Install emits one `Wrote harness rules` progress event per harness, with the auto-load / manual @-ref tag in the detail.
+- Idempotent: re-running install overwrites the same path with the current content (the rules body is a projection of the cclaw catalogs, not user-editable on disk).
+- `uninstallCclaw` removes the rules file from each enabled harness's path AND tidies an empty `.cursor/rules/` parent if cclaw was the sole inhabitant; the `.harness/` root directory survives because the user may keep other state there.
+
+**Deliverable 4 — install summary surfaces per-harness activation** (`src/install.ts`, `src/cli.ts`).
+
+- New exported helper `renderHarnessRulesGuidance(harnesses)` returns a multi-line block naming each installed harness with its native rules path and the action the user must take ("auto-load — no further action" for Cursor; "add `@.harness/cclaw-rules.md` to your CLAUDE.md / AGENTS.md" for the other three).
+- The CLI install dispatcher (`dispatchInstallAction`) emits the block between the existing `renderSummary` counts table and the final `[cclaw] install complete.` line. Both the TUI menu and `--non-interactive install` paths flow through this dispatcher, so the message renders identically across surfaces.
+- Every hint that names CLAUDE.md / AGENTS.md trails the explicit reminder "cclaw never writes CLAUDE.md / AGENTS.md" so the user knows the file is theirs to author.
+
+**Deliverable 5 — tests** (`tests/unit/v855-harness-rules.test.ts`, new file; `scripts/smoke-init.mjs` extended).
+
+- 38 new tripwires in `tests/unit/v855-harness-rules.test.ts`:
+  - **Content module**: exports shape; ambient-rules heading; orientation paragraph names `/cc`; every Iron Law title present verbatim; Iron Laws heading (Karpathy); all 5 anti-rat category keys present as inline code; `ANTI_RAT_CATEGORY_SUMMARIES` covers the catalog exactly; antipatterns section heading; A-1..A-5 present; A-6 / A-7 NOT advertised as bullet items (range mention "A-1..A-7" in footer is allowed); both `/cc`-only catalog paths named; "How to activate" footer with `/cc <task description>`; body size within 20-160 line bracket.
+  - **MDC variant**: starts with `---\n` fence; frontmatter carries `description:` and `alwaysApply: true`; post-frontmatter body is `CCLAW_RULES_MARKDOWN` verbatim; frontmatter omits `globs:` (rules are repo-wide).
+  - **Cross-reference (no drift)**: `ANTIPATTERN_SUMMARIES` IDs are exactly A-1..A-5; every summary title matches the verbatim `## A-N — Title` heading in `ANTIPATTERNS`; rendered body includes each antipattern title verbatim.
+  - **Per-harness install**: `HARNESS_LAYOUT_TABLE` carries `rules` for every supported harness with valid `path` / `format` / `autoLoad` / `activationHint`; Cursor uses MDC + auto-load at `.cursor/rules/cclaw.mdc`; the other three use plain markdown + manual @-ref at `.harness/cclaw-rules.md`; install writes the MDC body at `.cursor/rules/cclaw.mdc`; plain markdown at `.claude/`, `.codex/`, `.opencode/`; multi-harness install writes all four; idempotent install (re-run does not append); install NEVER creates project-root AGENTS.md / CLAUDE.md / GEMINI.md; install emits one progress event per harness rules file.
+  - **Uninstall**: removes `.cursor/rules/cclaw.mdc`; removes empty `.cursor/rules/` parent dir; preserves user-authored sibling rules under `.cursor/rules/`; removes `.harness/cclaw-rules.md` for every enabled harness.
+  - **Activation guidance**: empty string for zero harnesses; one hint per installed harness; Cursor hint names auto-load + the `.mdc` path; the other three hints name the `@`-reference target file; guidance carries the "cclaw never writes" reminder.
+- `scripts/smoke-init.mjs` extended to assert `.cursor/rules/cclaw.mdc` exists on install, opens with `---\n`, carries `alwaysApply: true`, ships the Iron Laws section + `/cc <task description>` pointer; AND asserts uninstall removes both the file and the empty `.cursor/rules/` parent; AND the existing AGENTS.md / CLAUDE.md negative assertions now extend to GEMINI.md.
+- Test count: 1077 → 1115 (+38 new tripwires; zero existing tests broken).
+
+### Metrics
+
+- **Files touched:** 6 modified, 2 new (`src/content/cclaw-rules.ts`, `tests/unit/v855-harness-rules.test.ts`).
+- **Test count:** 1077 → 1115 (+38).
+- **Rules body size:** ~42 lines rendered (compact-content contract; ambient surface is principles + `/cc` pointer, not duplicated heavy content).
+- **Smoke green** end-to-end (init + idempotent install + uninstall) on the build.
+
+### Migration
+
+- Existing `.cclaw/` installs without rules files: the next `cclaw install` adds the per-harness rules file. No state to migrate; the rules body is a projection of the cclaw catalogs.
+- Cursor: rules auto-load on next session start (`alwaysApply: true`); no user action required.
+- Claude Code / Codex / OpenCode: install summary surfaces the one-line `@`-reference the user adds to their CLAUDE.md / AGENTS.md to activate ambient discipline. Until the user adds the reference, the harness still works exactly as before (silent no-op file on disk).
+- Existing user-authored `.cursor/rules/*.mdc` sibling files: untouched. cclaw owns `.cursor/rules/cclaw.mdc` exclusively; any other `.mdc` in the directory survives install / uninstall.
+
+### Constraints
+
+- **No project-root file touched.** cclaw NEVER writes `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, or any file at the project root. The user owns those.
+- **Compact ambient surface.** The rules file carries only principles + `/cc` pointer. Heavy content (full anti-rat rebuttals, A-1..A-7 corrections, runbooks, specialist prompts) stays in `.cclaw/lib/` and loads only inside `/cc`.
+- **Per-harness format flexibility.** Cursor takes MDC (the only auto-load surface among the four); the other three take plain markdown matching their `@`-reference loading contract.
+- **Idempotency is the contract.** Re-running install overwrites the file rather than appending; the rules body is a projection, not a user-editable resource.
+
 ## 8.54.0 — consolidation pass: content cleanup + test slim + plan-critic gate widening + CI matrix simplification
 
 ### Why

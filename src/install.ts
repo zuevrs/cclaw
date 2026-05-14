@@ -14,6 +14,7 @@ import { CORE_AGENTS, renderAgentMarkdown } from "./content/core-agents.js";
 import { ARTIFACT_TEMPLATES, planTemplateForSlug, templateBody } from "./content/artifact-templates.js";
 import { AUTO_TRIGGER_SKILLS, SKILLS_INDEX_BODY } from "./content/skills.js";
 import { ANTI_RATIONALIZATIONS_BODY } from "./content/anti-rationalizations.js";
+import { CCLAW_RULES_MARKDOWN, CCLAW_RULES_MDC } from "./content/cclaw-rules.js";
 import { REFERENCE_PATTERNS, REFERENCE_PATTERNS_INDEX } from "./content/reference-patterns.js";
 import { STAGE_PLAYBOOKS, STAGE_PLAYBOOKS_INDEX } from "./content/stage-playbooks.js";
 import {
@@ -41,11 +42,46 @@ import { HARNESS_IDS, type HarnessId } from "./types.js";
 import { ironLawsMarkdown } from "./content/iron-laws.js";
 import type { ProgressEvent, SummaryCounts } from "./ui.js";
 
+/**
+ * v8.55 — per-harness layout for the ambient cclaw rules surface that
+ * lives outside `/cc`. Each harness gets its own activation contract;
+ * the field captures both the file path and the activation mode so the
+ * install summary can render the correct per-harness guidance.
+ *
+ * - `path` — repository-relative file path the installer writes / the
+ *   uninstaller removes. ALL paths live inside the harness's namespaced
+ *   directory (`.cursor/`, `.claude/`, `.codex/`, `.opencode/`); the
+ *   installer NEVER touches project-root `AGENTS.md` / `CLAUDE.md` /
+ *   `GEMINI.md` (the user owns those files).
+ * - `format` — `"mdc"` for Cursor (YAML frontmatter + markdown body) /
+ *   `"markdown"` for the other three (plain markdown body, no
+ *   frontmatter).
+ * - `autoLoad` — `true` when the harness's native rules system loads
+ *   the file on session start without further user action (Cursor MDC
+ *   with `alwaysApply: true`). `false` when the user must add a
+ *   one-line `@.harness/cclaw-rules.md` reference from their root
+ *   memory file (CLAUDE.md / AGENTS.md) for the rules to activate. The
+ *   install summary surfaces per-harness activation steps based on
+ *   this field.
+ * - `activationHint` — verbatim one-line activation step rendered by
+ *   the install summary. Each harness gets a custom hint matching its
+ *   native rules system; the install summary concatenates these into
+ *   the post-install message so the user sees exactly what to do per
+ *   harness.
+ */
+export interface HarnessRulesLayout {
+  path: string;
+  format: "mdc" | "markdown";
+  autoLoad: boolean;
+  activationHint: string;
+}
+
 export interface HarnessLayout {
   id: HarnessId;
   commandsDir: string;
   agentsDir: string;
   skillsDir: string;
+  rules: HarnessRulesLayout;
 }
 
 const HARNESS_LAYOUTS: Record<HarnessId, HarnessLayout> = {
@@ -53,25 +89,53 @@ const HARNESS_LAYOUTS: Record<HarnessId, HarnessLayout> = {
     id: "claude",
     commandsDir: ".claude/commands",
     agentsDir: ".claude/agents",
-    skillsDir: ".claude/skills/cclaw"
+    skillsDir: ".claude/skills/cclaw",
+    rules: {
+      path: ".claude/cclaw-rules.md",
+      format: "markdown",
+      autoLoad: false,
+      activationHint:
+        "Claude Code: add `@.claude/cclaw-rules.md` to your CLAUDE.md to activate ambient rules (cclaw never writes CLAUDE.md)."
+    }
   },
   cursor: {
     id: "cursor",
     commandsDir: ".cursor/commands",
     agentsDir: ".cursor/agents",
-    skillsDir: ".cursor/skills/cclaw"
+    skillsDir: ".cursor/skills/cclaw",
+    rules: {
+      path: ".cursor/rules/cclaw.mdc",
+      format: "mdc",
+      autoLoad: true,
+      activationHint:
+        "Cursor: rules auto-load from `.cursor/rules/cclaw.mdc` (`alwaysApply: true`); no further action needed."
+    }
   },
   opencode: {
     id: "opencode",
     commandsDir: ".opencode/commands",
     agentsDir: ".opencode/agents",
-    skillsDir: ".opencode/skills/cclaw"
+    skillsDir: ".opencode/skills/cclaw",
+    rules: {
+      path: ".opencode/cclaw-rules.md",
+      format: "markdown",
+      autoLoad: false,
+      activationHint:
+        "OpenCode: add `@.opencode/cclaw-rules.md` to your AGENTS.md to activate ambient rules (cclaw never writes AGENTS.md)."
+    }
   },
   codex: {
     id: "codex",
     commandsDir: ".codex/commands",
     agentsDir: ".codex/agents",
-    skillsDir: ".codex/skills/cclaw"
+    skillsDir: ".codex/skills/cclaw",
+    rules: {
+      path: ".codex/cclaw-rules.md",
+      format: "markdown",
+      autoLoad: false,
+      activationHint:
+        "Codex: add `@.codex/cclaw-rules.md` to your AGENTS.md to activate ambient rules (cclaw never writes AGENTS.md)."
+    }
   }
 };
 
@@ -409,6 +473,17 @@ async function writeAntiRationalizationsCatalog(
   );
 }
 
+/**
+ * v8.55 — render the ambient rules body for the harness's native rules
+ * system. Cursor takes the MDC variant (frontmatter + body); the other
+ * three harnesses take the plain markdown body. The same compact
+ * content rides every harness; only the wrapper format differs to
+ * match each system's native loading contract.
+ */
+function rulesBodyFor(layout: HarnessLayout): string {
+  return layout.rules.format === "mdc" ? CCLAW_RULES_MDC : CCLAW_RULES_MARKDOWN;
+}
+
 async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): Promise<void> {
   await ensureDir(path.join(projectRoot, layout.commandsDir));
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc.md"), renderStartCommand());
@@ -427,6 +502,16 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
   for (const skill of AUTO_TRIGGER_SKILLS) {
     await writeFileSafe(path.join(projectRoot, layout.skillsDir, skill.fileName), skill.body);
   }
+
+  // v8.55 — ambient rules surface. Each harness gets the rules body
+  // wrapped in its native format (Cursor MDC vs plain markdown) at its
+  // namespaced path. Idempotent: re-running install overwrites the
+  // file with the current content rather than appending; the cclaw
+  // catalog is the source of truth, the disk file is a projection.
+  await writeFileSafe(
+    path.join(projectRoot, layout.rules.path),
+    rulesBodyFor(layout)
+  );
 }
 
 /**
@@ -656,7 +741,17 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   for (const harness of harnesses) {
     await writeHarnessAssets(projectRoot, HARNESS_LAYOUTS[harness]);
   }
-  emit("Wired harnesses", `${harnesses.join(", ")} → commands · agents · skills`);
+  emit("Wired harnesses", `${harnesses.join(", ")} → commands · agents · skills · rules`);
+  // v8.55 — emit one progress event per harness rules file so the
+  // operator sees which path each rules file landed at. Cursor's MDC
+  // file is the only auto-load path; the other three require a
+  // one-line `@`-reference from the user's root memory file, which
+  // the install summary spells out below.
+  for (const harness of harnesses) {
+    const layout = HARNESS_LAYOUTS[harness];
+    const autoLoadTag = layout.rules.autoLoad ? "auto-load" : "manual @-ref";
+    emit("Wrote harness rules", `${layout.rules.path} (${autoLoadTag})`);
+  }
 
   await ensureGitignorePatterns(projectRoot);
   const configPath = await writeConfig(projectRoot, config);
@@ -706,6 +801,19 @@ export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
       await removePath(path.join(projectRoot, layout.agentsDir, `${agent.id}.md`));
     }
     await removePath(path.join(projectRoot, layout.skillsDir));
+    // v8.55 — remove the harness-namespaced rules file written by
+    // `writeHarnessAssets`. For Cursor this is `.cursor/rules/cclaw.mdc`;
+    // for the other three it is `.harness/cclaw-rules.md`. The cleanup
+    // is idempotent (removePath is force: true).
+    await removePath(path.join(projectRoot, layout.rules.path));
+    // Tidy empty parent directories the rules file may have been the
+    // only inhabitant of (e.g. `.cursor/rules/`). The harness-root
+    // directory survives because the user may have other state.
+    const rulesParent = path.dirname(path.join(projectRoot, layout.rules.path));
+    if (await exists(rulesParent)) {
+      const remaining = await fs.readdir(rulesParent);
+      if (remaining.length === 0) await removePath(rulesParent);
+    }
     if (await exists(path.join(projectRoot, layout.commandsDir))) {
       const remaining = await fs.readdir(path.join(projectRoot, layout.commandsDir));
       if (remaining.length === 0) await removePath(path.join(projectRoot, layout.commandsDir));
@@ -731,6 +839,36 @@ export async function upgradeCclaw(options: SyncOptions): Promise<SyncResult> {
 
 export function planSeedForSlug(slug: string): string {
   return planTemplateForSlug(slug);
+}
+
+/**
+ * v8.55 — render the per-harness rules activation guidance block the
+ * CLI prints after a successful install. The block names each enabled
+ * harness with its native rules path and the action the user has to
+ * take (none for Cursor; one-line `@`-reference for the other three).
+ *
+ * The function takes a list of installed harnesses (the canonical
+ * order from {@link HARNESS_IDS}) and returns a multi-line string the
+ * caller appends to the install summary. Returning an empty string
+ * when there are no harnesses keeps the integration site (cli.ts)
+ * simple — it can always concatenate without a guard.
+ *
+ * Format:
+ *
+ *   Ambient rules — activation per harness:
+ *     • Cursor: rules auto-load from `.cursor/rules/cclaw.mdc` ...
+ *     • Claude Code: add `@.claude/cclaw-rules.md` to your CLAUDE.md ...
+ *     • Codex: add `@.codex/cclaw-rules.md` to your AGENTS.md ...
+ *     • OpenCode: add `@.opencode/cclaw-rules.md` to your AGENTS.md ...
+ */
+export function renderHarnessRulesGuidance(
+  harnesses: readonly HarnessId[]
+): string {
+  if (harnesses.length === 0) return "";
+  const lines = harnesses.map(
+    (harness) => `    • ${HARNESS_LAYOUTS[harness].rules.activationHint}`
+  );
+  return `\n  Ambient rules — activation per harness:\n${lines.join("\n")}\n`;
 }
 
 export const HARNESS_LAYOUT_TABLE = HARNESS_LAYOUTS;
