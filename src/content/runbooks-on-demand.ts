@@ -129,9 +129,49 @@ const FINALIZE = `# On-demand runbook — finalize (ship → shipped)
 
 Open this runbook **only after the compound step completes** and \`flows/<slug>/ship.md\` carries \`status: shipped\`. Finalize is the orchestrator's job, never a sub-agent's.
 
+## Per-AC verified gate (precondition, shipped in v8.48)
+
+Before running any of the steps below, run the per-AC verified gate. The gate is the v8.48 precondition: finalize is refused when any AC failed verification, with no silent escape hatch.
+
+### Gate procedure
+
+1. Read \`flow-state.json > triage.acMode\`.
+2. If \`acMode == "inline"\` — gate **skipped**; finalize may proceed (inline mode has no per-AC tracking).
+3. Otherwise, parse the \`AC verified:\` line from:
+   - **strict mode** — the latest slice-builder slim summary (last \`build\` or \`fix-only\` cycle that returned \`continue\`) AND the latest reviewer slim summary. The reviewer's line takes precedence when the two disagree; reviewer's evidence is authoritative because slice-builder's attestation is self-reported.
+   - **soft mode** — same two summaries, looking for the single \`feature=yes|no\` token.
+4. Evaluate:
+   - **All ACs (strict) or feature (soft) have \`=yes\`** → gate **passes**; proceed to Steps 1-8 below.
+   - **Any AC has \`=no\`** OR **the \`AC verified:\` line is missing from either summary** → gate **fails**; orchestrator **refuses finalize** and surfaces a structured ask:
+
+\`\`\`
+Per-AC verification gate failed before finalize.
+
+Unverified ACs from latest slim summaries:
+- <list each AC-N with verified=no, with the source summary cited (slice-builder iteration N, reviewer iteration N)>
+- <e.g. "AC-3 verified=no (slice-builder iter 2 — slim summary line 4); reviewer iter 1 confirmed: open F-2 required finding tied to AC-3">
+
+Options:
+[1] Bounce to slice-builder fix-only to close the unverified AC.
+[2] Show the latest slim summaries.
+[3] Stay paused — end the turn.
+\`\`\`
+
+The gate **never** auto-rescues — there is no \`accept-unverified-and-finalize\` option. The slug stays in active state until either every AC is \`=yes\` (gate passes naturally) or the user types \`/cc-cancel\` to discard the flow explicitly. The rationale: finalize moves artifacts into \`flows/shipped/<slug>/\` and resets \`flow-state.json\`; once finalized, the unverified AC is invisible to the next \`/cc\` run, and the slug-vs-shipped-AC drift becomes permanent.
+
+### Edge cases
+
+- **\`AC verified\` line missing from slice-builder summary** — treat as \`every AC = no\`. The slice-builder is required to emit the line from v8.48 onwards (see slice-builder prompt § Slim summary). Missing line is a fix-only bounce on the slice-builder itself — the orchestrator dispatches \`slice-builder mode=fix-only\` with a one-line note: "re-emit slim summary with v8.48 \`AC verified\` line".
+- **\`AC verified\` line missing from reviewer summary** — same treatment; the reviewer is required to emit the line from v8.48 onwards. Bounce dispatches \`reviewer mode=code\` with a one-line note.
+- **slice-builder says \`AC-N=yes\` but reviewer says \`AC-N=no\`** — reviewer wins. The reviewer's downgrade reflects evidence in the ledger; slice-builder's claim is self-reported and the gate respects the second opinion.
+- **slice-builder says \`AC-N=no\` but reviewer says \`AC-N=yes\`** — slice-builder wins. The build couldn't verify itself; reviewer's \`yes\` is a process error (reviewer should have downgraded). Bounce to slice-builder fix-only to close AC-N legitimately, then re-review.
+- **inline ACs intermixed with strict ACs** is structurally impossible — \`acMode\` is per-flow, not per-AC. If you observe this in the wild, the flow-state is corrupted; surface and stop.
+
+This gate ships at v8.48 and adds one network-free check to every finalize step. It exists because the older \`Open findings\` counter was too coarse — a slug could have \`Open findings: 0\` and still ship with an AC that was silently deferred ("AC-3 deferred — follow-up slug"). The per-AC line forces the deferral to be explicit and forces the orchestrator to ask before letting the gap close silently.
+
 ## Steps (in order, in the orchestrator's own context)
 
-1. **Pre-condition check.** \`flows/<slug>/ship.md\` exists with \`status: shipped\` (or equivalent gate). If the gate is \`block\`, do NOT finalise — stay paused. If the path was \`inline\` (trivial), there is nothing to finalise; skip finalize entirely.
+1. **Pre-condition check.** \`flows/<slug>/ship.md\` exists with \`status: shipped\` (or equivalent gate). If the gate is \`block\`, do NOT finalise — stay paused. If the path was \`inline\` (trivial), there is nothing to finalise; skip finalize entirely. **Per-AC verified gate** (above) must have passed; if it has not, do NOT finalise.
 2. **Create the shipped directory.** \`mkdir -p .cclaw/flows/shipped/<slug>\`. Idempotent: if the directory already exists (re-run, race), continue without error.
 3. **Move every artifact.** Use \`git mv\` when the repo is a git workspace and the active flow files are tracked; otherwise plain \`mv\`. Move (do NOT copy) every file in \`flows/<slug>/\`:
    - \`plan.md\`

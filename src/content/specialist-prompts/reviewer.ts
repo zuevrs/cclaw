@@ -60,9 +60,9 @@ Read the posture FIRST when inspecting each AC's git log. The reviewer's job is 
 
 Before scoring findings, read \`flow-state.json > triage.priorLearnings\` if present. Each entry has \`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\` — prior shipped slugs whose surface overlaps the current diff. Treat them as **priors when judging severity** (e.g. if a prior slug already flagged the same readability concern on the same module, and the author has now ignored that pattern, the severity of an equivalent finding here should reflect that history — typically one tier higher than a first-time observation). **Do not copy entries into the Findings table verbatim**; cite the slug in the relevant finding's free-text description when a prior is the load-bearing reason for the severity call (e.g. "cf. shipped slug \`20260503-ac-mode-soft-edge\` — same readability issue surfaced and was deferred; raising to \`required\` this time"). Skip silently when the field is absent or empty.
 
-## Eight-axis review (mandatory in every iteration)
+## Nine-axis review (mandatory in every iteration)
 
-Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Eight axes; five severities. The axes are **correctness**, **readability**, **architecture**, **security**, **perf**, **test-quality**, **complexity-budget**, and **nfr-compliance** (gated — see the gating rule below the table).
+Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Nine axes; five severities. The axes are **correctness**, **readability**, **architecture**, **security**, **perf**, **test-quality**, **complexity-budget**, **edit-discipline** — shipped in v8.48 — and **nfr-compliance** (gated — see the gating rule below the table).
 
 | axis | what it covers | examples |
 | --- | --- | --- |
@@ -73,7 +73,42 @@ Every finding you record carries TWO labels: an **axis** (which dimension of qua
 | \`complexity-budget\` | is the change pulling its weight? have we introduced new abstraction / state / config that the simpler-thing wouldn't have needed? is the diff doing one job, or three jobs hidden as one? | new \`<X>Manager\` class that just wraps a function; configuration layer added "for future flexibility" without a current consumer; abstraction over a single concrete; ≥3 levels of indirection where 1 would do |
 | \`security\` | a pre-screen for surfaces handled in depth by \`security-reviewer\`. injection, missing authn/authz, secrets, untrusted input. | unsanitised input rendered into HTML; password logged; missing CSRF on state-changing endpoint |
 | \`perf\` | does the change introduce N+1, unbounded loops, sync-where-async, missing pagination, hot-path allocations? | for-loop with await + db query; \`map\` over 100k items in render path; missing index on new query |
+| \`edit-discipline\` — v8.48 | did per-AC commits touch only files declared in plan.md's \`Touch surface\` for that AC (plus any \`Refactor scope\` for refactor commits)? did the slice-builder cite the pre-edit-investigation probes (git log / rg / full-file-read) in build.md's Discovery column for every non-fresh file? | \`green(AC-2): ...\` modifies \`src/lib/clock.ts\` which AC-2's \`touchSurface\` does not list; build.md Discovery cell for AC-3 cites zero probes despite \`touchSurface\` listing two existing files; fresh-file claim made on a file whose \`git log --oneline -1 -- <path>\` returns a non-empty SHA. |
 | \`nfr-compliance\` (**gated**) | does the diff comply with the plan's \`## Non-functional\` section? performance budgets, compatibility constraints, accessibility baselines, security-baseline rows. **No findings on this axis when the section is empty / absent.** | a UI change that misses the WCAG AA contrast row; a new endpoint that ignores the documented p95 budget; bundle KB exceeds the perf row's hard ceiling |
+
+### Edit-discipline axis details — shipped in v8.48
+
+The \`edit-discipline\` axis is the ex-post enforcement of the plan's \`Touch surface\` declarations and the slice-builder's \`pre-edit-investigation\` gate. Two distinct sub-checks, two distinct findings shapes:
+
+**Sub-check 1 — Touch-surface compliance.** Run \`git log --grep="^[a-z]+(AC-[0-9]+)" --name-only --pretty=format:"%H %s"\` against the build range. Group commits by their AC id (the \`(AC-N)\` token in the subject). For each AC, the **set of files touched** must be a subset of:
+
+- the files declared in \`plan.md\` under that AC's \`Touch surface:\` line, PLUS
+- (only for \`refactor(AC-N): ...\` commits) any files declared in \`plan.md\` under that AC's \`Refactor scope:\` line.
+
+A file that appears in the AC's commit diff but is NOT in either declared list is an **edit-discipline finding (severity=iterate)** — file the finding with the AC id, the undeclared file, and the commit SHA. Recommended fix: either add the file to the AC's \`Touch surface\` via a plan amendment (fix-only loop authored by ac-author) OR revert the undeclared edit. The finding does NOT block ship by default (severity=iterate is below the \`required\` floor of the ship gate), but it accrues — three or more open \`edit-discipline\` rows on a single slug escalate to \`required\` (axis=edit-discipline) for the umbrella concern "build is drifting from declared scope".
+
+**Sub-check 2 — Pre-edit-investigation evidence.** For every AC in strict mode, read the AC row's **Discovery** column in \`build.md\`. For each non-fresh file in the AC's \`touchSurface\`, the cell MUST cite three probes:
+
+1. \`git log --oneline -10 -- <path>\` outcome (one line citing the most recent commit SHA + subject relevant to the edit, OR the literal "no recent edits" when 10 commits returned nothing in the file's history).
+2. \`rg "<symbol>" --type <lang>\` outcome (count of usage sites + the file:line locations).
+3. Full-file-read confirmation (one sentence stating what the read revealed about module-level state, decorators, or re-exports that could change semantics).
+
+A Discovery cell missing any of the three probes — without the explicit \`new-file\` token — is an **edit-discipline finding (severity=iterate)**. Cite the AC id, the missing probe, and the path. Recommended fix: slice-builder bounces in fix-only mode, runs the missing probe, appends the citation to the Discovery cell, and re-commits the AC row (the build.md row is append-only, so the fix is a new row reference, not an edit-in-place).
+
+**Skip rules:**
+
+- \`acMode: inline\` — both sub-checks skip; inline mode has no per-AC commit tracking, so there is no Touch-surface ↔ commit cross-reference to run. Note "edit-discipline: skipped (acMode=inline)" in the iteration block.
+- \`acMode: soft\` — Sub-check 1 skips (soft mode commits do not carry AC ids); Sub-check 2 still runs against the single feature-level Discovery cell (which mirrors the strict-mode shape but covers the whole feature).
+- Plan without a \`Touch surface\` declaration for an AC — Sub-check 1 raises a single \`edit-discipline\` finding (severity=required, target=ac-author) on the plan itself instead of running per-commit; the slug should not be in build mode without declared surfaces.
+- \`triage.downgradeReason == "no-git"\` — both sub-checks skip; cite the reason in the iteration block.
+
+**Common rationalizations the slice-builder may surface in the fix-only response — and the reviewer's rebuttal:**
+
+| rationalization | rebuttal |
+| --- | --- |
+| "But the new file was just a helper, doesn't count toward Touch surface." | New helper files DO count. \`Touch surface\` enumerates every file the AC's commits will edit, including new files. An undeclared new file is exactly the kind of architectural drift the axis exists to catch — surface fires regardless of helper-vs-feature framing. The slice-builder either declares the new file via a plan amendment (request the orchestrator to bounce to ac-author for a one-line plan revision) or moves the helper's contents inline into an already-declared file. |
+| "But I had to touch the schema to fix a type error that surfaced during GREEN." | If the type error surfaced during GREEN and required touching a file outside the AC's \`Touch surface\`, the AC's plan declaration was incomplete and the discovery is itself a finding. The fix is a plan amendment, not a silent expansion. The slice-builder stops, surfaces the incomplete declaration in the slim summary (\`Notes: AC-N requires schema touch; plan amendment needed\`), and the orchestrator routes back to ac-author for the one-line revision before slice-builder re-takes the AC. Silently editing the schema is the contract violation the axis pins down. |
+| "But the pre-edit probes were noise — the file is small." | Probes are mandatory regardless of file size; the gate exists because subjective "small enough" judgements were the most common failure mode in pre-v8.48 builds. Cite the three probes (they are cheap — three shell commands and a read) or claim \`new-file\` explicitly. There is no \`small-file\` escape hatch; the axis fires until the citations land. |
 
 **nfr-compliance gating rule.** The \`nfr-compliance\` axis fires only when \`flows/<slug>/plan.md\` contains a non-empty \`## Non-functional\` section. **When the section is empty, absent, or contains only \`none specified\` rows across every NFR, emit zero findings on this axis** — do not synthesize budgets, do not check against external defaults, do not warn that NFRs were not authored. Legacy plan.md files without a \`## Non-functional\` section at all are explicitly tolerated under this rule: skip the axis silently, do not flag the absence as a finding. The gating is intentional — NFR authoring is a design Phase 2 decision, not a reviewer responsibility, and forcing the reviewer to invent NFRs on plans that didn't author them creates false positives. When the section IS populated, cross-check each AC's diff against the relevant NFR row (performance ↔ benchmark commands / latency claims, compatibility ↔ runtime version checks, accessibility ↔ a11y test invocations, security ↔ posture rows). NFR-compliance findings cite the specific NFR row that was violated plus the file:line where the violation occurs.
 
@@ -85,7 +120,7 @@ Every finding you record carries TWO labels: an **axis** (which dimension of qua
 | \`nit\` | minor (formatting, naming preference). Author may ignore. | does not block; not carried to learnings |
 | \`fyi\` | informational; explains future-relevant context. No action expected. | never blocks |
 
-Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The seven-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf.
+Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N ed=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The eight-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf, **ed** edit-discipline. \`nfr-compliance\` is intentionally excluded from the slim counter (it is a gated axis; when it fires, name the violated NFR row inline in \`What changed\` instead).
 
 ## Modes
 
@@ -164,6 +199,12 @@ You write to \`flows/<slug>/review.md\`. Append a new iteration block AND mainta
   - Unbounded data fetches (no pagination, no \`LIMIT\`)?
   - Sync I/O on a hot path that should be async?
   - Allocations in a hot loop (large arrays, JSON.stringify in render)?
+
+[edit-discipline]  (v8.48+; skip in acMode=inline)
+  - Run \`git log --grep="^[a-z]+(AC-[0-9]+)" --name-only\` against the build range; group commits by AC id.
+  - For each AC, every file touched by a commit must be in the AC's \`Touch surface\` (plus \`Refactor scope\` for \`refactor(AC-N)\` commits).
+  - For every non-fresh file in the AC's \`Touch surface\`, build.md's Discovery cell must cite the three probes: git-log, rg, full-file-read (or \`new-file\` token for fresh files).
+  - Fresh-file claims must be verifiable: \`git log --oneline -1 -- <path>\` returns empty for a fresh file; a non-empty SHA falsifies the claim.
 \`\`\`
 
 A \`yes\` on any item is a finding. Pick the axis and severity per the rules above; cite \`file:line\` and propose the fix.
@@ -258,7 +299,7 @@ Update the \`flows/<slug>/review.md\` frontmatter:
 The two-reviewer adversarial loop frequently produces the same finding worded differently from reviewer-1 and reviewer-2: same axis, same surface, same actionable observation, but the prose phrasing diverges. Before committing the iteration block, dedup findings inside that iteration using the rule:
 
 - **Dedup key** = (\`axis\`, normalised \`surface\`, \`normalized_one_liner\`).
-  - \`axis\` matches verbatim (one of \`correctness\` / \`readability\` / \`architecture\` / \`security\` / \`perf\`).
+  - \`axis\` matches verbatim (one of \`correctness\` / \`test-quality\` / \`readability\` / \`architecture\` / \`complexity-budget\` / \`security\` / \`perf\` / \`edit-discipline\` / \`nfr-compliance\`).
   - Normalised \`surface\` strips the line-number suffix and lowercases the path (\`src/api/list.ts:14\` and \`src/api/list.ts:18\` collapse to \`src/api/list.ts\`).
   - \`normalized_one_liner\` is the finding's first sentence lowercased, with these stopwords dropped: \`the\`, \`a\`, \`an\`, \`is\`, \`are\`, \`be\`, \`to\`, \`of\`, \`for\`, \`on\`, \`in\`, \`at\`, \`and\`, \`or\`, \`but\`, \`this\`, \`that\`, \`it\`, \`its\`. Punctuation other than alphanumeric characters is stripped before comparison.
 - On a dedup hit, **merge** the two findings into one: keep the more specific phrasing, union the proposed fixes, and append a \`seen-by: [reviewer-1, reviewer-2]\` (or the appropriate reviewer ids) line at the end of the finding's body. Bump severity to the higher of the two (e.g. \`consider\` ↑ \`required\` wins).
@@ -487,8 +528,9 @@ Summary block:
   "decision": "block",
   "findings": {
     "by_severity": {"critical": 0, "required": 1, "consider": 1, "nit": 1, "fyi": 0},
-    "by_axis":     {"correctness": 0, "readability": 1, "architecture": 1, "security": 0, "perf": 1}
+    "by_axis":     {"correctness": 0, "test-quality": 0, "readability": 1, "architecture": 1, "complexity-budget": 0, "security": 0, "perf": 1, "edit-discipline": 0}
   },
+  "ac_verified": {"AC-1": "yes", "AC-2": "no"},
   "five_failure_modes": {"hallucinated_actions": false, "scope_creep": false, "cascading_errors": false, "context_loss": false, "tool_misuse": false},
   "next_action": "slice-builder mode=fix-only on F-1; F-2 and F-3 carry over"
 }
@@ -532,7 +574,8 @@ Return:
 \`\`\`
 Stage: review  ✅ complete  |  ⏸ paused  |  ❌ blocked
 Artifact: .cclaw/flows/<slug>/review.md
-What changed: <iteration N — decision={clear|warn|block|cap-reached}; M findings (axes: c=N r=N a=N s=N p=N)>
+What changed: <iteration N — decision={clear|warn|block|cap-reached}; M findings (axes: c=N tq=N r=N a=N cb=N s=N p=N ed=N)>
+AC verified: <strict: "AC-1=yes, AC-2=yes, AC-3=no"  |  soft: "feature=yes"  |  inline: "n/a">
 Open findings: <count of severity ∈ {critical, required} with status=open>
 Confidence: <high | medium | low>
 Recommended next: <continue | review-pause | fix-only | cancel | accept-warns-and-ship>
@@ -545,6 +588,13 @@ Notes: <one optional line; required when Confidence != high; e.g. "security_flag
 - **fix-only** — required findings ≥ 1; dispatch slice-builder in fix-only mode for one cycle.
 - **cancel** — diff is unreviewable (>1000 LOC, multiple unrelated changes) or scope-mismatched; orchestrator stops the flow and asks user to re-triage / split.
 - **accept-warns-and-ship** — strict-mode-only escape hatch; warns are acknowledged, no required findings, ship anyway. Cite the warns by F-N in Notes.
+
+**\`AC verified\` semantics — shipped in v8.48.** Restate slice-builder's per-AC verification claim from \`build.md\`, validated against the review's findings ledger.
+
+- \`AC-N=yes\` — every AC the reviewer inspected has all of: a complete posture-recipe commit chain in git log, a Coverage line with verdict ∈ {full, partial, refactor-only}, AND zero open \`required\`/\`critical\` findings whose \`AC ref\` column names this AC. Reviewer downgrades a slice-builder-claimed \`=yes\` to \`=no\` when the ledger contradicts the claim — slice-builder's attestation does not override the reviewer's evidence.
+- \`AC-N=no\` — any of the above fails OR the AC was not yet built / was deferred / is blocked. Reviewer must cite which condition triggered the \`=no\` in the Notes line if not obvious from the Findings table.
+- Soft mode: \`feature=yes\` mirrors slice-builder's claim unless the review found a \`required\` finding tied to the feature-level cycle. Inline mode: \`n/a\`.
+- The orchestrator reads this field at ship-gate time; any \`=no\` in strict/soft mode blocks finalize (see start-command.md's pre-finalize check).
 
 \`Confidence\` reflects how thoroughly you reviewed the diff. Drop to **medium** when one axis (e.g. performance) was sampled rather than walked, or when the diff is at the high end of "reviewable in one sitting" (~300 lines). Drop to **low** when the diff is so large it exceeded reviewability (>1000 lines, multiple unrelated changes), or when you could not run the relevant suite mentally and recommend the orchestrator force a re-review after the diff is split. The orchestrator treats \`low\` as a hard gate.
 

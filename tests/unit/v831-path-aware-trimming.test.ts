@@ -88,12 +88,12 @@ const LARGE_RISKY_RUNBOOKS: string[] = [
 ];
 
 describe("v8.31 path-aware orchestrator trimming — body-only budget", () => {
-  it("AC-1 — orchestrator body alone is ≤ 49000 chars (was 45212 on v8.30; v8.42 lifted to absorb the Hop 4.5 critic stage pointer; v8.47 lifted to absorb the design pacing prose)", () => {
+  it("AC-1 — orchestrator body alone is ≤ 51000 chars (was 45212 on v8.30; v8.42 lifted to absorb the Hop 4.5 critic stage pointer; v8.47 lifted to absorb the design pacing prose; v8.48 lifted to absorb the per-AC verified slim-summary line + finalize-precondition pointer)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 49000). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; v8.34 added ~2K chars for the mid-flight runMode toggle; v8.42 added ~2K chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare design's new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31/v8.34/v8.42/v8.47 stop here to keep v8.24 / v8.21 tripwires unmodified.`
-    ).toBeLessThanOrEqual(49000);
+      `start-command body is ${charCount} chars (budget 51000). v8.31 lifted Hop 4 pause/resume detail + plan-stage-on-small/medium into on-demand runbooks; v8.34 added ~2K chars for the mid-flight runMode toggle; v8.42 added ~2K chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare design's new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook); v8.48 added ~600 chars for the per-AC verified slim-summary line, its semantics paragraph, and the finalize-precondition pointer (the full Per-AC verified gate procedure lives in runbooks/finalize.md). Future slugs may tighten further by lifting the Two-reviewer per-task loop block (large-risky-only) or the slim-summary enum prose; v8.31/v8.34/v8.42/v8.47/v8.48 stop here to keep v8.24 / v8.21 tripwires unmodified.`
+    ).toBeLessThanOrEqual(51000);
   });
 
   it("AC-1 — orchestrator body alone is ≤ 485 lines (was 472 on v8.30; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer)", () => {
@@ -104,24 +104,24 @@ describe("v8.31 path-aware orchestrator trimming — body-only budget", () => {
     ).toBeLessThanOrEqual(485);
   });
 
-  it("AC-1 — orchestrator body alone stays within ≤107% of v8.30 baseline (one new stage + descriptive stage names)", () => {
+  it("AC-1 — orchestrator body alone stays within ≤113% of v8.30 baseline (one new stage + descriptive stage names + per-AC verified flag)", () => {
     const v830CharBaseline = 45212;
     const charCount = renderStartCommand().length;
     const ratio = charCount / v830CharBaseline;
     expect(
       ratio,
-      `body is ${charCount} chars, ratio ${ratio.toFixed(3)} of v8.30 baseline (${v830CharBaseline}). v8.31's win was ~7.8% cut; v8.34 + v8.40 spent some on the runMode toggle and git-log inspection prose; v8.42 added the new critic stage (~2K chars body + ~7K chars runbook); v8.45 traded the compact "Hop N" labels for descriptive stage names (~40 chars net). The body should stay within ~7% of v8.30 (one new stage costs ~5% growth; readable headings cost ~1% more). Future re-growth past this ratio is a signal to lift more content to runbooks.`
-    ).toBeLessThanOrEqual(1.07);
+      `body is ${charCount} chars, ratio ${ratio.toFixed(3)} of v8.30 baseline (${v830CharBaseline}). v8.31's win was ~7.8% cut; v8.34 + v8.40 spent some on the runMode toggle and git-log inspection prose; v8.42 added the new critic stage (~2K chars body + ~7K chars runbook); v8.45 traded the compact "Hop N" labels for descriptive stage names (~40 chars net); v8.48 added ~600 chars for the per-AC verified slim-summary line + finalize-precondition pointer (Per-AC verified gate procedure itself lives in runbooks/finalize.md). The body should stay within ~13% of v8.30 (one new stage costs ~5% growth; readable headings cost ~1% more; v8.48 verified gate costs ~1.5% more in the body for the slim-summary line + finalize pointer). Future re-growth past this ratio is a signal to lift more content to runbooks.`
+    ).toBeLessThanOrEqual(1.13);
   });
 });
 
 describe("v8.31 path-aware orchestrator trimming — per-path budget envelopes", () => {
-  it("AC-2 — inline-path budget = body only; ≤ 49000 chars (v8.42 lifted to absorb the Hop 4.5 critic stage pointer; v8.47 lifted to absorb the design pacing prose)", () => {
+  it("AC-2 — inline-path budget = body only; ≤ 51000 chars (v8.42 lifted to absorb the Hop 4.5 critic stage pointer; v8.47 lifted to absorb the design pacing prose; v8.48 lifted to absorb the per-AC verified slim-summary line + finalize-precondition pointer)", () => {
     const budget = pathBudget(INLINE_RUNBOOKS);
     expect(
       budget,
-      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 49000 (v8.31 = 42500 + v8.34 toggle docs + v8.42 critic stage pointer + v8.47 design pacing; inline does NOT open critic-stage.md since triage.path == ["build"] on inline).`
-    ).toBeLessThanOrEqual(49000);
+      `inline path reads the orchestrator body and nothing else (no specialist dispatches). budget = body alone = ${budget} chars; ceiling 51000 (v8.31 = 42500 + v8.34 toggle docs + v8.42 critic stage pointer + v8.47 design pacing + v8.48 per-AC verified slim-summary line; inline does NOT open critic-stage.md since triage.path == ["build"] on inline, but the slim-summary template applies in every mode).`
+    ).toBeLessThanOrEqual(51000);
   });
 
   it("AC-2 — small-medium-path budget = body + 8 runbooks; ≤ 115000 chars (v8.42 added critic-stage.md)", () => {

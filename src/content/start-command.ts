@@ -111,6 +111,7 @@ const SUMMARY_RETURN_EXAMPLE = `\`\`\`
 Stage: <stage>  ✅ complete  |  ⏸ paused  |  ❌ blocked
 Artifact: .cclaw/flows/<slug>/<stage>.md
 What changed: <one sentence in the user's language; e.g. "5 testable conditions written" or "AC-1 RED+GREEN+REFACTOR committed">
+AC verified: <strict: "AC-1=yes, AC-2=yes, AC-3=no"  |  soft: "feature=yes"  |  inline/non-build stages: "n/a">
 Open findings: <0 outside review; integer in review>
 Confidence: <high | medium | low>
 Recommended next: <continue | review-pause | fix-only | cancel | accept-warns-and-ship>
@@ -125,7 +126,9 @@ Notes: <optional; required when Confidence != high; one short sentence in the us
 - **cancel** — flow should stop here; user re-triages. NOT the same as \`/cc-cancel\` (which the user types explicitly to discard a flow). Specialists return \`cancel\` to **recommend** stopping; the orchestrator must still surface a structured ask before the flow is actually cancelled.
 - **accept-warns-and-ship** — strict-mode-only escape hatch (reviewer-emitted); warns acknowledged, no required findings, ship anyway.
 
-Hard-gate logic: \`Recommended next == "cancel"\` always pauses for user; \`Confidence == "low"\` always pauses for user; \`review-pause\` always pauses; the rest follow \`triage.runMode\`.`;
+\`AC verified\` is the v8.48 per-AC verification flag. slice-builder emits the truthful per-AC state (\`AC-N=yes\` only when RED+GREEN+REFACTOR + suite + Coverage + self_review all attest); reviewer restates and downgrades \`=yes\` to \`=no\` for any AC with an open \`required\`/\`critical\` finding; other specialists emit \`AC verified: n/a\`. Soft mode emits one \`feature=yes|no\` token; inline mode emits \`n/a\`. See \`runbooks/finalize.md > ## Per-AC verified gate\` for the full gate procedure.
+
+Hard-gate logic: \`Recommended next == "cancel"\` always pauses for user; \`Confidence == "low"\` always pauses for user; \`review-pause\` always pauses; any \`=no\` in \`AC verified\` outside \`acMode: inline\` blocks the finalize step; the rest follow \`triage.runMode\`.`;
 
 export const START_COMMAND_BODY = `# /cc — cclaw orchestrator
 
@@ -421,7 +424,9 @@ After a capture, the **compound-refresh** sub-step may fire (every 5th capture; 
 
 After the compound step, the orchestrator finalises the slug's directory layout: \`git mv\` every active artifact into \`flows/shipped/<slug>/\`, stamp the shipped frontmatter on \`ship.md\`, promote any PROPOSED ADRs to ACCEPTED, reset flow-state. This is the orchestrator's job, never a sub-agent's.
 
-The full finalize step-by-step (pre-condition check, mkdir, \`git mv\`-vs-\`mv\` rules, the no-\`cp\` invariant, post-condition empty-dir check, ADR promotion, flow-state reset, final summary to user) lives in \`.cclaw/lib/runbooks/finalize.md\`. Open that runbook before starting finalize.
+The full finalize step-by-step (Per-AC verified gate precondition shipped in v8.48, pre-condition check, mkdir, \`git mv\`-vs-\`mv\` rules, the no-\`cp\` invariant, post-condition empty-dir check, ADR promotion, flow-state reset, final summary to user) lives in \`.cclaw/lib/runbooks/finalize.md\`. Open that runbook before starting finalize.
+
+**Per-AC verified gate (precondition, shipped in v8.48).** The orchestrator MUST parse \`AC verified:\` from both the latest slice-builder and reviewer slim summaries before running finalize. When \`acMode != "inline"\` AND any AC is \`=no\` (or either summary is missing the line), refuse finalize and surface a structured ask (Bounce to slice-builder fix-only / Show slim summaries / Stay paused). No \`accept-unverified-and-finalize\` escape hatch; reviewer's verdict overrides slice-builder's self-attestation. Full procedure lives in \`runbooks/finalize.md > ## Per-AC verified gate\`.
 
 ## Always-ask rules
 
@@ -434,6 +439,7 @@ The full finalize step-by-step (pre-condition check, mkdir, \`git mv\`-vs-\`mv\`
 - Always show the slim summary back to the user; do not summarise from your own memory of the dispatch.
 - Render slim summaries and pause prose in the user's conversation language (see \`conversation-language.md\`). Mechanical tokens — \`AC-N\`, \`/cc\`, slugs, paths, frontmatter keys, mode names, \`Confidence\` field labels — stay English.
 - Finalize is **never delegated to a sub-agent**. The orchestrator runs \`git mv\` (or \`mv\`) itself and verifies the active dir is empty before resetting flow-state. Sub-agent dispatch envelopes never include the word "copy".
+- **Per-AC verified gate runs before finalize (v8.48+).** Parse the \`AC verified:\` line from the latest slice-builder and reviewer slim summaries; if any AC is \`=no\` outside \`acMode: inline\`, surface the structured ask and refuse finalize. See "Per-AC verified gate (finalize)" above.
 - Every dispatch envelope, without exception, lists \`.cclaw/lib/agents/<specialist>.md\` as the **first** read and the wrapper skill as the **second**. A sub-agent that skips either of those reads is acting on a hallucinated contract.
 
 ## Available specialists

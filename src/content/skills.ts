@@ -272,6 +272,51 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     ],
     stages: ["plan", "review"],
     body: readSkill("api-evolution.md")
+  },
+  {
+    id: "completion-discipline",
+    fileName: "completion-discipline.md",
+    description: "v8.48 — Iron Law concentrating verification-before-completion. No `✅ complete` slim summary, no `Recommended next: continue`, no Findings row close, no `ship.md > status: shipped` without paired fresh evidence (command + exit code + log lines, OR test output, OR git-log proof, OR file:line citation). Bans the sycophantic completion vocabulary (`should work`, `looks good`, `probably works`, `I think this is done`). Always-on across every specialist and every stage; the reviewer's Verification story table, slice-builder's self_review[], and orchestrator's per-AC verified flag are all enforcement surfaces deferring to this skill.",
+    triggers: [
+      "always-on",
+      "before:slim-summary",
+      "before:Recommended-next-continue",
+      "before:findings-row-close",
+      "before:ship-stamp",
+      "stage-exit:any"
+    ],
+    stages: ["always"],
+    body: readSkill("completion-discipline.md")
+  },
+  {
+    id: "receiving-feedback",
+    fileName: "receiving-feedback.md",
+    description: "v8.48 — anti-sycophancy guard for receiving review.md findings, critic.md gaps, security-reviewer findings, and user-named defects. Bans the bare-acknowledgement vocabulary (`good point`, `you're right`, `let me address that`, `I see your concern`, `great catch`). Installs the four-step response pattern: restate the finding in own words → classify against the ship gate (block-ship / iterate / fyi) → declare a plan (fix / push-back-with-evidence / accept-warning) → cite evidence. Fires on build (fix-only), review (re-iteration), and ship (pre-merge sweep).",
+    triggers: [
+      "input:review.md",
+      "input:critic.md",
+      "input:security-reviewer-findings",
+      "input:user-feedback",
+      "mode:fix-only",
+      "ship-gate:findings"
+    ],
+    stages: ["build", "review", "ship"],
+    body: readSkill("receiving-feedback.md")
+  },
+  {
+    id: "pre-edit-investigation",
+    fileName: "pre-edit-investigation.md",
+    description: "v8.48 — GateGuard-style fact-forcing gate that triggers before the slice-builder's FIRST Write/Edit/MultiEdit operation on a file. Mandatory three probes before editing: (1) `git log --oneline -10 -- <path>` for recent edits, (2) `rg \"<symbol>\" --type <lang>` for usage sites, (3) full file read (not just the edit window). Investigation evidence lands in build.md's Discovery column; the reviewer's `edit-discipline` axis (v8.48+, axis #8) flags missing or partial Discovery as severity=required. Exceptions: fresh files with no history, RED-phase test file edits, post-format passes.",
+    triggers: [
+      "before:Write",
+      "before:Edit",
+      "before:MultiEdit",
+      "specialist:slice-builder",
+      "stage:build",
+      "first-edit-of-file"
+    ],
+    stages: ["build"],
+    body: readSkill("pre-edit-investigation.md")
   }
 ];
 
