@@ -715,6 +715,126 @@ The migration is one-pass and idempotent — a slug whose critic has already run
 The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see v8.42 Q2).
 `;
 
+const PLAN_CRITIC_STAGE = `# On-demand runbook — plan-critic step (v8.51+)
+
+The orchestrator opens this runbook **on every \`ac-author\` slim-summary return** when the v8.51 gate evaluates to true. plan-critic is the v8.51 pre-implementation adversarial specialist that runs between \`ac-author\` and \`slice-builder\` on a tight subset of flows. It walks what is **missing or wrong** in the plan itself (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + pre-commitment predictions) rather than the post-impl critic's "did we build the right thing well?" pass. The contract that drives the dispatch lives in \`.cclaw/lib/agents/plan-critic.md\`; this runbook covers what the orchestrator does *around* the dispatch.
+
+Distinct from \`critic-stage.md\` (v8.42, post-implementation, Hop 4.5). Both stages ship together because they catch different problem classes:
+
+| stage | when | reads | output | verdicts |
+| --- | --- | --- | --- | --- |
+| **plan-critic** (v8.51) | between ac-author and slice-builder | plan.md only (read-only on the codebase) | flows/<slug>/plan-critic.md | \`pass\` / \`revise\` / \`cancel\` |
+| **critic** (v8.42) | between reviewer-clear and ship | plan.md + build.md + review.md + diff | flows/<slug>/critic.md | \`pass\` / \`iterate\` / \`block-ship\` |
+
+## Gating (the four AND conditions — orchestrator enforces deterministically)
+
+plan-critic runs ONLY when ALL of these hold:
+
+1. \`triage.acMode == "strict"\` (soft / inline plans don't carry the granularity surface to critique).
+2. \`triage.complexity == "large-risky"\` (small-medium plans are too small to amortize the dispatch cost).
+3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs extend prior shipped work; the parent slug already shipped + survived its post-impl critic).
+4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency surface).
+
+For any other combination, plan-critic is **structurally skipped**. The orchestrator advances directly from ac-author's slim summary to slice-builder dispatch, as today. The gate is **AND** across all four; widening any condition is a v8.52+ scope decision, not a within-slug runtime call.
+
+## Dispatch envelope
+
+\`\`\`
+Dispatch plan-critic
+─ Required first read: .cclaw/lib/agents/plan-critic.md  (your contract — gate, 5-dimension protocol, verdict, slim summary)
+─ Required second read: .cclaw/lib/anti-rationalizations.md  (v8.49 catalog; the prompt body cites it)
+─ Stage: plan-critic
+─ Slug: <slug>
+─ AC mode: strict  (gate enforces; always strict)
+─ AC count: <N>    (from plan.md frontmatter; ≥2 by gate)
+─ Iteration: <0 | 1>  (0 on first dispatch; 1 on the one allowed revise loop)
+─ Findings to address (iteration 1 only): <verbatim §8 hand-off block from the iter-0 plan-critic.md>
+─ Inputs the sub-agent reads after the contract + catalog:
+    - .cclaw/state/flow-state.json (triage)
+    - .cclaw/flows/<slug>/plan.md (Frame, Spec, NFR, AC, Decisions, Pre-mortem, Topology)
+    - .cclaw/lib/templates/plan-critic.md
+    - CONTEXT.md at the project root, if it exists
+─ Output contract:
+    - .cclaw/flows/<slug>/plan-critic.md (single-shot — overwrite on re-dispatch, no append-only ledger)
+    - return a slim summary block (≤7 lines)
+    - DO NOT mutate flow-state.json — only the orchestrator touches it
+─ Forbidden:
+    - edit plan.md / build.md / review.md / source / tests
+    - dispatch other specialists (composition is the orchestrator's job)
+    - exceed 7k tokens (input + output combined; itself a finding when approached)
+\`\`\`
+
+## Verdict handling (slim summary → orchestrator routing)
+
+The plan-critic returns one of three verdicts. The orchestrator branches on (verdict, iteration):
+
+| verdict | iteration | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
+| --- | --- | --- | --- | --- |
+| \`pass\` | 0 or 1 | \`"plan"\` → advance to \`"build"\` | step pauses end-of-stage; auto chains to build | no user gate; advance straight to slice-builder dispatch. \`iterate\` and \`fyi\` rows in plan-critic.md ride along as advisory notes for slice-builder + reviewer to see. |
+| \`revise\` | 0 | stays \`"plan"\`, \`lastSpecialist: "plan-critic"\` | both modes proceed silently | dispatch \`ac-author\` again, with plan-critic.md §8 hand-off block prepended to the dispatch envelope's \`Inputs\` line. ac-author updates plan.md, then the orchestrator re-dispatches plan-critic (iteration 1). |
+| \`revise\` | 1 | stays \`"plan"\` | both modes hard-gate | surface the revise-cap-reached user picker: \`[cancel]\` (out-of-band \`/cc-cancel\`), \`[accept-warnings-and-proceed]\` (advance to slice-builder anyway; stamps \`triage.planCriticOverride: true\` if you want to capture the override for audit — currently not a stamped field, surface as conversation), \`[re-design]\` (route back to design phase Phase 1 with the surfaced constraints). |
+| \`cancel\` | 0 or 1 | stays \`"plan"\` | both modes hard-gate | surface the cancel picker IMMEDIATELY: \`[cancel-slug]\` (user types \`/cc-cancel\` out-of-band), \`[re-design]\` (route back to design phase Phase 1). No silent fallback — \`cancel\` means the plan is structurally not buildable. |
+
+**Confidence: low** in the plan-critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The plan-critic MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator offers \`Expand plan-critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
+
+## Iteration cap enforcement
+
+- \`planCriticIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return.
+- The orchestrator dispatches plan-critic **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`revise\` from iter 0). A third dispatch is structurally not allowed — the orchestrator surfaces the revise-cap-reached picker instead.
+- A flow that goes \`revise\` (iter 0) → ac-author revise → \`revise\` (iter 1) is the canonical "1 revise loop max" path. After the second \`revise\`, the user picker decides whether to cancel, accept warnings and proceed to slice-builder, or re-design.
+- A \`cancel\` verdict at any iteration immediately surfaces the cancel picker; iteration does not advance.
+- The iteration cap is independent of \`reviewIterations\` (post-impl review loop) and \`criticIteration\` (post-impl critic). All three counters are tracked separately.
+
+## FlowState patches
+
+**Immediately before dispatching plan-critic (iteration 0 OR iteration 1):**
+
+\`\`\`json
+{
+  "currentStage": "plan",
+  "lastSpecialist": "ac-author"
+}
+\`\`\`
+
+(\`currentStage\` stays \`"plan"\` because plan-critic is structurally part of the plan stage — it sits between ac-author and slice-builder.)
+
+**After plan-critic returns slim summary (orchestrator has read it, BEFORE user-gate decision):**
+
+\`\`\`json
+{
+  "currentStage": "plan",
+  "lastSpecialist": "plan-critic",
+  "planCriticIteration": <0 if first dispatch returning; 1 if second dispatch returning>,
+  "planCriticVerdict": "pass | revise | cancel",
+  "planCriticDispatchedAt": "<iso timestamp>"
+}
+\`\`\`
+
+**After pass verdict (advance to build):** \`currentStage\` advances to \`"build"\`. The plan-critic fields stay; they are immutable for the rest of the flow.
+
+**After revise verdict (iter 0, bounce to ac-author):** \`currentStage\` stays \`"plan"\`; \`lastSpecialist\` is patched back to \`"ac-author"\` only after ac-author's revise dispatch returns its slim summary. plan-critic.md stays on disk; ac-author's next dispatch reads it.
+
+**After cancel verdict / revise-cap picker resolution:** the user's pick drives the next state transition (\`/cc-cancel\` clears the flow; \`[re-design]\` resets to design Phase 1; \`[accept-warnings-and-proceed]\` advances to slice-builder despite the \`revise\` verdict). The plan-critic fields stay verbatim as the audit trail.
+
+## What plan-critic CANNOT do (read this before authoring the envelope)
+
+- Edit any source file (\`src/**\`, \`tests/**\`, \`.cclaw/state/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\`. The only file plan-critic writes is \`.cclaw/flows/<slug>/plan-critic.md\`.
+- Commit, push, rebase, or merge. plan-critic owns no git operations.
+- Dispatch other specialists. Composition is the orchestrator's job.
+- Exceed 7k input+output tokens. Approaching the cap is itself a finding (\`confidence: low\`, recommend split).
+- Propose alternative approaches. The design phase chose; plan-critic catches mistakes in the chosen plan, not relitigates the choice.
+- Emit multi-perspective lens findings (security / a11y / perf as parallel sweeps). That is v8.53 scope for the post-impl critic; plan-critic stays focused on the five dimensions.
+
+## Legacy migration (pre-v8.51 \`flow-state.json\`)
+
+A state file with \`currentStage: "plan"\` AND \`lastSpecialist: "ac-author"\` AND no \`planCriticVerdict\` field is treated as **pre-plan-critic intermediate**:
+
+- If the slug satisfies the v8.51 gate (acMode=strict + complexity=large-risky + problemType!=refines + AC count>=2): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.51) detected; plan-critic will run on next /cc.\`) and dispatches plan-critic before advancing to slice-builder.
+- If the slug does NOT satisfy the gate (any combination that fails any of the four AND-conditions): no migration; plan-critic was structurally never going to run on this slug, advance to slice-builder as today.
+
+The migration is one-pass and idempotent — a slug whose plan-critic has already run shows \`planCriticVerdict\` set, so the legacy branch is never re-entered.
+`;
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -793,6 +913,12 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "critic-stage.md",
     title: "Critic step (v8.42+)",
     body: CRITIC_STAGE
+  },
+  {
+    id: "plan-critic-stage",
+    fileName: "plan-critic-stage.md",
+    title: "Plan-critic step (v8.51+)",
+    body: PLAN_CRITIC_STAGE
   }
 ];
 

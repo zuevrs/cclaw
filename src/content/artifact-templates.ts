@@ -6,6 +6,7 @@ export interface ArtifactTemplate {
     | "build-soft"
     | "review"
     | "critic"
+    | "plan-critic"
     | "ship"
     | "decisions"
     | "learnings"
@@ -554,6 +555,149 @@ Confidence rationale: <one line; required when Confidence != high>
 - _Anything the critic could not verify and the orchestrator may want to surface to the user (e.g. "P-3 was about a runtime path I could not exercise from read-only context; recommend manual verification before ship")._
 `;
 
+const PLAN_CRITIC_TEMPLATE = `---
+slug: SLUG-PLACEHOLDER
+stage: plan-critic
+status: active
+posture_inherited: PLAN-POSTURE-PLACEHOLDER  # most-restrictive AC posture from plan.md frontmatter
+ac_mode: AC-MODE-PLACEHOLDER                  # always "strict" — gate enforces; placeholder is a reminder
+ac_count: 0                                   # AC count from plan.md
+dispatched_at: DISPATCHED-AT-PLACEHOLDER      # ISO timestamp at dispatch time
+iteration: 0                                  # 0 on first dispatch; 1 after one revise loop (max)
+predictions_made: 0                           # count of pre-commitment predictions in §6
+findings: 0                                   # total §1+§2+§3+§4+§5 findings (excluding §6 predictions)
+verdict: pending                              # pending | pass | revise | cancel
+token_budget_used: 0                          # orchestrator stamps this from the sub-agent return
+---
+
+# Plan critic — SLUG-PLACEHOLDER
+
+This artifact captures the pre-implementation plan-critic pass over the slug. plan-critic runs BETWEEN \`ac-author\` and \`slice-builder\`, only on the tight gate \`{acMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}\`. It walks the plan itself (goal coverage / granularity / dependencies / parallelism / risk catalog) before any code is written. Distinct from the v8.42 post-implementation \`critic\` (which runs at Hop 4.5, after build/review); both ship together because they catch different problem classes.
+
+plan-critic is read-only on the codebase. Every finding cites \`plan.md > §section\` or the user's \`/cc <task>\` prompt verbatim. The plan-critic is structurally cheaper than the post-impl critic — there is no build.md or review.md to read.
+
+> **Iron Law (plan-critic):** EVIDENCE FROM THE PLAN ONLY. Every finding cites a row, column, or section of \`plan.md\` (or the user's \`/cc <task>\` prompt). A finding that cites the not-yet-existing diff is out of scope.
+
+## §1. Goal coverage
+
+_(Trace each Spec / Frame goal element to ≥1 AC. Catalog absences as G-N rows with severity.)_
+
+| G-N | Class | Severity | Anchor | Description | Suggested fix | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| G-1 | _goal-coverage_ | _block-ship / iterate / fyi_ | _plan.md > ## Spec > Objective_ | _what is missing or drifted_ | _smallest correct change_ | _open_ |
+
+**Severity definitions** (plan-critic's own vocabulary; do NOT merge with reviewer's \`critical\`/\`required\` ledger and do NOT merge with the post-impl critic's \`block-ship\`/\`iterate\`/\`fyi\` — plan-critic findings exist BEFORE build):
+
+- **\`block-ship\`** — closing this gap requires re-running design phase or re-authoring the plan from scratch. \`cancel\` verdict territory.
+- **\`iterate\`** — gap is real but addressable in one ac-author revise cycle. \`revise\` verdict territory.
+- **\`fyi\`** — gap is information-only; no action expected.
+
+## §2. Granularity
+
+_(For each AC: is the text appropriately sized to be ONE observable behaviour? Flag too-coarse (1 AC covering ≥5 unrelated concerns) and too-fine (one AC for a trivial mechanical change). One row per granularity finding.)_
+
+| G-N | AC | Class | Severity | Symptom | Suggested fix |
+| --- | --- | --- | --- | --- | --- |
+| G-2 | AC-3 | _too-coarse / too-fine_ | _iterate / fyi_ | _e.g. "AC-3 covers backend index + ranker + frontend badge + integration test; touchSurface spans 3 layers"_ | _split into AC-3a + AC-3b + AC-3c_ |
+
+## §3. Dependency accuracy
+
+_(Build the surface-overlap graph from the AC table's touchSurface column; compare to the declared \`dependsOn\` graph. Three failure modes: missing edge / cycle / stale reference.)_
+
+\`\`\`text
+_(Optional ASCII dependency diagram when the surface overlap is non-trivial; omit when the graph is trivially correct.)_
+
+AC-1 ─┐
+      ├─→ AC-3 ─→ AC-5
+AC-2 ─┘
+AC-4 (leaf)
+\`\`\`
+
+| G-N | Class | Severity | AC-i | AC-j | Description | Suggested fix |
+| --- | --- | --- | --- | --- | --- | --- |
+| G-3 | _missing-edge / cycle / stale-reference_ | _iterate / block-ship_ | AC-2 | AC-3 | _e.g. "AC-2 and AC-3 both touch src/cache/refresh.ts; AC-2 has no dependsOn entry"_ | _declare AC-3 dependsOn AC-2_ |
+
+## §4. Parallelism feasibility
+
+_(Applies only when \`plan.md > ## Topology\` is \`parallel-build\`. For \`inline\` topology, write \`Topology is inline; §4 not applicable.\` and move on. Otherwise: check slice disjointness, slice count cap (5), AC-to-slice mapping completeness.)_
+
+| G-N | Class | Severity | Slices | Description | Suggested fix |
+| --- | --- | --- | --- | --- | --- |
+| G-4 | _slice-overlap / slice-count-cap / unmapped-AC_ | _iterate_ | slice-1, slice-2 | _e.g. "slice-1 and slice-2 both list tests/integration/search.spec.ts"_ | _merge slice-1 + slice-2 OR move the shared file to a third slice_ |
+
+## §5. Risk catalog
+
+_(What risks does the plan NOT surface? NFR gaps, security implications, missing migration plans, irreversibility. Cap at 5 findings total; if you have more, the plan has structural problems best escalated via \`block-ship\` on the most severe one.)_
+
+| G-N | Class | Severity | Anchor | Description | Suggested fix |
+| --- | --- | --- | --- | --- | --- |
+| G-5 | _nfr-gap / security-unflagged / migration-unplanned / irreversibility_ | _iterate / block-ship_ | _plan.md > ## Non-functional_ | _e.g. "performance: p95 < 200ms declared but no AC verification line exercises perf"_ | _add a perf-test verification to AC-2_ |
+
+## §6. Pre-commitment predictions
+
+_(Authored BEFORE the critic reads plan.md in detail. 3-5 predictions in plan-critic mode. Each prediction names a verification path and a final outcome.)_
+
+| # | Prediction | Rationale (from Spec / prompt / priors) | Verified-against-plan | Outcome |
+| --- | --- | --- | --- | --- |
+| P-1 | _e.g. "AC-3's touchSurface overlaps AC-2 without a dependsOn declaration"_ | _e.g. "AC-2 and AC-3 both mention src/cache/refresh.ts in the Plan section"_ | _§3 anchor citation_ | _confirmed / refuted / partial_ |
+| P-2 | _e.g. "The Spec Out-of-scope bullet about 'no schema changes' contradicts AC-4 which touches migrations/"_ | _e.g. "Spec line vs AC-4 touchSurface"_ | _§1 anchor citation_ | _confirmed / refuted / partial_ |
+| P-3 | _e.g. "Parallel-build topology is declared but slice-1 and slice-2 share the integration test file"_ | _e.g. "topology block vs slice declarations"_ | _§4 anchor citation_ | _confirmed / refuted / partial_ |
+
+## §7. Verdict
+
+\`\`\`text
+Verdict: <pass | revise | cancel>
+Predictions: <N made; N_confirmed confirmed, N_refuted refuted, N_partial partial>
+Goal coverage gaps: <N total; N_block_ship block-ship, N_iterate iterate, N_fyi fyi>
+Granularity findings: <N total; same breakdown>
+Dependency findings: <N total; same breakdown>
+Parallelism findings: <N total; same breakdown — n/a if topology=inline>
+Risk catalog findings: <N total; same breakdown>
+Iteration: <N>/1
+Confidence: <high | medium | low>
+Confidence rationale: <one line; required when Confidence != high>
+\`\`\`
+
+**Verdict rules:**
+
+- **\`pass\`** — no \`block-ship\`-severity findings; minor \`iterate\` or \`fyi\` rows are OK. Plan is buildable; orchestrator advances to slice-builder.
+- **\`revise\`** — at least one \`iterate\`-severity finding (AND zero \`block-ship\` rows). Bounce to ac-author for ONE revision cycle (max). Iteration 0 → 1; if a second plan-critic dispatch ALSO returns \`revise\`, the orchestrator surfaces a user picker.
+- **\`cancel\`** — at least one \`block-ship\`-severity finding (or a §3 cycle, or a §1 goal-coverage gap that requires re-design). Surface a user picker immediately: \`[cancel-slug]\` / \`[re-design]\`.
+
+## §8. Hand-off
+
+_(For \`revise\`: specific changes ac-author must make on the next dispatch, ordered by severity. ac-author reads this section verbatim from plan-critic.md when re-dispatched on iteration 1.)_
+
+_(For \`cancel\`: recommended next step for the user — re-design with which constraints clarified, or cancel and split the slug.)_
+
+_(For \`pass\`: write \`No hand-off required — slice-builder dispatches as today.\`)_
+
+### Changes ac-author must make (revise verdict only)
+
+- _G-N (cite anchor verbatim) → ac-author action: <e.g. "split AC-3 into AC-3a (backend) + AC-3b (frontend)">_
+
+### Recommended next step (cancel verdict only)
+
+- _re-design with the surfaced constraints, OR cancel the slug — user decides_
+
+## Summary — plan-critic
+
+### Changes made
+
+- _N predictions recorded (M confirmed, K refuted, L partial)._
+- _N goal-coverage findings catalogued (M block-ship, K iterate, L fyi)._
+- _N granularity / dependency / parallelism / risk findings catalogued._
+- _Verdict: pass | revise | cancel._
+
+### Things I noticed but didn't touch
+
+- _Anything observed during reading that is outside plan-critic's lane (e.g. "the Approaches table dismissed Option B with a thin rationale — outside plan-critic's lane to relitigate; flagging for the user's re-design pass if cancel verdict fires")._
+
+### Potential concerns
+
+- _Anything the plan-critic could not verify and the orchestrator may want to surface to the user (e.g. "P-2 relied on a project convention I could not confirm from plan.md alone; recommend the user verify before iteration 1")._
+`;
+
 const SHIP_TEMPLATE = `---
 slug: SLUG-PLACEHOLDER
 stage: ship
@@ -848,6 +992,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
   { id: "critic", fileName: "critic.md", description: "v8.42 critic template — critic step falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ac_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), AC self-audit, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
+  { id: "plan-critic", fileName: "plan-critic.md", description: "v8.51 plan-critic template — pre-implementation adversarial pass between ac-author and slice-builder. Frontmatter (slug, stage=plan-critic, posture_inherited, ac_mode, ac_count, dispatched_at, iteration, predictions_made, findings, verdict). Body: goal coverage, granularity, dependency accuracy, parallelism feasibility, risk catalog, pre-commitment predictions, verdict (pass | revise | cancel), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed revise loop. Verdict: pass (advance to slice-builder), revise (bounce to ac-author once), cancel (user picker).", body: PLAN_CRITIC_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },
