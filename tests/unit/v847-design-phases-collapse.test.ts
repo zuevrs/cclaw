@@ -4,6 +4,7 @@ import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
 import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
+import { STAGE_PLAYBOOKS } from "../../src/content/stage-playbooks.js";
 
 /**
  * v8.47 — design phases UX collapse (6-10 user turns → 1-2 turns).
@@ -256,23 +257,23 @@ describe("v8.47 design phases collapse — orchestrator dispatch envelope reflec
     expect(START_COMMAND_BODY).toMatch(/Phase 1.*Phase 7|Phase 7.*Phase 1|v8\.47/iu);
   });
 
-  it("AC-6 — discovery.md runbook describes the v8.47 two-turn-max pacing", () => {
-    const discovery = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === "discovery.md");
-    expect(discovery, "discovery.md runbook must be registered").toBeDefined();
-    expect(discovery!.body).toMatch(/v8\.47/);
-    expect(discovery!.body).toMatch(/Phase 1.*Phase 7|two-turn-max|at MOST twice/i);
+  it("AC-6 — plan playbook (v8.54: lifted from discovery.md) describes the v8.47 two-turn-max pacing", () => {
+    const planPlaybook = STAGE_PLAYBOOKS.find((p) => p.id === "plan");
+    expect(planPlaybook).toBeDefined();
+    expect(planPlaybook!.body).toMatch(/v8\.47/);
+    expect(planPlaybook!.body).toMatch(/Phase 1.*Phase 7|two-turn-max|at MOST twice/i);
   });
 
-  it("AC-6 — discovery.md runbook describes the request-changes revise loop with cap", () => {
-    const discovery = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === "discovery.md");
-    expect(discovery!.body).toMatch(/request-changes/);
-    expect(discovery!.body).toMatch(/Revise cap = 3|3 iterations|revise.*cap.*3/i);
+  it("AC-6 — plan playbook describes the request-changes revise loop with cap", () => {
+    const planPlaybook = STAGE_PLAYBOOKS.find((p) => p.id === "plan")!;
+    expect(planPlaybook.body).toMatch(/request-changes/);
+    expect(planPlaybook.body).toMatch(/Revise cap = 3|3 iterations|revise.*cap.*3/i);
   });
 
-  it("AC-6 — discovery.md runbook describes the reject verdict path", () => {
-    const discovery = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === "discovery.md");
-    expect(discovery!.body).toMatch(/reject/);
-    expect(discovery!.body).toMatch(/Design rejected|## Design rejected/);
+  it("AC-6 — plan playbook describes the reject verdict path", () => {
+    const planPlaybook = STAGE_PLAYBOOKS.find((p) => p.id === "plan")!;
+    expect(planPlaybook.body).toMatch(/reject/);
+    expect(planPlaybook.body).toMatch(/Design rejected|## Design rejected/);
   });
 });
 

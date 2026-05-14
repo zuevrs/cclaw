@@ -17,12 +17,11 @@ describe("auto-trigger skills", () => {
     }
   });
 
-  it("ac-traceability names the v8.40 prompt-only commit-prefix contract (no commit-helper)", () => {
+  it("ac-traceability names the v8.40 prompt-only commit-prefix contract", () => {
     const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "ac-discipline");
     expect(skill?.body).toContain('git log --grep="(AC-N):"');
     expect(skill?.body).toContain("red(AC-");
     expect(skill?.body).toContain("green(AC-");
-    expect(skill?.body).not.toContain("commit-helper");
   });
 
   it("review-loop names the Five Failure Modes", () => {

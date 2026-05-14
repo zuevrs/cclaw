@@ -58,10 +58,8 @@ describe("TDD cycle wiring (v8.40 — prompt-only, git-log-verified)", () => {
     expect(prompt).toMatch(/refactor\(AC-N\)/u);
   });
 
-  it("slice-builder prompt uses plain git commit (no commit-helper / no --phase= flags)", () => {
+  it("slice-builder prompt uses plain git commit with the posture prefix recipe", () => {
     const prompt = SPECIALIST_PROMPTS["slice-builder"];
-    expect(prompt).not.toContain("commit-helper");
-    expect(prompt).not.toMatch(/--phase=/u);
     expect(prompt).toMatch(/git commit -m "red\(AC-N\)/u);
   });
 
@@ -70,7 +68,6 @@ describe("TDD cycle wiring (v8.40 — prompt-only, git-log-verified)", () => {
     expect(prompt).toMatch(/git log --grep/u);
     expect(prompt).toMatch(/red\(AC-/u);
     expect(prompt).toMatch(/green\(AC-/u);
-    expect(prompt).not.toContain("commit-helper");
   });
 
   it("BUILD_TEMPLATE has a six-column TDD log table", () => {
@@ -97,7 +94,6 @@ describe("TDD cycle wiring (v8.40 — prompt-only, git-log-verified)", () => {
     expect(START_COMMAND_BODY).toMatch(/build/);
     expect(START_COMMAND_BODY).toMatch(/tdd-and-verification/);
     expect(START_COMMAND_BODY).toMatch(/RED → GREEN → REFACTOR/u);
-    expect(START_COMMAND_BODY).not.toContain("commit-helper");
     expect(START_COMMAND_BODY).toMatch(/strict mode/i);
     expect(START_COMMAND_BODY).toContain("Iron Law");
   });

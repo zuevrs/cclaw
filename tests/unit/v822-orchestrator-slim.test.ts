@@ -94,19 +94,15 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
     "finalize.md",
     "cap-reached-recovery.md",
     "adversarial-rerun.md",
-    "self-review-gate.md",
-    "ship-gate.md",
+    "handoff-gates.md",
     "handoff-artifacts.md",
     "compound-refresh.md",
-    "discovery.md",
     "pause-resume.md",
-    "plan-small-medium.md",
-    "critic-stage.md",
-    "plan-critic-stage.md",
+    "critic-steps.md",
     "qa-stage.md",
   ];
 
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the fifteen expected files (v8.22 ten + v8.31 two + v8.42 one + v8.51 one + v8.52 one)", () => {
+  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files)", () => {
     const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
     expect(fileNames).toEqual([...expectedRunbookFiles].sort());
   });

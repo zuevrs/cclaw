@@ -79,9 +79,8 @@ describe("v8.23 no-git fallback — triage-gate skill documents the auto-downgra
     ).toMatch(/parallel.?build|worktree/i);
   });
 
-  it("AC-2 (v8.40) — `triage-gate.md` no longer references the retired commit-helper hook", () => {
-    expect(TRIAGE_GATE_SKILL).not.toContain("commit-helper");
-  });
+  // v8.40 "triage-gate.md no longer references commit-helper" is covered by
+  // tests/unit/retired-tokens.test.ts (v8.54 consolidated sweep).
 });
 
 describe("v8.40 no-git fallback — strict-mode chain check is skipped when no .git/", () => {

@@ -3,9 +3,7 @@ import { ANTIPATTERNS } from "../../src/content/antipatterns.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import { DECISION_PROTOCOL } from "../../src/content/decision-protocol.js";
 import { META_SKILL } from "../../src/content/meta-skill.js";
-import { RECOVERY_PLAYBOOKS } from "../../src/content/recovery.js";
 import { REFERENCE_PATTERNS } from "../../src/content/reference-patterns.js";
-import { RESEARCH_PLAYBOOKS } from "../../src/content/research-playbooks.js";
 import { LEARNINGS_RESEARCH_PROMPT } from "../../src/content/research-prompts/learnings-research.js";
 import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.js";
 import { STAGE_PLAYBOOKS } from "../../src/content/stage-playbooks.js";
@@ -143,14 +141,6 @@ describe("v8.12 cleanup", () => {
       expect(ids).toEqual(["auth-flow", "security-hardening"]);
     });
 
-    it("recovery playbooks empty by default", () => {
-      expect(RECOVERY_PLAYBOOKS).toEqual([]);
-    });
-
-    it("research playbooks empty by default", () => {
-      expect(RESEARCH_PLAYBOOKS).toEqual([]);
-    });
-
     it("decision protocol no longer cites deleted worked examples", () => {
       expect(DECISION_PROTOCOL).not.toContain("decision-permission-cache");
       expect(DECISION_PROTOCOL).not.toContain("Worked examples");
@@ -166,12 +156,12 @@ describe("v8.12 cleanup", () => {
       expect(START_COMMAND_BODY).toContain("finalize.md");
     });
 
-    it("orchestrator describes pre-mortem as a review.md section (v8.22: in ship-gate runbook)", () => {
-      const shipGate = runbookBody("ship-gate");
-      expect(shipGate).toMatch(
+    it("orchestrator describes pre-mortem as a review.md section (v8.54: merged into handoff-gates runbook)", () => {
+      const handoffGates = runbookBody("handoff-gates");
+      expect(handoffGates).toMatch(
         /adversarial reviewer's pre-mortem section is appended to `review\.md`/u
       );
-      expect(START_COMMAND_BODY).toContain("ship-gate.md");
+      expect(START_COMMAND_BODY).toContain("handoff-gates.md");
     });
 
     it("learnings-research returns lessons inline by default", () => {
@@ -197,10 +187,8 @@ describe("v8.12 cleanup", () => {
       expect(START_COMMAND_BODY).toMatch(/legacy-artifacts: true/u);
     });
 
-    it("meta-skill explains that recovery / research are empty by default (v8.44 removed examples entirely)", () => {
-      expect(META_SKILL).toMatch(/empty.{0,40}v8\.12/u);
+    it("meta-skill documents the legacy-artifacts opt-in", () => {
       expect(META_SKILL).toMatch(/legacy-artifacts/u);
-      expect(META_SKILL).toMatch(/v8\.44/u);
     });
   });
 });

@@ -5,10 +5,6 @@ import { describe, expect, it } from "vitest";
 
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.js";
-import { ANTIPATTERNS } from "../../src/content/antipatterns.js";
-import { START_COMMAND_BODY } from "../../src/content/start-command.js";
-import { CORE_AGENTS } from "../../src/content/core-agents.js";
-import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import {
   POSTURE_COMMIT_PREFIXES,
   expectedCommitsForPosture,
@@ -49,7 +45,6 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 
-const SLICE_BUILDER_PROMPT = SPECIALIST_PROMPTS["slice-builder"];
 const REVIEWER_PROMPT = SPECIALIST_PROMPTS["reviewer"];
 
 const TDD_SKILL = (() => {
@@ -96,56 +91,9 @@ describe("v8.40 — install pipeline no longer ships hooks", () => {
   });
 });
 
-describe("v8.40 — `commit-helper` is scrubbed from user-facing surfaces", () => {
-  it("slice-builder prompt does NOT mention commit-helper", () => {
-    expect(SLICE_BUILDER_PROMPT).not.toContain("commit-helper");
-  });
-
-  it("slice-builder prompt does NOT mention `--phase=` (the retired hook flag)", () => {
-    expect(SLICE_BUILDER_PROMPT).not.toContain("--phase=");
-  });
-
-  it("reviewer prompt does NOT mention commit-helper", () => {
-    expect(REVIEWER_PROMPT).not.toContain("commit-helper");
-  });
-
-  it("reviewer prompt does NOT mention `--phase=`", () => {
-    expect(REVIEWER_PROMPT).not.toContain("--phase=");
-  });
-
-  it("start-command body does NOT mention commit-helper", () => {
-    expect(START_COMMAND_BODY).not.toContain("commit-helper");
-  });
-
-  it("no skill body mentions commit-helper", () => {
-    for (const skill of AUTO_TRIGGER_SKILLS) {
-      expect(
-        skill.body,
-        `skill ${skill.fileName} must not reference the retired commit-helper hook`
-      ).not.toContain("commit-helper");
-    }
-  });
-
-  it("antipatterns body does NOT mention commit-helper (A-1 cites git log inspection instead)", () => {
-    expect(ANTIPATTERNS).not.toContain("commit-helper");
-  });
-
-  it("core-agents body does NOT mention commit-helper", async () => {
-    const sliceBuilder = CORE_AGENTS.find((agent) => agent.id === "slice-builder");
-    expect(sliceBuilder).toBeDefined();
-    expect(sliceBuilder?.description ?? "").not.toContain("commit-helper");
-    expect(sliceBuilder?.prompt ?? "").not.toContain("commit-helper");
-  });
-
-  it("artifact templates do NOT mention commit-helper", () => {
-    for (const template of ARTIFACT_TEMPLATES) {
-      expect(
-        template.body ?? "",
-        `template ${template.id} must not reference the retired commit-helper hook`
-      ).not.toContain("commit-helper");
-    }
-  });
-});
+// `commit-helper` / `--phase=` scrubbing across slice-builder, reviewer,
+// start-command, skills, antipatterns, core-agents, and artifact templates
+// is now consolidated in tests/unit/retired-tokens.test.ts (v8.54).
 
 describe("v8.40 — Iron Law + anti-rationalization table survive", () => {
   it("Iron Law text is present in tdd-and-verification.md", () => {
