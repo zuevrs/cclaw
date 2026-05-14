@@ -46,6 +46,12 @@ ship_commit: null
 review_iterations: 0
 security_flag: false
 feasibility_stamp: null  # green | yellow | red — set by ac-author before AC lock-in (T1-2)
+# v8.53 — design Phase 6 ambiguity score. Composite (0.0-1.0) across 3 dimensions
+# (greenfield: goal / constraints / success) or 4 dimensions (brownfield: + context).
+# Soft signal at Phase 7 picker; never a hard gate. Absent on pre-v8.53 plans.
+ambiguity_score: null
+ambiguity_dimensions: null
+ambiguity_threshold: null
 ---
 
 # SLUG-PLACEHOLDER

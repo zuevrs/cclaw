@@ -49,6 +49,32 @@ export interface ModelPreferences {
   planner?: ModelTier;
 }
 
+/**
+ * v8.53 — design phase tunables. Optional block in `.cclaw/config.yaml`;
+ * every field is independently optional and falls back to a documented
+ * default when absent. The block exists so the v8.53 ambiguity-threshold
+ * knob has a typed home (we do NOT want orchestrator prompts reaching
+ * for free-form `unknown` keys).
+ */
+export interface DesignConfig {
+  /**
+   * v8.53 — composite-ambiguity threshold for the Phase 7 warning prefix.
+   *
+   * The design specialist computes an `ambiguity_score` in Phase 6 across
+   * 3 dimensions (greenfield: goal / constraints / success) or 4
+   * dimensions (brownfield: + context). At Phase 7, if the composite
+   * score exceeds this threshold, the picker is prefixed with a soft
+   * warning ("⚠ Composite ambiguity X exceeds threshold Y —
+   * request-changes recommended for: …"). The user can still approve;
+   * this is informational, not a hard gate.
+   *
+   * Default `0.2`. Values outside `[0.0, 1.0]` fall back to `0.2` at
+   * read-time and design Phase 6 surfaces a one-line note in
+   * `plan.md > ## Open questions` so the misconfig is auditable.
+   */
+  ambiguity_threshold?: number;
+}
+
 export interface CclawConfig {
   version: string;
   flowVersion: "8";
@@ -95,6 +121,36 @@ export interface CclawConfig {
    * pipelines that don't want a structured-ask interruption.
    */
   captureLearningsBypass?: boolean;
+  /**
+   * v8.53 — design phase tunables. The only field today is
+   * {@link DesignConfig.ambiguity_threshold}, but the block is shaped
+   * to accept future design-phase knobs without churning the top-level
+   * config schema.
+   */
+  design?: DesignConfig;
+}
+
+/**
+ * v8.53 — default composite-ambiguity threshold used when
+ * `.cclaw/config.yaml > design.ambiguity_threshold` is absent or
+ * out-of-range. Exposed as a const so tests + orchestrator readers
+ * share the canonical value.
+ */
+export const DEFAULT_AMBIGUITY_THRESHOLD = 0.2;
+
+/**
+ * v8.53 — read the configured ambiguity threshold with the documented
+ * fallback. Returns {@link DEFAULT_AMBIGUITY_THRESHOLD} when the config
+ * is absent, the `design` block is missing, the field is absent, or the
+ * configured value is not a finite number in `[0.0, 1.0]`. Out-of-range
+ * values fall back silently at read time (design Phase 6 emits a note
+ * in `plan.md > ## Open questions` to keep the misconfig auditable).
+ */
+export function ambiguityThresholdOf(config: CclawConfig | null | undefined): number {
+  const raw = config?.design?.ambiguity_threshold;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return DEFAULT_AMBIGUITY_THRESHOLD;
+  if (raw < 0 || raw > 1) return DEFAULT_AMBIGUITY_THRESHOLD;
+  return raw;
 }
 
 export function createDefaultConfig(harnesses: HarnessId[] = ["cursor"]): CclawConfig {

@@ -239,6 +239,51 @@ Run **self-review checklist** (9 rules; all must pass before Phase 7):
 
 If a check fails, fix it silently before Phase 7. Do not present a known-failing artifact for sign-off. Do not pause to ask the user about the failure; that is what Phase 7 is for.
 
+#### Ambiguity score (v8.53; computed at end of Phase 6, before Phase 6.5 or Phase 7)
+
+After the self-review checklist passes, compute the **composite ambiguity score** for the design and stamp it into \`plan.md\` frontmatter. The score is a **soft signal** to the user at Phase 7: high ambiguity surfaces a recommended-revise warning prefix, but the user can always approve below or above the threshold. The score is calculated across 3 dimensions on greenfield slugs and 4 dimensions on brownfield slugs (\`triage.problemType == "refines"\` OR plan.md frontmatter \`refines\` is non-null).
+
+Each dimension is scored \`0.0\` (perfectly clear) to \`1.0\` (entirely fuzzy). The composite is the weighted sum of the dimension scores; clamp to \`[0.0, 1.0]\`.
+
+**Dimensions — greenfield (default; 3 dimensions, weights sum to 1.0):**
+
+- **Goal clarity** (weight \`0.4\`) — Does \`## Spec > Objective\` (and \`## Frame\` lead clause) answer "what does done look like"? Vague verbs ("improve", "modernize", "clean up", "make it better") → high score (≥ 0.5). Concrete verbs with subject ("user can save a draft", "p95 latency under 200ms over 100 RPS") → low score (≤ 0.2). Cite the specific Objective bullet when scoring.
+- **Constraints clarity** (weight \`0.3\`) — Does \`## Spec > Boundaries\` enumerate hard constraints with concrete tokens? "No DB schema changes", "compatible with Node 20+", "preserve cache keys" → low score. "Should be modern and clean", "use best practices" → high score. Cite the specific Boundaries bullet (or the absent-but-implied constraint) when scoring.
+- **Success criteria clarity** (weight \`0.3\`) — Does \`## Spec > Success\` reference measurable outcomes a stakeholder / test / operator can verify? "Function returns X when input is Y", "dashboard's worst page renders under 200ms p95 on staging" → low score. "Code is clean", "performance is good" → high score. Cite the specific Success bullet when scoring.
+
+**Dimensions — brownfield (\`triage.problemType == "refines"\` OR \`plan.md\` frontmatter \`refines\` is non-null; 4 dimensions, weights re-balanced to sum to 1.0):**
+
+- **Goal clarity** (weight \`0.35\`) — same rubric as greenfield, with weight bumped slightly down to make room for Context.
+- **Constraints clarity** (weight \`0.25\`) — same rubric as greenfield, with weight bumped slightly down.
+- **Success criteria clarity** (weight \`0.25\`) — same rubric as greenfield, with weight bumped slightly down.
+- **Context clarity** (weight \`0.15\`) — Does the design ground itself in prior-shipped slugs with concrete citations? "Extends v8.42 critic — see \`src/content/specialist-prompts/critic.ts:126\`" → low score. "Building on the critic stuff we did before" → high score. Cite the specific section (Frame paragraph, D-N rationale, or "cf. shipped slug" line) where prior-art grounding lives. Absence of any cite when brownfield-context exists is ambiguity (≥ 0.6).
+
+**Compute the composite:**
+
+\`\`\`text
+composite = sum(dimension_score × dimension_weight) over enabled dimensions
+\`\`\`
+
+Round to two decimal places. The composite is the single \`ambiguity_score\` value emitted to frontmatter.
+
+**Threshold lookup.** Default threshold is \`0.2\`. The threshold is configurable via \`.cclaw/config.yaml > design.ambiguity_threshold\` (optional; absent → \`0.2\`). Read the config silently in Phase 6; do not surface the lookup to the user. If the configured threshold is outside the \`[0.0, 1.0]\` range, fall back to \`0.2\` and emit a one-line note in \`## Open questions\` ("ambiguity threshold misconfigured in \`.cclaw/config.yaml\`; fell back to default 0.2 for this slug").
+
+**Persist to plan.md frontmatter** (under the existing frontmatter block, after \`feasibility_stamp\` and before the closing \`---\`):
+
+\`\`\`yaml
+ambiguity_score: 0.18
+ambiguity_dimensions:
+  goal: 0.1
+  constraints: 0.2
+  success: 0.25
+  # context: 0.4   # ONLY emitted on brownfield slugs (refines non-null)
+ambiguity_threshold: 0.2
+\`\`\`
+
+The \`ambiguity_dimensions\` map carries the per-dimension scores so downstream readers (ac-author, reviewer, ship-stage telemetry) can see WHICH dimension drove the composite. On greenfield slugs, omit the \`context\` key entirely (do NOT write \`context: null\`). On brownfield slugs, the key is present.
+
+**Backwards compat.** Existing \`plan.md\` files authored before v8.53 do NOT carry these fields. Readers (ac-author / reviewer / Phase 7 picker) treat absent \`ambiguity_score\` as \`"unknown"\` and skip the threshold comparison. The absence does NOT block downstream stages; only NEW design sessions emit the score. This is the same backwards-compat shape v8.46 used for \`## Spec\` (legacy plans without \`## Spec\` continue to validate; only new design sessions emit it).
+
 ### Phase 6.5 — Propose ADR(s) \`[SILENT]\` (optional, when triggers fire)
 
 Read \`.cclaw/lib/skills/documentation-and-adrs.md\`. For every recorded D-N that matches the ADR trigger table (new public interface, persistence shape change, security boundary, new runtime dependency, architectural pattern) AND posture is \`deep\` OR user explicitly requested \`--adr\`:
@@ -257,6 +302,8 @@ This is the **single mandatory user-facing turn** in the design flow (Phase 1 is
 Emit to user (in the user's conversation language for prose; mechanical tokens stay English):
 
 \`\`\`text
+<if ambiguity_score > ambiguity_threshold: "⚠ Composite ambiguity <score> exceeds threshold <threshold> — request-changes recommended for: <dimensions with score > 0.3, comma-separated>. This is informational; you can still approve below.">
+
 Design is ready. Here is the full spec:
 
 <full plan.md design sections rendered — Frame, Spec, optional Non-functional, optional Approaches, Selected Direction, optional Decisions (D-1..D-N inline), optional Pre-mortem, Not Doing, optional Open questions, Summary — design block>
@@ -265,6 +312,8 @@ Design is ready. Here is the full spec:
 
 Approve to proceed to ac-author, request changes, or reject?
 \`\`\`
+
+**Ambiguity warning prefix (v8.53; soft signal).** Read \`plan.md\` frontmatter \`ambiguity_score\` and \`ambiguity_threshold\` (the values Phase 6 wrote). If \`ambiguity_score <= threshold\` (or either field is absent on a legacy plan), emit the standard three-option picker with NO warning prefix. If \`ambiguity_score > threshold\`, **prefix the picker** with the warning line shown above — naming the composite, the threshold, and the comma-separated list of dimensions whose per-dimension score is greater than \`0.3\` (the per-dimension visibility cutoff). The warning is **informational, not a hard gate**: the user can pick \`approve\` regardless of the warning, and the orchestrator advances to ac-author exactly as if the warning had not fired. The threshold itself is configurable via \`.cclaw/config.yaml > design.ambiguity_threshold\` (default \`0.2\`); see Phase 6 above for the lookup contract. When the dimensions-above-\`0.3\` list is empty (i.e., composite cleared the threshold via several middling-but-not-individually-high scores), emit \`request-changes recommended for: composite (no single dimension above 0.3)\` so the user sees the structural shape rather than an empty list.
 
 Use the harness's structured ask facility (\`askUserQuestion\` / equivalent) with exactly three options:
 
