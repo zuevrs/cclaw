@@ -210,16 +210,16 @@ describe("v8.42 — critic prompt covers the §10 known-bad scenarios (gap-axis 
   });
 });
 
-describe("v8.42 — critic specialist count is seven end-to-end (v8.51 added plan-critic)", () => {
-  it("CORE_AGENTS contains exactly 7 specialists + 2 research helpers = 9 entries", () => {
+describe("v8.42 — critic specialist count is eight end-to-end (v8.51 added plan-critic; v8.52 added qa-runner)", () => {
+  it("CORE_AGENTS contains exactly 8 specialists + 2 research helpers = 10 entries", () => {
     const specialists = CORE_AGENTS.filter((a) => a.kind === "specialist");
     const research = CORE_AGENTS.filter((a) => a.kind === "research");
-    expect(specialists).toHaveLength(7);
+    expect(specialists).toHaveLength(8);
     expect(research).toHaveLength(2);
-    expect(CORE_AGENTS).toHaveLength(9);
+    expect(CORE_AGENTS).toHaveLength(10);
   });
 
-  it("init writes exactly 9 agent files under .cclaw/lib/agents/ (v8.51 added plan-critic.md)", async () => {
+  it("init writes exactly 10 agent files under .cclaw/lib/agents/ (v8.51 added plan-critic.md; v8.52 added qa-runner.md)", async () => {
     let project: string | null = null;
     try {
       project = await createTempProject();
@@ -232,6 +232,7 @@ describe("v8.42 — critic specialist count is seven end-to-end (v8.51 added pla
         "design.md",
         "learnings-research.md",
         "plan-critic.md",
+        "qa-runner.md",
         "repo-research.md",
         "reviewer.md",
         "security-reviewer.md",

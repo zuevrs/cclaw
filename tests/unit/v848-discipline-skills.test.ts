@@ -83,18 +83,19 @@ describe("v8.48 — three new discipline skills registered in AUTO_TRIGGER_SKILL
     expect(skill!.stages).toEqual(["build"]);
   });
 
-  it("AC-1 — total skill count is exactly 20 (17 pre-v8.48 + 3 new)", () => {
+  it("AC-1 — total skill count is exactly 21 (17 pre-v8.48 + 3 new in v8.48 + 1 new in v8.52)", () => {
     // v8.16 = 17; v8.27-v8.33 added 5 frontier-aesthetic; v8.44 retired
     // all 5 → back to 17. v8.48 adds 3 (completion-discipline,
     // receiving-feedback, pre-edit-investigation) → 20.
-    expect(AUTO_TRIGGER_SKILLS.length).toBe(20);
+    // v8.52 adds 1 (qa-and-browser, sibling of debug-and-browser) → 21.
+    expect(AUTO_TRIGGER_SKILLS.length).toBe(21);
   });
 
-  it("AC-1 — total skill count stays within [15, 24] range (v8.16 cleanup tolerance)", () => {
+  it("AC-1 — total skill count stays within [15, 25] range (v8.16 cleanup tolerance + v8.52 expansion)", () => {
     // Belt-and-braces — this is the same band v8.16 set; v8.48's
-    // additions stay inside without forcing a band edit.
+    // additions stay inside; v8.52 adds one more sibling skill.
     expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
-    expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(24);
+    expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(25);
   });
 });
 
@@ -234,12 +235,12 @@ describe("v8.48 — slice-builder prompt references pre-edit-investigation", () 
   });
 });
 
-describe("v8.48 — reviewer prompt adds edit-discipline axis (9th axis)", () => {
-  it("AC-6 — reviewer header reflects the bumped axis count (Nine-axis review)", () => {
+describe("v8.48 — reviewer prompt adds edit-discipline axis (9th axis); v8.52 adds qa-evidence axis (10th, gated)", () => {
+  it("AC-6 — reviewer header reflects the bumped axis count (Ten-axis review)", () => {
     expect(
       REVIEWER_PROMPT,
-      "reviewer prompt must declare the v8.48 axis bump (8 → 9 axes; edit-discipline added).",
-    ).toMatch(/Nine-axis review|nine axes/i);
+      "reviewer prompt must declare the v8.48 axis bump (8 → 9 axes; edit-discipline added) plus the v8.52 axis bump (9 → 10 axes; qa-evidence added, gated).",
+    ).toMatch(/Ten-axis review|ten axes/i);
   });
 
   it("AC-6 — reviewer's axis table lists `edit-discipline` with brief examples", () => {

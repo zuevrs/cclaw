@@ -35,11 +35,12 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
       expect(untagged.map((s) => s.id)).toEqual([]);
     });
 
-    it("every stages entry is a known AutoTriggerStage value", () => {
+    it("every stages entry is a known AutoTriggerStage value (v8.52 added the `qa` stage between build and review)", () => {
       const known = new Set<AutoTriggerStage>([
         "triage",
         "plan",
         "build",
+        "qa",
         "review",
         "ship",
         "compound",

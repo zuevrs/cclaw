@@ -46,8 +46,8 @@ describe("v8.51 plan-critic — registry membership", () => {
     expect((SPECIALISTS as readonly string[]).includes(PLAN_CRITIC)).toBe(true);
   });
 
-  it("SPECIALISTS array carries exactly seven specialists (v8.42 added critic; v8.51 added plan-critic)", () => {
-    expect(SPECIALISTS).toHaveLength(7);
+  it("SPECIALISTS array carries exactly eight specialists (v8.42 added critic; v8.51 added plan-critic; v8.52 added qa-runner)", () => {
+    expect(SPECIALISTS).toHaveLength(8);
   });
 
   it("plan-critic sits between ac-author and reviewer in the canonical specialist order", () => {
@@ -579,10 +579,10 @@ describe("v8.51 orchestrator wiring — start-command body declares the plan-cri
 // ─────────────────────────────────────────────────────────────────────
 
 describe("v8.51 cross-specialist consistency — counts line up across registries", () => {
-  it("SPECIALISTS, SPECIALIST_PROMPTS keys, and SPECIALIST_AGENTS are all in lockstep at exactly 7 specialists", () => {
-    expect(SPECIALISTS).toHaveLength(7);
-    expect(Object.keys(SPECIALIST_PROMPTS)).toHaveLength(7);
-    expect(SPECIALIST_AGENTS).toHaveLength(7);
+  it("SPECIALISTS, SPECIALIST_PROMPTS keys, and SPECIALIST_AGENTS are all in lockstep at exactly 8 specialists (v8.52 added qa-runner)", () => {
+    expect(SPECIALISTS).toHaveLength(8);
+    expect(Object.keys(SPECIALIST_PROMPTS)).toHaveLength(8);
+    expect(SPECIALIST_AGENTS).toHaveLength(8);
     for (const id of SPECIALISTS) {
       expect(SPECIALIST_PROMPTS[id], `prompt missing for specialist ${id}`).toBeDefined();
       const agent = SPECIALIST_AGENTS.find((a) => a.id === id);

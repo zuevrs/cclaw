@@ -24,8 +24,8 @@ function runbookBody(id: string): string {
  */
 describe("v8.14 strong-design + streamlined-gate", () => {
   describe("D1 — design specialist replaces brainstormer + architect", () => {
-    it("ships exactly seven specialists (v8.42 added critic between security-reviewer and slice-builder; v8.51 added plan-critic between ac-author and reviewer), design among them, brainstormer + architect retired", () => {
-      expect([...SPECIALISTS]).toEqual(["design", "ac-author", "plan-critic", "reviewer", "security-reviewer", "critic", "slice-builder"]);
+    it("ships exactly eight specialists (v8.42 added critic between security-reviewer and slice-builder; v8.51 added plan-critic between ac-author and reviewer; v8.52 added qa-runner between critic and slice-builder), design among them, brainstormer + architect retired", () => {
+      expect([...SPECIALISTS]).toEqual(["design", "ac-author", "plan-critic", "reviewer", "security-reviewer", "critic", "qa-runner", "slice-builder"]);
       for (const legacy of LEGACY_DISCOVERY_SPECIALISTS) {
         expect(SPECIALISTS as readonly string[]).not.toContain(legacy);
       }

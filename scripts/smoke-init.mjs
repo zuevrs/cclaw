@@ -104,7 +104,13 @@ try {
   // large-risky, problemType!=refines, AC count>=2}; the template is
   // the artifact's source-of-truth shape and ships unconditionally
   // (gate-gated on dispatch, not install).
-  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "plan-critic.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
+  // v8.52 — `qa.md` template was added alongside the new behavioural-QA
+  // qa-runner specialist. The qa stage dispatches qa-runner between
+  // `build` and `review` on the surface gate (triage.surfaces includes
+  // ui/web AND acMode != inline); the template is the artifact's
+  // source-of-truth shape and ships unconditionally (gate-gated on
+  // dispatch, not install).
+  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "plan-critic.md", "qa.md", "ship.md", "decisions.md", "learnings.md", "manifest.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "templates", tpl))) {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }
@@ -119,6 +125,14 @@ try {
   }
   if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "plan-critic.md"))) {
     throw new Error("smoke check failed: v8.51 plan-critic.md agent file missing after init");
+  }
+  // v8.52 — qa-runner specialist. SPECIALIST_AGENTS now contains 8
+  // specialists (design, ac-author, reviewer, security-reviewer, critic,
+  // plan-critic, qa-runner, slice-builder). The agent file ships
+  // unconditionally; the orchestrator gates the qa stage at dispatch on
+  // triage.surfaces ∩ {ui, web} ≠ ∅ AND acMode != inline.
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "qa-runner.md"))) {
+    throw new Error("smoke check failed: v8.52 qa-runner.md agent file missing after init");
   }
   // v8.17: derive the expected list from `AUTO_TRIGGER_SKILLS` so future
   // thematic merges / splits don't require touching this script. Assert
@@ -148,6 +162,15 @@ try {
   // writes the file unconditionally (gate-gated on dispatch).
   if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "plan-critic-stage.md"))) {
     throw new Error("smoke check failed: v8.51 plan-critic-stage.md runbook missing after init");
+  }
+  // v8.52 — `qa-stage.md` on-demand runbook was added alongside the new
+  // behavioural-QA qa-runner specialist. The runbook is lazy-loaded by
+  // the orchestrator on every slice-builder GREEN return when the
+  // surface gate fires (triage.surfaces ∩ {ui, web} ≠ ∅ AND acMode !=
+  // inline); install writes the file unconditionally (gate-gated on
+  // dispatch).
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "qa-stage.md"))) {
+    throw new Error("smoke check failed: v8.52 qa-stage.md runbook missing after init");
   }
   // v8.12 trimmed reference patterns 8 → 2.
   for (const pattern of ["auth-flow.md", "security-hardening.md"]) {
