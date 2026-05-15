@@ -9,61 +9,12 @@ const RESEARCH_HELPER_LIST = RESEARCH_AGENTS.map(
   (agent) => `- **${agent.id}** — ${agent.description}`
 ).join("\n");
 
-const TRIAGE_ASK_EXAMPLE = `\`\`\`
-# Single tool call, TWO questions in one form. The run-mode answer is ignored
-# at patch time on inline (form shape stays stable). Skipped on the
-# zero-question fast path (trivial / high-confidence; see Triage §1).
-# Combining saves one round-trip per non-inline flow start.
-askUserQuestion(
-  questions: [
-    {
-      id: "path",
-      prompt: <one sentence: complexity + confidence, recommended path, why (file count / LOC / sensitive surface), ceremony mode, "pick a path">,
-      options: [
-        <option label conveying: proceed with the recommended path>,
-        <option label conveying: switch to trivial — inline edit + commit, skip plan/review>,
-        <option label conveying: escalate to large-risky — collaborative design phase, strict AC, parallel slices>,
-        <option label conveying: customise — user edits complexity / ceremonyMode / path>
-      ],
-      allow_multiple: false
-    },
-    {
-      id: "run-mode",
-      prompt: <one sentence asking which run mode to use>,
-      options: [
-        <option label conveying: step mode — pause after each stage; next /cc advances (default)>,
-        <option label conveying: auto mode — chain plan → build → review → critic → ship; stop only on hard gates>
-      ],
-      allow_multiple: false
-    }
-  ]
-)
-# Harness fallback (no multi-question support): two sequential calls.
-# Skip Q2 if Q1 returned "switch to trivial".
+const TRIAGE_ANNOUNCE_EXAMPLE = `\`\`\`
+<one-line announcement in the user's language:>
+─ <complexity> / <ceremonyMode> / <"inline edit" | "plan → build → review → ship" | "design → plan → build → qa? → review → critic → ship">  ·  runMode=<step|auto|null>  ·  slug=<YYYYMMDD-semantic-kebab>
 \`\`\`
 
-\`<...>\` slots are intent descriptors. Render every prompt and option label in the user's conversation language. Mechanical tokens — \`/cc\`, \`/cc-cancel\`, stage names, mode names, \`AC-N\`, slugs, paths, JSON keys — stay English. See \`conversation-language.md\`.`;
-
-const TRIAGE_FALLBACK_EXAMPLE = `\`\`\`
-<Triage block in the user's language; lines are:>
-─ Complexity: <trivial | small/medium | large-risky>  (confidence: <high | medium | low>)
-─ Recommended path: <inline | plan → build → review → critic → ship>
-─ Why: <one short sentence in the user's language; cite file count / LOC / sensitive-surface flag>
-─ Ceremony mode: <inline | soft | strict>
-
-[1] <option text conveying: proceed with the recommendation>
-[2] <option text conveying: switch to trivial>
-[3] <option text conveying: escalate to large-risky>
-[4] <option text conveying: customise the triage>
-\`\`\`
-
-\`\`\`
-<Run-mode block heading in the user's language>
-[s] <option text conveying: step mode — pause after each stage; next /cc advances (default)>
-[a] <option text conveying: auto mode — chain stages; stop only on hard gates>
-\`\`\`
-
-The slot text inside \`<...>\` is intent only. The actual fallback rendered to the user uses the user's language. The bracketed shortcut letters (\`[1]\`, \`[s]\`, etc.) and mechanical tokens (\`/cc\`, stage names, mode names) stay English.`;
+The orchestrator emits this ONE line and proceeds straight to the first dispatch (or the inline edit on \`triage.path == ["build"]\`). The user is never asked anything at this hop. Override flags (\`/cc --inline <task>\` / \`/cc --soft <task>\` / \`/cc --strict <task>\`) short-circuit the heuristic and stamp the chosen ceremonyMode verbatim. The classification work that used to live here (surface detection, assumption capture, prior-learnings lookup, interpretation forks) moved to the specialist that already has the codebase context to do it: design Phase 0-2 on the strict path; ac-author Phase 0/1 on the soft path; inline gets neither (no specialist runs).`;
 
 const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 {
@@ -71,7 +22,7 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
     "complexity": "small-medium",
     "ceremonyMode": "soft",
     "path": ["plan", "build", "review", "critic", "ship"],
-    "surfaces": ["ui"],
+    "mode": "task",
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
     "runMode": "step"
@@ -79,35 +30,23 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 }
 \`\`\`
 
-\`runMode\` is \`null\` on inline (fast path or "switch to trivial"), \`"step"\` or \`"auto"\` everywhere else.
+\`runMode\` is \`null\` on inline (\`triage.path == ["build"]\`), \`"step"\` or \`"auto"\` everywhere else (default \`"step"\` unless the user passed \`--mode=auto\`). \`mode\` is \`"task"\` on the standard \`/cc <task>\` entry point and \`"research"\` on \`/cc research <topic>\` flows; pre-v8.58 state files lack the field and readers MUST default to \`"task"\`.
 
-**v8.52 surfaces field.** \`triage.surfaces\` is a list of runtime surfaces the slug touches, populated by the orchestrator at this Hop from the task description + repo signals. The vocabulary is fixed: \`cli\` / \`library\` / \`api\` / \`ui\` / \`web\` / \`data\` / \`infra\` / \`docs\` / \`other\`. Multiple entries are expected on mixed slugs (e.g. an endpoint + a Vue component → \`["api", "ui"]\`). Detection rules:
+**v8.58 — \`triage.surfaces\` is no longer written here.** The surface-detection step that used to live at this Hop moved to the specialist that already has the codebase context to decide: design Phase 2 (Frame) writes the surfaces list to \`flow-state.json\` on the strict path; ac-author Phase 1 (Surface scan) writes it on the soft path; the inline path does not write the field (no specialist runs). The qa-runner gate (v8.52) continues to read \`triage.surfaces\` literally — only the WRITER moved. Pre-v8.58 state files that already carry \`triage.surfaces\` from the orchestrator continue to validate unchanged; the value is read as ground truth on resume.
 
-- **\`ui\`** — task mentions any of \`click\` / \`form\` / \`modal\` / \`page\` / \`screen\` / \`button\` / \`render\` / \`toast\` / \`dialog\` / \`viewport\` / \`responsive\` / \`a11y\` / \`accessibility\` / \`dark mode\` / \`hover\` / \`focus ring\`; OR the touched files include any of \`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\` / \`*.scss\`; OR \`package.json\` references a UI framework (\`react\` / \`vue\` / \`svelte\` / \`next\` / \`astro\` / \`solid\` / \`qwik\`) AND the touched files include any component-ish path.
-- **\`web\`** — task mentions \`http\` / \`html\` / \`browser\` / \`safari\` / \`chrome\` AND the surface is browser-rendered (i.e. NOT an API endpoint). Alias for \`ui\` from the qa-runner gate's perspective; both tokens are treated as equivalent. When in doubt, prefer \`ui\` — \`web\` is for slugs that touch the page but not a component framework (e.g. plain HTML / CSS edits to a static site).
-- **\`api\`** — task mentions \`endpoint\` / \`route\` / \`handler\` / \`request\` / \`response\` / \`webhook\` / \`graphql\` / \`rpc\` / \`http method\` (GET/POST/PUT/PATCH/DELETE); OR the touched files include \`routes/**\` / \`api/**\` / \`pages/api/**\` / \`controllers/**\` / \`handlers/**\` paths.
-- **\`cli\`** — task mentions \`command\` / \`flag\` / \`argument\` / \`stdout\` / \`stdin\` / \`bin\` / \`script\`; OR the touched files include \`bin/**\` / \`cli/**\` / \`src/cli.*\` paths.
-- **\`library\`** — task mentions \`exported\` / \`public API\` / \`SDK\` / \`module\` / \`import from\`; OR the touched files are inside a published npm package's exported surface.
-- **\`data\`** — task mentions \`schema\` / \`migration\` / \`table\` / \`fixture\` / \`seed\` / \`ORM\` / \`database\`; OR the touched files include \`migrations/**\` / \`prisma/schema.prisma\` / \`db/schema.*\` / \`*.sql\`.
-- **\`infra\`** — task mentions \`docker\` / \`ci\` / \`deploy\` / \`terraform\` / \`kubernetes\` / \`helm\` / \`github actions\`; OR the touched files include \`Dockerfile\` / \`.github/workflows/**\` / \`terraform/**\` / \`helm/**\`.
-- **\`docs\`** — task mentions \`README\` / \`docs\` / \`CHANGELOG\` / \`migration guide\`; OR the touched files are purely \`*.md\` outside \`.cclaw/\`.
-- **\`other\`** — fallback when no canonical surface fits. Also the default when \`surfaces\` is **absent** in a pre-v8.52 state file; the v8.52 reader treats absent-\`surfaces\` as \`["other"]\` (the no-QA-gating fallback).
-
-Detection is performed once per slug, at this Hop, AFTER the user confirms ceremonyMode + complexity but BEFORE the first specialist dispatch. The orchestrator writes the detected list verbatim to \`triage.surfaces\`; the value is **immutable** for the lifetime of the flow (same immutability story as \`complexity\` / \`ceremonyMode\` / \`path\`). When no signal fires, write \`["other"]\` rather than an empty array — explicit "other" beats absent for the qa gate's evaluation. The qa-runner gate (v8.52) reads this field at Hop 4.25 to decide whether to dispatch qa-runner between build and review.
-
-**v8.52 \`qa\` stage inclusion in \`triage.path\`.** When the detected \`surfaces\` includes \`"ui"\` or \`"web"\` AND \`ceremonyMode != "inline"\`, the orchestrator MUST insert \`"qa"\` between \`"build"\` and \`"review"\` in \`triage.path\` — yielding e.g. \`["plan", "build", "qa", "review", "critic", "ship"]\`. The \`qa\` token is the v8.52 stage that dispatches qa-runner. On any other surface combination (or on \`ceremonyMode: "inline"\`), the path stays pre-v8.52 verbatim: \`"qa"\` is structurally absent, and the orchestrator advances build → review as before. Pre-v8.52 state files (whose \`path\` cannot contain \`"qa"\` because the stage did not exist) validate unchanged.
+**v8.58 — \`triage.path\` no longer includes \`"qa"\` at triage time.** The qa-stage insertion that used to happen at this Hop moved to the specialist write step: when design Phase 2 (strict) or ac-author Phase 1 (soft) writes \`triage.surfaces\` and the detected surfaces include \`"ui"\` or \`"web"\` AND \`ceremonyMode != "inline"\`, the same write rewrites \`triage.path\` to insert \`"qa"\` between \`"build"\` and \`"review"\`. The qa-runner gate continues to read the rewritten \`triage.path\` at Hop 4.25; only the writer moved. Pre-v8.58 state files whose \`triage.path\` already contains \`"qa"\` validate unchanged.
 
 **Audit log** (\`.cclaw/state/triage-audit.jsonl\`). Write-only telemetry (\`userOverrode\`, \`autoExecuted\`, \`iterationOverride\`) appends to this JSONL log instead of the triage object. Append one line per triage decision immediately after persisting the triage write (best-effort; if the write fails, log and continue). Append a second line with \`iterationOverride: true\` when \`keep-iterating-anyway\` fires at the 5-iteration review cap. Schema mirrors \`TriageAuditEntry\` in \`src/triage-audit.ts\`:
 
 \`\`\`json
-{"decidedAt":"2026-05-08T12:34:56Z","slug":"<slug>","complexity":"small-medium","ceremonyMode":"soft","userOverrode":false,"autoExecuted":false}
+{"decidedAt":"2026-05-08T12:34:56Z","slug":"<slug>","complexity":"small-medium","ceremonyMode":"soft","userOverrode":false,"autoExecuted":true}
 \`\`\`
 
-\`autoExecuted: true\` ONLY on the zero-question fast path. \`userOverrode: true\` when the user picked complexity / ceremony mode different from the recommendation; omit / \`false\` otherwise.
+\`autoExecuted: true\` is now the v8.58 default (no user-facing ask at triage), so every fresh \`/cc\` lands here. \`userOverrode: true\` is stamped only when the user passed an explicit \`--inline\` / \`--soft\` / \`--strict\` flag and the flag's ceremonyMode differs from the heuristic recommendation; the audit log records both the recommended and chosen values via the v8.44 audit-log surface.
 
 **v8.42:** \`triage.path\` includes the \`"critic"\` stage between \`"review"\` and \`"ship"\` whenever \`ceremonyMode != "inline"\`. On \`ceremonyMode: "inline"\` the path stays \`["build"]\`. See \`runbooks/critic-steps.md\` for the full contract.
 
-After triage is persisted, the orchestrator runs the **v8.18 prior-learnings lookup** (see "Prior-learnings lookup" below) and stamps \`triage.priorLearnings\` when matches are found.`;
+**v8.58 — the orchestrator no longer runs a prior-learnings lookup at this Hop.** The v8.18 \`findNearKnowledge\` lookup that used to live between triage persistence and the first dispatch moved into the specialists that consume it: \`ac-author\` Phase 3 already dispatches \`learnings-research\` (which reads \`knowledge.jsonl\` directly), and \`design\` Phase 1 / Phase 4 query the store on demand. Pre-v8.58 state files that carry \`triage.priorLearnings\` continue to be read verbatim by specialists on resume (back-compat); v8.58 new flows leave the field absent.`;
 
 const RESUME_SUMMARY_EXAMPLE = `\`\`\`
 Active flow: <slug>
@@ -225,36 +164,54 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 Before triage patches, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), force \`triage.ceremonyMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. Surface a one-sentence warning to the user at triage time. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale, behaviour, downstream consequences (reviewer's git-log inspection skipped, parallel-build suppression, inline path \`git commit\` skip) live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
 
-## Triage (fresh starts only)
+### Detect — research-mode fork (v8.58)
 
-Run the \`triage-gate.md\` skill. The gate has **two modes** in v8.14+:
+Before triage runs, check the raw \`/cc\` argument for the **research-mode entry point**. The fork fires when EITHER signal is present:
 
-1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), ceremony mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`runMode: null\` (the v8.44 audit log records the fast-path bit as \`autoExecuted: true\` — see "the triage audit log"); proceed straight to the inline edit (the dispatch step on the build stage). The inline path has no assumption surface (v8.21 fold: design Phase 0 owns large-risky, ac-author Phase 0 owns small-medium; inline gets neither).
+- the task argument starts with the literal token \`research \` (case-insensitive, exactly one space), or
+- the task argument carries the explicit \`--research\` flag anywhere in the argument string.
 
-2. **Combined-form structured ask** — for every other classification (and for trivial when confidence is \`medium\` or \`low\`), use the harness's structured question tool (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code / OpenCode do); fall back to two sequential calls only when the harness genuinely only supports single-question structured ask. Combining saves one user round-trip on every non-inline flow start.
+When the fork fires, the orchestrator strips the trigger from the task text (the topic that flows into the specialist is the argument WITHOUT \`research \` / \`--research\`), builds a research-mode slug (\`YYYYMMDD-research-<semantic-kebab>\` — the \`-research-\` infix is mandatory), and **skips triage entirely**. Stamp the triage block with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\`. Then dispatch the \`design\` specialist in **standalone mode** — the envelope MUST include the literal line \`Mode: research\` next to \`Topic: <stripped task text>\`; the specialist's Phase 0 reads that line and switches into the standalone variant (stops after Phase 6 Compose; writes \`research.md\` instead of plan.md; emits a Phase 7 picker with \`accept research\` / \`revise\` instead of \`approve\` / \`request-changes\` / \`reject\`).
 
-${TRIAGE_ASK_EXAMPLE}
+On the Phase 7 \`accept research\` return, the orchestrator finalises the flow: \`git mv\` the artifact into \`.cclaw/flows/shipped/<slug>/research.md\` (NO build / review / critic / ship stages). After finalize, surface the v8.58 **handoff prompt** in plain prose (no structured ask): "Ready to plan? Run \`/cc <clarified task description>\` and I'll carry the research forward as context." The next \`/cc\` invocation on the same project reads the most-recent shipped research slug under \`flows/shipped/\` and stamps it into \`flow-state.json > priorResearch: { slug, topic, path }\`; \`ac-author\` Phase 0 / \`design\` Phase 0 on that follow-up flow read \`priorResearch.path\` and include the research artifact in their reads.
 
-The first question's prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, ceremony mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
+Sub-cases:
 
-The second question (run-mode) is **always rendered** when the combined form is shown, even when the user might pick the "switch to trivial" option in Question 1 — the run-mode answer is then **ignored at patch time** and \`runMode\` is written as \`null\` on the inline path (no stages to chain). This keeps the form shape stable across answers and avoids a conditional second-call round-trip. Default \`runMode\` is \`step\` if the user dismisses the form or the harness can only show one question.
+- **Argument is \`research\` alone (no topic)** — surface \`research mode needs a topic; try '/cc research <topic>'\`, end the turn.
+- **Argument is \`research <topic>\` AND a flow is active (\`currentSlug != null\`)** — collision case (run the resume summary + r/s/n picker; on \`n\`, cancel the active flow and dispatch the research flow).
+- **Argument starts with \`research \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — flags are ignored (research's path is fixed). One-line note: \`research mode ignores ceremonyMode flags\`, then proceed.
+- **Research-mode + \`--mode=auto\` / \`--mode=step\`** — toggle dropped with one-line note (no stages to chain), identical to the inline-path rejection.
 
-If the harness lacks a structured ask facility, fall back to the legacy form:
+Full standalone-mode contract — Phase 0-6 outputs landing in \`research.md\`, the two-option Phase 7 picker, finalize semantics, the optional handoff — lives in \`.cclaw/lib/agents/design.md\` ("Standalone (research) mode" section).
 
-${TRIAGE_FALLBACK_EXAMPLE}
+## Triage — lightweight router (v8.58; fresh task flows only — research flows skip this hop)
 
-Once both answers are in, patch \`flow-state.json\`:
+Run the \`triage-gate.md\` skill. v8.58 reshapes the gate into a **lightweight router** that decides ONLY routing, never classification. The router is zero-question by default; the legacy v8.14-v8.57 combined-form structured ask is removed.
+
+The router stamps EXACTLY five fields on \`flow-state.json > triage\`: \`complexity\` (\`trivial\` / \`small-medium\` / \`large-risky\`), \`ceremonyMode\` (\`inline\` / \`soft\` / \`strict\`), \`path\` (\`["build"]\` for inline; \`["plan", "build", "review", "critic", "ship"]\` otherwise), \`runMode\` (\`null\` on inline; \`"step"\` default or \`"auto"\` from \`--mode=\`), and \`mode\` (\`"task"\` for standard entry; \`"research"\` is only stamped at the Detect fork above). Plus \`rationale\` + \`decidedAt\`.
+
+The router does NOT decide (v8.58 — moved out): \`surfaces\`, \`assumptions\`, \`priorLearnings\`, \`interpretationForks\`, \`criticOverride\`, \`notes\`. Those moved to the specialist that consumes them — design Phase 0-2 on strict; ac-author Phase 0-1 on soft; nothing on inline. The legacy fields remain on the \`TriageDecision\` type as optional \`@deprecated v8.58\` properties for one release; readers consume them verbatim when present on a pre-v8.58 state file. Slated for removal in v8.59+.
+
+Three override flags short-circuit the heuristic: \`/cc --inline <task>\` (pins \`ceremonyMode: "inline"\`), \`/cc --soft <task>\` (pins \`ceremonyMode: "soft"\`), \`/cc --strict <task>\` (pins \`ceremonyMode: "strict"\`, \`complexity: "large-risky"\`). The flags are mutually exclusive with each other but orthogonal to the v8.34 \`--mode=\` runMode toggle. The audit log records \`userOverrode: true\` when the chosen ceremony differs from the heuristic. The flags only apply to a fresh \`/cc <task>\`; on a resume they are ignored with a one-line note. Full parsing rules, edge cases, and worked examples live in \`triage-gate.md\` ("Override flags (v8.58)" section).
+
+In every case where no override flag is present (the common case), the router runs the heuristic, picks the five fields, builds the slug, patches \`flow-state.json\`, appends one audit-log line (\`autoExecuted: true\` is the v8.58 default), and emits a one-line announcement in the user's language:
+
+${TRIAGE_ANNOUNCE_EXAMPLE}
+
+After the announcement, the orchestrator proceeds straight to the first dispatch (or, on inline, the inline edit itself). The classification work the router no longer does is performed inside the first specialist's first turn — design Phase 0-2 on strict; ac-author Phase 0-1 on soft; none on inline. Specifically, design Phase 2 / ac-author Phase 1 detect surfaces and rewrite \`triage.path\` to insert \`"qa"\` between \`"build"\` and \`"review"\` when UI / web surfaces are detected and \`ceremonyMode != "inline"\`.
+
+The triage decision is **immutable** for the lifetime of the flow **except for \`runMode\`** (v8.34). \`complexity\`, \`ceremonyMode\`, \`path\`, and \`mode\` are pinned at triage; to change any, the user invokes \`/cc-cancel\` and starts a fresh \`/cc <task>\`. The orchestrator does not auto-cancel.
+
+The persisted triage shape:
 
 ${TRIAGE_PERSIST_EXAMPLE}
-
-The triage decision is **immutable** for the lifetime of the flow **except for \`runMode\`** (v8.34). \`complexity\`, \`ceremonyMode\`, and \`path\` are pinned at triage — to change any of those mid-flight, the user invokes \`/cc-cancel\` themselves and starts a fresh \`/cc <task>\`. The orchestrator does not auto-cancel; it surfaces the option in prose only when the user appears stuck.
 
 ### Mid-flight \`runMode\` toggle (v8.34)
 
 The user can flip \`triage.runMode\` between \`step\` and \`auto\` at any \`/cc\` invocation — mid-flow, between stages, after plan-approval, or on a fresh resume — by passing \`/cc --mode=auto\` or \`/cc --mode=step\`. Behaviour:
 
 - The orchestrator patches \`flow-state.json > triage.runMode\` immediately and the toggle **persists**: every subsequent \`/cc\` reads the patched value, no need to re-pass the flag.
-- The toggle never re-triages; only \`runMode\` flips. \`complexity\` / \`ceremonyMode\` / \`path\` / \`assumptions\` / \`priorLearnings\` stay verbatim.
+- The toggle never re-triages; only \`runMode\` flips. \`complexity\` / \`ceremonyMode\` / \`path\` / \`mode\` stay verbatim. Specialist-owned fields (\`assumptions\` / \`surfaces\` / \`priorLearnings\` / \`interpretationForks\`, populated by design / ac-author in v8.58) are also untouched.
 - After the patch, the orchestrator continues normally — if the toggle came on a fresh \`/cc\` (no current dispatch), it advances under the new mode; if it came mid-dispatch (rare; the user typed \`/cc --mode=auto\` while a specialist was running), the patch lands and takes effect on the next stage boundary, never mid-specialist.
 - **Inline path rejection.** When \`triage.path == ["build"]\` (inline / trivial), the toggle is structurally meaningless (no stages to chain). The orchestrator responds with the literal note **\`inline path has no runMode\`** (one line, no other action) and proceeds with the inline edit as if no flag had been passed. This is the only \`/cc --mode=\` failure mode; the toggle never errors out, never asks a follow-up question.
 - The \`--mode=\` flag is **only** \`auto\` or \`step\`; any other value (\`--mode=skip\`, \`--mode=\`) is treated as if the flag were absent and surfaces a one-line "unknown runMode value, ignored" note in plain prose. The flag does not consume the user's task text — \`/cc --mode=auto refactor the auth module\` is parsed as "toggle runMode to auto, then proceed as if \`/cc refactor the auth module\` had been passed".
@@ -267,33 +224,21 @@ Every flow slug uses the format \`YYYYMMDD-<semantic-kebab>\` (UTC date + kebab-
 
 On same-day collision (rare), append \`-2\`, \`-3\`, etc. until the slug is unique against \`.cclaw/flows/\` and \`.cclaw/flows/shipped/\` and \`.cclaw/flows/cancelled/\`.
 
-After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Pause and resume. Before the first dispatch, run the **v8.18 prior-learnings lookup** (Prior-learnings lookup). The assumption-confirmation surface (formerly the preflight step) is now owned by the first dispatched specialist's Phase 0 — see the **Preflight (folded)** section below for the v8.21 fold.
+After triage, the rest of the orchestrator runs the stages listed in \`triage.path\`, in order. Pause behaviour between stages is controlled by \`triage.runMode\` — see Pause and resume. The assumption-confirmation surface is owned by the first dispatched specialist's Phase 0 — see the **Preflight (folded)** section below; the prior-learnings lookup that used to run between triage and dispatch is owned by the specialist that consumes it — see "v8.58 prior-learnings consumption" below.
 
 ### Follow-up-bug detection (v8.50; runs on every fresh \`/cc\`)
 
-Between triage persistence and the prior-learnings lookup, call \`applyFollowUpBugSignals(projectRoot, triage.taskSummary, <iso-now>)\` (in \`src/outcome-detection.ts\`). The helper reads \`.cclaw/knowledge.jsonl\`, scans \`taskSummary\` for slug-cased references to prior shipped slugs paired with a bug keyword (\`bug\` / \`fix\` / \`broken\` / \`regression\` / \`crash\` / \`hotfix\` / \`hot-fix\` / \`revert\` / \`rollback\`), and stamps \`outcome_signal: "follow-up-bug"\` on every match. Both signals (slug-cased reference AND bug keyword) are required so refinement / rephrase tasks that mention a prior without bug intent don't false-positive. Missing / empty / unreadable file is a no-op. Sister capture paths (\`reverted\`, \`manual-fix\`) run at compound time — see Compound below.
+Immediately after triage persistence, call \`applyFollowUpBugSignals(projectRoot, triage.taskSummary, <iso-now>)\` (in \`src/outcome-detection.ts\`). The helper reads \`.cclaw/knowledge.jsonl\`, scans \`taskSummary\` for slug-cased references to prior shipped slugs paired with a bug keyword (\`bug\` / \`fix\` / \`broken\` / \`regression\` / \`crash\` / \`hotfix\` / \`hot-fix\` / \`revert\` / \`rollback\`), and stamps \`outcome_signal: "follow-up-bug"\` on every match. Both signals (slug-cased reference AND bug keyword) are required so refinement / rephrase tasks that mention a prior without bug intent don't false-positive. Missing / empty / unreadable file is a no-op. Sister capture paths (\`reverted\`, \`manual-fix\`) run at compound time — see Compound below. The follow-up-bug helper writes to \`.cclaw/knowledge.jsonl\` (telemetry on shipped entries); it does NOT write to \`flow-state.json > triage.priorLearnings\` (that field is no longer populated by the router; see below).
 
-### Prior-learnings lookup (v8.18; runs on every fresh \`/cc\`)
+### v8.58 prior-learnings consumption
 
-Between triage persistence (and the v8.50 follow-up-bug capture path above) and the first specialist dispatch, the orchestrator calls:
+The v8.18 \`findNearKnowledge\` lookup that used to run at this hop and stamp \`triage.priorLearnings\` is removed from the orchestrator. The same lookup is now performed by the specialist that consumes the result:
 
-\`\`\`ts
-findNearKnowledge(triage.taskSummary, projectRoot, {
-  window: 100, threshold: 0.4, limit: 3, excludeSlug: currentSlug
-})
-\`\`\`
+- **soft path** — \`ac-author\` Phase 3 dispatches \`learnings-research\` as part of its pre-author research order. The research helper reads \`.cclaw/knowledge.jsonl\` directly, runs the same Jaccard + outcome-signal weighting (\`OUTCOME_SIGNAL_MULTIPLIERS\` in \`src/knowledge-store.ts\`), and writes a short markdown summary that ac-author folds into plan.md's \`## Prior lessons\` section.
+- **strict path** — \`design\` Phase 1 (Clarify) queries the store on demand when a clarifying question depends on prior precedent (e.g. "we shipped a similar API last month — does the user want the same pattern?"); Phase 4 (Decisions) queries again to weight D-N options against prior outcomes. Both reads use the same \`findNearKnowledge\` helper.
+- **inline path** — no lookup runs (no specialist, no plan, no learnings to fold in).
 
-The lookup tokenises \`triage.taskSummary\` and runs Jaccard against each recent entry's \`tags\` and \`touchSurface\` value tokens.
-
-**v8.50 outcome-signal down-weight.** \`findNearKnowledge\` multiplies raw Jaccard by the entry's \`outcome_signal\` weight (\`good\`/\`unknown\`=\`1.0\`, \`manual-fix\`=\`0.75\`, \`follow-up-bug\`=\`0.5\`, \`reverted\`=\`0.2\`; see \`OUTCOME_SIGNAL_MULTIPLIERS\` in \`src/knowledge-store.ts\`). Adjusted score gates the threshold AND drives sort order. Absent field reads as \`"unknown"\` (neutral; pre-v8.50 behaviour).
-
-Persistence rules:
-
-- **Empty results → omit \`priorLearnings\` from \`flow-state.json\` entirely** (the absence of the field is the canonical "no prior learnings"; do not write \`priorLearnings: []\`).
-- **Non-empty results → stamp them verbatim under \`triage.priorLearnings\`** as \`KnowledgeEntry\` objects (\`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`, \`outcome_signal\` / \`outcome_signal_updated_at\` / \`outcome_signal_source\` when stamped, …). Downstream specialists read entries directly; do not re-paraphrase.
-- **Missing / empty / unreadable \`knowledge.jsonl\` → empty result, no stamp, no crash.**
-
-The stamp is **immutable for the lifetime of the flow**; \`/cc-cancel\` + fresh \`/cc\` triggers a new lookup.
+Pre-v8.58 state files that already carry \`triage.priorLearnings\` are read verbatim by specialists on resume (back-compat); the field stays on the \`TriageDecision\` type as optional + deprecated for one release. The v8.58 router never writes it.
 
 ### Trivial path (ceremonyMode: inline)
 

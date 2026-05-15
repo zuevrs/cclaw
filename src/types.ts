@@ -345,6 +345,34 @@ export const ROUTING_CLASSES = ["trivial", "small-medium", "large-risky"] as con
 export type RoutingClass = (typeof ROUTING_CLASSES)[number];
 
 /**
+ * v8.58 — flow mode dimension on `TriageDecision`. Distinguishes a normal
+ * `/cc <task>` flow ("task" mode, the historical default and the only
+ * mode pre-v8.58) from a `/cc research <topic>` flow ("research" mode, a
+ * new pre-task brainstormer entry point that invokes the `design`
+ * specialist in standalone mode).
+ *
+ * - `task` (default; pre-v8.58 behaviour) — the user wants to build
+ *   something. Triage routes through the full pipeline
+ *   (plan → build → qa? → review → critic → ship). All existing
+ *   specialists fire under their existing gates.
+ * - `research` (v8.58 new) — the user wants to brainstorm/research
+ *   BEFORE committing to a task. Triage is skipped (the orchestrator's
+ *   Hop 1 Detect forks on the `research ` prefix or `--research` flag);
+ *   only the `design` specialist runs, in its standalone-mode variant
+ *   (Phase 0 Bootstrap → Phase 1 Clarify → Phase 2 Frame → Phase 3
+ *   Approaches → Phase 4 Decisions → Phase 5 Pre-mortem → Phase 6
+ *   Compose → Phase 7 Sign-off, where Phase 7's picker is the
+ *   two-option `accept research` / `revise` instead of intra-flow
+ *   `approve` / `request-changes` / `reject`). Output is
+ *   `.cclaw/flows/<slug>/research.md`; no plan handoff.
+ *
+ * Pre-v8.58 state files do not carry this field; readers MUST default
+ * to `"task"` on absent.
+ */
+export const RESEARCH_MODES = ["task", "research"] as const;
+export type ResearchMode = (typeof RESEARCH_MODES)[number];
+
+/**
  * Plan-traceability and TDD ceremony modes (v8.2+; reviewer-enforced
  * since v8.40; renamed `acMode` → `ceremonyMode` in v8.56 to align with
  * how reference projects treat AC as one element of a plan rather than
@@ -408,6 +436,22 @@ export type RunMode = (typeof RUN_MODES)[number];
  * than the organizing concept around which the entire flow is named.
  * Pre-v8.56 state files with `triage.acMode` are hoisted to
  * `triage.ceremonyMode` on read; see `flow-state.ts > rewriteLegacyAcMode`.
+ *
+ * v8.58 — triage shrinks to a **lightweight router**. New writes carry
+ * only the canonical routing fields (complexity / ceremonyMode / path /
+ * runMode / mode); the classification fields (surfaces / assumptions /
+ * priorLearnings / interpretationForks / criticOverride / notes) are
+ * soft-deprecated — they remain on the type as optional `@deprecated
+ * v8.58` fields so pre-v8.58 state files continue to validate, but new
+ * orchestrator writes leave them absent. The work each represented
+ * moved to the specialist that already does it: design Phase 0-2 on the
+ * strict path; ac-author Phase 0/1 on the soft path; inline gets
+ * neither. The legacy fields stay on the type for one release; slated
+ * for removal in v8.59+ once one full release cycle has aged out any
+ * in-flight state files. The v8.52 qa-gate continues to read
+ * `triage.surfaces` literally; the WRITER moved (from triage step to
+ * design Phase 2 / ac-author Phase 1), the field itself remains the
+ * source of truth for the qa-runner dispatch decision.
  */
 export interface TriageDecision {
   complexity: RoutingClass;
@@ -453,6 +497,18 @@ export interface TriageDecision {
    */
   runMode?: RunMode | null;
   /**
+   * v8.58 — flow mode dimension. `"task"` (default; pre-v8.58 behaviour;
+   * full pipeline through plan → build → qa? → review → critic → ship)
+   * or `"research"` (v8.58 new; standalone design specialist only,
+   * outputs `research.md`, no plan handoff). Pre-v8.58 state files
+   * lack this field; readers MUST default to `"task"` on absent.
+   * Selected by the orchestrator's Hop 1 Detect step based on the
+   * task prefix / flag (`research ` / `--research`) — NOT by the
+   * triage classification heuristic. Immutable for the lifetime of
+   * the flow (research-mode flows do not flip to task-mode mid-run).
+   */
+  mode?: ResearchMode;
+  /**
    * Pre-flight assumptions surfaced at Hop 2.5 (between triage and first
    * dispatch). Each entry is one short sentence the orchestrator was about
    * to silently default to (stack pick, lib version, file layout, target
@@ -467,6 +523,16 @@ export interface TriageDecision {
    * Reading rule: `null` or absent means "no pre-flight ran" (legacy state
    * or trivial path). An empty array means "ran and the user accepted no
    * assumptions are needed", which is rare but valid.
+   *
+   * @deprecated v8.58 — the orchestrator no longer writes this field at
+   * the triage step. The assumption-capture surface moved to design
+   * Phase 0 (strict path) and ac-author Phase 0 (soft path); both write
+   * the captured list to `plan.md` under `## Assumptions` rather than
+   * to `triage.assumptions`. Kept on the type as optional + deprecated
+   * so pre-v8.58 state files continue to validate; readers (specialists,
+   * resume paths) still consume the field when it is present (back-compat
+   * with a v8.56 flow paused mid-design). Slated for removal in v8.59+
+   * once one full release cycle has aged out in-flight state files.
    */
   assumptions?: string[] | null;
   /**
@@ -483,6 +549,11 @@ export interface TriageDecision {
    * downstream specialists see the user's framing, not the orchestrator's
    * paraphrase). When the prompt was unambiguous and forks were not
    * surfaced, the field is `null` or absent.
+   *
+   * @deprecated v8.58 — the orchestrator no longer writes this field.
+   * v8.14+ already lean on design Phase 1 for ambiguity surfacing;
+   * v8.58 formalises the removal of the orchestrator-side writer.
+   * Kept on the type as optional + deprecated for one release.
    */
   interpretationForks?: string[] | null;
   /**
@@ -526,6 +597,16 @@ export interface TriageDecision {
    * it would create a cycle. Validators only check that each entry is a
    * plain object with a string `slug`; the entry's own assertions handle
    * deeper shape checks when readers parse it.
+   *
+   * @deprecated v8.58 — the orchestrator no longer performs the Hop 2.5
+   * prior-learnings lookup. `ac-author` already dispatches
+   * `learnings-research` at Phase 3, which reads `knowledge.jsonl`
+   * directly; `design` Phase 1 / Phase 4 can do the same on demand.
+   * Kept on the type as optional + deprecated for one release so
+   * pre-v8.58 state files (which may carry the field) continue to
+   * validate. Specialists that read this field still consume it
+   * verbatim when present (back-compat resume path); when absent on
+   * new v8.58 flows the specialists rely on their own lookup paths.
    */
   priorLearnings?: unknown[] | null;
   /**
@@ -589,6 +670,14 @@ export interface TriageDecision {
    * value, so the validator rejects `null` to keep the audit trail
    * unambiguous (absent = no override; `true` = override). Pre-v8.43
    * flows without the field validate unchanged.
+   *
+   * @deprecated v8.58 — relocated to the v8.44 audit-log telemetry
+   * surface (`.cclaw/state/triage-audit.jsonl`) so the triage object
+   * stays a pure routing decision. The orchestrator no longer writes
+   * this field; the audit-log entry captures the override signal
+   * instead (mirroring the v8.44 relocation of `userOverrode` /
+   * `autoExecuted` / `iterationOverride`). Kept on the type as
+   * optional + deprecated for one release.
    */
   criticOverride?: boolean;
   /**
@@ -605,19 +694,40 @@ export interface TriageDecision {
    * accept only `string` when present; `null` is rejected to keep the
    * "absent = no note" semantics unambiguous. Pre-v8.43 flows without
    * the field validate unchanged.
+   *
+   * @deprecated v8.58 — the orchestrator's lightweight router no
+   * longer writes narrative notes at triage. Critic skip rationale
+   * continues to land in `.cclaw/state/triage-audit.jsonl` via the
+   * v8.44 audit-log surface; specialists capture narrative context
+   * in their own artifacts (`plan.md`, `research.md`). Kept on the
+   * type as optional + deprecated for one release; readers (resume
+   * paths, critic) still consume the field verbatim when present.
    */
   notes?: string;
   /**
-   * v8.52 — surfaces this slug touches, populated by the orchestrator
-   * at Hop 2 from the task description plus the touched-files signal.
-   * Drives the v8.52 qa-runner gate: qa dispatches only when
-   * `surfaces` includes `"ui"` or `"web"` AND `ceremonyMode != "inline"`.
-   * See {@link Surface} for the vocabulary.
+   * v8.52 — surfaces this slug touches. Drives the v8.52 qa-runner
+   * gate: qa dispatches only when `surfaces` includes `"ui"` or
+   * `"web"` AND `ceremonyMode != "inline"`. See {@link Surface} for
+   * the vocabulary.
    *
    * Multiple values per slug are expected — a /cc that builds an HTTP
-   * endpoint plus a Vue component emits `["api", "ui"]`. The orchestrator
-   * writes the union of detected surfaces, not a single primary
+   * endpoint plus a Vue component emits `["api", "ui"]`. The writer
+   * emits the union of detected surfaces, not a single primary
    * classification.
+   *
+   * v8.58 — the **writer** of this field moved from the triage step
+   * (orchestrator Hop 2, pre-v8.58) to the specialist that already
+   * has the codebase context to decide:
+   *   - **strict path**: design Phase 2 (Frame) writes the surfaces
+   *     list to `flow-state.json` via a `patchFlowState` call after
+   *     Frame resolves.
+   *   - **soft path**: ac-author Phase 1 (Surface scan) writes the
+   *     list before authoring the `## Spec` section of `plan.md`.
+   *   - **inline path**: not written; downstream readers fall back to
+   *     a permissive default (no surface-specific routing fires).
+   * The field itself is NOT deprecated — the v8.52 qa-runner gate
+   * reads it literally and `surfaces` remains the canonical signal
+   * for visual-review opt-in. Only the WRITER moved.
    *
    * Backwards compat: when absent or empty, the orchestrator and the
    * qa gate treat the slug as `["other"]` (no QA gating). Pre-v8.52

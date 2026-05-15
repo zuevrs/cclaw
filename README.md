@@ -2,13 +2,17 @@
 
 **A multi-stage planning + review harness for coding agents.**
 
-cclaw drops a `/cc` slash command into Claude Code, Cursor, OpenCode, or Codex. It triages the task, picks the right amount of ceremony, and runs the work through a fixed pipeline: triage → plan → build → qa → review → critic → ship. Each stage emits a slim summary back to the harness and writes a tracked artifact under `.cclaw/flows/<slug>/`. Sub-agents are isolated; the orchestrator keeps the slug's history.
+cclaw drops a `/cc` slash command into Claude Code, Cursor, OpenCode, or Codex. It routes the task, picks the right amount of ceremony, and runs the work through a fixed pipeline: route → plan → build → qa → review → critic → ship. Each stage emits a slim summary back to the harness and writes a tracked artifact under `.cclaw/flows/<slug>/`. Sub-agents are isolated; the orchestrator keeps the slug's history.
+
+cclaw v8.58 ships two entry points: `/cc <task>` (the historical default — runs the full route → plan → build → ship pipeline) and `/cc research <topic>` (a standalone brainstorming entry that runs the `design` specialist in research mode and stops at the synthesis artifact). See [Modes](#modes) below.
 
 ## Why cclaw
 
 - **Pipeline, not autopilot.** Every stage pauses at a structured gate so the human can read the artifact, edit it, or `/cc-cancel`. There is no "let it run for an hour and hope".
 - **Two-model review.** A read-only reviewer walks ten axes; an adversarial critic falsifies what the reviewer cleared. They share no context and write to separate artifacts (`review.md`, `critic.md`).
 - **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Small/medium tasks get a soft-mode plan and a single TDD cycle. Large-risky tasks get a full per-criterion build with a pre-implementation plan-critic gate.
+- **Lightweight router.** v8.58 — the routing hop is zero-question by default (no structured ask, no clarifying prompt). Explicit override flags (`/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>`) short-circuit the heuristic when you want to pin a ceremony level. Classification work (surface detection, assumption capture, prior-learnings, interpretation forks) moved into the specialist that already has the codebase context — `design` Phase 0-2 on strict, `ac-author` Phase 0-1 on soft.
+- **Research mode.** v8.58 — `/cc research <topic>` is a separate entry point for pre-task uncertainty: brainstorming, scope exploration, architecture comparison. Runs the `design` specialist standalone (Phase 0 Bootstrap → Phase 6 Compose), emits a `research.md` synthesis artifact, and stops. Optional handoff into a follow-up `/cc <clarified task>` flow that consumes the research as `priorResearch` context.
 - **Same runtime, four harnesses.** Claude Code, Cursor, OpenCode, and Codex all read the same `.cclaw/` install. Each harness gets the same `/cc` body plus harness-namespaced ambient rules.
 - **Compound learnings.** Non-trivial slugs emit a `learnings.md`. Future runs read prior shipped lessons through `knowledge.jsonl` before authoring a plan; v8.50 outcome signals (`good` / `unknown` / `manual-fix` / `follow-up-bug` / `reverted`) down-weight priors that didn't hold up.
 
@@ -35,6 +39,60 @@ npx cclaw-cli@latest --non-interactive install --harness=cursor
 
 There is no `cclaw plan`, `cclaw build`, or `cclaw status`. Flow control lives inside `/cc`.
 
+## Modes
+
+v8.58 ships two top-level entry points. Both invocations use the same `/cc` slash-command surface; the orchestrator picks which mode to run based on the first token after `/cc`.
+
+### `/cc <task>` — task mode (the historical default)
+
+Runs the full route → plan → build → ship pipeline with all the gates. The router (formerly "triage") is zero-question by default — it picks `complexity` × `ceremonyMode` × `path` from heuristics and announces the choice in one line, then dispatches the first specialist. No clarifying questions; no structured ask. If you want to pin a ceremony level explicitly, pass one of:
+
+```bash
+/cc --inline <task>    # forces inline edit (one commit, no plan)
+/cc --soft <task>      # forces soft-mode plan → build → review → ship
+/cc --strict <task>    # forces strict + design Phase 0-7 + per-criterion commits + plan-critic gate
+```
+
+The flags are mutually exclusive and orthogonal to the `--mode=auto` / `--mode=step` runMode toggle (`/cc --strict --mode=auto <task>` is valid). When the project has no `.git/`, the router auto-downgrades strict → soft even with `--strict` (per-criterion commits need a SHA chain to be useful).
+
+What used to live at the router — surface detection, assumption capture, prior-learnings lookup, interpretation forks — now lives inside the specialist that has the codebase context to do it well: `design` Phase 0-2 (strict), `ac-author` Phase 0-1 (soft), nothing (inline). Pre-v8.58 state files continue to validate verbatim; readers default to `mode: "task"` when the field is absent.
+
+### `/cc research <topic>` — research mode (v8.58 new entry point)
+
+Runs the `design` specialist in standalone activation mode — same Phase 0-6 as the in-flow brainstormer (Bootstrap → Clarify → Frame → Approaches → Decisions → Pre-mortem → Compose), but stops at Compose. Output: `.cclaw/flows/<slug>/research.md`. No build / review / critic / ship. The Phase 7 picker is a two-option `accept research` / `revise` (instead of the intra-flow three-option `approve` / `request-changes` / `reject`).
+
+```bash
+/cc research storage strategy for shared agent memory
+/cc --research auth library trade-offs                 # equivalent
+```
+
+After accepting the research, the orchestrator surfaces a plain-prose handoff:
+
+> Ready to plan? Run `/cc <clarified task description>` and I'll carry the research forward as context.
+
+The next `/cc <task>` invocation on the same project reads `flow-state.json > priorResearch` and consumes the most-recent shipped research as input to its plan stage (design Phase 0 / ac-author Phase 0 include the research artifact in their reads). The handoff is optional — if you accept the research and never run a follow-up `/cc`, nothing else fires.
+
+Research mode skips the router entirely. There is no triage gate; no `complexity` / `ceremonyMode` heuristic runs. The orchestrator stamps a sentinel triage block (`mode: "research"`, `ceremonyMode: "strict"`, `path: ["plan"]`) so downstream readers that assume `triage` is present continue to work.
+
+```mermaid
+flowchart LR
+    A[/cc input/] -->|"research <topic>" or --research| R[Research mode]
+    A -->|"<task>"| T[Task mode]
+
+    R --> D1[design standalone<br/>Phase 0-6]
+    D1 --> RM["research.md"]
+    RM --> H{Handoff?}
+    H -->|"accept research"| END[Finalize]
+    H -->|next /cc| T
+
+    T --> RT[Router<br/>complexity × ceremonyMode × path]
+    RT -->|inline| INL[Build inline]
+    RT -->|soft| PL[ac-author Phase 0-1<br/>surfaces, assumptions, priorLearnings]
+    RT -->|strict| DS[design Phase 0-7<br/>+ Phase 0-2 absorb classification]
+    PL --> BD[plan → build → review → critic → ship]
+    DS --> BD
+```
+
 ## Worked example
 
 You type:
@@ -45,7 +103,7 @@ You type:
 
 The orchestrator runs through these stages in order, pausing at each gate. The slim-summary blocks the orchestrator emits sit under `## Triage`, `## Plan`, `## Build`, `## QA`, `## Review`, `## Critic`, `## Ship` section headers in chat. Artifacts land on disk.
 
-- **Triage.** complexity: small-medium · ceremony mode: soft · path: plan → build → review → critic → ship · slug: `20260515-search-caching`. The decision is persisted to `flow-state.json > triage` and is immutable for the slug.
+- **Triage (lightweight router).** complexity: small-medium · ceremony mode: soft · path: plan → build → review → critic → ship · slug: `20260515-search-caching` · mode: task. The router runs zero-question by default — no clarifying ask. The decision is persisted to `flow-state.json > triage` and is immutable for the slug. (v8.58 — surface detection / assumption capture / prior-learnings lookup moved into `ac-author` Phase 0-1 on the soft path; they used to live here.)
 - **Plan.** `ac-author` writes `plan.md` — Spec section (Objective / Success / Out of scope / Boundaries), Frame, Acceptance Criteria, Edge cases, Topology, Feasibility stamp, Traceability block. 3 AC, 2 prior lessons surfaced from `knowledge.jsonl`. Confidence: high.
 - **Build.** `slice-builder` runs one TDD cycle per criterion: RED → GREEN → REFACTOR. Each commit carries an `AC-N` prefix the reviewer reads via `git log --grep`. Tests: 14 passing (was 11). Coverage delta: +2.3%.
 - **Review.** Ten-axis reviewer opens 2 findings on the first iteration: cache-key collision on case-sensitive queries (`correctness`, `required`) and missing TTL refresh on stale entries (`architecture`, `consider`). Fix-only re-review closes both findings.
@@ -58,7 +116,7 @@ After ship, the orchestrator moves the artifacts to `.cclaw/flows/shipped/<slug>
 
 | Surface | Count + detail |
 | --- | --- |
-| **Specialists** | 8 sub-agents: `design` (large-risky plans only), `ac-author`, `plan-critic` (pre-implementation gate, strict + complexity≠trivial + AC≥2), `slice-builder`, `qa-runner` (UI/web surfaces, ceremonyMode≠inline), `reviewer`, `security-reviewer`, `critic` (post-implementation adversarial pass). Each runs in isolation with a mandatory contract read. |
+| **Specialists** | 8 sub-agents: `design` (two activation modes — intra-flow brainstormer for strict large-risky tasks, standalone researcher for `/cc research <topic>`; same Phase 0-6, only Phase 7 picker differs), `ac-author` (absorbs classification work on the soft path: Phase 0 assumption capture, Phase 1.5 surface detection), `plan-critic` (pre-implementation gate, strict + complexity≠trivial + AC≥2), `slice-builder`, `qa-runner` (UI/web surfaces, ceremonyMode≠inline), `reviewer`, `security-reviewer`, `critic` (post-implementation adversarial pass). Each runs in isolation with a mandatory contract read. |
 | **Research helpers** | `repo-research` (brownfield scan) and `learnings-research` (prior shipped lessons) dispatched in parallel before every plan. |
 | **Ceremony modes** | `strict` (per-criterion RED → GREEN → REFACTOR + AC↔commit chain), `soft` (single feature-level TDD cycle, plain commit), `inline` (one commit, no plan). Triage picks the mode; readers accept the legacy `acMode` key for one release. |
 | **Plan template** | 14 sections (`Frame`, `Non-functional`, `Approaches`, `Selected Direction`, `Decisions`, `Pre-mortem`, `Not Doing`, `Plan`, `Spec`, `Acceptance Criteria`, `Feasibility stamp`, `Edge cases`, `Topology`, `Traceability block`) in strict mode; 6 sections (`Plan`, `Spec`, `Testable conditions`, `Verification`, `Touch surface`, `Notes`) in soft mode. AC is one section among many. |
@@ -141,7 +199,8 @@ The runtime is under 1 KLOC. The prompt content is where the work lives. If you 
       critic.md             (v8.42+)
       plan-critic.md        (v8.51+, strict + complexity≠trivial + AC≥2)
       ship.md
-    shipped/<slug>/         finalized tasks
+      research.md           (v8.58+, /cc research <topic> only — design standalone synthesis)
+    shipped/<slug>/         finalized tasks (including research-mode flows)
     cancelled/<slug>/       /cc-cancel destination
   lib/
     agents/                 8 specialist contracts

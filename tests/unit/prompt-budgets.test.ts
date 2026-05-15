@@ -63,8 +63,30 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // ~45k chars; 47000 leaves ~4% headroom. The growth is justified in
     // CHANGELOG.md (v8.53 — critic enhancements: multi-perspective lenses +
     // ambiguity score); see CHANGELOG.md > 8.53.0 for the bump rationale.
-    maxLines: 470,
-    maxChars: 47000
+    //
+    // v8.58 raised the design budget from 470/47000 to 530/61000 to absorb the
+    // v8.58 router-collapse — design now owns three responsibilities previously
+    // carried by the orchestrator's triage step (assumption capture in Phase 0,
+    // interpretation forks in Phase 1, surface detection + qa-stage insertion
+    // in Phase 2) AND introduces the standalone research-mode activation
+    // (`triage.mode == "research"`; outputs `research.md`; emits a two-option
+    // Phase 7 picker; no ac-author handoff). The new content includes:
+    //   * Activation modes subsection — task vs research (~2k chars)
+    //   * Phase 0 assumption-capture-from-scratch block (~2k chars; replaces
+    //     the v8.21 fold prose which presumed a triage-pre-seeded list)
+    //   * Phase 0 priorResearch handoff read (~700 chars)
+    //   * Phase 1 prior-learnings query relocated from the orchestrator
+    //     (`findNearKnowledge` lookup + `patchFlowState` write; ~1.5k chars)
+    //   * Phase 1 interpretation-forks ownership block (~700 chars)
+    //   * Phase 2 surface-detection + qa-stage insertion contract (~2.5k chars)
+    //   * Phase 7 standalone-mode picker variant + finalize semantics + handoff
+    //     prompt prose (~2k chars)
+    // Total v8.58 add: ~10k chars. Current size ~57k chars; 61000 leaves ~7%
+    // headroom for the v8.58.x patch-release surface. Growth is justified in
+    // CHANGELOG.md (v8.58 — Lightweight router + research mode + design
+    // standalone); see CHANGELOG.md > 8.58.0 for the bump rationale.
+    maxLines: 530,
+    maxChars: 61000
   },
   {
     id: "ac-author",
