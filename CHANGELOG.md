@@ -1,5 +1,48 @@
 # Changelog
 
+## 8.57.0 — Utility slash commands (`/cclaw-review`, `/cclaw-critic`)
+
+### Why
+
+Through v8.56 cclaw had exactly **one** user-callable entry point: `/cc <task>`, which always triggers the full plan → build → review → critic → ship pipeline. A cross-reference scan of reference projects shows this is the outlier — gstack ships 51 slash commands, mattpocock-skills exposes `/triage` and `/to-prd` as direct primitives, and addyosmani-skills surfaces `/spec`, `/plan`, `/build`, `/test`, `/review` as separate entry points. cclaw's specialists (the 10-axis reviewer with anti-rationalization catalog + adversarial pre-mortem; the 8-section critic with 4 falsification techniques + 6 human-perspective lenses) are arguably the strongest user-facing primitives the harness ships, but they were only reachable by triggering a full `/cc` slug. That is over-ceremony for ad-hoc moments — a quick reviewer pass on staged changes before commit, an adversarial critique of a plan written outside cclaw, a second-opinion on a PR description.
+
+v8.57 closes this gap without changing the `/cc` flow contract. Two new utility commands install alongside `cc.md` / `cc-cancel.md` / `cc-idea.md` in every enabled harness's commands directory.
+
+### What changed
+
+**Deliverable 1 — `/cclaw-review [<git-ref-or-paths>]`** — runs the reviewer's 10-axis pass directly on a diff or set of files.
+
+- Default: `git diff --cached` (staged changes). Falls back to `git diff HEAD` when nothing is staged.
+- With a ref / ref range: review the diff at that point (e.g. `/cclaw-review HEAD~3..HEAD`).
+- With paths: review the named files (whole-file mode).
+- 10-axis pass with utility-mode gating: `qa-evidence` skipped (no `qa.md` to cross-check), plan-dependent sub-checks of `edit-discipline` skipped (no `Touch surface` declaration), `nfr-compliance` skipped (no plan `## Non-functional` section).
+- Output: Findings table directly to chat. Pass `--out <path>` to also write the body as markdown.
+- No `flow-state.json` interaction, no `.cclaw/flows/<slug>/` writes, no artifact tree.
+
+**Deliverable 2 — `/cclaw-critic <path>`** — runs the critic's adversarial 8-section protocol on any document.
+
+- Input: required path to a markdown / text document (plan written outside cclaw, design doc, RFC, PR description, ADR, README, etc.).
+- Always runs **adversarial** mode (4 falsification techniques + multi-perspective lens sweep). Lens selection adapts to the document type (plan-stage lenses: executor / stakeholder / skeptic; code-stage lenses: security / new-hire / ops).
+- §2 / §4 / §5 sub-buckets adapt to whatever the document carries (acceptance lines, requirements, design decisions, open questions, risks) — the bucket labels follow the document's own vocabulary, not the cclaw plan vocabulary.
+- Output: critic findings directly to chat. Pass `--out <path>` to also write the body as markdown.
+- No `flow-state.json` interaction, no `.cclaw/flows/<slug>/` writes, no `critic.md`.
+
+**Deliverable 3 — content + install wiring** — `src/content/utility-commands.ts` exports `CCLAW_REVIEW_COMMAND` and `CCLAW_CRITIC_COMMAND` prompt bodies plus `UTILITY_COMMAND_FILES` (the single source-of-truth for which files install). `src/install.ts > writeHarnessAssets` writes both files alongside `cc.md` / `cc-cancel.md` / `cc-idea.md` in every enabled harness's commands directory. `uninstallCclaw` sweeps them via the same per-harness pass. `SummaryCounts.commands` is sourced from `3 + UTILITY_COMMAND_FILES.length` so future utility commands flip the count automatically.
+
+**Deliverable 4 — specialist contract notes** — `reviewer.ts` and `critic.ts` gain a brief informational note at the top describing the two invocation contexts (full-flow context dispatched by `/cc`, utility-command context dispatched by `/cclaw-review` / `/cclaw-critic`). The contract bodies themselves are unchanged — same axes, same investigation protocol, same outputs.
+
+**Deliverable 5 — README + smoke** — `README.md` adds a new `## Utility commands` section between `## What you get` and `## Harnesses supported` describing both commands in ~15 lines. `scripts/smoke-init.mjs` asserts both files install + uninstall and spot-checks the body invariants (specialist contract reference, `--out` flag, explicit flow-state disclaimer).
+
+### Tests
+
+26 new tests (`tests/unit/v857-utility-commands.test.ts` + `tests/integration/v857-utility-commands.test.ts`) covering content module shape, prompt body invariants, per-harness install + uninstall, idempotency, byte-identity across harnesses, specialist contract notes, and the SummaryCounts contract.
+
+### Non-goals (deliberately punted)
+
+- **No `/cclaw-plan` / `/cclaw-build` / `/cclaw-ship`.** Those stages are flow-coupled — `build` requires a plan; `plan` requires triage; `ship` requires reviewer + critic clearance. Surfacing them as utility primitives would dilute the contracts. The two specialists that DO make sense as standalone primitives are reviewer (read-only on any diff / file set) and critic (read-only on any document).
+- **No `/cclaw-security-review`.** Security review is invoked by the regular reviewer when sensitive-surface heuristics fire, OR by the user inside a `/cc` flow. A standalone security-review utility is a v8.58+ candidate, not a v8.57 deliverable.
+- **No qa-evidence utility.** `qa-runner` requires a UI artifact + Playwright / browser-MCP tooling + AC table — too coupled to flow state to make a clean utility shim.
+
 ## 8.56.0 — Decenter AC: rename `acMode` → `ceremonyMode`, recontextualize AC as one element of the plan, neutral-tone README rewrite
 
 ### Why
