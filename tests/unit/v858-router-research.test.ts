@@ -29,6 +29,7 @@
  * /cc flow (the orchestrator runs inside the LLM, not in the unit
  * test runner). For end-to-end behaviour, see the smoke harness.
  */
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { researchTemplateForSlug, templateBody } from "../../src/content/artifact-templates.js";
 import { renderStartCommand } from "../../src/content/start-command.js";
@@ -452,13 +453,13 @@ describe("v8.58 — research.md artifact template", () => {
 
   it("activeArtifactPath resolves research.md under .cclaw/flows/<slug>/", () => {
     expect(activeArtifactPath("/p", "research", "20260515-research-foo")).toBe(
-      "/p/.cclaw/flows/20260515-research-foo/research.md"
+      path.join("/p", ".cclaw", "flows", "20260515-research-foo", "research.md")
     );
   });
 
   it("shippedArtifactPath resolves research.md under .cclaw/flows/shipped/<slug>/", () => {
     expect(shippedArtifactPath("/p", "20260515-research-foo", "research")).toBe(
-      "/p/.cclaw/flows/shipped/20260515-research-foo/research.md"
+      path.join("/p", ".cclaw", "flows", "shipped", "20260515-research-foo", "research.md")
     );
   });
 
