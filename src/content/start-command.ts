@@ -153,6 +153,8 @@ Read \`.cclaw/state/flow-state.json\`.
 | \`currentSlug == null\` | no active flow | fresh start |
 | \`currentSlug != null\` and no \`/cc\` arg | resume | run \`flow-resume.md\` summary, ask r/s |
 | \`currentSlug != null\` and \`/cc <task>\` arg | collision | run resume summary AND ask r/s/n |
+| any state and \`/cc extend <slug> <task>\` arg | v8.59 extend-mode fork | run extend-mode init (see "Detect — extend-mode fork (v8.59)" below) |
+| any state and \`/cc research <topic>\` arg | v8.58 research-mode fork | run research-mode init (see "Detect — research-mode fork (v8.58)" below) |
 
 Hard-stop message for pre-v8 state:
 
@@ -163,6 +165,10 @@ Do not auto-delete state. Do not hand-edit the JSON.
 ### Detect — git-check sub-step (v8.23)
 
 Before triage patches, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), force \`triage.ceremonyMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. Surface a one-sentence warning to the user at triage time. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale, behaviour, downstream consequences (reviewer's git-log inspection skipped, parallel-build suppression, inline path \`git commit\` skip) live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
+
+### Detect — extend-mode fork (v8.59)
+
+Before the v8.58 research-mode fork runs, check the raw \`/cc\` argument for the **extend-mode entry point**. The fork fires when the argument starts with the literal token \`extend \` (case-insensitive, exactly one space). Parse \`<slug>\` + \`<task>\`, validate the parent via \`loadParentContext(projectRoot, slug)\` (\`src/parent-context.ts\`), and on \`ok: true\` stamp \`flow-state.json > parentContext\` + seed \`refines: <parent-slug>\` in plan.md frontmatter + run the triage-inheritance sub-step. Full procedure (argument parsing, error sub-cases, seven argument shapes, precedence rules, multi-level chaining, worked examples) in \`runbooks/extend-mode.md\`. v8.59 loads the **immediate** parent only; multi-level traversal is opt-in via \`findRefiningChain\` from specialists.
 
 ### Detect — research-mode fork (v8.58)
 
@@ -229,6 +235,10 @@ After triage, the rest of the orchestrator runs the stages listed in \`triage.pa
 ### Follow-up-bug detection (v8.50; runs on every fresh \`/cc\`)
 
 Immediately after triage persistence, call \`applyFollowUpBugSignals(projectRoot, triage.taskSummary, <iso-now>)\` (in \`src/outcome-detection.ts\`). The helper reads \`.cclaw/knowledge.jsonl\`, scans \`taskSummary\` for slug-cased references to prior shipped slugs paired with a bug keyword (\`bug\` / \`fix\` / \`broken\` / \`regression\` / \`crash\` / \`hotfix\` / \`hot-fix\` / \`revert\` / \`rollback\`), and stamps \`outcome_signal: "follow-up-bug"\` on every match. Both signals (slug-cased reference AND bug keyword) are required so refinement / rephrase tasks that mention a prior without bug intent don't false-positive. Missing / empty / unreadable file is a no-op. Sister capture paths (\`reverted\`, \`manual-fix\`) run at compound time — see Compound below. The follow-up-bug helper writes to \`.cclaw/knowledge.jsonl\` (telemetry on shipped entries); it does NOT write to \`flow-state.json > triage.priorLearnings\` (that field is no longer populated by the router; see below).
+
+### v8.59 prior-context consumption
+
+When extend-mode stamped \`flowState.parentContext\`, specialists treat parent artifacts as load-bearing context (lazy \`await exists\` reads; missing = no-op). Per-specialist contracts: \`design\` Phase 0 reads parent's \`## Spec\` / \`## Decisions\` / \`## Selected Direction\`; \`ac-author\` Phase 0 (soft) surfaces inheritance bullets, Phase 1.7 authors the mandatory \`## Extends\` section in plan.md; \`reviewer\` adds a parent-contradictions cross-check; \`critic\` §3 adds a skeptic question on parent decisions. The field is orthogonal to \`priorResearch\` and may co-exist on a single flow. Full per-specialist read patterns live in each specialist's contract; orchestrator-side dispatch + triage-inheritance lives in \`runbooks/extend-mode.md\`.
 
 ### v8.58 prior-learnings consumption
 

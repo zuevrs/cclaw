@@ -388,6 +388,52 @@ export interface NearKnowledgeOptions {
    * values surface).
    */
   problemType?: ProblemType;
+  /**
+   * v8.59 — when set, the parent slug's knowledge-store entry is
+   * **prepended** to the result regardless of Jaccard similarity (the
+   * parent is load-bearing context by design — `/cc extend <slug>`
+   * already told us the parent is relevant; we don't need Jaccard to
+   * re-prove it). Behaviour:
+   *
+   * - Parent's entry is included at index 0 of the result list when
+   *   present in `knowledge.jsonl`. The remaining `limit - 1` slots
+   *   are filled with the standard Jaccard-ranked hits, in order.
+   * - Result list length is capped at `limit` (parent counts against
+   *   the cap, so a `limit: 3` query with a parent returns parent +
+   *   top 2 Jaccard hits).
+   * - If a Jaccard hit shares the parent's slug, it is de-duplicated
+   *   in favour of the prepended parent entry (the parent appears
+   *   exactly once).
+   * - When the parent slug is not present in the log (parent was
+   *   never compound-captured, knowledge.jsonl missing, …), the
+   *   helper degrades gracefully to a Jaccard-only result.
+   * - When the parent slug equals {@link excludeSlug}, the prepend
+   *   STILL fires (parent's entry is explicit context, not "from the
+   *   active flow"); the exclude only affects the Jaccard candidate
+   *   pool. In practice the two values won't equal — `parentSlug` is
+   *   a shipped slug, `excludeSlug` is the active flow's slug — but
+   *   the behaviour is defined for completeness.
+   * - When `taskSummary` is empty/blank, the helper short-circuits
+   *   the Jaccard branch (returns `[]`) but STILL prepends the
+   *   parent entry. Rationale: the parent is the entire reason the
+   *   caller is asking — even a vacuous task summary doesn't
+   *   suppress the parent's load-bearing context.
+   *
+   * The {@link KnowledgeEntry.outcome_signal} multiplier does NOT
+   * apply to the prepended parent entry; the multiplier shapes
+   * Jaccard ranking, and the parent's prepend is by construction
+   * outside the Jaccard branch. A `reverted` parent (the orchestrator
+   * already warned the user at extend init via the "parent slug was
+   * later reverted — proceed only if you understand the revert"
+   * one-liner) is intentionally still loaded — the user accepted
+   * the warning when invoking `/cc extend`. If the caller wants the
+   * `outcome_signal` to gate the prepend, they should not pass
+   * `parentSlug` (or filter the entry themselves).
+   *
+   * Omit the option to retain pre-v8.59 behaviour (Jaccard-only
+   * ranking, no prepend).
+   */
+  parentSlug?: string;
 }
 
 /**
@@ -508,8 +554,7 @@ export async function findNearKnowledge(
   projectRoot: string,
   options: NearKnowledgeOptions = {}
 ): Promise<KnowledgeEntry[]> {
-  const { window = 100, threshold = 0.4, limit = 3, excludeSlug, problemType } = options;
-  if (typeof taskSummary !== "string" || taskSummary.trim().length === 0) return [];
+  const { window = 100, threshold = 0.4, limit = 3, excludeSlug, problemType, parentSlug } = options;
   if (threshold <= 0 || threshold > 1) {
     throw new KnowledgeStoreError(`threshold must be in (0, 1]; got ${threshold}.`);
   }
@@ -518,9 +563,16 @@ export async function findNearKnowledge(
       `problemType filter must be one of ${JSON.stringify(PROBLEM_TYPES)}; got ${JSON.stringify(problemType)}.`
     );
   }
-  const taskTokens = tokenizeTaskSummary(taskSummary);
-  if (taskTokens.size === 0) return [];
+  if (parentSlug !== undefined && (typeof parentSlug !== "string" || parentSlug.length === 0)) {
+    throw new KnowledgeStoreError("parentSlug must be a non-empty string when provided.");
+  }
 
+  // v8.59 — the parent-prepend branch fires regardless of taskSummary
+  // emptiness; the parent is load-bearing context that the caller
+  // explicitly named via `/cc extend <slug>`, so even a vacuous task
+  // summary (which would short-circuit the Jaccard branch below) must
+  // still surface the parent's entry. Read the log up front so both
+  // branches share the same load.
   let all: KnowledgeEntry[];
   try {
     all = await readKnowledgeLog(projectRoot);
@@ -532,32 +584,75 @@ export async function findNearKnowledge(
     return [];
   }
 
-  const recent = all.slice(-Math.max(0, window));
-  const scored: Array<{ entry: KnowledgeEntry; similarity: number; adjusted: number }> = [];
-  for (const entry of recent) {
-    if (excludeSlug && entry.slug === excludeSlug) continue;
-    if (problemType !== undefined && !matchesProblemType(entry, problemType)) continue;
-    const entryTokens = entryTokensForSummaryMatch(entry);
-    if (entryTokens.size === 0) continue;
-    const similarity = jaccard(taskTokens, entryTokens);
-    // v8.50 — apply outcome-signal multiplier BEFORE the threshold gate,
-    // so a down-weighted prior (e.g. `reverted: 0.2`) is excluded the
-    // moment its adjusted score drops below the caller's threshold,
-    // even if the raw similarity would have passed. Pre-v8.50 entries
-    // without `outcome_signal` get multiplier `1.0` (no behaviour
-    // change at the gate; the absence-as-`unknown` rule is honoured by
-    // {@link outcomeMultiplier}).
-    const adjusted = similarity * outcomeMultiplier(entry);
-    if (adjusted < threshold) continue;
-    scored.push({ entry, similarity, adjusted });
+  // Locate the parent entry up front (used by both branches and by the
+  // de-dup pass that ensures the parent appears exactly once). The
+  // lookup walks the full log, not just the recency window: the user
+  // explicitly named this slug via `/cc extend`, so even a slug older
+  // than the standard 100-entry window must surface when called out by
+  // name. Falling back to the window-only candidate pool would re-
+  // introduce the v8.18 cold-start gap the entire feature was designed
+  // to close.
+  const parentEntry = parentSlug !== undefined ? (all.find((entry) => entry.slug === parentSlug) ?? null) : null;
+
+  // Reserve the first slot for the parent (when present), so the
+  // Jaccard branch fills at most `limit - 1` slots when the parent is
+  // prepended. The reservation lives outside the Jaccard branch so the
+  // taskSummary-empty short-circuit still honours the cap correctly.
+  const reservedForParent = parentEntry !== null ? 1 : 0;
+  const jaccardLimit = Math.max(0, limit - reservedForParent);
+
+  // Jaccard branch — same body as pre-v8.59, with the early-empty-
+  // summary short-circuit pulled below the parent lookup so an
+  // empty-summary + parentSlug call still returns the parent.
+  const jaccardHits: KnowledgeEntry[] = [];
+  if (typeof taskSummary === "string" && taskSummary.trim().length > 0 && jaccardLimit > 0) {
+    const taskTokens = tokenizeTaskSummary(taskSummary);
+    if (taskTokens.size > 0) {
+      const recent = all.slice(-Math.max(0, window));
+      const scored: Array<{ entry: KnowledgeEntry; similarity: number; adjusted: number }> = [];
+      for (const entry of recent) {
+        if (excludeSlug && entry.slug === excludeSlug) continue;
+        // v8.59 — drop the parent's entry from the Jaccard pool so the
+        // de-dup pass below doesn't have to filter it out (the parent
+        // is prepended unconditionally). Skipping here is cheaper and
+        // keeps the Jaccard rank ordering stable (a high-similarity
+        // sibling no longer competes against the parent for a slot).
+        if (parentEntry !== null && entry.slug === parentEntry.slug) continue;
+        if (problemType !== undefined && !matchesProblemType(entry, problemType)) continue;
+        const entryTokens = entryTokensForSummaryMatch(entry);
+        if (entryTokens.size === 0) continue;
+        const similarity = jaccard(taskTokens, entryTokens);
+        // v8.50 — apply outcome-signal multiplier BEFORE the threshold gate,
+        // so a down-weighted prior (e.g. `reverted: 0.2`) is excluded the
+        // moment its adjusted score drops below the caller's threshold,
+        // even if the raw similarity would have passed. Pre-v8.50 entries
+        // without `outcome_signal` get multiplier `1.0` (no behaviour
+        // change at the gate; the absence-as-`unknown` rule is honoured by
+        // {@link outcomeMultiplier}).
+        const adjusted = similarity * outcomeMultiplier(entry);
+        if (adjusted < threshold) continue;
+        scored.push({ entry, similarity, adjusted });
+      }
+      // Sort by adjusted score so the multiplier shapes ranking (a perfect
+      // raw match with a `reverted` signal MUST land below a 0.5-raw match
+      // with a `good` signal). Tie-break on raw similarity to keep two
+      // entries with equal adjusted scores ordered the way pre-v8.50 would
+      // have ordered them (the higher-overlap one first).
+      scored.sort((a, b) => b.adjusted - a.adjusted || b.similarity - a.similarity);
+      for (const row of scored.slice(0, jaccardLimit)) {
+        jaccardHits.push(row.entry);
+      }
+    }
   }
-  // Sort by adjusted score so the multiplier shapes ranking (a perfect
-  // raw match with a `reverted` signal MUST land below a 0.5-raw match
-  // with a `good` signal). Tie-break on raw similarity to keep two
-  // entries with equal adjusted scores ordered the way pre-v8.50 would
-  // have ordered them (the higher-overlap one first).
-  scored.sort((a, b) => b.adjusted - a.adjusted || b.similarity - a.similarity);
-  return scored.slice(0, Math.max(0, limit)).map((row) => row.entry);
+
+  // Prepend the parent (when present), then the Jaccard hits, capped
+  // at `limit`. The cap is redundant given `jaccardLimit` is already
+  // `limit - reservedForParent`, but the explicit slice is a belt-and-
+  // braces guard against future signature changes.
+  const result: KnowledgeEntry[] = [];
+  if (parentEntry !== null) result.push(parentEntry);
+  for (const entry of jaccardHits) result.push(entry);
+  return result.slice(0, Math.max(0, limit));
 }
 
 /**

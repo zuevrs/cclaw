@@ -259,6 +259,38 @@ try {
   if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "qa-stage.md"))) {
     throw new Error("smoke check failed: v8.52 qa-stage.md runbook missing after init");
   }
+  // v8.59 — `extend-mode.md` on-demand runbook was added alongside the
+  // new `/cc extend <slug>` continuation-flow entry point. The runbook
+  // is lazy-loaded by the orchestrator on every `/cc` whose argument
+  // starts with `extend ` (case-insensitive, exactly one space); it
+  // covers the full Detect-hop procedure (argument parsing, parent
+  // validation via `loadParentContext`, slug-init patches for
+  // `parentContext` + `refines:` + `parent_slug:`, triage-inheritance
+  // precedence rules, the seven argument sub-cases, multi-level chaining
+  // policy, and worked examples). Install writes the file unconditionally;
+  // it is only consumed on extend-mode dispatches.
+  const extendModeRunbook = join(tempDir, ".cclaw", "lib", "runbooks", "extend-mode.md");
+  if (!existsSync(extendModeRunbook)) {
+    throw new Error("smoke check failed: v8.59 extend-mode.md runbook missing after init");
+  }
+  const extendModeBody = readFileSync(extendModeRunbook, "utf8");
+  if (!extendModeBody.startsWith("# On-demand runbook —")) {
+    throw new Error("smoke check failed: v8.59 extend-mode.md must open with the canonical `# On-demand runbook —` heading");
+  }
+  for (const reason of ["in-flight", "cancelled", "missing", "corrupted"]) {
+    if (!extendModeBody.includes(reason)) {
+      throw new Error(`smoke check failed: v8.59 extend-mode.md must document the ParentContextErrorReason \`${reason}\``);
+    }
+  }
+  if (!extendModeBody.includes("loadParentContext")) {
+    throw new Error("smoke check failed: v8.59 extend-mode.md must reference the loadParentContext validator");
+  }
+  if (!extendModeBody.includes("parentContext")) {
+    throw new Error("smoke check failed: v8.59 extend-mode.md must reference the flow-state.json > parentContext field");
+  }
+  if (!extendModeBody.includes("refines:")) {
+    throw new Error("smoke check failed: v8.59 extend-mode.md must reference the legacy `refines:` frontmatter for back-compat with knowledge-store");
+  }
   // v8.12 trimmed reference patterns 8 → 2.
   for (const pattern of ["auth-flow.md", "security-hardening.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "patterns", pattern))) {

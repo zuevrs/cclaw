@@ -91,8 +91,17 @@ const PROMPT_BUDGETS: PromptBudget[] = [
   {
     id: "ac-author",
     body: AC_AUTHOR_PROMPT,
-    maxLines: 600,
-    maxChars: 56000
+    // v8.59 raised the ac-author budget from 600 lines / 56000 chars to
+    // 640 lines / 60000 chars to absorb the new Phase 1.7 parent-context
+    // linkage block. The new section authors the mandatory `## Extends`
+    // section in plan.md when `flowState.parentContext` is non-null,
+    // confirms the `refines:` frontmatter, surfaces parent testable
+    // conditions as inheritance defaults on the soft path, and points
+    // at the reviewer's parent-contradictions cross-check. Body is
+    // ~18 lines and ~2.6k chars. Growth is justified in CHANGELOG.md
+    // (v8.59 — Continuation flow / `/cc extend <slug>`).
+    maxLines: 640,
+    maxChars: 60000
   },
   {
     id: "reviewer",
@@ -105,8 +114,17 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // table row and slim-summary counter prose add ~5 lines and ~300
     // chars. Growth is justified in CHANGELOG.md (v8.52 — qa-and-
     // browser stage; reviewer axis).
-    maxLines: 690,
-    maxChars: 68000
+    //
+    // v8.59 raised the reviewer budget from 690 lines / 68000 chars to
+    // 710 lines / 71000 chars to absorb the new parent-contradictions
+    // cross-check section (runs when `flowState.parentContext` is set).
+    // The block teaches the reviewer to detect silent reversals of
+    // parent D-N decisions and to spot-check parent `block-ship` findings
+    // overridden via `triage.criticOverride`. Body is ~10 lines and
+    // ~2k chars. Growth justified in CHANGELOG.md (v8.59 —
+    // Continuation flow / `/cc extend <slug>`).
+    maxLines: 710,
+    maxChars: 71000
   },
   {
     id: "security-reviewer",

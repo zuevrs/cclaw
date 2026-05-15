@@ -4,7 +4,7 @@
 
 cclaw drops a `/cc` slash command into Claude Code, Cursor, OpenCode, or Codex. It routes the task, picks the right amount of ceremony, and runs the work through a fixed pipeline: route → plan → build → qa → review → critic → ship. Each stage emits a slim summary back to the harness and writes a tracked artifact under `.cclaw/flows/<slug>/`. Sub-agents are isolated; the orchestrator keeps the slug's history.
 
-cclaw v8.58 ships two entry points: `/cc <task>` (the historical default — runs the full route → plan → build → ship pipeline) and `/cc research <topic>` (a standalone brainstorming entry that runs the `design` specialist in research mode and stops at the synthesis artifact). See [Modes](#modes) below.
+cclaw v8.59 ships three entry points: `/cc <task>` (the historical default — runs the full route → plan → build → ship pipeline), `/cc research <topic>` (a standalone brainstorming entry that runs the `design` specialist in research mode and stops at the synthesis artifact), and `/cc extend <slug> <task>` (v8.59 — a continuation flow that initialises a new slug with a previously-shipped parent slug's plan / build / learnings loaded as context). See [Modes](#modes) below.
 
 ## Why cclaw
 
@@ -13,6 +13,7 @@ cclaw v8.58 ships two entry points: `/cc <task>` (the historical default — run
 - **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Small/medium tasks get a soft-mode plan and a single TDD cycle. Large-risky tasks get a full per-criterion build with a pre-implementation plan-critic gate.
 - **Lightweight router.** v8.58 — the routing hop is zero-question by default (no structured ask, no clarifying prompt). Explicit override flags (`/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>`) short-circuit the heuristic when you want to pin a ceremony level. Classification work (surface detection, assumption capture, prior-learnings, interpretation forks) moved into the specialist that already has the codebase context — `design` Phase 0-2 on strict, `ac-author` Phase 0-1 on soft.
 - **Research mode.** v8.58 — `/cc research <topic>` is a separate entry point for pre-task uncertainty: brainstorming, scope exploration, architecture comparison. Runs the `design` specialist standalone (Phase 0 Bootstrap → Phase 6 Compose), emits a `research.md` synthesis artifact, and stops. Optional handoff into a follow-up `/cc <clarified task>` flow that consumes the research as `priorResearch` context.
+- **Continuation flow.** v8.59 — `/cc extend <slug> <task>` is a third entry point for iterative work that explicitly builds on a previously-shipped slug. Loads the parent's `plan.md` / `build.md` / `learnings.md` (and `review.md` / `critic.md` / `qa.md` when present) into `flowState.parentContext`. Triage inherits `ceremonyMode` / `runMode` / `surfaces` from the parent (explicit `--strict` / `--soft` / `--inline` flags still override). The new flow's `plan.md` carries a `## Extends` section + `parent_slug:` frontmatter that points back at the parent.
 - **Same runtime, four harnesses.** Claude Code, Cursor, OpenCode, and Codex all read the same `.cclaw/` install. Each harness gets the same `/cc` body plus harness-namespaced ambient rules.
 - **Compound learnings.** Non-trivial slugs emit a `learnings.md`. Future runs read prior shipped lessons through `knowledge.jsonl` before authoring a plan; v8.50 outcome signals (`good` / `unknown` / `manual-fix` / `follow-up-bug` / `reverted`) down-weight priors that didn't hold up.
 
@@ -41,7 +42,7 @@ There is no `cclaw plan`, `cclaw build`, or `cclaw status`. Flow control lives i
 
 ## Modes
 
-v8.58 ships two top-level entry points. Both invocations use the same `/cc` slash-command surface; the orchestrator picks which mode to run based on the first token after `/cc`.
+v8.59 ships three top-level entry points. All invocations use the same `/cc` slash-command surface; the orchestrator picks which mode to run based on the first token after `/cc`.
 
 ### `/cc <task>` — task mode (the historical default)
 
@@ -74,9 +75,30 @@ The next `/cc <task>` invocation on the same project reads `flow-state.json > pr
 
 Research mode skips the router entirely. There is no triage gate; no `complexity` / `ceremonyMode` heuristic runs. The orchestrator stamps a sentinel triage block (`mode: "research"`, `ceremonyMode: "strict"`, `path: ["plan"]`) so downstream readers that assume `triage` is present continue to work.
 
+### `/cc extend <slug> <task>` — continuation mode (v8.59 new entry point)
+
+Initialises a new flow that explicitly **extends a previously-shipped slug**. The orchestrator loads the parent's `plan.md`, `build.md`, `learnings.md`, and (when present) `review.md` / `critic.md` / `qa.md` as `flowState.parentContext` and surfaces them to design / ac-author / reviewer / critic as load-bearing context. Things already settled by the parent are NOT re-decided in the new flow.
+
+```bash
+/cc extend 20260514-auth-flow add SAML login                   # canonical
+/cc extend 20260514-auth-flow --strict refactor session store  # ceremony override wins over inheritance
+/cc extend 20260514-cli-help --mode=auto fix typo in --help    # runMode override wins
+```
+
+The orchestrator runs the same pipeline as a standard `/cc <task>` (plan → build → qa? → review → critic → ship); the only difference is at init:
+
+- **Parent validation.** `loadParentContext(projectRoot, <slug>)` (`src/parent-context.ts`) confirms the slug is shipped + has a non-empty `plan.md`. Four failure modes are explicit: `in-flight` (slug still active), `cancelled` (under `flows/cancelled/`), `corrupted` (shipped but `plan.md` missing), `missing` (slug not found anywhere). Each surfaces a one-line error and ends the turn.
+- **State stamp.** The new flow's `flow-state.json > parentContext` carries the parent's slug + status + shippedAt + structured artifact paths. Plan.md frontmatter carries `parent_slug: <parent>` (v8.59-native) plus `refines: <parent>` (back-compat with the knowledge-store chain, qa-runner skip rule, plan-critic skip gate, design Phase 6 brownfield path).
+- **Triage inheritance.** The new flow's `ceremonyMode` / `runMode` / `surfaces` default to the parent's values. Explicit `--strict` / `--soft` / `--inline` / `--mode=auto` / `--mode=step` flags override inheritance. A security-keyword escalation heuristic (`security` / `auth` / `migration` / `schema` / `payment` / `gdpr` / `pci`) auto-escalates a soft/inline parent → strict for the new flow.
+- **Specialist consumption.** `design` Phase 0 reads parent's `## Spec` / `## Decisions` / `## Selected Direction` and surfaces "Building on prior decisions: …". `ac-author` Phase 1.7 authors a mandatory `## Extends` section at the top of `plan.md` with parent slug + 1-line decision summary + clickable links to parent artifacts. `reviewer` runs a lightweight parent-contradictions cross-check (silent reversals of a parent D-N are `required` findings). `critic` §3 adds a skeptic question on parent decision contradictions.
+- **Knowledge-store integration.** When `parentContext` is set, `findNearKnowledge` prepends the parent's `knowledge.jsonl` entry to the top of the prior-learnings result (load-bearing context overrides Jaccard ranking).
+
+v8.59 loads the **immediate** parent only — multi-level chains (`grandparent → parent → child`) are not auto-walked. Specialists may use `findRefiningChain` on demand when transitive context is needed; multi-level auto-loading at orchestrator level is v8.60+ scope.
+
 ```mermaid
 flowchart LR
     A[/cc input/] -->|"research <topic>" or --research| R[Research mode]
+    A -->|"extend <slug> <task>"| E[Extend mode]
     A -->|"<task>"| T[Task mode]
 
     R --> D1[design standalone<br/>Phase 0-6]
@@ -85,11 +107,17 @@ flowchart LR
     H -->|"accept research"| END[Finalize]
     H -->|next /cc| T
 
+    E --> LC[loadParentContext<br/>shipped + plan.md required]
+    LC -->|ok| EI[Stamp parentContext<br/>+ refines + parent_slug]
+    EI --> EHE[Triage inheritance<br/>ceremonyMode/runMode/surfaces]
+    EHE --> T
+    LC -->|in-flight/cancelled<br/>/missing/corrupted| EERR[Surface error<br/>end turn]
+
     T --> RT[Router<br/>complexity × ceremonyMode × path]
     RT -->|inline| INL[Build inline]
     RT -->|soft| PL[ac-author Phase 0-1<br/>surfaces, assumptions, priorLearnings]
     RT -->|strict| DS[design Phase 0-7<br/>+ Phase 0-2 absorb classification]
-    PL --> BD[plan → build → review → critic → ship]
+    PL --> BD[plan → build → review → critic → ship<br/>specialists read parentContext]
     DS --> BD
 ```
 
@@ -124,7 +152,7 @@ After ship, the orchestrator moves the artifacts to `.cclaw/flows/shipped/<slug>
 | **Review** | 10 reviewer axes — 8 base (`correctness`, `readability`, `architecture`, `security`, `perf`, `test-quality`, `complexity-budget`, `edit-discipline`) plus 2 gated (`qa-evidence` when qa-runner ran, `nfr-compliance` when `## Non-functional` is non-empty). Append-only findings table, convergence detector, severity-aware ship gate. |
 | **Critic step** | Falsificationist pass after review clears: §1 predictions, §2 gap analysis, §3 four adversarial techniques + 6 human-perspective lenses (executor / stakeholder / skeptic for plan-stage, security / new-hire / ops for code-stage; adversarial mode only), §4 Criterion check (AC + Edge cases + NFR), §5 goal-backward, §6 realist check, §7 verdict, §8 summary. |
 | **Auto-trigger skills** | 21 skills (`triage-gate`, `plan-authoring`, `tdd-and-verification`, `review-discipline`, `commit-hygiene`, `completion-discipline`, `pre-edit-investigation`, `qa-and-browser`, `debug-and-browser`, `ac-discipline`, `source-driven`, `summary-format`, `documentation-and-adrs`, `parallel-build`, `refinement`, `flow-resume`, `receiving-feedback`, `anti-slop`, `conversation-language`, `api-evolution`, `pre-flight-assumptions`). Auto-applied per stage, not user-invoked. |
-| **On-demand runbooks** | 11 runbooks loaded by trigger (`dispatch-envelope`, `parallel-build`, `finalize`, `cap-reached-recovery`, `adversarial-rerun`, `handoff-gates`, `handoff-artifacts`, `compound-refresh`, `pause-resume`, `critic-steps`, `qa-stage`). Kept out of the orchestrator body to hold the prompt budget. |
+| **On-demand runbooks** | 12 runbooks loaded by trigger (`dispatch-envelope`, `parallel-build`, `finalize`, `cap-reached-recovery`, `adversarial-rerun`, `handoff-gates`, `handoff-artifacts`, `compound-refresh`, `pause-resume`, `critic-steps`, `qa-stage`, `extend-mode`). Kept out of the orchestrator body to hold the prompt budget. |
 | **Anti-rationalization catalog** | v8.49 — `.cclaw/lib/anti-rationalizations.md` carries the cross-cutting rebuttal table (posture-bypass, completion-discipline, edit-discipline, verification rows). Each specialist's prompt cites the catalog and adds its own specialist-specific rows. |
 | **Outcome signals** | v8.50 — 5-value enum (`good`, `unknown`, `manual-fix`, `follow-up-bug`, `reverted`) recorded on `knowledge.jsonl` rows. Three capture paths (orchestrator scans on every `/cc` for follow-up-bug references; compound time scans for revert commits and same-touch-surface manual-fix commits). Prior-learnings lookup multiplies similarity by signal weight before threshold filtering. |
 | **Ambiguity score** | v8.53 — design Phase 6 emits a composite ambiguity score (3 dims on greenfield, 4 dims on brownfield) into `plan.md` frontmatter. Phase 7 prefixes a soft warning when the composite exceeds threshold (default `0.2`, configurable). Informational signal, never a hard gate. |
