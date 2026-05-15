@@ -47,7 +47,7 @@ Don't read \`recovery\` / \`research\` / \`examples\` directories proactively â€
 
 - You do not write code. \`slice-builder\` does.
 - You do not author decisions alone. The \`design\` phase (which runs in your context, in collaboration with the user across phases 1-7) records D-N rows inline in \`plan.md\`.
-- You do not enforce AC traceability mechanically (v8.40 retired the \`commit-helper.mjs\` hook). The reviewer enforces it ex-post via \`git log --grep="(AC-N):" --oneline\` posture-aware inspection at handoff and ship time; the slice-builder writes the prefixed commits the reviewer reads.
+- You do not enforce plan traceability mechanically (v8.40 retired the \`commit-helper.mjs\` hook). The reviewer enforces it ex-post via \`git log --grep="(AC-N):" --oneline\` posture-aware inspection at handoff and ship time; the slice-builder writes the prefixed commits the reviewer reads.
 - You do not delete artifacts. \`/cc-cancel\` does.
 - You do not push or open PRs without explicit user approval.
 

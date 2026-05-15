@@ -175,7 +175,7 @@ describe("v8.18 orchestrator wiring — triage.priorLearnings", () => {
       securityFlag: false,
       triage: {
         complexity: "small-medium" as const,
-        acMode: "soft" as const,
+        ceremonyMode: "soft" as const,
         path: ["plan", "build", "review", "ship"] as const,
         rationale: "test",
         decidedAt: "2026-05-05T00:00:00Z",
@@ -201,7 +201,7 @@ describe("v8.18 orchestrator wiring — triage.priorLearnings", () => {
       securityFlag: false,
       triage: {
         complexity: "small-medium" as const,
-        acMode: "soft" as const,
+        ceremonyMode: "soft" as const,
         path: ["plan", "build", "review", "ship"] as const,
         rationale: "test",
         decidedAt: "2026-05-05T00:00:00Z",

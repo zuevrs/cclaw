@@ -26,8 +26,8 @@ export interface TriageAuditEntry {
   complexity: "trivial" | "small-medium" | "large-risky";
   /** Final classification after override (often equal to `complexity`). */
   finalComplexity?: "trivial" | "small-medium" | "large-risky";
-  /** Final AC mode after override. */
-  acMode?: "inline" | "soft" | "strict";
+  /** Final ceremony mode after override. v8.56 rename of `acMode`. */
+  ceremonyMode?: "inline" | "soft" | "strict";
   /** Did the user override the orchestrator's recommendation at the triage gate? */
   userOverrode?: boolean;
   /** Was this the v8.14 zero-question fast path (trivial / high-confidence auto-execute)? */

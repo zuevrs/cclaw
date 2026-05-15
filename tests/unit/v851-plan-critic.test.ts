@@ -53,8 +53,8 @@ describe("v8.51 plan-critic — registry anchors", () => {
 });
 
 describe("v8.51 plan-critic prompt — v8.54 widened gate", () => {
-  it("prompt requires acMode == strict", () => {
-    expect(PLAN_CRITIC_PROMPT).toMatch(/acMode.*strict/);
+  it("prompt requires ceremonyMode == strict", () => {
+    expect(PLAN_CRITIC_PROMPT).toMatch(/ceremonyMode.*strict/);
   });
 
   it("prompt requires complexity != trivial (v8.54 widened from large-risky)", () => {
@@ -91,7 +91,7 @@ describe("v8.51 plan-critic template", () => {
     for (const field of [
       "slug:",
       "stage: plan-critic",
-      "ac_mode:",
+      "ceremony_mode:",
       "ac_count:",
       "iteration:",
       "verdict:"
@@ -199,8 +199,8 @@ describe("v8.51 plan-critic — orchestrator body wiring (v8.54: widened gate)",
     expect(body).toContain("lastSpecialist");
   });
 
-  it("body declares the v8.54 widened gate (acMode=strict + complexity != trivial + problemType != refines + AC count >= 2)", () => {
-    expect(body).toMatch(/acMode.*strict/);
+  it("body declares the v8.54 widened gate (ceremonyMode=strict + complexity != trivial + problemType != refines + AC count >= 2)", () => {
+    expect(body).toMatch(/ceremonyMode.*strict/);
     expect(body).toMatch(/triage\.complexity != "trivial"/);
     expect(body).toMatch(/triage\.problemType != "refines"/);
     expect(body).toMatch(/AC count.*≥\s*2|AC count.*>=\s*2/);

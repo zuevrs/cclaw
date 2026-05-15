@@ -148,7 +148,7 @@ const ORIENTATION = `When the user invokes \`/cc\`, cclaw's full multi-stage wor
  */
 const FOOTER = `### How to activate the full flow
 
-Type \`/cc <task description>\` to run cclaw's multi-stage workflow with adversarial critics, AC traceability, posture-driven commit prefixes, and per-stage artifacts written to \`.cclaw/flows/<slug>/\`. The full anti-rationalization catalog (rebuttals per row), antipatterns A-1..A-7 with full corrections, specialist prompts, and stage runbooks live in \`.cclaw/lib/\` and load only when \`/cc\` is invoked.
+Type \`/cc <task description>\` to run cclaw's multi-stage workflow with adversarial critics, plan traceability, posture-driven commit prefixes, and per-stage artifacts written to \`.cclaw/flows/<slug>/\`. The full anti-rationalization catalog (rebuttals per row), antipatterns A-1..A-7 with full corrections, specialist prompts, and stage runbooks live in \`.cclaw/lib/\` and load only when \`/cc\` is invoked.
 
 Outside \`/cc\`, the rules above are advisory ambient discipline. If a task crosses the trivial threshold (multi-step plan, behaviour change, or unclear AC), invoke \`/cc\` instead of running naked.`;
 

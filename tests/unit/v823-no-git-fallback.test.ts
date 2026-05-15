@@ -43,8 +43,8 @@ describe("v8.23 no-git fallback — detect step git-check + auto-downgrade", () 
     expect(body).toMatch(/no.?git/i);
     expect(
       body,
-      "body should name the downgrade target so a future maintainer reading detect knows what acMode the orchestrator settles on"
-    ).toMatch(/strict.*soft|soft.*downgrade|acMode.*soft/);
+      "body should name the downgrade target so a future maintainer reading detect knows what ceremonyMode the orchestrator settles on"
+    ).toMatch(/strict.*soft|soft.*downgrade|ceremonyMode.*soft/);
   });
 
   it("AC-1 — body names `triage.downgradeReason` as the audit-trail field", () => {
@@ -65,7 +65,7 @@ describe("v8.23 no-git fallback — triage-gate skill documents the auto-downgra
     expect(
       TRIAGE_GATE_SKILL,
       "skill should explain that strict mode auto-downgrades to soft when .git/ is absent"
-    ).toMatch(/strict.*soft|acMode.*soft|downgrade.*soft/);
+    ).toMatch(/strict.*soft|ceremonyMode.*soft|downgrade.*soft/);
   });
 
   it("AC-2 — `triage-gate.md` records the audit-trail field name (downgradeReason)", () => {
@@ -84,8 +84,8 @@ describe("v8.23 no-git fallback — triage-gate skill documents the auto-downgra
 });
 
 describe("v8.40 no-git fallback — strict-mode chain check is skipped when no .git/", () => {
-  it("AC-3 — `triage-gate.md` notes that strict mode requires per-AC commits the reviewer reads via git log", () => {
-    expect(TRIAGE_GATE_SKILL).toMatch(/strict mode requires per-AC commits/i);
+  it("AC-3 — `triage-gate.md` notes that strict mode requires per-criterion commits the reviewer reads via git log", () => {
+    expect(TRIAGE_GATE_SKILL).toMatch(/strict mode requires per-criterion commits/i);
     expect(TRIAGE_GATE_SKILL).toMatch(/git log/i);
   });
 
@@ -117,7 +117,7 @@ describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReaso
     state.currentSlug = "20260511-no-git-flow";
     state.triage = {
       complexity: "large-risky",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "Auto-downgraded from strict because no .git/ in projectRoot.",
       decidedAt: new Date().toISOString(),
@@ -137,7 +137,7 @@ describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReaso
     state.currentSlug = "20260511-with-git-flow";
     state.triage = {
       complexity: "small-medium",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "Normal small-medium flow.",
       decidedAt: new Date().toISOString(),
@@ -157,7 +157,7 @@ describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReaso
     state.currentSlug = "20260511-legacy-flow";
     state.triage = {
       complexity: "small-medium",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "Pre-v8.23 flow without downgradeReason.",
       decidedAt: new Date().toISOString(),
@@ -177,7 +177,7 @@ describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReaso
     raw.currentSlug = "20260511-bad-shape";
     raw.triage = {
       complexity: "small-medium",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "Bad shape: downgradeReason is a number.",
       decidedAt: new Date().toISOString(),

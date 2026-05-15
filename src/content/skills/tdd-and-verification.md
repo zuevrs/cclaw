@@ -1,6 +1,6 @@
 ---
 name: tdd-and-verification
-trigger: when stage=build (granularity depends on ac_mode — see below); before any handoff between specialists or before ship; auto-triggered for slice-builder (between phases) and reviewer (before dispatch); when the slug is identified as a pure refactor
+trigger: when stage=build (granularity depends on ceremony_mode — see below); before any handoff between specialists or before ship; auto-triggered for slice-builder (between phases) and reviewer (before dispatch); when the slug is identified as a pure refactor
 ---
 
 # Skill: tdd-and-verification (RED → GREEN → REFACTOR + staged verification gate + refactor safety)
@@ -11,7 +11,7 @@ This merged skill covers the full build-stage loop: the test-first cycle (former
 
 build is a TDD stage. **What changes between modes is the granularity, not whether to write tests.**
 
-| ac_mode | granularity | enforced by |
+| ceremony_mode | granularity | enforced by |
 | --- | --- | --- |
 | `inline` (trivial) | optional; one quick check is enough | nothing |
 | `soft` (small/medium) | one TDD cycle per feature: write 1–3 tests that exercise the listed conditions, then implement | reviewer at `/cc-review` |
@@ -19,7 +19,7 @@ build is a TDD stage. **What changes between modes is the granularity, not wheth
 
 > **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
 
-The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests entirely is never the answer; loosening the per-AC ceremony is.
+The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests entirely is never the answer; loosening the per-criterion ceremony is.
 
 ## The three phases
 
@@ -222,7 +222,7 @@ The AC id stays the same; commit messages cite `F-N` in the subject. The reviewe
 
 ## Posture mapping (v8.36, supersedes "When NOT to apply")
 
-Every AC in strict mode carries a **`posture`** value in its `plan.md` frontmatter — a per-AC annotation that picks the right TDD ceremony. The default is `test-first` (the standard RED → GREEN → REFACTOR cycle); the other five values cover the cases where the standard cycle is structurally absent or actively wrong. The ac-author sets the posture using the heuristic table in its prompt; the slice-builder reads it and selects the ceremony; the reviewer applies the posture-specific check ex-post via `git log --grep` and the `src/posture-validation.ts` helper.
+Every AC in strict mode carries a **`posture`** value in its `plan.md` frontmatter — a per-criterion annotation that picks the right TDD ceremony. The default is `test-first` (the standard RED → GREEN → REFACTOR cycle); the other five values cover the cases where the standard cycle is structurally absent or actively wrong. The ac-author sets the posture using the heuristic table in its prompt; the slice-builder reads it and selects the ceremony; the reviewer applies the posture-specific check ex-post via `git log --grep` and the `src/posture-validation.ts` helper.
 
 The mapping is mechanical — there is no "did the agent feel like TDD today?" judgement call. Pick the row that matches the AC's posture; do exactly what that row says.
 
@@ -255,14 +255,14 @@ Each of the five legacy "When NOT to apply" examples maps cleanly to a posture r
 
 The posture mapping above covers every AC the slice-builder will see. Two cases live OUTSIDE the posture system because they are not "an AC with a different ceremony" — they are "no AC at all in the strict-mode sense", and so the skill itself does not apply:
 
-- **`triage.acMode == "inline"`.** Trivial inline edits commit straight without the per-AC commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo. The orchestrator never dispatches the slice-builder for inline mode, so this skill never opens.
+- **`triage.ceremonyMode == "inline"`.** Trivial inline edits commit straight without the per-criterion commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo. The orchestrator never dispatches the slice-builder for inline mode, so this skill never opens.
 - **Discovery-phase artifacts** (design Phases 0-7 in main context, plan / decisions / ADR drafts before the build stage opens). Those produce prose, not behaviour; the build stage is where the posture system opens. The skill is a build-stage rule, not a discovery-stage rule.
 
 For every other AC, pick a row from the posture mapping above and follow it. There is no third "skip TDD entirely" escape hatch beyond these two — every other "we don't need a test here" instinct maps to **`docs-only`**, **`refactor-only`**, or **`tests-as-deliverable`** posture and gets the corresponding (smaller) ceremony, not zero ceremony.
 
 ## Anti-rationalization table (T2-8, addyosmani pattern; v8.13)
 
-**Cross-cutting rationalizations:** the canonical RED-skipping / REFACTOR-silence / "manual test" rows live in `.cclaw/lib/anti-rationalizations.md` under category `posture-bypass` (v8.49). The rows below stay here because they are TDD-cycle-specific (suppressing failure, mock vs real DB, AC-named test files, prefix discipline at the per-AC chain). Treat the catalog as the cross-cutting source of truth; treat this table as the cycle-specific deepening.
+**Cross-cutting rationalizations:** the canonical RED-skipping / REFACTOR-silence / "manual test" rows live in `.cclaw/lib/anti-rationalizations.md` under category `posture-bypass` (v8.49). The rows below stay here because they are TDD-cycle-specific (suppressing failure, mock vs real DB, AC-named test files, prefix discipline at the per-criterion chain). Treat the catalog as the cross-cutting source of truth; treat this table as the cycle-specific deepening.
 
 This table is the **explicit list of excuses an agent will produce to skip the cycle**, paired with the truth. When you catch yourself thinking the left column, do the right column instead. Surface the rationalization in your slim-summary Notes when you choose the right column anyway, so the reviewer can see the discipline.
 
@@ -276,7 +276,7 @@ This table is the **explicit list of excuses an agent will produce to skip the c
 | "I mocked the database to make the test green faster." | A-3 finding. Real DB > in-memory fake > stub > mock. Reach for the simplest level that gets the job done. |
 | "The test file named `AC-1.test.ts` is fine — it's clearer where this test lives." | Required-severity finding. Tests are named after the unit under test; the AC id lives in the test name + commit message. `tests/unit/permissions.test.ts` is correct. |
 | "The mechanical TDD hook is gone; I can write production code without a test first." | The Iron Law is a discipline, not a hook. Skipping RED breaks the audit trail the reviewer reads at handoff. The reviewer will find the gap by `git log --grep="(AC-N):" --oneline` inspection (a `green(AC-N)` without a prior `red(AC-N)` is an A-1 finding, severity=required, axis=correctness) — fix it before commit by writing the RED test first. |
-| "I'll commit production and tests together because there's no helper to stop me." | That's an A-1 finding (severity=required) on the next reviewer pass — `git show <SHA> --stat` for the `red(AC-N): ...` commit must show test files only; mixing in production files is the same violation the retired hook used to catch. Keep the per-AC RED-then-GREEN sequence by staging test files and committing `red(AC-N): ...` before touching production. |
+| "I'll commit production and tests together because there's no helper to stop me." | That's an A-1 finding (severity=required) on the next reviewer pass — `git show <SHA> --stat` for the `red(AC-N): ...` commit must show test files only; mixing in production files is the same violation the retired hook used to catch. Keep the per-criterion RED-then-GREEN sequence by staging test files and committing `red(AC-N): ...` before touching production. |
 
 ## verification-loop
 
@@ -287,7 +287,7 @@ A **staged verification gate**. Each step runs only when the previous step passe
 1. **build** — `npm run build` (or the project's equivalent). Compilation / bundling success. Cheapest gate, catches type errors that escape the editor LSP, missing imports, etc.
 2. **typecheck** — `npm run typecheck` / `tsc --noEmit` / `pyright` / `mypy` / `go vet`. Run separately from `build` because some build pipelines emit on type errors and only fail at runtime; the typecheck gate makes the contract explicit.
 3. **lint** — `npm run lint` / `ruff check` / `golangci-lint run`. Style + obvious-bugs gate. Lint warnings count as **failures** here when the project has lint-as-error in CI; otherwise warnings pass but are recorded.
-4. **test** — the project's full relevant suite (`npm test`, `pytest`, `go test ./...`). The slice-builder's GREEN evidence is a *subset* of this gate (per-AC suite); verification-loop runs the full repo suite.
+4. **test** — the project's full relevant suite (`npm test`, `pytest`, `go test ./...`). The slice-builder's GREEN evidence is a *subset* of this gate (per-criterion suite); verification-loop runs the full repo suite.
 5. **security** — when the slug's `security_flag` is true OR the diff matches the security-sensitive heuristic from the review stage (see start-command.ts), run the project's security check (`npm audit --audit-level=high`, `pip-audit`, `bandit`, `govulncheck`). When the check is absent, skip with an explicit "no security check configured" line in the verification log.
 6. **diff** — `git diff --stat` + `git diff --name-only` against the slug's plan-base. Verifies the working tree is clean (no uncommitted changes) and the touched-file set matches the AC's union of touchSurfaces. Detects accidental commits to files outside the slug.
 

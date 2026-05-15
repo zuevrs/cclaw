@@ -9,7 +9,7 @@ This merged skill covers both kinds of "what lands in a commit" discipline: how 
 
 ## When NOT to apply
 
-- **Inline / trivial flows commit with plain `git commit`.** In inline / soft modes there is no AC↔commit chain; the per-AC prefix rules below apply only in strict mode.
+- **Inline / trivial flows commit with plain `git commit`.** In inline / soft modes there is no AC↔commit chain; the per-criterion prefix rules below apply only in strict mode.
 - **Amending the most recent commit before push.** Amend is acceptable when the commit has not been pushed AND the amend fixes the message (e.g. correcting a mis-prefixed subject so the reviewer's `git log --grep="(AC-N):"` scan picks it up). Avoid amending once another commit is layered on top.
 - **Cleaning up pre-existing dead code outside the AC's `touchSurfaces`.** Surfaced under `## Summary → Noticed but didn't touch`; never deleted in-scope. The audit trail breaks regardless of whether the dead code was real.
 - **Writing co-author trailers on solo commits.** Anti-pattern call-out — co-author trailers belong on collaborative commits.
@@ -18,7 +18,7 @@ This merged skill covers both kinds of "what lands in a commit" discipline: how 
 
 ## commit-message-quality
 
-The reviewer's posture-aware chain check keys off the subject-line prefix. The AC traceability chain only stays usable if every commit's subject is readable AND prefixed correctly.
+The reviewer's posture-aware chain check keys off the subject-line prefix. The plan-traceability chain only stays usable if every commit's subject is readable AND prefixed correctly.
 
 ## Rules
 

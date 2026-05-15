@@ -102,7 +102,7 @@ An on-demand markdown file at \`.cclaw/lib/runbooks/\` that the orchestrator rea
 
 ## Triage
 
-The opening step of every \`/cc\` dispatch. The triage gate sets \`complexity\` (\`small-medium\` vs \`large-risky\`), \`path\` (inline / small-medium / large-risky), \`acMode\` (\`strict\` vs \`soft\`), and \`runMode\` (\`auto\` vs \`step\`). Triage is immutable mid-flight **except** for \`runMode\` (v8.34).
+The opening step of every \`/cc\` dispatch. The triage gate sets \`complexity\` (\`small-medium\` vs \`large-risky\`), \`path\` (inline / small-medium / large-risky), \`ceremonyMode\` (\`strict\` vs \`soft\`), and \`runMode\` (\`auto\` vs \`step\`). Triage is immutable mid-flight **except** for \`runMode\` (v8.34). The \`ceremonyMode\` field was named \`acMode\` pre-v8.56; legacy state files are hoisted on read.
 
 ## Project-specific terms
 

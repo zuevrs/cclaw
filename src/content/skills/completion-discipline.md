@@ -18,7 +18,7 @@ Always-on. Every cclaw specialist and the orchestrator obey it on every dispatch
 3. **Before closing a Findings row (`status: closed`).** The reviewer's row close requires a citation; without it, the close is itself a finding (axis=correctness, severity=required).
 4. **Before the orchestrator stamps `ship.md > status: shipped` or runs finalize.** The Victory Detector reads structured signals from preceding stages; faking any of them propagates downstream.
 
-The rule applies in every acMode (`inline` / `soft` / `strict`) and every stage (`plan` / `build` / `review` / `critic` / `ship`).
+The rule applies in every ceremonyMode (`inline` / `soft` / `strict`) and every stage (`plan` / `build` / `review` / `critic` / `ship`).
 
 ## When NOT to apply
 
@@ -67,7 +67,7 @@ Before any completion claim, walk this checklist (≈30 seconds):
 
 ## Verification
 
-The reviewer's per-iteration **Verification story** table (`Tests run / Build run / Security checked`) is the canonical surface where this skill's evidence requirement is enforced ex-post. The slice-builder's `self_review[]` JSON attestation enforces it at handoff. The orchestrator's finalize step — per-AC `verified` flag check, shipped in v8.48 — enforces it at ship time. Three layers of catch — the rule is the same one stated above; each layer re-asserts it in the surface most appropriate to that stage.
+The reviewer's per-iteration **Verification story** table (`Tests run / Build run / Security checked`) is the canonical surface where this skill's evidence requirement is enforced ex-post. The slice-builder's `self_review[]` JSON attestation enforces it at handoff. The orchestrator's finalize step — per-criterion `verified` flag check, shipped in v8.48 — enforces it at ship time. Three layers of catch — the rule is the same one stated above; each layer re-asserts it in the surface most appropriate to that stage.
 
 If a downstream stage finds an upstream claim lacked evidence, that is **F-N severity=required (axis=correctness)** — the upstream claim was a violation, not a noticing.
 
@@ -117,7 +117,7 @@ Recommended next: review
 Notes: tsc --noEmit → 0 errors; coverage row written (verdict=full).
 ```
 
-Evidence shapes: command + exit code (`npm test → 47 passed`), git log proof (three SHAs in commit-ordering), per-AC verified flag. The completion claim (`✅ complete`) is paired with all three.
+Evidence shapes: command + exit code (`npm test → 47 passed`), git log proof (three SHAs in commit-ordering), per-criterion verified flag. The completion claim (`✅ complete`) is paired with all three.
 
 ## Worked example — WRONG (and the rebuttal)
 
@@ -141,6 +141,6 @@ The reviewer's Verification story will catch this, but the cost is one full revi
 
 ## Composition
 
-This skill is **always-on** — every specialist, every stage. Auto-trigger on `stages: ["always"]`; the rule fires on every dispatch return and every stage exit. The reviewer's `Verification story` table, the slice-builder's `self_review[]`, the orchestrator's finalize per-AC `verified` check are all enforcement surfaces; this skill is the source of truth they share.
+This skill is **always-on** — every specialist, every stage. Auto-trigger on `stages: ["always"]`; the rule fires on every dispatch return and every stage exit. The reviewer's `Verification story` table, the slice-builder's `self_review[]`, the orchestrator's finalize per-criterion `verified` check are all enforcement surfaces; this skill is the source of truth they share.
 
 Pairs with `receiving-feedback.md` (when receiving review / critic findings, the response must include fresh evidence per this skill) and with `anti-slop.md` (stale evidence and shimming-instead-of-verifying are the two flavours of evading completion-discipline).

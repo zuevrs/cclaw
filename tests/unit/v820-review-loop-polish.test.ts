@@ -137,7 +137,7 @@ describe("v8.20 review-loop polish", () => {
     it("TriageDecision schema accepts iterationOverride boolean", () => {
       const triage = {
         complexity: "small-medium",
-        acMode: "soft",
+        ceremonyMode: "soft",
         path: ["plan", "build", "review", "ship"],
         rationale: "test",
         decidedAt: "2026-05-11T00:00:00Z",
@@ -160,14 +160,14 @@ describe("v8.20 review-loop polish", () => {
     });
   });
 
-  describe("AC-3 — severity=required + axis=architecture gates ship across acModes", () => {
+  describe("AC-3 — severity=required + axis=architecture gates ship across ceremonyModes", () => {
     it("reviewer prompt names the architecture-severity priors rule", () => {
       expect(REVIEWER_PROMPT).toContain("Architecture severity priors");
       expect(REVIEWER_PROMPT).toMatch(/required[^.]*architecture[^.]*ship/iu);
     });
 
-    it("reviewer prompt says the gate applies across every acMode (not just strict)", () => {
-      expect(REVIEWER_PROMPT).toMatch(/across every acMode|every ac[\s-]?mode|all ac[\s-]?modes/iu);
+    it("reviewer prompt says the gate applies across every ceremonyMode (not just strict)", () => {
+      expect(REVIEWER_PROMPT).toMatch(/across every ceremonyMode|every ceremony[\s-]?mode|all ceremony[\s-]?modes/iu);
     });
 
     it("start-command's ship gate enforces the architecture finding rule", () => {

@@ -33,9 +33,9 @@ describe("stage playbooks", () => {
     expect(review?.body).toContain("Hard cap");
   });
 
-  it("ship runbook covers the AC traceability gate and push approval rule", () => {
+  it("ship runbook covers the Plan traceability gate and push approval rule", () => {
     const ship = STAGE_PLAYBOOKS.find((entry) => entry.id === "ship");
-    expect(ship?.body).toContain("AC traceability gate");
+    expect(ship?.body).toContain("Plan traceability gate");
     expect(ship?.body).toContain("Always ask before pushing");
   });
 

@@ -92,7 +92,7 @@ describe("v8.48 — slim-summary per-AC `verified` contract", () => {
     expect(SLICE_BUILDER_PROMPT).toMatch(/AC verified/i);
   });
 
-  it("orchestrator refuses to advance when any AC is verified=no outside acMode=inline", () => {
+  it("orchestrator refuses to advance when any AC is verified=no outside ceremonyMode=inline", () => {
     expect(START_COMMAND_BODY).toMatch(/AC verified/i);
   });
 });

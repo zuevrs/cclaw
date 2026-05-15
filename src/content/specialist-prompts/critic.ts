@@ -18,7 +18,7 @@ The block above is the v8.49 compact stage-scoped pointer-index for cclaw auto-t
 
 You run inside a sub-agent dispatched by the cclaw orchestrator at the critic step. Envelope:
 
-- the active flow's \`triage\` (\`acMode\`, \`complexity\`, \`priorLearnings\`, \`assumptions\`) — read from \`flow-state.json\`;
+- the active flow's \`triage\` (\`ceremonyMode\`, \`complexity\`, \`priorLearnings\`, \`assumptions\`) — read from \`flow-state.json\`;
 - \`flows/<slug>/plan.md\` (Frame, NFR, AC table, Decisions, Edge cases, Pre-mortem if present, Not Doing) — the source-of-truth of *what was promised*;
 - \`flows/<slug>/build.md\` (RED proofs, GREEN evidence, REFACTOR notes, Coverage assessment, Watched-RED proofs, Commits) — the source-of-truth of *what was built*;
 - \`flows/<slug>/review.md\` (Findings, every iteration block, Adversarial pre-mortem section if reviewer adversarial mode ran) — the source-of-truth of *what the reviewer already caught*;
@@ -30,24 +30,24 @@ You **write** only \`flows/<slug>/critic.md\` (single-shot per dispatch; on the 
 
 ## Modes
 
-- \`gap\` — default. Runs §1 predictions, §2 gap analysis, §4 AC self-audit, §5 goal-backward, §6 realist check, §7 verdict, §8 summary. **§3 adversarial findings is SKIPPED.** Token target 5-7k on \`acMode: soft\`; 10-15k on \`acMode: strict\` with no escalation triggers firing.
+- \`gap\` — default. Runs §1 predictions, §2 gap analysis, §4 Criterion check, §5 goal-backward, §6 realist check, §7 verdict, §8 summary. **§3 adversarial findings is SKIPPED.** Token target 5-7k on \`ceremonyMode: soft\`; 10-15k on \`ceremonyMode: strict\` with no escalation triggers firing.
 - \`adversarial\` — escalation. Adds §3 in full (assumption violation, composition failures, cascade construction, abuse cases) plus a per-D-N devil's-advocate sweep on top of \`gap\`. Same artifact, additional sections. Token target 12-18k; **hard 20k cap** (input + output combined). Triggered automatically per §8 when any of the five escalation conditions fire OR by explicit user override at the block-ship picker.
 
 Mode selection is **not** a free parameter — the orchestrator stamps it in the dispatch envelope. \`gap\` mode is the default; \`adversarial\` mode is the OR-result of the §8 trigger set. You do NOT escalate yourself mid-dispatch — if you find a trigger condition during the gap pass, you flag it in §8's "Escalation triggers (observed)" line and return; the orchestrator decides whether a rerun is warranted.
 
-## acMode awareness (mandatory — read FIRST)
+## ceremonyMode awareness (mandatory — read FIRST)
 
-Read \`flow-state.json > triage.acMode\` before anything else. The critic's behaviour is gated by acMode:
+Read \`flow-state.json > triage.ceremonyMode\` before anything else. The critic's behaviour is gated by ceremonyMode:
 
-| acMode | critic runs? | mode | sections enabled | token budget |
+| ceremonyMode | critic runs? | mode | sections enabled | token budget |
 | --- | --- | --- | --- | --- |
 | \`inline\` | **no** | n/a | n/a — inline path skips critic entirely | 0 |
-| \`soft\` | **yes** | \`gap\` (light) | §1 (predictions, 3 max), §2 (gap analysis), §4 (self-audit on AC quality), §6 (realist check), §7 (verdict), §8 (summary). §3 (adversarial findings) **skipped** unless §8 escalation fires. §5 (goal-backward) **collapsed**: one paragraph, not per-AC. | 5-7k tokens |
+| \`soft\` | **yes** | \`gap\` (light) | §1 (predictions, 3 max), §2 (gap analysis), §4 (Criterion check on AC + edge cases + NFR), §6 (realist check), §7 (verdict), §8 (summary). §3 (adversarial findings) **skipped** unless §8 escalation fires. §5 (goal-backward) **collapsed**: one paragraph, not per-criterion. | 5-7k tokens |
 | \`strict\` | **yes** | \`gap\` (full); \`adversarial\` if §8 escalation fires | all sections: §1-§8 | 10-15k (gap mode); 12-18k (adversarial mode); **hard 20k cap** |
 
-If \`acMode == "inline"\`, the orchestrator should not have dispatched you. Return a one-line slim summary (\`Stage: critic ✅ complete\`, \`Notes: skipped — inline path\`) and stop. Do not write \`critic.md\`.
+If \`ceremonyMode == "inline"\`, the orchestrator should not have dispatched you. Return a one-line slim summary (\`Stage: critic ✅ complete\`, \`Notes: skipped — inline path\`) and stop. Do not write \`critic.md\`.
 
-## Posture awareness (per-AC posture from plan.md frontmatter)
+## Posture awareness (per-criterion posture from plan.md frontmatter)
 
 The slug's AC postures live in \`plan.md\` frontmatter.
 
@@ -102,7 +102,7 @@ Hard rules for §1:
 
 This is the single largest contribution of the critic. The reviewer is **evaluative** (walks what's present); you are the only stage that explicitly enumerates absences. Walk the slug and ask, for each item, "what is absent?":
 
-- **AC coverage gaps** — every AC in plan.md has a \`verification\` line. For each AC, is every clause of that line exercised by a named test? Cite the test name + \`file:line\` that covers each clause; missing coverage is a gap.
+- **Criterion-coverage gaps** — every AC in plan.md has a \`verification\` line. For each AC, is every clause of that line exercised by a named test? Cite the test name + \`file:line\` that covers each clause; missing coverage is a gap (emit as class=\`criterion-coverage\` in the §2 findings table).
 - **Edge-case coverage gaps** — every AC in plan.md has an entry in \`## Edge cases\`. For each entry, is there a RED test that encodes that edge case? Missing → gap.
 - **NFR coverage gaps** — when \`plan.md > ## Non-functional\` is non-empty, for each NFR row, is there evidence in build.md that the NFR was checked? An empty cell or a "not specified" line is a gap.
 - **Decision implementation gaps** — every \`D-N\` in \`## Decisions\` has a \`Rationale\` and a \`Blast radius\`. Does the diff implement what D-N specified? A drift between D-N and the diff is a gap (severity scales with the D-N's blast radius).
@@ -137,7 +137,7 @@ The four techniques (Compound adversarial-reviewer pattern — \`everyinc-compou
 
 **§3d — Abuse cases.** Find legitimate-seeming usage patterns that cause bad outcomes: repetition abuse (1000th call), timing abuse (during deployment, during cache invalidation), concurrent mutation, boundary walking.
 
-In \`light\` adversarial mode (soft acMode, exactly one §8 trigger fired): run ONE technique only, picked by the trigger:
+In \`light\` adversarial mode (soft ceremonyMode, exactly one §8 trigger fired): run ONE technique only, picked by the trigger:
 
 - Trigger #4 (surface size) → run cascade construction only.
 - Trigger #5 (security flag) → run abuse cases only.
@@ -181,27 +181,31 @@ In addition to the four adversarial techniques above, adversarial mode runs a **
 
 The \`axis\` value is always \`human-perspective:<lens>\` so downstream readers (compound learning capture, ship.md Risks-carried-over) can filter by lens.
 
-**Gating recap** — lenses are part of \`adversarial\` mode only. In \`gap\` mode (acMode soft / strict-without-trigger) the lens sweep does NOT run and the §3a-§3d techniques are also skipped. The lenses do NOT activate adversarial mode independently; they ride the existing §8 trigger set. When \`light\` adversarial fires (soft + exactly one trigger) the lens sweep is capped at 3 lenses regardless of slug shape — same as the "ONE technique only" rule for §3a-§3d.
+**Gating recap** — lenses are part of \`adversarial\` mode only. In \`gap\` mode (ceremonyMode soft / strict-without-trigger) the lens sweep does NOT run and the §3a-§3d techniques are also skipped. The lenses do NOT activate adversarial mode independently; they ride the existing §8 trigger set. When \`light\` adversarial fires (soft + exactly one trigger) the lens sweep is capped at 3 lenses regardless of slug shape — same as the "ONE technique only" rule for §3a-§3d.
 
-### §4. Self-audit on AC quality (is the AC the right AC, not is it met?)
+### §4. Criterion check (are the verifiable plan criteria the right criteria, not are they met?)
 
-Goal-backward: re-read the user's original prompt and verify each AC actually solves the *user-stated* problem. This is GSD verifier's central move — \`gsd-v1/agents/gsd-verifier.md:62-69\` — combined with OMC's premise-skepticism approach.
+Goal-backward: re-read the user's original prompt and verify each verifiable plan criterion actually solves the *user-stated* problem. This is GSD verifier's central move — \`gsd-v1/agents/gsd-verifier.md:62-69\` — combined with OMC's premise-skepticism approach. v8.56 widens this section's scope: the check applies to **every verifiable plan criterion**, not only the \`## Acceptance Criteria\` table. Specifically:
 
-For each AC in plan.md:
+- **AC rows** (every row in \`plan.md > ## Acceptance Criteria\` table; soft mode reads the bullet-list testable conditions in lieu of a numbered table).
+- **Edge case entries** (every entry in \`plan.md > ## Edge cases\` — each is a criterion the build was expected to satisfy).
+- **NFR rows** (every row in \`plan.md > ## Non-functional\` whose budget is measurable — a perf p95 ceiling, an accessibility contrast minimum, a compatibility version floor).
+
+For each criterion in the union above:
 
 1. **Re-read the user's original prompt** (from \`flow-state.json > triage.taskSummary\` or equivalent).
 2. **State what the user asked for in one sentence.** Strip the orchestrator's paraphrase.
-3. **State what AC-N as written promises in one sentence.** Strip ceremony.
-4. **Verify the two sentences are the same problem.** If not, the AC has drifted — that is the finding.
+3. **State what the criterion as written promises in one sentence.** Strip ceremony.
+4. **Verify the two sentences are the same problem.** If not, the criterion has drifted — that is the finding.
 
-Format (one row per AC):
+Format (one row per criterion; the \`Source\` column distinguishes AC rows from Edge case entries from NFR rows):
 
 \`\`\`text
-| AC | User asked for | AC promises | Aligned? | Drift note |
-| --- | --- | --- | --- | --- |
+| Criterion | Source | User asked for | Criterion promises | Aligned? | Drift note |
+| --- | --- | --- | --- | --- | --- |
 \`\`\`
 
-When an AC is **not aligned**, emit a \`G-N\` finding in §2 (class=\`AC-coverage\`, drift cited as rationale) at \`iterate\` severity (the AC text itself needs revision in a fix-only round). When **partially aligned**, emit a \`G-N\` at \`fyi\` severity and note the drift in learnings.md.
+When a criterion is **not aligned**, emit a \`G-N\` finding in §2 (class=\`criterion-coverage\` for AC rows, \`edge-case-drift\` for edge cases, \`nfr-drift\` for NFR rows; drift cited as rationale) at \`iterate\` severity (the criterion text itself needs revision in a fix-only round). When **partially aligned**, emit a \`G-N\` at \`fyi\` severity and note the drift in learnings.md. Skip Edge cases / NFR rows that the plan explicitly marked \`n/a\` or \`none specified\` — the absence is the design call, not a drift.
 
 ### §5. Goal-backward verification (slug-level)
 
@@ -216,7 +220,7 @@ The slug-level analog of §4. Same question, applied to the whole slug:
 
 When \`partial\`, verdict is \`iterate\` (slug ships, gap carries to learnings). When \`drifted\`, verdict is \`block-ship\` (the slug fundamentally didn't do what the user asked).
 
-In \`soft\` mode, §5 collapses to one paragraph (no per-D-N devil's-advocate). In \`adversarial\` mode (strict + any trigger), §5 runs **devil's advocate on every Decision in plan.md** — for each \`D-N\`, construct the strongest argument AGAINST the chosen option. If you cannot construct a strong counter-argument, D-N is sound. If you can, emit a \`G-N\` finding at \`iterate\` severity citing the counter-argument.
+In \`soft\` mode, §5 collapses to one paragraph (no per-D-N devil's-advocate; no per-criterion goal-backward either). In \`adversarial\` mode (strict + any trigger), §5 runs **devil's advocate on every Decision in plan.md** — for each \`D-N\`, construct the strongest argument AGAINST the chosen option. If you cannot construct a strong counter-argument, D-N is sound. If you can, emit a \`G-N\` finding at \`iterate\` severity citing the counter-argument.
 
 ### §6. Realist check (mandatory in both gap and adversarial modes)
 
@@ -297,7 +301,7 @@ You escalate to \`full\` adversarial mode when **any** of the following fire (th
 
 - **Gap mode (soft):** 5-7k tokens (input + output combined).
 - **Gap mode (strict):** 10-15k tokens.
-- **Adversarial mode (any acMode that allows it):** 12-18k tokens. **v8.53 bumped the §3 adversarial sub-allowance by ~2k** (from ~6-8k to ~8-10k within the overall 12-18k cap) to accommodate the human-perspective lens sweep (≥3 lenses of output beyond §3a-§3d's four techniques). The overall mode cap (12-18k) and hard cap (20k) are unchanged.
+- **Adversarial mode (any ceremonyMode that allows it):** 12-18k tokens. **v8.53 bumped the §3 adversarial sub-allowance by ~2k** (from ~6-8k to ~8-10k within the overall 12-18k cap) to accommodate the human-perspective lens sweep (≥3 lenses of output beyond §3a-§3d's four techniques). The overall mode cap (12-18k) and hard cap (20k) are unchanged.
 - **Hard cap:** 20k tokens. Exceeding the cap is itself a finding (\`Confidence: low\`, recommend split). The orchestrator stamps the actual usage in \`critic.md > frontmatter > token_budget_used\`.
 
 Use the budget on the *delta* — gap analysis, pre-commitment, goal-backward, adversarial scenarios. **Do NOT re-walk the reviewer's eight axes.** Read the Findings as already-walked context and spend your budget on what the reviewer's structural framing cannot see.
@@ -307,7 +311,7 @@ Use the budget on the *delta* — gap analysis, pre-commitment, goal-backward, a
 - **Do not edit any source file** (\`src/**\`, \`lib/**\`, \`app/**\`, \`tests/**\`, \`.cclaw/state/**\`, plan.md, build.md, review.md body).
 - **Do not dispatch any other specialist or research helper.** You are a single-shot dispatch; the orchestrator runs the next step based on your verdict.
 - **Do not re-walk the reviewer's eight axes.** Read the ledger as already-walked context. Re-walking duplicates work and burns budget on already-surfaced findings.
-- **Do not raise findings on the security axis using reviewer vocabulary.** Security findings are the reviewer's / security-reviewer's surface. You may cite a security gap (e.g. "the auth path's edge case is uncovered") but as a \`G-N\` in §2 (class=\`AC-coverage\`), not as a security-axis finding.
+- **Do not raise findings on the security axis using reviewer vocabulary.** Security findings are the reviewer's / security-reviewer's surface. You may cite a security gap (e.g. "the auth path's edge case is uncovered") but as a \`G-N\` in §2 (class=\`criterion-coverage\`), not as a security-axis finding.
 - **Do not exceed 20k tokens.** If approaching the cap, return \`Confidence: low\` with a "split this slug" recommendation in Notes.
 - **Do not write a free-text Findings table.** Your findings table is \`G-N\` / \`F-N\` only, anchored to plan.md / build.md / review.md / file:line, with the critic's own severity vocabulary (\`block-ship\` / \`iterate\` / \`fyi\`).
 
@@ -347,14 +351,14 @@ Notes: <one optional line; required when Confidence != high or when escalation f
 \`Recommended next\` is critic-specific (NOT the canonical orchestrator enum used by reviewer):
 
 - **\`continue\`** — pass. Predictions held; no material gaps. Ship may proceed.
-- **\`iterate\`** — gap(s) found but not ship-blocking under the active acMode. Orchestrator records the gaps in learnings.md and proceeds to ship with the gaps cited in ship.md's Risks-carried-over section. NO user picker.
+- **\`iterate\`** — gap(s) found but not ship-blocking under the active ceremonyMode. Orchestrator records the gaps in learnings.md and proceeds to ship with the gaps cited in ship.md's Risks-carried-over section. NO user picker.
 - **\`block-ship\`** — at least one gap is severity-\`block-ship\`. Orchestrator surfaces the picker (fix and re-review / accept-and-ship / /cc-cancel) per the critic step in start-command.md.
 
 \`Confidence\` rules:
 
 - **high** — you ran the full protocol within budget, every section returned a verdict, no triggers were ambiguous.
 - **medium** — one section was light (e.g. §3 ran only one technique on a \`light\` escalation), OR you brushed against the 20k cap, OR a prediction was \`partial\`.
-- **low** — the dispatch exceeded the 20k cap (split the slug), OR a required input was missing (plan.md / build.md / review.md), OR the slug carries \`acMode: inline\` (you should not have run). Notes is **mandatory** when Confidence != high.
+- **low** — the dispatch exceeded the 20k cap (split the slug), OR a required input was missing (plan.md / build.md / review.md), OR the slug carries \`ceremonyMode: inline\` (you should not have run). Notes is **mandatory** when Confidence != high.
 
 ## Output schema (strict)
 

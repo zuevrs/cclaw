@@ -17,7 +17,7 @@ Dispatch <specialist>
 ─ Required second read: .cclaw/lib/skills/<wrapper>.md  (your wrapping skill — see "Stage → wrapper" in start-command)
 ─ Stage: <plan | build | review | ship>
 ─ Slug: <slug>
-─ AC mode: <inline | soft | strict>
+─ Ceremony mode: <inline | soft | strict>
 ─ Pre-flight assumptions: see triage.assumptions in flow-state.json
 ─ Inputs the sub-agent reads after the contract + wrapper:
     - .cclaw/state/flow-state.json
@@ -51,11 +51,11 @@ In strict mode the slice-builder commits each AC with the posture-driven prefix 
 
 const PARALLEL_BUILD = `# On-demand runbook — parallel-build fan-out
 
-Open this runbook only when the ac-author artifact declares \`topology: parallel-build\` with ≥2 slices AND \`acMode == strict\`. For sequential build, see \`.cclaw/lib/runbooks/build.md\`.
+Open this runbook only when the ac-author artifact declares \`topology: parallel-build\` with ≥2 slices AND \`ceremonyMode == strict\`. For sequential build, see \`.cclaw/lib/runbooks/build.md\`.
 
 ## Trigger
 
-When the ac-author artifact declares \`topology: parallel-build\` with ≥2 slices and \`acMode == strict\`, the orchestrator fans out one \`slice-builder\` sub-agent per slice, **capped at 5**, each in its own \`git worktree\`. This is the only fan-out cclaw uses outside of \`ship\`.
+When the ac-author artifact declares \`topology: parallel-build\` with ≥2 slices and \`ceremonyMode == strict\`, the orchestrator fans out one \`slice-builder\` sub-agent per slice, **capped at 5**, each in its own \`git worktree\`. This is the only fan-out cclaw uses outside of \`ship\`.
 
 ## Fan-out shape
 
@@ -101,7 +101,7 @@ Dispatch slice-builder
 ─ Slice: s-N  (acIds: [AC-N, AC-N+1])
 ─ Working tree: .cclaw/worktrees/<slug>-s-N
 ─ Branch: cclaw/<slug>/s-N
-─ AC mode: strict
+─ Ceremony mode: strict
 ─ Touch surface (only paths this slice may modify): [<paths from plan>]
 ─ Output: .cclaw/flows/<slug>/build.md (append, marked with slice id)
 ─ Forbidden: read or modify any path outside touch surface; read another slice's worktree mid-flight; merge or rebase
@@ -131,12 +131,12 @@ Open this runbook **only after the compound step completes** and \`flows/<slug>/
 
 ## Per-AC verified gate (precondition, shipped in v8.48)
 
-Before running any of the steps below, run the per-AC verified gate. The gate is the v8.48 precondition: finalize is refused when any AC failed verification, with no silent escape hatch.
+Before running any of the steps below, run the per-criterion verified gate. The gate is the v8.48 precondition: finalize is refused when any AC failed verification, with no silent escape hatch.
 
 ### Gate procedure
 
-1. Read \`flow-state.json > triage.acMode\`.
-2. If \`acMode == "inline"\` — gate **skipped**; finalize may proceed (inline mode has no per-AC tracking).
+1. Read \`flow-state.json > triage.ceremonyMode\`.
+2. If \`ceremonyMode == "inline"\` — gate **skipped**; finalize may proceed (inline mode has no per-criterion tracking).
 3. Otherwise, parse the \`AC verified:\` line from:
    - **strict mode** — the latest slice-builder slim summary (last \`build\` or \`fix-only\` cycle that returned \`continue\`) AND the latest reviewer slim summary. The reviewer's line takes precedence when the two disagree; reviewer's evidence is authoritative because slice-builder's attestation is self-reported.
    - **soft mode** — same two summaries, looking for the single \`feature=yes|no\` token.
@@ -165,9 +165,9 @@ The gate **never** auto-rescues — there is no \`accept-unverified-and-finalize
 - **\`AC verified\` line missing from reviewer summary** — same treatment; the reviewer is required to emit the line from v8.48 onwards. Bounce dispatches \`reviewer mode=code\` with a one-line note.
 - **slice-builder says \`AC-N=yes\` but reviewer says \`AC-N=no\`** — reviewer wins. The reviewer's downgrade reflects evidence in the ledger; slice-builder's claim is self-reported and the gate respects the second opinion.
 - **slice-builder says \`AC-N=no\` but reviewer says \`AC-N=yes\`** — slice-builder wins. The build couldn't verify itself; reviewer's \`yes\` is a process error (reviewer should have downgraded). Bounce to slice-builder fix-only to close AC-N legitimately, then re-review.
-- **inline ACs intermixed with strict ACs** is structurally impossible — \`acMode\` is per-flow, not per-AC. If you observe this in the wild, the flow-state is corrupted; surface and stop.
+- **inline ACs intermixed with strict ACs** is structurally impossible — \`ceremonyMode\` is per-flow, not per-criterion. If you observe this in the wild, the flow-state is corrupted; surface and stop.
 
-This gate ships at v8.48 and adds one network-free check to every finalize step. It exists because the older \`Open findings\` counter was too coarse — a slug could have \`Open findings: 0\` and still ship with an AC that was silently deferred ("AC-3 deferred — follow-up slug"). The per-AC line forces the deferral to be explicit and forces the orchestrator to ask before letting the gap close silently.
+This gate ships at v8.48 and adds one network-free check to every finalize step. It exists because the older \`Open findings\` counter was too coarse — a slug could have \`Open findings: 0\` and still ship with an AC that was silently deferred ("AC-3 deferred — follow-up slug"). The per-criterion line forces the deferral to be explicit and forces the orchestrator to ask before letting the gap close silently.
 
 ## Steps (in order, in the orchestrator's own context)
 
@@ -184,7 +184,7 @@ This gate ships at v8.48 and adds one network-free check to every finalize step.
    - \`research-repo.md\` (when written by repo-research)
    - \`research-learnings.md\` (only on \`legacy-artifacts: true\` — default v8.12 keeps learnings inline in the ac-author's slim-summary)
    The word "copy" must not appear in the dispatch envelope or in your own actions. \`cp\` is forbidden here. The active directory must end up empty after the moves.
-4. **Stamp the shipped frontmatter on \`ship.md\`.** As of v8.12, manifest.md is collapsed into \`ship.md\`'s frontmatter. Update \`ship.md\`'s frontmatter to include the final flow signals (snake_case keys per artefact-frontmatter convention): \`slug\`, \`shipped_at\`, \`ac_mode\`, \`complexity\`, \`security_flag\`, \`review_iterations\`, \`ac_count\`, \`finalization_mode\`. Body of \`ship.md\` keeps the AC↔commit map (strict) or condition checklist (soft); add an "## Artefact index" section listing the artefacts that ended up in the shipped dir (one bullet per file). Users on the opt-in \`legacy-artifacts: true\` config still get a separate \`manifest.md\` in addition.
+4. **Stamp the shipped frontmatter on \`ship.md\`.** As of v8.12, manifest.md is collapsed into \`ship.md\`'s frontmatter. Update \`ship.md\`'s frontmatter to include the final flow signals (snake_case keys per artefact-frontmatter convention): \`slug\`, \`shipped_at\`, \`ceremony_mode\`, \`complexity\`, \`security_flag\`, \`review_iterations\`, \`ac_count\`, \`finalization_mode\`. Body of \`ship.md\` keeps the AC↔commit map (strict) or condition checklist (soft); add an "## Artefact index" section listing the artefacts that ended up in the shipped dir (one bullet per file). Users on the opt-in \`legacy-artifacts: true\` config still get a separate \`manifest.md\` in addition.
 5. **Post-condition check (mandatory).** \`flows/<slug>/\` (the active directory) must be empty. If it is not, you have made a mistake — list the residue, surface it to the user, do NOT continue. The most common cause is mistakenly using \`cp\` instead of \`git mv\`/\`mv\`. Once the active dir is empty, \`rmdir flows/<slug>\` to remove the now-empty directory.
 6. **Promote ADRs (PROPOSED → ACCEPTED).** Scan \`flows/shipped/<slug>/plan.md\` (just moved in step 3; v8.14+ inlines D-N records there) and any legacy \`flows/shipped/<slug>/decisions.md\` (pre-v8.14 shipped flows) for \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` lines. For each found ADR file, edit the frontmatter in place: \`status: PROPOSED\` → \`status: ACCEPTED\`; add \`accepted_at: <iso>\`; add \`accepted_in_slug: <slug>\`; add \`accepted_at_commit: <ship-commit-sha>\`. Commit each promotion with \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. Skip the entire step when no PROPOSED ADR was found. Do NOT promote ADRs the design phase did not propose for this slug. See \`.cclaw/lib/skills/documentation-and-adrs.md\` for the full lifecycle (including supersession bookkeeping for ADRs that supersede an earlier ACCEPTED one).
 7. **Reset flow-state.** Write \`createInitialFlowState\` defaults to \`.cclaw/state/flow-state.json\` (\`currentSlug: null\`, \`currentStage: null\`, \`triage: null\`, \`ac: []\`, \`reviewIterations: 0\`, \`securityFlag: false\`, \`lastSpecialist: null\`). The shipped manifest is the durable record; flow-state is now a clean slot ready for the next \`/cc\`.
@@ -226,7 +226,7 @@ After this block is authored, the orchestrator surfaces a structured ask to the 
 
 ## Architecture severity gates ship (v8.20+)
 
-The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every acMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate: when the open ledger contains any \`required + architecture\` row, the ship picker does NOT offer \`continue\` until the user explicitly picks \`accept-warns-and-ship\` for the architecture finding(s). Other \`severity=required\` findings continue to follow the standard acMode table (gate in strict, carry-over in soft).
+The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every ceremonyMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate: when the open ledger contains any \`required + architecture\` row, the ship picker does NOT offer \`continue\` until the user explicitly picks \`accept-warns-and-ship\` for the architecture finding(s). Other \`severity=required\` findings continue to follow the standard ceremonyMode table (gate in strict, carry-over in soft).
 
 Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the ship picker's option list becomes \`accept-warns-and-ship\` (highlighted as the path past the architecture gate) / \`fix-only\` (re-dispatch slice-builder to address) / \`stay-paused\`. The \`continue\` (silent advance) option is not offered.
 `;
@@ -554,7 +554,7 @@ The orchestrator opens this section **on every \`ac-author\` slim-summary return
 
 plan-critic runs ONLY when ALL of these hold:
 
-1. \`triage.acMode == "strict"\` (soft / inline plans don't carry the granularity surface to critique).
+1. \`triage.ceremonyMode == "strict"\` (soft / inline plans don't carry the granularity surface to critique).
 2. \`triage.complexity != "trivial"\` (trivial flows have no plan stage; small-medium and large-risky plans are both eligible).
 3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs extend prior shipped work; the parent slug already shipped + survived its post-impl critic).
 4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency surface).
@@ -569,7 +569,7 @@ Dispatch plan-critic
 ─ Required second read: .cclaw/lib/anti-rationalizations.md  (v8.49 catalog; the prompt body cites it)
 ─ Stage: plan-critic
 ─ Slug: <slug>
-─ AC mode: strict  (gate enforces; always strict)
+─ Ceremony mode: strict  (gate enforces; always strict)
 ─ AC count: <N>    (from plan.md frontmatter; ≥2 by gate)
 ─ Iteration: <0 | 1>  (0 on first dispatch; 1 on the one allowed revise loop)
 ─ Findings to address (iteration 1 only): <verbatim §8 hand-off block from the iter-0 plan-critic.md>
@@ -653,24 +653,24 @@ The plan-critic returns one of three verdicts. The orchestrator branches on (ver
 
 A state file with \`currentStage: "plan"\` AND \`lastSpecialist: "ac-author"\` AND no \`planCriticVerdict\` field is treated as **pre-plan-critic intermediate**:
 
-- If the slug satisfies the v8.54 gate (acMode=strict + complexity!=trivial + problemType!=refines + AC count>=2): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.51) detected; plan-critic will run on next /cc.\`) and dispatches plan-critic before advancing to slice-builder.
+- If the slug satisfies the v8.54 gate (ceremonyMode=strict + complexity!=trivial + problemType!=refines + AC count>=2): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.51) detected; plan-critic will run on next /cc.\`) and dispatches plan-critic before advancing to slice-builder.
 - If the slug does NOT satisfy the gate (any combination that fails any of the four AND-conditions): no migration; plan-critic was structurally never going to run on this slug, advance to slice-builder as today.
 
 The migration is one-pass and idempotent — a slug whose plan-critic has already run shows \`planCriticVerdict\` set, so the legacy branch is never re-entered.
 
 ## Post-implementation pass (critic, v8.42)
 
-The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the v8.42 on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + AC self-audit + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the v8.42 on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
 
-### critic acMode gating (Q1, no flag exposed)
+### critic ceremonyMode gating (Q1, no flag exposed)
 
-| \`triage.acMode\` | does critic run? | mode | typical token budget |
+| \`triage.ceremonyMode\` | does critic run? | mode | typical token budget |
 | --- | --- | --- | --- |
 | \`inline\` | **no — skipped** (\`triage.path\` never includes \`critic\` on inline) | — | 0 |
 | \`soft\` | **yes** | \`gap\` (light) — predictions ≤3, §3 adversarial skipped, §5 goal-backward collapsed to one paragraph | 5-7k |
 | \`strict\` | **yes** | \`gap\` (full) by default; auto-escalates to \`adversarial\` (\§3 emitted in full + per-D-N devil's-advocate sweep) when any §8 trigger fires | 10-15k (gap) / 12-18k (adversarial), hard cap 20k |
 
-### critic escalation triggers (§8, OR-conditions — any one fires escalation on \`acMode: strict\`)
+### critic escalation triggers (§8, OR-conditions — any one fires escalation on \`ceremonyMode: strict\`)
 
 1. **Architectural-tier change** — touchSurface includes ≥2 files marked \`tier: architectural\` in plan.md OR the build introduced one.
 2. **Test-first + zero failing tests in build.md** — slug posture is \`test-first\` AND the TDD log shows zero \`RED\` rows (v8.42 Q5: narrow trigger, do NOT widen to "missing RED excerpt"; the difference matters — a slug with \`RED\` rows that lack a captured excerpt is a build.md audit-trail gap to be flagged, not a critic escalator).
@@ -682,8 +682,8 @@ The orchestrator computes the trigger set deterministically from \`flow-state.js
 
 Mapping fired-triggers count to \`criticEscalation\`:
 
-- \`acMode: soft\` AND exactly one trigger fired → \`light\` (still \`gap\` mode; one extra technique permitted).
-- \`acMode: strict\` AND any trigger fired → \`full\` (\`adversarial\` mode; all four §3 techniques + devil's-advocate sweep).
+- \`ceremonyMode: soft\` AND exactly one trigger fired → \`light\` (still \`gap\` mode; one extra technique permitted).
+- \`ceremonyMode: strict\` AND any trigger fired → \`full\` (\`adversarial\` mode; all four §3 techniques + devil's-advocate sweep).
 - Otherwise → \`none\` (\`gap\` mode unchanged).
 
 ### critic cap & rerun rules
@@ -763,10 +763,10 @@ Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires
 qa-runner runs ONLY when ALL of these hold:
 
 1. \`triage.surfaces\` includes at least one of \`"ui"\` or \`"web"\` (CLI / library / API / data / infra / docs-only slugs structurally skip qa).
-2. \`triage.acMode != "inline"\` (trivial / one-shot slugs skip qa; inline budget cannot afford a structured pass).
+2. \`triage.ceremonyMode != "inline"\` (trivial / one-shot slugs skip qa; inline budget cannot afford a structured pass).
 3. \`qaIteration < 1\` (hard cap — a third dispatch is structurally not allowed; the orchestrator surfaces the iterate-cap-reached picker instead).
 
-For any other combination, qa-runner is **structurally skipped**. The orchestrator advances directly from slice-builder's GREEN slim summary to reviewer dispatch, as today. The gate is **AND** across all three; widening any condition (e.g. running qa on \`acMode: inline\`) is a v8.53+ scope decision, not a within-slug runtime call.
+For any other combination, qa-runner is **structurally skipped**. The orchestrator advances directly from slice-builder's GREEN slim summary to reviewer dispatch, as today. The gate is **AND** across all three; widening any condition (e.g. running qa on \`ceremonyMode: inline\`) is a v8.53+ scope decision, not a within-slug runtime call.
 
 Backwards compat: a pre-v8.52 flow whose \`triage.surfaces\` field is absent reads as \`["other"]\` and skips qa — the orchestrator does not retro-fit qa onto legacy slugs.
 
@@ -778,7 +778,7 @@ Dispatch qa-runner
 ─ Required second read: .cclaw/lib/skills/qa-and-browser.md  (the cross-cutting QA discipline; tier definitions, evidence requirements, anti-rationalizations)
 ─ Stage: qa
 ─ Slug: <slug>
-─ AC mode: <strict | soft>  (gate enforces non-inline; inline is structurally impossible here)
+─ Ceremony mode: <strict | soft>  (gate enforces non-inline; inline is structurally impossible here)
 ─ Surfaces: <list from triage.surfaces — e.g. ["ui"], ["web"], ["ui", "api"]>
 ─ UI ACs: <list of AC ids whose touchSurface includes UI files, computed from plan.md AC table>
 ─ Iteration: <0 | 1>  (0 on first dispatch; 1 on the one allowed iterate loop)
@@ -886,8 +886,8 @@ The axis is the 9th explicit axis (10th with the gated \`nfr-compliance\` axis).
 
 A state file with \`currentStage: "build"\` AND \`lastSpecialist: "slice-builder"\` AND no \`qaVerdict\` field is treated as **pre-qa intermediate**:
 
-- If the slug satisfies the v8.52 gate (\`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.acMode != "inline"\`): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.52) detected; qa-runner will run on next /cc.\`) and dispatches qa-runner before advancing to reviewer.
-- If the slug does NOT satisfy the gate (\`triage.surfaces\` is absent / empty / non-UI, OR \`triage.acMode == "inline"\`): no migration; qa-runner was structurally never going to run on this slug, advance to reviewer as today. \`triage.surfaces\` absent is treated as \`["other"]\` (the canonical no-QA-gating fallback).
+- If the slug satisfies the v8.52 gate (\`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.ceremonyMode != "inline"\`): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.52) detected; qa-runner will run on next /cc.\`) and dispatches qa-runner before advancing to reviewer.
+- If the slug does NOT satisfy the gate (\`triage.surfaces\` is absent / empty / non-UI, OR \`triage.ceremonyMode == "inline"\`): no migration; qa-runner was structurally never going to run on this slug, advance to reviewer as today. \`triage.surfaces\` absent is treated as \`["other"]\` (the canonical no-QA-gating fallback).
 
 The migration is one-pass and idempotent — a slug whose qa-runner has already run shows \`qaVerdict\` set, so the legacy branch is never re-entered.
 

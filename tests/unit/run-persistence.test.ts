@@ -78,7 +78,7 @@ describe("run-persistence", () => {
       securityFlag: false,
       triage: {
         complexity: "small-medium",
-        acMode: "soft",
+        ceremonyMode: "soft",
         path: ["plan", "build", "review", "ship"],
         rationale: "test",
         decidedAt: "2026-05-07T00:00:00Z",
@@ -112,7 +112,7 @@ describe("run-persistence", () => {
     const state = await readFlowState(project);
     expect(state.schemaVersion).toBe(3);
     expect(state.currentSlug).toBe("approval-page");
-    expect(state.triage?.acMode).toBe("strict");
+    expect(state.triage?.ceremonyMode).toBe("strict");
     expect(state.triage?.complexity).toBe("small-medium");
 
     const onDisk = JSON.parse(

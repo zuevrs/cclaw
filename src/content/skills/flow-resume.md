@@ -33,7 +33,7 @@ Read `.cclaw/state/flow-state.json`:
 ```
 Active flow: <slug>
 ─ Stage: <plan | build | review | ship>  (last touched <relative-time, in the user's language>)
-─ Triage: <complexity> / acMode=<inline | soft | strict>
+─ Triage: <complexity> / ceremonyMode=<inline | soft | strict>
 ─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
 ─ Last specialist: <none | design | ac-author | reviewer | security-reviewer | slice-builder>
 ─ Open findings: <K>  (review only; 0 outside review)
@@ -50,7 +50,7 @@ Then ask:
 
 `[n]` is shown only when the user passed a new task argument; otherwise drop it. `Cancel` is **not** an option — if the user wants to nuke this flow without starting a new one, they invoke `/cc-cancel` themselves. Surface that command in plain prose, in the user's language, only when the user looks stuck.
 
-The slots inside `<...>` (relative time, next step, option text) render in the user's conversation language. `/cc`, `/cc-cancel`, slug, stage names, `acMode`, `AC-N`, file paths, frontmatter keys, and specialist names stay in their original form (mechanical tokens; see `conversation-language.md`). Bracketed shortcut letters (`[r]`, `[s]`, `[n]`) stay English.
+The slots inside `<...>` (relative time, next step, option text) render in the user's conversation language. `/cc`, `/cc-cancel`, slug, stage names, `ceremonyMode`, `AC-N`, file paths, frontmatter keys, and specialist names stay in their original form (mechanical tokens; see `conversation-language.md`). Bracketed shortcut letters (`[r]`, `[s]`, `[n]`) stay English.
 
 ## Inferring next step
 
@@ -68,7 +68,7 @@ The slots inside `<...>` (relative time, next step, option text) render in the u
 
 ## Resume rules
 
-1. **Triage is preserved.** A resumed flow keeps its `acMode`, `complexity`, and `path`. The user does not re-pick. If they want to change any of those, the answer is "/cc-cancel and start fresh". The **one exception** is `runMode` — see the v8.34 mid-flight toggle below.
+1. **Triage is preserved.** A resumed flow keeps its `ceremonyMode`, `complexity`, and `path`. The user does not re-pick. If they want to change any of those, the answer is "/cc-cancel and start fresh". The **one exception** is `runMode` — see the v8.34 mid-flight toggle below.
 2. **Last-specialist context is restored** by reading `flows/<slug>/<stage>.md` (which now contains the design's Decisions section inline; legacy `flows/<slug>/decisions.md` is read too when it exists from a pre-v8.14 flow). The orchestrator does not summarise from memory; it re-reads the artifact.
 3. **Time gate.** If the resume summary's "last touched" is >7 days ago, surface a warning ("flow is stale — verify scope still applies") but still allow resume.
 4. **Sub-agent dispatch resumes from the same stage.** A build that was paused mid-RED for AC-3 resumes by dispatching slice-builder for AC-3, not by restarting AC-1.
@@ -81,7 +81,7 @@ The user can flip `triage.runMode` between `step` and `auto` at any `/cc` invoca
 - **After a noisy auto-mode run**, the user wants a deliberate pause between stages: `/cc --mode=step`.
 - **Resume + toggle in one step** is supported: `/cc --mode=auto` on a paused flow patches `runMode` then immediately advances under the new mode (no extra `/cc` needed).
 
-The toggle patches `.cclaw/state/flow-state.json > triage.runMode` and **persists** across `/cc` invocations — every subsequent `/cc` reads the patched value, no need to re-pass the flag. `complexity` / `acMode` / `path` / `assumptions` / `priorLearnings` stay verbatim; only `runMode` flips.
+The toggle patches `.cclaw/state/flow-state.json > triage.runMode` and **persists** across `/cc` invocations — every subsequent `/cc` reads the patched value, no need to re-pass the flag. `complexity` / `ceremonyMode` / `path` / `assumptions` / `priorLearnings` stay verbatim; only `runMode` flips.
 
 When the flag arrives mid-specialist (the user typed `/cc --mode=auto` while a specialist was running — rare; usually the user is in step mode and types it between stages), the patch lands immediately and takes effect at the next stage boundary, never mid-specialist.
 
@@ -104,7 +104,7 @@ Combine with task text the normal way: `/cc --mode=auto refactor the auth module
 
 Active flow: <slug>
 ─ Stage: build  (last touched <relative-time>)
-─ Triage: small/medium / acMode=soft
+─ Triage: small/medium / ceremonyMode=soft
 ─ Progress: 2 of 3 conditions verified
 ─ Last specialist: slice-builder
 ─ Open findings: 0

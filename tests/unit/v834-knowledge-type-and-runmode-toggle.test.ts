@@ -228,7 +228,7 @@ describe("v8.34 — mid-flight runMode toggle (item 6)", () => {
 
   it("AC-5 — start-command body names runMode as the only mutable triage field (mid-flight toggle is the v8.34 exception)", () => {
     // The existing "triage decision is **immutable**" rule still holds for
-    // complexity / acMode / path, but runMode is now mid-flight-toggleable.
+    // complexity / ceremonyMode / path, but runMode is now mid-flight-toggleable.
     expect(
       body,
       "the body must explicitly call out the runMode exception so future readers don't infer the toggle violates the immutability invariant"
