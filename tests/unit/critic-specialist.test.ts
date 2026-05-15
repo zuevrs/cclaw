@@ -11,13 +11,13 @@ import { SPECIALISTS } from "../../src/types.js";
  * The critic is an on-demand specialist that runs between the reviewer's
  * final `clear` (or `warn` with the architecture-severity gate satisfied)
  * and the ship gate. It walks what is MISSING (gap analysis +
- * pre-commitment predictions + goal-backward verification + AC self-audit
+ * pre-commitment predictions + goal-backward verification + Criterion check
  * + realist check), and in `adversarial` mode also runs the four-technique
  * scaffold (assumption violation, composition failures, cascade
  * construction, abuse cases).
  *
  * These tripwires lock the contract so a future refactor cannot
- * accidentally drop the critic, weaken its acMode gating, soften its
+ * accidentally drop the critic, weaken its ceremonyMode gating, soften its
  * token-budget caps, or break the artifact-template shape that the
  * orchestrator and downstream consumers (ship.md > Risks carried over,
  * learnings.md compound capture) rely on.
@@ -90,7 +90,7 @@ describe("v8.42 critic prompt — investigation protocol sections", () => {
     expect(CRITIC_PROMPT, "§1 pre-commitment predictions").toMatch(/§1.*Pre-?commitment predictions/i);
     expect(CRITIC_PROMPT, "§2 gap analysis").toMatch(/§2.*Gap analysis/i);
     expect(CRITIC_PROMPT, "§3 adversarial findings").toMatch(/§3.*Adversarial findings/i);
-    expect(CRITIC_PROMPT, "§4 AC self-audit").toMatch(/§4.*Self-?audit on AC quality/i);
+    expect(CRITIC_PROMPT, "§4 Criterion check").toMatch(/§4.*Criterion check/i);
     expect(CRITIC_PROMPT, "§5 goal-backward verification").toMatch(/§5.*Goal-?backward verification/i);
     expect(CRITIC_PROMPT, "§6 realist check").toMatch(/§6.*Realist check/i);
   });
@@ -133,25 +133,25 @@ describe("v8.42 critic prompt — posture awareness", () => {
   });
 });
 
-describe("v8.42 critic prompt — acMode gating (spec Q1)", () => {
-  it("prompt names all three acMode values explicitly: inline, soft, strict", () => {
+describe("v8.42 critic prompt — ceremonyMode gating (spec Q1)", () => {
+  it("prompt names all three ceremonyMode values explicitly: inline, soft, strict", () => {
     expect(CRITIC_PROMPT).toMatch(/`inline`/);
     expect(CRITIC_PROMPT).toMatch(/`soft`/);
     expect(CRITIC_PROMPT).toMatch(/`strict`/);
   });
 
-  it("prompt states that critic SKIPS on acMode: inline", () => {
+  it("prompt states that critic SKIPS on ceremonyMode: inline", () => {
     expect(
       CRITIC_PROMPT,
-      "Q1: critic must skip on acMode: inline (no flag exposed)"
+      "Q1: critic must skip on ceremonyMode: inline (no flag exposed)"
     ).toMatch(/inline[^a-z]*(skip|no|n\/a)/i);
   });
 
-  it("prompt states that critic runs gap mode on acMode: soft", () => {
+  it("prompt states that critic runs gap mode on ceremonyMode: soft", () => {
     expect(CRITIC_PROMPT).toMatch(/`soft`[\s\S]{0,200}`gap`/);
   });
 
-  it("prompt states that critic runs gap-or-adversarial on acMode: strict", () => {
+  it("prompt states that critic runs gap-or-adversarial on ceremonyMode: strict", () => {
     expect(CRITIC_PROMPT).toMatch(/`strict`[\s\S]{0,300}(`gap`|`adversarial`)/);
   });
 });
@@ -281,7 +281,7 @@ describe("v8.42 critic.md artifact template — registered with required frontma
       "stage:",
       "generated_at:",
       "posture_inherited:",
-      "ac_mode:",
+      "ceremony_mode:",
       "mode:",
       "predictions_made:",
       "gaps_found:",
@@ -301,7 +301,7 @@ describe("v8.42 critic.md artifact template — registered with required frontma
       "## 1. Pre-commitment predictions",
       "## 2. Gap analysis",
       "## 3. Adversarial findings",
-      "## 4. Self-audit on AC quality",
+      "## 4. Criterion check",
       "## 5. Goal-backward verification",
       "## 6. Realist check",
       "## 7. Verdict",

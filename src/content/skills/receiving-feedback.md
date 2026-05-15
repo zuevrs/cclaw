@@ -15,7 +15,7 @@ Always-on when a specialist or the orchestrator is processing **feedback that na
 
 1. **Reviewer findings** — slice-builder receiving F-N rows from `review.md`'s Findings table (every iteration of the review-fix loop, every `severity ∈ {critical, required, consider, nit}` row that targets slice-builder's diff).
 2. **Critic gaps / verdicts** — slice-builder OR ac-author receiving `critic.md > ## Gap analysis` rows (G-N records) or a `Verdict: block-ship` / `Verdict: iterate` line. The critic is read-only on the codebase; the receiver is whoever owns the file the gap targets.
-3. **Security-reviewer findings** — same as reviewer findings, scoped to the security axis. Severity escalates faster (every `critical` security finding blocks ship in every acMode); the response pattern below still applies.
+3. **Security-reviewer findings** — same as reviewer findings, scoped to the security axis. Severity escalates faster (every `critical` security finding blocks ship in every ceremonyMode); the response pattern below still applies.
 4. **User feedback that points at a defect** — the user typing `/cc` with prose saying "AC-2 missed the edge case where X" or "the plan doesn't mention Y". Treat this as a finding (severity inferred from prose; default to `required` when the user names a concrete miss).
 
 Fires on `stages: ["build", "review", "ship"]` because the receive-feedback moment can land at any of those stages (slice-builder in build, reviewer in review-iteration, both at ship-gate fix-only).
@@ -75,7 +75,7 @@ State the action plan in one sentence. One of three shapes:
 
 - **`fix`** — "Plan: fix — write RED test asserting null-claims returns false, then GREEN at `src/lib/permissions.ts:18` adding the null-guard". The plan must be concrete (file:line refs, named tests, named refactors); "I'll fix it" without specifics is sycophantic agreement.
 - **`push-back-with-evidence`** — "Plan: push back — the null-claims branch is unreachable per `src/auth/middleware.ts:42` which guarantees `claims !== null` before this function is called. Evidence: `tests/integration/auth-middleware.test.ts:88` exercises that path." Use this when you disagree with the finding; the evidence is what distinguishes informed push-back from sycophantic resistance.
-- **`accept-warning`** — "Plan: accept warning — the finding is correct but `acMode: soft` and `severity: consider` carries over without blocking. Will surface in `learnings.md`." Use this when the finding is valid but the ship gate allows the carry-over.
+- **`accept-warning`** — "Plan: accept warning — the finding is correct but `ceremonyMode: soft` and `severity: consider` carries over without blocking. Will surface in `learnings.md`." Use this when the finding is valid but the ship gate allows the carry-over.
 
 ### Step 4 — Evidence
 

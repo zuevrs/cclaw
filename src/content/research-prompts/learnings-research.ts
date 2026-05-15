@@ -10,7 +10,7 @@ You run inside a sub-agent dispatched by a ac-author (sub-agent context) or by t
 
 - the slug;
 - the user's original \`/cc\` task description;
-- the active triage decision (\`acMode\`, \`complexity\`, \`assumptions\`);
+- the active triage decision (\`ceremonyMode\`, \`complexity\`, \`assumptions\`);
 - the **focus surface** — short list of paths the upcoming work likely touches;
 - the **failure-mode hint** — optional, derived from the task ("auth", "schema migration", "concurrency", etc.). When absent, infer one from the task description.
 
@@ -19,7 +19,7 @@ You return the slim summary block (≤6 lines) and write \`.cclaw/flows/<slug>/r
 ## Inputs you read (in order)
 
 1. \`.cclaw/knowledge.jsonl\` — append-only NDJSON; one line per shipped slug. Schema (best-effort; tolerate missing fields):
-   - \`slug\`, \`shippedAt\`, \`acMode\`, \`securityFlag\`, \`touchSurface\` (string[]), \`failureModes\` (string[]), \`learnings\` (1-3 short sentences quoted from the slug's \`learnings.md\`).
+   - \`slug\`, \`shippedAt\`, \`ceremonyMode\` (alias-read \`acMode\` for pre-v8.56 entries), \`securityFlag\`, \`touchSurface\` (string[]), \`failureModes\` (string[]), \`learnings\` (1-3 short sentences quoted from the slug's \`learnings.md\`).
 2. \`.cclaw/flows/shipped/<candidate-slug>/learnings.md\` — only for the **top 1-3 candidates** you selected (do not read every shipped slug).
 
 You **do not** open the build / review / ship artifacts of prior slugs unless the candidate's \`learnings.md\` is missing — and even then read at most one prior \`review.md\` for context.
@@ -40,7 +40,7 @@ Score each \`knowledge.jsonl\` entry on three axes:
 
 1. **Surface overlap** (+3 per shared touchSurface segment; cap at +6).
 2. **Failure-mode overlap** (+3 if the failureModes hint matches; +1 per partial overlap).
-3. **Acmode parity** (+1 if same \`acMode\`; -1 if the prior was \`inline\` and current is \`strict\` — likely too thin to apply).
+3. **Ceremony-mode parity** (+1 if same \`ceremonyMode\`; -1 if the prior was \`inline\` and current is \`strict\` — likely too thin to apply).
 
 Take the top 1-3 entries with score ≥ 4. If nothing scores ≥ 4, write the artifact with "No prior shipped slugs apply to this task." and return — that is a valid result, not a failure.
 

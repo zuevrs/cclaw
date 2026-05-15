@@ -227,7 +227,7 @@ describe("v8.9 cleanup", () => {
         ac: [{ id: "AC-1", text: "demo", status: "committed" as const }],
         triage: {
           complexity: "small-medium" as const,
-          acMode: "soft" as const,
+          ceremonyMode: "soft" as const,
           path: ["plan", "build", "review", "ship"] as const,
           rationale: "test",
           decidedAt: new Date().toISOString(),

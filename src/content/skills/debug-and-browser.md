@@ -1,6 +1,6 @@
 ---
 name: debug-and-browser
-trigger: when build hits a stop-the-line event (test fails for unclear reason, flaky test, regression, hook rejection); also dispatch by request when the user reports a hard-to-reproduce bug; when the slug's touchSurface includes UI files (*.tsx, *.jsx, *.vue, *.svelte, *.html, *.css) and the project ships a browser app; default-on for ac_mode=strict UI work, opt-in for soft
+trigger: when build hits a stop-the-line event (test fails for unclear reason, flaky test, regression, hook rejection); also dispatch by request when the user reports a hard-to-reproduce bug; when the slug's touchSurface includes UI files (*.tsx, *.jsx, *.vue, *.svelte, *.html, *.css) and the project ships a browser app; default-on for ceremony_mode=strict UI work, opt-in for soft
 ---
 
 # Skill: debug-and-browser
@@ -187,7 +187,7 @@ The reviewer's five-axis pass walks the diff. **Browser verification** walks the
 
 - Slice-builder dispatches this skill in Phase 4 (verification) when the AC's `touchSurface` includes UI files AND the project ships a browser app (detect: `package.json` references `react` / `vue` / `svelte` / `next` / `vite` / `webpack` / `astro`, OR the repo has `public/` / `pages/` / `app/`).
 - Reviewer dispatches this skill in iteration 1 when the diff touches UI files. The browser-verification artifact is read in addition to (not instead of) the five-axis pass.
-- Triggered automatically in `ac_mode: strict`; opt-in for `ac_mode: soft` (the slice-builder may decide it is overkill for a small UI tweak).
+- Triggered automatically in `ceremony_mode: strict`; opt-in for `ceremony_mode: soft` (the slice-builder may decide it is overkill for a small UI tweak).
 
 ## Phase 1 — DevTools wiring
 
@@ -247,7 +247,7 @@ Take a screenshot before and after the AC's interactions. Compare:
 - Does the responsive view (mobile + desktop) still hold?
 - Are there empty / loading / error states the AC didn't handle?
 
-For ac_mode=strict UI slugs, attach the screenshots to `flows/<slug>/build.md`'s GREEN section as evidence.
+For ceremony_mode=strict UI slugs, attach the screenshots to `flows/<slug>/build.md`'s GREEN section as evidence.
 
 ### Check 5 — Perf trace (when AC's surface is hot-path)
 

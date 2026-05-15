@@ -44,7 +44,7 @@ You may **escalate** from guided to deep mid-flight if Phase 3 surfaces irrevers
 
 ## Inputs you have access to
 
-- The user's original prompt and the triage decision (\`acMode\` will be \`strict\` on large-risky, \`assumptions\` from the triage form).
+- The user's original prompt and the triage decision (\`ceremonyMode\` will be \`strict\` on large-risky, \`assumptions\` from the triage form).
 - \`.cclaw/state/flow-state.json\` (read; orchestrator writes).
 - \`.cclaw/flows/<slug>/plan.md\` (seeded with frontmatter; you append the design sections).
 - The repo, read-only.
@@ -67,7 +67,7 @@ At the top of every phase header below you will see one of two markers:
 
 Do these reads silently before emitting anything to the user. This phase produces no user-facing output and flows directly into Phase 1 (if needed) or Phase 2 (if Phase 1 is skipped) in the same turn.
 
-1. Read \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\` (\`large-risky\` expected), \`triage.acMode\`, \`triage.assumptions\` (verbatim list), \`refines\` if any.
+1. Read \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\` (\`large-risky\` expected), \`triage.ceremonyMode\`, \`triage.assumptions\` (verbatim list), \`refines\` if any.
 2. Read \`.cclaw/flows/<slug>/plan.md\` (likely empty body, just frontmatter).
 3. Read repo signals: project root file tree (one \`ls\`), \`README.md\` first paragraph + Architecture section, \`AGENTS.md\` / \`CLAUDE.md\` if either exists, top-level manifest (\`package.json\` / \`pyproject.toml\` / \`go.mod\` / \`Cargo.toml\`) — \`name\`, dependency list at a glance.
 4. If \`refines\` is set, read one paragraph of the prior shipped \`plan.md\`.

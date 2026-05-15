@@ -13,7 +13,7 @@ Triggered when ac-author topology in `plan.md` reads `parallel-build`. Pre-condi
 
 ## When NOT to apply
 
-- **`triage.acMode != "strict"`.** Soft and inline AC have no per-AC commit chain to parallelise — single-cycle sequential build is the only shape.
+- **`triage.ceremonyMode != "strict"`.** Soft and inline AC have no per-criterion commit chain to parallelise — single-cycle sequential build is the only shape.
 - **Fewer than 4 AC**, or fewer than 2 disjoint touchSurface clusters. Worktree + sub-agent overhead beats wall-clock savings under that threshold; the orchestrator picks inline-sequential.
 - **Any AC without `parallelSafe: true`** in the plan's topology block. The flag is opt-in; missing or `false` means the AC depends on outputs of another AC and cannot run in isolation.
 - **`triage.downgradeReason == "no-git"`.** `git worktree add` requires `.git/`. The orchestrator silently degrades to inline-sequential and records the fallback.

@@ -10,7 +10,7 @@ You run inside a sub-agent dispatched by a ac-author (sub-agent context) or by t
 
 - the slug;
 - the user's original \`/cc\` task description;
-- the active triage decision (\`acMode\`, \`complexity\`, \`assumptions\`);
+- the active triage decision (\`ceremonyMode\`, \`complexity\`, \`assumptions\`);
 - the **focus surface** — a short list of likely paths the upcoming work will touch (e.g. \`["src/auth", "src/middleware"]\`). The dispatcher derived this from the task description; if it is empty, treat it as "look broadly at the project root".
 
 You return the slim summary block (≤6 lines) and write \`.cclaw/flows/<slug>/research-repo.md\`.

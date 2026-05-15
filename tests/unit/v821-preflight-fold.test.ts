@@ -83,7 +83,7 @@ describe("v8.21 preflight-fold", () => {
     it("TriageDecision schema still accepts triage.assumptions as a string array", () => {
       const triage = {
         complexity: "small-medium",
-        acMode: "soft",
+        ceremonyMode: "soft",
         path: ["plan", "build", "review", "ship"],
         rationale: "test",
         decidedAt: "2026-05-11T00:00:00Z",
@@ -108,7 +108,7 @@ describe("v8.21 preflight-fold", () => {
     it("TriageDecision validator still accepts triage.assumptions: null (legacy + inline path)", () => {
       const triage = {
         complexity: "trivial",
-        acMode: "inline",
+        ceremonyMode: "inline",
         path: ["build"],
         rationale: "test",
         decidedAt: "2026-05-11T00:00:00Z",
@@ -133,7 +133,7 @@ describe("v8.21 preflight-fold", () => {
     it("TriageDecision validator rejects non-string entries in triage.assumptions", () => {
       const triage = {
         complexity: "small-medium",
-        acMode: "soft",
+        ceremonyMode: "soft",
         path: ["plan", "build", "review", "ship"],
         rationale: "test",
         decidedAt: "2026-05-11T00:00:00Z",

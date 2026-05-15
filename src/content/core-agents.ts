@@ -82,7 +82,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["gap", "adversarial"],
     description:
-      "v8.42 adversarial critic. Runs at the critic step (after reviewer, before ship). Falsificationist stance: walks what's MISSING (gap analysis + pre-commitment predictions + goal-backward verification + AC self-audit + realist check). gap mode is default; adversarial mode (assumption violation / composition failures / cascade construction / abuse cases) auto-escalates on the §8 trigger set. acMode-gated: inline skip, soft gap, strict full + escalation. Writes single-shot critic.md (overwrites on re-dispatch).",
+      "v8.42 adversarial critic. Runs at the critic step (after reviewer, before ship). Falsificationist stance: walks what's MISSING (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check). gap mode is default; adversarial mode (assumption violation / composition failures / cascade construction / abuse cases) auto-escalates on the §8 trigger set. ceremonyMode-gated: inline skip, soft gap, strict full + escalation. Writes single-shot critic.md (overwrites on re-dispatch).",
     prompt: SPECIALIST_PROMPTS.critic
   },
   {
@@ -92,7 +92,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["pre-impl-review"],
     description:
-      "v8.51 pre-implementation plan-critic. Runs between ac-author and slice-builder ONLY on the tight gate {acMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}. Five-dimension protocol (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog) + §6 pre-commitment predictions before final review. Verdicts: pass (advance to slice-builder), revise (bounce to ac-author once — max 1 revise loop), cancel (user picker: cancel-slug / re-design). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
+      "v8.51 pre-implementation plan-critic. Runs between ac-author and slice-builder ONLY on the tight gate {ceremonyMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}. Five-dimension protocol (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog) + §6 pre-commitment predictions before final review. Verdicts: pass (advance to slice-builder), revise (bounce to ac-author once — max 1 revise loop), cancel (user picker: cancel-slug / re-design). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
     prompt: SPECIALIST_PROMPTS["plan-critic"]
   },
   {
@@ -102,7 +102,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["browser-verify"],
     description:
-      "v8.52 behavioural-QA specialist for UI surfaces. Runs at the qa stage (between build and review) ONLY when triage.surfaces includes ui or web AND acMode != inline. Browser tool hierarchy: Playwright MCP (Tier 1, CI-runnable) > browser-MCP (Tier 2, cursor-ide-browser / chrome-devtools / browser-use; session-bound screenshots) > manual steps (Tier 3, user confirms numbered procedure). Per-UI-AC evidence rubric, 3-5 pre-commitment predictions before verification, qa-runner-specific anti-rationalizations. Verdicts: pass (advance to review), iterate (bounce to slice-builder once — max 1 loop), blocked (browser tools unavailable AND manual steps required; user picker). Read-only on production src; writes qa.md + optional tests/e2e/<slug>-<ac>.spec.ts + screenshots under flows/<slug>/qa-assets/. Reviewer cross-checks the artifact via the v8.52 qa-evidence axis.",
+      "v8.52 behavioural-QA specialist for UI surfaces. Runs at the qa stage (between build and review) ONLY when triage.surfaces includes ui or web AND ceremonyMode != inline. Browser tool hierarchy: Playwright MCP (Tier 1, CI-runnable) > browser-MCP (Tier 2, cursor-ide-browser / chrome-devtools / browser-use; session-bound screenshots) > manual steps (Tier 3, user confirms numbered procedure). Per-UI-AC evidence rubric, 3-5 pre-commitment predictions before verification, qa-runner-specific anti-rationalizations. Verdicts: pass (advance to review), iterate (bounce to slice-builder once — max 1 loop), blocked (browser tools unavailable AND manual steps required; user picker). Read-only on production src; writes qa.md + optional tests/e2e/<slug>-<ac>.spec.ts + screenshots under flows/<slug>/qa-assets/. Reviewer cross-checks the artifact via the v8.52 qa-evidence axis.",
     prompt: SPECIALIST_PROMPTS["qa-runner"]
   },
   {

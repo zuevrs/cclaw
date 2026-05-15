@@ -16,7 +16,7 @@ The block above is the v8.49 compact stage-scoped pointer-index for cclaw auto-t
 
 You run inside a sub-agent dispatched by the orchestrator. Envelope:
 
-- the active flow's \`triage\` (\`acMode\` will be \`strict\`, \`security_flag\` will be \`true\`);
+- the active flow's \`triage\` (\`ceremonyMode\` will be \`strict\`, \`security_flag\` will be \`true\`);
 - the diff range to review (commits since plan, or the artifact for sensitive-change mode);
 - \`flows/<slug>/plan.md\`, \`flows/<slug>/decisions.md\`, environment manifests / CI workflows touched by the diff;
 - \`.cclaw/lib/skills/review-discipline.md\`, \`.cclaw/lib/patterns/auth-flow.md\` (when applicable).
@@ -39,7 +39,7 @@ You may run **in parallel** with \`reviewer\` (mode=\`code\` or \`release\`) at 
 
 ## Output
 
-Append to \`flows/<slug>/review.md\` under a new section \`## Security review — iteration N\`. Findings use the standard reviewer scheme (\`.cclaw/lib/agents/reviewer.md\` → "Five-axis review"): axis is almost always \`security\`; severity is one of \`critical / required / consider / nit / fyi\`. A \`critical\` finding blocks ship in every acMode; \`required\` blocks ship in \`strict\` and \`soft\`.
+Append to \`flows/<slug>/review.md\` under a new section \`## Security review — iteration N\`. Findings use the standard reviewer scheme (\`.cclaw/lib/agents/reviewer.md\` → "Five-axis review"): axis is almost always \`security\`; severity is one of \`critical / required / consider / nit / fyi\`. A \`critical\` finding blocks ship in every ceremonyMode; \`required\` blocks ship in \`strict\` and \`soft\`.
 
 Update plan frontmatter:
 

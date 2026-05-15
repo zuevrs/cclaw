@@ -99,7 +99,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "triage-gate",
     fileName: "triage-gate.md",
-    description: "Mandatory first step of every new /cc flow: classify complexity, propose acMode/path, ask user to confirm, persist the decision.",
+    description: "Mandatory first step of every new /cc flow: classify complexity, propose ceremonyMode/path, ask user to confirm, persist the decision.",
     triggers: ["start:/cc"],
     stages: ["triage"],
     body: readSkill("triage-gate.md")
@@ -131,8 +131,8 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "ac-discipline",
     fileName: "ac-discipline.md",
-    description: "v8.16 merge of ac-quality + ac-traceability (revised for v8.40 — hook removed). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the posture-driven commit-prefix contract (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies ex-post via git log --grep. AC-quality always-on for AC authoring; AC-traceability active only when ac_mode=strict, no chain enforced in soft / inline modes.",
-    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:ac-author", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ac_mode:strict"],
+    description: "v8.16 merge of ac-quality + ac-traceability (revised for v8.40 — hook removed). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the posture-driven commit-prefix contract (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies ex-post via git log --grep. AC-quality always-on for AC authoring; AC-traceability active only when ceremony_mode=strict, no chain enforced in soft / inline modes.",
+    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:ac-author", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ceremony_mode:strict"],
     stages: ["plan", "build", "review"],
     body: readSkill("ac-discipline.md")
   },
@@ -163,7 +163,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "tdd-and-verification",
     fileName: "tdd-and-verification.md",
-    description: "v8.16 merge of tdd-cycle + verification-loop + refactor-safety. Always-on whenever stage=build. Granularity scales with ac_mode (inline = optional, soft = one cycle per feature, strict = full RED → GREEN → REFACTOR per AC). The verification gate (build → typecheck → lint → test → security → diff) wraps every handoff; refactor-safety governs behaviour-preserving slugs and the REFACTOR step.",
+    description: "v8.16 merge of tdd-cycle + verification-loop + refactor-safety. Always-on whenever stage=build. Granularity scales with ceremony_mode (inline = optional, soft = one cycle per feature, strict = full RED → GREEN → REFACTOR per criterion). The verification gate (build → typecheck → lint → test → security → diff) wraps every handoff; refactor-safety governs behaviour-preserving slugs and the REFACTOR step.",
     triggers: [
       "stage:build",
       "specialist:slice-builder",
@@ -204,7 +204,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "source-driven",
     fileName: "source-driven.md",
     description: "Detect stack + versions from manifest, fetch official documentation deep-links, implement against documented patterns, cite URLs in plan/decisions/code. Default in strict mode for framework-specific work.",
-    triggers: ["ac_mode:strict", "specialist:ac-author", "specialist:design", "framework-specific-code-detected"],
+    triggers: ["ceremony_mode:strict", "specialist:ac-author", "specialist:design", "framework-specific-code-detected"],
     stages: ["plan", "build"],
     body: readSkill("source-driven.md")
   },
@@ -249,7 +249,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
       "specialist:slice-builder:fix-only",
       "task:bug-fix",
       "test-failed-unclear-reason",
-      "ac_mode:strict",
+      "ceremony_mode:strict",
       "touch-surface:ui",
       "diff:tsx|jsx|vue|svelte|html|css",
       "specialist:slice-builder",
@@ -267,8 +267,8 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
       "specialist:qa-runner",
       "triage.surfaces:ui",
       "triage.surfaces:web",
-      "ac_mode:strict",
-      "ac_mode:soft",
+      "ceremony_mode:strict",
+      "ceremony_mode:soft",
       "touch-surface:ui",
       "diff:tsx|jsx|vue|svelte|html|css",
       "specialist:slice-builder",
@@ -297,7 +297,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "completion-discipline",
     fileName: "completion-discipline.md",
-    description: "v8.48 — Iron Law concentrating verification-before-completion. No `✅ complete` slim summary, no `Recommended next: continue`, no Findings row close, no `ship.md > status: shipped` without paired fresh evidence (command + exit code + log lines, OR test output, OR git-log proof, OR file:line citation). Bans the sycophantic completion vocabulary (`should work`, `looks good`, `probably works`, `I think this is done`). Always-on across every specialist and every stage; the reviewer's Verification story table, slice-builder's self_review[], and orchestrator's per-AC verified flag are all enforcement surfaces deferring to this skill.",
+    description: "v8.48 — Iron Law concentrating verification-before-completion. No `✅ complete` slim summary, no `Recommended next: continue`, no Findings row close, no `ship.md > status: shipped` without paired fresh evidence (command + exit code + log lines, OR test output, OR git-log proof, OR file:line citation). Bans the sycophantic completion vocabulary (`should work`, `looks good`, `probably works`, `I think this is done`). Always-on across every specialist and every stage; the reviewer's Verification story table, slice-builder's self_review[], and orchestrator's per-criterion verified flag are all enforcement surfaces deferring to this skill.",
     triggers: [
       "always-on",
       "before:slim-summary",

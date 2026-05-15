@@ -6,7 +6,7 @@ import {
   assertFlowStateV82,
   assumptionsOf,
   createInitialFlowState,
-  isAcMode,
+  isCeremonyMode,
   isFlowStage,
   isRoutingClass,
   isRunMode,
@@ -71,7 +71,7 @@ describe("flow-state", () => {
     ).toThrow(/Invalid lastSpecialist/);
   });
 
-  it("validates triage decision (acMode, complexity, path)", () => {
+  it("validates triage decision (ceremonyMode, complexity, path)", () => {
     expect(() =>
       assertFlowStateV82({
         schemaVersion: 3,
@@ -84,7 +84,7 @@ describe("flow-state", () => {
         securityFlag: false,
         triage: {
           complexity: "huge" as never,
-          acMode: "soft",
+          ceremonyMode: "soft",
           path: ["plan"],
           rationale: "x",
           decidedAt: "2026-05-07T00:00:00Z",
@@ -105,11 +105,11 @@ describe("flow-state", () => {
     expect(isFlowStage("spec")).toBe(false);
   });
 
-  it("isAcMode matches inline / soft / strict", () => {
-    expect(isAcMode("inline")).toBe(true);
-    expect(isAcMode("soft")).toBe(true);
-    expect(isAcMode("strict")).toBe(true);
-    expect(isAcMode("loose")).toBe(false);
+  it("isCeremonyMode matches inline / soft / strict", () => {
+    expect(isCeremonyMode("inline")).toBe(true);
+    expect(isCeremonyMode("soft")).toBe(true);
+    expect(isCeremonyMode("strict")).toBe(true);
+    expect(isCeremonyMode("loose")).toBe(false);
   });
 
   it("isRoutingClass matches trivial / small-medium / large-risky", () => {
@@ -146,7 +146,7 @@ describe("flow-state", () => {
     expect(runModeOf(undefined)).toBe("step");
     const triageWithoutRunMode: TriageDecision = {
       complexity: "small-medium",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "x",
       decidedAt: "2026-05-07T00:00:00Z",
@@ -161,7 +161,7 @@ describe("flow-state", () => {
     expect(assumptionsOf(undefined)).toEqual([]);
     const triage: TriageDecision = {
       complexity: "small-medium",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "x",
       decidedAt: "2026-05-07T00:00:00Z",
@@ -188,7 +188,7 @@ describe("flow-state", () => {
     };
     const validTriage: TriageDecision = {
       complexity: "small-medium",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "x",
       decidedAt: "2026-05-07T00:00:00Z",
@@ -224,7 +224,7 @@ describe("flow-state", () => {
     };
     const validTriage: TriageDecision = {
       complexity: "small-medium",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "x",
       decidedAt: "2026-05-07T00:00:00Z",
@@ -272,7 +272,7 @@ describe("flow-state", () => {
     };
     const validTriage: TriageDecision = {
       complexity: "small-medium",
-      acMode: "soft",
+      ceremonyMode: "soft",
       path: ["plan", "build", "review", "ship"],
       rationale: "x",
       decidedAt: "2026-05-07T00:00:00Z",
@@ -379,7 +379,7 @@ describe("migrateFlowState", () => {
     };
     const migrated = migrateFlowState(legacy);
     expect(migrated.triage).not.toBeNull();
-    expect(migrated.triage?.acMode).toBe("strict");
+    expect(migrated.triage?.ceremonyMode).toBe("strict");
     expect(migrated.triage?.complexity).toBe("large-risky");
     expect(migrated.triage?.path).toEqual(["plan", "build", "review", "ship"]);
     expect(migrated.triage?.userOverrode).toBe(false);

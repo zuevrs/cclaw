@@ -1,13 +1,13 @@
 import {
-  AC_MODES,
+  CEREMONY_MODES,
   FLOW_STAGES,
   ROUTING_CLASSES,
   RUN_MODES,
   SPECIALISTS,
   SURFACES,
-  type AcMode,
   type AcceptanceCriterionState,
   type BuildProfile,
+  type CeremonyMode,
   type CriticEscalation,
   type CriticVerdict,
   type FlowStage,
@@ -136,7 +136,7 @@ export interface FlowStateV82 {
    *
    * Absence means plan-critic has not run yet (either pre-v8.51 state,
    * gating excluded the flow, or the dispatch hasn't fired). The
-   * orchestrator's deterministic gate (acMode=strict + complexity=
+   * orchestrator's deterministic gate (ceremonyMode=strict + complexity=
    * large-risky + problemType!=refines + AC count>=2) is the canonical
    * "should this slug have a verdict?" check; downstream code branches
    * on presence + value, never on absence-as-implicit-pass.
@@ -183,7 +183,7 @@ export interface FlowStateV82 {
    *   `pause-for-manual-qa` / `skip-qa`).
    *
    * Absence means qa-runner has not run yet (either pre-v8.52 state,
-   * gating excluded the flow on non-UI surface, acMode=inline, or the
+   * gating excluded the flow on non-UI surface, ceremonyMode=inline, or the
    * dispatch hasn't fired). `null` is explicitly accepted because the
    * orchestrator may write `null` to mark "qa ran but the slim summary
    * forgot the verdict" recovery cases — distinguishing absent-vs-null
@@ -258,9 +258,16 @@ export function isRoutingClass(value: unknown): value is RoutingClass {
   return typeof value === "string" && (ROUTING_CLASSES as readonly string[]).includes(value);
 }
 
-export function isAcMode(value: unknown): value is AcMode {
-  return typeof value === "string" && (AC_MODES as readonly string[]).includes(value);
+export function isCeremonyMode(value: unknown): value is CeremonyMode {
+  return typeof value === "string" && (CEREMONY_MODES as readonly string[]).includes(value);
 }
+
+/**
+ * @deprecated v8.56 — use {@link isCeremonyMode}. Kept as an alias so
+ * pre-v8.56 import sites continue to work. Slated for removal once one
+ * full release cycle has aged out external imports.
+ */
+export const isAcMode = isCeremonyMode;
 
 export function isRunMode(value: unknown): value is RunMode {
   return typeof value === "string" && (RUN_MODES as readonly string[]).includes(value);
@@ -328,8 +335,8 @@ export const createInitialFlowStateV8 = createInitialFlowState;
  * Infer a TriageDecision for a v2 (pre-8.2) state being migrated forward.
  *
  * v2 states never recorded a triage. To preserve their behaviour we map
- * them to `strict` AC mode (they relied on per-AC TDD), with complexity
- * inferred from the AC count and security flag.
+ * them to `strict` ceremony mode (they relied on per-criterion TDD), with
+ * complexity inferred from the AC count and security flag.
  */
 function inferTriageFromLegacy(state: {
   ac: AcceptanceCriterionState[];
@@ -347,7 +354,7 @@ function inferTriageFromLegacy(state: {
   }
   return {
     complexity,
-    acMode: "strict",
+    ceremonyMode: "strict",
     path: ["plan", "build", "review", "ship"],
     rationale: "Auto-migrated from cclaw 8.0/8.1 flow-state (no triage recorded; preserved as strict).",
     decidedAt: state.startedAt,
@@ -387,8 +394,8 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   if (!isRoutingClass(triage.complexity)) {
     throw new Error(`Invalid triage.complexity: ${String(triage.complexity)}`);
   }
-  if (!isAcMode(triage.acMode)) {
-    throw new Error(`Invalid triage.acMode: ${String(triage.acMode)}`);
+  if (!isCeremonyMode(triage.ceremonyMode)) {
+    throw new Error(`Invalid triage.ceremonyMode: ${String(triage.ceremonyMode)}`);
   }
   if (!Array.isArray(triage.path)) {
     throw new Error("triage.path must be an array of stage names");
@@ -636,7 +643,7 @@ export function migrateFlowState(value: unknown): FlowStateV82 {
   }
   const raw = value as Record<string, unknown> & { schemaVersion?: unknown };
   if (raw.schemaVersion === FLOW_STATE_SCHEMA_VERSION) {
-    const rewritten = rewriteLegacyPlanner(rewriteLegacyDiscoverySpecialist(raw));
+    const rewritten = rewriteLegacyAcMode(rewriteLegacyPlanner(rewriteLegacyDiscoverySpecialist(raw)));
     assertFlowStateV82(rewritten);
     return rewritten;
   }
@@ -695,6 +702,43 @@ function rewriteLegacyPlanner(
 ): Record<string, unknown> {
   if (isLegacyPlanner(raw.lastSpecialist)) {
     return { ...raw, lastSpecialist: "ac-author" };
+  }
+  return raw;
+}
+
+/**
+ * v8.56: rewrite `triage.acMode` to `triage.ceremonyMode` so a
+ * `flow-state.json` written by pre-v8.56 cclaw resumes cleanly under the
+ * renamed field. The rename is **semantics-preserving** — the contract
+ * (`inline` / `soft` / `strict`) is identical, only the field name
+ * changed — so the rewrite is a direct hoist. Following the same pattern
+ * as {@link rewriteLegacyPlanner}, the transformation runs on **every
+ * read** of a current-schema state file; the next write persists the new
+ * field name. Shipped flow artifacts under `flows/shipped/<slug>/` are
+ * NOT rewritten — they keep their historical text untouched.
+ *
+ * When BOTH `acMode` and `ceremonyMode` are present (mid-flight resume of
+ * a project that already migrated), `ceremonyMode` wins and the legacy
+ * `acMode` is dropped silently. This matches the v8.28 planner rewrite
+ * shape; cclaw never relies on conflicting fields surviving.
+ *
+ * Slated for removal in v8.57+ once one full release cycle has aged out
+ * any in-flight state files.
+ */
+function rewriteLegacyAcMode(
+  raw: Record<string, unknown>
+): Record<string, unknown> {
+  if (typeof raw.triage !== "object" || raw.triage === null) return raw;
+  const triage = raw.triage as Record<string, unknown>;
+  if ("acMode" in triage && !("ceremonyMode" in triage)) {
+    const rewrittenTriage: Record<string, unknown> = { ...triage, ceremonyMode: triage.acMode };
+    delete rewrittenTriage.acMode;
+    return { ...raw, triage: rewrittenTriage };
+  }
+  if ("acMode" in triage && "ceremonyMode" in triage) {
+    const rewrittenTriage: Record<string, unknown> = { ...triage };
+    delete rewrittenTriage.acMode;
+    return { ...raw, triage: rewrittenTriage };
   }
   return raw;
 }

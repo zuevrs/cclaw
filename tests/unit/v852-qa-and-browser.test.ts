@@ -100,7 +100,7 @@ describe("v8.52 qa-runner prompt — structural shape", () => {
     expect(p).toMatch(/read-only/i);
   });
 
-  it("gating: surfaces ∩ {ui, web} ≠ ∅ and acMode !== inline (the two qa-gating predicates)", () => {
+  it("gating: surfaces ∩ {ui, web} ≠ ∅ and ceremonyMode !== inline (the two qa-gating predicates)", () => {
     expect(p).toMatch(/triage\.surfaces[\s\S]{0,200}(?:ui|web)/i);
     expect(p).toMatch(/inline/i);
   });

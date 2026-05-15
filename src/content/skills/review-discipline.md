@@ -13,7 +13,7 @@ Invoked at the start of every `reviewer` or `security-reviewer` dispatch. Auto-a
 
 ## When NOT to apply
 
-- **Inline / trivial flows.** `triage.acMode == "inline"` skips the review stage entirely — there is no `flows/<slug>/review.md` and no reviewer dispatch.
+- **Inline / trivial flows.** `triage.ceremonyMode == "inline"` skips the review stage entirely — there is no `flows/<slug>/review.md` and no reviewer dispatch.
 - **Mid-iteration drafts** that have not yet been committed to a slim summary. Iteration N's findings are appended when N returns; partial drafts must not be merged into the ledger.
 - **Renumbering or rewriting F-N rows.** The Findings table is append-only — supersede an old finding with `F-K supersedes F-J` instead of editing F-J in place.
 - **Convergence after one iteration with zero new findings.** Signal #2 requires **two** consecutive zero-blocking iterations; a single zero-finding pass is not enough to declare `clear`.
@@ -51,7 +51,7 @@ Rules:
 
 - **F-N** ids are stable and global per slug — never renumber. If a finding is superseded, append `F-K supersedes F-J` instead.
 - **Axis** is one of `correctness` | `readability` | `architecture` | `security` | `perf`. Pick the dimension the finding speaks to; never blank.
-- **Severity** is one of `critical` | `required` | `consider` | `nit` | `fyi`. Ship gate threshold depends on `acMode` (see below).
+- **Severity** is one of `critical` | `required` | `consider` | `nit` | `fyi`. Ship gate threshold depends on `ceremonyMode` (see below).
 - **Status** is `open` | `closed`. A closed row records the iteration that closed it.
 - **Citation** is a real `file:line` (or test id, or commit SHA). No prose-only findings — if you cannot cite, you do not have a finding yet.
 
@@ -71,9 +71,9 @@ Walk every diff with the five axes in mind. Per-axis checklist:
 
 A reviewer that records zero findings on every axis must explicitly say so in the iteration block ("Five-axis pass: no findings on any axis"); silence is not the same as a clean review.
 
-## Severity ↔ acMode → ship gate
+## Severity ↔ ceremonyMode → ship gate
 
-| acMode | open severity → blocks ship |
+| ceremonyMode | open severity → blocks ship |
 | --- | --- |
 | `strict` | `critical` OR `required` |
 | `soft` | `critical` only (`required` carries over) |
@@ -81,12 +81,12 @@ A reviewer that records zero findings on every axis must explicitly say so in th
 
 `consider` / `nit` / `fyi` never block ship. They carry over to `flows/<slug>/ship.md` (and `flows/<slug>/learnings.md` for `consider`) but do not delay ship.
 
-## Convergence detector (acMode-aware)
+## Convergence detector (ceremonyMode-aware)
 
 The loop ends when ANY of these fires:
 
 1. **All ledger rows closed.** Decision: `clear`.
-2. **Two consecutive iterations append zero new blocking findings AND every open row is non-blocking.** Decision: `clear` with non-blocking carry-over to `flows/<slug>/ship.md` and `flows/<slug>/learnings.md`. "Blocking" depends on acMode (see table above).
+2. **Two consecutive iterations append zero new blocking findings AND every open row is non-blocking.** Decision: `clear` with non-blocking carry-over to `flows/<slug>/ship.md` and `flows/<slug>/learnings.md`. "Blocking" depends on ceremonyMode (see table above).
 3. **Hard cap reached** (5 iterations) with at least one open blocking row remaining. Decision: `cap-reached`. Stop; surface to user.
 
 Tie-breaker: if iteration 5 closes the last blocking row, return `clear` (signal #1) even though the cap was hit. The cap exists to bound runaway loops, not to punish a slug that converges on the last attempt.
@@ -94,11 +94,11 @@ Tie-breaker: if iteration 5 closes the last blocking row, return `clear` (signal
 ## Hard cap
 
 - 5 review iterations per slug. After the 5th, the reviewer writes `status: cap-reached` and stops.
-- The orchestrator surfaces every remaining open ledger row and recommends `/cc-cancel` (split into a fresh slug) or `accept-and-ship` (only valid if every remaining open row is non-blocking under the active acMode).
+- The orchestrator surfaces every remaining open ledger row and recommends `/cc-cancel` (split into a fresh slug) or `accept-and-ship` (only valid if every remaining open row is non-blocking under the active ceremonyMode).
 
 ## Decision values
 
-- `block` — at least one ledger row is blocking under the active acMode + open. `slice-builder` (mode=fix-only) must run next; then re-review.
+- `block` — at least one ledger row is blocking under the active ceremonyMode + open. `slice-builder` (mode=fix-only) must run next; then re-review.
 - `warn` — open rows exist, all non-blocking, convergence detector signal #2 has fired. Ship may proceed; carry-over.
 - `clear` — signal #1 (all closed) OR signal #2 (non-blocking convergence). Ready for ship.
 - `cap-reached` — signal #3 fired with at least one open blocking row remaining.
@@ -155,7 +155,7 @@ The reviewer's discipline is the first thing the slug shape pressures an agent t
 | "F-2 is fixed by F-1's commit, I'll close it without re-checking." | Closing a row is itself a claim. Cite the fix SHA / test name / file:line that proves the close. A close without evidence is the next iteration's reopen. |
 | "Severity `required` everywhere makes it look serious." | Padding severity makes the gradient useless. `nit` / `consider` / `required` / `critical` are a routing signal; collapse them and the orchestrator can't decide what blocks ship. |
 | "I'll skip the Findings this iteration; the findings are short." | The ledger is the resume contract. Iteration N+1 reads it before walking the diff; skipping breaks fix-only dispatch and supersession tracking. |
-| "Architecture severity `required` doesn't block in soft mode anyway." | v8.20 architecture-severity gate fires across **every** acMode (not just strict). Treating it as soft-mode-skippable is a known bypass the gate is designed to catch. |
+| "Architecture severity `required` doesn't block in soft mode anyway." | v8.20 architecture-severity gate fires across **every** ceremonyMode (not just strict). Treating it as soft-mode-skippable is a known bypass the gate is designed to catch. |
 | "The diff is small — no real review needed, I'll fast-pass it." | Small diffs hide concentrated risk. The Failure Modes checklist runs every iteration; "I trust myself on this one" is the rationalization the audit catches. |
 | "Two-pass mode is overkill for this slug." | Two-pass is the v8.24 default on every large-risky OR security-flagged slug. `config.reviewerTwoPass: false` is the audit-trailed opt-out; "felt like overkill" is not. |
 

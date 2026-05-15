@@ -182,7 +182,7 @@ describe("v8.16 thematic skills merge", () => {
         "specialist:reviewer:text-review",
         "before:git-commit",
         "before:git-push",
-        "ac_mode:strict",
+        "ceremony_mode:strict",
       ]) {
         expect(skill.triggers).toContain(trigger);
       }
@@ -249,7 +249,7 @@ describe("v8.16 thematic skills merge", () => {
         "specialist:slice-builder:fix-only",
         "task:bug-fix",
         "test-failed-unclear-reason",
-        "ac_mode:strict",
+        "ceremony_mode:strict",
         "touch-surface:ui",
         "diff:tsx|jsx|vue|svelte|html|css",
       ]) {

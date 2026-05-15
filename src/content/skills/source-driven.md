@@ -9,11 +9,11 @@ Framework-specific code (React hooks, Django views, Next.js routing, Prisma migr
 
 ## When NOT to apply
 
-- **`triage.acMode == "inline"` (trivial).** Single-line edits don't need URL citations; the audit-trail cost is wasted on a typo fix.
+- **`triage.ceremonyMode == "inline"` (trivial).** Single-line edits don't need URL citations; the audit-trail cost is wasted on a typo fix.
 - **Pure logic** (loops, data structures, internal helpers, project-local utility functions). Correctness is version-independent; the docs add no signal.
 - **Internal-only modules** that never cross a framework boundary. Citing React docs for a function that doesn't import React is noise.
 - **Refactor slugs with `behaviour-preserving: true`.** The behaviour is pinned by existing tests; no new framework decision is being made.
-- **`triage.acMode == "soft"` without an explicit `source_driven: true` flag.** Soft mode is opt-in for source-driven citations; the default keeps the small/medium loop fast.
+- **`triage.ceremonyMode == "soft"` without an explicit `source_driven: true` flag.** Soft mode is opt-in for source-driven citations; the default keeps the small/medium loop fast.
 - **`UNVERIFIED:` is honest, not lazy.** When official docs are unreachable AND the harness has no `user-context7`, marking the surface `UNVERIFIED:` is the correct outcome — don't paper over with a Stack Overflow link.
 
 ## When this skill applies

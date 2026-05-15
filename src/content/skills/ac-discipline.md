@@ -1,6 +1,6 @@
 ---
 name: ac-discipline
-trigger: when authoring or reviewing AC entries; when committing changes for an active cclaw run with ac_mode=strict
+trigger: when authoring or reviewing AC entries; when committing changes for an active cclaw run with ceremony_mode=strict
 ---
 
 # Skill: ac-discipline
@@ -9,12 +9,12 @@ This merged skill covers both AC concerns: the bar for every AC entry (formerly 
 
 ## When NOT to apply
 
-- **Inline / trivial flows (`triage.acMode == "inline"`).** Single-line edits commit straight with plain `git commit`; no AC ids exist to trace.
-- **Soft mode commit chain.** In `soft` mode plain `git commit` is the contract. There is no per-AC prefix and no AC↔commit chain; the reviewer reads `build.md` and the feature-level commit message instead.
+- **Inline / trivial flows (`triage.ceremonyMode == "inline"`).** Single-line edits commit straight with plain `git commit`; no AC ids exist to trace.
+- **Soft mode commit chain.** In `soft` mode plain `git commit` is the contract. There is no per-criterion prefix and no AC↔commit chain; the reviewer reads `build.md` and the feature-level commit message instead.
 - **Mid-flight AC additions to an existing plan.** Adding new AC during build is scope creep. Either the new work fits an existing AC (no new id), or it's a follow-up slug — never a mid-flight AC graft.
 - **Renumbering AC ids after a delete.** Don't reuse `AC-3` because `AC-2` got removed; the remaining ids stay sequential after compaction without rewriting committed AC references.
 - **Refinement slugs reading parent slug AC ids.** A refining slug restarts at `AC-1` even when the parent shipped slug had `AC-12`.
-- **Strict mode commits without the per-AC prefix.** A bare `git commit -m "fix the thing"` in strict mode breaks the reviewer's `git log --grep="(AC-N):"` scan; the AC reads as missing and the reviewer files an A-1 finding (severity=required, axis=correctness).
+- **Strict mode commits without the per-criterion prefix.** A bare `git commit -m "fix the thing"` in strict mode breaks the reviewer's `git log --grep="(AC-N):"` scan; the AC reads as missing and the reviewer files an A-1 finding (severity=required, axis=correctness).
 
 ## ac-quality
 
@@ -45,7 +45,7 @@ You don't. Adding AC during build is scope creep. Either the new work fits an ex
 
 ## ac-traceability
 
-This part of the skill applies only when the active flow's `ac_mode` is `strict` (set at the triage gate for large-risky / security-flagged work). In `inline` and `soft` modes there is no per-AC commit prefix and no AC↔commit chain — see `triage-gate.md` for what each mode does.
+This part of the skill applies only when the active flow's `ceremony_mode` is `strict` (set at the triage gate for large-risky / security-flagged work). In `inline` and `soft` modes there is no per-criterion commit prefix and no AC↔commit chain — see `triage-gate.md` for what each mode does.
 
 In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/cc` references exactly one AC via a posture-driven subject-line prefix, and the AC ↔ commit chain is reconstructible by anyone who runs `git log --grep="(AC-N):" --oneline`.
 
@@ -68,7 +68,7 @@ In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/c
 - A single TDD cycle covers the whole feature; you do not run RED → GREEN → REFACTOR per condition.
 - Ship gate is a single reviewer pass ("all listed conditions verified"), not an AC-by-AC ledger.
 
-## When you accidentally committed without the per-AC prefix (strict mode only)
+## When you accidentally committed without the per-criterion prefix (strict mode only)
 
 - Reviewer's `git log --grep="(AC-N):"` scan misses the commit; the AC reads as missing.
 - Two options:

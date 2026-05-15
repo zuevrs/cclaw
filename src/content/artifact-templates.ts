@@ -176,7 +176,7 @@ const PLAN_TEMPLATE_SOFT = `---
 slug: SLUG-PLACEHOLDER
 stage: plan
 status: active
-ac_mode: soft
+ceremony_mode: soft
 last_specialist: null
 refines: null
 shipped_at: null
@@ -313,13 +313,13 @@ const BUILD_TEMPLATE_SOFT = `---
 slug: SLUG-PLACEHOLDER
 stage: build
 status: active
-ac_mode: soft
+ceremony_mode: soft
 last_commit: null
 ---
 
 # Build log — SLUG-PLACEHOLDER
 
-This is the soft-mode build log. One TDD cycle covers all listed conditions; commits are plain \`git commit -m "<feat|fix|...>: <one-line>"\` with no per-AC prefix (the reviewer reads this file plus the feature-level commit at ship time).
+This is the soft-mode build log. One TDD cycle covers all listed conditions; commits are plain \`git commit -m "<feat|fix|...>: <one-line>"\` with no per-criterion prefix (the reviewer reads this file plus the feature-level commit at ship time).
 
 > **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
 
@@ -428,7 +428,7 @@ slug: SLUG-PLACEHOLDER
 stage: critic
 status: active
 posture_inherited: PLAN-POSTURE-PLACEHOLDER  # most-restrictive AC posture from plan.md frontmatter
-ac_mode: AC-MODE-PLACEHOLDER                  # inline | soft | strict (mirrors flow-state.json > triage.acMode)
+ceremony_mode: CEREMONY-MODE-PLACEHOLDER      # inline | soft | strict (mirrors flow-state.json > triage.ceremonyMode; legacy ac_mode read accepted for one release)
 generated_at: GENERATED-AT-PLACEHOLDER        # ISO timestamp at dispatch time
 mode: gap                                     # gap | adversarial
 predictions_made: 0                           # count of pre-commitment predictions in §1
@@ -460,11 +460,11 @@ _(Authored BEFORE the critic reads \`build.md\` and \`review.md\` in detail. 3-5
 
 ## 2. Gap analysis (what's missing)
 
-_(The OMC "What's Missing" section. Walk the slug and ask, for each item, "what is absent?" — AC-coverage gaps, edge-case coverage gaps, NFR coverage gaps, decision implementation gaps, scope creep, untested edge cases, false assumptions.)_
+_(The OMC "What's Missing" section. Walk the slug and ask, for each item, "what is absent?" — criterion-coverage gaps, edge-case coverage gaps, NFR coverage gaps, decision implementation gaps, scope creep, untested edge cases, false assumptions.)_
 
 | G-N | Class | Severity | Anchor | Description | Suggested patch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| G-1 | _AC-coverage / edge-case / NFR / decision / scope-creep / untested / false-assumption_ | _block-ship / iterate / fyi_ | _plan.md > AC-N \\| build.md row \\| file:line_ | _what is missing and why it matters_ | _smallest correct change to close the gap_ | _open / closed-by-iteration_ |
+| G-1 | _criterion-coverage / edge-case-drift / nfr-drift / decision / scope-creep / untested / false-assumption_ | _block-ship / iterate / fyi_ | _plan.md > AC-N \\| build.md row \\| file:line_ | _what is missing and why it matters_ | _smallest correct change to close the gap_ | _open / closed-by-iteration_ |
 
 **Severity definitions** (critic's own vocabulary; do NOT merge with reviewer's \`critical\`/\`required\`/\`consider\`/\`nit\`/\`fyi\` ledger):
 
@@ -500,20 +500,22 @@ _(Skipped in gap mode unless escalation fires. Emitted in full in adversarial mo
 | --- | --- | --- | --- | --- |
 | F-4 | _e.g. "user submits same form rapidly"_ | _e.g. "no debounce, no idempotency key"_ | _e.g. "duplicate orders created"_ | _block-ship / iterate / fyi_ |
 
-## 4. Self-audit on AC quality (is the AC the right AC, not is it met?)
+## 4. Criterion check (are the verifiable plan criteria the right criteria, not are they met?)
 
-_(Goal-backward, per-AC. Re-read the user's original prompt and verify each AC actually solves the user-stated problem.)_
+_(Goal-backward, per criterion. Re-read the user's original prompt and verify each verifiable plan criterion actually solves the user-stated problem. v8.56 scope: every row in the AC table, every entry in \`## Edge cases\`, and every measurable row in \`## Non-functional\`.)_
 
-| AC | User asked for | AC promises | Aligned? | Drift note (if any) |
-| --- | --- | --- | --- | --- |
-| AC-1 | _e.g. "make the invite list refresh when a user clicks Refresh"_ | _e.g. "InviteList component re-fetches /api/invites on click of the Refresh button"_ | _yes / partial / no_ | _e.g. "AC asks for re-fetch; user said 'refresh' which could mean re-render with cached data."_ |
+| Criterion | Source | User asked for | Criterion promises | Aligned? | Drift note (if any) |
+| --- | --- | --- | --- | --- | --- |
+| AC-1 | ac | _e.g. "make the invite list refresh when a user clicks Refresh"_ | _e.g. "InviteList component re-fetches /api/invites on click of the Refresh button"_ | _yes / partial / no_ | _e.g. "AC asks for re-fetch; user said 'refresh' which could mean re-render with cached data."_ |
+| EC-1 | edge-case | _e.g. "race when two refreshes click within 50ms"_ | _e.g. "second click cancels in-flight request"_ | _yes / partial / no_ | _e.g. "still allows double-fetch; debounce not actually wired."_ |
+| NFR-1 | nfr | _e.g. "p95 list load under 200ms on 1k invites"_ | _e.g. "useMemo + windowed render"_ | _yes / partial / no_ | _e.g. "missing perf measurement; budget not verified."_ |
 
 ## 5. Goal-backward verification (slug-level)
 
 1. **Goal stated** (from \`plan.md > ## Frame\`): _<one sentence>_
 2. **What shipped** (from \`build.md > ## TDD cycle log\` + \`review.md > Findings\` closed rows): _<one sentence>_
 3. **Outcome:** _\`solved\` / \`partial\` / \`drifted\`_
-4. **Gap (if partial or drifted):** _<one sentence; emit a G-N finding in §2 — class=AC-coverage for partial, class=scope-creep for drifted>_
+4. **Gap (if partial or drifted):** _<one sentence; emit a G-N finding in §2 — class=criterion-coverage for partial, class=scope-creep for drifted>_
 
 ## 6. Realist check (mandatory)
 
@@ -567,7 +569,7 @@ slug: SLUG-PLACEHOLDER
 stage: plan-critic
 status: active
 posture_inherited: PLAN-POSTURE-PLACEHOLDER  # most-restrictive AC posture from plan.md frontmatter
-ac_mode: AC-MODE-PLACEHOLDER                  # always "strict" — gate enforces; placeholder is a reminder
+ceremony_mode: CEREMONY-MODE-PLACEHOLDER      # always "strict" — gate enforces; placeholder is a reminder; legacy ac_mode key read accepted for one release
 ac_count: 0                                   # AC count from plan.md
 dispatched_at: DISPATCHED-AT-PLACEHOLDER      # ISO timestamp at dispatch time
 iteration: 0                                  # 0 on first dispatch; 1 after one revise loop (max)
@@ -579,7 +581,7 @@ token_budget_used: 0                          # orchestrator stamps this from th
 
 # Plan critic — SLUG-PLACEHOLDER
 
-This artifact captures the pre-implementation plan-critic pass over the slug. plan-critic runs BETWEEN \`ac-author\` and \`slice-builder\`, only on the tight gate \`{acMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}\`. It walks the plan itself (goal coverage / granularity / dependencies / parallelism / risk catalog) before any code is written. Distinct from the v8.42 post-implementation \`critic\` (which runs at Hop 4.5, after build/review); both ship together because they catch different problem classes.
+This artifact captures the pre-implementation plan-critic pass over the slug. plan-critic runs BETWEEN \`ac-author\` and \`slice-builder\`, only on the tight gate \`{ceremonyMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}\`. It walks the plan itself (goal coverage / granularity / dependencies / parallelism / risk catalog) before any code is written. Distinct from the v8.42 post-implementation \`critic\` (which runs at Hop 4.5, after build/review); both ship together because they catch different problem classes.
 
 plan-critic is read-only on the codebase. Every finding cites \`plan.md > §section\` or the user's \`/cc <task>\` prompt verbatim. The plan-critic is structurally cheaper than the post-impl critic — there is no build.md or review.md to read.
 
@@ -726,7 +728,7 @@ token_budget_used: 0                            # orchestrator stamps this from 
 
 # QA report — SLUG-PLACEHOLDER
 
-This artifact captures the qa-runner pass over the slug. qa-runner runs BETWEEN \`build\` and \`review\`, only when \`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.acMode != "inline"\`. It walks the **rendered page** with whichever browser tooling is available (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. Distinct from the reviewer (which walks the diff) and from \`debug-and-browser.md\` (which drives stop-the-line debugging on a live system).
+This artifact captures the qa-runner pass over the slug. qa-runner runs BETWEEN \`build\` and \`review\`, only when \`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.ceremonyMode != "inline"\`. It walks the **rendered page** with whichever browser tooling is available (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. Distinct from the reviewer (which walks the diff) and from \`debug-and-browser.md\` (which drives stop-the-line debugging on a live system).
 
 qa-runner is read-only on production source. Every \`Status: pass\` row cites a real test exit code, a saved screenshot path, or a numbered manual-steps block — never "looks good to me".
 
@@ -1147,9 +1149,9 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "build", fileName: "build.md", description: "Strict-mode build log (six-column TDD table, RED proofs, GREEN suite evidence).", body: BUILD_TEMPLATE },
   { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
-  { id: "critic", fileName: "critic.md", description: "v8.42 critic template — critic step falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ac_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), AC self-audit, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
-  { id: "plan-critic", fileName: "plan-critic.md", description: "v8.51 plan-critic template — pre-implementation adversarial pass between ac-author and slice-builder. Frontmatter (slug, stage=plan-critic, posture_inherited, ac_mode, ac_count, dispatched_at, iteration, predictions_made, findings, verdict). Body: goal coverage, granularity, dependency accuracy, parallelism feasibility, risk catalog, pre-commitment predictions, verdict (pass | revise | cancel), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed revise loop. Verdict: pass (advance to slice-builder), revise (bounce to ac-author once), cancel (user picker).", body: PLAN_CRITIC_TEMPLATE },
-  { id: "qa", fileName: "qa.md", description: "v8.52 qa-runner template — behavioural-QA pass for UI surfaces between build and review. Frontmatter (slug, stage=qa, specialist=qa-runner, dispatched_at, iteration, surfaces, evidence_tier, ui_acs_total/pass/fail/pending, predictions_made, findings, verdict). Body: surfaces under QA, browser tool detection, §3 pre-commitment predictions (3-5), per-AC evidence (one block per UI-tagged AC with Status pass/fail/pending-user), findings (failures only), verdict (pass | iterate | blocked), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed iterate loop. Verdict: pass (advance to review), iterate (bounce to slice-builder once), blocked (user picker — browser tools unavailable AND manual steps required).", body: QA_TEMPLATE },
+  { id: "critic", fileName: "critic.md", description: "v8.42 critic template — critic step falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ceremony_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), Criterion check, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
+  { id: "plan-critic", fileName: "plan-critic.md", description: "v8.51 plan-critic template — pre-implementation adversarial pass between ac-author and slice-builder. Frontmatter (slug, stage=plan-critic, posture_inherited, ceremony_mode, ac_count, dispatched_at, iteration, predictions_made, findings, verdict). Body: goal coverage, granularity, dependency accuracy, parallelism feasibility, risk catalog, pre-commitment predictions, verdict (pass | revise | cancel), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed revise loop. Verdict: pass (advance to slice-builder), revise (bounce to ac-author once), cancel (user picker).", body: PLAN_CRITIC_TEMPLATE },
+  { id: "qa", fileName: "qa.md", description: "v8.52 qa-runner template — behavioural-QA pass for UI surfaces between build and review. Frontmatter (slug, stage=qa, specialist=qa-runner, dispatched_at, iteration, surfaces, evidence_tier, ui_acs_total/pass/fail/pending, predictions_made, findings, verdict). Body: surfaces under QA, browser tool detection, §3 pre-commitment predictions (3-5), per-criterion evidence (one block per UI-tagged AC with Status pass/fail/pending-user), findings (failures only), verdict (pass | iterate | blocked), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed iterate loop. Verdict: pass (advance to review), iterate (bounce to slice-builder once), blocked (user picker — browser tools unavailable AND manual steps required).", body: QA_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },

@@ -18,12 +18,12 @@ askUserQuestion(
   questions: [
     {
       id: "path",
-      prompt: <one sentence: complexity + confidence, recommended path, why (file count / LOC / sensitive surface), AC mode, "pick a path">,
+      prompt: <one sentence: complexity + confidence, recommended path, why (file count / LOC / sensitive surface), ceremony mode, "pick a path">,
       options: [
         <option label conveying: proceed with the recommended path>,
         <option label conveying: switch to trivial — inline edit + commit, skip plan/review>,
         <option label conveying: escalate to large-risky — collaborative design phase, strict AC, parallel slices>,
-        <option label conveying: customise — user edits complexity / acMode / path>
+        <option label conveying: customise — user edits complexity / ceremonyMode / path>
       ],
       allow_multiple: false
     },
@@ -49,7 +49,7 @@ const TRIAGE_FALLBACK_EXAMPLE = `\`\`\`
 ─ Complexity: <trivial | small/medium | large-risky>  (confidence: <high | medium | low>)
 ─ Recommended path: <inline | plan → build → review → critic → ship>
 ─ Why: <one short sentence in the user's language; cite file count / LOC / sensitive-surface flag>
-─ AC mode: <inline | soft | strict>
+─ Ceremony mode: <inline | soft | strict>
 
 [1] <option text conveying: proceed with the recommendation>
 [2] <option text conveying: switch to trivial>
@@ -69,7 +69,7 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 {
   "triage": {
     "complexity": "small-medium",
-    "acMode": "soft",
+    "ceremonyMode": "soft",
     "path": ["plan", "build", "review", "critic", "ship"],
     "surfaces": ["ui"],
     "rationale": "3 modules, ~150 LOC, no auth touch.",
@@ -93,26 +93,26 @@ const TRIAGE_PERSIST_EXAMPLE = `\`\`\`json
 - **\`docs\`** — task mentions \`README\` / \`docs\` / \`CHANGELOG\` / \`migration guide\`; OR the touched files are purely \`*.md\` outside \`.cclaw/\`.
 - **\`other\`** — fallback when no canonical surface fits. Also the default when \`surfaces\` is **absent** in a pre-v8.52 state file; the v8.52 reader treats absent-\`surfaces\` as \`["other"]\` (the no-QA-gating fallback).
 
-Detection is performed once per slug, at this Hop, AFTER the user confirms acMode + complexity but BEFORE the first specialist dispatch. The orchestrator writes the detected list verbatim to \`triage.surfaces\`; the value is **immutable** for the lifetime of the flow (same immutability story as \`complexity\` / \`acMode\` / \`path\`). When no signal fires, write \`["other"]\` rather than an empty array — explicit "other" beats absent for the qa gate's evaluation. The qa-runner gate (v8.52) reads this field at Hop 4.25 to decide whether to dispatch qa-runner between build and review.
+Detection is performed once per slug, at this Hop, AFTER the user confirms ceremonyMode + complexity but BEFORE the first specialist dispatch. The orchestrator writes the detected list verbatim to \`triage.surfaces\`; the value is **immutable** for the lifetime of the flow (same immutability story as \`complexity\` / \`ceremonyMode\` / \`path\`). When no signal fires, write \`["other"]\` rather than an empty array — explicit "other" beats absent for the qa gate's evaluation. The qa-runner gate (v8.52) reads this field at Hop 4.25 to decide whether to dispatch qa-runner between build and review.
 
-**v8.52 \`qa\` stage inclusion in \`triage.path\`.** When the detected \`surfaces\` includes \`"ui"\` or \`"web"\` AND \`acMode != "inline"\`, the orchestrator MUST insert \`"qa"\` between \`"build"\` and \`"review"\` in \`triage.path\` — yielding e.g. \`["plan", "build", "qa", "review", "critic", "ship"]\`. The \`qa\` token is the v8.52 stage that dispatches qa-runner. On any other surface combination (or on \`acMode: "inline"\`), the path stays pre-v8.52 verbatim: \`"qa"\` is structurally absent, and the orchestrator advances build → review as before. Pre-v8.52 state files (whose \`path\` cannot contain \`"qa"\` because the stage did not exist) validate unchanged.
+**v8.52 \`qa\` stage inclusion in \`triage.path\`.** When the detected \`surfaces\` includes \`"ui"\` or \`"web"\` AND \`ceremonyMode != "inline"\`, the orchestrator MUST insert \`"qa"\` between \`"build"\` and \`"review"\` in \`triage.path\` — yielding e.g. \`["plan", "build", "qa", "review", "critic", "ship"]\`. The \`qa\` token is the v8.52 stage that dispatches qa-runner. On any other surface combination (or on \`ceremonyMode: "inline"\`), the path stays pre-v8.52 verbatim: \`"qa"\` is structurally absent, and the orchestrator advances build → review as before. Pre-v8.52 state files (whose \`path\` cannot contain \`"qa"\` because the stage did not exist) validate unchanged.
 
 **Audit log** (\`.cclaw/state/triage-audit.jsonl\`). Write-only telemetry (\`userOverrode\`, \`autoExecuted\`, \`iterationOverride\`) appends to this JSONL log instead of the triage object. Append one line per triage decision immediately after persisting the triage write (best-effort; if the write fails, log and continue). Append a second line with \`iterationOverride: true\` when \`keep-iterating-anyway\` fires at the 5-iteration review cap. Schema mirrors \`TriageAuditEntry\` in \`src/triage-audit.ts\`:
 
 \`\`\`json
-{"decidedAt":"2026-05-08T12:34:56Z","slug":"<slug>","complexity":"small-medium","acMode":"soft","userOverrode":false,"autoExecuted":false}
+{"decidedAt":"2026-05-08T12:34:56Z","slug":"<slug>","complexity":"small-medium","ceremonyMode":"soft","userOverrode":false,"autoExecuted":false}
 \`\`\`
 
-\`autoExecuted: true\` ONLY on the zero-question fast path. \`userOverrode: true\` when the user picked complexity / AC mode different from the recommendation; omit / \`false\` otherwise.
+\`autoExecuted: true\` ONLY on the zero-question fast path. \`userOverrode: true\` when the user picked complexity / ceremony mode different from the recommendation; omit / \`false\` otherwise.
 
-**v8.42:** \`triage.path\` includes the \`"critic"\` stage between \`"review"\` and \`"ship"\` whenever \`acMode != "inline"\`. On \`acMode: "inline"\` the path stays \`["build"]\`. See \`runbooks/critic-steps.md\` for the full contract.
+**v8.42:** \`triage.path\` includes the \`"critic"\` stage between \`"review"\` and \`"ship"\` whenever \`ceremonyMode != "inline"\`. On \`ceremonyMode: "inline"\` the path stays \`["build"]\`. See \`runbooks/critic-steps.md\` for the full contract.
 
 After triage is persisted, the orchestrator runs the **v8.18 prior-learnings lookup** (see "Prior-learnings lookup" below) and stamps \`triage.priorLearnings\` when matches are found.`;
 
 const RESUME_SUMMARY_EXAMPLE = `\`\`\`
 Active flow: <slug>
 ─ Stage: <stage>  (last touched <relative-time, in the user's language>)
-─ Triage: <complexity> / acMode=<acMode>
+─ Triage: <complexity> / ceremonyMode=<ceremonyMode>
 ─ Progress: <N committed / M total AC>  or  <N conditions verified> in soft mode
 ─ Last specialist: <none | design | ac-author | plan-critic | reviewer | security-reviewer | critic | qa-runner | slice-builder>
 ─ Open findings: <K>
@@ -122,7 +122,7 @@ Active flow: <slug>
 [s] <option text conveying: show — open the artifact for <stage> and stop>
 \`\`\`
 
-\`/cc-cancel\` is **not** offered as a clickable option; it is a separate user-typed command for explicit nuke (move to \`cancelled/<slug>/\`, reset state). Surface it only in plain prose, in the user's language, if the user looks stuck — never inside the picker. The \`<slug>\`, stage names, \`acMode\` values, and slim-summary keys stay English (wire protocol). The \`<...>\` slots — including the option text after \`[r]\` and \`[s]\` — render in the user's language.`;
+\`/cc-cancel\` is **not** offered as a clickable option; it is a separate user-typed command for explicit nuke (move to \`cancelled/<slug>/\`, reset state). Surface it only in plain prose, in the user's language, if the user looks stuck — never inside the picker. The \`<slug>\`, stage names, \`ceremonyMode\` values, and slim-summary keys stay English (wire protocol). The \`<...>\` slots — including the option text after \`[r]\` and \`[s]\` — render in the user's language.`;
 
 const SUMMARY_RETURN_EXAMPLE = `\`\`\`
 Stage: <stage>  ✅ complete  |  ⏸ paused  |  ❌ blocked
@@ -143,9 +143,9 @@ Notes: <optional; required when Confidence != high; one short sentence in the us
 - **cancel** — flow should stop here; user re-triages. NOT the same as \`/cc-cancel\` (which the user types explicitly to discard a flow). Specialists return \`cancel\` to **recommend** stopping; the orchestrator must still surface a structured ask before the flow is actually cancelled.
 - **accept-warns-and-ship** — strict-mode-only escape hatch (reviewer-emitted); warns acknowledged, no required findings, ship anyway.
 
-\`AC verified\` is the v8.48 per-AC verification flag. slice-builder emits the truthful per-AC state (\`AC-N=yes\` only when RED+GREEN+REFACTOR + suite + Coverage + self_review all attest); reviewer restates and downgrades \`=yes\` to \`=no\` for any AC with an open \`required\`/\`critical\` finding; other specialists emit \`AC verified: n/a\`. Soft mode emits one \`feature=yes|no\` token; inline mode emits \`n/a\`. See \`runbooks/finalize.md > ## Per-AC verified gate\` for the full gate procedure.
+\`AC verified\` is the v8.48 per-criterion verification flag. slice-builder emits the truthful per-criterion state (\`AC-N=yes\` only when RED+GREEN+REFACTOR + suite + Coverage + self_review all attest); reviewer restates and downgrades \`=yes\` to \`=no\` for any AC with an open \`required\`/\`critical\` finding; other specialists emit \`AC verified: n/a\`. Soft mode emits one \`feature=yes|no\` token; inline mode emits \`n/a\`. See \`runbooks/finalize.md > ## Per-criterion verified gate\` for the full gate procedure.
 
-Hard-gate logic: \`Recommended next == "cancel"\` always pauses for user; \`Confidence == "low"\` always pauses for user; \`review-pause\` always pauses; any \`=no\` in \`AC verified\` outside \`acMode: inline\` blocks the finalize step; the rest follow \`triage.runMode\`.`;
+Hard-gate logic: \`Recommended next == "cancel"\` always pauses for user; \`Confidence == "low"\` always pauses for user; \`review-pause\` always pauses; any \`=no\` in \`AC verified\` outside \`ceremonyMode: inline\` blocks the finalize step; the rest follow \`triage.runMode\`.`;
 
 export const START_COMMAND_BODY = `# /cc — cclaw orchestrator
 
@@ -176,7 +176,7 @@ The orchestrator body keeps only the always-needed hops. Open the matching runbo
 | \`triage.complexity == "large-risky"\` AND \`plan\` in path | \`plan.md\` (see "Path: large-risky") |
 | ac-author declares \`topology: parallel-build\` (≥2 slices, strict) | \`parallel-build.md\` |
 | every reviewer-stage exit before the reviewer dispatch | \`handoff-gates.md\` (self-review section) |
-| every slice-builder GREEN return when \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\` (v8.52 qa gate) | \`qa-stage.md\` |
+| every slice-builder GREEN return when \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\` (v8.52 qa gate) | \`qa-stage.md\` |
 | \`reviewCounter\` reaches 5 without convergence | \`cap-reached-recovery.md\` |
 | fix-only commits intersect a prior adversarial finding | \`adversarial-rerun.md\` |
 | stage ship (every ship attempt) | \`handoff-gates.md\` (ship-gate section) |
@@ -223,19 +223,19 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 ### Detect — git-check sub-step (v8.23)
 
-Before triage patches, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), force \`triage.acMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. Surface a one-sentence warning to the user at triage time. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale, behaviour, downstream consequences (reviewer's git-log inspection skipped, parallel-build suppression, inline path \`git commit\` skip) live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
+Before triage patches, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), force \`triage.ceremonyMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. Surface a one-sentence warning to the user at triage time. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale, behaviour, downstream consequences (reviewer's git-log inspection skipped, parallel-build suppression, inline path \`git commit\` skip) live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
 
 ## Triage (fresh starts only)
 
 Run the \`triage-gate.md\` skill. The gate has **two modes** in v8.14+:
 
-1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), AC mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`runMode: null\` (the v8.44 audit log records the fast-path bit as \`autoExecuted: true\` — see "the triage audit log"); proceed straight to the inline edit (the dispatch step on the build stage). The inline path has no assumption surface (v8.21 fold: design Phase 0 owns large-risky, ac-author Phase 0 owns small-medium; inline gets neither).
+1. **Zero-question fast path** — when the heuristic classifies the request as \`trivial\` **with confidence \`high\`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, skip the structured ask entirely. Print a one-sentence announcement in the user's language naming complexity (\`trivial\`), ceremony mode (\`inline\`), the touched file(s), and the \`/cc-cancel\` affordance; patch \`flow-state.json > triage\` with \`runMode: null\` (the v8.44 audit log records the fast-path bit as \`autoExecuted: true\` — see "the triage audit log"); proceed straight to the inline edit (the dispatch step on the build stage). The inline path has no assumption surface (v8.21 fold: design Phase 0 owns large-risky, ac-author Phase 0 owns small-medium; inline gets neither).
 
 2. **Combined-form structured ask** — for every other classification (and for trivial when confidence is \`medium\` or \`low\`), use the harness's structured question tool (\`AskUserQuestion\` in Claude Code, \`askUserQuestion\` in Cursor, the "ask" content block in OpenCode, \`prompt\` in Codex). Both triage questions go in **a single tool call** when the harness accepts a multi-question form (Cursor / Claude Code / OpenCode do); fall back to two sequential calls only when the harness genuinely only supports single-question structured ask. Combining saves one user round-trip on every non-inline flow start.
 
 ${TRIAGE_ASK_EXAMPLE}
 
-The first question's prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, AC mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
+The first question's prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, ceremony mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
 
 The second question (run-mode) is **always rendered** when the combined form is shown, even when the user might pick the "switch to trivial" option in Question 1 — the run-mode answer is then **ignored at patch time** and \`runMode\` is written as \`null\` on the inline path (no stages to chain). This keeps the form shape stable across answers and avoids a conditional second-call round-trip. Default \`runMode\` is \`step\` if the user dismisses the form or the harness can only show one question.
 
@@ -247,14 +247,14 @@ Once both answers are in, patch \`flow-state.json\`:
 
 ${TRIAGE_PERSIST_EXAMPLE}
 
-The triage decision is **immutable** for the lifetime of the flow **except for \`runMode\`** (v8.34). \`complexity\`, \`acMode\`, and \`path\` are pinned at triage — to change any of those mid-flight, the user invokes \`/cc-cancel\` themselves and starts a fresh \`/cc <task>\`. The orchestrator does not auto-cancel; it surfaces the option in prose only when the user appears stuck.
+The triage decision is **immutable** for the lifetime of the flow **except for \`runMode\`** (v8.34). \`complexity\`, \`ceremonyMode\`, and \`path\` are pinned at triage — to change any of those mid-flight, the user invokes \`/cc-cancel\` themselves and starts a fresh \`/cc <task>\`. The orchestrator does not auto-cancel; it surfaces the option in prose only when the user appears stuck.
 
 ### Mid-flight \`runMode\` toggle (v8.34)
 
 The user can flip \`triage.runMode\` between \`step\` and \`auto\` at any \`/cc\` invocation — mid-flow, between stages, after plan-approval, or on a fresh resume — by passing \`/cc --mode=auto\` or \`/cc --mode=step\`. Behaviour:
 
 - The orchestrator patches \`flow-state.json > triage.runMode\` immediately and the toggle **persists**: every subsequent \`/cc\` reads the patched value, no need to re-pass the flag.
-- The toggle never re-triages; only \`runMode\` flips. \`complexity\` / \`acMode\` / \`path\` / \`assumptions\` / \`priorLearnings\` stay verbatim.
+- The toggle never re-triages; only \`runMode\` flips. \`complexity\` / \`ceremonyMode\` / \`path\` / \`assumptions\` / \`priorLearnings\` stay verbatim.
 - After the patch, the orchestrator continues normally — if the toggle came on a fresh \`/cc\` (no current dispatch), it advances under the new mode; if it came mid-dispatch (rare; the user typed \`/cc --mode=auto\` while a specialist was running), the patch lands and takes effect on the next stage boundary, never mid-specialist.
 - **Inline path rejection.** When \`triage.path == ["build"]\` (inline / trivial), the toggle is structurally meaningless (no stages to chain). The orchestrator responds with the literal note **\`inline path has no runMode\`** (one line, no other action) and proceeds with the inline edit as if no flag had been passed. This is the only \`/cc --mode=\` failure mode; the toggle never errors out, never asks a follow-up question.
 - The \`--mode=\` flag is **only** \`auto\` or \`step\`; any other value (\`--mode=skip\`, \`--mode=\`) is treated as if the flag were absent and surfaces a one-line "unknown runMode value, ignored" note in plain prose. The flag does not consume the user's task text — \`/cc --mode=auto refactor the auth module\` is parsed as "toggle runMode to auto, then proceed as if \`/cc refactor the auth module\` had been passed".
@@ -295,7 +295,7 @@ Persistence rules:
 
 The stamp is **immutable for the lifetime of the flow**; \`/cc-cancel\` + fresh \`/cc\` triggers a new lookup.
 
-### Trivial path (acMode: inline)
+### Trivial path (ceremonyMode: inline)
 
 \`triage.path\` is \`["build"]\`. Skip plan/review/ship; the inline path has no assumption surface (the v8.21 fold puts that surface inside design Phase 0 / ac-author Phase 0, neither of which runs on inline). Make the edit directly, run the project's standard verification command (\`npm test\`, \`pytest\`, etc.) once if there is one, commit with plain \`git commit\`. Single message back to the user with the commit SHA. Done.
 
@@ -341,20 +341,20 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 
 ### Stage → specialist mapping
 
-\`triage.path\` holds the canonical stages \`plan\`, \`build\`, \`review\`, \`critic\`, \`ship\`, plus the **v8.52 optional \`qa\`** stage inserted between \`build\` and \`review\` when \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → ac-author) — see \`runbooks/plan.md\` ("Path: large-risky"). The \`critic\` stage (v8.42+) is **acMode-gated**: \`inline\` skips it entirely; \`soft\` runs \`gap\` mode; \`strict\` runs gap-or-adversarial with §8 escalation. Full gating + escalation + verdict-routing contract lives in \`runbooks/critic-steps.md\` ("Post-implementation pass" section). The \`qa\` stage (v8.52+) is **surface-gated**: only UI / web slugs in non-inline mode see \`qa\` in their path; CLI / library / API / data / infra / docs slugs skip it entirely. Full gating + verdict-routing contract lives in \`runbooks/qa-stage.md\`.
+\`triage.path\` holds the canonical stages \`plan\`, \`build\`, \`review\`, \`critic\`, \`ship\`, plus the **v8.52 optional \`qa\`** stage inserted between \`build\` and \`review\` when \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`. **\`discovery\` is never a stage in the path.** On the large-risky path the \`plan\` stage **expands** into a two-step discovery sub-phase (design → ac-author) — see \`runbooks/plan.md\` ("Path: large-risky"). The \`critic\` stage (v8.42+) is **ceremonyMode-gated**: \`inline\` skips it entirely; \`soft\` runs \`gap\` mode; \`strict\` runs gap-or-adversarial with §8 escalation. Full gating + escalation + verdict-routing contract lives in \`runbooks/critic-steps.md\` ("Post-implementation pass" section). The \`qa\` stage (v8.52+) is **surface-gated**: only UI / web slugs in non-inline mode see \`qa\` in their path; CLI / library / API / data / infra / docs slugs skip it entirely. Full gating + verdict-routing contract lives in \`runbooks/qa-stage.md\`.
 
-**plan-critic (v8.51+) is a sub-step of \`plan\`, not a separate stage.** When \`acMode == "strict"\` AND \`triage.complexity != "trivial"\` AND \`triage.problemType != "refines"\` AND the plan has ≥2 ACs, the orchestrator dispatches the \`plan-critic\` specialist immediately after ac-author and before slice-builder. Otherwise plan-critic is structurally skipped. \`currentStage\` stays \`"plan"\` for the plan-critic dispatch (the build stage only opens after the plan-critic returns \`pass\` or the user resolves a revise-cap / cancel picker). Full gating + verdict-routing contract lives in \`runbooks/critic-steps.md\` ("Pre-implementation pass" section).
+**plan-critic (v8.51+) is a sub-step of \`plan\`, not a separate stage.** When \`ceremonyMode == "strict"\` AND \`triage.complexity != "trivial"\` AND \`triage.problemType != "refines"\` AND the plan has ≥2 ACs, the orchestrator dispatches the \`plan-critic\` specialist immediately after ac-author and before slice-builder. Otherwise plan-critic is structurally skipped. \`currentStage\` stays \`"plan"\` for the plan-critic dispatch (the build stage only opens after the plan-critic returns \`pass\` or the user resolves a revise-cap / cancel picker). Full gating + verdict-routing contract lives in \`runbooks/critic-steps.md\` ("Pre-implementation pass" section).
 
 **v8.54 gate widening rationale:** prior gates required \`triage.complexity == "large-risky"\` — the narrowest gate in the reference cohort. Reference patterns (chachamaru \`plan_critic\` runs on every Phase 0, gsd-v1 plan-checker runs across complexity tiers) showed that small-medium strict flows benefit from a plan-critic pass too. The widened gate now triggers on every non-trivial strict flow with ≥2 ACs; trivial flows are still skipped (no plan to critique).
 
 | Stage | Specialist | Mode | Wrapper skill | Inline allowed? |
 | --- | --- | --- | --- | --- |
 | \`plan\` | \`ac-author\` (small/medium); design → ac-author (large-risky) | — | plan-authoring (ac-author); design.md is read in main context (no wrapper skill) | yes for trivial; no for any path that includes plan |
-| \`plan\` *(sub-step, v8.51; widened v8.54)* | \`plan-critic\` *(gated: acMode=strict + complexity≠trivial + problemType≠refines + AC count ≥ 2)* | \`pre-impl-review\` | — (plan-critic prompt body is self-contained; no wrapper) | no, never inline (gate forbids \`acMode: inline\`) |
+| \`plan\` *(sub-step, v8.51; widened v8.54)* | \`plan-critic\` *(gated: ceremonyMode=strict + complexity≠trivial + problemType≠refines + AC count ≥ 2)* | \`pre-impl-review\` | — (plan-critic prompt body is self-contained; no wrapper) | no, never inline (gate forbids \`ceremonyMode: inline\`) |
 | \`build\` | \`slice-builder\` | \`build\` (or \`fix-only\` after a review with block findings) | tdd-and-verification | yes for trivial only |
-| \`qa\` (v8.52+) | \`qa-runner\` *(gated: \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\`)* | \`browser-verify\` | qa-and-browser | no, never inline (gate forbids \`acMode: inline\`) |
+| \`qa\` (v8.52+) | \`qa-runner\` *(gated: \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`)* | \`browser-verify\` | qa-and-browser | no, never inline (gate forbids \`ceremonyMode: inline\`) |
 | \`review\` | \`reviewer\` | \`code\` (default) or \`integration\` (after parallel-build) | review-discipline, anti-slop | no, always sub-agent |
-| \`critic\` (v8.42+) | \`critic\` | \`gap\` (default, soft + strict-no-trigger) or \`adversarial\` (strict + §8 trigger fires) | — (the critic prompt body is self-contained; no wrapper) | no, never inline (skipped on \`acMode: inline\`) |
+| \`critic\` (v8.42+) | \`critic\` | \`gap\` (default, soft + strict-no-trigger) or \`adversarial\` (strict + §8 trigger fires) | — (the critic prompt body is self-contained; no wrapper) | no, never inline (skipped on \`ceremonyMode: inline\`) |
 | \`ship\` | \`reviewer\` (mode=release) + \`reviewer\` (mode=adversarial, strict) + \`security-reviewer\` if \`security_flag\` | parallel fan-out, then merge | release-checklist | no, always sub-agent |
 
 The wrapper-skill column is what you put in the dispatch envelope's "Required second read" line. If multiple wrappers apply (ac-author reads both \`plan-authoring.md\` and \`source-driven.md\` in strict mode), list both — sub-agent reads them in order.
@@ -387,7 +387,7 @@ The full sub-phase procedure — discovery auto-skip heuristic, posture selectio
 
 #### plan-critic (v8.51+, sub-step of \`plan\`)
 
-- Specialist: \`plan-critic\`. On-demand sub-agent; runs between ac-author and slice-builder on the **v8.54 widened gate**: \`acMode == "strict"\` AND \`triage.complexity != "trivial"\` AND \`triage.problemType != "refines"\` AND AC count ≥ 2. Any other combination skips plan-critic — the orchestrator goes straight to slice-builder. The gate is AND across all four conditions; v8.54 dropped the prior \`complexity == "large-risky"\` requirement to match the wider reference cohort (chachamaru, gsd-v1). Further widening is a v8.55+ scope decision.
+- Specialist: \`plan-critic\`. On-demand sub-agent; runs between ac-author and slice-builder on the **v8.54 widened gate**: \`ceremonyMode == "strict"\` AND \`triage.complexity != "trivial"\` AND \`triage.problemType != "refines"\` AND AC count ≥ 2. Any other combination skips plan-critic — the orchestrator goes straight to slice-builder. The gate is AND across all four conditions; v8.54 dropped the prior \`complexity == "large-risky"\` requirement to match the wider reference cohort (chachamaru, gsd-v1). Further widening is a v8.55+ scope decision.
 - **Why a separate specialist from the v8.42 \`critic\`.** The post-impl \`critic\` (Hop 4.5) walks build.md + review.md + diff to catch "did we build the right thing well?" gaps after the code exists. plan-critic walks plan.md alone — BEFORE any code is written — to catch "is this plan structurally buildable?" gaps. Different lens, different problem class, different verdict vocabulary (\`pass\` / \`revise\` / \`cancel\` for plan-critic vs \`pass\` / \`iterate\` / \`block-ship\` for the post-impl critic). Both ship; both run when their gates fire.
 - Inputs (read-only on the codebase): \`flow-state.json > triage\`, \`.cclaw/flows/<slug>/plan.md\` (mandatory), \`.cclaw/flows/<slug>/triage.json\` if present, \`.cclaw/state/knowledge.jsonl\` prior learnings (use v8.50 \`outcome_signal\` to weight precedent). Output: \`.cclaw/flows/<slug>/plan-critic.md\` — single-shot per dispatch (re-runs on iteration 1 overwrite the file, not append).
 - The plan-critic walks five dimensions (§1 goal coverage / §2 granularity / §3 dependency accuracy / §4 parallelism feasibility / §5 risk catalog) plus §6 pre-commitment predictions before finalizing. The five dimensions are mandatory output sections in plan-critic.md regardless of verdict.
@@ -398,7 +398,7 @@ The full sub-phase procedure — discovery auto-skip heuristic, posture selectio
 
 - Specialist: \`slice-builder\`.
 - Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/lib/templates/build.md\`, \`.cclaw/lib/skills/tdd-and-verification.md\`.
-- Output: \`.cclaw/flows/<slug>/build.md\` with TDD evidence at the granularity dictated by \`acMode\`.
+- Output: \`.cclaw/flows/<slug>/build.md\` with TDD evidence at the granularity dictated by \`ceremonyMode\`.
 - Soft mode: one TDD cycle for the whole feature; tests under \`tests/\` mirroring the production module path; plain \`git commit\`. Sequential, single dispatch, no worktrees.
 - Strict mode, sequential: full RED → GREEN → REFACTOR per AC; plain \`git commit -m "<prefix>(AC-N): ..."\` with posture-driven message prefixes (\`red\` / \`green\` / \`refactor\` / \`test\` / \`docs\`). Single \`slice-builder\` dispatch in the main working tree. The reviewer enforces ordering at handoff via \`git log --grep="(AC-N):" --oneline\`.
 - Strict mode, parallel: see \`.cclaw/lib/runbooks/parallel-build.md\` — only when ac-author declared \`topology: parallel-build\` AND ≥4 AC AND ≥2 disjoint touchSurface clusters.
@@ -407,7 +407,7 @@ The full sub-phase procedure — discovery auto-skip heuristic, posture selectio
 
 #### qa (v8.52+, optional UI-surface stage)
 
-- Specialist: \`qa-runner\`. On-demand sub-agent; runs between \`build\` and \`review\` on the **v8.52 surface gate**: \`triage.surfaces\` includes \`"ui"\` or \`"web"\` AND \`acMode != "inline"\` AND \`qaIteration < 1\`. Any other combination skips qa — the orchestrator advances from slice-builder's GREEN slim summary directly to reviewer dispatch (current pre-v8.52 behaviour preserved verbatim). The gate is AND across all three conditions; widening any one is v8.53+ scope, not a within-slug runtime call.
+- Specialist: \`qa-runner\`. On-demand sub-agent; runs between \`build\` and \`review\` on the **v8.52 surface gate**: \`triage.surfaces\` includes \`"ui"\` or \`"web"\` AND \`ceremonyMode != "inline"\` AND \`qaIteration < 1\`. Any other combination skips qa — the orchestrator advances from slice-builder's GREEN slim summary directly to reviewer dispatch (current pre-v8.52 behaviour preserved verbatim). The gate is AND across all three conditions; widening any one is v8.53+ scope, not a within-slug runtime call.
 - **Why a separate specialist from the v8.42 \`critic\` and the v8.51 \`plan-critic\`.** plan-critic walks plan.md before code exists ("is the plan structurally buildable?"). slice-builder walks tests + diff during build ("does the code satisfy the AC's test?"). reviewer walks the diff after build ("does the diff meet the eight axes?"). critic walks the diff + reviewer output after review ("did we build the right thing well?"). None of those four touches the **rendered page**. qa-runner is the missing link: it walks the page through whichever browser tooling is available (Playwright > browser-MCP > manual) and confirms each UI AC's behavioural clause actually renders on screen. Different lens, different problem class.
 - Inputs (read-only on production source): \`flow-state.json > triage\` (the \`surfaces\` field gates), \`.cclaw/flows/<slug>/plan.md\` (AC table with \`touchSurface\` column), \`.cclaw/flows/<slug>/build.md\` (the slice-builder's GREEN evidence), \`.cclaw/flows/<slug>/qa.md\` from the prior dispatch (only on iteration 1). Output: \`.cclaw/flows/<slug>/qa.md\` (single-shot per dispatch — overwrite on re-dispatch), plus screenshots under \`.cclaw/flows/<slug>/qa-assets/\` and optional Playwright specs under \`tests/e2e/<slug>-<ac>.spec.ts\` (when the project already ships Playwright; qa-runner does NOT npm-install Playwright as a side effect).
 - The qa-runner picks the strongest available **evidence tier** (Tier 1 Playwright > Tier 2 browser-MCP > Tier 3 manual steps) and records it in \`qa.md\` frontmatter as \`evidence_tier\`. Each UI AC gets one evidence row: Playwright spec path + exit code + last 3 lines of stdout, OR screenshot path + observations paragraph, OR numbered manual-steps block. Pre-commitment predictions (3-5, written BEFORE running any verification) sit in §3 of qa.md; predictions activate deliberate search.
@@ -418,21 +418,21 @@ The full sub-phase procedure — discovery auto-skip heuristic, posture selectio
 
 - Specialist: \`reviewer\` (mode = \`code\` for sequential build, \`integration\` for parallel-build).
 - Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/flows/<slug>/build.md\`, the diff since plan.
-- Output: \`.cclaw/flows/<slug>/review.md\` with the **Findings** table (always; same shape regardless of acMode).
+- Output: \`.cclaw/flows/<slug>/review.md\` with the **Findings** table (always; same shape regardless of ceremonyMode).
 - The five Failure Modes checklist runs every iteration. Every iteration block also includes \`What's done well\` (≥1 evidence-backed item, anti-sycophancy gate) and a \`Verification story\` table (tests run / build run / security checked, each with evidence). See \`.cclaw/lib/agents/reviewer.md\`.
 - The reviewer applies the **seven-axis** check (correctness / test-quality / readability / architecture / complexity-budget / security / perf — v8.13 added test-quality and complexity-budget; see reviewer.md for the per-axis checklist).
 - **Auto-detect security-sensitive surfaces (T1-7).** Before dispatching the reviewer, scan the slug's diff file list against the sensitive-surface heuristic in \`.cclaw/lib/runbooks/review.md\` (auth/oauth/saml/session/token/secret/credential/encryption/crypto/acl/permission/role/policy/iam/csrf/xss paths; migrations and SQL; \`.env\` / vault / kms; HTTP route files; dependency manifests with new lines; \`@security-sensitive\` comment marker). **Any match forces \`security-reviewer\` to run alongside the regular reviewer, regardless of \`security_flag\`** preset state. On a match, set \`security_flag: true\` in plan.md frontmatter (so subsequent iterations and the ship gate see the flag), dispatch the parallel reviewer + security-reviewer, and surface the trigger to the user in one line ("Security-reviewer triggered: \`auth\` keyword in 2 touched files. Continuing with parallel review.").
-- Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user. **Cap-reached recovery is not silent** — the full picker + split-plan procedure lives in \`.cclaw/lib/runbooks/cap-reached-recovery.md\`. The runbook also covers the v8.20 architecture-severity ship gate (\`required + architecture\` findings gate ship in every acMode, not just strict).
+- Hard cap: 5 review/fix iterations. After the 5th iteration without convergence, write \`status: cap-reached\` and surface to user. **Cap-reached recovery is not silent** — the full picker + split-plan procedure lives in \`.cclaw/lib/runbooks/cap-reached-recovery.md\`. The runbook also covers the v8.20 architecture-severity ship gate (\`required + architecture\` findings gate ship in every ceremonyMode, not just strict).
 - **Self-review gate before reviewer dispatch.** Every slice-builder strict-mode return carries a \`self_review\` array; the orchestrator inspects it before deciding whether to dispatch reviewer or bounce the slice back. The full gate procedure (decision rule, fix-only bounce envelope, escalation, parallel-build behaviour) lives in \`.cclaw/lib/runbooks/handoff-gates.md\` ("Pre-reviewer dispatch gate" section). Open that runbook on every reviewer-stage exit before the dispatch decision.
 - Slim summary: decision (clear / warn / block / cap-reached), open findings count, recommended next (continue / fix-only / cancel).
 
 #### critic (v8.42+, critic step)
 
-- Specialist: \`critic\`. On-demand sub-agent; runs at the critic step — after the reviewer's final iteration returns \`clear\` (or \`warn\` with the architecture-severity gate satisfied), before ship begins. **Skipped on \`acMode: inline\`** (the path is just \`["build"]\`).
+- Specialist: \`critic\`. On-demand sub-agent; runs at the critic step — after the reviewer's final iteration returns \`clear\` (or \`warn\` with the architecture-severity gate satisfied), before ship begins. **Skipped on \`ceremonyMode: inline\`** (the path is just \`["build"]\`).
 - Inputs (read-only): user's original \`/cc <task>\`, \`flow-state.json > triage\`, \`.cclaw/flows/<slug>/{plan,build,review}.md\`, diff since plan, \`CONTEXT.md\` if present. Output: \`.cclaw/flows/<slug>/critic.md\` — single-shot per dispatch (re-runs overwrite; v8.42 Q2).
-- The critic walks what's **missing** (pre-commitment predictions, gap analysis, AC self-audit, slug-level goal-backward verification, realist check) rather than re-walking the reviewer's eight axes. In \`adversarial\` mode it also runs the four-technique scaffold (assumption violation, composition failures, cascade construction, abuse cases).
+- The critic walks what's **missing** (pre-commitment predictions, gap analysis, Criterion check, slug-level goal-backward verification, realist check) rather than re-walking the reviewer's eight axes. In \`adversarial\` mode it also runs the four-technique scaffold (assumption violation, composition failures, cascade construction, abuse cases).
 - Slim summary: verdict (\`pass\` / \`iterate\` / \`block-ship\`), predictions/gaps/adversarial-findings counts, goal-backward verdict, escalation level + triggers, realist recalibrations, confidence + rationale.
-- Full procedure — acMode gating table (\`inline\` skip / \`soft\` gap-light / \`strict\` gap-or-adversarial), the five §8 escalation triggers (architectural tier / test-first+zero-RED / large surface / security flag / reviewIterations≥4), 1-rerun cap rules, verdict-handling routing table, \`flow-state.json\` patches, legacy pre-v8.42 migration, dogfood note for the v8.42 slug — lives in \`.cclaw/lib/runbooks/critic-steps.md\` ("Post-implementation pass" section). Open that runbook on every transition from \`review\` to \`critic\` and at every block-ship picker resolution.
+- Full procedure — ceremonyMode gating table (\`inline\` skip / \`soft\` gap-light / \`strict\` gap-or-adversarial), the five §8 escalation triggers (architectural tier / test-first+zero-RED / large surface / security flag / reviewIterations≥4), 1-rerun cap rules, verdict-handling routing table, \`flow-state.json\` patches, legacy pre-v8.42 migration, dogfood note for the v8.42 slug — lives in \`.cclaw/lib/runbooks/critic-steps.md\` ("Post-implementation pass" section). Open that runbook on every transition from \`review\` to \`critic\` and at every block-ship picker resolution.
 
 #### ship
 
@@ -478,7 +478,7 @@ After the compound step, the orchestrator finalises the slug's directory layout:
 
 The full finalize step-by-step (Per-AC verified gate precondition shipped in v8.48, pre-condition check, mkdir, \`git mv\`-vs-\`mv\` rules, the no-\`cp\` invariant, post-condition empty-dir check, ADR promotion, flow-state reset, final summary to user) lives in \`.cclaw/lib/runbooks/finalize.md\`. Open that runbook before starting finalize.
 
-**Per-AC verified gate (precondition, shipped in v8.48).** The orchestrator MUST parse \`AC verified:\` from both the latest slice-builder and reviewer slim summaries before running finalize. When \`acMode != "inline"\` AND any AC is \`=no\` (or either summary is missing the line), refuse finalize and surface a structured ask (Bounce to slice-builder fix-only / Show slim summaries / Stay paused). No \`accept-unverified-and-finalize\` escape hatch; reviewer's verdict overrides slice-builder's self-attestation. Full procedure lives in \`runbooks/finalize.md > ## Per-AC verified gate\`.
+**Per-criterion verified gate (precondition, shipped in v8.48).** The orchestrator MUST parse \`AC verified:\` from both the latest slice-builder and reviewer slim summaries before running finalize. When \`ceremonyMode != "inline"\` AND any AC is \`=no\` (or either summary is missing the line), refuse finalize and surface a structured ask (Bounce to slice-builder fix-only / Show slim summaries / Stay paused). No \`accept-unverified-and-finalize\` escape hatch; reviewer's verdict overrides slice-builder's self-attestation. Full procedure lives in \`runbooks/finalize.md > ## Per-criterion verified gate\`.
 
 ## Always-ask rules
 
@@ -491,7 +491,7 @@ The full finalize step-by-step (Per-AC verified gate precondition shipped in v8.
 - Always show the slim summary back to the user; do not summarise from your own memory of the dispatch.
 - Render slim summaries and pause prose in the user's conversation language (see \`conversation-language.md\`). Mechanical tokens — \`AC-N\`, \`/cc\`, slugs, paths, frontmatter keys, mode names, \`Confidence\` field labels — stay English.
 - Finalize is **never delegated to a sub-agent**. The orchestrator runs \`git mv\` (or \`mv\`) itself and verifies the active dir is empty before resetting flow-state. Sub-agent dispatch envelopes never include the word "copy".
-- **Per-AC verified gate runs before finalize (v8.48+).** Parse the \`AC verified:\` line from the latest slice-builder and reviewer slim summaries; if any AC is \`=no\` outside \`acMode: inline\`, surface the structured ask and refuse finalize. See "Per-AC verified gate (finalize)" above.
+- **Per-criterion verified gate runs before finalize (v8.48+).** Parse the \`AC verified:\` line from the latest slice-builder and reviewer slim summaries; if any AC is \`=no\` outside \`ceremonyMode: inline\`, surface the structured ask and refuse finalize. See "Per-criterion verified gate (finalize)" above.
 - Every dispatch envelope, without exception, lists \`.cclaw/lib/agents/<specialist>.md\` as the **first** read and the wrapper skill as the **second**. A sub-agent that skips either of those reads is acting on a hallucinated contract.
 
 ## Available specialists
@@ -519,7 +519,7 @@ These skills auto-trigger during \`/cc\`. Do not re-explain them; obey them. Eac
 - **flow-resume** — when \`/cc\` runs with no task or with an active flow.
 - **plan-authoring** — on every edit to \`flows/<slug>/plan.md\`.
 - **ac-discipline** — ac-quality (always-on for AC authoring) + ac-traceability (strict only; before every commit).
-- **tdd-and-verification** — always-on while \`stage=build\`; granularity scales with acMode.
+- **tdd-and-verification** — always-on while \`stage=build\`; granularity scales with ceremonyMode.
 - **refinement** — when an existing plan match is detected.
 - **parallel-build** — strict mode + ac-author \`topology=parallel-build\`; enforces 5-slice cap and worktree dispatch.
 - **review-discipline** — wraps every reviewer / security-reviewer invocation; Findings + seven-axis pass + convergence detector.

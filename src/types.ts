@@ -2,8 +2,8 @@
  * v8.42 — `critic` stage inserted between `review` and `ship`. The critic
  * runs at Hop 4.5 (after the reviewer returns `clear`/`warn`, before the
  * ship gate begins) and writes `critic.md`. The stage value is gated by
- * `acMode`: `inline` skips critic entirely; `soft` runs critic in `gap`
- * mode; `strict` runs the full critic protocol with adversarial
+ * `ceremonyMode`: `inline` skips critic entirely; `soft` runs critic in
+ * `gap` mode; `strict` runs the full critic protocol with adversarial
  * escalation per the trigger set in `.cclaw/lib/agents/critic.md`.
  *
  * Legacy migration: pre-v8.42 state files where `currentStage == "review"`
@@ -20,7 +20,7 @@
  *
  * v8.52 adds `"qa"` between `build` and `review`. It is the only stage
  * the orchestrator dispatches conditionally: only when
- * `triage.surfaces` includes `"ui"` or `"web"` AND `acMode != "inline"`.
+ * `triage.surfaces` includes `"ui"` or `"web"` AND `ceremonyMode != "inline"`.
  * Non-UI slugs skip directly from `build` to `review`, preserving the
  * pre-v8.52 path verbatim.
  */
@@ -54,7 +54,7 @@ export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
  *
  * v8.51 — `plan-critic` joins the roster between `ac-author` and
  * `slice-builder`. plan-critic is a **pre-implementation** adversarial
- * pass that runs only on the tight gate {acMode=strict, complexity=
+ * pass that runs only on the tight gate {ceremonyMode=strict, complexity=
  * large-risky, problemType!=refines, AC count>=2}. It walks the plan
  * itself (goal coverage / granularity / dependencies / parallelism /
  * risk catalog) before any code is written, and writes a single
@@ -143,7 +143,7 @@ export type CriticEscalation = "none" | "light" | "full";
 /**
  * v8.52 — verdict the qa-runner specialist returns in its slim summary.
  * Drives the qa stage routing (between `build` and `review` on the tight
- * gate {triage.surfaces includes "ui" or "web" AND acMode != "inline"}):
+ * gate {triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"}):
  *
  * - `pass` — every UI AC has evidence (Playwright test result / browser
  *   MCP screenshot / manual-steps confirmation); proceed to review.
@@ -188,7 +188,7 @@ export type QaEvidenceTier = "playwright" | "browser-mcp" | "manual";
  * orchestrator at triage (Hop 2) from the task description and the
  * touched-files signal, stamped under `triage.surfaces`. Drives the
  * v8.52 qa-runner gate (qa-runner dispatches only when `surfaces`
- * includes `"ui"` or `"web"` AND `acMode != "inline"`).
+ * includes `"ui"` or `"web"` AND `ceremonyMode != "inline"`).
  *
  * Multiple values per slug are expected — a /cc that builds an HTTP
  * endpoint + a Vue component touches both `"api"` and `"ui"`. The
@@ -236,7 +236,7 @@ export type Surface = (typeof SURFACES)[number];
 /**
  * v8.51 — verdict the pre-implementation plan-critic returns in its
  * slim summary. Drives the plan-critic step routing (between
- * `ac-author` and `slice-builder` on the tight gate {acMode=strict,
+ * `ac-author` and `slice-builder` on the tight gate {ceremonyMode=strict,
  * complexity=large-risky, problemType!=refines, AC count>=2}):
  *
  * - `pass` — advance to slice-builder dispatch (no ceremony).
@@ -280,7 +280,7 @@ export interface TddPhaseRecord {
 }
 
 /**
- * v8.36 — per-AC `posture` annotation (everyinc-compound pattern).
+ * v8.36 — per-criterion `posture` annotation (everyinc-compound pattern).
  *
  * The ac-author stamps one of these six values on every AC stanza in
  * `plan.md` frontmatter. Slice-builder reads `posture` and selects the
@@ -332,7 +332,7 @@ export interface AcceptanceCriterionState {
    */
   phases?: Partial<Record<TddPhase, TddPhaseRecord>>;
   /**
-   * v8.36 — per-AC posture annotation. Absent means
+   * v8.36 — per-criterion posture annotation. Absent means
    * {@link DEFAULT_POSTURE} ("test-first"). Validators reject unknown
    * string values.
    */
@@ -345,10 +345,13 @@ export const ROUTING_CLASSES = ["trivial", "small-medium", "large-risky"] as con
 export type RoutingClass = (typeof ROUTING_CLASSES)[number];
 
 /**
- * AC traceability and TDD enforcement modes (v8.2+; reviewer-enforced
- * since v8.40).
+ * Plan-traceability and TDD ceremony modes (v8.2+; reviewer-enforced
+ * since v8.40; renamed `acMode` → `ceremonyMode` in v8.56 to align with
+ * how reference projects treat AC as one element of a plan rather than
+ * the organizing concept around which the entire flow is named).
  *
- * - `inline`: trivial change. No AC table, no per-AC prefixes, optional tests.
+ * - `inline`: trivial change. No AC table, no per-criterion prefixes,
+ *   optional tests.
  * - `soft`: small/medium feature work. Bullet-list testable conditions in
  *   `plan.md` (no AC IDs); one TDD cycle per feature is enough.
  *   Default for small/medium routing.
@@ -359,10 +362,26 @@ export type RoutingClass = (typeof ROUTING_CLASSES)[number];
  *   Ship gate is the reviewer's release pass (no separate `runCompoundAndShip`
  *   pending-AC gate).
  *
- * Selected at the triage gate; user can override.
+ * Selected at the triage gate; user can override. Pre-v8.56 state files
+ * with `triage.acMode` are hoisted to `triage.ceremonyMode` on read by
+ * {@link rewriteLegacyAcMode} in `flow-state.ts`.
  */
-export const AC_MODES = ["inline", "soft", "strict"] as const;
-export type AcMode = (typeof AC_MODES)[number];
+export const CEREMONY_MODES = ["inline", "soft", "strict"] as const;
+export type CeremonyMode = (typeof CEREMONY_MODES)[number];
+
+/**
+ * @deprecated v8.56 — use {@link CEREMONY_MODES}. Kept as a re-export so
+ * pre-v8.56 import sites continue to type-check while downstream consumers
+ * (tests, plugins, etc.) update to the new name. Slated for removal once
+ * one full release cycle has aged out external imports.
+ */
+export const AC_MODES = CEREMONY_MODES;
+
+/**
+ * @deprecated v8.56 — use {@link CeremonyMode}. Type alias preserved so
+ * pre-v8.56 import sites continue to type-check.
+ */
+export type AcMode = CeremonyMode;
 
 /**
  * How aggressively the orchestrator advances through the flow.
@@ -383,10 +402,24 @@ export type RunMode = (typeof RUN_MODES)[number];
 /**
  * Decision recorded at the triage gate that opens every new flow.
  * Persisted in flow-state.json so resumes never re-trigger triage.
+ *
+ * v8.56 — `acMode` renamed to `ceremonyMode` to align cclaw's vocabulary
+ * with how reference projects treat AC as one element of a plan rather
+ * than the organizing concept around which the entire flow is named.
+ * Pre-v8.56 state files with `triage.acMode` are hoisted to
+ * `triage.ceremonyMode` on read; see `flow-state.ts > rewriteLegacyAcMode`.
  */
 export interface TriageDecision {
   complexity: RoutingClass;
-  acMode: AcMode;
+  /**
+   * TDD ceremony mode for the flow: `inline` (trivial; no plan, single
+   * commit), `soft` (one TDD cycle per feature, plain commits), or
+   * `strict` (per-criterion RED → GREEN → REFACTOR with posture-driven
+   * commit prefixes the reviewer verifies ex-post). Selected at triage;
+   * immutable for the flow's lifetime. v8.56 rename of `acMode`; legacy
+   * field is hoisted on read for one release.
+   */
+  ceremonyMode: CeremonyMode;
   /** Stages the orchestrator promised to run, in order. Empty for trivial. */
   path: FlowStage[];
   /** Why this complexity was chosen. One short sentence. */
@@ -518,11 +551,11 @@ export interface TriageDecision {
    */
   iterationOverride?: boolean | null;
   /**
-   * v8.23 — set when Hop 1 (Detect) auto-downgraded `acMode` because the
+   * v8.23 — set when Hop 1 (Detect) auto-downgraded `ceremonyMode` because the
    * project lacks a usable VCS. Today the only value is `"no-git"`, which
    * means the orchestrator detected the absence of `.git/` at projectRoot
-   * and forced `acMode` from `strict` to `soft` (strict requires AC trace
-   * commits, which require git). The field is purely informational — it
+   * and forced `ceremonyMode` from `strict` to `soft` (strict requires per-criterion
+   * trace commits, which require git). The field is purely informational — it
    * leaves an audit trail for "why is this large-risky slug running in
    * soft mode?". Downstream readers can branch on its presence to
    * suppress git-only affordances (parallel-build worktrees, inline-path
@@ -578,7 +611,7 @@ export interface TriageDecision {
    * v8.52 — surfaces this slug touches, populated by the orchestrator
    * at Hop 2 from the task description plus the touched-files signal.
    * Drives the v8.52 qa-runner gate: qa dispatches only when
-   * `surfaces` includes `"ui"` or `"web"` AND `acMode != "inline"`.
+   * `surfaces` includes `"ui"` or `"web"` AND `ceremonyMode != "inline"`.
    * See {@link Surface} for the vocabulary.
    *
    * Multiple values per slug are expected — a /cc that builds an HTTP

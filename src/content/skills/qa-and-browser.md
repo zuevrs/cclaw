@@ -1,6 +1,6 @@
 ---
 name: qa-and-browser
-trigger: when stage = qa (the v8.52 qa-runner dispatch); when triage.surfaces includes "ui" or "web" AND acMode != "inline"; on build when the slug touches UI files (*.tsx, *.jsx, *.vue, *.svelte, *.html, *.css) and the project ships a browser app (so the slice-builder can pre-commit a Playwright test before qa runs); on review when the diff includes any UI file (so the reviewer's qa-evidence axis cross-checks qa.md)
+trigger: when stage = qa (the v8.52 qa-runner dispatch); when triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"; on build when the slug touches UI files (*.tsx, *.jsx, *.vue, *.svelte, *.html, *.css) and the project ships a browser app (so the slice-builder can pre-commit a Playwright test before qa runs); on review when the diff includes any UI file (so the reviewer's qa-evidence axis cross-checks qa.md)
 ---
 
 # Skill: qa-and-browser
@@ -17,7 +17,7 @@ It is the v8.52 sibling of `debug-and-browser.md`. The two split cleanly:
 ## When NOT to apply
 
 - **`triage.surfaces` does not include `"ui"` or `"web"`.** CLI / library / API / data / infra / docs-only slugs skip qa entirely. The orchestrator gates on surface detection at Hop 2; the qa stage does not run.
-- **`triage.acMode == "inline"`.** Trivial / one-shot slugs skip qa even on UI surface (the cost of a structured qa pass eats the inline budget). The reviewer's `qa-evidence` axis is also skipped on inline.
+- **`triage.ceremonyMode == "inline"`.** Trivial / one-shot slugs skip qa even on UI surface (the cost of a structured qa pass eats the inline budget). The reviewer's `qa-evidence` axis is also skipped on inline.
 - **The diff is pure-prose / docs-only** with no rendered output. There is nothing to QA; the regular diff review is sufficient.
 - **The slug is `refines: <prior-slug>` and the prior slug shipped with `qa.md > verdict: pass`** AND the refines diff does not touch any UI file. The prior evidence stands; the orchestrator does not re-run qa for an internal refactor.
 - **Stop-the-line debugging mid-build.** That is `debug-and-browser.md`'s job; the qa stage runs *after* build completes green, not during a broken build.

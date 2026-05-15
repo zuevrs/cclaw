@@ -1,5 +1,81 @@
 # Changelog
 
+## 8.56.0 — Decenter AC: rename `acMode` → `ceremonyMode`, recontextualize AC as one element of the plan, neutral-tone README rewrite
+
+### Why
+
+A cross-reference audit (run after v8.55 landed) sampled how 11 reference projects — gsd-v1, chachamaru, compound, addyosmani, mattpocock, oh-my-claudecode, oh-my-openagent, gstack, and others — frame Acceptance Criteria. The pattern is consistent across the cohort: AC is **one element inside a larger plan/spec artifact**, not the organising concept around which the tool is named. cclaw's IMPLEMENTATION was already largely balanced — `plan.md` carries 14 sections (AC is section 10 of 14), the reviewer has 0/10 AC-named axes, and only 1/8 specialists is AC-named — but three surfaces leaked an AC-centric vocabulary:
+
+1. **The config knob `acMode`** — unique among the 11 references; the rest call this dimension some shape of "ceremony" / "rigor" / "mode".
+2. **Narrative phrasing "per-AC"** in prompts/skills/runbooks treated AC as the only unit-of-work, even when the underlying contract covers AC rows + Edge cases + NFR rows + Decisions.
+3. **README framing** had drifted significantly between v8.48 and v8.55: 7 numeric drifts (specialist count, skill count, runbook count, reviewer axes, plan sections, postures, outcome signals) and 8 v8.48-v8.55 features were missing from the document entirely.
+
+v8.56 fixes the vocabulary surface without changing any runtime contract. The technical trace mechanism `<type>(AC-N):` commit prefix is unchanged; the `## Acceptance Criteria` plan-section heading is unchanged (9/11 references use it verbatim); the `AcceptanceCriterionState` type name is unchanged; the `ac-author` specialist is **not** renamed.
+
+### What changed
+
+**Deliverable 1 — `acMode` → `ceremonyMode` rename with one-release legacy alias on read** (`src/types.ts`, `src/flow-state.ts`, `src/triage-audit.ts`, all specialist prompts, all skill bodies, all runbooks, all tests).
+
+- `AC_MODES` constant → `CEREMONY_MODES`; `AcMode` type → `CeremonyMode`. The legacy `AC_MODES` and `AcMode` exports survive as deprecated re-exports for one release so downstream importers compile during the deprecation window.
+- `TriageDecision.acMode` field → `TriageDecision.ceremonyMode`. `migrateFlowState` hoists `triage.acMode` to `triage.ceremonyMode` on read when the legacy key is present (pre-v8.56 `flow-state.json` files migrate transparently); when both keys appear, `ceremonyMode` wins and `acMode` is stripped.
+- Snake-case YAML frontmatter on artifact templates: `ac_mode:` → `ceremony_mode:` in plan / build / critic / plan-critic / qa templates. The artifact-template comments note the legacy `ac_mode` key is accepted on read for one release.
+- `isAcMode` predicate → `isCeremonyMode` (with `isAcMode` retained as a deprecated alias).
+- Skill descriptions in `src/content/skills.ts` and auto-trigger condition strings (`ac_mode:strict` → `ceremony_mode:strict` in `ac-discipline` / `tdd-and-verification` / `debug-and-browser` / `qa-and-browser` / `source-driven` triggers).
+- Test surface: 13 test files updated to use the new field names. One new test file `tests/unit/v856-ceremony-mode.test.ts` locks the safe-rename contract — verifies (a) canonical names are correct, (b) `migrateFlowState` rewrites legacy `triage.acMode` to `triage.ceremonyMode` and strips a stale companion `acMode` when both keys appear, (c) `readFlowState` normalises a pre-v8.56 on-disk file with `triage.acMode` into a v8.56-shaped triage.
+
+**Deliverable 2 — narrative sweep: `per-AC` → `per-criterion`** (all prompts/skills/runbooks/templates).
+
+- "per-AC TDD cycle" → "per-criterion TDD cycle".
+- "per-AC commits" / "one commit per AC" → "per-criterion commits" / "one commit per criterion".
+- "per-AC prefix" / "per-AC chain" / "per-AC ordering" / "per-AC traceability" → "per-criterion prefix" / "per-criterion chain" / "per-criterion ordering" / "per-criterion traceability".
+- "per-AC evidence" / "per-AC verification" / "per-AC verified flag" → "per-criterion evidence" / "per-criterion verification" / "per-criterion verified flag".
+- "AC mode" → "ceremony mode" (orchestrator prompts, triage-gate skill prose, flow-resume skill).
+- "AC traceability" reviewer axis description → "plan traceability" (reviewer.ts, stage-playbooks ship section, cclaw-rules ambient surface).
+- `AC-N` trace IDs are unchanged (commit prefix mechanism, technical trace; user explicit reject).
+- The `## Acceptance Criteria` plan-section heading is unchanged (9/11 references use it verbatim; industry standard).
+
+**Deliverable 3 — `ac-author` contract recontextualization** (`src/content/specialist-prompts/ac-author.ts`).
+
+- Opening / role definition rewritten: "You write `plan.md` for the active slug. The plan carries seven outputs: Spec, Plan, Acceptance Criteria, Edge cases, Topology, Feasibility stamp, Traceability block. Acceptance Criteria is one of these outputs — not the primary deliverable, not the organising concept — and the spec / edge-case / topology / traceability sections carry the same authoring weight."
+- The specialist is **not** renamed (user explicit reject; gsd-v1 precedent shows AC vocabulary can coexist with balanced framing).
+
+**Deliverable 4 — reviewer axis text update** (`src/content/specialist-prompts/reviewer.ts`).
+
+- "AC traceability" axis description text → "plan traceability" — the axis checks that commits trace back to plan items (AC IDs are one mechanism), not just to AC rows. The axis NAMES (`correctness`, `test-quality`, etc.) are unchanged.
+
+**Deliverable 5 — critic §4 rename + scope expansion** (`src/content/specialist-prompts/critic.ts`).
+
+- §4 title "Self-audit on AC quality" → "Criterion check (are the verifiable plan criteria the right criteria, not are they met?)".
+- Scope **expanded** to cover every verifiable plan criterion: AC rows + Edge case entries + NFR rows (where measurable). The §4 table grows a `Source` column distinguishing AC / edge-case / NFR rows. Drift findings emit at class=`criterion-coverage` (AC rows) / `edge-case-drift` (edge cases) / `nfr-drift` (NFR rows).
+- §2 first bullet renamed from "AC coverage gaps" to "Criterion-coverage gaps" for vocabulary symmetry with §4 and the §2 findings-table class enum.
+- Critic template (`critic.md`) §4 narrative + table shape updated to match the expanded scope.
+
+**Deliverable 6 — `ac-discipline` skill rename decision** (no file rename).
+
+- Re-read `src/content/skills/ac-discipline.md`. The skill's content is narrowly scoped to AC table format/quality + the posture-driven commit-prefix contract — not to broader criterion discipline. **Decision: KEEP the file name.** Skill ID, `AUTO_TRIGGER_SKILLS` entry, and `EXPECTED_SKILL_FILES` smoke list unchanged.
+
+**Deliverable 7 — README rewrite** (`README.md`).
+
+- Tagline drops "TDD by default" lead → "A multi-stage planning + review harness for coding agents."
+- AC enters only where structurally true (strict ceremony mode, per-criterion build cycle); NOT in tagline, NOT in first 2 "Why" bullets, NOT as the worked-example spine.
+- All 7 numeric drifts fixed: 8 specialists (was "5 sub-agents + 1 main-context coordinator"), 21 skills (was "17"), 11 runbooks (was "13"), 10 reviewer axes — 8 base + 2 gated (was "seven-axis"), 14/6 plan template sections (was implicit "7"), 6 postures, 5 outcome signals.
+- All 8 missing v8.48-v8.55 features now documented: `plan-critic` specialist (v8.51), `qa-runner` specialist (v8.52), 6 critic human-perspective lenses (v8.53), ambiguity score (v8.53), `outcome_signal` enum (v8.50), discipline skills (v8.48 — completion-discipline / pre-edit-investigation / receiving-feedback / edit-discipline axis), anti-rationalization catalog (v8.49), harness-embedded rules (v8.55).
+- Neutral technical tone — no marketing prose, no "where cclaw wins" framing.
+
+### Out of scope (explicit)
+
+- Renaming the `ac-author` specialist (user explicit reject; AC vocabulary OK if rest is balanced — gsd-v1 precedent).
+- Renaming the `## Acceptance Criteria` section in `plan.md` templates (industry standard, 9/11 references use it verbatim).
+- Renaming the `AcceptanceCriterionState` type (accurately describes the record it stores).
+- Changing the commit prefix `<type>(AC-N):` (technical trace mechanism the reviewer reads via `git log --grep`).
+
+### Migration / back-compat
+
+- **Existing `.cclaw/config.yaml`**: cclaw never stored `acMode` at the config level (the field has always lived on `flow-state.json > triage`); no config migration needed.
+- **Existing `flow-state.json` files**: pre-v8.56 files carry `triage.acMode`; `migrateFlowState` rewrites them on first read to `triage.ceremonyMode` and persists the v8.56 shape on the next state write. The migration is a no-op when the file already carries `ceremonyMode`.
+- **Existing shipped artifacts**: never modified. Shipped flows under `.cclaw/flows/shipped/<slug>/` carry the original `ac_mode:` frontmatter key; the prompts and skills accept this on read.
+- **Downstream importers of `AC_MODES` / `AcMode`**: continue to work as deprecated aliases of `CEREMONY_MODES` / `CeremonyMode` for one release. Plan to migrate before v8.57.
+
 ## 8.55.0 — harness-embedded rules surface: cclaw ambient discipline in `.cursor/`, `.claude/`, `.codex/`, `.opencode/` namespaces
 
 ### Why

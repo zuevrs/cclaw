@@ -15,7 +15,7 @@ If the task is a typo / format / rename limited to ≤1 file and ≤30 lines, **
 
 - create the change directly,
 - stage it,
-- run \`git commit -m "<feat|fix|refactor|docs>: <one-line summary>"\` (no per-AC prefix; inline-mode flows do not produce an AC table),
+- run \`git commit -m "<feat|fix|refactor|docs>: <one-line summary>"\` (no per-criterion prefix; inline-mode flows do not produce an AC table),
 - proceed to ship.
 
 For anything else, continue with this runbook.
@@ -109,10 +109,10 @@ Both research helpers run as sub-agent dispatches with their own \`.cclaw/lib/ag
 
 \`flows/<slug>/plan.md\` with:
 
-- frontmatter \`status: active\`, \`slug\`, \`stage: plan\`, \`acMode\` (\`soft\` or \`strict\`), \`ac: [...]\` (id + status), \`last_specialist: ac-author\`, \`refines\` (if applicable), \`security_flag\`.
+- frontmatter \`status: active\`, \`slug\`, \`stage: plan\`, \`ceremonyMode\` (\`soft\` or \`strict\`), \`ac: [...]\` (id + status), \`last_specialist: ac-author\`, \`refines\` (if applicable), \`security_flag\`.
 - \`## Assumptions\` section, **verbatim** from \`triage.assumptions\` — do not paraphrase.
 - \`## Prior lessons\` section from the learnings-research blob, **verbatim** quotes (no summary).
-- Body shape depends on acMode:
+- Body shape depends on ceremonyMode:
   - **soft-mode body** = a bullet list of testable conditions (3-7 items typical).
   - **strict-mode body** = an AC table with \`AC-N\`, verification line (test name / manual step / command), \`touchSurface\`, and \`parallelSafe\` per row; \`## Topology\` block with \`inline\` (default) or \`parallel-build\` (only when the topology gate from §5 above fires).
 
@@ -167,7 +167,7 @@ The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=
    - On Phase 7 \`request-changes\`: design re-runs the affected silent phases (Phase 2 / 3 / 4 / 5 / 6) internally and re-emits Phase 7 with the revised plan.md. **Revise cap = 3 iterations**; on the 4th request, design escalates explicitly (\`approve as-is\` / \`reject\` / \`revise one more time\`). Orchestrator does not patch \`lastSpecialist\` until the user picks \`approve\`.
    - On Phase 7 \`reject\`: design appends a brief \`## Design rejected\` note to plan.md and surfaces the rejection. Orchestrator does NOT patch \`lastSpecialist: design\`; the user is routed to \`/cc-cancel\` or re-triage.
 2. **Dispatch \`ac-author\`** as a normal sub-agent with the same contract as small/medium plan, plus an extra input: the design sections already in \`flows/<slug>/plan.md\`.
-   - AC author now writes the AC table (large-risky is always \`strict\` acMode by default), touch surfaces, parallel-build topology if it applies. The Frame / Approaches / Selected Direction / Decisions / Pre-mortem sections from design remain at the top of \`plan.md\`; ac-author appends its own sections below.
+   - AC author now writes the AC table (large-risky is always \`strict\` ceremonyMode by default), touch surfaces, parallel-build topology if it applies. The Frame / Approaches / Selected Direction / Decisions / Pre-mortem sections from design remain at the top of \`plan.md\`; ac-author appends its own sections below.
    - Orchestrator reads slim summary → patches \`lastSpecialist: "ac-author"\` AND advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`). At this point the orchestrator follows \`triage.runMode\` for the plan→build transition: \`step\` ends the turn; \`auto\` chains immediately into the build dispatch.
 
 Resume after a design or ac-author checkpoint: \`flow-state.lastSpecialist\` tells the orchestrator which discovery step to skip. If \`lastSpecialist == "design"\` and \`currentStage == "plan"\`, the resume dispatches \`ac-author\` directly. The user can also \`/cc <task> --skip-discovery\` to drop straight into a single ac-author dispatch when the design phase already happened in a prior session.
@@ -300,7 +300,7 @@ All eight gates are now reviewer-enforced ex-post via prompt + git log + \`build
 - Single test passes, full suite fails, but commit anyway. That is not GREEN; it is a regression.
 - REFACTOR phase silently skipped. v8.49 default: write \`Refactor: skipped — <reason>\` in the AC's build.md row REFACTOR notes column (no empty commit needed). The legacy empty-marker commit is still accepted; absence of both is the missing-refactor finding.
 - Writing production code in the RED commit. Stage and commit test files only in the RED phase.
-- Skipping the per-AC prefix (\`red(AC-N): ...\`) "just this once" or committing without an AC id. The reviewer's \`git log --grep\` scan misses it and the AC reads as missing → A-1 finding, fix-only bounce.
+- Skipping the per-criterion prefix (\`red(AC-N): ...\`) "just this once" or committing without an AC id. The reviewer's \`git log --grep\` scan misses it and the AC reads as missing → A-1 finding, fix-only bounce.
 - \`git add -A\` inside build. Stage AC-related files only.
 - Refactoring across files outside the AC scope. That is a separate slug.
 `;
@@ -374,7 +374,7 @@ The orchestrator opens this file before invoking \`runCompoundAndShip()\` (or it
 
 > **Iron Law:** NO MERGE WITHOUT GREEN PREFLIGHT, A WRITTEN ROLLBACK, AND EXACTLY ONE SELECTED FINALIZATION MODE. No exceptions for urgency. If no VCS is available, use \`FINALIZE_NO_VCS\` explicitly instead of inventing git steps.
 
-## 1. AC traceability gate
+## 1. Plan traceability gate
 
 Before anything else, verify every AC in flow-state.json is \`status: committed\` with a real SHA. If any AC is pending, the gate refuses ship. Stop and either complete the AC or open a fresh slug for the rest.
 

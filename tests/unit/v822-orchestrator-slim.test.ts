@@ -55,7 +55,7 @@ describe("v8.22 orchestrator-slim — `/cc` body line budget", () => {
     const lineCount = body.split("\n").length;
     expect(
       lineCount,
-      `start-command body is ${lineCount} lines (budget 535). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md and kept only a five-bullet pointer in the orchestrator body (one new stage entry, one new table row, one trimmed acMode-gating sentence under triage.path, one v8.42 footnote on the triage example). v8.51 added a parallel pointer for the pre-impl plan-critic sub-step (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section, gating + verdict-routing pointer to runbooks/plan-critic-stage.md); ~95% of the new content is in the runbook + the plan-critic.ts prompt. v8.52 lifted ~95% of the new qa stage content into runbooks/qa-stage.md and kept ~20 lines in the body (one Hop-2 surface-detection block listing the Surface vocabulary + detection heuristics, one stage-table row for qa-runner, one #### qa body section pointing into the runbook). If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
+      `start-command body is ${lineCount} lines (budget 535). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md and kept only a five-bullet pointer in the orchestrator body (one new stage entry, one new table row, one trimmed ceremonyMode-gating sentence under triage.path, one v8.42 footnote on the triage example). v8.51 added a parallel pointer for the pre-impl plan-critic sub-step (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section, gating + verdict-routing pointer to runbooks/plan-critic-stage.md); ~95% of the new content is in the runbook + the plan-critic.ts prompt. v8.52 lifted ~95% of the new qa stage content into runbooks/qa-stage.md and kept ~20 lines in the body (one Hop-2 surface-detection block listing the Surface vocabulary + detection heuristics, one stage-table row for qa-runner, one #### qa body section pointing into the runbook). If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
     ).toBeLessThanOrEqual(535);
   });
 
@@ -78,11 +78,11 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
   // from the body and has a `# On-demand runbook —` heading) is
   // preserved.
   // v8.42 extends the set with `critic-stage.md` — the on-demand runbook
-  // for Hop 4.5 critic dispatch (acMode gating, escalation triggers,
+  // for Hop 4.5 critic dispatch (ceremonyMode gating, escalation triggers,
   // verdict routing, flow-state patches, legacy migration).
   // v8.51 extends the set with `plan-critic-stage.md` — the on-demand
   // runbook for the pre-implementation plan-critic sub-step (gating
-  // table: acMode=strict + complexity=large-risky + problemType!=refines
+  // table: ceremonyMode=strict + complexity=large-risky + problemType!=refines
   // + AC count>=2, verdict routing pass/revise/cancel, iteration cap,
   // flow-state patches).
   // v8.52 extends the set with `qa-stage.md` — the on-demand runbook for

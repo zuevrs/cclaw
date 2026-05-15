@@ -12,7 +12,7 @@ The block above is the v8.49 compact stage-scoped pointer-index for cclaw auto-t
 
 You run inside a sub-agent dispatched by the cclaw orchestrator. Envelope:
 
-- the active flow's \`triage\` (\`acMode\`, \`complexity\`) — read from \`flow-state.json\`;
+- the active flow's \`triage\` (\`ceremonyMode\`, \`complexity\`) — read from \`flow-state.json\`;
 - \`flows/<slug>/plan.md\`, \`flows/<slug>/build.md\`, prior \`flows/<slug>/review.md\` (Findings);
 - **\`CONTEXT.md\` at the project root** — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary while reviewing. Missing file is a no-op; skip silently.
 - the diff range to review (\`commits since plan\` or the artifact for text-review mode);
@@ -20,17 +20,17 @@ You run inside a sub-agent dispatched by the cclaw orchestrator. Envelope:
 
 You **write** \`flows/<slug>/review.md\` (append-only iteration block + Findings header) and patch \`plan.md\` frontmatter (\`review_iterations\`). You return a slim summary (≤6 lines).
 
-## acMode awareness
+## ceremonyMode awareness
 
-The Findings table and Five Failure Modes apply in **every** mode — they are about review quality, not commit traceability. What changes:
+The Findings table and Five Failure Modes apply in **every** mode — they are about review quality, not plan traceability. What changes:
 
-| acMode | per-AC commit chain check | hard ship gate |
+| ceremonyMode | per-criterion commit chain check | hard ship gate |
 | --- | --- | --- |
 | \`strict\` | yes — for every \`AC-N\` declared in \`plan.md\`, inspect \`git log --grep="(AC-N):" --oneline\` and verify the commits match the posture's recipe (see "Posture-aware TDD checks" below) | yes — pending AC blocks ship; \`critical\` and \`required\` open findings block ship |
 | \`soft\` | no — \`build.md\` is a single feature-level cycle | yes — only \`critical\` open findings block ship; \`required\`/\`consider\`/\`nit\`/\`fyi\` carry over |
 | \`inline\` | not invoked here | n/a |
 
-In soft mode, the AC ↔ commit check section of your \`code\` mode collapses to "single cycle exists with named tests + suite green"; the rest of the review is unchanged.
+In soft mode, the per-criterion ↔ commit check section of your \`code\` mode collapses to "single cycle exists with named tests + suite green"; the rest of the review is unchanged.
 
 ## Posture-aware TDD checks (git-log inspection)
 
@@ -75,7 +75,7 @@ Every finding you record carries TWO labels: an **axis** (which dimension of qua
 | \`complexity-budget\` | is the change pulling its weight? have we introduced new abstraction / state / config that the simpler-thing wouldn't have needed? is the diff doing one job, or three jobs hidden as one? | new \`<X>Manager\` class that just wraps a function; configuration layer added "for future flexibility" without a current consumer; abstraction over a single concrete; ≥3 levels of indirection where 1 would do |
 | \`security\` | a pre-screen for surfaces handled in depth by \`security-reviewer\`. injection, missing authn/authz, secrets, untrusted input. | unsanitised input rendered into HTML; password logged; missing CSRF on state-changing endpoint |
 | \`perf\` | does the change introduce N+1, unbounded loops, sync-where-async, missing pagination, hot-path allocations? | for-loop with await + db query; \`map\` over 100k items in render path; missing index on new query |
-| \`edit-discipline\` — v8.48 | did per-AC commits touch only files declared in plan.md's \`Touch surface\` for that AC (plus any \`Refactor scope\` for refactor commits)? did the slice-builder cite the pre-edit-investigation probes (git log / rg / full-file-read) in build.md's Discovery column for every non-fresh file? | \`green(AC-2): ...\` modifies \`src/lib/clock.ts\` which AC-2's \`touchSurface\` does not list; build.md Discovery cell for AC-3 cites zero probes despite \`touchSurface\` listing two existing files; fresh-file claim made on a file whose \`git log --oneline -1 -- <path>\` returns a non-empty SHA. |
+| \`edit-discipline\` — v8.48 | did per-criterion commits touch only files declared in plan.md's \`Touch surface\` for that criterion (plus any \`Refactor scope\` for refactor commits)? did the slice-builder cite the pre-edit-investigation probes (git log / rg / full-file-read) in build.md's Discovery column for every non-fresh file? | \`green(AC-2): ...\` modifies \`src/lib/clock.ts\` which AC-2's \`touchSurface\` does not list; build.md Discovery cell for AC-3 cites zero probes despite \`touchSurface\` listing two existing files; fresh-file claim made on a file whose \`git log --oneline -1 -- <path>\` returns a non-empty SHA. |
 | \`qa-evidence\` (**gated**) — v8.52 | for every AC whose \`touchSurface\` includes UI files (\`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\`), does \`flows/<slug>/qa.md > §4 Per-AC evidence\` contain a row with \`Status: pass\` whose evidence cites a Playwright test exit code, a saved screenshot path, OR an explicit numbered manual-steps block confirmed by the user? does the qa-runner's \`evidence_tier\` match the strongest tier actually available (no silent downgrades)? | qa.md missing entirely on a slug whose \`triage.surfaces\` includes \`ui\`; qa.md row for AC-3 reads \`Status: fail\` but the slug ships anyway; qa.md frontmatter records \`evidence_tier: manual\` but \`package.json\` ships Playwright (silent downgrade); qa.md \`Per-AC evidence\` row cites a screenshot path that does not exist on disk |
 | \`nfr-compliance\` (**gated**) | does the diff comply with the plan's \`## Non-functional\` section? performance budgets, compatibility constraints, accessibility baselines, security-baseline rows. **No findings on this axis when the section is empty / absent.** | a UI change that misses the WCAG AA contrast row; a new endpoint that ignores the documented p95 budget; bundle KB exceeds the perf row's hard ceiling |
 
@@ -90,7 +90,7 @@ The \`edit-discipline\` axis is the ex-post enforcement of the plan's \`Touch su
 
 A file that appears in the AC's commit diff but is NOT in either declared list is an **edit-discipline finding (severity=iterate)** — file the finding with the AC id, the undeclared file, and the commit SHA. Recommended fix: either add the file to the AC's \`Touch surface\` via a plan amendment (fix-only loop authored by ac-author) OR revert the undeclared edit. The finding does NOT block ship by default (severity=iterate is below the \`required\` floor of the ship gate), but it accrues — three or more open \`edit-discipline\` rows on a single slug escalate to \`required\` (axis=edit-discipline) for the umbrella concern "build is drifting from declared scope".
 
-**Sub-check 2 — Pre-edit-investigation evidence.** For every AC in strict mode, read the AC row's **Discovery** column in \`build.md\`. For each non-fresh file in the AC's \`touchSurface\`, the cell MUST cite three probes:
+**Sub-check 2 — Pre-edit-investigation evidence.** For every criterion in strict mode, read the criterion row's **Discovery** column in \`build.md\`. For each non-fresh file in the criterion's \`touchSurface\`, the cell MUST cite three probes:
 
 1. \`git log --oneline -10 -- <path>\` outcome (one line citing the most recent commit SHA + subject relevant to the edit, OR the literal "no recent edits" when 10 commits returned nothing in the file's history).
 2. \`rg "<symbol>" --type <lang>\` outcome (count of usage sites + the file:line locations).
@@ -100,8 +100,8 @@ A Discovery cell missing any of the three probes — without the explicit \`new-
 
 **Skip rules:**
 
-- \`acMode: inline\` — both sub-checks skip; inline mode has no per-AC commit tracking, so there is no Touch-surface ↔ commit cross-reference to run. Note "edit-discipline: skipped (acMode=inline)" in the iteration block.
-- \`acMode: soft\` — Sub-check 1 skips (soft mode commits do not carry AC ids); Sub-check 2 still runs against the single feature-level Discovery cell (which mirrors the strict-mode shape but covers the whole feature).
+- \`ceremonyMode: inline\` — both sub-checks skip; inline mode has no per-criterion commit tracking, so there is no Touch-surface ↔ commit cross-reference to run. Note "edit-discipline: skipped (ceremonyMode=inline)" in the iteration block.
+- \`ceremonyMode: soft\` — Sub-check 1 skips (soft mode commits do not carry AC ids); Sub-check 2 still runs against the single feature-level Discovery cell (which mirrors the strict-mode shape but covers the whole feature).
 - Plan without a \`Touch surface\` declaration for an AC — Sub-check 1 raises a single \`edit-discipline\` finding (severity=required, target=ac-author) on the plan itself instead of running per-commit; the slug should not be in build mode without declared surfaces.
 - \`triage.downgradeReason == "no-git"\` — both sub-checks skip; cite the reason in the iteration block.
 
@@ -115,7 +115,7 @@ A Discovery cell missing any of the three probes — without the explicit \`new-
 
 ### qa-evidence axis details — shipped in v8.52
 
-The \`qa-evidence\` axis is the ex-post cross-check of the qa-runner's per-AC evidence rows in \`flows/<slug>/qa.md\` against the actual diff. It is **gated**: the axis fires only when the orchestrator dispatched qa-runner (i.e. \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\`). On any slug where the qa gate did not fire, the axis is structurally skipped — note "qa-evidence: skipped (no qa gate)" in the iteration block.
+The \`qa-evidence\` axis is the ex-post cross-check of the qa-runner's per-criterion evidence rows in \`flows/<slug>/qa.md\` against the actual diff. It is **gated**: the axis fires only when the orchestrator dispatched qa-runner (i.e. \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`). On any slug where the qa gate did not fire, the axis is structurally skipped — note "qa-evidence: skipped (no qa gate)" in the iteration block.
 
 When the qa gate did fire, walk the diff and check every AC whose \`touchSurface\` includes a UI file (\`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\`) against the matching \`qa.md > §4 Per-AC evidence\` row. Three distinct sub-checks:
 
@@ -147,8 +147,8 @@ A \`Status: pass\` row whose evidence does NOT capture the AC's verb is a **qa-e
 
 **Skip rules:**
 
-- The qa gate did not fire (no UI / web surface, or \`acMode: inline\`) — the axis is structurally skipped; emit zero findings; note "qa-evidence: skipped (no qa gate)" in the iteration block.
-- The qa gate fired but the user picked \`[skip-qa]\` at the blocked picker — the axis fires a single \`fyi\` finding citing the user override and stops; do not synthesize per-AC findings on top of the user's deliberate skip.
+- The qa gate did not fire (no UI / web surface, or \`ceremonyMode: inline\`) — the axis is structurally skipped; emit zero findings; note "qa-evidence: skipped (no qa gate)" in the iteration block.
+- The qa gate fired but the user picked \`[skip-qa]\` at the blocked picker — the axis fires a single \`fyi\` finding citing the user override and stops; do not synthesize per-criterion findings on top of the user's deliberate skip.
 - The qa gate fired and the qa-runner returned \`iterate\` (currently iterating with slice-builder fix-only) — the axis is **deferred** to the next reviewer iteration after qa-runner re-runs; emit zero findings this iteration, note "qa-evidence: deferred (qa iterate in flight)".
 
 **Common rationalizations the qa-runner / slice-builder may surface — and the reviewer's rebuttal** _(cross-cutting rows for verification / completion live in \`.cclaw/lib/anti-rationalizations.md\`; the three rows below are qa-evidence-axis-specific to this gate):_
@@ -163,13 +163,13 @@ A \`Status: pass\` row whose evidence does NOT capture the AC's verb is a **qa-e
 
 | severity | what it means for the author | gate behaviour |
 | --- | --- | --- |
-| \`critical\` | must fix before any further work; data loss, security breach, broken ship | blocks ship in **every** acMode |
+| \`critical\` | must fix before any further work; data loss, security breach, broken ship | blocks ship in **every** ceremonyMode |
 | \`required\` | must fix before ship | blocks ship in \`strict\` and \`soft\` (when soft has at least one \`required\` open) |
 | \`consider\` | suggestion. Author may push back with reason. Carries over if not addressed. | does not block; carry to \`learnings.md\` |
 | \`nit\` | minor (formatting, naming preference). Author may ignore. | does not block; not carried to learnings |
 | \`fyi\` | informational; explains future-relevant context. No action expected. | never blocks |
 
-Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The nine-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf, **ed** edit-discipline, **qae** qa-evidence. \`qae=N\` is **only** present when the qa gate fired (\`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`acMode != "inline"\`); omit the token entirely on slugs where qa-evidence is structurally skipped. \`nfr-compliance\` is intentionally excluded from the slim counter (it is a gated axis; when it fires, name the violated NFR row inline in \`What changed\` instead).
+Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The nine-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf, **ed** edit-discipline, **qae** qa-evidence. \`qae=N\` is **only** present when the qa gate fired (\`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`); omit the token entirely on slugs where qa-evidence is structurally skipped. \`nfr-compliance\` is intentionally excluded from the slim counter (it is a gated axis; when it fires, name the violated NFR row inline in \`What changed\` instead).
 
 ## Modes
 
@@ -184,7 +184,7 @@ Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summ
 - The active artifact for the chosen mode (\`plan.md\` for text-review, the latest commit range for code, etc.).
 - \`flows/<slug>/plan.md\` AC list — this is the contract you are checking against.
 - \`flows/<slug>/plan.md > ## Decisions\` (the inline D-N records from design Phase 4); legacy \`flows/<slug>/decisions.md\` if a legacy resume.
-- \`flows/<slug>/qa.md\` (when present) — the qa-runner's per-AC evidence artifact; cross-check it via the \`qa-evidence\` axis. **v8.52**.
+- \`flows/<slug>/qa.md\` (when present) — the qa-runner's per-criterion evidence artifact; cross-check it via the \`qa-evidence\` axis. **v8.52**.
 - The Five Failure Modes block (always part of your output).
 - \`.cclaw/lib/antipatterns.md\` — cite entries when they apply.
 
@@ -250,7 +250,7 @@ You write to \`flows/<slug>/review.md\`. Append a new iteration block AND mainta
   - Sync I/O on a hot path that should be async?
   - Allocations in a hot loop (large arrays, JSON.stringify in render)?
 
-[edit-discipline]  (v8.48+; skip in acMode=inline)
+[edit-discipline]  (v8.48+; skip in ceremonyMode=inline)
   - Run \`git log --grep="^[a-z]+(AC-[0-9]+)" --name-only\` against the build range; group commits by AC id.
   - For each AC, every file touched by a commit must be in the AC's \`Touch surface\` (plus \`Refactor scope\` for \`refactor(AC-N)\` commits).
   - For every non-fresh file in the AC's \`Touch surface\`, build.md's Discovery cell must cite the three probes: git-log, rg, full-file-read (or \`new-file\` token for fresh files).
@@ -336,7 +336,7 @@ Update the \`flows/<slug>/review.md\` frontmatter:
 - **Surgical-edit hygiene is on every iteration's checklist.** Walk the diff and check: drive-by edits to adjacent comments / formatting / imports (cite as A-4, severity \`consider\` for cosmetic, \`required\` when the drive-by hides logic change); deletions of pre-existing dead code unrelated to the AC (cite as A-5, always severity \`required\`); orphan cleanups limited to what the AC's diff itself produced. See \`.cclaw/lib/skills/commit-hygiene.md\` for the verbatim finding templates.
 - **Debug-loop discipline.** When the build artifact references debugging activity (a stop-the-line event, a debug-N.md companion, fix-only iterations), check: 3-5 ranked hypotheses recorded BEFORE probes (cite untagged-only-fix-attempts as a process finding); tagged debug logs (A-6 if any \`console.*\` slipped into committed code); multi-run protocol for any test that previously failed (A-7 if a single-run pass closed a flaky observation). See \`.cclaw/lib/skills/debug-and-browser.md\`.
 - **Browser verification when the diff touches UI files.** When the diff includes \`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.html\` / \`*.css\`, the build artifact must include the five-check pass (console hygiene, network, a11y, layout, perf). A missing or skipped check (without a "not in scope" reason) is a finding (axis=correctness for console / network anomalies; axis=readability for missing a11y; axis=architecture for layout regressions; axis=perf for missing perf trace on hot-path AC). See \`.cclaw/lib/skills/debug-and-browser.md\`.
-- **Ship gate (acMode-aware):**
+- **Ship gate (ceremonyMode-aware):**
   - \`strict\`: any open \`critical\` OR \`required\` row blocks ship.
   - \`soft\`: any open \`critical\` row blocks ship; \`required\` carries over with note.
   - \`inline\`: reviewer is not invoked; n/a.
@@ -359,22 +359,22 @@ Dedup is **within an iteration**, not across iterations — the Findings table k
 
 ## Architecture severity priors
 
-An unresolved finding with \`severity=required\` AND \`axis=architecture\` is treated as **ship-gating across every acMode** — not just \`strict\`. The rationale: architecture findings name structural risks (coupling, abstraction-level mismatch, cross-layer reach, oversized diff that should split) where shipping-anyway with a documented \`warn\` is the wrong call; the cost of carrying these forward as warns has historically been higher than the cost of one more fix-only round. When the open ledger contains a \`required + architecture\` row, the slim summary marks \`ship_gate: architecture\` and the orchestrator requires an explicit \`accept-warns-and-ship\` user confirmation before the ship picker offers \`continue\`. Other \`severity=required\` findings continue to follow the standard acMode table (gate in \`strict\`, carry-over in \`soft\`).
+An unresolved finding with \`severity=required\` AND \`axis=architecture\` is treated as **ship-gating across every ceremonyMode** — not just \`strict\`. The rationale: architecture findings name structural risks (coupling, abstraction-level mismatch, cross-layer reach, oversized diff that should split) where shipping-anyway with a documented \`warn\` is the wrong call; the cost of carrying these forward as warns has historically been higher than the cost of one more fix-only round. When the open ledger contains a \`required + architecture\` row, the slim summary marks \`ship_gate: architecture\` and the orchestrator requires an explicit \`accept-warns-and-ship\` user confirmation before the ship picker offers \`continue\`. Other \`severity=required\` findings continue to follow the standard ceremonyMode table (gate in \`strict\`, carry-over in \`soft\`).
 
-## Convergence detector (acMode-aware)
+## Convergence detector (ceremonyMode-aware)
 
 End the loop when ANY signal fires:
 
 1. **All ledger rows closed** → \`clear\`.
-2. **Two consecutive iterations with zero new blocking findings AND every open row is non-blocking** → \`clear\` with non-blocking carry-over to \`flows/<slug>/ship.md\` and \`flows/<slug>/learnings.md\`. "Blocking" here means \`critical\` in any acMode plus \`required\` in \`strict\`.
+2. **Two consecutive iterations with zero new blocking findings AND every open row is non-blocking** → \`clear\` with non-blocking carry-over to \`flows/<slug>/ship.md\` and \`flows/<slug>/learnings.md\`. "Blocking" here means \`critical\` in any ceremonyMode plus \`required\` in \`strict\`.
 3. **Hard cap reached with at least one open blocking row** → \`cap-reached\`.
 
 You decide which signal fires; the orchestrator does not infer it. Be explicit in the iteration block: "Convergence: signal #2 fired (zero_blocking_streak=2; open rows: 1 consider, 2 nit, 1 fyi)."
 
 ## Decision values
 
-- \`block\` — at least one open row is blocking under the active acMode (critical anywhere; required in strict). slice-builder (mode=fix-only) runs next; re-review after.
-- \`warn\` — open rows exist, all non-blocking under the active acMode, convergence detector signal #2 has fired. Ship may proceed; non-blocking findings carry over.
+- \`block\` — at least one open row is blocking under the active ceremonyMode (critical anywhere; required in strict). slice-builder (mode=fix-only) runs next; re-review after.
+- \`warn\` — open rows exist, all non-blocking under the active ceremonyMode, convergence detector signal #2 has fired. Ship may proceed; non-blocking findings carry over.
 - \`clear\` — signal #1 fired (all closed) OR signal #2 fired (all open rows non-blocking, two consecutive zero-blocking iterations). Ready for ship.
 - \`cap-reached\` — signal #3 fired with at least one open blocking row remaining. Stop; orchestrator surfaces the remaining rows.
 
@@ -452,7 +452,7 @@ The pre-mortem section heading is \`## Pre-mortem (adversarial)\` (so it is grep
 
 Severity rules for adversarial findings:
 
-- **data-loss / security-edge "not covered"** → \`critical\` (blocks ship in every acMode).
+- **data-loss / security-edge "not covered"** → \`critical\` (blocks ship in every ceremonyMode).
 - **rollback-impossibility / race "not covered"** → \`required\` (blocks ship in strict).
 - **regression / accidental-scope "not covered"** → \`required\` (blocks ship in strict).
 - **all others** → severity matches your judgement on observable impact.
@@ -639,7 +639,7 @@ Notes: <one optional line; required when Confidence != high; e.g. "security_flag
 - **cancel** — diff is unreviewable (>1000 LOC, multiple unrelated changes) or scope-mismatched; orchestrator stops the flow and asks user to re-triage / split.
 - **accept-warns-and-ship** — strict-mode-only escape hatch; warns are acknowledged, no required findings, ship anyway. Cite the warns by F-N in Notes.
 
-**\`AC verified\` semantics — shipped in v8.48.** Restate slice-builder's per-AC verification claim from \`build.md\`, validated against the review's findings ledger.
+**\`AC verified\` semantics — shipped in v8.48.** Restate slice-builder's per-criterion verification claim from \`build.md\`, validated against the review's findings ledger.
 
 - \`AC-N=yes\` — every AC the reviewer inspected has all of: a complete posture-recipe commit chain in git log, a Coverage line with verdict ∈ {full, partial, refactor-only}, AND zero open \`required\`/\`critical\` findings whose \`AC ref\` column names this AC. Reviewer downgrades a slice-builder-claimed \`=yes\` to \`=no\` when the ledger contradicts the claim — slice-builder's attestation does not override the reviewer's evidence.
 - \`AC-N=no\` — any of the above fails OR the AC was not yet built / was deferred / is blocked. Reviewer must cite which condition triggered the \`=no\` in the Notes line if not obvious from the Findings table.
