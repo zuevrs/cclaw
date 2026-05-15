@@ -59,6 +59,61 @@ try {
   if (!existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command missing after init");
   }
+  // v8.57 — utility slash commands. /cclaw-review and /cclaw-critic
+  // expose the reviewer + critic specialists outside the full /cc flow.
+  // Both files ship alongside cc.md / cc-cancel.md / cc-idea.md in every
+  // enabled harness's commands directory; uninstall sweeps them (covered
+  // at the end of this script via the post-uninstall .cursor/commands
+  // existence checks).
+  for (const utilityCmd of ["cclaw-review.md", "cclaw-critic.md"]) {
+    if (!existsSync(join(tempDir, ".cursor", "commands", utilityCmd))) {
+      throw new Error(
+        `smoke check failed: v8.57 utility command ${utilityCmd} missing after init`
+      );
+    }
+  }
+  // Spot-check command body invariants — both utility commands must
+  // reference their corresponding specialist contract by canonical
+  // agent path, document the --out flag, and explicitly skip
+  // flow-state interaction.
+  const reviewBody = readFileSync(
+    join(tempDir, ".cursor", "commands", "cclaw-review.md"),
+    "utf8"
+  );
+  if (!reviewBody.includes(".cclaw/lib/agents/reviewer.md")) {
+    throw new Error(
+      "smoke check failed: v8.57 cclaw-review.md must reference .cclaw/lib/agents/reviewer.md"
+    );
+  }
+  if (!reviewBody.includes("--out <path>")) {
+    throw new Error(
+      "smoke check failed: v8.57 cclaw-review.md must document the --out <path> flag"
+    );
+  }
+  if (!reviewBody.includes("flow-state.json")) {
+    throw new Error(
+      "smoke check failed: v8.57 cclaw-review.md must explicitly disallow flow-state interaction"
+    );
+  }
+  const criticBody = readFileSync(
+    join(tempDir, ".cursor", "commands", "cclaw-critic.md"),
+    "utf8"
+  );
+  if (!criticBody.includes(".cclaw/lib/agents/critic.md")) {
+    throw new Error(
+      "smoke check failed: v8.57 cclaw-critic.md must reference .cclaw/lib/agents/critic.md"
+    );
+  }
+  if (!criticBody.includes("--out <out-path>")) {
+    throw new Error(
+      "smoke check failed: v8.57 cclaw-critic.md must document the --out <out-path> flag"
+    );
+  }
+  if (!criticBody.includes("flow-state.json")) {
+    throw new Error(
+      "smoke check failed: v8.57 cclaw-critic.md must explicitly disallow flow-state interaction"
+    );
+  }
   for (const dir of ["state", "flows"]) {
     if (!existsSync(join(tempDir, ".cclaw", dir))) {
       throw new Error(`smoke check failed: top-level .cclaw/${dir}/ missing after init`);
@@ -426,6 +481,14 @@ try {
   }
   if (existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command still exists after uninstall");
+  }
+  // v8.57 — utility command files must also be removed by uninstall.
+  for (const utilityCmd of ["cclaw-review.md", "cclaw-critic.md"]) {
+    if (existsSync(join(tempDir, ".cursor", "commands", utilityCmd))) {
+      throw new Error(
+        `smoke check failed: v8.57 utility command ${utilityCmd} still exists after uninstall`
+      );
+    }
   }
   // v8.55 — uninstall must remove the harness-namespaced rules file
   // AND the (now-empty) `.cursor/rules/` parent dir cclaw owned. The

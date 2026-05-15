@@ -75,6 +75,15 @@ After ship, the orchestrator moves the artifacts to `.cclaw/flows/shipped/<slug>
 | **Parallel build** | Up to 5 slices on git worktrees when AC are independent and ≥2 touch-surface clusters. `ceremonyMode: strict` required. |
 | **Multi-harness install** | Claude Code, Cursor, OpenCode, Codex — same `.cclaw/` runtime, different harness adapters. |
 
+## Utility commands
+
+Beyond the main `/cc` flow, cclaw installs two **direct-callable utility commands** into each enabled harness. They are escape valves for ad-hoc moments — when the full plan → build → review → critic → ship ceremony is too heavy for the task at hand. Both commands reuse the same specialist contracts the `/cc` flow dispatches, but skip flow state, triage, the artifact tree, and slug tracking.
+
+- **`/cclaw-review [<git-ref-or-paths>]`** — run the reviewer's 10-axis pass directly on a diff or set of files. Default: staged changes (`git diff --cached`); falls back to `git diff HEAD` when nothing is staged. Accepts a git ref or ref range (e.g. `HEAD~3..HEAD`) or one or more file paths. Pass `--out <path>` to write findings as markdown.
+- **`/cclaw-critic <path>`** — run the critic's adversarial 8-section protocol (predictions, gap analysis, 4 falsification techniques, lens sweep, criterion check, goal-backward, realist check, verdict) against any document: a plan written outside cclaw, a design doc, an RFC, a PR description, an ADR, a README. Pass `--out <path>` to write findings as markdown.
+
+Both commands emit findings directly to chat. Neither touches `.cclaw/state/flow-state.json`, `.cclaw/flows/<slug>/`, or any flow artifact. For the full slug ceremony (AC, plan traceability, per-criterion commits, post-implementation critic), use `/cc <task>` instead.
+
 ## Harnesses supported
 
 | Harness | Detection | Status |

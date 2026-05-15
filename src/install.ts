@@ -27,6 +27,7 @@ import { META_SKILL } from "./content/meta-skill.js";
 import { renderStartCommand } from "./content/start-command.js";
 import { renderCancelCommand } from "./content/cancel-command.js";
 import { renderIdeaCommand } from "./content/idea-command.js";
+import { UTILITY_COMMAND_FILES } from "./content/utility-commands.js";
 import { ensureDir, exists, removePath, writeFileSafe } from "./fs-utils.js";
 import { ensureRunSystem } from "./run-persistence.js";
 import { createDefaultConfig, readConfig, renderConfig, type CclawConfig } from "./config.js";
@@ -489,6 +490,16 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc.md"), renderStartCommand());
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc-cancel.md"), renderCancelCommand());
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc-idea.md"), renderIdeaCommand());
+  // v8.57 — utility slash commands. Direct-callable shims that expose
+  // the reviewer / critic specialists outside the full /cc flow. Each
+  // file ships next to cc.md / cc-cancel.md / cc-idea.md so the harness
+  // surfaces them through the same slash-command discovery mechanism.
+  for (const utility of UTILITY_COMMAND_FILES) {
+    await writeFileSafe(
+      path.join(projectRoot, layout.commandsDir, utility.fileName),
+      utility.render()
+    );
+  }
 
   await ensureDir(path.join(projectRoot, layout.agentsDir));
   for (const agent of CORE_AGENTS) {
@@ -778,7 +789,11 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     recovery: 0,
     examples: 0,
     hooks: 0,
-    commands: 3
+    // v8.57 — three flow commands (cc, cc-cancel, cc-idea) plus the new
+    // utility command count from UTILITY_COMMAND_FILES (currently 2:
+    // cclaw-review, cclaw-critic). Sourcing from the constant means a
+    // future v8.58 utility command flips the count automatically.
+    commands: 3 + UTILITY_COMMAND_FILES.length
   };
   return { installedHarnesses: harnesses, configPath, counts };
 }
@@ -794,7 +809,11 @@ export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
   await removePath(path.join(projectRoot, RUNTIME_ROOT));
   for (const harness of harnesses as HarnessId[]) {
     const layout = HARNESS_LAYOUTS[harness];
-    for (const filename of ["cc.md", "cc-cancel.md", "cc-idea.md"]) {
+    // v8.57 — utility command files (`cclaw-review.md`, `cclaw-critic.md`)
+    // ship alongside the cc.md / cc-cancel.md / cc-idea.md trio; uninstall
+    // sweeps them via the same per-harness commands directory pass.
+    const utilityFiles = UTILITY_COMMAND_FILES.map((u) => u.fileName);
+    for (const filename of ["cc.md", "cc-cancel.md", "cc-idea.md", ...utilityFiles]) {
       await removePath(path.join(projectRoot, layout.commandsDir, filename));
     }
     for (const agent of CORE_AGENTS) {
