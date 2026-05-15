@@ -272,6 +272,82 @@ export interface FlowStateV82 {
     topic: string;
     path: string;
   } | null;
+  /**
+   * v8.59 — pointer to a prior **shipped** slug whose plan/build/learnings
+   * (and optional review/critic/qa) should be loaded as context by the
+   * active task flow's design / ac-author / reviewer / critic. Stamped
+   * by the orchestrator at Hop 0 (Detect) when the user invokes
+   * `/cc extend <slug> <task>`; cleared automatically when the task
+   * flow ships.
+   *
+   * Shape:
+   *   - `slug`: the parent flow's slug (e.g. `20260514-auth-flow`), so
+   *     specialists can rebuild artifact paths if needed.
+   *   - `status`: `"shipped"` is the only valid value in v8.59. The
+   *     `/cc extend` validator rejects in-flight / cancelled / missing
+   *     parents at the entry point, so by the time this field is
+   *     stamped the parent's shipped status is guaranteed. The field
+   *     is preserved as a string union (not a literal) so v8.60+ can
+   *     widen the validator (e.g. to support in-flight parents) without
+   *     a schema bump.
+   *   - `shippedAt`: best-effort ISO timestamp from the parent's
+   *     `ship.md > frontmatter.shipped_at`. Optional because legacy
+   *     shipped slugs may have authored `ship.md` without the field.
+   *   - `artifactPaths`: pre-derived absolute paths to the parent's
+   *     shipped artifacts. `plan` is mandatory (its presence was the
+   *     validation gate at `/cc extend`); `build` / `review` / `critic`
+   *     / `learnings` / `qa` are optional because they may be absent
+   *     depending on the parent's path (e.g. an inline-mode parent
+   *     has no `review.md`). Specialists `await exists(path)` before
+   *     reading — a parent artifact that disappears between extend
+   *     and dispatch is a no-op skip, not an error.
+   *
+   * Optional in TypeScript: pre-v8.59 state files lack the field and
+   * MUST validate unchanged; readers default to `null`/absent meaning
+   * "no parent linked, this is a cold-start /cc flow". Distinct from
+   * {@link priorResearch} (the v8.58 research→task handoff): the two
+   * fields are orthogonal and can coexist on a single flow (a `/cc
+   * extend <slug>` flow that also happens to follow a `/cc research`
+   * ship picks up BOTH context sources).
+   *
+   * Design rationale lives at `.cclaw/flows/v859-continuation/design.md`.
+   */
+  parentContext?: ParentContext | null;
+}
+
+/**
+ * v8.59 — orchestrator-level pointer to a parent shipped slug, set when
+ * the user invokes `/cc extend <slug> <task>`. See
+ * {@link FlowStateV82.parentContext} for the full semantics.
+ *
+ * The `status` field is a string union (not a literal) so v8.60+ can
+ * widen the validator without a schema bump. v8.59's validator accepts
+ * `"shipped"` only.
+ */
+export interface ParentContext {
+  slug: string;
+  status: "shipped";
+  shippedAt?: string;
+  artifactPaths: ParentArtifactPaths;
+}
+
+/**
+ * v8.59 — pre-derived absolute paths to a parent's shipped artifacts.
+ * `plan` is mandatory (its presence was the validation gate); every
+ * other field is optional because the parent may have shipped with a
+ * shorter path (e.g. inline mode has no `review.md`).
+ *
+ * Specialists `await exists(path)` before reading — a parent artifact
+ * that disappears between `/cc extend` and the first dispatch is a
+ * no-op skip, not an error.
+ */
+export interface ParentArtifactPaths {
+  plan: string;
+  build?: string;
+  review?: string;
+  critic?: string;
+  learnings?: string;
+  qa?: string;
 }
 
 export type FlowState = FlowStateV82;
@@ -682,6 +758,52 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     }
     if (typeof pr.path !== "string" || pr.path.length === 0) {
       throw new Error("flow-state.priorResearch.path must be a non-empty string");
+    }
+  }
+  // v8.59 — `parentContext` is optional and accepts `null` as the
+  // explicit-cleared sentinel. When present-and-non-null it must be a
+  // plain object whose `slug` is a non-empty string, `status` is
+  // exactly `"shipped"` (v8.59 only valid value; widened in v8.60+),
+  // and `artifactPaths.plan` is a non-empty string (presence of
+  // plan.md was the validation gate at `/cc extend`). Optional
+  // sibling artifact paths (build/review/critic/learnings/qa) must be
+  // strings when present. Pre-v8.59 state files lack the field
+  // entirely; readers default to `null`/absent.
+  if (state.parentContext !== undefined && state.parentContext !== null) {
+    if (typeof state.parentContext !== "object" || Array.isArray(state.parentContext)) {
+      throw new Error("flow-state.parentContext must be an object, null, or absent");
+    }
+    const pc = state.parentContext as {
+      slug?: unknown;
+      status?: unknown;
+      shippedAt?: unknown;
+      artifactPaths?: unknown;
+    };
+    if (typeof pc.slug !== "string" || pc.slug.length === 0) {
+      throw new Error("flow-state.parentContext.slug must be a non-empty string");
+    }
+    if (pc.status !== "shipped") {
+      throw new Error(
+        `flow-state.parentContext.status must be "shipped" (v8.59 only valid value); got ${JSON.stringify(pc.status)}`
+      );
+    }
+    if (pc.shippedAt !== undefined && typeof pc.shippedAt !== "string") {
+      throw new Error("flow-state.parentContext.shippedAt must be a string or absent");
+    }
+    if (typeof pc.artifactPaths !== "object" || pc.artifactPaths === null || Array.isArray(pc.artifactPaths)) {
+      throw new Error("flow-state.parentContext.artifactPaths must be an object");
+    }
+    const ap = pc.artifactPaths as Record<string, unknown>;
+    if (typeof ap.plan !== "string" || ap.plan.length === 0) {
+      throw new Error("flow-state.parentContext.artifactPaths.plan must be a non-empty string");
+    }
+    for (const optional of ["build", "review", "critic", "learnings", "qa"] as const) {
+      const value = ap[optional];
+      if (value !== undefined && (typeof value !== "string" || value.length === 0)) {
+        throw new Error(
+          `flow-state.parentContext.artifactPaths.${optional} must be a non-empty string when present`
+        );
+      }
     }
   }
 }

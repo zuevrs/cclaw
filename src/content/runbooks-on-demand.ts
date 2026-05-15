@@ -894,6 +894,143 @@ The migration is one-pass and idempotent — a slug whose qa-runner has already 
 For slugs where \`triage.surfaces\` was never populated (the field was added in v8.52 and pre-v8.52 triage prompts did not emit it), the orchestrator does NOT retro-populate the field on read — leaving \`surfaces\` absent is the canonical "this was a pre-v8.52 slug, qa was never on the table" signal. The qa gate evaluates absent-surfaces as the empty list and skips dispatch.
 `;
 
+const EXTEND_MODE = `# On-demand runbook — extend-mode entry point (v8.59+)
+
+The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts with the literal token \`extend \` (case-insensitive, exactly one space)**. The Detect hop fires before the v8.58 research-mode fork — \`extend\` always wins. This runbook covers the full extend-mode contract: argument parsing, parent validation, slug-init patches, triage inheritance, and the four error sub-cases. Specialist consumption of \`parentContext\` lives further down the orchestrator body under \`### v8.59 prior-context consumption\`; this runbook does not duplicate that section.
+
+## Trigger evaluation order (Detect hop)
+
+1. **Git-check sub-step (v8.23)** — \`.git/\` presence; force \`ceremonyMode: soft\` if absent.
+2. **extend-mode fork (v8.59; this runbook)** — argument starts with \`extend \`.
+3. **research-mode fork (v8.58)** — argument starts with \`research \` OR carries \`--research\`.
+4. **Default routes** — fresh / resume / collision / pre-v8 state per the Detect table.
+
+The order matters: \`/cc extend <slug> research <topic>\` enters extend mode, not research. The user wanting a research flow that extends a parent runs \`/cc research <topic>\` directly without the \`extend\` prefix.
+
+## Argument parsing
+
+When the fork fires, parse the argument into two parts:
+
+- \`<slug>\` — the **first whitespace-separated token** after \`extend \`. Cases:
+  - Empty (argument is exactly \`extend\` with no remainder) → sub-case "no slug".
+  - Present but no follow-up text → sub-case "no task".
+  - Present + remainder → continue to validation.
+
+- \`<task>\` — the **remainder of the argument string** after the slug, trimmed. Must be non-empty for the fork to proceed.
+
+The slug token is matched verbatim; no fuzzy resolution at this layer (a typo surfaces as \`reason: "missing"\` from \`loadParentContext\` and the orchestrator's error message points the user at \`cclaw --non-interactive knowledge\` for the canonical list).
+
+## Parent validation via \`loadParentContext\`
+
+Call \`loadParentContext(projectRoot, slug)\` from \`src/parent-context.ts\`. The helper returns a discriminated union:
+
+\`\`\`typescript
+type ParentContextResolution =
+  | { ok: true; context: ParentContext }
+  | { ok: false; reason: ParentContextErrorReason; slug: string; message: string };
+
+type ParentContextErrorReason = "in-flight" | "cancelled" | "missing" | "corrupted";
+\`\`\`
+
+The orchestrator branches on \`ok\`:
+
+### \`ok: true\` — happy path
+
+The slug resolves to a shipped flow with a non-empty \`plan.md\`. Continue with extend-mode initialisation:
+
+1. **Build a slug for the follow-up flow** — canonical \`YYYYMMDD-<semantic-kebab>\` from the \`<task>\` text. Same naming rules as a standard \`/cc <task>\` (date prefix mandatory; same-day collision suffix \`-2\`, \`-3\`, etc.).
+2. **Stamp \`flow-state.json > parentContext\`** — patch the new flow's state with the resolved \`ParentContext\` (slug + status: "shipped" + optional shippedAt + artifactPaths) via \`patchFlowState\`. This is the single source of truth for the parent linkage; specialists read this field, not \`refines\`.
+3. **Seed \`refines:\` in plan.md frontmatter** — write \`refines: <parent-slug>\` so the legacy v8.58 knowledge-store chain (\`findRefiningChain\`), qa-runner skip rule, plan-critic skip gate, and design Phase 6 ambiguity-score brownfield path keep working unchanged. The two writes (\`parentContext\` + \`refines\`) are kept in sync by the same init code path; user manual edits to plan.md after init are out of scope. \`parent_slug:\` mirrors the pointer (v8.59-native field); \`parent_slug:\` wins on drift.
+4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`runMode\` / \`surfaces\` on the new triage decision, unless the user passed an explicit override flag.
+5. **Proceed to triage announcement → first dispatch.** The new flow runs the same pipeline as a standard \`/cc <task>\` (plan → build → qa? → review → critic → ship). Only the parent-context loading at init is new.
+
+### \`ok: false\` — error sub-cases
+
+Surface the resolution's \`message\` field verbatim to the user and end the turn. The validator distinguishes four failure modes:
+
+| \`reason\` | meaning | message template |
+| --- | --- | --- |
+| \`"in-flight"\` | slug is still active under \`flows/<slug>/\` | \`Slug '<slug>' is still in-flight (active under flows/<slug>/). Ship it first, then run /cc extend.\` |
+| \`"cancelled"\` | slug was cancelled (under \`flows/cancelled/<slug>/\`) | \`Slug '<slug>' was cancelled (under flows/cancelled/<slug>/, never shipped). Pass a shipped slug.\` |
+| \`"corrupted"\` | shipped dir exists but \`plan.md\` is missing | \`Shipped slug '<slug>' is corrupted (plan.md missing under flows/shipped/<slug>/). Cannot use as parent context.\` |
+| \`"missing"\` | slug not found under \`flows/\` or \`flows/shipped/\` or \`flows/cancelled/\` | \`Unknown slug '<slug>'. Run 'cclaw --non-interactive knowledge' to list shipped slugs.\` |
+
+The error message is plain prose, ends the turn, and does NOT consume any of the user's quota of clarifying questions (the lightweight router from v8.58 still asks zero questions; extend mode does not change that contract).
+
+## Sub-cases — argument shapes that the parser must handle
+
+- **Argument is \`extend\` alone (no slug, no task)** — surface \`extend mode needs a parent slug; try '/cc extend <slug> <task>'\`, end the turn.
+- **Argument is \`extend <slug>\` (slug but no task)** — surface \`extend mode needs a follow-up task description; try '/cc extend <slug> <task>'\`, end the turn.
+- **Argument is \`extend <slug> <task>\` AND a flow is active (\`currentSlug != null\`)** — collision case. Run the standard resume summary + r/s/n picker. On \`n\` (cancel the active flow), dispatch the extend flow as if no flow were active. On \`r\` or \`s\`, the user's choice wins; extend-mode dispatch is deferred until the active flow finalises.
+- **Argument is \`extend <slug> <task>\` AND \`<slug>\` resolves to a shipped slug with \`outcome_signal: "reverted"\` in \`knowledge.jsonl\`** — proceed with extend init, but emit a one-line informational note: \`parent slug '<slug>' was later reverted — proceed only if you understand the revert.\` The user can still ship the follow-up; the note exists so a reverted parent does not become invisible context.
+- **Argument starts with \`extend \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — the explicit flag wins over inheritance (the user knows the new task's complexity better than the parent's classification did). Audit log records \`userOverrode: true\` when the chosen value differs from the parent's value.
+- **Argument starts with \`extend \` AND the \`--mode=auto\` / \`--mode=step\` flag is also present** — the explicit toggle wins over inheritance (same precedence as ceremonyMode flags).
+- **Argument is \`extend <slug> research <topic>\`** — extend mode takes precedence (the research-mode fork below does not fire when the argument begins with \`extend \`). The new flow extends \`<slug>\` and runs a normal task pipeline; the user wanting a research flow that extends a parent should run \`/cc research <topic>\` directly without the extend prefix.
+
+## Multi-level chaining
+
+v8.59 loads the **immediate** parent only. If \`parentContext.slug\` itself has \`refines:\` (its parent has a grandparent), the orchestrator does NOT auto-load the grandparent's artifacts. Specialists may walk the chain on demand via \`findRefiningChain\` in \`src/knowledge-store.ts\` when transitive context is needed (the helper walks parent → grandparent → great-grandparent until it hits a slug with no \`refines:\`). Multi-level auto-loading at orchestrator level is v8.60+ scope; the constraint here keeps the v8.59 context-loading bounded.
+
+## Triage inheritance (fires only when \`parentContext\` is set at flow init)
+
+When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the orchestrator runs an **inheritance sub-step** BEFORE the v8.58 lightweight router's heuristic classifier. The sub-step reads the parent's shipped \`ship.md\` / \`plan.md\` frontmatter (best-effort; missing fields fall through to the router default) and seeds the new flow's triage with the parent's values:
+
+- \`ceremonyMode\` ← parent's \`ceremony_mode\` (or pre-v8.56 \`ac_mode\`) from plan.md frontmatter, OR the value implied by the parent's ship.md when plan.md frontmatter is absent.
+- \`runMode\` ← parent's \`run_mode\` from ship.md frontmatter (when present).
+- \`surfaces\` ← parent's \`surfaces\` from plan.md / triage block (when present).
+
+### Precedence rules (highest → lowest, evaluated in this order)
+
+1. **Explicit override flag from the current \`/cc extend\`** — \`--strict\` / \`--soft\` / \`--inline\` for ceremonyMode; \`--mode=auto\` / \`--mode=step\` for runMode. Always wins; inheritance is bypassed for that field. Audit log records \`userOverrode: true\` when the chosen value differs from the parent's value.
+2. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the v8.23 no-git auto-downgrade audit shape.
+3. **Parent inheritance** — fields not pinned by (1) or (2) inherit from parent's frontmatter.
+4. **Router default** — fields not seeded by (1)-(3) fall through to the v8.58 lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
+
+The inheritance is one-way: the new flow's triage values are immutable for its lifetime (except \`runMode\` via the v8.34 mid-flight toggle); changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init.
+
+### Worked examples
+
+| user invocation | parent's \`ceremony_mode\` | parent's \`run_mode\` | new flow's \`ceremonyMode\` | new flow's \`runMode\` | rationale |
+| --- | --- | --- | --- | --- | --- |
+| \`/cc extend 20260514-auth-flow add OIDC\` | strict | step | strict | step | rule 3 (pure inheritance) |
+| \`/cc extend 20260514-auth-flow --soft tighten error copy\` | strict | step | soft | step | rule 1 (explicit flag wins on ceremonyMode); rule 3 inherits runMode |
+| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | step | strict | step | rule 2 (escalation heuristic — \`migration\` keyword) |
+| \`/cc extend 20260514-auth-flow --mode=auto tighten error copy\` | strict | step | strict | auto | rule 1 (explicit toggle wins on runMode); rule 3 inherits ceremonyMode |
+| \`/cc extend 20260514-cli-help fix typo\` | inline | (null) | inline | (null) | rule 3 (inheritance); inline path has no runMode |
+| \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (unknown) | (router heuristic decides) | (router heuristic decides) | rule 4 (router fallthrough) |
+
+The audit log entry for the new flow's triage decision records:
+
+\`\`\`json
+{
+  "decidedAt": "<iso>",
+  "ceremonyMode": "strict",
+  "runMode": "step",
+  "rationale": "extend-mode inheritance from 20260514-auth-flow (parent: ceremony_mode=strict, run_mode=step)",
+  "parentSlug": "20260514-auth-flow",
+  "inheritanceSource": "parent-frontmatter",
+  "userOverrode": false
+}
+\`\`\`
+
+When \`userOverrode: true\` is recorded, the entry also includes a \`overrideField\` array (e.g. \`["ceremonyMode"]\`) so audit consumers can tell which field was explicitly flagged vs. which was inherited.
+
+## What the orchestrator does NOT do at extend init
+
+- **Auto-load grandparent artifacts.** v8.59 immediate-parent-only; multi-level traversal is opt-in via \`findRefiningChain\` from specialists.
+- **Auto-detect extend intent from task text.** v8.59 ships the explicit \`/cc extend <slug>\` entry point only. Auto-detection (recognising "extend feature X" / "continue X" / "after slug Y" in a plain \`/cc <task>\`) is deferred to a future release — the v8.58 lightweight router is zero-question by default and adding a combined-form ask ("Looks like you're extending <slug>. Use parent context? [y/n]") would conflict with that contract. The deferred decision is recorded in \`.cclaw/flows/v859-continuation/design.md\` under "Decisions > D-7: auto-detection deferred".
+- **Re-read parent state during the flow.** \`parentContext\` is stamped once at init and treated as immutable. If the parent's artifacts change after extend init (the parent is unshipped, re-shipped, or modified out-of-band), the new flow's view is stale and that is by design — specialists read the paths via \`await exists(path)\` and treat missing as a no-op skip.
+- **Validate task overlap with the parent.** The orchestrator does not check whether the \`<task>\` text is coherent with the parent's scope; that's design's job (Phase 0 reads parent plan.md and surfaces the "Building on prior decisions" framing, then Phase 1 clarifies any contradictions).
+- **Walk the knowledge store.** \`findNearKnowledge\` (v8.18) still runs at the specialist that consumes the result (\`ac-author\` Phase 3 on soft; \`design\` Phase 1 / Phase 4 on strict). When \`parentContext\` is set, the lookup augments rather than replaces; the parent's \`learnings.md\` ride alongside the global knowledge-store top-3 picks.
+
+## Backwards compatibility
+
+- **Pre-v8.59 state files** never carry \`parentContext\`. Readers default to \`null\`/absent meaning "cold-start flow, no parent". Migration is a no-op; the field is opt-in.
+- **Pre-v8.59 shipped slugs** are valid extend targets. Their plan.md may not have a \`parent_slug:\` field; the orchestrator does not write one retroactively. The new flow's \`parentContext.slug\` is the canonical link.
+- **\`priorResearch\` co-existence.** A \`/cc extend\` flow that also follows a \`/cc research\` ship reads BOTH context sources (the two fields are orthogonal on the FlowState type). Specialists merge the two when both are present; \`priorResearch\` is the bigger / fuzzier context, \`parentContext\` is the tighter / structured one.
+- **Auto-detection deferral.** If a future release ships auto-detection, the entry point in this runbook stays unchanged — auto-detection becomes a second path into the same init code (the explicit \`/cc extend\` slug stays as the primary, unambiguous entry).
+`;
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -960,6 +1097,12 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "qa-stage.md",
     title: "QA step (v8.52+)",
     body: QA_STAGE
+  },
+  {
+    id: "extend-mode",
+    fileName: "extend-mode.md",
+    title: "Extend-mode entry point (v8.59+)",
+    body: EXTEND_MODE
   }
 ];
 

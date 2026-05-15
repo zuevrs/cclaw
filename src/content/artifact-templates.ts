@@ -50,6 +50,18 @@ ac:
     posture: test-first
 last_specialist: null
 refines: null
+# v8.59 — parent_slug mirrors the orchestrator-level pointer set when the
+# flow was initialised via /cc extend <slug> <task>. The orchestrator's
+# Detect hop seeds this field at slug-init when flowState.parentContext is
+# set; ac-author Phase 1.7 (when run) confirms the value. Distinct from
+# the refines: field above: refines is the legacy/manual link
+# (also written by the v8.59 extend init for back-compat with the
+# knowledge-store chain + qa-runner skip / plan-critic skip / design
+# ambiguity-score brownfield gates), while parent_slug is the
+# v8.59-native pointer that downstream tooling can rely on without
+# ambiguity. The two values are kept in sync at extend init; if they
+# drift (e.g. user manual edit), parent_slug is authoritative.
+parent_slug: null
 shipped_at: null
 ship_commit: null
 review_iterations: 0
@@ -66,6 +78,23 @@ ambiguity_threshold: null
 # SLUG-PLACEHOLDER
 
 > One short paragraph: what we are doing and why. If the goal does not fit in 4 lines, the request is probably too large — split it.
+
+## Extends
+
+_(v8.59 — present only when this flow was initialised via \`/cc extend <slug> <task>\`. ac-author Phase 1.7 authors this section verbatim from \`flowState.parentContext\`. Drop the entire section on cold-start \`/cc <task>\` flows. Format:_
+
+_\`refines: <parent-slug>\` (shipped \`<parent.shippedAt>\` if known). Parent decision summary: one-line synthesis of the highest-blast-radius D-N from the parent's plan.md, or "see parent's plan for context" when no decisions were recorded._
+
+_Parent artifacts (one bullet per artifact, only those present on disk):_
+
+_- [plan](../shipped/<parent-slug>/plan.md)_
+_- [build](../shipped/<parent-slug>/build.md) — when present_
+_- [review](../shipped/<parent-slug>/review.md) — when present_
+_- [critic](../shipped/<parent-slug>/critic.md) — when present_
+_- [qa](../shipped/<parent-slug>/qa.md) — when present_
+_- [learnings](../shipped/<parent-slug>/learnings.md) — when present_
+
+_The relative paths use \`../shipped/<parent-slug>/\` to walk from the active \`flows/<new-slug>/\` directory to the parent's shipped directory. The reviewer's parent-contradictions cross-check (v8.59) reads this section to validate the new flow does not silently undo a parent decision.)_
 
 ## Frame
 
@@ -188,6 +217,10 @@ status: active
 ceremony_mode: soft
 last_specialist: null
 refines: null
+# v8.59 — see PLAN_TEMPLATE above for parent_slug semantics. Same field,
+# same authority rules (extend init seeds; ac-author Phase 1.7 confirms;
+# parent_slug wins on drift).
+parent_slug: null
 shipped_at: null
 ship_commit: null
 review_iterations: 0
@@ -197,6 +230,10 @@ security_flag: false
 # SLUG-PLACEHOLDER
 
 > One short paragraph: what we are doing and why. If the goal does not fit in 4 lines, the request is probably too large — split it or re-triage to large-risky.
+
+## Extends
+
+_(v8.59 — present only when this flow was initialised via \`/cc extend <slug> <task>\`. ac-author Phase 1.7 authors this section verbatim from \`flowState.parentContext\` on soft flows. Drop the entire section on cold-start \`/cc <task>\` flows. Format is identical to the strict PLAN_TEMPLATE — \`refines: <parent-slug>\` line + parent decision summary + bulleted artifact links. See PLAN_TEMPLATE comment for the exact shape.)_
 
 ## Plan
 
@@ -1365,4 +1402,105 @@ export function manifestTemplate(slug: string, shipCommit: string, shippedAt: st
     "SHIP-COMMIT-PLACEHOLDER": shipCommit,
     "SHIPPED-AT-PLACEHOLDER": shippedAt
   });
+}
+
+/**
+ * v8.59 — render the `## Extends` section that ac-author Phase 1.7
+ * writes at the top of plan.md when `flowState.parentContext` is set.
+ * The function takes the structured `ParentContext` (the orchestrator
+ * stamped it into flow-state at extend init) and an optional
+ * `decisionSummary` (a one-line synthesis of the parent's highest-
+ * blast-radius D-N; ac-author composes this from the parent's plan.md
+ * `## Decisions` section, or falls back to a default sentence when no
+ * D-N records exist).
+ *
+ * The relative artifact links use the `../shipped/<parent-slug>/`
+ * pattern (walking from `.cclaw/flows/<new-slug>/plan.md` up to
+ * `.cclaw/flows/shipped/<parent-slug>/`); the new slug is not needed
+ * here because the relative path is symmetric.
+ *
+ * The output is one Markdown block ready to splice into plan.md
+ * between the H1 title and the `## Frame` heading. No trailing
+ * newline — the caller adds whatever separator their splicer needs.
+ *
+ * The function does NOT read parent artifacts to compose the summary
+ * — that's ac-author's job (the parent's plan.md is in the new
+ * flow's read-set at extend init via `parentContext.artifactPaths.plan`).
+ * This is a pure rendering helper; supply the summary text from
+ * upstream.
+ */
+export interface ExtendsSectionInput {
+  parentSlug: string;
+  shippedAt?: string;
+  /**
+   * One-line synthesis of the parent's highest-blast-radius D-N (e.g.
+   * "switched session storage from Redis to Postgres for durability
+   * (D-2 in parent's plan)"), OR the parent's `## Selected Direction`
+   * one-liner when no D-N records exist, OR `"see parent's plan for
+   * context"` when both are absent. Trimmed; never empty.
+   */
+  decisionSummary: string;
+  /**
+   * Map of artifact-key → relative path. The keys are the optional
+   * artifacts (`build` / `review` / `critic` / `qa` / `learnings`);
+   * `plan` is implicit (always present, always linked). Pass only the
+   * keys whose underlying file exists — `loadParentContext` already
+   * filtered out missing artifacts in `parentContext.artifactPaths`.
+   *
+   * Each value is the path as it should appear in the rendered link
+   * (typically `../shipped/<parent-slug>/<artifact>.md`). The helper
+   * does NOT compute paths; the caller passes them so this function
+   * stays a pure renderer with no filesystem dependency.
+   */
+  optionalArtifactRelativePaths: Partial<Record<"build" | "review" | "critic" | "qa" | "learnings", string>>;
+  /**
+   * Relative path to the parent's plan.md, e.g.
+   * `../shipped/20260514-auth-flow/plan.md`. Always rendered (the
+   * `plan` artifact is mandatory; its presence was the validation
+   * gate at `/cc extend`).
+   */
+  planRelativePath: string;
+}
+
+export function renderExtendsSection(input: ExtendsSectionInput): string {
+  const {
+    parentSlug,
+    shippedAt,
+    decisionSummary,
+    optionalArtifactRelativePaths,
+    planRelativePath
+  } = input;
+  if (typeof parentSlug !== "string" || parentSlug.length === 0) {
+    throw new Error("renderExtendsSection: parentSlug must be a non-empty string");
+  }
+  if (typeof decisionSummary !== "string" || decisionSummary.trim().length === 0) {
+    throw new Error("renderExtendsSection: decisionSummary must be a non-empty string");
+  }
+  if (typeof planRelativePath !== "string" || planRelativePath.length === 0) {
+    throw new Error("renderExtendsSection: planRelativePath must be a non-empty string");
+  }
+  const shippedAtFragment = shippedAt && shippedAt.length > 0 ? `shipped ${shippedAt}` : "shipped date unknown";
+  const lines: string[] = [];
+  lines.push("## Extends");
+  lines.push("");
+  lines.push(
+    `\`refines: ${parentSlug}\` (${shippedAtFragment}). Parent decision summary: ${decisionSummary.trim()}`
+  );
+  lines.push("");
+  lines.push("Parent artifacts:");
+  lines.push(`- [plan](${planRelativePath})`);
+  const ORDER: ReadonlyArray<keyof typeof optionalArtifactRelativePaths> = [
+    "build",
+    "qa",
+    "review",
+    "critic",
+    "learnings"
+  ];
+  for (const key of ORDER) {
+    const value = optionalArtifactRelativePaths[key];
+    if (typeof value === "string" && value.length > 0) {
+      lines.push(`- [${key}](${value})`);
+    }
+  }
+  return lines.join("\n");
 }

@@ -86,7 +86,7 @@ Phase 0 is **one turn**. Do not ask follow-up questions inside it; that's Phase 
 1. Read \`.cclaw/lib/agents/ac-author.md\` (this file).
 2. Read \`.cclaw/lib/skills/plan-authoring.md\`.
 3. Read \`.cclaw/lib/skills/source-driven.md\` if the task is framework-specific; \`parallel-build.md\` if strict mode; \`anti-slop.md\` always.
-4. Open \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.ceremonyMode\`, \`triage.assumptions\` (verbatim list — v8.58: usually written by your own Phase 0 on the soft path; pre-v8.58 state files may have the field pre-seeded by the orchestrator), \`triage.interpretationForks\` (chosen-reading sentence(s); typically one — v8.58 legacy back-compat; new soft flows handle interpretation forks in Phase 0's assumption ask instead), \`flowState.priorResearch\` (v8.58 — optional pointer to a prior \`/cc research <topic>\` flow's research.md; when non-null, read \`priorResearch.path\` and use the research as Frame / Approaches / AC-scoping context, citing the linked slug inline). When \`interpretationForks\` is non-null/non-empty, it is the user's framing of the work — your AC must build the thing the user picked, not the orchestrator's paraphrase.
+4. Open \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.ceremonyMode\`, \`triage.assumptions\` (verbatim list — v8.58: usually written by your own Phase 0 on the soft path; pre-v8.58 state files may have the field pre-seeded by the orchestrator), \`triage.interpretationForks\` (chosen-reading sentence(s); typically one — v8.58 legacy back-compat; new soft flows handle interpretation forks in Phase 0's assumption ask instead), \`flowState.priorResearch\` (v8.58 — optional pointer to a prior \`/cc research <topic>\` flow's research.md; when non-null, read \`priorResearch.path\` and use the research as Frame / Approaches / AC-scoping context, citing the linked slug inline), \`flowState.parentContext\` (v8.59 — optional pointer to a prior **shipped** slug's plan/build/learnings/critic/qa/review artifacts when the flow was initialised via \`/cc extend <slug> <task>\`; when non-null, read \`parentContext.artifactPaths.plan\` and use the parent's \`## Spec\` + \`## Plan\` (soft) or \`## Acceptance Criteria\` (strict) as AC-scoping context — see Phase 1.7 below for the mandatory \`## Extends\` section authoring). When \`interpretationForks\` is non-null/non-empty, it is the user's framing of the work — your AC must build the thing the user picked, not the orchestrator's paraphrase.
 5. Open \`.cclaw/flows/<slug>/plan.md\`. Design's Frame / Approaches / Selected Direction / Decisions (inline D-N) / Pre-mortem (deep posture) / Not Doing should already be there on large-risky.
 6. Open legacy \`.cclaw/flows/<slug>/decisions.md\` if it exists (legacy resume). On current flows the D-N records are inline in plan.md and this file does not exist.
 7. Open \`.cclaw/flows/<slug>/research-repo.md\` if it exists.
@@ -112,7 +112,39 @@ v8.58 — the orchestrator's lightweight router no longer writes \`triage.surfac
 3. \`patchFlowState\` with \`triage.surfaces: <detected list>\`.
 4. **qa-stage path rewrite.** If the detected surfaces include \`"ui"\` or \`"web"\` AND \`triage.ceremonyMode != "inline"\` (soft path is \`"soft"\`, so this always holds when Phase 1.5 ran), the same \`patchFlowState\` MUST also rewrite \`triage.path\` to insert \`"qa"\` between \`"build"\` and \`"review"\` — e.g. \`["plan", "build", "review", "critic", "ship"]\` → \`["plan", "build", "qa", "review", "critic", "ship"]\`. This preserves the v8.52 qa-runner gating contract verbatim; only the writer moved from the orchestrator's triage step to your Phase 1.5.
 
-Phase 1.5 is silent; emit no user-facing output. After the patch, proceed to Phase 2 in the same turn.
+Phase 1.5 is silent; emit no user-facing output. After the patch, proceed to Phase 1.7 in the same turn.
+
+### Phase 1.7 — Parent-context linkage (v8.59; runs after Phase 1.5, before Phase 2 — only when \`flowState.parentContext\` is set)
+
+**Run Phase 1.7 only when** \`flowState.parentContext\` is non-null (a \`/cc extend <slug> <task>\` invocation stamped it at flow init). Skip silently when the field is absent — pre-v8.59 flows and cold-start \`/cc <task>\` flows never see this phase.
+
+**Protocol:**
+
+1. \`await exists(flowState.parentContext.artifactPaths.plan)\` — the parent's shipped \`plan.md\` is the mandatory artifact (the \`/cc extend\` validator confirmed presence at flow init, but a paranoid re-check guards against the user manually deleting it between extend and dispatch). Missing → log a one-line note (\`parent plan.md missing at <path>; proceeding without parent context\`) under \`## Open questions\` in the new plan.md and proceed without parent linkage.
+2. Read the parent's plan.md \`## Spec\` section (always present on v8.46+) and \`## Decisions\` section (present on large-risky parents; may be absent on soft parents). Extract the parent's Objective / Boundaries / Out-of-scope to seed the new AC scoping; extract up to 3 highest-blast-radius D-N records as parent decisions the new flow inherits.
+3. **Author the mandatory \`## Extends\` section** at the TOP of the new plan.md (after \`# <slug>\` heading, before \`## Frame\` on strict / before \`## Plan\` on soft). The section format is fixed; readers and reviewer's cross-check expect it verbatim:
+
+\`\`\`markdown
+## Extends
+
+\`refines: <parentContext.slug>\` (shipped <parentContext.shippedAt | "date unknown">). Parent decision summary: <one-line synthesis of the parent's highest-blast-radius D-N, or the parent's \`## Selected Direction\` when no D-N records exist, or "see parent's plan for context" when both are absent>.
+
+Parent artifacts:
+- [plan](<relative path to parent's plan.md from new slug's flow dir>)
+- [build](<relative path>) *(if parentContext.artifactPaths.build is set)*
+- [review](<relative path>) *(if parentContext.artifactPaths.review is set)*
+- [critic](<relative path>) *(if parentContext.artifactPaths.critic is set)*
+- [qa](<relative path>) *(if parentContext.artifactPaths.qa is set)*
+- [learnings](<relative path>) *(if parentContext.artifactPaths.learnings is set)*
+\`\`\`
+
+The relative paths are computed from the new slug's active flow directory (\`.cclaw/flows/<new-slug>/\`) to the parent's shipped directory (\`.cclaw/flows/shipped/<parentSlug>/\`) — typically \`../shipped/<parentSlug>/<artifact>.md\`. Use that pattern verbatim unless the project's filesystem layout overrides it.
+
+4. **Also set plan.md frontmatter \`refines: <parentContext.slug>\`** so existing downstream consumers (compound's \`knowledge.jsonl\` writer, qa-runner skip rule, design Phase 6 brownfield ambiguity score, plan-critic skip gate) keep working unchanged. The orchestrator's Detect-hop extend-mode fork already seeded \`refines:\` in the plan.md skeleton when extend init ran; this step confirms the value is set correctly (sometimes the skeleton write races with the user's first dispatch — confirm via direct frontmatter read, NOT via the in-memory value the orchestrator passed).
+5. **AC inheritance scoping (soft path; large-risky has design already filtered this).** When \`triage.complexity == "small-medium"\` AND parent's plan.md has a \`## Testable conditions\` section, surface 3-5 of the parent's testable conditions in your Phase 0 assumption ask as "Prior testable conditions: <bullet list>" — the user can accept (silence; they apply verbatim to the new flow) or revise (mention what changes). Persist any user corrections to \`triage.assumptions\` alongside the rest.
+6. **Reviewer cross-check awareness.** The reviewer specialist (see \`reviewer.md\`) runs a parent-contradictions cross-check at every review iteration when \`flowState.parentContext\` is set. Your AC must NOT silently undo a parent D-N decision; if the new task explicitly reverses a parent decision, surface it in plan.md under \`## Open questions\` as "Reverses parent decision D-N: <one-line rationale>" — the reviewer reads this section and acknowledges the explicit reversal rather than flagging it as a contradiction.
+
+Phase 1.7 is silent (no user-facing output). After authoring the \`## Extends\` section and confirming frontmatter \`refines:\`, proceed to Phase 2 in the same turn.
 
 ### Phase 2 — Assumptions + interpretation cross-check (always, < 1 min)
 
