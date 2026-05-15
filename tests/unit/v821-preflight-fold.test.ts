@@ -39,8 +39,15 @@ describe("v8.21 preflight-fold", () => {
       expect(START_COMMAND_BODY).toMatch(/large-risky[\s\S]*?design Phase 0/u);
     });
 
-    it("design.ts Phase 0 explicitly mentions the v8.21 fold (assumption-surface ownership)", () => {
-      expect(DESIGN_PROMPT).toContain("Assumption-surface ownership");
+    it("design.ts Phase 0 explicitly mentions the v8.21 fold (assumption-capture ownership; v8.58 renamed the surface)", () => {
+      // v8.58 — when the v8.58 router stopped pre-seeding `triage.assumptions`
+      // (the router is lightweight; the specialist captures), Phase 0's
+      // ownership block was renamed to "Assumption-capture ownership" with the
+      // explicit "v8.58 — moved from triage" qualifier. The substring
+      // "Assumption-capture ownership" subsumes the v8.21 "Assumption-surface
+      // ownership" wording: v8.21 folded the preflight surface into design,
+      // v8.58 deepens the fold by also folding the orchestrator-side capture.
+      expect(DESIGN_PROMPT).toContain("Assumption-capture ownership");
       expect(DESIGN_PROMPT).toContain("triage.assumptions");
     });
   });

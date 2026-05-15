@@ -12,7 +12,16 @@ export interface ArtifactTemplate {
     | "decisions"
     | "learnings"
     | "manifest"
-    | "ideas";
+    | "ideas"
+    /**
+     * v8.58 — `research.md` template for standalone research-mode
+     * flows (`/cc research <topic>`). Written by the `design`
+     * specialist when activated in standalone mode; same section
+     * layout as the design portion of `plan.md` but with a
+     * research-specific frontmatter (mode / topic / generated_at)
+     * and no AC table / topology / traceability.
+     */
+    | "research";
   fileName: string;
   description: string;
   body: string;
@@ -1136,6 +1145,145 @@ _(If this run refined a previous slug, link to its shipped manifest here.)_
 This slug is referenced from \`.cclaw/knowledge.jsonl\` whenever the compound quality gate captured a learning.
 `;
 
+/**
+ * v8.58 — `research.md` template for standalone research-mode flows
+ * (`/cc research <topic>` / `/cc --research <topic>`). The artifact is
+ * written by the `design` specialist when activated in standalone mode
+ * (`triage.mode == "research"`); same section layout as the design
+ * portion of `plan.md`, but with a research-specific frontmatter block
+ * (mode / topic / generatedAt) instead of the intra-flow plan
+ * frontmatter, and no AC table, Topology, or Traceability block (those
+ * belong to a follow-up `/cc <task>` flow that consumes this research
+ * via `flowState.priorResearch`).
+ *
+ * The frontmatter `mode: research` field is the disambiguator between
+ * this artifact and `plan.md` — readers that walk `flows/shipped/`
+ * branch on this field to decide whether the slug shipped a research
+ * artifact (no AC; no build / review / critic / ship stages ran) or a
+ * normal plan (full pipeline).
+ */
+const RESEARCH_TEMPLATE = `---
+slug: SLUG-PLACEHOLDER
+stage: plan
+status: active
+mode: research
+topic: TOPIC-PLACEHOLDER
+generated_at: GENERATED-AT-PLACEHOLDER
+last_specialist: null
+refines: null
+shipped_at: null
+ship_commit: null
+# v8.53 — design Phase 6 ambiguity score also applies to research-mode
+# composition. Same composite (0.0-1.0) across 3 dimensions (greenfield)
+# or 4 dimensions (brownfield); soft signal at Phase 7 picker; never a
+# hard gate.
+ambiguity_score: null
+ambiguity_dimensions: null
+ambiguity_threshold: null
+---
+
+# Research — SLUG-PLACEHOLDER
+
+> Topic: **TOPIC-PLACEHOLDER**.
+>
+> This artifact is the output of a \`/cc research <topic>\` flow — the
+> \`design\` specialist's standalone-mode pass (Phase 0 Bootstrap →
+> Phase 1 Clarify → Phase 2 Frame → Phase 3 Approaches → Phase 4
+> Decisions → Phase 5 Pre-mortem → Phase 6 Compose; Phase 7 emits the
+> two-option \`accept research\` / \`revise\` picker). No build /
+> review / critic / ship stages run; the flow finalises to
+> \`.cclaw/flows/shipped/<slug>/research.md\` on \`accept research\`.
+>
+> Optional handoff: the next \`/cc <task>\` invocation on this project
+> reads the most-recent shipped research slug and stamps it into
+> \`flow-state.json > priorResearch\` so the follow-up flow's
+> design Phase 0 / ac-author Phase 0 / Phase 1 reads carry this
+> research as context.
+
+## Frame
+
+_(Design Phase 2, mandatory. 2-5 sentences: what is unclear or under-explored today, who feels it, what success looks like for the RESEARCH outcome — a sharper task description, a chosen architectural direction, a vetted set of approaches — rather than for a shipped feature. What is explicitly out of scope for THIS research. Cite real evidence — \`file:path:line\`, prior shipped slugs, ticket id — when you have it.)_
+
+## Spec
+
+_(Design Phase 2, mandatory in v8.46+. Four bullets — Objective / Success / Out of scope / Boundaries — adapted for research outcomes rather than shippable features.)_
+
+- **Objective** — _what we are researching and why, in one short line. Often a restatement of the topic from the user's prompt._
+- **Success** — _high-level indicators that the research is done — what the user would observe (e.g. "user has a clear pick between approach A and B with named trade-offs"; "open questions reduced from 5 to 2")._
+- **Out of scope** — _explicit non-goals derived from this Frame + the user's topic. Mirrors the \`## Not Doing\` section below at a higher altitude._
+- **Boundaries** — _per-research "ask first" / "never do" constraints layered on top of the iron-laws. Examples: "do not propose changes outside the current monorepo", "stay within the existing auth provider"._
+
+## Non-functional
+
+_(Design Phase 2, optional. Compose the four NFR rows when the research touches a product-grade tier OR carries irreversibility (data migration, public API change, auth / payment surface, performance hot-path, accessibility-sensitive UI). Skip the section entirely when neither trigger fires.)_
+
+- **performance:** _budgets that bound the eventual implementation (e.g. "any chosen approach must hold p95 < 200ms over 100 RPS")._
+- **compatibility:** _runtime / dependency-version constraints (e.g. "must support Node 20+", "must not require a new database")._
+- **accessibility:** _a11y baseline that bounds the chosen approach for UI research._
+- **security:** _auth / data-classification / compliance baseline; defer threat modelling to a follow-up flow if depth is needed._
+
+## Approaches
+
+_(Design Phase 3, mandatory on research mode. 2-3 candidate approaches to the Frame, each with name / what it is / trade-offs / effort / best-when. Drop dead options; do not pad to 3 rows for symmetry.)_
+
+| Approach | What it is | Trade-offs | Effort | Best when |
+| --- | --- | --- | --- | --- |
+| _name_ | _one sentence_ | _2-4 bullets_ | _small/medium/large_ | _scenario_ |
+
+## Selected Direction
+
+_(Design Phase 3, mandatory. One paragraph naming the picked option + rationale, including why the rejected alternatives lost. On research mode this is a RECOMMENDATION, not a commitment — the follow-up \`/cc <task>\` flow that consumes this research can pick a different approach and the research stays valid as the analysis that led to the choice.)_
+
+## Decisions
+
+_(Design Phase 4, optional. For each structural decision the selected approach implies (≥2 defensible options + blast-radius + visible failure modes), append a D-N record. On research mode these are RECOMMENDATIONS — the follow-up task flow's ac-author / design can re-derive D-N inline in plan.md, optionally citing the research's D-N as prior art.)_
+
+### Decision D-1: _one-line title_
+
+- **Choice:** _what we're recommending — one sentence._
+- **Blast-radius:** _files affected, surface touched, rollback cost — 2-4 bullets._
+- **Failure modes:**
+  - _mode 1 — what goes wrong, what the user sees_
+  - _mode 2 — what goes wrong, what the user sees_
+- **Alternatives considered:**
+  - _alt A — why rejected_
+  - _alt B — why rejected_
+- **Refs:** _file:path:line, prior shipped slugs, doc URLs if framework-specific._
+
+## Pre-mortem
+
+_(Design Phase 5, deep posture only. 3-7 failure modes ranked by likelihood × impact. For research mode, the failure modes are about the RECOMMENDED approach landing badly in the follow-up implementation: "we picked approach A, three months later it's a regret because <X>".)_
+
+- **Failure mode 1 — _name_:** _what happened (1-2 sentences); earliest signal; mitigation._
+
+## Not Doing
+
+_(Design Phase 6, mandatory. 3-5 concrete bullets that bound the research's scope. On research mode this is explicit about what the research will NOT cover — e.g. "Not deciding on the migration timeline — that's a separate \`/cc <task>\` after the architecture pick lands".)_
+
+- _bullet 1_
+- _bullet 2_
+
+## Open questions
+
+_(Compiled across Phases 1 / 3 / 4 / 5 — any unresolved ambiguity, deferred decision, or "user input needed" point. Surfaced explicitly at Phase 7 sign-off so the user sees the gaps. On research mode, leaving open questions is normal — the follow-up flow may resolve them via design Phase 1.)_
+
+- _open question 1_
+
+## Summary — design (research mode)
+
+### Findings
+
+- _one bullet per major finding from the research — what we learned that the user did not know going in._
+
+### Recommendations
+
+- _one bullet per recommended decision — what we suggest the user / follow-up flow do, and why._
+
+### Open questions left for the follow-up flow
+
+- _one bullet per question that did NOT get resolved here and SHOULD be addressed when the user picks a follow-up \`/cc <task>\`._
+`;
+
 const IDEAS_TEMPLATE = `# .cclaw/ideas.md
 
 This file is a free-form idea backlog. Entries are appended by \`/cc-idea\` and never auto-promoted to plans. To act on an idea, invoke \`/cc <task>\` describing it.
@@ -1156,7 +1304,15 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },
   { id: "manifest", fileName: "manifest.md", description: "Shipped manifest template; lists AC, artifacts, refines link.", body: MANIFEST_TEMPLATE },
-  { id: "ideas", fileName: "ideas.md", description: "Append-only idea backlog seed.", body: IDEAS_TEMPLATE }
+  { id: "ideas", fileName: "ideas.md", description: "Append-only idea backlog seed.", body: IDEAS_TEMPLATE },
+  // v8.58 — `research.md` for standalone research-mode flows. Written
+  // by the `design` specialist in standalone activation; finalized to
+  // `.cclaw/flows/shipped/<slug>/research.md` on Phase 7 `accept
+  // research`. The frontmatter `mode: research` field is the
+  // disambiguator between this artifact and `plan.md` — readers that
+  // walk `flows/shipped/` branch on this field to decide which
+  // artifact shape the slug shipped.
+  { id: "research", fileName: "research.md", description: "v8.58 research-mode artifact — standalone `design` specialist output for `/cc research <topic>` flows. Same section layout as the design portion of plan.md (Frame / Spec / NFR / Approaches / Selected Direction / Decisions / Pre-mortem / Not Doing / Open questions / Summary), plus the research-specific frontmatter (mode: research, topic, generated_at). No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`. Phase 6 ambiguity score still emitted (soft signal at Phase 7 picker).", body: RESEARCH_TEMPLATE }
 ];
 
 export function templateBody(id: ArtifactTemplate["id"], replacements: Record<string, string> = {}): string {
@@ -1171,6 +1327,36 @@ export function templateBody(id: ArtifactTemplate["id"], replacements: Record<st
 
 export function planTemplateForSlug(slug: string): string {
   return templateBody("plan", { "SLUG-PLACEHOLDER": slug });
+}
+
+/**
+ * v8.58 — render the standalone research-mode artifact for a fresh
+ * `/cc research <topic>` flow. The orchestrator calls this immediately
+ * after stamping the sentinel triage block (`triage.mode == "research"`)
+ * and before dispatching design in standalone mode; the templated file
+ * lands at `.cclaw/flows/<slug>/research.md` for design Phase 0 to
+ * pick up. The placeholders match the template body verbatim:
+ *
+ * - `SLUG-PLACEHOLDER` — the v8.58 research-mode slug (always
+ *   `YYYYMMDD-research-<semantic-kebab>` per the Detect step's
+ *   research-mode fork; the `-research-` infix is mandatory).
+ * - `TOPIC-PLACEHOLDER` — the topic line, i.e. the user's
+ *   `/cc research <topic>` argument with the `research ` / `--research`
+ *   trigger stripped. The orchestrator passes it verbatim so the
+ *   user's framing is preserved in the artifact frontmatter.
+ * - `GENERATED-AT-PLACEHOLDER` — ISO-8601 timestamp at which the
+ *   orchestrator stamped the template (research flow start).
+ */
+export function researchTemplateForSlug(
+  slug: string,
+  topic: string,
+  generatedAtIso: string
+): string {
+  return templateBody("research", {
+    "SLUG-PLACEHOLDER": slug,
+    "TOPIC-PLACEHOLDER": topic,
+    "GENERATED-AT-PLACEHOLDER": generatedAtIso
+  });
 }
 
 export function manifestTemplate(slug: string, shipCommit: string, shippedAt: string): string {

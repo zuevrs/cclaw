@@ -44,15 +44,18 @@ You may **escalate** from guided to deep mid-flight if Phase 3 surfaces irrevers
 
 ## Inputs you have access to
 
-- The user's original prompt and the triage decision (\`ceremonyMode\` will be \`strict\` on large-risky, \`assumptions\` from the triage form).
-- \`.cclaw/state/flow-state.json\` (read; orchestrator writes).
-- \`.cclaw/flows/<slug>/plan.md\` (seeded with frontmatter; you append the design sections).
+- The user's original prompt and the triage decision (\`ceremonyMode\` will be \`strict\` on large-risky intra-flow, sentinel \`strict\` on standalone research mode; \`mode\` is \`"task"\` on intra-flow and \`"research"\` on standalone; \`assumptions\` is the v8.58 back-compat slot — usually absent on v8.58 fresh flows and captured by Phase 0 itself).
+- \`.cclaw/state/flow-state.json\` (read; orchestrator writes \`lastSpecialist\` after Phase 7; YOU \`patchFlowState\` for \`triage.assumptions\` in Phase 0/1, \`triage.priorLearnings\` in Phase 1, and \`triage.surfaces\` + \`triage.path\` rewrite in Phase 2).
+- \`.cclaw/flows/<slug>/plan.md\` (intra-flow; seeded with frontmatter; you append the design sections) OR \`.cclaw/flows/<slug>/research.md\` (standalone research mode; you write the full artifact).
+- \`flowState.priorResearch\` (v8.58; optional pointer to a prior \`/cc research <topic>\` flow's research.md, read at Phase 0).
 - The repo, read-only.
 - **\`CONTEXT.md\` at the project root** — an optional project domain glossary. Read once at the start of Phase 0 **if the file exists**; treat the body as shared project vocabulary for Frame / Approaches / D-N. Missing file is a no-op; skip silently.
 - Any prior shipped slug referenced via \`refines:\` (read at most one paragraph).
 - \`repo-research\` and \`learnings-research\` helpers — you may dispatch them once each.
 
-You **write** to \`flows/<slug>/plan.md\` only (Frame, Approaches, Selected Direction, Decisions section inline, Pre-mortem section, Not Doing). There is no separate \`decisions.md\` — D-N records live inline in plan.md under \`## Decisions\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when ADR triggers fire (Phase 6.5).
+You **write** to:
+- Intra-flow (\`triage.mode == "task"\`): \`flows/<slug>/plan.md\` only (Frame, Spec, optional NFR, Approaches, Selected Direction, Decisions section inline, optional Pre-mortem, Not Doing, optional Open questions, Summary). There is no separate \`decisions.md\` — D-N records live inline in plan.md under \`## Decisions\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when ADR triggers fire (Phase 6.5).
+- Standalone research (\`triage.mode == "research"\`; v8.58): \`flows/<slug>/research.md\` only (same section layout as the intra-flow plan.md design portion, plus the v8.58 research.md frontmatter — \`mode: research\`, \`topic\`, \`generatedAt\`). NO plan.md is written; NO ADR proposal in Phase 6.5 (research mode is exploratory; ADR proposals belong to the follow-up task flow). The orchestrator finalises the flow on Phase 7 \`accept research\` — \`git mv\` research.md into \`.cclaw/flows/shipped/<slug>/\`.
 
 ## Phases — execute in order; only Phase 1 (conditional) and Phase 7 (mandatory) end the orchestrator turn
 
@@ -63,30 +66,45 @@ At the top of every phase header below you will see one of two markers:
 - **\`[ENDS TURN]\`** — Phase emits user-facing output and ends the orchestrator turn with a structured ask. Only Phase 1 (conditional) and Phase 7 (mandatory) carry this marker.
 - **\`[SILENT]\`** — Phase produces no user-facing output. Flow directly into the next phase in the same orchestrator turn. Append the phase's plan.md section before moving on.
 
-### Phase 0 — Bootstrap \`[SILENT]\` + assumption surface
+### Phase 0 — Bootstrap \`[SILENT]\` + assumption capture (v8.58 owner)
 
 Do these reads silently before emitting anything to the user. This phase produces no user-facing output and flows directly into Phase 1 (if needed) or Phase 2 (if Phase 1 is skipped) in the same turn.
 
-1. Read \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\` (\`large-risky\` expected), \`triage.ceremonyMode\`, \`triage.assumptions\` (verbatim list), \`refines\` if any.
-2. Read \`.cclaw/flows/<slug>/plan.md\` (likely empty body, just frontmatter).
-3. Read repo signals: project root file tree (one \`ls\`), \`README.md\` first paragraph + Architecture section, \`AGENTS.md\` / \`CLAUDE.md\` if either exists, top-level manifest (\`package.json\` / \`pyproject.toml\` / \`go.mod\` / \`Cargo.toml\`) — \`name\`, dependency list at a glance.
-4. If \`refines\` is set, read one paragraph of the prior shipped \`plan.md\`.
-5. Decide posture if the orchestrator did not pass one (default guided; escalate to deep on the triggers listed above).
-6. **Conditional parallel dispatch:** if brownfield AND task likely touches existing surface AND no \`research-repo.md\` exists yet, dispatch \`repo-research\` IN PARALLEL with Phase 1's user-facing turn. Do not wait. The result lands by Phase 4 when you need it.
+1. Read \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\` (\`large-risky\` expected on intra-flow; sentinel \`large-risky\` on standalone research mode), \`triage.ceremonyMode\`, \`triage.mode\` (\`"task"\` for intra-flow; \`"research"\` for standalone — see "Activation modes" below), \`refines\` if any. Also read pre-v8.58 fields when present (back-compat): \`triage.assumptions\` (verbatim list, optional in v8.58), \`triage.interpretationForks\` (legacy; design Phase 1 owns the surface now), \`triage.priorLearnings\` (legacy; Phase 1 / Phase 4 query on demand).
+2. Read \`.cclaw/flows/<slug>/plan.md\` (likely empty body, just frontmatter). On \`triage.mode == "research"\`, read \`.cclaw/flows/<slug>/research.md\` instead (the standalone-mode artifact).
+3. **v8.58 prior-research linkage.** If \`flowState.priorResearch\` is non-null (a prior \`/cc research <topic>\` flow's handoff), read \`flowState.priorResearch.path\` — the shipped \`research.md\` from the linked flow — and treat its contents as additional Frame / Approaches / Decisions context. Cite the linked slug inline in your Frame ("cf. research \`<priorResearch.slug>\`"). Missing file is a no-op; skip silently.
+4. Read repo signals: project root file tree (one \`ls\`), \`README.md\` first paragraph + Architecture section, \`AGENTS.md\` / \`CLAUDE.md\` if either exists, top-level manifest (\`package.json\` / \`pyproject.toml\` / \`go.mod\` / \`Cargo.toml\`) — \`name\`, dependency list at a glance.
+5. If \`refines\` is set, read one paragraph of the prior shipped \`plan.md\`.
+6. Decide posture if the orchestrator did not pass one (default guided; escalate to deep on the triggers listed above; on \`triage.mode == "research"\`, default to \`deep\` posture so Pre-mortem fires).
+7. **Conditional parallel dispatch:** if brownfield AND task likely touches existing surface AND no \`research-repo.md\` exists yet, dispatch \`repo-research\` IN PARALLEL with Phase 1's user-facing turn. Do not wait. The result lands by Phase 4 when you need it.
 
-**Assumption-surface ownership.** On the large-risky path, design Phase 0 + Phase 1 own the assumption-confirmation surface. Concretely:
+**Assumption-capture ownership (v8.58 — moved from triage).** On the large-risky path (intra-flow), design Phase 0 + Phase 1 own the assumption-confirmation surface. The orchestrator's lightweight router no longer captures assumptions; design is the single source of truth. Concretely:
 
-- If \`triage.assumptions\` is already populated (triage-gate seed, a prior fresh \`/cc\` that captured the list, or a mid-flight resume), **read it verbatim and treat it as ground truth**. Mention the load-bearing items in your Frame (Phase 2) so the user can correct them inline if needed; do not re-prompt with a separate "Pre-flight" ask.
-- If \`triage.assumptions\` is \`null\` / absent / empty (the triage gate did not pre-seed any), **surface a single assumption confirmation as your Phase 1 opening question** — formatted as a numbered 3-7-item ask with a "Tell me if any is wrong" close. Use the harness's structured ask tool when available. On user accept / silence, persist the list to \`triage.assumptions\` before proceeding to Phase 2 (Frame). On correction, adjust and persist; do not re-ask.
+- If \`triage.assumptions\` is already populated (pre-v8.58 state file, or a mid-flight resume where a prior \`/cc\` captured the list before this design ran), **read it verbatim and treat it as ground truth**. Mention the load-bearing items in your Frame (Phase 2) so the user can correct them inline if needed; do not re-prompt with a separate "Pre-flight" ask.
+- If \`triage.assumptions\` is \`null\` / absent / empty (the v8.58 default — the router never wrote the field, so absence is the common case on v8.58 fresh flows), **generate 3-7 stack / convention / target-platform assumptions from repo signals + task descriptor in Phase 0** (silently), then **surface a single assumption confirmation as your Phase 1 opening question** when ANY of those assumptions is load-bearing — formatted as a numbered 3-7-item ask with a "Tell me if any is wrong" close. Use the harness's structured ask tool when available. On user accept / silence, persist the final list to \`triage.assumptions\` via \`patchFlowState\` before proceeding to Phase 2 (Frame). On correction, adjust and persist; do not re-ask.
+- When none of the generated assumptions are load-bearing (the task is so concrete that defaults can be silently accepted), skip the Phase 1 assumption-ask entirely — still \`patchFlowState\` with the inferred list under \`triage.assumptions\` so downstream specialists can read it, but do not pause for confirmation.
 - Either way, the user sees **at most one** assumption ask per design flow.
 
 If any required file is missing (state, plan), stop and ask the orchestrator to re-seed the slug. Do not improvise.
 
-### Phase 1 — Clarify \`[ENDS TURN — conditional]\` (single batched ask, optional)
+### Activation modes (v8.58)
 
-**Before starting Phase 1 reads:** read \`flow-state.json > triage.priorLearnings\`. When present, the field is an array of prior shipped \`KnowledgeEntry\` records — each carries \`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`, and (v8.50) optional \`outcome_signal\` / \`outcome_signal_updated_at\` / \`outcome_signal_source\`. Treat them as **"what we already know nearby"**: prior shipped slugs whose tag/surface profile overlaps the current task. Use them as context to inform your Clarify questions and the Frame draft; **do not copy them into your output verbatim**. When a prior learning is directly relevant — e.g. a prior slug already grappled with the exact ambiguity the current prompt has — **cite the slug inline** (e.g. "cf. shipped slug \`20260503-ac-mode-soft-edge\`"). Skip silently when the field is absent or empty.
+Design has **two activation modes**, controlled by \`triage.mode\`:
 
-**v8.50 outcome-signal weighting.** Entries that carry an \`outcome_signal\` of \`manual-fix\` / \`follow-up-bug\` / \`reverted\` are less authoritative precedents — the orchestrator already down-weighted them at lookup but they cleared the threshold. When you cite a down-weighted prior, name the signal verbatim so the user sees WHY this prior was admitted despite the down-weight ("cf. shipped slug \`<slug>\` (\`outcome_signal: reverted\`) — treating as cautionary rather than precedent"). Entries without \`outcome_signal\` (legacy, pre-v8.50) read as \`"unknown"\` (neutral; the pre-v8.50 default).
+- **Intra-flow (\`triage.mode == "task"\`; the historical default)** — design runs as the discovery sub-phase under the \`plan\` stage on the large-risky path. Phases 0-7 all run; Phase 7 \`approve\` hands off to ac-author for AC decomposition. Plan.md is the artifact; \`research.md\` is NOT written. This is the v8.14-v8.57 behaviour, preserved verbatim.
+- **Standalone research (\`triage.mode == "research"\`; v8.58 new)** — design runs as a one-off researcher invoked by \`/cc research <topic>\` / \`/cc --research <topic>\`. Phases 0-6 run identically to intra-flow (silent work for Bootstrap → Compose); **Phase 7's picker collapses to two options (\`accept research\` / \`revise\`)** and Phase 7 \`accept research\` STOPS — there is no ac-author handoff, no AC decomposition, no plan stage continuation. The artifact is \`research.md\` (NOT \`plan.md\`) — same section layout as the intra-flow plan.md design portion (Frame / Spec / NFR / Approaches / Selected Direction / Decisions / Pre-mortem / Not Doing / Open questions / Summary), but written under \`## Research findings\` heading at the top and using \`research.md\` frontmatter (\`mode: research\`, \`topic\`, \`generatedAt\`).
+
+Detect the mode at Phase 0 step 1 by reading \`triage.mode\`. Default to \`"task"\` when the field is absent (pre-v8.58 state file). On standalone mode, every reference to \`plan.md\` in Phases 2-6 below MUST be substituted with \`research.md\` — same section headings, same self-review checklist, same composition. Phase 7's picker semantics differ; see "Phase 7 — Sign-off" below for the standalone-mode variant.
+
+### Phase 1 — Clarify \`[ENDS TURN — conditional]\` (single batched ask, optional; v8.58 owner of interpretation forks + prior-learnings query)
+
+**v8.58 prior-learnings query (replaces the orchestrator-side Hop 2.5 lookup).** Before starting Phase 1 reads, call \`findNearKnowledge(triageTaskSummary, projectRoot, { window: 100, threshold: 0.4, limit: 3, excludeSlug: currentSlug })\` directly from this phase — the v8.18 lookup that used to live in the orchestrator at Hop 2.5 (pre-v8.58) moved here. The helper reads \`.cclaw/knowledge.jsonl\` and returns 0-3 prior shipped \`KnowledgeEntry\` records (or the empty array on missing / empty / unreadable file). Each match carries \`slug\`, \`summary\` / \`notes\`, \`tags\`, \`touchSurface\`, and (v8.50) optional \`outcome_signal\` / \`outcome_signal_updated_at\` / \`outcome_signal_source\`. Treat them as **"what we already know nearby"**: prior shipped slugs whose tag/surface profile overlaps the current task. Use them as context to inform your Clarify questions and the Frame draft; **do not copy them into your output verbatim**. When a prior learning is directly relevant — e.g. a prior slug already grappled with the exact ambiguity the current prompt has — **cite the slug inline** (e.g. "cf. shipped slug \`20260503-ac-mode-soft-edge\`"). Skip silently when the lookup returns the empty array. Persist non-empty results to \`flow-state.json > triage.priorLearnings\` via \`patchFlowState\` so downstream specialists (ac-author, slice-builder) see the same set — same persistence contract as the pre-v8.58 orchestrator-side write.
+
+Back-compat: when \`flow-state.json > triage.priorLearnings\` is already populated (pre-v8.58 state file resumed under v8.58), **skip the \`findNearKnowledge\` call** and read the field verbatim — the pre-v8.58 lookup landed during the orchestrator's Hop 2.5 and we honour that result.
+
+**v8.50 outcome-signal weighting.** Entries that carry an \`outcome_signal\` of \`manual-fix\` / \`follow-up-bug\` / \`reverted\` are less authoritative precedents — the lookup already down-weighted them via \`OUTCOME_SIGNAL_MULTIPLIERS\` in \`src/knowledge-store.ts\` but they cleared the threshold. When you cite a down-weighted prior, name the signal verbatim so the user sees WHY this prior was admitted despite the down-weight ("cf. shipped slug \`<slug>\` (\`outcome_signal: reverted\`) — treating as cautionary rather than precedent"). Entries without \`outcome_signal\` (legacy, pre-v8.50) read as \`"unknown"\` (neutral; the pre-v8.50 default).
+
+**Interpretation-forks ownership (v8.58 — moved from triage).** The orchestrator's lightweight router no longer surfaces interpretation forks; design Phase 1 is the single source of truth. Concretely: when the prompt has two reasonable readings the choice between which would change the Frame, **list both readings as ONE of the Phase 1 clarifying questions** (within the 0-3 cap), formatted with options the user can pick from. This subsumes the pre-v8.58 \`triage.interpretationForks\` field — the user's pick is recorded verbatim in plan.md (or research.md) as the chosen Frame; the rejected reading is recorded under \`## Open questions\` as "considered: <verbatim alt reading>; rejected by user at Phase 1." Pre-v8.58 state files with populated \`triage.interpretationForks\` are read verbatim (back-compat) — when both signals are present, Phase 1's freshly-asked clarifying question wins.
 
 Enumerate **at most three** clarifying questions before writing the Frame, and ONLY when ALL of the following hold:
 
@@ -104,7 +122,7 @@ When you decline to ask a question because the answer is in \`triage.assumptions
 
 **Skip Phase 1 entirely** when the prompt is unambiguous on the framing axis (0 questions needed). Emit nothing to the user; flow directly into Phase 2 in the same orchestrator turn. **The user sees no Phase 1 ask at all** in this case — and the design will surface for review at Phase 7 as the single user-facing turn.
 
-### Phase 2 — Frame \`[SILENT]\`
+### Phase 2 — Frame \`[SILENT]\` + surface detection (v8.58 owner)
 
 Compose one Frame paragraph (2-5 sentences) covering:
 
@@ -115,7 +133,15 @@ Compose one Frame paragraph (2-5 sentences) covering:
 
 Cite real evidence (\`file:path:line\`, ticket id, conversation excerpt) when you have it. Do not invent.
 
-**Write the Frame paragraph directly to \`flows/<slug>/plan.md\` under a \`## Frame\` heading.** Do NOT pause to ask the user for confirmation — Phase 7 (Sign-off) is where the user reviews the Frame alongside everything else. If the user dislikes the Frame at Phase 7, they pick \`request-changes\` and you re-enter Phase 2 internally to revise. The composition continues silently to the Spec section below in the same turn.
+**Write the Frame paragraph directly to \`flows/<slug>/plan.md\` under a \`## Frame\` heading.** (On standalone research mode, write to \`research.md\` instead — same heading.) Do NOT pause to ask the user for confirmation — Phase 7 (Sign-off) is where the user reviews the Frame alongside everything else. If the user dislikes the Frame at Phase 7, they pick \`request-changes\` and you re-enter Phase 2 internally to revise. The composition continues silently to the Spec section below in the same turn.
+
+**Surface-detection ownership (v8.58 — moved from triage).** The orchestrator's lightweight router no longer detects surfaces; design Phase 2 is the single source of truth on the strict path. Detect the v8.52 surface set from the Frame paragraph + the touched-files signal (read from the repo or from \`repo-research\`'s output if it ran), using the canonical vocabulary (\`cli\` / \`library\` / \`api\` / \`ui\` / \`web\` / \`data\` / \`infra\` / \`docs\` / \`other\`). Multiple entries are expected on mixed slugs (e.g. an endpoint + a Vue component → \`["api", "ui"]\`). When no signal fires, write \`["other"]\` rather than an empty array — explicit "other" beats absent for the qa gate's evaluation. The same detection rules from the v8.52 spec apply verbatim; the full keyword + file-pattern table lives in \`src/content/skills/triage-gate.md > "v8.52 surfaces field"\` (still readable as reference text even though the router no longer writes the field).
+
+After detection, **\`patchFlowState\` with \`triage.surfaces: <detected list>\`** before proceeding to Spec. If the detected surfaces include \`"ui"\` or \`"web"\` AND \`triage.ceremonyMode != "inline"\` AND \`triage.mode == "task"\` (research-mode flows have a fixed \`triage.path: ["plan"]\` and do not insert qa), the same write MUST also rewrite \`triage.path\` to insert \`"qa"\` between \`"build"\` and \`"review"\` (e.g. \`["plan", "build", "review", "critic", "ship"]\` → \`["plan", "build", "qa", "review", "critic", "ship"]\`). This preserves the v8.52 qa-runner gating contract verbatim; only the writer moved from orchestrator triage to design Phase 2.
+
+Pre-v8.58 state files where \`triage.surfaces\` is already populated by the pre-v8.58 orchestrator are read verbatim — DO NOT re-detect and overwrite; the orchestrator's value wins for back-compat. Same rule for pre-v8.58 \`triage.path\` already containing \`"qa"\`.
+
+**On standalone research mode (\`triage.mode == "research"\`),** surface detection still runs (the v8.52 vocabulary is useful context for Frame / Approaches / Decisions in research.md) but \`patchFlowState\` writes \`triage.surfaces\` only; the \`triage.path\` rewrite does NOT happen (research-mode flows have \`triage.path: ["plan"]\` as a sentinel and never run qa / build / review / ship).
 
 **Spec section (v8.46, mandatory on every large-risky plan).** Alongside Frame, compose the \`## Spec\` section — a four-bullet requirement-side contract that complements Frame (intent + scope + non-goals + per-slug constraints) and is later cross-referenced by ac-author when authoring AC. Frame is the **narrative** (what's broken, who feels it, what success looks like, what's out of scope); Spec is the **structured restatement** in four fixed bullets so downstream specialists (ac-author, reviewer, critic) and the user can scan the requirement at a glance without rereading the Frame paragraph. NFRs (the next block below) capture **quality attributes** — performance budgets, accessibility, compatibility, security baseline. Spec captures **intent + scope**; NFRs capture **how-well**. They are complementary, not duplicative.
 
@@ -208,7 +234,9 @@ Skip Phase 5 entirely on \`guided\` posture; flow directly to Phase 6.
 
 ### Phase 6 — Compose + self-review \`[SILENT]\`
 
-By Phase 6, the previous silent phases have already appended their sections to plan.md (Frame in Phase 2, Approaches + Selected Direction in Phase 3, Decisions in Phase 4, Pre-mortem in Phase 5 when deep). Phase 6's job is to (a) confirm the section order is correct, (b) compose the mandatory \`## Not Doing\` block + the \`## Summary — design\` block that were not written by earlier phases, and (c) run the self-review checklist.
+By Phase 6, the previous silent phases have already appended their sections to plan.md / research.md (Frame in Phase 2, Approaches + Selected Direction in Phase 3, Decisions in Phase 4, Pre-mortem in Phase 5 when deep). Phase 6's job is to (a) confirm the section order is correct, (b) compose the mandatory \`## Not Doing\` block + the \`## Summary — design\` block that were not written by earlier phases, and (c) run the self-review checklist.
+
+**On standalone research mode (\`triage.mode == "research"\`),** the artifact is \`research.md\` (not plan.md). All references to \`plan.md\` in this phase substitute with \`research.md\`. The section ordering and self-review checklist are otherwise identical — Frame / Spec / NFR / Approaches / Selected Direction / Decisions / Pre-mortem / Not Doing / Open questions / Summary all land in research.md exactly as they would land in plan.md on the intra-flow path. The research.md frontmatter carries \`mode: research\`, \`topic: <triage.taskSummary stripped of the 'research' prefix>\`, \`generatedAt: <iso-now>\` instead of the intra-flow plan.md frontmatter. After self-review passes, proceed to Phase 6.5 / Phase 7 in the same turn.
 
 Verify plan.md sections are in this order; reorder if any earlier phase wrote in a different position:
 
@@ -315,17 +343,34 @@ Approve to proceed to ac-author, request changes, or reject?
 
 **Ambiguity warning prefix (v8.53; soft signal).** Read \`plan.md\` frontmatter \`ambiguity_score\` and \`ambiguity_threshold\` (the values Phase 6 wrote). If \`ambiguity_score <= threshold\` (or either field is absent on a legacy plan), emit the standard three-option picker with NO warning prefix. If \`ambiguity_score > threshold\`, **prefix the picker** with the warning line shown above — naming the composite, the threshold, and the comma-separated list of dimensions whose per-dimension score is greater than \`0.3\` (the per-dimension visibility cutoff). The warning is **informational, not a hard gate**: the user can pick \`approve\` regardless of the warning, and the orchestrator advances to ac-author exactly as if the warning had not fired. The threshold itself is configurable via \`.cclaw/config.yaml > design.ambiguity_threshold\` (default \`0.2\`); see Phase 6 above for the lookup contract. When the dimensions-above-\`0.3\` list is empty (i.e., composite cleared the threshold via several middling-but-not-individually-high scores), emit \`request-changes recommended for: composite (no single dimension above 0.3)\` so the user sees the structural shape rather than an empty list.
 
+**Picker shape depends on activation mode.** v8.58 introduces the standalone-mode picker variant; the intra-flow picker is unchanged from v8.14.
+
+#### Intra-flow picker (\`triage.mode == "task"\`; the historical default)
+
 Use the harness's structured ask facility (\`askUserQuestion\` / equivalent) with exactly three options:
 
 - \`approve — proceed to ac-author (AC decomposition)\`
 - \`request-changes — describe what to change, I will revise and re-emit\`
 - \`reject — stop the design, write a rejection note, surface to orchestrator\`
 
-#### Handling \`approve\`
+#### Standalone research picker (v8.58; \`triage.mode == "research"\`)
 
-End the turn. The orchestrator patches \`flow-state.json\` with \`lastSpecialist: "design"\` and \`plan.md\` frontmatter with \`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`. The next \`/cc\` dispatches ac-author as a sub-agent.
+Use the structured ask facility with exactly **two** options — \`approve\` collapses to \`accept research\` and the AC-decomposition reference is dropped, because research mode has no ac-author handoff; \`reject\` collapses to \`revise\` because the only follow-up from a rejected research is another revise pass (there is no flow to cancel — the research IS the flow).
 
-#### Handling \`request-changes\`
+- \`accept research — write research.md, surface optional /cc handoff prompt, end flow\`
+- \`revise — describe what to change, I will revise the research and re-emit Phase 7\`
+
+The revise iteration cap (3) applies identically on the standalone path. When the user requests changes, internally loop back to the relevant phase (per the intra-flow rules below) and re-emit Phase 7 with the revised research.
+
+#### Handling \`approve\` / \`accept research\`
+
+On **intra-flow \`approve\`**: end the turn. The orchestrator patches \`flow-state.json\` with \`lastSpecialist: "design"\` and \`plan.md\` frontmatter with \`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`. The next \`/cc\` dispatches ac-author as a sub-agent. This is the v8.14-v8.57 behaviour, preserved verbatim.
+
+On **standalone \`accept research\` (v8.58)**: write the final \`research.md\` (including the v8.58 frontmatter — \`mode: research\`, \`topic\`, \`generatedAt\`), end the turn. The orchestrator finalises the flow IMMEDIATELY (no further specialist dispatch — research-mode flows have no build / review / critic / ship stages): \`git mv .cclaw/flows/<slug>/research.md .cclaw/flows/shipped/<slug>/research.md\`, reset flow-state. After finalize, surface the v8.58 **handoff prompt** in plain prose (no structured ask): "Ready to plan? Run \`/cc <clarified task description>\` and I'll carry this research forward as context." The next \`/cc <task>\` invocation on the same project reads the most-recent shipped research slug under \`flows/shipped/\` and stamps it into \`flow-state.json > priorResearch: { slug, topic, path }\`; ac-author / design Phase 0 on that follow-up flow read \`priorResearch.path\` and include the research artifact in their reads.
+
+#### Handling \`request-changes\` / \`revise\`
+
+(\`request-changes\` is the intra-flow picker label; \`revise\` is the standalone-mode label. Handling is identical — only the picker label differs.)
 
 The user describes what they want changed in plain prose (e.g. "Frame should mention the dashboard widget too", "swap D-2 to use streaming instead of polling", "pre-mortem missed the rate-limit risk", "Approach C wasn't really considered — show why").
 
@@ -337,7 +382,7 @@ The user describes what they want changed in plain prose (e.g. "Frame should men
 - Pre-mortem changes → re-enter Phase 5 silently (deep posture only)
 - Not Doing / Open questions / Summary tweaks → re-enter Phase 6 silently
 
-Update plan.md in place — replace the affected section(s), keep everything else, re-run the Phase 6 self-review checklist. Re-emit Phase 7 with the revised design. The user sees the **updated** design plus a one-line diff summary ("Revised: D-2 now uses streaming; rate-limit failure mode added to pre-mortem.").
+Update plan.md / research.md in place — replace the affected section(s), keep everything else, re-run the Phase 6 self-review checklist. Re-emit Phase 7 with the revised design. The user sees the **updated** design plus a one-line diff summary ("Revised: D-2 now uses streaming; rate-limit failure mode added to pre-mortem.").
 
 **Revise iteration cap: 3.** Count revise iterations under \`## Open questions\` in plan.md (write \`revise_iterations: <N>\` so resumes see the count). On the 4th revise request, do NOT silently revise again — escalate explicitly:
 

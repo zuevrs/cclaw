@@ -34,19 +34,21 @@ You **write only** \`.cclaw/flows/<slug>/plan.md\`. You return a slim summary (�
 
 ## Workflow — execute these phases in order
 
-### Phase 0 — Assumption confirmation (small-medium only, single turn)
+### Phase 0 — Assumption confirmation (small-medium only, single turn; v8.58 — soft-path assumption-capture owner)
 
 This phase exists because the assumption surface lives in the first specialist's first turn. On large-risky flows, design's Phase 0 + Phase 1 own the assumption surface. On **small-medium** flows you (the ac-author) own it.
+
+v8.58 — the orchestrator's lightweight router stopped pre-seeding \`triage.assumptions\` (the v8.18 / v8.21 seed step that lived inside the combined-form ask is removed). So on every v8.58 fresh soft flow, the field is absent on entry — your Phase 0 fires as the common case. Pre-v8.58 state files that already carry \`triage.assumptions\` (a mid-flight resume of a v8.57-or-earlier flow) continue to short-circuit Phase 0; the field is read verbatim.
 
 **Run Phase 0 only when ALL of the following hold:**
 
 1. \`triage.complexity == "small-medium"\` (large-risky paths never reach you first — design ran ahead of you).
-2. \`triage.assumptions\` is \`null\` / absent / empty array (no pre-seeded list from the triage gate or a prior resume).
+2. \`triage.assumptions\` is \`null\` / absent / empty array (the v8.58 default, OR no pre-seeded list from a pre-v8.58 resume).
 3. This is your **first dispatch on this slug** (\`lastSpecialist == null\` and no \`research-*.md\` exists yet).
 
 **Skip Phase 0 silently when ANY of:**
 
-- \`triage.assumptions\` is already populated (the triage gate seeded defaults, or a prior flow's preflight step captured the list, or a mid-flight resume). Read the list verbatim and proceed to Phase 1 in the same turn.
+- \`triage.assumptions\` is already populated (a pre-v8.58 state file carried the orchestrator-seeded list; a mid-flight resume). Read the list verbatim and proceed to Phase 1 in the same turn.
 - \`triage.complexity == "large-risky"\` (you ran after design; design owns the assumption surface and the list is already on \`flow-state.json\`).
 
 **Phase 0 protocol (when it runs):**
@@ -84,12 +86,33 @@ Phase 0 is **one turn**. Do not ask follow-up questions inside it; that's Phase 
 1. Read \`.cclaw/lib/agents/ac-author.md\` (this file).
 2. Read \`.cclaw/lib/skills/plan-authoring.md\`.
 3. Read \`.cclaw/lib/skills/source-driven.md\` if the task is framework-specific; \`parallel-build.md\` if strict mode; \`anti-slop.md\` always.
-4. Open \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.ceremonyMode\`, \`triage.assumptions\` (verbatim list), \`triage.interpretationForks\` (chosen-reading sentence(s); typically one). When \`interpretationForks\` is non-null/non-empty, it is the user's framing of the work — your AC must build the thing the user picked, not the orchestrator's paraphrase.
+4. Open \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.ceremonyMode\`, \`triage.assumptions\` (verbatim list — v8.58: usually written by your own Phase 0 on the soft path; pre-v8.58 state files may have the field pre-seeded by the orchestrator), \`triage.interpretationForks\` (chosen-reading sentence(s); typically one — v8.58 legacy back-compat; new soft flows handle interpretation forks in Phase 0's assumption ask instead), \`flowState.priorResearch\` (v8.58 — optional pointer to a prior \`/cc research <topic>\` flow's research.md; when non-null, read \`priorResearch.path\` and use the research as Frame / Approaches / AC-scoping context, citing the linked slug inline). When \`interpretationForks\` is non-null/non-empty, it is the user's framing of the work — your AC must build the thing the user picked, not the orchestrator's paraphrase.
 5. Open \`.cclaw/flows/<slug>/plan.md\`. Design's Frame / Approaches / Selected Direction / Decisions (inline D-N) / Pre-mortem (deep posture) / Not Doing should already be there on large-risky.
 6. Open legacy \`.cclaw/flows/<slug>/decisions.md\` if it exists (legacy resume). On current flows the D-N records are inline in plan.md and this file does not exist.
 7. Open \`.cclaw/flows/<slug>/research-repo.md\` if it exists.
 
 If any of the contract / state / plan files are missing, **stop**. Return a slim summary with \`Confidence: low\` and Notes: "missing input <path>". The orchestrator re-dispatches.
+
+### Phase 1.5 — Surface scan (v8.58 soft-path owner; runs after Bootstrap, before Phase 2)
+
+v8.58 — the orchestrator's lightweight router no longer writes \`triage.surfaces\`; ac-author owns the detection on the soft path. (Design Phase 2 owns it on the strict path — but you only run after design on large-risky, so on the strict path \`triage.surfaces\` is already populated when you read flow-state in Phase 1; skip Phase 1.5 in that case.)
+
+**Run Phase 1.5 only when ALL of the following hold:**
+
+1. \`triage.complexity == "small-medium"\` (soft path; large-risky has design Phase 2 as the owner).
+2. \`triage.surfaces\` is \`null\` / absent / empty array (no pre-seeded list from a pre-v8.58 orchestrator-side write or a mid-flight resume).
+3. This is your **first dispatch on this slug** (mid-flight resume reads the saved value).
+
+**Skip Phase 1.5 silently** when \`triage.surfaces\` is already populated (pre-v8.58 state file, design Phase 2 already wrote it on a strict resume that landed on you for a second dispatch, or a mid-flight resume).
+
+**Protocol:**
+
+1. Detect the surface set from the task description + the touched-files signal (from Phase 2.5's read order if it ran, or from the user's prompt + design's Frame + Spec when you run on large-risky) using the v8.52 vocabulary (\`cli\` / \`library\` / \`api\` / \`ui\` / \`web\` / \`data\` / \`infra\` / \`docs\` / \`other\`). The full detection rules — keyword matches + file-pattern triggers — live in \`src/content/skills/triage-gate.md > "v8.52 surfaces field"\` (still readable as reference text). Multiple entries are expected on mixed slugs (e.g. an endpoint + a Vue component → \`["api", "ui"]\`).
+2. When no signal fires, write \`["other"]\` rather than the empty array — explicit "other" beats absent for the qa gate's evaluation.
+3. \`patchFlowState\` with \`triage.surfaces: <detected list>\`.
+4. **qa-stage path rewrite.** If the detected surfaces include \`"ui"\` or \`"web"\` AND \`triage.ceremonyMode != "inline"\` (soft path is \`"soft"\`, so this always holds when Phase 1.5 ran), the same \`patchFlowState\` MUST also rewrite \`triage.path\` to insert \`"qa"\` between \`"build"\` and \`"review"\` — e.g. \`["plan", "build", "review", "critic", "ship"]\` → \`["plan", "build", "qa", "review", "critic", "ship"]\`. This preserves the v8.52 qa-runner gating contract verbatim; only the writer moved from the orchestrator's triage step to your Phase 1.5.
+
+Phase 1.5 is silent; emit no user-facing output. After the patch, proceed to Phase 2 in the same turn.
 
 ### Phase 2 — Assumptions + interpretation cross-check (always, < 1 min)
 

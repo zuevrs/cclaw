@@ -5,98 +5,88 @@ trigger: at the start of every new /cc invocation, before any specialist runs
 
 # Skill: triage-gate
 
-Every new flow opens with a **triage gate**. The orchestrator analyses the user's request, picks a complexity class, names a ceremony mode, and proposes a path. v8.14 collapses the prior two-question gate into **at most one structured ask**:
+Every new flow opens with a **triage gate**. v8.58 reshapes the gate from a heavy classification step into a **lightweight router**. The router decides only complexity, ceremonyMode, path, runMode, and mode; the heavy work that used to live here — surface detection, assumption capture, prior-learnings lookup, interpretation forks — moved into the specialist that already has the codebase context to do it (design Phase 0-2 on strict; ac-author Phase 0-1 on soft; nothing on inline).
 
-- **trivial / high-confidence**: **zero questions**. The orchestrator announces what it is about to do in one short sentence and goes straight to the inline edit. The user can always type `/cc-cancel` to undo and re-open the gate.
-- **everything else**: **one structured ask** that bundles **two questions in a single form** (path + run-mode). Both questions are answered in the same turn; nothing else runs until the form returns.
+The default behaviour is **zero questions**. The orchestrator announces what it decided in one short line and proceeds straight to the dispatch (or, on inline, straight to the edit). Three explicit override flags — `/cc --inline` / `/cc --soft` / `/cc --strict` — short-circuit the heuristic when the user wants a different ceremony than the heuristic would pick.
 
 ## When this skill applies
 
-- Always at the start of `/cc <task>` when no active flow exists.
+- Always at the start of `/cc <task>` when no active flow exists AND the task argument does NOT start with the v8.58 research-mode token (`research `) or carry the `--research` flag — research flows skip the router entirely (see `/cc.md > Detect — research-mode fork`).
 - Skipped on `/cc` (no argument) when an active flow is detected — see `flow-resume.md`.
 - Skipped on `/cc-cancel` and `/cc-idea` (these never open a flow).
+- Skipped on `/cc research <topic>` and `/cc --research <topic>` — these dispatch design in standalone mode with a sentinel triage block; the router runs no heuristics.
 
 ## When NOT to apply
 
-- **Active flow detected** (`flow-state.json > currentSlug != null`). The saved triage is read as ground truth; `flow-resume.md` runs instead and the gate does NOT re-prompt.
-- **`/cc-cancel`** (shelves the active flow) and **`/cc-idea`** (one-shot idea capture). Neither opens a flow; the gate has no surface.
-- **User passed `--triage=<class>`** on the `/cc` invocation. The override is the audit-trailed skip; append a v8.44 audit-log entry with `userOverrode: true` to `.cclaw/state/triage-audit.jsonl` and proceed.
-- **User passed `--no-triage`.** Documented escape hatch (`complexity: small-medium`, `ceremonyMode: soft`, rationale "user disabled triage"; append audit-log entry with `userOverrode: true`). Do not re-render the form.
-- **Resume from a pre-v8.21 flow with populated `triage` already on disk.** The orchestrator reads the saved triage; the gate is not re-opened mid-flow.
+- **Active flow detected** (`flow-state.json > currentSlug != null`). The saved triage is read as ground truth; `flow-resume.md` runs instead and the router does NOT re-prompt.
+- **`/cc-cancel`** (shelves the active flow) and **`/cc-idea`** (one-shot idea capture). Neither opens a flow.
+- **Research-mode entry point** (`/cc research <topic>` / `/cc --research <topic>`). The Detect step's research fork stamps a sentinel triage block (`mode: "research"`, `complexity: "large-risky"`, `ceremonyMode: "strict"`, `path: ["plan"]`, `runMode: null`) and dispatches design standalone; the router runs no heuristics.
+- **Resume from a pre-v8.58 flow with populated `triage` already on disk.** The orchestrator reads the saved triage (including pre-v8.58 fields like `triage.surfaces` / `triage.priorLearnings` / `triage.assumptions`); the router is not re-opened mid-flow.
 
-## Zero-question fast path (trivial / high-confidence)
+## v8.58 routing contract
 
-When the heuristic in §"Heuristics — how to pick" classifies the request as `trivial` **with confidence `high`** AND the user did not include any "discuss first" / "design only" / "what do you think" cue, **do not ask anything**. Instead:
+The router stamps exactly five fields on `flow-state.json > triage`:
 
-1. Print one short sentence in the user's language naming what is happening: complexity (`trivial`), ceremony mode (`inline`), the touched file(s), and a one-clause affordance: "say /cc-cancel to undo and re-triage".
-2. Patch `flow-state.json > triage` with `complexity: "trivial", ceremonyMode: "inline", path: ["build"], runMode: null`. `runMode` is `null` because there are no stages to chain on the inline path. Append a v8.44 audit-log entry to `.cclaw/state/triage-audit.jsonl` with `autoExecuted: true` (the fast-path bit lives in the audit log, not on the triage object; see `src/triage-audit.ts > appendTriageAudit`).
-3. Proceed straight to the inline edit + commit dispatch (the dispatch step; build stage). Pre-flight is skipped on inline by design.
+1. **`complexity`** — heuristic-driven: `trivial` / `small-medium` / `large-risky` (see §"Heuristics — how to pick" below).
+2. **`ceremonyMode`** — mapped from complexity: `trivial → inline`, `small-medium → soft`, `large-risky → strict`. Override flags pin this directly.
+3. **`path`** — `["build"]` for inline; `["plan", "build", "review", "critic", "ship"]` for soft + strict. The v8.52 `"qa"` insertion happens later, at the design Phase 2 / ac-author Phase 1 surface-write step; not at this router hop.
+4. **`runMode`** — `null` on inline (no stages to chain); `"step"` (default) or `"auto"` on soft + strict (from `--mode=` or the default).
+5. **`mode`** — `"task"` for every `/cc <task>` entry. `"research"` is stamped only by the Detect research-mode fork; never by this router.
 
-If confidence is `medium` or `low`, **fall through to the structured ask** even when the class is `trivial` — uncertainty wins.
+The router does NOT decide (v8.58 — moved out):
 
-The auto-execute path exists because >80% of "trivial" requests are mechanical renames, comment fixes, and typo patches; surfacing a two-question gate for those is friction without value. The audit trail is preserved by the one-sentence announcement plus the `autoExecuted: true` line in `.cclaw/state/triage-audit.jsonl`, which downstream tooling can grep for.
+- **`surfaces`** — moved to design Phase 2 (strict) / ac-author Phase 1 (soft) / not-written (inline). The v8.52 qa-runner gate reads `triage.surfaces` literally; only the WRITER moved.
+- **`assumptions`** — moved to design Phase 0 (strict) / ac-author Phase 0 (soft) / not-captured (inline).
+- **`priorLearnings`** — moved to design Phase 1 / Phase 4 (strict) / ac-author Phase 3's `learnings-research` dispatch (soft) / not-queried (inline).
+- **`interpretationForks`** — moved to design Phase 1 (strict) / ac-author Phase 0 (soft) / not-surfaced (inline).
+- **`criticOverride`** — relocated to the v8.44 `.cclaw/state/triage-audit.jsonl` audit log surface.
+- **`notes`** — narrative context lives in `plan.md` / `research.md`.
 
-## Combined-form ask (one structured ask, two questions inside)
+Pre-v8.58 state files that already carry the moved fields are read verbatim by specialists on resume (back-compat). The fields stay on the `TriageDecision` type as optional `@deprecated v8.58` properties for one release; slated for removal in v8.59+.
 
-For every non-trivial classification (and for trivial when confidence is not `high`), render the gate as **one** structured-ask call that contains **two question objects in one form** — the user picks one option per question and submits the form once. This eliminates the v8.13-era double round-trip ("answer path", then a separate "answer run-mode" turn) that wasted a structured-ask cycle and broke flow in chat-style harnesses.
+## Zero-question fast path (v8.58 — the only path on `/cc <task>` without an override flag)
 
-If the harness exposes a structured question tool with multi-question support — `AskUserQuestion` (Claude Code, accepts `questions: [...]`), `AskQuestion` (Cursor, accepts `questions: [...]`), an "ask" content block (OpenCode, accepts multiple `question` entries), `prompt` (Codex, accepts multiple prompts in one round-trip) — **use it with both questions in a single call**.
+In every case where no override flag is present, the router runs the heuristic and proceeds without asking:
 
-If the harness only supports single-question structured ask, render the two questions back-to-back as two structured-ask calls (legacy v8.13 behaviour). The state is the same — only the UX is rougher.
-
-If the harness has no structured ask at all, fall back to the fenced form below.
-
-### Question 1 (in the same form) — path
-
-- prompt: <one sentence in the user's language stating: complexity + confidence, recommended path, why (cite file count / LOC / sensitive surface), ceremony mode, "pick a path">
-- options:
-  - <option label conveying: proceed with the recommended path>
-  - <option label conveying: switch to trivial — inline edit + commit, skip plan/review>
-  - <option label conveying: escalate to large-risky — adds collaborative design phase, strict AC, parallel slices when applicable>
-  - <option label conveying: customise — user edits complexity / ceremonyMode / path>
-
-The slots above (`<...>`) are intent descriptors. Render the prompt body and every option label in the user's conversation language; do not copy the descriptor text. The prompt MUST embed the four heuristic facts (complexity + confidence, recommended path, why, ac mode) so the user can decide without reading another block. Keep it under 280 characters; truncate the rationale before truncating the facts.
-
-### Question 2 (in the same form) — run mode
-
-- prompt: <one sentence in the user's language asking which run mode to use>
-- options:
-  - <option label conveying: step mode — pause after each stage; next /cc advances (the default)>
-  - <option label conveying: auto mode — chain plan → build → review → ship; stop only on hard gates>
-
-Default `step` if the user dismisses the form or the harness only returns Question 1. On the inline path (chosen via Question 1's "switch to trivial" option) the run-mode answer is **ignored** at patch time — `runMode` is set to `null` because there are no stages to chain.
-
-`/cc`, `plan`, `build`, `review`, `ship`, `step`, `auto` stay in their original form (mechanical tokens; see `conversation-language.md`); the descriptive prose around them is in the user's language.
-
-## Fallback — when no structured ask tool exists
-
-Only when the harness has no structured ask facility (rare; legacy CLI mode), print the entire combined form as **one** fenced block:
+1. Run the §"Heuristics" classification to pick complexity / ceremonyMode / path.
+2. Pick `runMode` from `--mode=` (if present) or the default (`step` on soft + strict, `null` on inline).
+3. Stamp `mode: "task"`.
+4. Build the slug (`YYYYMMDD-<semantic-kebab>`).
+5. Patch `flow-state.json > triage` with the five fields + `rationale` + `decidedAt`.
+6. Append one line to `.cclaw/state/triage-audit.jsonl` with `autoExecuted: true` (the v8.58 default) and `userOverrode: false` (unless an override flag fired).
+7. Emit a one-line announcement in the user's language, e.g.:
 
 ```
-<Triage block heading in the user's language>
-─ Complexity: <trivial | small/medium | large-risky>  (confidence: <high | medium | low>)
-─ Recommended path: <inline | plan → build → review → ship>  (large-risky uses the same four-stage path; the discovery sub-phase is an expansion of `plan`, not a separate path entry)
-─ Why: <one short sentence in the user's language; cite file count, LOC estimate, sensitive-surface flag>
-─ Ceremony mode: <inline | soft | strict>
-
-<Question 1 — path>
-[1] <option text conveying: proceed with the recommendation>
-[2] <option text conveying: switch to trivial>
-[3] <option text conveying: escalate to large-risky>
-[4] <option text conveying: customise the triage>
-
-<Question 2 — run mode (not asked on inline)>
-[s] <option text conveying: step mode — pause after each stage; next /cc advances (default)>
-[a] <option text conveying: auto mode — chain stages; stop only on hard gates>
+─ small-medium / soft / plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-status-pill
 ```
 
-The user replies with two tokens on the same turn (`1s` / `3a` / etc.). The slots inside `<...>` are intent only; the actual fallback rendered to the user uses the user's language. Bracketed shortcut letters (`[1]`, `[s]`) and mechanical tokens (`/cc`, `plan`, `build`, `review`, `ship`, `step`, `auto`, complexity / ceremonyMode keywords) stay in their original form regardless of conversation language.
+Mechanical tokens (`small-medium` / `soft` / stage names / `runMode` / `slug`) stay English; descriptive prose around them is in the user's language. The user is NOT asked anything at this hop; there is no structured ask. Proceed straight to the first dispatch.
 
-The fenced form is a fallback, not the primary path. Always try the structured tool first.
+## Override flags (v8.58)
+
+Three flags short-circuit the heuristic; each maps directly to a ceremonyMode:
+
+| Flag | Effect |
+| --- | --- |
+| `/cc --inline <task>` | `complexity: "trivial"`, `ceremonyMode: "inline"`, `path: ["build"]`, `runMode: null`, `mode: "task"`. Stamp `rationale: "user override: --inline"`. |
+| `/cc --soft <task>` | `ceremonyMode: "soft"`, `path: ["plan", "build", "review", "critic", "ship"]`, `runMode: "step"` (or `--mode=`'s value), `mode: "task"`. `complexity` = heuristic's value. Append `+ user override: --soft` to rationale. |
+| `/cc --strict <task>` | `ceremonyMode: "strict"`, `path: ["plan", "build", "review", "critic", "ship"]`, `runMode: "step"` (or `--mode=`'s value), `mode: "task"`. `complexity: "large-risky"`. Append `+ user override: --strict` to rationale. |
+
+Flag parsing rules:
+
+- The flags do NOT consume the task text — `/cc --strict refactor the auth module` parses as "strict ceremonyMode + task = refactor the auth module".
+- The flags are **mutually exclusive**. `/cc --inline --soft <task>` surfaces a one-line note (`mutually exclusive ceremonyMode flags; using the last one (--soft)`) and proceeds with the last flag.
+- A flag value that does not match (`--ceremony=fast`) is ignored with a one-line `unknown ceremonyMode flag, ignored` note; the router falls back to the zero-question path.
+- The v8.34 `--mode=auto` / `--mode=step` runMode toggle is **orthogonal** to the ceremonyMode flags. `/cc --strict --mode=auto <task>` is valid and stamps `ceremonyMode: "strict"` + `runMode: "auto"` in one triage write.
+- The audit log records `userOverrode: true` whenever the chosen ceremonyMode differs from the heuristic's recommendation.
+
+## Legacy v8.14-v8.57 combined-form ask (REMOVED in v8.58)
+
+v8.14 introduced a combined-form structured ask (two questions in one form: path + runMode). v8.58 **removes** the combined form entirely — the router is zero-question by default, override flags handle the explicit-choice case, and there is no fallback to the legacy form. Harness fallback prose for the legacy form has been deleted from this skill; if your project depends on the v8.14-v8.57 combined-form gate, pin to cclaw v8.57 or use the `--strict` / `--soft` / `--inline` flags to express intent.
 
 ## Heuristics — how to pick
 
-Rank the request against these signals. The orchestrator picks the **highest** complexity any signal triggers (escalation is one-way).
+Rank the request against these signals. The router picks the **highest** complexity any signal triggers (escalation is one-way).
 
 | Signal | Pushes toward |
 | --- | --- |
@@ -104,30 +94,24 @@ Rank the request against these signals. The orchestrator picks the **highest** c
 | 1-3 modules, ≤5 testable behaviours, no auth/payment/data-layer touch, no migration | small/medium / soft |
 | ≥4 modules touched OR ≥6 distinct behaviours OR architectural decision needed OR migration required OR auth/payment/data-layer touch OR explicit security flag | large-risky / strict (plan stage expands into discovery sub-phase) |
 | user explicitly asked for "discuss first" / "design only" / "what do you think" | large-risky (forces discovery sub-phase under plan) |
-| user explicitly asked for "just fix it" on a single file | trivial / inline (still confirm — they may underestimate) |
+| user explicitly asked for "just fix it" on a single file | trivial / inline |
+| **user prompt is vague** ("make it better", "fix bugs", "add some auth") | always escalate one class from heuristic baseline; design Phase 1 (Clarify) or ac-author Phase 0 (assumption check) then asks the user to specify mid-flight |
 
-The "highest wins" rule is intentional. Agents underestimate scope more often than they overestimate; if any signal says large-risky, surface large-risky.
+The "highest wins" rule is intentional. Agents underestimate scope more often than they overestimate; if any signal says large-risky, route to large-risky.
 
-If the heuristic gives `small/medium` but the user said something like "feature spanning auth and billing", upgrade and explain why in the `Why` line.
-
-## Confidence levels
-
-- **high** — at least two signals agree on the same class, AND the user's prompt is concrete (named files, named behaviours, or named acceptance).
-- **medium** — only one signal triggered, OR the prompt is concrete but no scope cues.
-- **low** — prompt is vague ("make it better", "fix bugs", "add some auth"). Always escalate one class on `low` confidence and ask the user to clarify before locking.
-
-`Recommended path` for low confidence is always at least `plan → …` (never `inline`); the user explicitly opting into trivial after seeing the triage is fine.
+v8.58 note: prior versions surfaced a confidence dimension (`high` / `medium` / `low`) and used it to gate the structured-ask path. v8.58 routes zero-question regardless of confidence; vague prompts escalate one class (so design Phase 1 / ac-author Phase 0 picks up the clarification surface), but the user is never interrupted at the router. The confidence dimension lives only inside the rationale string now (`rationale: "small-medium (medium confidence): 3 modules, ~150 LOC"`), not as a separate field.
 
 ## What the orchestrator records
 
-After the combined form returns (or after the zero-question fast path executes), patch `.cclaw/state/flow-state.json`:
+After the heuristic runs (or an override flag fires), patch `.cclaw/state/flow-state.json`:
 
 ```json
 {
   "triage": {
     "complexity": "small-medium",
     "ceremonyMode": "soft",
-    "path": ["plan", "build", "review", "ship"],
+    "path": ["plan", "build", "review", "critic", "ship"],
+    "mode": "task",
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
     "runMode": "step"
@@ -135,25 +119,27 @@ After the combined form returns (or after the zero-question fast path executes),
 }
 ```
 
-`runMode` is `step` by default on non-inline paths; `auto` when the user explicitly opted into autopilot in Question 2; `null` on inline / trivial paths (no stages to chain). The `userOverrode` and `autoExecuted` bits (write-only telemetry) live in the v8.44 audit log at `.cclaw/state/triage-audit.jsonl`, NOT on the triage object — append the audit-log entry immediately after persisting the triage write. Pre-v8.44 state files retain these fields on `TriageDecision`; readers tolerate their presence, but new writes target the audit log.
+`runMode` is `step` by default on non-inline paths; `auto` when the user explicitly passed `--mode=auto`; `null` on inline / trivial paths (no stages to chain). `mode` is `"task"` for every `/cc <task>` entry; pre-v8.58 state files lack the field and readers default to `"task"`.
 
-The triage block is **immutable for the lifetime of the flow** — with one v8.34 exception. `complexity` / `ceremonyMode` / `path` cannot change mid-flight; if the user wants to escalate (e.g. discovers it is bigger than thought), `/cc-cancel` and start a fresh flow with new triage. `runMode` is the **single mutable field**: the user passes `/cc --mode=auto` or `/cc --mode=step` to flip mid-flight (`flow-resume.md > Mid-flight runMode toggle` carries the full mechanics). The inline path rejects the toggle (no stages to chain).
+The `userOverrode` and `autoExecuted` bits (write-only telemetry) live in the v8.44 audit log at `.cclaw/state/triage-audit.jsonl`, NOT on the triage object — append the audit-log entry immediately after persisting the triage write.
+
+The triage block is **immutable for the lifetime of the flow** — with one v8.34 exception. `complexity` / `ceremonyMode` / `path` / `mode` cannot change mid-flight; if the user wants to escalate (e.g. discovers it is bigger than thought), `/cc-cancel` and start a fresh flow with new triage. `runMode` is the **single mutable field**: the user passes `/cc --mode=auto` or `/cc --mode=step` to flip mid-flight (`flow-resume.md > Mid-flight runMode toggle` carries the full mechanics). The inline path rejects the toggle (no stages to chain).
 
 ## Path semantics
 
 | path value | what runs | when |
 | --- | --- | --- |
-| `["build"]` (inline trivial) | direct edit + commit, no plan, no review | `complexity == "trivial"` |
-| `["plan", "build", "review", "ship"]` (small/medium) | one ac-author sub-agent for plan; one slice-builder for build; one reviewer for review; ship fan-out | `complexity == "small-medium"` |
-| `["plan", "build", "review", "ship"]` (large-risky) | **plan stage expands** into design (main context, multi-turn) → ac-author; build/review/ship behave as small/medium plus parallel-build fan-out and adversarial pre-mortem when applicable | `complexity == "large-risky"` |
+| `["build"]` (inline trivial) | direct edit + commit, no plan, no review | `complexity == "trivial"` OR `--inline` flag |
+| `["plan", "build", "review", "critic", "ship"]` (small/medium) | one ac-author sub-agent for plan; one slice-builder for build; one reviewer for review; critic; ship fan-out | `complexity == "small-medium"` OR `--soft` flag |
+| `["plan", "build", "review", "critic", "ship"]` (large-risky) | **plan stage expands** into design (main context, multi-turn) → ac-author; build/review/critic/ship behave as small/medium plus parallel-build fan-out and adversarial pre-mortem when applicable | `complexity == "large-risky"` OR `--strict` flag |
 
-`triage.path` only ever holds the four canonical stages: `plan`, `build`, `review`, `ship`. **`discovery` is never an entry in `path`.** When the orchestrator promises a "discovery sub-phase" it means the `plan` stage runs design (Phase 0-7 in main context) then ac-author — see `/cc.md` "Plan stage on large-risky" for the dispatch contract.
+`triage.path` at the router hop holds the canonical four-or-five stages: `plan`, `build`, `review`, `critic`, `ship`. **`discovery` is never an entry in `path`.** **The `"qa"` stage is NOT inserted at this router hop in v8.58** — the v8.52 qa-stage insertion moved to the design Phase 2 / ac-author Phase 1 surface-write step (which has the codebase context to detect UI / web surfaces). When that write detects UI / web surfaces and `ceremonyMode != "inline"`, the same write rewrites `triage.path` to insert `"qa"` between `"build"` and `"review"`. The qa-runner gate continues to read the rewritten path; only the writer moved.
 
-The orchestrator's path-validation rule is single-stage: `triage.path` ⊆ `{plan, build, review, ship}`. Any state file that contains a `"discovery"` entry is from an older schema and must be normalised — strip the `"discovery"` entry and continue with the remaining stages.
+The path-validation rule is: `triage.path` ⊆ `{plan, build, qa, review, critic, ship}`. Any state file that contains a `"discovery"` entry is from an older schema and must be normalised — strip the `"discovery"` entry and continue with the remaining stages.
 
 ## No-git auto-downgrade (v8.23)
 
-Before the triage decision is patched into `flow-state.json`, the orchestrator runs the detect-step git-check: does `<projectRoot>/.git/` exist? If not, the gate **auto-downgrades** `ceremonyMode` from whatever the heuristic recommended to `soft`, regardless of complexity class, and records the audit-trail field:
+Before the router patches `flow-state.json`, the Detect step runs the git-check: does `<projectRoot>/.git/` exist? If not, the router **auto-downgrades** `ceremonyMode` from whatever the heuristic recommended (or whatever override flag the user passed) to `soft`, regardless of complexity class, and records the audit-trail field:
 
 ```json
 {
@@ -168,128 +154,105 @@ Before the triage decision is patched into `flow-state.json`, the orchestrator r
 
 The downgrade is structural, not stylistic:
 
-- **strict mode requires per-criterion commits.** The slice-builder writes one commit per posture-phase (e.g. `red(AC-N): ...`, `green(AC-N): ...`, `refactor(AC-N): ...`) and the reviewer reconstructs the chain ex-post via `git log --grep="(AC-N):"`. Without `.git/`, there is nothing to commit and nothing to grep — the chain cannot exist. Soft mode is git-optional (the build still works without commits, just without an audit trail); strict mode is not.
-- **parallel-build relies on `git worktree add`.** v8.13's parallel fan-out clones the working tree into `.cclaw/worktrees/<slug>-s-N` via `git worktree`; without `.git/`, the dispatch envelope can't construct the worktree. Soft mode falls back to sequential slice dispatch; the slice-builder reads `triage.downgradeReason == "no-git"` and suppresses the parallel envelope.
-- **inline path's terminal `git commit`** is gracefully suppressed too — the orchestrator surfaces "no-git: change applied, no commit recorded" instead of crashing.
+- **strict mode requires per-criterion commits.** Without `.git/`, there is no SHA chain for the reviewer to grep via `git log --grep="(AC-N):"`. The downgrade to soft is structural; treating it as advisory crashes on the first commit attempt.
+- **parallel-build relies on `git worktree`.** Soft mode falls back to sequential slice dispatch when `triage.downgradeReason == "no-git"`.
+- **Inline path's terminal `git commit`** is gracefully suppressed — the orchestrator surfaces "no-git: change applied, no commit recorded" instead of crashing.
 
-Surface the downgrade to the user as a one-sentence warning at triage time, in the user's conversation language: "no `.git/` detected — running in soft ceremonyMode; parallel-build is disabled until you initialise a repo." The mechanical tokens (`ceremonyMode`, `soft`, `.git/`, `/cc`) stay English.
-
-The downgrade is **one-way for the lifetime of the flow**. Running `git init` mid-flight does NOT re-upgrade the triage — `/cc-cancel` + fresh `/cc` is the only path that re-triages with git now present. This mirrors the general invariant that triage is immutable for the lifetime of the flow (above, in "What the orchestrator records").
-
-Ship-gate's `no-vcs` finalization option remains available regardless of the downgrade — a user can still ship a soft-mode flow without git by picking the no-vcs path at the finalize step. See `runbooks/ship-gate.md`.
+Surface the downgrade as a one-sentence warning at the router announcement, in the user's conversation language. The downgrade is **one-way for the lifetime of the flow**. The `--strict` / `--soft` / `--inline` override flags do not bypass the no-git auto-downgrade — even `/cc --strict <task>` in a no-git project lands on `ceremonyMode: "soft"` with `downgradeReason: "no-git"`.
 
 ## When to skip the gate
 
-The gate is **never skipped silently**. Three explicit forms of skip:
+The gate is **never skipped silently**. v8.58 supports three explicit skip forms:
 
-1. User passed `--triage=trivial` (or `--triage=small-medium` / `--triage=large-risky`) on the `/cc` invocation — append a v8.44 audit-log entry with `userOverrode: true`, skip the question, log the choice in the rationale: "user passed --triage=trivial".
-2. Active flow detected with a recorded triage — `flow-resume.md` resumes that triage; you do not re-prompt.
-3. User typed `/cc <task> --no-triage` — record `complexity: small-medium, ceremonyMode: soft, path: plan→build→review→ship`, rationale "user disabled triage"; append an audit-log entry with `userOverrode: true`. This is the documented escape hatch; surfacing it as a footnote on the help text is fine, but it should not be the default.
+1. **Override flag** — `/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>` short-circuit the heuristic; the chosen ceremonyMode is stamped verbatim and the audit log records `userOverrode: true` whenever the choice differs from the heuristic.
+2. **Active flow** — `flow-resume.md` resumes the saved triage; the router does not re-prompt.
+3. **Research-mode entry point** — `/cc research <topic>` / `/cc --research <topic>` stamp a sentinel triage and dispatch design standalone; the router runs no heuristics.
+
+v8.57 supported `--triage=trivial` / `--triage=small-medium` / `--triage=large-risky` and `--no-triage`. v8.58 removes these flags in favour of `--inline` / `--soft` / `--strict` (more explicit about the ceremonyMode choice). Pre-v8.58 invocations with `--triage=` flags are treated as unknown arguments (one-line `unknown flag, ignored` note) and fall back to the zero-question path.
 
 ## Worked examples
 
-### Trivial — high confidence (zero-question fast path)
+### Trivial — zero-question (default)
 
-User: "Rename `getCwd` to `getCurrentWorkingDirectory` across the repo."
+User: `/cc Rename getCwd to getCurrentWorkingDirectory across the repo.`
 
-The orchestrator **does not ask**. It prints one sentence and proceeds straight to the inline edit:
-
-```
-Triage: trivial / inline — mechanical rename across ~12 call sites in 5 files; running inline now. Say /cc-cancel to undo and re-triage.
-```
-
-Then it dispatches the edit + commit and stops. A v8.44 audit-log line in `.cclaw/state/triage-audit.jsonl` with `autoExecuted: true` records the fast-path use (the bit no longer lives on `triage` itself).
-
-### Trivial — medium confidence (combined form, single ask)
-
-User: "Clean up the auth helper."
+The router emits one line and proceeds:
 
 ```
-Triage
-─ Complexity: trivial  (confidence: medium — prompt is vague: "clean up" could be cosmetic or behavioural)
-─ Recommended path: inline
-─ Why: single helper file, ~80 LOC, no caller touch.
-─ Ceremony mode: inline
+─ trivial / inline / inline edit  ·  runMode=null  ·  slug=20260515-rename-getcwd
 ```
 
-```
-Question 1 — path
-[1] Proceed as recommended
-[2] Switch to trivial (inline edit + commit, skip plan/review)
-[3] Escalate to large-risky (add collaborative design phase, strict AC, parallel slices)
-[4] Custom (let me edit complexity / ceremonyMode / path)
+Then dispatches the inline edit + commit and stops. The v8.44 audit-log line records `autoExecuted: true`.
 
-Question 2 — run mode (ignored on inline)
-[s] Step mode — pause after each stage; next /cc advances (default)
-[a] Auto mode — chain plan → build → review → ship; stop only on hard gates
-```
+### Small/medium — zero-question (default)
 
-### Small/medium — medium confidence
-
-User: "Add a status pill to the approvals dashboard."
+User: `/cc Add a status pill to the approvals dashboard.`
 
 ```
-Triage
-─ Complexity: small/medium  (confidence: medium)
-─ Recommended path: plan → build → review → ship
-─ Why: 1 new component + 1 hook, ~120 LOC, no auth/payment touch.
-─ Ceremony mode: soft
+─ small-medium / soft / plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-status-pill
 ```
 
-### Large-risky — escalation triggered
+Then dispatches ac-author Phase 0 (assumption capture happens inside the specialist, not at the router).
 
-User: "Migrate the user store from Postgres to DynamoDB."
+### Large-risky — zero-question (default)
 
-```
-Triage
-─ Complexity: large-risky  (confidence: high)
-─ Recommended path: plan → build → review → ship  (plan stage expands: design → ac-author)
-─ Why: data-layer migration, schema change, requires runbook + rollback plan.
-─ Ceremony mode: strict
-```
-
-### Low confidence — escalate one class
-
-User: "Make auth less broken."
+User: `/cc Migrate the user store from Postgres to DynamoDB.`
 
 ```
-Triage
-─ Complexity: small/medium  (confidence: low — escalated from trivial because prompt is vague)
-─ Recommended path: plan → build → review → ship
-─ Why: "auth" touches sensitive surface; need a plan to scope concretely.
-─ Ceremony mode: soft
+─ large-risky / strict / design → plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-user-store-migration
 ```
 
-The user is expected to clarify in (4) Custom or accept (1) Proceed; either way the triage is now recorded.
+Then dispatches design Phase 0 (assumption capture, surface detection, prior-learnings lookup all happen inside design, not at the router).
+
+### Override flag — explicit choice
+
+User: `/cc --strict Clean up the auth helper.`
+
+```
+─ large-risky / strict / design → plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-auth-helper-cleanup
+```
+
+Heuristic would have picked `small-medium / soft` (single helper file, ~80 LOC), but the user pinned `--strict`. The audit log records `userOverrode: true`. Then dispatches design Phase 0.
+
+### Vague prompt — escalate one class
+
+User: `/cc Make auth less broken.`
+
+Heuristic baseline: `small-medium`. Vague-prompt rule escalates one class:
+
+```
+─ large-risky / strict / design → plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-auth-improvements
+```
+
+Then dispatches design; Phase 1 (Clarify) asks the user to specify which auth surface is broken (interpretation forks live in design now, not at the router).
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical completion / verification / commit-discipline rows live in `.cclaw/lib/anti-rationalizations.md` (v8.49). The rows below stay here because they cover triage-specific framings ("obviously trivial - skip the gate", "just fix it" cue handling, mid-flight runMode toggle, large-risky padding, no-git auto-downgrade).
-
-The triage gate is the easiest place to skip "because the task is obvious". When you catch yourself thinking the left column, do the right column. Surface the rationalization in the triage rationale line so the audit trail records why the gate ran (or didn't) the way it did.
+**Cross-cutting rationalizations:** the canonical completion / verification / commit-discipline rows live in `.cclaw/lib/anti-rationalizations.md` (v8.49). The rows below stay here because they cover triage-specific framings ("obviously trivial — skip the router", "just fix it" cue handling, mid-flight runMode toggle, large-risky padding, no-git auto-downgrade, research-mode-as-ceremonyMode confusion).
 
 | rationalization | truth |
 | --- | --- |
-| "This is obviously trivial — skip the gate entirely." | Confidence must be `high` AND no "discuss first" cue for the zero-question fast path. If either is missing, the structured ask runs; "obviously" is the canonical anchoring bias. |
-| "User said 'just fix it' — go straight to inline." | "just fix it" is a cue but not a free pass. The heuristic still ranks file count / LOC / sensitive surface; if any signal says large-risky, surface large-risky and let the user override. |
-| "Vague prompt + confidence low → small/medium is fine." | On `low` confidence, always escalate one class. The user reads the triage and learns to ignore your scope estimates; escalation produces an honest gate. |
-| "Combined form is overkill for a small slug — let me ask Question 1, then Question 2 separately." | The combined form is the v8.14 default on every supporting harness (Cursor / Claude Code / OpenCode / Codex). Splitting back to two asks wastes a round-trip on every non-inline flow. |
-| "I'll re-render the triage on resume to confirm — safer." | Resume reads the saved triage and continues from `currentStage` — never re-prompts. Re-rendering is a contract violation; the user already chose. |
-| "Mid-flight the user wants to switch from step to auto — let me patch `triage.runMode`." | v8.34 lifts the immutability rule for `runMode` only: the user passes `/cc --mode=auto` or `/cc --mode=step` and the orchestrator patches `triage.runMode` (see `flow-resume.md > Mid-flight runMode toggle`). `complexity` / `ceremonyMode` / `path` stay immutable — those still require `/cc-cancel` + fresh `/cc`. Inline path rejects the toggle (no `runMode` to flip). |
+| "This is obviously trivial — skip the router entirely." | v8.58's router is zero-question by default; there is no separate skip. The router runs the heuristic and announces in one line, whether or not the result is trivial. |
+| "User said 'just fix it' — go straight to inline." | "just fix it" is a heuristic signal but not a free pass. The router still checks file count / LOC / sensitive surface; if any signal says large-risky, route to large-risky. The user can pass `--inline` if they want to override. |
+| "Vague prompt — let me ask a clarifying question at the router." | The router does not ask. Vague prompts escalate one class so design Phase 1 (or ac-author Phase 0) picks up the clarification surface inside the specialist, not at the router. |
+| "Let me render the legacy v8.14 combined-form ask to be safe." | v8.58 removed the combined-form ask. The router is zero-question + override flags only; do not synthesize a structured ask at this hop. |
+| "Mid-flight the user wants to switch from step to auto — let me patch `triage.runMode`." | v8.34 lifts immutability for `runMode` only: the user passes `/cc --mode=auto` and the orchestrator patches `triage.runMode`. `complexity` / `ceremonyMode` / `path` / `mode` stay immutable — those require `/cc-cancel` + fresh `/cc`. Inline path rejects the toggle. |
+| "Mid-flight the user wants to switch from soft to strict — `/cc --strict` should re-triage." | v8.58 override flags ONLY work on a fresh `/cc <task>` (no active flow). On a resume, the `--strict` flag is ignored with a one-line `override flags only apply to fresh /cc; resume continues with saved ceremonyMode` note. |
 | "`large-risky` to be safe on this one-file rename." | Don't pad the heuristic. The user reads it and learns to ignore your triage; padding undermines the gate's signal-to-noise. |
-| "No-git auto-downgrade is a warning, not a hard rule." | Strict mode requires per-criterion commits — without `.git/`, there is no SHA to record. The downgrade is structural; treating it as advisory crashes on the first commit attempt. |
+| "No-git auto-downgrade is a warning, not a hard rule." | Strict mode requires per-criterion commits — without `.git/`, there is no SHA to record. The downgrade is structural even with `--strict` override. |
+| "Research mode is just another ceremonyMode — I should ask the user to pick it at the router." | Research is a separate ENTRY POINT (`/cc research <topic>`), not a ceremonyMode option. The router never offers research-mode as an alternative to task-mode; the user types `research ` as a prefix or passes `--research` to enter research mode. |
 
 ## Common pitfalls
 
-- **Rendering the triage as a code block when a structured ask tool is available.** Try the harness's structured ask facility (`AskUserQuestion` / `AskQuestion` / `prompt` / "ask" content block) first; the fenced form is a fallback only.
-- Stating "I think this is medium-complexity" and then immediately invoking ac-author. Wait for the user's pick — orchestrator-decided routing without an explicit user confirmation is the most common cause of mis-scoped flows.
-- Picking `large-risky` for a one-file rename "to be safe". Do not pad the heuristic; the user reads it and learns to ignore your triage.
-- **Asking the gate on a trivial / high-confidence request.** The zero-question fast path exists for exactly this case; surfacing a form for a typo-fix is friction without value. If you are about to ask, double-check the confidence is not `high`.
-- **Splitting the combined form into two separate structured-ask calls when the harness supports multi-question.** v8.13's double round-trip is now a regression; pack both questions into one form on every supporting harness (Cursor `AskQuestion`, Claude Code `AskUserQuestion`, OpenCode "ask", Codex `prompt`).
-- Forgetting that the run-mode answer is **ignored on the inline path**. `triage.runMode` is `null` on inline; do not write `"step"` or `"auto"` there.
-- Forgetting to write `triage` into `flow-state.json`. The resume detector reads it; an absent triage breaks resume and the reviewer's posture-aware git-log inspection (which needs `triage.ceremonyMode` to know whether to run the strict-mode chain check at all).
-- Re-running the gate on resume. Resume reads the saved triage (path + runMode) and continues from `currentStage`; it never re-prompts. (Pre-v8.44 state files may still carry `autoExecuted` / `userOverrode` on the triage object; readers tolerate them but resume does not re-stamp them.)
+- **Rendering a structured ask at the router.** v8.58's router is zero-question. If you find yourself about to invoke `AskUserQuestion` / `AskQuestion` / `prompt` / an "ask" content block at this hop, stop — the router is wrong.
+- **Asking a clarifying question at the router because the prompt is vague.** Vague prompts escalate one complexity class; the clarification surface is owned by design Phase 1 (strict) or ac-author Phase 0 (soft), not the router.
+- **Writing `triage.surfaces` / `triage.assumptions` / `triage.priorLearnings` / `triage.interpretationForks` at the router.** Those fields are populated by the specialist that consumes them. The router writes only `complexity` / `ceremonyMode` / `path` / `runMode` / `mode` / `rationale` / `decidedAt`.
+- **Inserting `"qa"` into `triage.path` at the router.** The v8.52 qa-stage insertion moved to the design Phase 2 / ac-author Phase 1 surface-write step. The router writes `["plan", "build", "review", "critic", "ship"]` (or `["build"]` on inline); the specialist rewrites to insert `"qa"` when UI / web surfaces are detected.
+- **Synthesizing a combined-form ask from the v8.14-v8.57 prose.** The combined form is removed in v8.58; do not reach for it as a fallback.
+- **Confusing the v8.58 ceremonyMode flags (`--inline` / `--soft` / `--strict`) with the v8.34 runMode flags (`--mode=auto` / `--mode=step`).** They are orthogonal — a single `/cc` can carry both (`/cc --strict --mode=auto <task>` is valid).
+- **Re-running the router on resume.** Resume reads the saved triage and continues from `currentStage`; never re-runs the router.
+- **Treating `/cc research <topic>` as a task.** The Detect step's research-mode fork is the entry point for research flows; the router is skipped entirely. If you find the router running on a `research ` prefix, the fork failed.
 
 ## Next step
 
-After the combined form returns AND the path is **not** `inline`, the orchestrator dispatches the first specialist directly. As of v8.21 there is no separate preflight assumption-confirmation step in between — the assumption surface lives inside the first specialist's first turn (design Phase 0 on large-risky; ac-author Phase 0 on small-medium). `triage.assumptions` is still a first-class field on `flow-state.json` and is populated by whichever specialist runs first. On the inline path (whether reached via the zero-question fast path or via Question 1 option (2)), the orchestrator goes straight to the build dispatch — there is no assumption surface (a one-line edit has no assumptions worth surfacing).
+After the router announces (or after an override flag fires), the orchestrator dispatches the first specialist directly. The assumption surface, surface detection, and prior-learnings lookup all live inside the first specialist's first turn — design Phase 0-2 on strict, ac-author Phase 0-1 on soft, none on inline. `triage.assumptions` / `triage.surfaces` / `triage.priorLearnings` are first-class fields on `flow-state.json` and continue to be populated (just by the specialist, not by the orchestrator). On the inline path, the orchestrator goes straight to the build dispatch — there is no assumption surface (a one-line edit has no assumptions worth surfacing).

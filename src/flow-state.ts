@@ -1,6 +1,7 @@
 import {
   CEREMONY_MODES,
   FLOW_STAGES,
+  RESEARCH_MODES,
   ROUTING_CLASSES,
   RUN_MODES,
   SPECIALISTS,
@@ -14,6 +15,7 @@ import {
   type PlanCriticVerdict,
   type QaEvidenceTier,
   type QaVerdict,
+  type ResearchMode,
   type RoutingClass,
   type RunMode,
   type SpecialistId,
@@ -49,6 +51,10 @@ function isQaEvidenceTier(value: unknown): value is QaEvidenceTier {
 
 function isSurface(value: unknown): value is Surface {
   return typeof value === "string" && (SURFACES as readonly string[]).includes(value);
+}
+
+function isResearchMode(value: unknown): value is ResearchMode {
+  return typeof value === "string" && (RESEARCH_MODES as readonly string[]).includes(value);
 }
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
@@ -236,6 +242,36 @@ export interface FlowStateV82 {
    * Persisted so resume never re-prompts the user.
    */
   triage: TriageDecision | null;
+  /**
+   * v8.58 — pointer to a prior `/cc research <topic>` flow whose
+   * `research.md` should be loaded as context by the active task
+   * flow's triage / design / ac-author. Written by the orchestrator
+   * at Hop 0 (Detect) when the user accepts the optional "ready to
+   * plan?" handoff that the standalone design specialist emits at
+   * the tail of a research flow; cleared automatically when the
+   * task flow ships.
+   *
+   * Shape:
+   *   - `slug`: the research flow's slug (e.g. `2026-05-15-research-foo`)
+   *     so the artifact path can be reconstructed
+   *     (`.cclaw/flows/<slug>/research.md`).
+   *   - `topic`: the research topic line, for surfacing in pickers
+   *     and prompts (e.g. "Storage strategy for shared agent memory").
+   *   - `path`: the absolute artifact path; redundant with `slug`
+   *     but cached for fast surfacing without rebuilding the path.
+   *
+   * Optional in TypeScript: pre-v8.58 state files lack the field and
+   * MUST validate unchanged; readers default to `null`/absent meaning
+   * "no prior research linked". Distinct from a research-mode flow's
+   * own state (which lives in the same `currentSlug` slot; the
+   * research-vs-task distinction is recorded via `triage.mode`, not
+   * via a separate slug field).
+   */
+  priorResearch?: {
+    slug: string;
+    topic: string;
+    path: string;
+  } | null;
 }
 
 export type FlowState = FlowStateV82;
@@ -413,6 +449,13 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   }
   if (triage.runMode !== undefined && triage.runMode !== null && !isRunMode(triage.runMode)) {
     throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
+  }
+  // v8.58 — `triage.mode` is the optional "task" | "research" flag the
+  // orchestrator stamps at Hop 1 (Detect) to record which entry point
+  // started the flow. Pre-v8.58 state files lack the field; readers
+  // default to `"task"` (the historical single-mode behaviour).
+  if (triage.mode !== undefined && !isResearchMode(triage.mode)) {
+    throw new Error(`Invalid triage.mode: ${String(triage.mode)} (expected "task" or "research" or absent)`);
   }
   if (
     triage.autoExecuted !== undefined &&
@@ -622,6 +665,25 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     throw new Error(`Invalid buildProfile: ${String(state.buildProfile)}`);
   }
   assertTriageOrNull(state.triage);
+  // v8.58 — `priorResearch` is optional and accepts `null` as the
+  // explicit-cleared sentinel. When present-and-non-null it must be a
+  // plain object with three string fields. Pre-v8.58 state files lack
+  // the field entirely; readers default to `null`/absent.
+  if (state.priorResearch !== undefined && state.priorResearch !== null) {
+    if (typeof state.priorResearch !== "object" || Array.isArray(state.priorResearch)) {
+      throw new Error("flow-state.priorResearch must be an object, null, or absent");
+    }
+    const pr = state.priorResearch as { slug?: unknown; topic?: unknown; path?: unknown };
+    if (typeof pr.slug !== "string" || pr.slug.length === 0) {
+      throw new Error("flow-state.priorResearch.slug must be a non-empty string");
+    }
+    if (typeof pr.topic !== "string" || pr.topic.length === 0) {
+      throw new Error("flow-state.priorResearch.topic must be a non-empty string");
+    }
+    if (typeof pr.path !== "string" || pr.path.length === 0) {
+      throw new Error("flow-state.priorResearch.path must be a non-empty string");
+    }
+  }
 }
 
 /** @deprecated alias preserved for v8.1 import sites. Use {@link assertFlowStateV82}. */

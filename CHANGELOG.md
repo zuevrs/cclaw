@@ -1,47 +1,91 @@
 # Changelog
 
-## 8.57.0 — Utility slash commands (`/cclaw-review`, `/cclaw-critic`)
+## 8.58.0 — Lightweight router + research mode + design standalone
 
 ### Why
 
-Through v8.56 cclaw had exactly **one** user-callable entry point: `/cc <task>`, which always triggers the full plan → build → review → critic → ship pipeline. A cross-reference scan of reference projects shows this is the outlier — gstack ships 51 slash commands, mattpocock-skills exposes `/triage` and `/to-prd` as direct primitives, and addyosmani-skills surfaces `/spec`, `/plan`, `/build`, `/test`, `/review` as separate entry points. cclaw's specialists (the 10-axis reviewer with anti-rationalization catalog + adversarial pre-mortem; the 8-section critic with 4 falsification techniques + 6 human-perspective lenses) are arguably the strongest user-facing primitives the harness ships, but they were only reachable by triggering a full `/cc` slug. That is over-ceremony for ad-hoc moments — a quick reviewer pass on staged changes before commit, an adversarial critique of a plan written outside cclaw, a second-opinion on a PR description.
+A v8.56 audit pass surfaced two structural problems with how the orchestrator handles the up-front routing step:
 
-v8.57 closes this gap without changing the `/cc` flow contract. Two new utility commands install alongside `cc.md` / `cc-cancel.md` / `cc-idea.md` in every enabled harness's commands directory.
+1. **The router was doing classification, not just routing.** "Triage" today decides `complexity` × `ceremonyMode` × `path` × `runMode` (pure routing), but it ALSO does surface detection, assumption capture, prior-learnings injection, and interpretation-fork extraction. ~50% of that overlap duplicates work the `design` specialist already does in Phase 0-2 (assumption capture in Bootstrap, clarifying questions in Clarify, scope framing in Frame). When `design` ran (`large-risky` tasks), the duplication was wasted work; when `design` did not run (`trivial` / `small-medium`), the orchestrator did the same work but with less codebase context. The combined-form structured ask added user-visible friction at the gate that the heuristics rarely needed (the v8.44 audit log showed `userOverrode == false` on ~85% of v8.49+ flows).
+2. **There was no pre-task entry point.** Users sometimes start with unclear intent (research / brainstorm need) rather than a clear task. The 11-reference audit (gsd-v1 spec-phase, chachamaru plan_analyst, compound planner, addyosmani `/spec`, mattpocock `/triage` + `/to-prd`, obra-superpowers brainstorming, oh-my-claudecode analyst, oh-my-openagent Prometheus, ...) showed that every reference with this problem treated brainstorming as a **separate entry point**, not a sub-step inside routing. cclaw users with unclear intent had to exit cclaw, use the harness directly for research, then come back with a clarified task.
+
+v8.58 closes both gaps with three coordinated changes that share one principle: **routing decides where to go; specialists decide what to do.**
 
 ### What changed
 
-**Deliverable 1 — `/cclaw-review [<git-ref-or-paths>]`** — runs the reviewer's 10-axis pass directly on a diff or set of files.
+**Deliverable 1 — Router (Hop 2) reshape** (`src/content/start-command.ts`, `src/content/skills/triage-gate.md`, `src/types.ts`).
 
-- Default: `git diff --cached` (staged changes). Falls back to `git diff HEAD` when nothing is staged.
-- With a ref / ref range: review the diff at that point (e.g. `/cclaw-review HEAD~3..HEAD`).
-- With paths: review the named files (whole-file mode).
-- 10-axis pass with utility-mode gating: `qa-evidence` skipped (no `qa.md` to cross-check), plan-dependent sub-checks of `edit-discipline` skipped (no `Touch surface` declaration), `nfr-compliance` skipped (no plan `## Non-functional` section).
-- Output: Findings table directly to chat. Pass `--out <path>` to also write the body as markdown.
-- No `flow-state.json` interaction, no `.cclaw/flows/<slug>/` writes, no artifact tree.
+- The router is now **zero-question by default**. The legacy v8.14-v8.57 combined-form structured ask is removed; the router emits a one-line announcement (`─ small-medium / soft / plan → build → review → critic → ship · runMode=step · slug=<slug>`) and dispatches the first specialist. No `AskUserQuestion` invocation at this hop.
+- **The router decides exactly five fields**: `complexity` (trivial / small-medium / large-risky) × `ceremonyMode` (inline / soft / strict) × `path` (FlowStage[]) × `runMode` (auto / step / null) × `mode` (task / research). Six fields the router used to decide moved to the specialist that consumes them: `surfaces` (design Phase 2 / ac-author Phase 1.5), `assumptions` (design Phase 0 / ac-author Phase 0), `priorLearnings` (design Phase 1 / ac-author Phase 0), `interpretationForks` (design Phase 1), `criticOverride` (no v8.58 writer; reserved for future explicit-flag promotion), `notes` (no v8.58 writer; specialist-owned annotations now).
+- **Three new override flags** short-circuit the heuristic on explicit user intent: `/cc --inline <task>`, `/cc --soft <task>`, `/cc --strict <task>`. Flags are mutually exclusive (last-flag wins on conflict, with a one-line note); orthogonal to the v8.34 `--mode=auto` / `--mode=step` runMode toggle; do NOT bypass the no-git auto-downgrade (a no-git project with `--strict` still lands on `ceremonyMode: "soft"` with `downgradeReason: "no-git"`); record `userOverrode: true` in the v8.44 audit log when the choice differs from the heuristic.
+- New `RESEARCH_MODES = ["task", "research"]` constant + `ResearchMode` type in `src/types.ts`. `TriageDecision.mode?: ResearchMode` field added; defaults to `"task"` on absence (pre-v8.58 state files read as task-mode automatically). The six soft-deprecated `TriageDecision` fields (surfaces, assumptions, priorLearnings, interpretationForks, criticOverride, notes) keep their type signatures with `@deprecated v8.58` JSDoc; readers continue to consume them verbatim on pre-v8.58 state files, and the v8.58 specialist write path repopulates them via `patchFlowState`.
+- `triage-gate.md` skill is rewritten end-to-end for the v8.58 routing contract: documents the five-field router output, the seven moved-out fields, the three override flags, the no-git auto-downgrade interaction with override flags, four worked examples (trivial / small-medium / large-risky / override-flag / vague-prompt), and twelve common-rationalizations rows (router-skip-temptation, vague-prompt-ask-temptation, legacy-combined-form-temptation, mid-flight-toggle-shape, override-flag-on-resume, large-risky-padding, no-git-downgrade-with-strict, research-as-ceremonyMode-confusion, plus the cross-cutting `.cclaw/lib/anti-rationalizations.md` pointer).
 
-**Deliverable 2 — `/cclaw-critic <path>`** — runs the critic's adversarial 8-section protocol on any document.
+**Deliverable 2 — Design specialist absorbs triage responsibilities** (`src/content/specialist-prompts/design.ts`).
 
-- Input: required path to a markdown / text document (plan written outside cclaw, design doc, RFC, PR description, ADR, README, etc.).
-- Always runs **adversarial** mode (4 falsification techniques + multi-perspective lens sweep). Lens selection adapts to the document type (plan-stage lenses: executor / stakeholder / skeptic; code-stage lenses: security / new-hire / ops).
-- §2 / §4 / §5 sub-buckets adapt to whatever the document carries (acceptance lines, requirements, design decisions, open questions, risks) — the bucket labels follow the document's own vocabulary, not the cclaw plan vocabulary.
-- Output: critic findings directly to chat. Pass `--out <path>` to also write the body as markdown.
-- No `flow-state.json` interaction, no `.cclaw/flows/<slug>/` writes, no `critic.md`.
+- Phase 0 (Bootstrap) is now the **assumption-capture owner**. v8.58 fresh flows arrive with `triage.assumptions` absent; Phase 0 generates 3-7 stack / convention / target-platform assumptions and `patchFlowState`s `triage.assumptions`. Pre-v8.58 flows with seeded assumptions: Phase 0 reads them verbatim (back-compat) and supplements only if Phase 0's scan surfaces an undocumented assumption.
+- Phase 1 (Clarify) is now the **interpretation-forks + prior-learnings owner**. Phase 1 surfaces ambiguities as clarifying questions and `patchFlowState`s `triage.interpretationForks` after the user disambiguates. Phase 1 also calls `findNearKnowledge(taskText)` (replaces the v8.18 orchestrator-side Hop 2.5 lookup) and `patchFlowState`s `triage.priorLearnings`. The v8.50 outcome-signal weighting and similarity threshold are preserved verbatim — only the call site moved.
+- Phase 2 (Frame) is now the **surface-detection owner**. Phase 2 detects surfaces from file signals + task description, `patchFlowState`s `triage.surfaces`, and rewrites `triage.path` to insert `"qa"` between `"build"` and `"review"` when UI/web surfaces are detected and `ceremonyMode != "inline"` (the v8.52 qa-stage insertion contract is preserved verbatim — only the writer moved).
+- Phase 7 (Sign-off) emits a **two-variant picker** depending on activation mode. Intra-flow (the historical default) — three-option `approve` / `request-changes` / `reject` (unchanged). Standalone research — two-option `accept research` / `revise` (new).
 
-**Deliverable 3 — content + install wiring** — `src/content/utility-commands.ts` exports `CCLAW_REVIEW_COMMAND` and `CCLAW_CRITIC_COMMAND` prompt bodies plus `UTILITY_COMMAND_FILES` (the single source-of-truth for which files install). `src/install.ts > writeHarnessAssets` writes both files alongside `cc.md` / `cc-cancel.md` / `cc-idea.md` in every enabled harness's commands directory. `uninstallCclaw` sweeps them via the same per-harness pass. `SummaryCounts.commands` is sourced from `3 + UTILITY_COMMAND_FILES.length` so future utility commands flip the count automatically.
+**Deliverable 3 — Design standalone mode (research mode)** (`src/content/specialist-prompts/design.ts`, `src/content/artifact-templates.ts`, `src/artifact-paths.ts`).
 
-**Deliverable 4 — specialist contract notes** — `reviewer.ts` and `critic.ts` gain a brief informational note at the top describing the two invocation contexts (full-flow context dispatched by `/cc`, utility-command context dispatched by `/cclaw-review` / `/cclaw-critic`). The contract bodies themselves are unchanged — same axes, same investigation protocol, same outputs.
+- New `### Activation modes (v8.58)` section at the top of the design specialist contract. Two modes share Phase 0-6 verbatim; only Phase 7 picker shape and the Phase 6 artifact-target differ.
+  - **Intra-flow** (`triage.mode == "task"`, `ceremonyMode == "strict"`): writes Phase 6 Compose output to `plan.md`; hands off to `ac-author` after Phase 7 `approve`.
+  - **Standalone research** (`triage.mode == "research"`): writes Phase 6 Compose output to `research.md`; finalises immediately after Phase 7 `accept research` (no ac-author handoff, no build / review / critic / ship). The research posture defaults to `deep` regardless of complexity heuristic (since the user explicitly invoked the brainstormer).
+- New `RESEARCH_TEMPLATE` in `src/content/artifact-templates.ts` carries the v8.58 research-mode frontmatter (`mode: research`, `topic`, `generated_at`) and the design-portion section layout (Frame, Spec, Approaches, Selected Direction, Decisions, Pre-mortem, Not Doing, Open questions, Summary — no AC table / Topology / Traceability, since those belong to the follow-up `/cc <task>` flow that consumes this research). `researchTemplateForSlug(slug, topic, isoTimestamp)` helper fills the placeholders.
+- New `"research"` entry in `ArtifactStage` (`src/artifact-paths.ts`) and `ARTIFACT_FILE_NAMES` (`research: "research.md"`). `activeArtifactPath(projectRoot, "research", slug)` resolves to `.cclaw/flows/<slug>/research.md`; `shippedArtifactPath` to `.cclaw/flows/shipped/<slug>/research.md`. The `"research"` artifact stage is NOT a `FlowStage` token — research flows have no build / review / critic / ship.
 
-**Deliverable 5 — README + smoke** — `README.md` adds a new `## Utility commands` section between `## What you get` and `## Harnesses supported` describing both commands in ~15 lines. `scripts/smoke-init.mjs` asserts both files install + uninstall and spot-checks the body invariants (specialist contract reference, `--out` flag, explicit flow-state disclaimer).
+**Deliverable 4 — `/cc research <topic>` entry point** (`src/content/start-command.ts`, `src/flow-state.ts`).
 
-### Tests
+- Hop 1 (Detect) gains a research-mode fork: if input starts with `research ` or carries `--research`, the orchestrator strips the trigger from the task text, builds a research-mode slug (`YYYYMMDD-research-<semantic-kebab>`), and skips the router entirely. The orchestrator stamps a sentinel `triage` block (`complexity: "large-risky"`, `ceremonyMode: "strict"`, `path: ["plan"]`, `mode: "research"`, `runMode: "step"`, `rationale: "research-mode entry point"`) and dispatches `design` standalone with a `Mode: research` flag in the dispatch envelope.
+- After Phase 7 `accept research`, the orchestrator `git mv`s the artifact to `.cclaw/flows/shipped/<slug>/research.md` and surfaces a plain-prose handoff prompt: "Ready to plan? Run `/cc <clarified task description>` and I'll carry the research forward as context." The next `/cc <task>` invocation on the same project reads the most-recent shipped research slug and stamps it into `flow-state.json > priorResearch: { slug, topic, path }`.
+- New `flowState.priorResearch?: { slug: string; topic: string; path: string } | null` field in `FlowStateV82`. `assertFlowStateV82` validates that present-and-non-null `priorResearch` has three non-empty string fields; pre-v8.58 state files lack the field entirely and continue to validate.
+- `ac-author` Phase 0 / `design` Phase 0 on the follow-up flow read `priorResearch.path` and include the research artifact in their reads (no new specialist contract; the existing "Inputs you have access to" section adds the new path).
 
-26 new tests (`tests/unit/v857-utility-commands.test.ts` + `tests/integration/v857-utility-commands.test.ts`) covering content module shape, prompt body invariants, per-harness install + uninstall, idempotency, byte-identity across harnesses, specialist contract notes, and the SummaryCounts contract.
+**Deliverable 5 — ac-author absorbs soft-path triage responsibilities** (`src/content/specialist-prompts/ac-author.ts`).
 
-### Non-goals (deliberately punted)
+- Phase 0 (Assumption confirmation) is now the **soft-path assumption-capture owner**. On v8.58 fresh flows `triage.assumptions` is absent; Phase 0 generates and `patchFlowState`s the field. Phase 0 also reads `flowState.priorResearch.path` when present (v8.58 research → task handoff).
+- New **Phase 1.5 (Surface scan)** between Phase 1 (Bootstrap) and Phase 2 (AC authoring). Detects surfaces from the task description + file signals, `patchFlowState`s `triage.surfaces`, and rewrites `triage.path` to insert `"qa"` when UI/web surfaces are detected (mirrors the design Phase 2 contract — only the call site differs).
 
-- **No `/cclaw-plan` / `/cclaw-build` / `/cclaw-ship`.** Those stages are flow-coupled — `build` requires a plan; `plan` requires triage; `ship` requires reviewer + critic clearance. Surfacing them as utility primitives would dilute the contracts. The two specialists that DO make sense as standalone primitives are reviewer (read-only on any diff / file set) and critic (read-only on any document).
-- **No `/cclaw-security-review`.** Security review is invoked by the regular reviewer when sensitive-surface heuristics fire, OR by the user inside a `/cc` flow. A standalone security-review utility is a v8.58+ candidate, not a v8.57 deliverable.
-- **No qa-evidence utility.** `qa-runner` requires a UI artifact + Playwright / browser-MCP tooling + AC table — too coupled to flow state to make a clean utility shim.
+**Deliverable 6 — Tests** (`tests/unit/v858-router-research.test.ts` — new file, 44 tests; updates to `prompt-budgets.test.ts`, `v818-knowledge-surfacing.test.ts`, `v821-preflight-fold.test.ts`, `v823-no-git-fallback.test.ts`, `v849-overcomplexity-sweep.test.ts`, `artifact-paths.test.ts`).
+
+- New `v858-router-research.test.ts` carries the tripwire suite — RESEARCH_MODES type surface, soft-deprecated TriageDecision fields back-compat, flowState.priorResearch validation + migration, start-command lightweight-router prose (zero-question default, override flags, five fields the router decides, six fields the router stops deciding, research-mode entry-point fork, sentinel triage block shape, priorResearch handoff prose, qa-stage gating contract preservation, combined-form removal), design Phase 0/1/2 specialist-ownership prose, design standalone activation mode + Phase 6 research.md target + Phase 7 two-option picker, intra-flow three-option picker preservation, ac-author Phase 0 + Phase 1.5 soft-path ownership prose, research.md artifact template + path resolution + frontmatter shape, triage-gate skill v8.58 routing-contract prose, pre-v8.58 state-file back-compat (verbatim migration of seeded triage classification fields).
+- `prompt-budgets.test.ts`: `design` prompt budget raised from 470 lines / 47000 chars to 530 lines / 61000 chars. The increase is justified by the four absorbed responsibilities (Phase 0 assumption-capture owner, Phase 1 interpretation-forks owner + prior-learnings owner, Phase 2 surface-detection owner) plus the new standalone activation mode (Phase 7 two-variant picker, research-posture defaulting, research.md artifact targeting).
+- `v818-knowledge-surfacing.test.ts`: tests `(e)` and `(f)` updated to reflect the v8.58 ownership move — the test still asserts that `findNearKnowledge` is called and `triage.priorLearnings` is populated, but now in the context of the design Phase 1 / ac-author Phase 0 specialist-side lookup rather than the Hop 2.5 orchestrator-side lookup.
+- `v821-preflight-fold.test.ts`: the test for design Phase 0's v8.21 fold updated to expect the v8.58 renamed term "Assumption-capture ownership" instead of "Assumption-surface ownership".
+- `v823-no-git-fallback.test.ts`: the strict-mode no-git auto-downgrade explanation in `triage-gate.md` updated to include the `git log --grep="(AC-N):"` reviewer grep call.
+- `v849-overcomplexity-sweep.test.ts`: passes after `triage-gate.md` gains the required cross-cutting `.cclaw/lib/anti-rationalizations.md` pointer.
+- `artifact-paths.test.ts`: the `ARTIFACT_FILE_NAMES` exact-shape test expanded to include the new `research: "research.md"` entry; a new test locks the `activeArtifactPath` / `shippedArtifactPath` resolution for the `"research"` stage.
+
+**Deliverable 7 — README rewrite** (`README.md`).
+
+- Lead paragraph updated to mention the two-entry-point shape (`/cc <task>` + `/cc research <topic>`).
+- New `## Modes` section documents both entry points: `/cc <task>` (with override flags + v8.58 routing simplification), `/cc research <topic>` (with `--research` alias + handoff prompt + sentinel triage block + Mermaid flow diagram showing the two-fork shape).
+- "Why cclaw" gains two new bullets (Lightweight router + Research mode).
+- "Worked example" Triage line updated to mention the v8.58 zero-question default and the moved-out classification work.
+- "What you get" Specialists row updated to reflect design's two activation modes + ac-author's soft-path absorption.
+- Artifact tree gains `research.md` (v8.58+, research-mode flows only).
+
+### Migration
+
+**Pre-v8.58 state files validate verbatim.** A `flow-state.json` written by cclaw ≤ v8.57 has its `triage.{surfaces, assumptions, priorLearnings, interpretationForks, criticOverride, notes}` fields populated by the orchestrator. `migrateFlowState` is a no-op for those fields — they stay readable on the soft-deprecated surface for one release, and the specialists continue to consume them verbatim. Pre-v8.58 state files lack the `triage.mode` field; readers default to `"task"`. Pre-v8.58 state files lack the `priorResearch` field; readers default to `undefined`.
+
+**CLI invocations are forward-compatible.** `/cc <task>` continues to work unchanged. The new override flags (`--inline` / `--soft` / `--strict`) and the new entry point (`/cc research <topic>` / `/cc --research <topic>`) are opt-in. v8.57 utility commands (`/cclaw-review`, `/cclaw-critic`) are unaffected — they continue to install alongside `cc.md` / `cc-cancel.md` / `cc-idea.md` in every enabled harness's commands directory, and their runtime behaviour is independent of the router reshape.
+
+**No artifact rename.** `plan.md` is unchanged. `research.md` is new (v8.58 only, research-mode flows). The existing build / qa / review / critic / plan-critic / ship artifacts are unchanged.
+
+**Test count delta.** +44 v8.58 tests (`tests/unit/v858-router-research.test.ts`), +1 artifact-paths test (research path resolution), prompt-budgets test updated to reflect the design specialist's expanded scope. Net +45 tests over the v8.57 baseline.
+
+### Removed surface
+
+- v8.14-v8.57 **combined-form structured ask** at the router hop — removed. The router is zero-question by default; override flags carry the explicit-choice case. One breadcrumb sentence in `triage-gate.md` notes the removal so harness operators upgrading from v8.57 see the contract change.
+
+### Files added / modified
+
+**Added** (3 files): `src/content/artifact-templates.ts` (new `RESEARCH_TEMPLATE` + `researchTemplateForSlug`), `tests/unit/v858-router-research.test.ts` (44 tests, new), `.cclaw/flows/v858-router-research/design.md` (the Phase A design doc; preserved under `.cclaw/flows/shipped/` after this release ships per the dogfooding convention).
+
+**Modified** (9 source files + 6 test files + 2 docs): `src/types.ts` (RESEARCH_MODES constant, ResearchMode type, TriageDecision.mode field, six soft-deprecated JSDoc rows), `src/flow-state.ts` (priorResearch field + assertion, isResearchMode helper, triage.mode validation), `src/content/start-command.ts` (Detect fork for research-mode, router rewrite for zero-question default, override flags, sentinel triage block for research, priorResearch handoff, v8.58 prior-learnings consumption note), `src/content/skills/triage-gate.md` (full rewrite for v8.58 routing contract), `src/content/specialist-prompts/design.ts` (activation modes header, Phase 0/1/2 absorption, Phase 6 research.md target, Phase 7 two-variant picker), `src/content/specialist-prompts/ac-author.ts` (Phase 0 assumption-capture owner on soft path, Phase 1.5 surface scan, priorResearch read), `src/content/artifact-templates.ts` (RESEARCH_TEMPLATE), `src/artifact-paths.ts` ("research" stage), `scripts/smoke-init.mjs` (research.md installation check). Tests: `tests/unit/prompt-budgets.test.ts`, `tests/unit/v818-knowledge-surfacing.test.ts`, `tests/unit/v821-preflight-fold.test.ts`, `tests/unit/v823-no-git-fallback.test.ts`, `tests/unit/v849-overcomplexity-sweep.test.ts`, `tests/unit/artifact-paths.test.ts`. Docs: `README.md`, `CHANGELOG.md`.
 
 ## 8.56.0 — Decenter AC: rename `acMode` → `ceremonyMode`, recontextualize AC as one element of the plan, neutral-tone README rewrite
 

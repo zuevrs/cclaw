@@ -153,14 +153,28 @@ describe("v8.18 findNearKnowledge — knowledge-surfacing helper", () => {
 });
 
 describe("v8.18 orchestrator wiring — triage.priorLearnings", () => {
-  it("(e) start-command spec describes the prior-learnings lookup step with findNearKnowledge name", () => {
-    expect(START_COMMAND_BODY).toMatch(/^### Prior-learnings lookup/mu);
+  it("(e) start-command spec describes the v8.58 prior-learnings consumption surface (lookup moved from orchestrator to specialists)", () => {
+    // v8.58 — the v8.18 `findNearKnowledge` lookup was REMOVED from the
+    // orchestrator's Hop 2.5; the same lookup is now performed by the
+    // specialist that consumes it (ac-author Phase 3 dispatches
+    // `learnings-research`; design Phase 1 / Phase 4 query the store on
+    // demand). The start-command body still references the lookup name
+    // and the `triage.priorLearnings` back-compat read so pre-v8.58 state
+    // files continue to validate; the section header changed from
+    // "Prior-learnings lookup" to "v8.58 prior-learnings consumption".
+    expect(START_COMMAND_BODY).toMatch(/^### v8\.58 prior-learnings consumption/mu);
     expect(START_COMMAND_BODY).toContain("findNearKnowledge");
     expect(START_COMMAND_BODY).toContain("triage.priorLearnings");
   });
 
-  it("(f) start-command spec instructs to OMIT triage.priorLearnings when empty", () => {
-    expect(START_COMMAND_BODY).toMatch(/omit `priorLearnings` from `flow-state.json`/iu);
+  it("(f) start-command spec explains that the orchestrator no longer writes triage.priorLearnings on v8.58 (specialist owns the write)", () => {
+    // v8.58 — pre-v8.58 the body said "omit `priorLearnings` from
+    // `flow-state.json` entirely" when results were empty. v8.58 retires
+    // the orchestrator-side write entirely; the specialists own the read
+    // and never write back to `triage.priorLearnings` (their results land
+    // in `plan.md` / `research.md`). The body now states the v8.58 router
+    // never writes the field.
+    expect(START_COMMAND_BODY).toMatch(/v8\.58 router never writes it/u);
   });
 
   it("flow-state validator accepts triage.priorLearnings as an optional KnowledgeEntry[]", () => {

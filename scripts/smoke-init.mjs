@@ -176,7 +176,15 @@ try {
   // v8.54: decisions.md is gated behind config.legacyArtifacts; default install
   // does NOT write the legacy decisions template (v8.14+ inlines D-N rows in
   // plan.md > ## Decisions).
-  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "plan-critic.md", "qa.md", "ship.md", "learnings.md", "manifest.md"]) {
+  // v8.58 — `research.md` template was added alongside the new standalone
+  // research-mode entry point (`/cc research <topic>`). The `design`
+  // specialist writes to `research.md` (instead of plan.md) when activated
+  // in standalone mode; the artifact carries the same section layout as the
+  // design portion of plan.md but with the research-specific frontmatter
+  // (mode: research / topic / generated_at). Ships unconditionally — the
+  // template is the artifact's source-of-truth shape regardless of whether
+  // the project ever invokes research-mode.
+  for (const tpl of ["plan.md", "build.md", "review.md", "critic.md", "plan-critic.md", "qa.md", "ship.md", "learnings.md", "manifest.md", "research.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "templates", tpl))) {
       throw new Error(`smoke check failed: template ${tpl} missing after init`);
     }

@@ -10,7 +10,15 @@ import {
 } from "../../src/artifact-paths.js";
 
 describe("artifact paths", () => {
-  it("uses singular file names for every artifact stage (v8.42 added critic between review and ship; v8.52 added qa between build and review)", () => {
+  it("uses singular file names for every artifact stage (v8.42 added critic between review and ship; v8.52 added qa between build and review; v8.58 added research for standalone research-mode flows)", () => {
+    // v8.58 — `"research"` joins the artifact stage set for the new
+    // standalone research-mode entry point (`/cc research <topic>`).
+    // It is NOT a FlowStage token (the flow-state machine has no
+    // `research` stage; research flows finalise straight from design
+    // Phase 7 `accept research` without touching build / review /
+    // critic / ship). The artifact path machinery needs a name so
+    // `activeArtifactPath(projectRoot, "research", slug)` resolves to
+    // `.cclaw/flows/<slug>/research.md` without a special case.
     expect(ARTIFACT_FILE_NAMES).toEqual({
       plan: "plan.md",
       build: "build.md",
@@ -20,8 +28,19 @@ describe("artifact paths", () => {
       ship: "ship.md",
       decisions: "decisions.md",
       learnings: "learnings.md",
-      "pre-mortem": "pre-mortem.md"
+      "pre-mortem": "pre-mortem.md",
+      research: "research.md"
     });
+  });
+
+  it("v8.58 — supports research as an artifact stage (used by standalone research-mode flows)", () => {
+    const project = "/tmp/proj";
+    expect(activeArtifactPath(project, "research", "20260515-research-storage")).toBe(
+      path.join(project, ".cclaw", "flows", "20260515-research-storage", "research.md")
+    );
+    expect(shippedArtifactPath(project, "20260515-research-storage", "research")).toBe(
+      path.join(project, ".cclaw", "flows", "shipped", "20260515-research-storage", "research.md")
+    );
   });
 
   it("supports pre-mortem as a first-class artifact stage", () => {
