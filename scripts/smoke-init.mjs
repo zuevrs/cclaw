@@ -86,9 +86,53 @@ try {
       throw new Error(`smoke check failed: stale per-stage flow dir .cclaw/flows/${stale}/ should not exist after init`);
     }
   }
-  for (const dir of ["agents", "skills", "templates", "runbooks", "patterns"]) {
+  for (const dir of ["agents", "skills", "templates", "runbooks", "patterns", "research-lenses"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", dir))) {
       throw new Error(`smoke check failed: .cclaw/lib/${dir}/ missing after init`);
+    }
+  }
+  // v8.65 — `.cclaw/lib/research-lenses/` ships exactly the five
+  // research-only lens contracts (research-engineer / research-product
+  // / research-architecture / research-history / research-skeptic). The
+  // lenses install to a separate subdir from `agents/` (the flow
+  // specialists + the read-only research helpers) so the agents/
+  // namespace doesn't mix the two roles. Lenses are NOT in the
+  // `SPECIALISTS` array; the v8.65 main-context research orchestrator
+  // dispatches them in parallel after the open-ended discovery
+  // dialogue completes.
+  const expectedLensFiles = [
+    "research-engineer.md",
+    "research-product.md",
+    "research-architecture.md",
+    "research-history.md",
+    "research-skeptic.md"
+  ].sort();
+  const lensesOnDisk = (await import("node:fs"))
+    .readdirSync(join(tempDir, ".cclaw", "lib", "research-lenses"))
+    .filter((name) => name.endsWith(".md"))
+    .sort();
+  if (lensesOnDisk.length !== expectedLensFiles.length) {
+    throw new Error(
+      `smoke check failed: v8.65 research-lenses dir contains ${lensesOnDisk.length} files; expected ${expectedLensFiles.length} (got: [${lensesOnDisk.join(", ")}])`
+    );
+  }
+  for (const lensFile of expectedLensFiles) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "research-lenses", lensFile))) {
+      throw new Error(`smoke check failed: v8.65 research-lens ${lensFile} missing after init`);
+    }
+    const lensBody = readFileSync(
+      join(tempDir, ".cclaw", "lib", "research-lenses", lensFile),
+      "utf8"
+    );
+    if (!lensBody.includes("kind: research-lens")) {
+      throw new Error(
+        `smoke check failed: v8.65 research-lens ${lensFile} must carry \`kind: research-lens\` in its frontmatter`
+      );
+    }
+    if (!lensBody.includes(`# Research — `)) {
+      throw new Error(
+        `smoke check failed: v8.65 research-lens ${lensFile} must open with the \`# Research — \` title prefix`
+      );
     }
   }
   // v8.44 retired .cclaw/lib/examples/ — the directory should NOT exist on a fresh install.
@@ -548,6 +592,16 @@ try {
   execFileSync("node", [cli, "--non-interactive", "uninstall"], { cwd: tempDir, stdio: "pipe" });
   if (existsSync(join(tempDir, ".cclaw"))) {
     throw new Error("smoke check failed: .cclaw still exists after uninstall");
+  }
+  // v8.65 — uninstall must remove `.cclaw/lib/research-lenses/` along
+  // with the rest of the runtime tree. The `.cclaw/` root removal above
+  // covers this implicitly, but we assert it explicitly so a future
+  // refactor that splits research-lenses into a separate root dir
+  // doesn't silently regress.
+  if (existsSync(join(tempDir, ".cclaw", "lib", "research-lenses"))) {
+    throw new Error(
+      "smoke check failed: v8.65 .cclaw/lib/research-lenses/ still exists after uninstall"
+    );
   }
   if (existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command still exists after uninstall");

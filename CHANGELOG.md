@@ -1,6 +1,79 @@
 # Changelog
 
 
+## 8.65.0 — Powerful research mode (5 lenses + open-ended dialogue)
+
+### Why
+
+`/cc research <topic>` shipped in v8.58 as an interim stub: a dispatch into the `architect` specialist in a standalone activation mode (Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose run silently against a research artifact). It produced `research.md`, but the artifact was effectively a plan-shaped document with the AC table removed. Three drifts had accumulated.
+
+1. **Single-lens research underdelivers on uncertainty.** Real research questions span multiple orthogonal dimensions — technical feasibility, user value, system fit, prior attempts, what could go wrong. A single architect dispatch can touch each dimension, but it runs them sequentially against one author's context budget, and it inherits the architect's plan-shaped output mental model (Frame / Approaches / Decisions / Pre-mortem). The reference projects the user pointed at — gstack's `/plan-eng-review` / `/plan-design-review` / `/plan-ceo-review` / `/plan-qa-review` / `/plan-dx-review` quintet; obra-superpowers' brainstorming → writing-plans → subagent-driven-development chain; compound's continuous notebook + adversarial-reviewer — all converge on the same answer: multi-lens beats single-lens for research-grade exploration.
+2. **No discovery surface.** v8.58 research mode dispatched the architect on the raw `/cc research <topic>` argument with no chance to scope, refine, or surface what the user already knew. The architect compensated by writing a generic Frame section that asked "what is this about?" instead of using that information to deepen the lens scans.
+3. **Architect drift.** The architect's prompt carried two activation modes (intra-flow `task` and standalone `research`) plus a research-specific Phase 7 finalise branch. v8.62 already trimmed the picker; v8.65 finishes the job by removing research-mode entirely from the architect so its contract is single-purpose (plan authoring).
+
+### What changed
+
+**Deliverable 1 — Five research-only lens sub-agents** (new directory `src/content/research-lenses/`).
+
+- `research-engineer` — technical feasibility lens. Covers overall feasibility + 5 sub-axes (technology fit, skills required, time horizon, reversibility, verification path), 2-3 candidate implementation paths with effort + trade-off tags, blockers (hard / soft severity), implementation-time risks, ranged effort estimate. May dispatch the existing `repo-research` helper for brownfield codebase context.
+- `research-product` — user / product value lens. Covers user-value rating, primary + secondary beneficiaries, alternatives considered (always including the explicit "do nothing" baseline), market / domain context, open product questions.
+- `research-architecture` — system-fit lens. Covers per-module surface impact with severity, coupling points (new-dependency / tighter-coupling / looser-coupling), boundaries crossed, scalability considerations, reusable in-repo patterns + precedents. May dispatch `repo-research` for brownfield architecture topics.
+- `research-history` — memory lens. Reads `.cclaw/knowledge.jsonl` (cclaw's append-only ship log) + git log directly. Covers prior attempts (with `knowledge.jsonl:line` / git ref citations), lessons learned (verbatim quotes from prior `learnings.md`), outcome signal counts (`reverted` / `manual-fix` / `follow-up-bug`), git-archaeology highlights, directional drift.
+- `research-skeptic` — adversarial lens. Covers failure modes (likelihood × impact matrix), edge cases (accidental), abuse cases (intentional), hidden costs (post-ship), explicit don't-proceed triggers when severity is irreversible and no obvious mitigation exists within scope.
+- Each lens runs as an `on-demand` sub-agent. Engineer / product / architecture / skeptic lenses may optionally use a web-search MCP tool when one is available (e.g. `user-exa`); they fall back to training knowledge with a `Notes:` tag when no tool is wired into the harness. History lens is grounded purely in the project's own memory.
+- Lenses are **research-only**: they live in a new `RESEARCH_LENSES` type-level collection (`src/types.ts`), are NOT in the `SPECIALISTS` array (which stays at 7), never become `lastSpecialist`, never appear in `triage.path`, and cannot be dispatched by any of the seven flow specialists.
+
+**Deliverable 2 — Multi-lens main-context research orchestrator** (`src/content/start-command.ts`).
+
+- Replaces the v8.58 / v8.62 architect-standalone-research dispatch with a four-phase main-context flow:
+  - **Phase 0 — bootstrap.** Orchestrator parses the `/cc research <topic>` argument, generates the slug `<YYYYMMDD>-research-<topic-kebab>`, initialises `flow-state.json` with `currentSlug` + sentinel triage block (`mode: "research"`, `ceremonyMode: "strict"`, `path: ["plan"]`), creates the active flow dir.
+  - **Phase 1 — open-ended discovery dialogue.** Orchestrator opens with the canonical seed prompt (`"Hi. What are you researching? Tell me what you know and what you don't."`) and runs an **uncapped** dialogue with the user. No question budget. No auto-advance. The user signals `ready` / `go ahead` / `finalize` / `let's go` / `that's enough` (or any variant the orchestrator reads as a transition signal) to proceed. The user can also pivot back into dialogue at any time during Phase 2 / 3.
+  - **Phase 2 — parallel lens dispatch.** Orchestrator distils the dialogue into a 5-15 bullet `Dialogue summary`, then dispatches **all five lenses in parallel** with the topic + dialogue summary as shared envelope. Each lens returns a structured findings block in its slim summary.
+  - **Phase 3 — synthesis.** Orchestrator pastes each lens's findings verbatim into the corresponding `## <Lens> lens` section of `research.md`, then authors the cross-lens `## Synthesis` section (convergence / divergence / trade-off space / confidence + coverage gaps) and the `## Recommended next step` section (one of `plan with /cc <task>` / `more research needed (specific area)` / `don't proceed (skeptic blocked: <reason>)`).
+  - **Phase 4 — finalize.** `git mv` (or `mv` on no-git projects) into `.cclaw/flows/shipped/<slug>/research.md`. Reset `flow-state.json > currentSlug` to `null`. Surface the handoff prompt: `"research.md is ready at <path>. Recommended next: <verbatim recommendation>. Ready to plan? Run /cc <task> and I'll carry the research as priorResearch context."`
+- Research mode continues to skip triage (no `complexity` / `ceremonyMode` heuristic runs; the orchestrator stamps the sentinel triage block so downstream readers continue to work). The `flowState.priorResearch` handoff for the optional research → task transition is preserved verbatim.
+
+**Deliverable 3 — Multi-lens `research.md` template** (`src/content/artifact-templates.ts`).
+
+- `RESEARCH_TEMPLATE` rewritten end-to-end. Frontmatter declares `mode: research`, `lenses: [engineer, product, architecture, history, skeptic]` (canonical roster + ordering; any lens whose dispatch timed out is marked `failed` rather than dropped, so coverage gaps are auditable from the artifact). Back-compat frontmatter fields (`ambiguity_score` / `ambiguity_dimensions` / `ambiguity_threshold` from v8.53) ship null by default to keep downstream readers compatible.
+- Body sections: `## Discovery dialogue summary` (5-15 bullets distilled from Phase 1), `## Engineer lens` / `## Product lens` / `## Architecture lens` / `## History lens` / `## Skeptic lens` (one per dispatched lens, pasted verbatim from the lens's findings block), `## Synthesis` (orchestrator's cross-lens distillation), `## Recommended next step` (the orchestrator's finalise authoring; one of the three permitted recommendations with concrete reasoning).
+- Removed: the v8.58 design-portion sections (Frame / Spec / Approaches / Selected Direction / Decisions / Pre-mortem / Not Doing / Open questions / `Summary — architect (research mode)`). Those belonged to the architect-as-researcher contract that the multi-lens orchestrator replaces.
+
+**Deliverable 4 — Architect surgically decoupled from research mode** (`src/content/specialist-prompts/architect.ts`).
+
+- Removed the v8.58 `## Activation modes` section entirely. Architect prompt declares intra-flow `mode: "task"` is the only mode it handles post-v8.65. Pre-v8.65 state files carrying `triage.mode == "research"` are handled by the orchestrator's Detect hop directly; the architect never sees a research-mode dispatch envelope.
+- Removed the `Phase 7-research` / "finalises the research flow immediately" prose. Research finalisation lives in the orchestrator (Phase 4 above), not in the architect.
+- Preserved: `flowState.priorResearch` consumption at Bootstrap. When the user follows up a shipped research slug with `/cc <task>`, the architect's Bootstrap reads `priorResearch.path` and includes the research artifact (per-lens findings + synthesis + recommendation) as Frame / Approaches / Decisions context.
+- Triage prompt heuristics updated to suggest `/cc research <topic>` when the user signals "discuss first" / "design only" / "what do you think" intent.
+
+**Deliverable 5 — Install layer wires the five lens contracts** (`src/install.ts`, `src/content/core-agents.ts`, `src/ui.ts`).
+
+- New `RESEARCH_LENS_AGENTS` registry maps each lens id to its `kind: "research-lens"` agent record (id + title + activation + description + prompt). Source of truth for the lens roster is `RESEARCH_LENSES` in `src/types.ts`; metadata (title + description) lives in `src/content/research-lenses/index.ts`.
+- New `writeResearchLensFiles` install step renders each lens contract via `renderResearchLensMarkdown` and writes it to `.cclaw/lib/research-lenses/<lens-id>.md`. The frontmatter carries `kind: research-lens` so harness UIs / readers can route lens contracts to a separate shelf from flow specialists (`.cclaw/lib/agents/`) and from the read-only research helpers (`repo-research` / `learnings-research`, both in `.cclaw/lib/agents/` with `kind: research-helper`).
+- Lenses mirror into each harness's agent directory tree (same mirror logic that handles `.cclaw/lib/agents/`) so the harness's own agent registry sees the lens contracts when the orchestrator dispatches them.
+- New `SyncResult.counts.researchLenses` field reports the count of installed lens contracts.
+- Uninstall path (`removePath(RUNTIME_ROOT)` already covers `.cclaw/lib/research-lenses/` implicitly; smoke explicitly asserts the directory does not survive uninstall).
+
+**Deliverable 6 — Tests + smoke** (new: `tests/unit/research-lenses.test.ts`, `tests/unit/v865-powerful-research.test.ts`; updated: `tests/unit/types.test.ts`, `tests/unit/v858-router-research.test.ts`, `tests/unit/v822-orchestrator-slim.test.ts`, `tests/unit/v831-path-aware-trimming.test.ts`, `tests/unit/v861-triage-subagent.test.ts`, `scripts/smoke-init.mjs`).
+
+- `research-lenses.test.ts` (97 tests): per-lens structural invariants — every lens declares the canonical sections (Sub-agent context / Role / Scope / Inputs / Outputs / Slim summary / Hard rules / Composition / Activation), declares it is a research-only sub-agent (NOT in `SPECIALISTS`), declares the v8.65 multi-lens parallel dispatch contract + sibling lens names, declares the no-inter-lens-chatter rule, declares a Confidence calibration, declares the `Findings:` payload in the slim summary. Plus cross-lens invariants: the three lenses that may spawn helpers (engineer / product / architecture) explicitly forbid spawning another lens; research-history declares `You may spawn: nothing`; research-skeptic's spawn line does not name any sibling lens id.
+- `v865-powerful-research.test.ts` (31 tests): the five lens source files exist; `RESEARCH_LENSES` enumerates exactly five ids and is disjoint from `SPECIALISTS`; `RESEARCH_LENS_AGENTS` registry surface; `RESEARCH_TEMPLATE` has the multi-lens structure; `start-command.ts` body documents the four-phase research orchestrator, names all five lenses, no longer actively dispatches the architect for research-mode (breadcrumb references allowed), declares the priorResearch handoff prompt; the architect no longer carries the v8.58 activation-modes section; install layer writes five lens contracts under `.cclaw/lib/research-lenses/`; sync is idempotent.
+- Existing tests updated: v8.58 architect-mode tests rewritten to lock the v8.65 single-mode architect contract; v8.58 research template section-layout test rewritten to lock the v8.65 multi-lens layout (Discovery / Engineer / Product / Architecture / History / Skeptic / Synthesis / Recommended next step); body-length budget tests (v822 / v831 / v861) raised from 69000 / 72000 to 79000 / 81000 chars (v8.65 absorbs ~9k for the multi-lens orchestrator on top of v8.63's ~1k slice envelope bump) to absorb the multi-lens orchestrator's body prose (full per-lens contracts live in `.cclaw/lib/research-lenses/<lens>.md` so the body only carries orchestrator-side prose).
+- Smoke (`scripts/smoke-init.mjs`) asserts the five lens contracts install under `.cclaw/lib/research-lenses/`, each carries `kind: research-lens` in its frontmatter, opens with the `# Research — ` title prefix, and is swept on uninstall.
+
+### Migration
+
+- Pre-v8.65 state files carrying `triage.mode == "research"`: handled transparently. The orchestrator's Detect hop reads the field on the next `/cc` invocation and routes the resume into the multi-lens orchestrator (Phase 1 dialogue if the slug is fresh; Phase 4 finalize if the architect-authored research-mode artifact already exists). No state-file migration required.
+- Pre-v8.65 architect-authored `research.md` artifacts: continue to validate as research artifacts (frontmatter still carries `mode: research` + `topic:` + `generated_at:`). The `priorResearch` handoff reads the file path; both the pre-v8.65 single-author and the v8.65 multi-lens shape are accepted as Frame context by the follow-up architect's Bootstrap.
+- Harness installs: a `cclaw install` on the upgraded CLI writes the five lens contracts to `.cclaw/lib/research-lenses/` and mirrors them into each enabled harness's agent directory tree. Existing `.cclaw/` state is untouched.
+
+### How to verify
+
+- `npx vitest run` — 1391 tests across 87 files pass.
+- `npm run smoke:runtime` — init → sync → uninstall round-trip on a temp project; asserts the five lens contracts ship with `kind: research-lens` frontmatter and are swept on uninstall.
+- Manual: `/cc research <some topic>` from a harness with cclaw installed. Verify Phase 1 dialogue is open-ended; the orchestrator transitions on a "ready" signal; the five lenses dispatch in parallel; `research.md` carries all six lens sections (discovery + 5 lenses) + synthesis + recommended next step; follow-up `/cc <task>` reads `priorResearch` and the architect's Bootstrap surfaces the research artifact.
+
+
 ## 8.63.0 — Separate slices (work-units) from AC (verification)
 
 ### Why

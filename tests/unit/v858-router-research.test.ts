@@ -385,23 +385,41 @@ describe("v8.58 — architect specialist absorbs triage responsibilities (v8.62 
   });
 });
 
-describe("v8.58 — architect standalone mode (research mode; v8.62 — single architect specialist serves both intra-flow + research)", () => {
-  it("architect prompt defines two activation modes — intra-flow (task) and standalone (research)", () => {
-    expect(ARCHITECT_PROMPT).toMatch(/## Activation modes/u);
-    // Intra-flow mode (the historical default)
-    expect(ARCHITECT_PROMPT).toMatch(/Intra-flow \(`triage\.mode == "task"`/u);
-    // Standalone research mode
-    expect(ARCHITECT_PROMPT).toMatch(/Standalone research \(`triage\.mode == "research"`/u);
+describe("v8.58 — architect standalone mode (v8.65 superseded: research-mode rebuilt as a multi-lens main-context orchestrator; architect now intra-flow only)", () => {
+  // v8.65 rebuilt research as a multi-lens main-context orchestrator
+  // (`/cc research <topic>` → open-ended discovery dialogue → five
+  // parallel research lenses → synthesised research.md). The architect
+  // no longer handles research-mode dispatch — its contract is
+  // intra-flow plan authoring only. The block below pins the v8.65
+  // supersession invariant: the architect's prompt drops the v8.58
+  // two-mode `## Activation modes` section and explicitly notes the
+  // research-mode handoff lives in the orchestrator.
+  it("v8.65 — architect prompt declares intra-flow `task` mode is the only mode it handles (research-mode rebuilt as the main-context orchestrator)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/intra-flow `mode: "task"` is the only mode you handle post-v8\.65/u);
+    expect(ARCHITECT_PROMPT).not.toMatch(/Standalone research \(`triage\.mode == "research"`/u);
   });
 
-  it("architect composes research.md (not plan.md) when triage.mode == 'research'", () => {
-    expect(ARCHITECT_PROMPT).toMatch(/research mode/iu);
+  it("v8.65 — architect prompt references the multi-lens research orchestrator without dispatching it (legacy migration breadcrumb)", () => {
+    // The architect still mentions research.md as a back-compat / legacy
+    // migration breadcrumb (the orchestrator now owns research-mode
+    // dispatch directly), and explicitly states the architect no longer
+    // handles research-mode dispatch envelopes.
     expect(ARCHITECT_PROMPT).toContain("research.md");
+    expect(ARCHITECT_PROMPT).toMatch(/architect no longer handles research-mode dispatch/u);
+    expect(ARCHITECT_PROMPT).toMatch(/research-engineer|research-product|research-architecture|research-history|research-skeptic/u);
   });
 
-  it("v8.62 — research-mode finalises immediately (no further specialist dispatch; no mid-plan dialogue)", () => {
-    expect(ARCHITECT_PROMPT).toMatch(/finalises the (research )?flow immediately|no further specialist dispatch/iu);
-    expect(ARCHITECT_PROMPT).toMatch(/Ready to plan/u);
+  it("v8.65 — architect no longer carries the v8.58 research-mode finalise prose (orchestrator owns research finalisation directly)", () => {
+    // The Phase 7-research / "Ready to plan" handoff prose moved out of
+    // the architect into the orchestrator's research-mode fork in
+    // start-command.ts. The architect's contract reads
+    // `flowState.priorResearch` (when a previous research flow shipped
+    // and the user follows up with `/cc <task>`) as Bootstrap context,
+    // but the architect itself does not author the handoff prompt.
+    expect(ARCHITECT_PROMPT).not.toMatch(/Phase 7-research/u);
+    expect(ARCHITECT_PROMPT).not.toMatch(/finalises the research flow immediately/u);
+    // priorResearch consumption (Bootstrap context read) still lives in
+    // the architect — this is the research → task handoff contract.
     expect(ARCHITECT_PROMPT).toContain("priorResearch");
   });
 
@@ -452,7 +470,7 @@ describe("v8.58 — research.md artifact template", () => {
     expect(tpl).toContain("generated_at: GENERATED-AT-PLACEHOLDER");
   });
 
-  it("researchTemplateForSlug fills the placeholders and preserves the section layout", () => {
+  it("researchTemplateForSlug fills the placeholders and preserves the v8.65 multi-lens section layout", () => {
     const out = researchTemplateForSlug(
       "20260515-research-storage",
       "storage strategy for shared agent memory",
@@ -463,22 +481,32 @@ describe("v8.58 — research.md artifact template", () => {
     expect(out).toContain("topic: storage strategy for shared agent memory");
     expect(out).toContain("generated_at: 2026-05-15T12:34:56Z");
     expect(out).toContain("mode: research");
+    // v8.65 — lenses frontmatter declares the canonical 5-lens roster
+    expect(out).toMatch(/lenses:\s*\[engineer,\s*product,\s*architecture,\s*history,\s*skeptic\]/u);
     // No leftover placeholders
     expect(out).not.toContain("SLUG-PLACEHOLDER");
     expect(out).not.toContain("TOPIC-PLACEHOLDER");
     expect(out).not.toContain("GENERATED-AT-PLACEHOLDER");
-    // Same design-portion section layout
-    expect(out).toMatch(/^## Frame$/mu);
-    expect(out).toMatch(/^## Spec$/mu);
-    expect(out).toMatch(/^## Approaches$/mu);
-    expect(out).toMatch(/^## Selected Direction$/mu);
-    expect(out).toMatch(/^## Decisions$/mu);
-    expect(out).toMatch(/^## Pre-mortem$/mu);
-    expect(out).toMatch(/^## Not Doing$/mu);
-    expect(out).toMatch(/^## Open questions$/mu);
-    // v8.62 unified flow: the "Summary —" heading author moved from
-    // dead `design` to the renamed `architect`.
-    expect(out).toMatch(/^## Summary — architect \(research mode\)$/mu);
+    // v8.65 multi-lens section layout — five lens sections + discovery
+    // dialogue summary + cross-lens synthesis + recommended next step.
+    expect(out).toMatch(/^## Discovery dialogue summary$/mu);
+    expect(out).toMatch(/^## Engineer lens$/mu);
+    expect(out).toMatch(/^## Product lens$/mu);
+    expect(out).toMatch(/^## Architecture lens$/mu);
+    expect(out).toMatch(/^## History lens$/mu);
+    expect(out).toMatch(/^## Skeptic lens$/mu);
+    expect(out).toMatch(/^## Synthesis$/mu);
+    expect(out).toMatch(/^## Recommended next step$/mu);
+    // v8.65 retired the v8.58 design-portion sections (Frame / Spec /
+    // Approaches / Selected Direction / Decisions / Pre-mortem / Not
+    // Doing / Open questions / Summary). Those belonged to the
+    // architect-as-researcher contract that the multi-lens orchestrator
+    // replaces.
+    expect(out).not.toMatch(/^## Frame$/mu);
+    expect(out).not.toMatch(/^## Spec$/mu);
+    expect(out).not.toMatch(/^## Approaches$/mu);
+    expect(out).not.toMatch(/^## Selected Direction$/mu);
+    expect(out).not.toMatch(/^## Summary — architect/mu);
     // No AC table / Topology / Traceability — those belong to the
     // follow-up `/cc <task>` flow that consumes this research.
     expect(out).not.toMatch(/^## Acceptance Criteria/mu);
