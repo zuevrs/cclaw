@@ -34,12 +34,13 @@ describe("specialist prompts", () => {
     expect(prompt).toContain("Tool misuse");
   });
 
-  it("builder prompt uses plain `git commit` with posture-driven prefixes", () => {
+  it("builder prompt uses plain `git commit` with posture-driven prefixes (v8.63 — slice work commits use SL-N; AC verification commits use AC-N)", () => {
     const prompt = SPECIALIST_PROMPTS["builder"];
     expect(prompt).toContain("git commit");
-    expect(prompt).toContain("red(AC-");
-    expect(prompt).toContain("green(AC-");
-    expect(prompt).toContain("refactor(AC-");
+    expect(prompt).toContain("red(SL-");
+    expect(prompt).toContain("green(SL-");
+    expect(prompt).toContain("refactor(SL-");
+    expect(prompt).toContain("verify(AC-");
   });
 
   it("SPECIALIST_AGENTS use the deep specialist prompts", () => {
@@ -79,9 +80,10 @@ describe("specialist prompts", () => {
     }
   });
 
-  it("builder Composition footer mentions parallel-build dispatch contract", () => {
+  it("builder Composition footer mentions parallel-build dispatch contract (v8.63 — slice-based assignment, AC verification runs serially)", () => {
     expect(SPECIALIST_PROMPTS["builder"]).toContain("Parallel-dispatch contract");
-    expect(SPECIALIST_PROMPTS["builder"]).toContain("touchSurface");
+    expect(SPECIALIST_PROMPTS["builder"]).toContain("assigned_slices");
+    expect(SPECIALIST_PROMPTS["builder"]).toContain("Surface");
   });
 
   it("builder hard rules forbid env shims and redundant verification", () => {

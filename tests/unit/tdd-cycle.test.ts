@@ -47,20 +47,22 @@ describe("TDD cycle wiring (v8.40 — prompt-only, git-log-verified)", () => {
     }
   });
 
-  it("builder prompt is TDD-aware with watched-RED proof and full-suite GREEN evidence (v8.62 — `builder` is the v8.48 `slice-builder` body verbatim, rename only)", () => {
+  it("builder prompt is TDD-aware with watched-RED proof and full-suite GREEN evidence (v8.63 — slice-based TDD; commit prefixes carry SL-N for the work pass and verify(AC-N) for the verification pass)", () => {
     const prompt = SPECIALIST_PROMPTS["builder"];
     expect(prompt).toMatch(/RED.*GREEN.*REFACTOR/u);
     expect(prompt).toContain("watched-RED proof");
     expect(prompt).toMatch(/full[- ]?relevant suite/iu);
     expect(prompt).toContain("Iron Law");
-    expect(prompt).toMatch(/red\(AC-N\)/u);
-    expect(prompt).toMatch(/green\(AC-N\)/u);
-    expect(prompt).toMatch(/refactor\(AC-N\)/u);
+    expect(prompt).toMatch(/red\(SL-N\)/u);
+    expect(prompt).toMatch(/green\(SL-N\)/u);
+    expect(prompt).toMatch(/refactor\(SL-N\)/u);
+    expect(prompt).toMatch(/verify\(AC-N\)/u);
   });
 
-  it("builder prompt uses plain git commit with the posture prefix recipe", () => {
+  it("builder prompt uses plain git commit with the posture prefix recipe (v8.63 — slice work commits prefixed with red(SL-N); AC verify commits prefixed with verify(AC-N))", () => {
     const prompt = SPECIALIST_PROMPTS["builder"];
-    expect(prompt).toMatch(/git commit -m "red\(AC-N\)/u);
+    expect(prompt).toMatch(/git commit -m "red\(SL-N\)/u);
+    expect(prompt).toMatch(/git commit (?:--allow-empty )?-m "verify\(AC-N\)/u);
   });
 
   it("reviewer prompt mentions git-log inspection of the per-AC commit chain", () => {

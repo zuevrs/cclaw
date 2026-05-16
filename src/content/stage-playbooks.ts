@@ -114,7 +114,7 @@ Both research helpers run as sub-agent dispatches with their own \`.cclaw/lib/ag
 - \`## Prior lessons\` section from the learnings-research blob, **verbatim** quotes (no summary).
 - Body shape depends on ceremonyMode:
   - **soft-mode body** = a bullet list of testable conditions (3-7 items typical).
-  - **strict-mode body** = an AC table with \`AC-N\`, verification line (test name / manual step / command), \`touchSurface\`, and \`parallelSafe\` per row; \`## Topology\` block with \`inline\` (default) or \`parallel-build\` (only when the topology gate from §5 above fires).
+  - **strict-mode body (v8.63+)** = **two distinct tables**: \`## Plan / Slices\` (SL-N work-units with \`Surface\`, \`dependsOn\`, \`independent\`, and posture per row) PLUS \`## Acceptance Criteria (verification)\` (AC-N verification rows with verification line, \`touchSurface\`, \`parallelSafe\`, and a \`Verifies\` column listing the slice ids this AC proves). \`## Topology\` block with \`inline\` (default) or \`parallel-build\` (only when the topology gate from §5 above fires). Archived flows (pre-v8.63) used a single \`## Acceptance Criteria\` table that conflated work-units with verification; new flows MUST author both.
 
 ### Slim summary (architect → orchestrator)
 
@@ -134,7 +134,7 @@ The orchestrator reads only this; the full plan.md stays in \`flows/<slug>/plan.
 
 Open this section **only when \`triage.complexity == "large-risky"\` and the path includes \`plan\`**. For small/medium plan, see "Path: small/medium" above.
 
-The plan stage runs as a **single architect dispatch** on every complexity class (v8.62 unified flow). The architect's ceremony depth scales with \`ceremonyMode\`: on strict / large-risky the architect runs Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose silently in one dispatch and emits the full \`plan.md\` (Frame, Spec, optional NFR, Approaches, Selected Direction, Decisions, Pre-mortem, Not Doing, Open questions, Summary, AC table, Topology). \`currentStage\` stays \`"plan"\` for the architect; \`lastSpecialist\` patches to \`"architect"\` on dispatch return.
+The plan stage runs as a **single architect dispatch** on every complexity class (v8.62 unified flow). The architect's ceremony depth scales with \`ceremonyMode\`: on strict / large-risky the architect runs Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose silently in one dispatch and emits the full \`plan.md\` (Frame, Spec, optional NFR, Approaches, Selected Direction, Decisions, Pre-mortem, Not Doing, Open questions, Summary, Plan / Slices table (v8.63 work-units), Acceptance Criteria (verification) table (v8.63 — back-references slices via \`Verifies\`), Topology). \`currentStage\` stays \`"plan"\` for the architect; \`lastSpecialist\` patches to \`"architect"\` on dispatch return.
 
 ### collapse context
 
@@ -146,7 +146,7 @@ Pre-v8.14 ran a three-step \`brainstormer → architect → ac-author\` chain of
 
 1. **Dispatch \`architect\`** as an on-demand sub-agent. Envelope inputs: triage decision (with \`assumptions\` from triage.assumptions), the user's original \`/cc <task>\` prompt, the \`.cclaw/lib/templates/plan.md\` template, the \`learnings-research\` blob, \`flows/<slug>/research-repo.md\` (when brownfield), \`.cclaw/knowledge.jsonl\` for cross-check, the parent slug's plan.md when \`triage.refines\` is set, and the strict-mode marker so the architect runs the full Frame → Compose ceremony.
    - The orchestrator picks the **posture** before dispatch: \`deep\` when any of (security-sensitive keyword, \`security_flag\` preset, irreversibility / migration / schema / breaking-change / data-loss / payment / gdpr / pci in the prompt, \`refines:\` points to a slug with \`security_flag: true\`); \`guided\` otherwise. The architect may escalate to \`deep\` mid-dispatch if Approaches surfaces irreversibility the orchestrator missed.
-   - The architect appends Frame, Spec, optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, the AC table, optional Topology block, and Summary — architect block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files are written from the Compose phase when an ADR trigger fires. **No separate \`decisions.md\` is written; v8.14+ inlines D-N records in the Decisions section of plan.md.**
+   - The architect appends Frame, Spec, optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, the \`## Plan / Slices\` table (v8.63 work-units), the \`## Acceptance Criteria (verification)\` table (v8.63 — AC verification rows back-referencing slices via \`Verifies\`), optional Topology block, and Summary — architect block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files are written from the Compose phase when an ADR trigger fires. **No separate \`decisions.md\` is written; v8.14+ inlines D-N records in the Decisions section of plan.md.**
    - On dispatch return: orchestrator patches \`lastSpecialist: "architect"\` and \`plan.md\` frontmatter (\`last_specialist: architect\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`), advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`), and chains to the next stage when \`triage.runMode == auto\`.
 
 Resume after an architect dispatch: \`flow-state.lastSpecialist == "architect"\` and \`currentStage == "plan"\` means the architect already wrote plan.md — the next \`/cc\` advances to the build dispatch (or plan-critic, when the gate fires). The user can also \`/cc <task> --skip-plan\` to drop straight into the build dispatch when the architect's plan.md already shipped in a prior session.
@@ -156,7 +156,9 @@ Resume after an architect dispatch: \`flow-state.lastSpecialist == "architect"\`
 
 const BUILD_PLAYBOOK = `# Stage runbook — build (TDD cycle)
 
-**Build is a TDD cycle.** Every AC goes through RED → GREEN → REFACTOR. There is no other build mode. The orchestrator opens this file before invoking \`builder\` or implementing inline; \`builder\` opens it on every AC.
+**Build is a TDD cycle.** Every work unit goes through RED → GREEN → REFACTOR. There is no other build mode. The orchestrator opens this file before invoking \`builder\` or implementing inline; \`builder\` opens it on every work unit.
+
+> **v8.63 — work-units vs verification.** New strict-mode flows split work-units from verification: \`## Plan / Slices\` holds the SL-N work units (one TDD cycle each, commit prefix \`<type>(SL-N): ...\`) and \`## Acceptance Criteria (verification)\` holds the AC-N rows back-referencing slices. After all slices land, builder emits one \`verify(AC-N): passing\` commit per AC (empty diff when slice tests already cover the AC's observable behaviour; test-files-only diff when broader verification is needed). The recipe below (steps 1–6) describes the **per-work-unit TDD cycle**: substitute \`SL-N\` for v8.63 new flows, \`AC-N\` for pre-v8.63 archived flows whose plan.md has no \`## Plan / Slices\` table — same recipe, different id token. Step 6.5 (per-AC verify) only applies on v8.63+ new flows.
 
 ## Iron Law
 
@@ -235,19 +237,36 @@ git commit -m "refactor(AC-N): <one-line shape change>"
 
 If no refactor lands, **default is the build.md row declaration** (no empty commit needed): write \`Refactor: skipped — <one-line reason>\` in the AC row's REFACTOR notes column. The reviewer reads the literal \`Refactor: skipped\` token from the row and treats the refactor slot as satisfied. The legacy path — \`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\` — is still accepted for backwards compat on already-shipped slugs. A row that records neither a SHA, the build.md \`Refactor: skipped\` token, nor the empty marker is treated as missing-refactor (A-1, severity=required).
 
-## 6. Append the AC row to builds/<slug>.md
+## 6. Append the work-unit row to builds/<slug>.md
 
-After REFACTOR, the AC row in \`.cclaw/flows/<slug>/build.md\` carries:
+After REFACTOR, the work-unit row in \`.cclaw/flows/<slug>/build.md\` carries:
 
-| AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
+| WU | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
 | --- | --- | --- | --- | --- | --- |
-| AC-N | tests/path:line, fixtures... | test name + failure excerpt | command + PASS summary | one-line shape change applied **or** "Refactor: skipped — <reason>" (default; no empty commit) | red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped") |
+| SL-N (or AC-N for archived flows) | tests/path:line, fixtures... | test name + failure excerpt | command + PASS summary | one-line shape change applied **or** "Refactor: skipped — <reason>" (default; no empty commit) | red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped") |
 
-The build is complete for this AC only when all six columns are filled.
+The build is complete for this work unit only when all six columns are filled. On v8.63 new flows, write rows into a \`## Slice cycles\` section keyed off SL-N; archived flows continue to write rows into the AC-keyed section.
+
+## 6.5. AC verification pass (v8.63+ new flows only — skip on archived single-AC-table slugs)
+
+After all slices in step 6 are through REFACTOR, run the AC verification pass. For each AC in \`plan.md > ## Acceptance Criteria (verification)\`:
+
+1. Read the AC's \`Verifies\` column — the slice ids whose work this AC validates.
+2. Re-run the relevant suite covering the AC's behaviour. It MUST pass (the slice commits already made it pass; the verify pass confirms the merged state still holds).
+3. Decide the verify shape:
+   - **Path V1 — empty verify commit** (slice tests already cover the AC's observable behaviour): \`git commit --allow-empty -m "verify(AC-N): passing"\`. The commit body MAY cite \`covered by <test-file>:<test-name> committed under SL-K\`.
+   - **Path V2 — test-files-only verify commit** (AC requires broader verification — perf budget, integration scenario, contract assertion). Write or update the test file. Run the relevant suite — it MUST pass. Stage only the test file, then \`git commit -m "verify(AC-N): passing"\`. Do NOT touch production code in a verify commit.
+4. Append an AC row to \`build.md > ## AC verification\`:
+
+| AC | Verifies | Path | Evidence | commit |
+| --- | --- | --- | --- | --- |
+| AC-N | SL-1, SL-3 | V1 or V2 | test file:test name + PASS summary | verify SHA |
+
+The reviewer cross-checks at handoff via \`git log --grep="verify(AC-N): passing" --oneline\` (exactly one verify commit per AC) and \`git show --stat <verify-SHA>\` (empty OR test-files-only diff — \`src/**\` / \`lib/**\` / \`app/**\` in a verify commit is A-1 severity \`critical\` because verification commits never carry production behaviour).
 
 ## 7. Repeat or hand off
 
-If more AC are pending, repeat from step 1. If all AC are through REFACTOR, transition to review-stage.
+If more work units are pending, repeat from step 1. If all slices are through REFACTOR AND step 6.5 has emitted one verify(AC-N): passing commit per AC (v8.63+ flows only), transition to review-stage.
 
 ## 8. Fix-only flow (after a review iteration)
 

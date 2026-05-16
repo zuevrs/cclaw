@@ -352,8 +352,9 @@ describe("v8.9 cleanup", () => {
       expect(BUILDER_PROMPT).toMatch(/coverage-assessed/);
     });
 
-    it("builder self-review gate now declares five rules (was four)", () => {
-      expect(BUILDER_PROMPT).toMatch(/\*\*five mandatory rules\*\*/);
+    it("builder self-review gate declares five per-slice rules and three per-AC rules (v8.63 — was five mandatory rules per AC pre-v8.63; now split into work-pass rules per slice + verify-pass rules per AC)", () => {
+      expect(BUILDER_PROMPT).toMatch(/five per-slice rules/);
+      expect(BUILDER_PROMPT).toMatch(/three per-AC rules/);
       expect(BUILDER_PROMPT).not.toMatch(/\*\*four mandatory rules\*\*/);
     });
 

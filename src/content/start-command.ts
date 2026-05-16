@@ -311,7 +311,7 @@ Depth scales with \`ceremonyMode\`, NOT with which specialist runs:
 
 - **\`inline\`** — no plan stage (the path is \`["build"]\`); architect does not run.
 - **\`soft\`** — architect writes a lean \`plan.md\`: \`## Objective\` + \`## Plan\` + \`## Spec\` + \`## Testable conditions\` + \`## Verification\` + \`## Touch surface\` (bullet-list format, no AC IDs).
-- **\`strict\`** — architect writes a rich \`plan.md\`: the soft sections PLUS \`## Frame\` + \`## Approaches\` + \`## Selected Direction\` + \`## Decisions\` (D-N records) + \`## Pre-mortem\` + \`## Acceptance Criteria\` (AC table with posture annotations) + \`## Edge cases\` + \`## Topology\` + \`## Feasibility\` + \`## Traceability\`.
+- **\`strict\`** — architect writes a rich \`plan.md\`: the soft sections PLUS \`## Frame\` + \`## Approaches\` + \`## Selected Direction\` + \`## Decisions\` (D-N records) + \`## Pre-mortem\` + \`## Plan / Slices\` (SL-N work units with surface + dependencies + posture — v8.63 separated work-units from verification) + \`## Acceptance Criteria (verification)\` (AC-N verification rows whose \`Verifies\` column back-references the slices they prove) + \`## Edge cases\` + \`## Topology\` + \`## Feasibility\` + \`## Traceability\`. The architect MUST write the two tables distinctly per the dual-table contract in \`.cclaw/lib/templates/plan.md\` — slices are HOW we build (one TDD cycle each, prefix \`<type>(SL-N): ...\`); ACs are HOW we verify (one \`verify(AC-N): passing\` commit each, after all slices land).
 
 Full procedure — pre-author research order, input list, output spec, slim-summary shape, soft/strict body split — lives in \`.cclaw/lib/runbooks/plan.md\`. Open that runbook when \`plan\` is in \`triage.path\`.
 
@@ -326,11 +326,11 @@ Full procedure — pre-author research order, input list, output spec, slim-summ
 
 #### build
 
-- Specialist: \`builder\` (renamed from \`slice-builder\` in v8.62; AC-as-unit-of-work semantics unchanged).
-- Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/lib/templates/build.md\`, \`.cclaw/lib/skills/tdd-and-verification.md\`.
+- Specialist: \`builder\` (renamed from \`slice-builder\` in v8.62; v8.63 — unit of work is now the **slice** (SL-N), distinct from the AC (AC-N); slices are HOW we build (per-slice TDD), ACs are HOW we verify (one \`verify(AC-N): passing\` commit per AC after all slices land)).
+- Inputs: \`.cclaw/flows/<slug>/plan.md\`, \`.cclaw/lib/templates/build.md\`, \`.cclaw/lib/skills/tdd-and-verification.md\`, \`.cclaw/lib/skills/slice-discipline.md\` (v8.63).
 - Output: \`.cclaw/flows/<slug>/build.md\` with TDD evidence at the granularity dictated by \`ceremonyMode\`.
-- Soft mode: one TDD cycle for the whole feature; tests under \`tests/\` mirroring the production module path; plain \`git commit\`. Sequential, single dispatch, no worktrees.
-- Strict mode, sequential: full RED → GREEN → REFACTOR per AC; plain \`git commit -m "<prefix>(AC-N): ..."\` with posture-driven message prefixes (\`red\` / \`green\` / \`refactor\` / \`test\` / \`docs\`). Single \`builder\` dispatch in the main working tree. The reviewer enforces ordering at handoff via \`git log --grep="(AC-N):" --oneline\`.
+- Soft mode: one TDD cycle for the whole feature; tests under \`tests/\` mirroring the production module path; plain \`git commit\`. Sequential, single dispatch, no worktrees. No slice/AC separation — the GREEN suite IS the verification.
+- Strict mode, sequential: full RED → GREEN → REFACTOR **per slice** (commit prefix \`<type>(SL-N): ...\` with posture-driven shapes — \`red\` / \`green\` / \`refactor\` / \`test\` / \`docs\`). Single \`builder\` dispatch in the main working tree. The dispatch envelope MUST clarify: "work per slice; emit \`verify(AC-N): passing\` after merged state passes". After all slices land, builder writes one \`verify(AC-N): passing\` commit per AC (empty diff when slice tests already cover the AC's observable behaviour; test-files-only diff when the AC requires broader verification — perf budget, integration, contract). The reviewer enforces ordering at handoff via \`git log --grep="(SL-N):" --oneline\` per slice and \`git log --grep="verify(AC-N): passing" --oneline\` per AC.
 - Strict mode, parallel: see \`.cclaw/lib/runbooks/parallel-build.md\` — only when architect declared \`topology: parallel-build\` AND ≥4 AC AND ≥2 disjoint touchSurface clusters.
 - Inline mode: not dispatched here — handled in the trivial path of triage.
 - Slim summary: AC committed (strict) or conditions verified (soft), suite-status (passed / failed), open follow-ups.

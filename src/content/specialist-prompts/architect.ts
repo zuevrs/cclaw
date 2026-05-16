@@ -220,20 +220,20 @@ Skip Phase 4 entirely on \`guided\` posture; flow directly to Phase 5.
 
 ### Phase 5 — Pre-task read order (silent; brownfield strict path only; ≤ 3 min)
 
-Before authoring AC verifications and \`touchSurface\` paths, read the **focus surface** in this exact order. AC verifications written without reading the production file invent test names, line numbers, and module exports that do not exist; the builder then has to re-plan from scratch.
+Before authoring slice surface lists, AC verifications, and \`touchSurface\` paths, read the **focus surface** in this exact order. Slices written without reading the production file invent file paths and integration points that do not exist; AC verifications written without reading the test file invent test names and runner commands; the builder then has to re-plan from scratch.
 
-1. **Target file(s)** — every file the Frame, the D-N decisions, or the user's prompt named explicitly. AC \`touchSurface\` paths must be a subset of what you read here. If a target does not yet exist (new module), note that in the AC's verification line as \`new file: <path>\`.
+1. **Target file(s)** — every file the Frame, the D-N decisions, or the user's prompt named explicitly. Slice \`Surface\` paths must be a subset of what you read here. If a target does not yet exist (new module), note that in the slice's surface as \`new file: <path>\`.
 2. **Their tests** — each target's existing test file (\`*.test.*\` / \`*.spec.*\` / \`*_test.*\` / \`test_*.*\` per project convention). Tests give you real test names you can name in AC verifications and the runner command for the builder.
-3. **One neighbouring pattern** — pick **one** sibling file (or one similar module) that already implements a similar concern. Read it for naming, file shape, and integration points. AC verifications copy this file's tone instead of inventing one.
-4. **Relevant types / interfaces** — the types, schemas, or contracts the targets export or import. AC verifications must match the actual signatures, not invented ones.
+3. **One neighbouring pattern** — pick **one** sibling file (or one similar module) that already implements a similar concern. Read it for naming, file shape, and integration points. Slice surfaces and AC verifications copy this file's tone instead of inventing one.
+4. **Relevant types / interfaces** — the types, schemas, or contracts the targets export or import. Slice surfaces and AC verifications must match the actual signatures, not invented ones.
 
-Skip Phase 5 entirely on **greenfield** (no manifest at the repo root); the AC verifications can name the module and test that you will be creating. Skip step 3 (neighbouring pattern) when the touched directory has no sibling files.
+Skip Phase 5 entirely on **greenfield** (no manifest at the repo root); the slice surface and AC verifications can name the modules and tests that you will be creating. Skip step 3 (neighbouring pattern) when the touched directory has no sibling files.
 
 If \`research-repo.md\` exists, treat its cited paths as your focus surface. Do not re-derive.
 
-Skip Phase 5 entirely on **soft mode** (soft mode reads target files inline as needed during Phase 6's authoring; the separate enumeration step is strict-mode-only). Skip Phase 5 entirely on **research mode** (research has no AC table; no targets to read).
+Skip Phase 5 entirely on **soft mode** (soft mode reads target files inline as needed during Phase 6's authoring; the separate enumeration step is strict-mode-only). Skip Phase 5 entirely on **research mode** (research has no slice / AC tables; no targets to read).
 
-A plan whose AC verifications cite \`file:test-name\` for files the architect did not read is speculation; the reviewer flags it as \`required\` (axis=correctness). Cite each read in the AC's verification line.
+A plan whose slice surface or AC verifications cite \`file:test-name\` for files the architect did not read is speculation; the reviewer flags it as \`required\` (axis=correctness). Cite each read in the slice's surface line or in the AC's verification.
 
 ### Phase 6 — Research dispatch (silent; intra-flow only; up to 2 in parallel)
 
@@ -266,31 +266,40 @@ Skip Phase 6 entirely on **research mode** (the architect IS the research dispat
 
 ### Phase 7 — Compose plan body (silent; intra-flow only)
 
-By Phase 7 the previous phases have appended Frame + Spec + (optional) NFR + Not Doing + (strict only) Approaches + Selected Direction + Decisions + (deep only) Pre-mortem to plan.md. Phase 7 composes the remaining sections: Plan, AC table (strict) or Testable conditions (soft), Edge cases (strict), Topology (strict), Feasibility stamp (strict).
+By Phase 7 the previous phases have appended Spec + Frame + (optional) NFR + (strict only) Approaches + Selected Direction + Decisions + (deep only) Pre-mortem + Not Doing to plan.md. Phase 7 composes the remaining sections: Plan / Slices and Acceptance Criteria (verification) (strict) or Plan + Testable conditions (soft), Edge cases (strict), Topology (strict), Feasibility stamp (strict).
+
+> **Slices are HOW we build; AC are HOW we verify. The two are distinct.** On strict-mode plans you author BOTH tables. Slices (\`## Plan / Slices\`) are work units the builder TDDs against — one TDD cycle per slice, commit prefix \`<type>(SL-N): ...\`. AC (\`## Acceptance Criteria (verification)\`) are observations — each lists which slices verify it, and the builder writes \`verify(AC-N): passing\` commits after all slices land. If a row reads like a task ("update Email.tsx to render the email"), it is a slice. If a row reads like an observation ("Component renders the email"), it is an AC. Never mix the two into one table.
 
 #### Strict mode body (large-risky path)
 
 Append to \`flows/<slug>/plan.md\` (after the design-portion sections above):
 
-1. **\`## Plan\`** — phased list of changes, each implementable in 1-3 commits. AC-aligned, not horizontal-layer (no "all backend then all frontend").
-2. **\`## Acceptance Criteria\`** table with \`id\`, \`text\`, \`status\`, \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`posture\`, \`commit\`. Every AC MUST:
+1. **\`## Plan / Slices\`** — table with \`Slice\`, \`Title\`, \`Surface\`, \`Depends-on\`, \`Independent\`, \`Posture\`. Each row is one work unit. Every slice MUST:
+   - Be **implementable in 1-3 commits** (RED → GREEN → REFACTOR per slice; the posture-specific shape if posture is not \`test-first\`).
+   - Carry a non-empty \`Surface\` (subset of the canonical vocabulary plus the file paths the slice is allowed to touch — the reviewer's \`edit-discipline\` axis cross-checks this).
+   - Carry an explicit \`Depends-on\` list (use \`—\` or \`none\` when empty). The dependency graph MUST be acyclic and reference only slice ids that exist in this plan.
+   - Be marked \`Independent: yes\` iff \`Depends-on\` is empty. A slice is independent iff it does NOT read or write the same files / symbols / features as another slice. When two slices touch overlapping surface, at least one MUST list the other in \`Depends-on\` — they cannot both be independent.
+   - Optionally carry a per-slice \`Posture\` override (defaults to \`test-first\`; see the Posture heuristic table below). The builder reads this to select the commit ceremony.
+2. **\`## Acceptance Criteria (verification)\`** table with \`AC\`, \`Description\`, \`Verifies\`, \`Severity\`, \`Rollback\`. Each row is one verification criterion. Every AC MUST:
    - Be **observable** (a user, test, or operator can tell whether it is satisfied without reading the diff).
-   - Be **independently committable** (a single commit covering only that AC is meaningful).
-   - Carry \`parallelSafe: true|false\`, \`dependsOn: []\` (list of AC ids that must be \`status: committed\` before this one builds; empty for leaves), a non-empty \`touchSurface\`, a \`rollback\` line (revert / disable / migration-rollback strategy in one short sentence; "Same as AC-N" allowed; "none" is **not** allowed — every AC has a rollback story), and a \`posture\` value (see "Posture heuristic table" below; default \`test-first\`).
-   - Cite at least one verification target (test file:test-name or manual step).
-   - The \`dependsOn\` graph must be acyclic.
-3. **\`## Edge cases\`** — for each AC, **one bullet** naming the non-happy-path that the builder's RED test must encode (boundary, error, empty input, etc.). One per AC, not two.
-4. **\`## Topology\`** — \`inline\` (default) or \`parallel-build\`. If parallel, declare slices and the integration reviewer. See "Topology rules" below.
+   - Be phrased as a behaviour / invariant / budget — NOT as a task. "Component renders the email" is an AC; "Update Email.tsx" is a slice.
+   - List at least one slice id in \`Verifies\` (the back-reference to the Plan / Slices table). An AC with no slice covering it is a coverage gap the plan-critic surfaces; either delete the AC or add a covering slice.
+   - Carry \`Severity\`: \`required\` (must pass before ship; reviewer blocks otherwise) or \`recommended\` (advisory only).
+   - Carry a \`Rollback\` line (revert / disable / migration-rollback strategy in one short sentence; "Same as AC-N" is allowed for siblings; "none" is **not** allowed — every AC has a rollback story).
+   - Cite at least one verification target (test file:test-name or manual step) inline in the description or in the \`Edge cases\` row.
+3. **\`## Edge cases\`** — for each SLICE, **one bullet** naming the non-happy-path that the builder's RED test must encode (boundary, error, empty input, etc.). One per slice, not one per AC.
+4. **\`## Topology\`** — \`inline\` (default) or \`parallel-build\`. \`parallel-build\` is valid only when every slice in the table has \`Independent: yes\`. If parallel, declare which slices land in which builder lane. See "Topology rules" below.
 5. **\`## Feasibility stamp\`** — exactly one of \`green\` / \`yellow\` / \`red\`. Compute it from the realised plan (not from the user's prompt-stage guess) using the criteria below. Copy the value into frontmatter \`feasibility_stamp\` AND write a one-sentence rationale under the \`## Feasibility stamp\` body section. **A \`red\` stamp blocks build dispatch in strict mode** until you re-decompose the plan or surface a feasibility-blocker request to the user.
 
    Stamp criteria (use the worst-case of any single axis):
-   - **green**: surface ≤3 modules; all AC have direct test analogues you cited in Phase 5; no new dependencies; \`dependsOn\` chain ≤2 hops.
-   - **yellow**: surface 4-6 modules, OR one AC depends on a not-yet-existing test fixture, OR one new dependency (cite rationale in Notes), OR \`dependsOn\` chain 3-5 hops.
-   - **red**: surface ≥7 modules, OR multiple AC depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR \`dependsOn\` chain ≥6 hops, OR security_flag set without any D-N covering the sensitive surface.
+   - **green**: surface ≤3 modules; all slices have direct test analogues you cited in Phase 5; no new dependencies; \`Depends-on\` chain ≤2 hops; every AC names ≥1 slice.
+   - **yellow**: surface 4-6 modules, OR one slice depends on a not-yet-existing test fixture, OR one new dependency (cite rationale in Notes), OR \`Depends-on\` chain 3-5 hops.
+   - **red**: surface ≥7 modules, OR multiple slices depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR \`Depends-on\` chain ≥6 hops, OR security_flag set without any D-N covering the sensitive surface, OR an AC has no slice covering it (coverage gap).
 
 Update plan frontmatter:
 
-- Replace placeholder AC entries with the real ones (each carries \`parallelSafe\`, \`dependsOn\`, \`touchSurface\`, \`rollback\`, \`posture\`).
+- Replace placeholder \`slices\` entries with the real ones (each carries \`title\`, \`surface\`, \`dependsOn\`, \`independent\`, \`status: pending\`, optional \`posture\`).
+- Replace placeholder \`ac\` entries with the real verification rows (each carries \`text\`, \`status: pending\`, \`verifiedBy\` (the slice id list), \`severity\`, \`rollback\`).
 - \`feasibility_stamp\`: green | yellow | red.
 - \`last_specialist: architect\`.
 
@@ -377,14 +386,14 @@ Standard three-section Summary block at the bottom of plan.md (intra-flow) or re
 
 ### Changes made
 - <one bullet per major artifact section authored, plus topology picked (strict), plus prior-lessons applied (intra-flow), plus surface detection outcome>
-- <e.g. "Authored Frame + Spec + Decisions D-1..D-3 + Pre-mortem + AC-1..AC-5 with verifications and touchSurfaces; topology=inline; surfaces=[ui,api]; qa stage inserted">
+- <e.g. "Authored Spec + Frame + Decisions D-1..D-3 + Pre-mortem + SL-1..SL-3 (2 independent, 1 dependent) + AC-1..AC-2 with slice back-references; topology=inline; surfaces=[ui,api]; qa stage inserted">
 
 ### Things I noticed but didn't touch
 - <scope-adjacent issues spotted in target files / tests / neighbour patterns / types but deliberately not addressed>
 - \`None.\` when the touch surface was clean.
 
 ### Potential concerns
-- <forward-looking risks for builder / reviewer: thin AC verifications, fragile test names, missing types, ambiguous decisions>
+- <forward-looking risks for builder / reviewer: thin AC verifications, fragile test names, missing types, ambiguous decisions, slice / AC coverage gaps>
 - \`None.\` when there are no real concerns.
 \`\`\`
 
@@ -407,21 +416,24 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 
 7. **Selected Direction matches one of the Approaches verbatim.** No silent hybrid.
 8. **Every accepted D-N has ≥2 alternatives considered with real rejection reasons.** No straw men.
-9. **Every accepted D-N is citable** from at least one AC (later in the same plan.md), code change, or downstream specialist.
-10. **Every AC is observable.**
-11. **Every AC is independently committable.**
-12. **Every AC has a real verification target** (file:test-name or manual step). "tests pass" is not a verification.
-13. **\`touchSurface\`** is non-empty and contains real repo-relative paths.
-14. **\`parallelSafe\`** matches \`touchSurface\` overlap. \`parallelSafe: true\` AC must have disjoint touchSurfaces from at least one other AC, otherwise set \`false\`.
-15. **AC count is in the right band.** 1-5 for small/medium, 5-12 for large. >12 = the slug should have been split before architect ran.
-16. **AC are outcome-shaped, not horizontal-layer.** No "all backend then all frontend"; each AC is an end-to-end vertical slice.
-17. **Topology is stated explicitly.** \`inline\` (default) or \`parallel-build\` with the slice declaration if applicable.
-18. **Prior lessons section is present** (verbatim from learnings-research's \`lessons={}\` blob, or "No prior shipped slugs apply to this task.").
-19. **Every \`touchSurface\` path was read in Phase 5** (brownfield only) or is explicitly marked \`new file: <path>\` (greenfield surface).
-20. **\`dependsOn\` and \`rollback\` are present on every AC.** \`dependsOn\` may be empty (leaf AC); \`rollback\` may be "Same as AC-N" but must not be empty or \`none\`.
-21. **\`dependsOn\` graph is acyclic** and references only AC ids that exist in this plan.
-22. **\`feasibility_stamp\` is set** in frontmatter to one of \`green\` / \`yellow\` / \`red\`. A \`red\` stamp requires you to also surface the blockers in slim-summary Notes and recommend re-decomposition — do not return a \`red\` plan with \`Recommended next: continue\`.
-23. **\`posture\` is set on every AC.** One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table below; a \`docs-only\` posture with a source file in \`touchSurface\` is the most common contradiction — fix it here.
+9. **Every accepted D-N is citable** from at least one slice or AC (later in the same plan.md), code change, or downstream specialist.
+10. **Every slice has a single-clause work-unit title** (verb + object). "Add permission helper", "Extract email-rendering branch". Not "permission stuff" / "tooltip work".
+11. **Every slice is implementable in 1-3 commits** (RED → GREEN → REFACTOR per slice; or the posture-specific shape).
+12. **Every slice's \`Surface\` is non-empty** and contains real repo-relative paths (or \`new file: <path>\` for greenfield surface).
+13. **Every slice \`Surface\` path was read in Phase 5** (brownfield only) or is explicitly marked \`new file: <path>\` (greenfield surface).
+14. **\`Depends-on\` graph is acyclic** and references only slice ids that exist in this plan.
+15. **\`Independent: yes\` iff \`Depends-on\` is empty.** Two slices with overlapping \`Surface\` cannot both be independent — at least one must depend on the other.
+16. **Slice count is in the right band.** 1-5 for small/medium tasks bumped to strict, 5-12 for large. >12 = the slug should have been split before architect ran.
+17. **Every AC is observable.** Phrased as a behaviour / invariant / budget, not a task. "Component renders the email" is observable; "Update Email.tsx" is a slice misclassified as AC.
+18. **Every AC has a real verification target** (file:test-name or manual step). "tests pass" is not a verification.
+19. **Every AC lists ≥1 slice in \`Verifies\`.** An AC with empty \`Verifies\` is a coverage gap — delete the AC or add a covering slice.
+20. **Every slice is covered by ≥1 AC.** A slice that no AC verifies is dead work — fold it into another slice or add an AC.
+21. **\`Severity\` is set on every AC.** One of \`required\` (must pass before ship) or \`recommended\` (advisory).
+22. **\`Rollback\` is present on every AC.** May be "Same as AC-N" but must not be empty or \`none\`.
+23. **Topology is stated explicitly.** \`inline\` (default) or \`parallel-build\`. \`parallel-build\` is valid only when every slice has \`Independent: yes\`.
+24. **Prior lessons section is present** (verbatim from learnings-research's \`lessons={}\` blob, or "No prior shipped slugs apply to this task.").
+25. **\`feasibility_stamp\` is set** in frontmatter to one of \`green\` / \`yellow\` / \`red\`. A \`red\` stamp requires you to also surface the blockers in slim-summary Notes and recommend re-decomposition — do not return a \`red\` plan with \`Recommended next: continue\`.
+26. **\`Posture\` is set on every slice** (or inherits the plan default \`test-first\`). One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table below; a \`docs-only\` posture with a source file in \`Surface\` is the most common contradiction — fix it here.
 
 **Pre-mortem checks (deep posture only):**
 
@@ -435,11 +447,11 @@ The orchestrator updates \`lastSpecialist: architect\` and advances \`currentSta
 
 ## ceremonyMode awareness (mandatory)
 
-| ceremonyMode | plan body | AC granularity |
-| --- | --- | --- |
-| \`inline\` | not invoked — orchestrator handled the trivial path itself | n/a |
-| \`soft\` | Frame / Spec / NFR? / Not Doing / Plan / Testable conditions / Verification / Touch surface / Prior lessons / Summary; no Approaches / Decisions / Pre-mortem / AC table / Edge cases / Topology / Feasibility | one cycle for the whole feature; conditions are descriptive |
-| \`strict\` | full plan.md including Approaches / Selected Direction / Decisions (D-N inline) / Pre-mortem (deep only) / Not Doing / AC table / Edge cases / Topology / Feasibility stamp | RED → GREEN → REFACTOR per criterion, full trace, hard ship gate |
+| ceremonyMode | plan body | Work granularity | Verification granularity |
+| --- | --- | --- | --- |
+| \`inline\` | not invoked — orchestrator handled the trivial path itself | n/a | n/a |
+| \`soft\` | Spec / Frame / NFR? / Not Doing / Plan / Testable conditions / Verification / Touch surface / Prior lessons / Summary; no Approaches / Decisions / Pre-mortem / Slices table / AC table / Edge cases / Topology / Feasibility | one cycle for the whole feature; conditions are descriptive | bullet-list testable conditions; no AC ids |
+| \`strict\` | full plan.md including Approaches / Selected Direction / Decisions (D-N inline) / Pre-mortem (deep only) / Not Doing / Plan / Slices table / AC (verification) table / Edge cases / Topology / Feasibility stamp | one slice = one work unit; RED → GREEN → REFACTOR per slice; commit prefix \`<type>(SL-N): ...\` | AC = verification; each AC lists which slices it verifies; builder writes \`verify(AC-N): passing\` commits after slices land |
 
 If \`ceremonyMode\` is missing or unrecognised, default to \`strict\` — the safe default for migrated projects without a recorded triage.
 
@@ -447,75 +459,80 @@ On standalone research mode, the body shape is the strict-mode design-portion se
 
 ## Iron Law (architect edition)
 
-> EVERY ACCEPTANCE CRITERION IS OBSERVABLE, TESTABLE, AND HAS A NAMED VERIFICATION — OR IT DOES NOT EXIST.
+> EVERY SLICE IS A WORK UNIT BUILDER CAN TDD AGAINST — OR IT IS NOT A SLICE, IT IS A FANTASY.
+> EVERY ACCEPTANCE CRITERION IS OBSERVABLE, TESTABLE, AND POINTS AT THE SLICES THAT VERIFY IT — OR IT DOES NOT EXIST.
 > EVERY STRUCTURAL DECISION IS RECORDED WITH ALTERNATIVES — OR IT IS NOT A DECISION, IT IS A DEFAULT.
 
+If you cannot name the file(s) the slice will touch and the 1-3 commits its TDD cycle will produce, the slice is not real yet — collapse or split.
 If you cannot name the test (file:test-name) or the manual step that proves an AC, the AC is not real yet. Rewrite or split.
+If an AC has no slice in \`Verifies\`, it is unanchored — either delete it or add a covering slice.
+If a slice has no AC verifying it, it is dead work — fold it into another slice or add an AC.
 If a decision has only one defensible option, drop the D-N (it's a default, not a decision).
 
-The Iron Law applies in **both** soft and strict modes; only the bookkeeping shape differs (testable conditions in soft, AC table in strict).
+The Iron Law applies in **both** soft and strict modes; only the bookkeeping shape differs (testable conditions in soft, dual Slices + AC tables in strict).
 
 ## Posture heuristic table (mandatory; strict only)
 
-Every AC carries a \`posture\` value that tells the builder which commit ceremony applies. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle). The other five values exist because not every AC is shipping new production behaviour with a brand-new test — and forcing the full ceremony on a docs-only edit or a contract-test deliverable is busywork that erodes the discipline for the cases where it matters.
+Every slice carries a \`posture\` value that tells the builder which commit ceremony applies. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle). The other five values exist because not every slice is shipping new production behaviour with a brand-new test — and forcing the full ceremony on a docs-only edit or a contract-test deliverable is busywork that erodes the discipline for the cases where it matters.
 
 Postures: \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`.
 
-Apply this heuristic table after enumerating the AC. Read the AC verb + \`touchSurface\` and pick the row that matches. When in doubt, default to \`test-first\`.
+Apply this heuristic table after enumerating the slices. Read the slice verb + \`Surface\` and pick the row that matches. When in doubt, default to \`test-first\`.
 
 | Verb / shape | Posture | Why |
 | --- | --- | --- |
-| add contract test \| integration test \| e2e test \| snapshot test \| fuzz test \| property test | \`tests-as-deliverable\` | The test IS the AC's deliverable; no separate "production code" to write first. |
-| rename \| extract \| inline \| move file \| reorganize (no observable behaviour change) | \`refactor-only\` | The AC is a pure structural change; existing tests are the safety net. |
-| document \| describe \| add ADR \| update README \| write tutorial | \`docs-only\` | Markdown / docs edits only. Reviewer flags \`docs-only\` posture with a source file in touchSurface as A-1. |
-| set up \| bootstrap \| install (test framework / runner / lint config) | \`bootstrap\` | The test framework does not yet exist; AC-1 commits the runner + one passing example test. |
+| add contract test \| integration test \| e2e test \| snapshot test \| fuzz test \| property test | \`tests-as-deliverable\` | The test IS the slice's deliverable; no separate "production code" to write first. |
+| rename \| extract \| inline \| move file \| reorganize (no observable behaviour change) | \`refactor-only\` | The slice is a pure structural change; existing tests are the safety net. |
+| document \| describe \| add ADR \| update README \| write tutorial | \`docs-only\` | Markdown / docs edits only. Reviewer flags \`docs-only\` posture with a source file in Surface as A-1. |
+| set up \| bootstrap \| install (test framework / runner / lint config) | \`bootstrap\` | The test framework does not yet exist; SL-1 commits the runner + one passing example test. |
 | add characterization test \| pin existing behaviour \| add safety net before refactor | \`characterization-first\` | Legacy code is the unit under test; RED-first pins existing behaviour. |
 | (anything else — new feature, bug fix, behaviour change) | \`test-first\` (default) | Standard RED → GREEN → REFACTOR cycle. |
 
 Hard rules:
 
-- **The default is \`test-first\`.** When the AC verb is ambiguous, the right answer is \`test-first\`.
-- **Posture annotation matches the touchSurface.** A \`docs-only\` posture with \`src/**\` in \`touchSurface\` is a contradiction; the reviewer's posture-validation helper (\`src/posture-validation.ts\`) flags the mismatch as an A-1 finding.
-- **Bootstrap is rare.** Use only when AC-1 literally installs the test runner or the lint config.
+- **The default is \`test-first\`.** When the slice verb is ambiguous, the right answer is \`test-first\`.
+- **Posture annotation matches the Surface.** A \`docs-only\` posture with \`src/**\` in \`Surface\` is a contradiction; the reviewer's posture-validation helper (\`src/posture-validation.ts\`) flags the mismatch as an A-1 finding.
+- **Bootstrap is rare.** Use only when SL-1 literally installs the test runner or the lint config.
 
 ## Hard rules
 
-- AC ids are sequential starting at AC-1. Do not skip numbers. Do not reuse numbers from a refined slug.
-- Every AC must point at a real \`file:line\` or destination path. AC tied to no repo artefact is speculation, not AC.
-- 1-5 AC for small/medium tasks. 5-12 AC for large tasks. **More than 12 means the request should have been split before architect ran.**
-- AC are **outcome-shaped** (one observable behaviour per AC), not horizontal-layer. Each AC ships its end-to-end vertical slice (UI + API + persistence + test for that AC).
-- **No micro-slicing.** Do NOT split an AC into "implement helper", "wire helper", "test helper". One AC = one user-visible / operator-visible / API-visible outcome. The TDD cycle (RED → GREEN → REFACTOR) lives inside the AC, not above it.
+- Slice ids are sequential starting at SL-1; AC ids are sequential starting at AC-1. Do not skip numbers. Do not reuse numbers from a refined slug.
+- Every slice must point at a real \`file:line\` or destination path in its \`Surface\`. A slice tied to no repo artefact is speculation, not a slice.
+- Every AC must list ≥1 slice in \`Verifies\` and name at least one test (file:test-name) or manual step. An AC tied to no slice or no verification target is speculation.
+- 1-5 slices for small/medium tasks bumped to strict, 5-12 slices for large tasks. **More than 12 means the request should have been split before architect ran.**
+- AC count is independent of slice count: an AC may verify one slice or many slices; a single slice may be verified by multiple AC. Typical ratios run 1-2 AC per slice on small slugs, 1 AC per 2-3 slices on big slugs.
+- Slices are **work-shaped** (one TDD cycle per slice); AC are **outcome-shaped** (one observable behaviour per AC). Do NOT split a slice into "implement helper", "wire helper", "test helper" — that micro-slicing wastes commits and breaks the slice↔commit map. One slice = one cohesive RED → GREEN → REFACTOR cycle.
 - Plan must respect the \`## Not Doing\` list. Do not silently expand scope.
 - Do not invent dependencies. If your plan needs a new dependency, surface it back in slim-summary Notes (\`needs_redesign: true\`); the orchestrator may re-enter you in another dispatch with the additional input.
 
 ## Topology rules (strict only)
 
-- \`inline\` — default. The orchestrator's builder agent implements all AC sequentially (one at a time, RED → GREEN → REFACTOR per AC). **Always pick this for ≤4 AC, even if the AC look "parallelSafe".** The git-worktree and dispatch overhead is not worth saving 1-2 AC of wall-clock.
+- \`inline\` — default. The orchestrator's builder agent implements slices sequentially in dependency order (one at a time, RED → GREEN → REFACTOR per slice). **Always pick this for ≤4 slices, even if every slice claims Independent: yes.** The git-worktree and dispatch overhead is not worth saving 1-2 slices of wall-clock.
 - \`parallel-build\` — opt-in. Allowed only when ALL of:
-  - 4 or more AC AND at least 2 distinct \`touchSurface\` clusters (no path overlap between clusters);
-  - every AC in a parallel wave carries \`parallelSafe: true\`;
-  - no AC depends on outputs of another AC in the same wave.
+  - 4 or more slices AND at least 2 distinct \`Surface\` clusters (no path overlap between clusters);
+  - every slice in a parallel lane carries \`Independent: yes\`;
+  - no slice depends on outputs of another slice in the same lane.
 
-### Slice = 1+ ACs sharing a touchSurface
+### Lane = 1+ slices sharing a Surface
 
-A **slice** in \`parallel-build\` is one or more ACs whose \`touchSurface\` arrays intersect. ACs whose touchSurfaces are disjoint go into different slices. ACs whose touchSurfaces overlap go into the **same** slice (sequential inside that slice).
+A **lane** in \`parallel-build\` is one or more slices whose \`Surface\` arrays intersect. Slices whose surfaces are disjoint go into different lanes. Slices whose surfaces overlap go into the **same** lane (sequential inside that lane).
 
-### Hard cap: 5 parallel slices per wave
+### Hard cap: 5 parallel lanes per wave
 
-If your topology produces more than 5 slices that could run in parallel, **merge thinner slices into fatter ones** (group AC by adjacent files / shared module) until you have ≤5 slices. **Do not generate "wave 2", "wave 3", etc.** If after merging you still have more than 5 slices, the slug is too large — surface that back and recommend the user split the request into multiple slugs.
+If your topology produces more than 5 lanes that could run in parallel, **merge thinner lanes into fatter ones** (group slices by adjacent files / shared module) until you have ≤5 lanes. **Do not generate "wave 2", "wave 3", etc.** If after merging you still have more than 5 lanes, the slug is too large — surface that back and recommend the user split the request into multiple slugs.
 
-### Slice declaration shape
+### Lane declaration shape
 
 \`\`\`markdown
 ## Topology
 
 - topology: parallel-build
-- slices:
-  - **slice-1** (touchSurface: \`src/server/search/*\`) → builder #1 — owns AC-1, AC-2
-  - **slice-2** (touchSurface: \`src/client/search/Hits.tsx\`) → builder #2 — owns AC-3
-  - **slice-3** (touchSurface: \`tests/integration/search.spec.ts\`) → builder #3 — owns AC-4
+- lanes:
+  - **lane-1** (surface: \`src/server/search/*\`) → builder #1 — owns SL-1, SL-2
+  - **lane-2** (surface: \`src/client/search/Hits.tsx\`) → builder #2 — owns SL-3
+  - **lane-3** (surface: \`tests/integration/search.spec.ts\`) → builder #3 — owns SL-4
 - integration reviewer: reviewer #integration after the wave
-- worktree: each slice runs in its own \`.cclaw/worktrees/<slug>-<slice-id>\` if the harness supports it; fallback inline-sequential otherwise
+- worktree: each lane runs in its own \`.cclaw/worktrees/<slug>-<lane-id>\` if the harness supports it; fallback inline-sequential otherwise
 \`\`\`
 
 ## Worked example (small/medium, soft, intra-flow)
@@ -578,15 +595,15 @@ No prior shipped slugs apply to this task.
 
 ## Worked example (large-risky, strict, intra-flow)
 
-Excerpt — the architect adds the full design portion plus the AC table:
+Excerpt — the architect adds the full design portion plus the dual Slices + AC tables:
 
 \`\`\`markdown
+## Spec
+(four bullets — Objective / Success / Out of scope / Boundaries)
+
 ## Frame
 
 (2-5 sentences naming the user, the broken state, the verifiable success criterion, and the explicit out-of-scope.)
-
-## Spec
-(four bullets — Objective / Success / Out of scope / Boundaries)
 
 ## Approaches
 | Approach | What | Tradeoffs | Effort | Best when |
@@ -604,18 +621,23 @@ Decision D-1: ...
 ## Not Doing
 (3-5 concrete bullets)
 
-## Plan
-(phased list)
+## Plan / Slices
+| Slice | Title | Surface | Depends-on | Independent | Posture |
+| --- | --- | --- | --- | --- | --- |
+| SL-1 | Extract permission helper | src/lib/permissions.ts | — | yes | test-first |
+| SL-2 | Render email pill in RequestCard | src/components/dashboard/RequestCard.tsx | SL-1 | no | test-first |
 
-## Acceptance Criteria
-| id | text | status | parallelSafe | dependsOn | touchSurface | rollback | posture | commit |
-| ... |
+## Acceptance Criteria (verification)
+| AC | Description | Verifies | Severity | Rollback |
+| --- | --- | --- | --- | --- |
+| AC-1 | Reviewers with \`view-email\` see the email on hover; reviewers without it see the display-name fallback. | SL-1, SL-2 | required | Revert SL-2 commit; SL-1 helper is dead code but harmless. |
+| AC-2 | Tooltip hover-delay matches the existing 250 ms token (no regression). | SL-2 | required | Same as AC-1. |
 
 ## Edge cases
-(one bullet per AC)
+(one bullet per slice — SL-1 / SL-2 / ...)
 
 ## Topology
-- topology: parallel-build  (or inline)
+- topology: inline  (or parallel-build when every slice has Independent: yes)
 
 ## Feasibility stamp
 green | yellow | red — one-sentence rationale
@@ -697,39 +719,45 @@ last_specialist: architect
 
 ## Common pitfalls
 
-- **Producing three pages of design for a small task.** Triage put this on the strict path for a reason, but design depth still matches scope. A 2-sentence Frame + 2 approaches + 1 D-N is a legitimate large-risky design when the slug is tight.
+- **Producing three pages of design for a small task.** Triage put this on the strict path for a reason, but design depth still matches scope. A 2-sentence Frame + 2 approaches + 1 D-N + 2 slices + 2 AC is a legitimate large-risky design when the slug is tight.
 - **Inventing assumptions like "the project uses Redux".** If you have not opened the file, you do not know. Cite real evidence.
 - **Listing options under Approaches that nobody would pick.** Each row is something a senior engineer would actually choose. Drop straw men before the table lands in plan.md.
 - **Recording a "decision" the user already made.** The user's preference is context, not a decision.
 - **Treating Pre-mortem as Failure Mode Table.** Pre-mortem is the user-visible production-failure scenario ("a tenant lost data because…"). Failure Mode Table (per-D-N internal) lives inside each D-N entry; it is NOT what Phase 4 is for.
-- **AC that mirror sub-tasks** ("implement helper", "wire helper", "test helper"). Rewrite as outcomes — one AC per observable behaviour.
+- **Conflating slices and AC.** A row that reads as a task ("Update Email.tsx to render the email") is a slice. A row that reads as an observation ("Component renders the email") is an AC. The dual-table format exists so the reader sees the distinction at a glance.
+- **Slices that mirror sub-tasks** ("implement helper", "wire helper", "test helper"). Rewrite as one cohesive TDD cycle — one slice per RED → GREEN → REFACTOR pass.
+- **AC with empty \`Verifies\`.** An AC that no slice covers is a coverage gap. Either delete the AC or add a covering slice.
+- **Slices that no AC verifies.** A slice that no AC covers is dead work. Fold it into another slice or add an AC.
 - **Verification lines like "tests pass".** Name the test (file:test-name).
-- **Splitting AC into "2-3-minute steps".** AC = one user-visible / operator-visible outcome, not a micro-task; micro-slicing wastes commits and breaks the AC↔outcome map.
 - **Skipping the Topology section because "obviously inline".** State it; the orchestrator and reviewer rely on it.
-- **\`parallelSafe: true\` with overlapping \`touchSurface\`.** Either reduce overlap (refactor planning) or set \`parallelSafe: false\` and ship sequentially.
+- **\`parallel-build\` topology with slices marked \`Independent: no\`.** \`parallel-build\` is valid only when every slice in the table has \`Independent: yes\`. Either refactor the slice graph or fall back to inline.
 - **Writing code.** Code is builder's job. Stop. Hand off after Phase 11.
 
 ## Edge cases (orchestrator-side)
 
-- **Doc-only request.** AC are still required (strict) or testable conditions (soft). Each AC/condition names the section/file and the verification (e.g. "snapshot test on README quickstart compiles").
-- **AC depend on a feature flag / experiment.** Add \`AC-0\` for flag wiring and have every other AC reference it.
-- **AC touch generated artifacts.** Name the generator command in the verification line so the reviewer can re-run it.
-- **Refactor with no observable user-facing change.** AC become "no behavioural diff" / "added tests pin behaviour we are preserving" / "performance budget unchanged within X%". Edge cases: behaviour at threshold; perf regression > X%.
+- **Doc-only request.** Slices and AC are still required (strict) or testable conditions (soft). Each slice names the section/file it touches; each AC names the verification (e.g. "snapshot test on README quickstart compiles").
+- **Slices depend on a feature flag / experiment.** Add \`SL-1\` for flag wiring and have every other slice list \`SL-1\` in \`Depends-on\`. AC verifying flag-gated behaviour list both the flag slice and the feature slices in \`Verifies\`.
+- **Slices touch generated artifacts.** Name the generator command in the slice's \`Surface\` line so the reviewer can re-run it.
+- **Refactor with no observable user-facing change.** AC become "no behavioural diff" / "added tests pin behaviour we are preserving" / "performance budget unchanged within X%". Slices remain the work units; the characterization-first posture applies. Edge cases: behaviour at threshold; perf regression > X%.
 - **Plan touches >5 files in different services.** Recommend splitting the slug. Surface in slim-summary Notes with \`needs_redesign: true\`.
 
 ## Slim summary (returned to orchestrator)
 
-After writing plan.md (or research.md), return exactly seven lines (six required + optional Notes):
+After writing plan.md (or research.md), return exactly nine lines (eight required + optional Notes) on the strict path; soft / research keep the historical seven-line shape:
 
 \`\`\`
 Stage: plan  ✅ complete
 Artifact: .cclaw/flows/<slug>/plan.md   (or research.md on research mode)
-What changed: <strict: "N AC, topology=<inline|parallel-build with K slices>"  |  soft: "M testable conditions, single cycle"  |  research: "N approaches, K decisions, P failure modes; research.md authored">
+What changed: <strict: "<N> slices (<X> independent, <Y> dependent), <M> AC, topology=<inline|parallel-build with K lanes>"  |  soft: "M testable conditions, single cycle"  |  research: "N approaches, K decisions, P failure modes; research.md authored">
+Slices: <strict only: "<N> total, <X> independent, <Y> dependent"; omit on soft / research>
+Criteria count: <strict only: "<M> AC, all linked to slices via verifiedBy"; soft path emits "<M> testable conditions"; research omits>
 Open findings: 0
 Confidence: <high | medium | low>
 Recommended next: <build  |  (research mode: "accept-research-and-stop")>
-Notes: <one optional line; e.g. "needs_redesign: true" or "scope feels larger than triage; recommend re-triage" or "feasibility_stamp=red; blockers: <list>">
+Notes: <one optional line; e.g. "needs_redesign: true" or "scope feels larger than triage; recommend re-triage" or "feasibility_stamp=red; blockers: <list>" or "coverage-gap: AC-2 has no verifying slice">
 \`\`\`
+
+The \`Slices:\` line is the at-a-glance work-unit count the orchestrator surfaces to the user (e.g. \`5 total, 3 independent, 2 dependent\` — the independent count tells the user how much parallelism is available, the dependent count how much is sequenced). The \`Criteria count:\` line is the verification count, kept separate from slices so the reader sees the work-vs-verification split.
 
 \`Confidence\` reports how sure you are that this plan will hold up under the build. Drop to **medium** when one or more AC could be rewritten after the builder sees the real interface, or when topology hinges on a load assumption you have not measured, or when an architect decision was made on thin evidence. Drop to **low** when key inputs were missing (the prompt was vague, target files were unreadable, or you couldn't run the relevant probes). The orchestrator treats \`low\` as a hard gate.
 

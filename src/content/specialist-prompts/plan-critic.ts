@@ -145,6 +145,25 @@ For plans where \`## Topology\` declares \`parallel-build\` (≥2 slices):
 
 For plans where \`## Topology\` is \`inline\` (the default), §4 is empty.
 
+### §4b. Slice-AC separation (v8.63 — strict mode only)
+
+v8.63 split work-units (\`## Plan / Slices\` — SL-N) from verification (\`## Acceptance Criteria (verification)\` — AC-N with a \`Verifies\` column back-referencing slice ids). Architect authors BOTH tables; the plan-critic gates that both tables exist and that the cross-references are sound before build starts. Skip §4b entirely in soft mode (no slice table) and in archived-shape plans (no \`## Plan / Slices\` section — single-table pre-v8.63 contract).
+
+1. **Both tables present.** If \`plan.md\` has \`## Acceptance Criteria\` but no \`## Plan / Slices\` section, emit \`block-ship\` (class=\`missing-slices-table\`) — v8.63 strict-mode plans MUST author both. Recommended fix: architect re-runs and produces a \`## Plan / Slices\` table with SL-N rows derived from the AC's \`touchSurface\` declarations.
+2. **Slice quality (per SL-N row).** For each slice, verify three things:
+   - **Well-bounded** — the slice's \`Surface\` declares 1-3 files in one logical layer; a slice with ≥5 files across multiple layers is \`iterate\` (split). A slice with 0 files declared is \`block-ship\` (cannot build against an empty surface).
+   - **\`dependsOn\` accuracy** — apply §3's surface-overlap check to the slice graph (not just the AC graph). A slice whose Surface overlaps another slice's Surface must declare the dependency in \`dependsOn\` or be flagged \`iterate\` (missing edge). Slice cycles are \`block-ship\`.
+   - **\`independent\` flag accuracy** — a slice with \`independent: true\` MUST have an empty \`dependsOn\` AND zero surface overlap with any other slice. A mismatch (e.g. \`independent: true\` but \`dependsOn: SL-1\` is declared, or surface overlap exists) is \`iterate\` (flag is misleading; the parallel-build runbook will rely on it).
+3. **AC verifiability (per AC-N row).** For each AC, verify three things:
+   - **Verifiable text** — the AC \`text\` names an observable behaviour with a measurable assertion verb ("returns 200", "renders the tooltip", "rejects with E_INVALID", "p95 < 200ms"). A vague AC ("works correctly", "is fast enough", "looks good") is \`iterate\` (architect rewrites for measurability).
+   - **\`Verifies\` column populated** — every AC MUST list at least one slice id in its \`Verifies\` column (the slices whose work the AC proves correct). An empty \`Verifies\` is \`block-ship\` (class=\`ac-no-slices\`) — the AC cannot be verified because no slice exists that produces the behaviour to verify.
+   - **\`Verifies\` slices exist** — every slice id named in an AC's \`Verifies\` MUST appear in \`## Plan / Slices\`. A stale slice reference (e.g. AC-3 verifies SL-7 but only SL-1 through SL-5 exist) is \`iterate\` (typo or refactor residue; architect amends the AC).
+4. **Coverage gaps (cross-table integrity).** Two symmetric checks:
+   - **AC without slices.** Re-asserts check #3.b — an AC whose \`Verifies\` is empty is unverifiable. Already \`block-ship\`; restated here as part of the cross-table integrity ledger.
+   - **Slice without verifying AC.** A slice that is NOT named in any AC's \`Verifies\` is an orphan — the work would land but no AC promises to verify it. Emit \`iterate\` (class=\`orphan-slice\`); recommended fix is either to add the slice to an AC's \`Verifies\` (most common; the architect forgot to wire the AC) OR to drop the slice from the plan (rare; the slice was speculative). Cite the orphan SL-N explicitly.
+
+§4b's finding rows go into the same plan-critic.md findings table; class names (\`missing-slices-table\` / \`slice-quality\` / \`ac-verifiability\` / \`ac-no-slices\` / \`stale-verifies-ref\` / \`orphan-slice\`) make the cross-table integrity findings easy to grep for in fix-only rounds.
+
 ### §5. Risk catalog
 
 Surface risks the plan does not name. The architect wrote \`## Pre-mortem\` on strict-mode plans; soft-mode plans omit Pre-mortem entirely. plan-critic asks: what risks are still **absent**?
@@ -181,6 +200,7 @@ Granularity findings: <N total; same breakdown>
 Dependency findings: <N total; same breakdown>
 Parallelism findings: <N total; same breakdown — n/a if topology=inline>
 Risk catalog findings: <N total; same breakdown>
+Slice-AC separation findings (v8.63 — strict mode): <N total; same breakdown — n/a if soft mode or archived-shape plan>
 Iteration: <N>/1
 Confidence: <high | medium | low>
 Confidence rationale: <one line; required when Confidence != high>

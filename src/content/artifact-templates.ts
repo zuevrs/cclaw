@@ -31,23 +31,43 @@ const PLAN_TEMPLATE = `---
 slug: SLUG-PLACEHOLDER
 stage: plan
 status: active
+# Slices (work units) — strict-mode only. Each entry is a unit of
+# work the builder TDDs against; commit prefix is <type>(SL-N): ....
+# Slices are the WORK side of the plan; AC are the VERIFICATION
+# side (see below).
+slices:
+  - id: SL-1
+    title: "Replace with the first work-unit title (one short clause)."
+    status: pending
+    surface: []
+    dependsOn: []
+    independent: true
+    posture: test-first  # one of: test-first | characterization-first | tests-as-deliverable | refactor-only | docs-only | bootstrap
+  - id: SL-2
+    title: "Replace with the second work-unit, or delete this entry if one slice is enough."
+    status: pending
+    surface: []
+    dependsOn: []
+    independent: true
+    posture: test-first
+# Acceptance criteria — verification only. Each AC lists which
+# slices verify it via the verifiedBy field; reviewer / plan-critic /
+# critic read this back-reference to validate slice↔AC coverage.
+# Pre-v8.63 frontmatter used AC as work units; the new shape scopes
+# AC tightly to "how do we know it works".
 ac:
   - id: AC-1
-    text: "Replace with the first observable outcome (something a user or test can verify)."
+    text: "Replace with the first verifiable behaviour (something a user or test can confirm passes)."
     status: pending
-    parallelSafe: true
-    touchSurface: []
-    dependsOn: []
-    rollback: "Replace with revert/disable strategy if this AC ships and breaks."
-    posture: test-first  # v8.36 — one of: test-first | characterization-first | tests-as-deliverable | refactor-only | docs-only | bootstrap
+    verifiedBy: [SL-1]
+    severity: required  # required | recommended (advisory, drops out of strict gating)
+    rollback: "Replace with revert/disable strategy if the AC ships and the verified behaviour breaks."
   - id: AC-2
-    text: "Replace with the second observable outcome, or delete this entry if one AC is enough."
+    text: "Replace with the second verifiable behaviour, or delete this entry."
     status: pending
-    parallelSafe: true
-    touchSurface: []
-    dependsOn: []
-    rollback: "Replace with revert/disable strategy if this AC ships and breaks."
-    posture: test-first
+    verifiedBy: [SL-1, SL-2]
+    severity: required
+    rollback: "Replace with revert/disable strategy."
 last_specialist: null
 refines: null
 # parent_slug mirrors the orchestrator-level pointer set when the
@@ -55,7 +75,7 @@ refines: null
 # Detect hop seeds this field at slug-init when flowState.parentContext is
 # set; architect Bootstrap (when run) confirms the value. Distinct from
 # the refines: field above: refines is the legacy/manual link
-# (also written by the v8.59 extend init for back-compat with the
+# (also written by the extend init for back-compat with the
 # knowledge-store chain + qa-runner skip / plan-critic skip / architect
 # ambiguity-score brownfield gates), while parent_slug is the
 # native pointer that downstream tooling can rely on without
@@ -66,10 +86,10 @@ shipped_at: null
 ship_commit: null
 review_iterations: 0
 security_flag: false
-feasibility_stamp: null  # green | yellow | red — set by architect before AC lock-in (T1-2)
+feasibility_stamp: null  # green | yellow | red — set by architect before slice lock-in (T1-2)
 # Architect Compose-phase ambiguity score. Composite (0.0-1.0) across 3 dimensions
 # (greenfield: goal / constraints / success) or 4 dimensions (brownfield: + context).
-# Informational signal (no mid-plan picker in v8.62 unified flow); never a hard gate. Absent on pre-v8.53 plans.
+# Informational signal (no mid-plan picker in the unified flow); never a hard gate. Absent on pre-v8.53 plans.
 ambiguity_score: null
 ambiguity_dimensions: null
 ambiguity_threshold: null
@@ -95,6 +115,17 @@ _- [qa](../shipped/<parent-slug>/qa.md) — when present_
 _- [learnings](../shipped/<parent-slug>/learnings.md) — when present_
 
 _The relative paths use \`../shipped/<parent-slug>/\` to walk from the active \`flows/<new-slug>/\` directory to the parent's shipped directory. The reviewer's parent-contradictions cross-check reads this section to validate the new flow does not silently undo a parent decision.)_
+
+## Spec
+
+_(mandatory on every plan.md (strict and soft). Four bullets capture the requirement-side contract that AC alone do not carry: intent + scope + non-goals + per-slug constraints. Always authored by the architect; on strict-mode plans the Frame phase adds NFR rows alongside this section. Each bullet MUST be filled — write "none" or "n/a" when genuinely nothing applies; \`<TBD>\` or empty values are not acceptable. Existing legacy plans without this section continue to work; the section appears only on plans authored on v8.46+.)_
+
+- **Objective**: _what we are building and why, in one short line._
+- **Success**: _how we know it is done — high-level indicators (e.g. "users can rename a task without losing comments"), NOT the AC bullets below._
+- **Out of scope**: _explicit non-goals derived from triage + framing. Write "none" if not applicable._
+- **Boundaries**: _per-slug "ask first" / "never do" notes layered on top of the iron-laws (e.g. "do not break public API", "preserve current cache keys"). Write "none" when iron-laws cover it._
+
+The reviewer's existing axes (correctness, architecture, complexity-budget) implicitly cover the Spec section — a build that does not match the recorded Objective is a \`correctness\` finding; scope creep past \`Out of scope\` is an \`architecture\` or \`complexity-budget\` finding. No new reviewer axis is introduced; the 7-axis (+ gated NFR) count is stable.
 
 ## Frame
 
@@ -130,9 +161,9 @@ _(Architect: Decisions, strict mode only. One D-N row per decision. Each row is 
 
 ## Pre-mortem
 
-_(Architect: Pre-mortem, strict mode only. 2-4 ways this plan could fail; each line names the failure, the symptom, and the mitigation already encoded in the plan/AC.)_
+_(Architect: Pre-mortem, strict mode only. 2-4 ways this plan could fail; each line names the failure, the symptom, and the mitigation already encoded in the plan / slices / AC.)_
 
-- _failure_ → _symptom_ → _mitigation in AC-N / D-N_.
+- _failure_ → _symptom_ → _mitigation in SL-N / AC-N / D-N_.
 
 ## Not Doing
 
@@ -141,73 +172,74 @@ _(Architect: Frame / Compose — 3-5 bullets explicitly out of scope. Protects a
 - _explicit non-commitment_
 - _explicit non-commitment_
 
-## Plan
+## Plan / Slices
 
-_(AC author authors this. AC-aligned, not horizontal-layer. Each unit ships an end-to-end vertical slice for one AC.)_
+_(Architect-authored, strict mode only. Slices are work units — HOW we build. Each row is one unit of work the builder TDDs against; commit prefix \`<type>(SL-N): ...\`. The AC table below is the verification side — HOW we know it works. **The two are distinct concepts.** Do not mix work and verification in a single table.)_
 
-- **Phase 1 — Foundation (AC-1).**
-  - Concrete change with file:path:line reference.
-- **Phase 2 — Wiring (AC-2, AC-3).**
-  - Concrete change with file:path:line reference.
+| Slice | Title | Surface | Depends-on | Independent | Posture |
+| --- | --- | --- | --- | --- | --- |
+| SL-1 | _short work-unit title_ | _surface tokens (frontend / backend / cli / library / api / ui / web / data / infra / docs / other)_ | _— or SL-N list_ | _yes / no_ | _test-first (default)_ |
+| SL-2 | _short work-unit title_ | _surface tokens_ | _SL-1_ | _no_ | _test-first_ |
 
-## Spec
+Slice authoring rules (architect):
 
-_(mandatory on every plan.md (strict and soft). Four bullets capture the requirement-side contract that AC alone do not carry: intent + scope + non-goals + per-slug constraints. Always authored by the architect; on strict-mode plans the Frame phase adds NFR rows alongside this section. Each bullet MUST be filled — write "none" or "n/a" when genuinely nothing applies; \`<TBD>\` or empty values are not acceptable. Existing legacy plans without this section continue to work; the section appears only on plans authored on v8.46+.)_
+- **\`Surface\`** lists the runtime surfaces and the files the slice is allowed to touch. The reviewer's \`edit-discipline\` axis cross-checks against this column — undeclared edits become findings.
+- **\`Depends-on\`** is the explicit dependency on other slices. Use \`—\` (or \`none\`) when the slice can land independently. The plan-critic validates the graph (no cycles, no dangling refs).
+- **\`Independent\`** is \`yes\` iff \`Depends-on\` is empty. A slice is independent iff it does NOT read or write the same files / symbols / features as another slice. When two slices touch overlapping surface, they cannot both be independent — at least one MUST list the other in \`Depends-on\`.
+- **\`Posture\`** is optional per slice; defaults to the plan-level posture, which itself defaults to \`test-first\`. One of \`test-first\` | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The builder reads this to select the commit ceremony; see \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping.
 
-- **Objective**: _what we are building and why, in one short line._
-- **Success**: _how we know it is done — high-level indicators (e.g. "users can rename a task without losing comments"), NOT the AC bullets below._
-- **Out of scope**: _explicit non-goals derived from triage + framing. Write "none" if not applicable._
-- **Boundaries**: _per-slug "ask first" / "never do" notes layered on top of the iron-laws (e.g. "do not break public API", "preserve current cache keys"). Write "none" when iron-laws cover it._
+The builder runs ONE TDD cycle per slice (RED → GREEN → REFACTOR or the posture-specific shape); each commit subject is prefixed with \`<type>(SL-N): ...\`. Verification commits (\`verify(AC-N): passing\`) are emitted SEPARATELY, after all slices land, when the builder writes or updates the tests that prove each AC.
 
-The reviewer's existing axes (correctness, architecture, complexity-budget) implicitly cover the Spec section — a build that does not match the recorded Objective is a \`correctness\` finding; scope creep past \`Out of scope\` is an \`architecture\` or \`complexity-budget\` finding. No new reviewer axis is introduced; the 7-axis (+ gated NFR) count is stable.
+## Acceptance Criteria (verification)
 
-## Acceptance Criteria
+_(Architect-authored. AC are verification — HOW we know it works. Each row names a behaviour the test suite (or evidence chain) must demonstrate against the merged state of the implemented slices. Every AC MUST list at least one slice in the \`Verifies\` column; an AC with no slices is a coverage gap the plan-critic surfaces.)_
 
-| id | text | status | parallelSafe | dependsOn | touchSurface | rollback | posture | commit |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| AC-1 | _Replace with the first observable outcome._ | pending | true | _none_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | test-first | — |
-| AC-2 | _Replace or delete._ | pending | true | _AC-1_ | _list of repo paths_ | _revert / disable / migration-rollback strategy_ | test-first | — |
+| AC | Description | Verifies | Severity | Rollback |
+| --- | --- | --- | --- | --- |
+| AC-1 | _verifiable behaviour, performance budget, security invariant, etc_ | _SL-1, SL-2, ..._ | required | _revert / disable / migration-rollback strategy_ |
+| AC-2 | _verifiable behaviour_ | _SL-2_ | required | _revert / disable / migration-rollback strategy_ |
 
-The AC block is the source of truth. Every strict-mode commit produced inside the flow references exactly one AC id via a posture-driven subject-line prefix (\`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` / \`test(AC-N): ...\` / \`docs(AC-N): ...\`); the reviewer reconstructs the AC↔commit chain ex-post via \`git log --grep="(AC-N):" --oneline\` at handoff and ship time.
+AC authoring rules (architect):
 
-- \`parallelSafe: false\` opts the AC out of parallel-build dispatch.
-- \`dependsOn\` is a list of AC ids that must be \`status: committed\` before this AC enters builder. Use \`none\` (or empty) when the AC has no predecessors. The reviewer cross-checks the dependency graph against the AC commit order — out-of-order commits are a \`required\` finding.
-- \`touchSurface\` is the list of repo-relative paths the AC is allowed to modify.
-- \`rollback\` is the explicit revert / disable / migration-rollback strategy if this AC ships and breaks in production. Required in strict mode; one short sentence per AC. "Same as AC-N" is acceptable for siblings that share the same rollback path. \`none\` is **not** acceptable — every AC has a rollback story, even if it is "revert the single commit".
-- \`posture\` is one of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The builder reads this field to select the commit ceremony (which posture-driven prefix sequence to write); the reviewer's \`src/posture-validation.ts:POSTURE_COMMIT_PREFIXES\` mapping is the canonical source for which prefixes are expected per posture, and \`src/posture-validation.ts:validatePostureTouchSurface\` cross-checks the \`docs-only\` and \`tests-as-deliverable\` postures against the touchSurface. See \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle).
+- **AC are observations, not work.** "Component renders the email" is an AC. "Update Email.tsx to render the email" is a slice (work). If the row reads as a task instead of an observation, move it to the Slices table.
+- **\`Verifies\`** is the back-reference to slices. List every slice whose implementation is needed for the AC to be true on the merged state. Plan-critic rejects an empty list.
+- **\`Severity\`** is one of \`required\` (must pass before ship; reviewer blocks otherwise) or \`recommended\` (advisory; reviewer surfaces as \`consider\` finding when missing).
+- **\`Rollback\`** is the explicit revert / disable / migration-rollback strategy if the AC ships and breaks in production. One short sentence; \`Same as AC-N\` is acceptable for siblings.
 
-Each AC must point at a real \`file:line\` or destination path.
-
-## Feasibility stamp
-
-_(AC author-authored before AC lock-in. One of \`green\` / \`yellow\` / \`red\`; copy into frontmatter \`feasibility_stamp\`.)_
-
-- **green** — surface ≤3 modules, all AC have direct test analogues, no new dependencies, dependency chain ≤2 hops.
-- **yellow** — surface 4-6 modules, OR one AC depends on a not-yet-existing test fixture, OR one new dependency (with rationale), OR dependency chain 3-5 hops.
-- **red** — surface ≥7 modules, OR multiple AC depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR dependency chain ≥6 hops, OR security flag set without an architect D-N covering the sensitive surface. **Red feasibility blocks build dispatch in strict mode** until the architect re-decomposes (likely splitting into multiple slugs) or re-enters the Decisions phase to record the missing D-N.
-
-The stamp is computed once per plan, before builder enters. The reviewer cross-checks the stamp against the realised diff at review time; an \`actual_complexity > stamp\` is a \`consider\`-severity finding for future calibration.
+The builder writes \`verify(AC-N): passing\` commits AFTER all slices are merged. The reviewer reconstructs the slice↔commit and AC↔verification chains ex-post via \`git log --grep="(SL-N):" --oneline\` and \`git log --grep="verify(AC-N):" --oneline\`.
 
 ## Edge cases
 
-_(Architect-authored. One bullet per AC naming the non-happy-path the builder's RED test must encode.)_
+_(Architect-authored. One bullet per slice naming the non-happy-path the builder's RED test must encode.)_
 
-- **AC-1** — _empty input / boundary / error response_.
-- **AC-2** — _hover under 100ms / missing fixture / etc_.
+- **SL-1** — _empty input / boundary / error response_.
+- **SL-2** — _hover under 100ms / missing fixture / etc_.
 
 ## Topology
 
-_(AC author topology mode. Default: \`inline\`. \`parallel-build\` is opt-in; see lib/skills/parallel-build.md for rules.)_
+_(Architect topology mode. Default: \`inline\`. \`parallel-build\` is opt-in and only valid when every slice in the Slices table is \`independent: yes\`; see lib/skills/parallel-build.md for rules.)_
 
 - topology: inline
-- slices: _none_
+- slices: _the slice ids from the Plan / Slices table (e.g. SL-1, SL-2)_
+
+## Feasibility stamp
+
+_(Architect-authored before slice lock-in. One of \`green\` / \`yellow\` / \`red\`; copy into frontmatter \`feasibility_stamp\`.)_
+
+- **green** — surface ≤3 modules, all slices have direct test analogues, no new dependencies, dependency chain ≤2 hops, every AC names ≥1 slice.
+- **yellow** — surface 4-6 modules, OR one slice depends on a not-yet-existing test fixture, OR one new dependency (with rationale), OR dependency chain 3-5 hops, OR an AC verifies multiple slices in a way that is awkward to test in isolation.
+- **red** — surface ≥7 modules, OR multiple slices depend on not-yet-existing fixtures/types, OR ≥2 new dependencies, OR dependency chain ≥6 hops, OR security flag set without an architect D-N covering the sensitive surface, OR an AC has no slice covering it (coverage gap). **Red feasibility blocks build dispatch in strict mode** until the architect re-decomposes (likely splitting into multiple slugs) or re-enters the Decisions phase to record the missing D-N.
+
+The stamp is computed once per plan, before builder enters. The reviewer cross-checks the stamp against the realised diff at review time; an \`actual_complexity > stamp\` is a \`consider\`-severity finding for future calibration.
 
 ## Traceability block
 
-- AC-1 → commit pending
-- AC-2 → commit pending
+- SL-1 → commit pending (implementation)
+- SL-2 → commit pending (implementation)
+- AC-1 → commit pending (\`verify(AC-1): passing\`)
+- AC-2 → commit pending (\`verify(AC-2): passing\`)
 
-This block is filled in by the builder as each AC's commits land (one SHA per phase: \`red\` → \`green\` → \`refactor\`); the reviewer's posture-aware \`git log --grep="(AC-N):" --oneline\` scan reconciles it against the actual git history at handoff and ship time. Do not edit by hand once an AC's row in \`build.md\` carries SHAs.
+This block is filled in by the builder as each slice's TDD cycle lands (slice SHAs) and as each AC's verification commit lands (\`verify(AC-N): passing\` SHA). The reviewer's posture-aware \`git log --grep="(SL-N):"\` and \`git log --grep="verify(AC-N):"\` scans reconcile it against the actual git history at handoff and ship time. Do not edit by hand once a row in \`build.md\` carries SHAs.
 `;
 
 const PLAN_TEMPLATE_SOFT = `---
@@ -1323,8 +1355,8 @@ _(Compiled across Frame / Approaches / Decisions / Pre-mortem — any unresolved
 `;
 
 export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
-  { id: "plan", fileName: "plan.md", description: "Strict-mode plan template (AC table, parallelSafe, touchSurface, traceability block).", body: PLAN_TEMPLATE },
-  { id: "plan-soft", fileName: "plan-soft.md", description: "Soft-mode plan template (bullet-list testable conditions, no AC IDs).", body: PLAN_TEMPLATE_SOFT },
+  { id: "plan", fileName: "plan.md", description: "Strict-mode plan template — dual-table layout: ## Plan / Slices (work units with surface + dependencies) and ## Acceptance Criteria (verification, each row lists which slices it verifies). Slices are HOW we build; AC are HOW we verify.", body: PLAN_TEMPLATE },
+  { id: "plan-soft", fileName: "plan-soft.md", description: "Soft-mode plan template (informal ## Plan paragraph + bullet-list ## Testable conditions; no slice / AC tables — those are strict-mode only).", body: PLAN_TEMPLATE_SOFT },
   { id: "build", fileName: "build.md", description: "Strict-mode build log (six-column TDD table, RED proofs, GREEN suite evidence).", body: BUILD_TEMPLATE },
   { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
