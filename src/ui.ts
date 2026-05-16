@@ -109,6 +109,14 @@ export function renderProgress(event: ProgressEvent, useColor: boolean): string 
 export interface SummaryCounts {
   harnesses: readonly string[];
   agents: number;
+  /**
+   * Count of research-lens contracts written to
+   * `.cclaw/lib/research-lenses/`. Distinct from `agents` (the seven
+   * flow specialists + two read-only research helpers under
+   * `.cclaw/lib/agents/`) because lenses are dispatched only by the
+   * main-context research orchestrator, never by the flow specialists.
+   */
+  researchLenses: number;
   skills: number;
   templates: number;
   runbooks: number;
@@ -135,6 +143,7 @@ export function renderSummary(counts: SummaryCounts, useColor: boolean): string 
   const harnessLine = `  ${harnessesLabel} ${counts.harnesses.join(", ")}`;
   const allRows: ReadonlyArray<readonly [string, number]> = [
     ["Agents", counts.agents],
+    ["Research lenses", counts.researchLenses],
     ["Skills", counts.skills],
     ["Templates", counts.templates],
     ["Runbooks", counts.runbooks],

@@ -10,7 +10,12 @@ import {
   SHIPPED_DIR_REL_PATH,
   STATE_REL_PATH
 } from "./constants.js";
-import { CORE_AGENTS, renderAgentMarkdown } from "./content/core-agents.js";
+import {
+  CORE_AGENTS,
+  RESEARCH_LENS_AGENTS,
+  renderAgentMarkdown,
+  renderResearchLensMarkdown
+} from "./content/core-agents.js";
 import { ARTIFACT_TEMPLATES, planTemplateForSlug, templateBody } from "./content/artifact-templates.js";
 import { AUTO_TRIGGER_SKILLS, SKILLS_INDEX_BODY } from "./content/skills.js";
 import { ANTI_RATIONALIZATIONS_BODY } from "./content/anti-rationalizations.js";
@@ -266,6 +271,7 @@ export async function ensureRuntimeRoot(projectRoot: string): Promise<void> {
     CANCELLED_DIR_REL_PATH,
     LIB_ROOT,
     path.join(LIB_ROOT, "agents"),
+    path.join(LIB_ROOT, "research-lenses"),
     path.join(LIB_ROOT, "skills"),
     path.join(LIB_ROOT, "templates"),
     path.join(LIB_ROOT, "runbooks"),
@@ -283,6 +289,28 @@ async function writeAgentFiles(projectRoot: string): Promise<void> {
   for (const agent of CORE_AGENTS) {
     const agentPath = path.join(projectRoot, LIB_ROOT, "agents", `${agent.id}.md`);
     await writeFileSafe(agentPath, renderAgentMarkdown(agent));
+  }
+}
+
+/**
+ * Writes the five research-lens contracts under
+ * `.cclaw/lib/research-lenses/<id>.md`. Lenses are NOT in
+ * `.cclaw/lib/agents/` on purpose: agents/ is the flow-specialist
+ * namespace (the seven on-demand specialists + the two read-only
+ * research helpers); lenses are dispatched only by the v8.65
+ * main-context research orchestrator and live in a sibling directory
+ * so the agents/ namespace doesn't mix the two roles.
+ *
+ * Idempotent — re-running install overwrites each lens file with the
+ * current content; the cclaw catalog (`RESEARCH_LENS_AGENTS`) is the
+ * source of truth, the disk file is a projection.
+ */
+async function writeResearchLensFiles(projectRoot: string): Promise<void> {
+  const lensesDir = path.join(projectRoot, LIB_ROOT, "research-lenses");
+  await ensureDir(lensesDir);
+  for (const lens of RESEARCH_LENS_AGENTS) {
+    const lensPath = path.join(lensesDir, `${lens.id}.md`);
+    await writeFileSafe(lensPath, renderResearchLensMarkdown(lens));
   }
 }
 
@@ -600,6 +628,19 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
     );
   }
 
+  // Mirror the research lens contracts into the harness's agents
+  // namespace so harnesses that surface contracts in their UI (Cursor's
+  // /agents picker, Claude's agent picker) can route the lens dispatches
+  // through the same surface as the flow specialists. The lenses keep
+  // their `kind: research-lens` frontmatter discriminator so harness UIs
+  // can group them separately if desired.
+  for (const lens of RESEARCH_LENS_AGENTS) {
+    await writeFileSafe(
+      path.join(projectRoot, layout.agentsDir, `${lens.id}.md`),
+      renderResearchLensMarkdown(lens)
+    );
+  }
+
   await ensureDir(path.join(projectRoot, layout.skillsDir));
   for (const skill of AUTO_TRIGGER_SKILLS) {
     await writeFileSafe(path.join(projectRoot, layout.skillsDir, skill.fileName), skill.body);
@@ -783,6 +824,12 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   await writeAgentFiles(projectRoot);
   emit("Wrote specialists", `${CORE_AGENTS.length} agents → .cclaw/lib/agents/`);
 
+  await writeResearchLensFiles(projectRoot);
+  emit(
+    "Wrote research lenses",
+    `${RESEARCH_LENS_AGENTS.length} lenses → .cclaw/lib/research-lenses/`
+  );
+
   await removeRetiredHookArtefacts(projectRoot, emit);
 
   await writeRuntimeSkills(projectRoot);
@@ -882,6 +929,7 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   const counts: SummaryCounts = {
     harnesses: [...harnesses],
     agents: CORE_AGENTS.length,
+    researchLenses: RESEARCH_LENS_AGENTS.length,
     skills: AUTO_TRIGGER_SKILLS.length + 1,
     templates: templateCount,
     runbooks: STAGE_PLAYBOOKS.length + ON_DEMAND_RUNBOOKS.length,
@@ -911,6 +959,9 @@ export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
     }
     for (const agent of CORE_AGENTS) {
       await removePath(path.join(projectRoot, layout.agentsDir, `${agent.id}.md`));
+    }
+    for (const lens of RESEARCH_LENS_AGENTS) {
+      await removePath(path.join(projectRoot, layout.agentsDir, `${lens.id}.md`));
     }
     for (const fileName of RETIRED_AGENT_FILES) {
       await removePath(path.join(projectRoot, layout.agentsDir, fileName));

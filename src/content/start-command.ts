@@ -167,24 +167,102 @@ Before dispatching triage, check \`<projectRoot>/.git/\`. If absent (plain worki
 
 Before the research-mode fork runs, check the raw \`/cc\` argument for the **extend-mode entry point**. The fork fires when the argument starts with the literal token \`extend \` (case-insensitive, exactly one space). Parse \`<slug>\` + \`<task>\`, validate the parent via \`loadParentContext(projectRoot, slug)\` (\`src/parent-context.ts\`), and on \`ok: true\` stamp \`flow-state.json > parentContext\` + seed \`refines: <parent-slug>\` in plan.md frontmatter + dispatch the \`triage\` sub-agent with the resolved \`parentContext\` in the envelope (the triage sub-agent owns the inheritance sub-step — see its contract). Full procedure (argument parsing, error sub-cases, seven argument shapes, precedence rules, multi-level chaining, worked examples) in \`runbooks/extend-mode.md\`. The orchestrator loads the **immediate** parent only; multi-level traversal is opt-in via \`findRefiningChain\` from specialists.
 
-### Detect — research-mode fork
+### Detect — research-mode fork (v8.65 multi-lens orchestrator)
 
 Before triage dispatch, check the raw \`/cc\` argument for the **research-mode entry point**. The fork fires when EITHER signal is present:
 
 - the task argument starts with the literal token \`research \` (case-insensitive, exactly one space), or
 - the task argument carries the explicit \`--research\` flag anywhere in the argument string.
 
-When the fork fires, the orchestrator strips the trigger from the task text (the topic that flows into the specialist is the argument WITHOUT \`research \` / \`--research\`), builds a research-mode slug (\`YYYYMMDD-research-<semantic-kebab>\` — the \`-research-\` infix is mandatory), and **skips triage dispatch entirely**. Stamp the triage block with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\`. Then dispatch the \`architect\` specialist in **standalone research mode** — the envelope MUST include the literal line \`Mode: research\` next to \`Topic: <stripped task text>\`. The architect runs its Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose sequence silently in a single dispatch (no mid-plan dialogue per v8.61 always-auto), writes \`research.md\` instead of \`plan.md\`, skips the AC table entirely (no Plan / Spec / AC / Topology / Feasibility / Traceability sections in research mode), and returns a slim summary with \`Recommended next: continue\` (or \`cancel\` if the topic was too unscoped to research).
+When the fork fires, the orchestrator strips the trigger from the task text (the topic that flows into the lenses is the argument WITHOUT \`research \` / \`--research\`), builds a research-mode slug (\`YYYYMMDD-research-<semantic-kebab>\` — the \`-research-\` infix is mandatory), and **skips triage dispatch entirely**. Stamp the triage block with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\`. Stamp \`flow-state.json > currentSlug\` with the new slug, \`currentStage: "plan"\` (used purely as a sentinel — research mode has no plan / build / review / critic / ship stages; the field is the only signal that distinguishes "research in flight" from "task in flight" for the v8.61 invocation matrix).
 
-On the architect's slim-summary return, the orchestrator finalises the flow: \`git mv\` the artifact into \`.cclaw/flows/shipped/<slug>/research.md\` (NO build / review / critic / ship stages). After finalize, surface the v8.58 **handoff prompt** in plain prose (no structured ask): "Ready to plan? Run \`/cc <clarified task description>\` and I'll carry the research forward as context." The next \`/cc\` invocation on the same project reads the most-recent shipped research slug under \`flows/shipped/\` and stamps it into \`flow-state.json > priorResearch: { slug, topic, path }\`; the architect's Bootstrap on that follow-up flow reads \`priorResearch.path\` and includes the research artifact.
+The orchestrator then enters the **v8.65 multi-lens research flow** — replacing the v8.58/v8.62 architect-standalone-research interim. The flow is four phases:
+
+#### Phase 0 — bootstrap (silent; main-context)
+
+The orchestrator (NOT a sub-agent — research mode's discovery dialogue lives in the main-context flow so the user can iterate openly without round-trip envelopes) does:
+
+1. Read \`.cclaw/state/flow-state.json\` (already initialised at the fork).
+2. Read \`CONTEXT.md\` at the project root if it exists.
+3. Read \`README.md\` first paragraph + Architecture / Purpose section for high-level project framing.
+4. Initialise an empty \`.cclaw/flows/<slug>/research.md\` from the \`research\` template (\`.cclaw/lib/templates/research.md\`); the orchestrator will fill it in Phase 3.
+
+#### Phase 1 — open-ended discovery dialogue (main-context; no question cap)
+
+The orchestrator opens the dialogue with the user in plain prose, in the user's language:
+
+> "Hi. What are you researching? Tell me what you know and what you don't."
+
+The user replies. The orchestrator asks follow-up questions as long as they are productive — there is **NO fixed question cap** (gstack-style and obra-superpowers-style references converged on "as many questions as productive"; v8.65 follows that). Productive questions reduce ambiguity, surface constraints, or reveal stakeholders / users / prior attempts the lenses will need. Unproductive questions (repeating, padding for symmetry, re-asking what was already answered) are forbidden.
+
+The dialogue runs UNTIL the user signals readiness with any of these phrases (case-insensitive; the orchestrator matches loosely on intent, not on a fixed token list):
+
+- "ready" / "I'm ready" / "go ahead" / "let's go" / "go on" / "proceed" / "finalize" / "explore now" / "dispatch the lenses" / "run the research" / "do it" / "ship it" / a clear "I've said what I know — over to you" framing.
+
+When the user signals ready, the orchestrator distils the dialogue into a **dialogue summary** — 5-15 bullets capturing what the user told the orchestrator (topic refinement, known constraints, prior attempts, stakeholders, scope edges). The summary is the payload passed to each lens; the lenses do not see the raw dialogue.
+
+The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides for follow-up turns (Cursor's structured-ask, Claude's TUI text input, etc.) but the questions are open-ended (no multiple-choice picker, no "[y/n]" gate) — research-mode discovery is the one cclaw surface where free-form dialogue is the contract.
+
+If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel"), the orchestrator runs the cancel runtime (move the empty research.md to \`cancelled/<slug>/\`, reset state) and ends the turn.
+
+#### Phase 2 — parallel lens dispatch
+
+When Phase 1 completes, the orchestrator **dispatches all five research lenses in parallel**:
+
+- \`research-engineer\` — technical feasibility, stack fit, implementation paths, blockers, risks, rough effort.
+- \`research-product\` — user / product value, who benefits, alternatives considered (always including "do nothing"), market / domain context, open product questions.
+- \`research-architecture\` — surface impact, coupling points, boundaries crossed, scalability considerations, reusable in-repo patterns.
+- \`research-history\` — prior attempts via \`.cclaw/knowledge.jsonl\` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift.
+- \`research-skeptic\` — failure modes, edge cases, abuse cases, hidden costs, explicit don't-proceed triggers.
+
+Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\` but with the lens-specific shape):
+
+- \`Slug:\` — the research slug.
+- \`Topic:\` — the stripped task text (no \`research \` / \`--research\` prefix).
+- \`Dialogue summary:\` — the 5-15 bullets from Phase 1.
+- \`Project root:\` — absolute path.
+- \`Active flow state:\` — the sentinel triage block (lenses do not run heuristics on it).
+- \`Required first read:\` — the lens contract at \`.cclaw/lib/research-lenses/<lens-id>.md\`.
+
+Lenses run independently. The engineer + architecture lenses MAY dispatch \`repo-research\` on brownfield projects (the history lens reads \`.cclaw/knowledge.jsonl\` directly — that's the in-research mirror of \`learnings-research\`, and dispatching \`learnings-research\` from the history lens would be redundant). Lenses MAY use an MCP web-search tool (\`user-exa\`, \`user-context7\`, or comparable) when one is available; web search is **optional** — lenses fall back to training knowledge if no tool is wired, and stamp the fallback in their slim summary's \`Notes\` field. Research mode does NOT hard-require MCP web search.
+
+Each lens returns a structured findings block (the markdown payload that becomes the \`## <Lens> lens\` section of \`research.md\`) and a slim summary (≤8 lines). The orchestrator collects all five before proceeding.
+
+If any lens returns \`Confidence: low\` AND the dialogue summary was thin, the orchestrator MAY re-dispatch ONLY that lens once with a richer envelope (extra bullets from the dialogue). Cap: 1 re-dispatch per lens, total cap 2 re-dispatches across all five lenses. After the cap, proceed with partial findings — the synthesis section will surface the thin-coverage warning.
+
+#### Phase 3 — synthesis (main-context)
+
+The orchestrator authors \`research.md\` by:
+
+1. Pasting each lens's findings block verbatim under the corresponding section (\`## Engineer lens\`, \`## Product lens\`, \`## Architecture lens\`, \`## History lens\`, \`## Skeptic lens\`).
+2. Writing the \`## Discovery dialogue summary\` section from the Phase 1 bullets.
+3. Composing the \`## Synthesis\` section — a 3-7 paragraph cross-lens distillation. The synthesis surfaces:
+   - Convergence: where 2+ lenses point the same way (e.g. "engineer + product both flag X as the blocker").
+   - Divergence: where lenses disagree (e.g. "product says high value, skeptic flags an unmitigated abuse case").
+   - The big trade-off space the user / follow-up architect must navigate.
+4. Composing the \`## Recommended next step\` section. The recommendation is ONE of:
+   - **"plan with \`/cc <task>\`"** — research converges on a workable direction; risks are tracked but proceedable. Suggest a concrete kebab-case task description the user can type.
+   - **"more research needed (specific area)"** — one or more lenses returned \`Confidence: low\` AND the user gap is concrete (e.g. "need to talk to the data team about the migration window first").
+   - **"don't proceed (skeptic blocked: <reason>)"** — the skeptic lens set \`Don't-proceed: yes\` AND no obvious mitigation exists within the topic's scope. Cite the specific trigger.
+5. Stamping frontmatter with \`lenses: [engineer, product, architecture, history, skeptic]\` (or the subset that successfully returned; mark any failed lens as \`failed\` rather than dropping it from the list) and \`generated_at: <iso>\`.
+
+#### Phase 4 — finalize
+
+The orchestrator finalises the flow: \`git mv\` the artifact into \`.cclaw/flows/shipped/<slug>/research.md\` (NO build / review / critic / ship stages — research mode has no implementation pipeline). Reset \`flow-state.json > currentSlug\` to \`null\`. After finalize, surface the **handoff prompt** in plain prose (no structured ask):
+
+> "\`research.md\` is ready at \`.cclaw/flows/shipped/<slug>/research.md\`. Recommended next: <verbatim Phase 3 recommendation>. Ready to plan? Run \`/cc <task>\` and I'll carry the research as \`priorResearch\` context."
+
+The next \`/cc <task>\` invocation on the same project reads the most-recent shipped research slug under \`flows/shipped/\` and stamps it into \`flow-state.json > priorResearch: { slug, topic, path }\`; the architect's Bootstrap on that follow-up flow reads \`priorResearch.path\` and includes the research artifact as Frame / Approaches / Decisions context.
 
 Sub-cases:
 
 - **Argument is \`research\` alone (no topic)** — surface \`research mode needs a topic; try '/cc research <topic>'\`, end the turn.
-- **Argument starts with \`research \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — flags are ignored (research's path is fixed). One-line note: \`research mode ignores ceremonyMode flags\`, then proceed.
-- **Research-mode + \`--mode=auto\` / \`--mode=step\`** — toggle dropped with one-line note (v8.61 always-auto, no stages to chain).
+- **Argument starts with \`research \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — flags are ignored (research's path is fixed at the multi-lens flow; ceremonyMode doesn't apply). One-line note: \`research mode ignores ceremonyMode flags\`, then proceed.
+- **Research-mode + \`--mode=auto\` / \`--mode=step\`** — toggle dropped with one-line note (research has no stages to chain; the run mode does not apply).
+- **User cancels mid-dialogue** — run the cancel runtime, end the turn.
+- **All five lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
 
-Full standalone-mode contract — research-mode dispatch envelope, the silent Bootstrap → Compose sequence, finalize semantics, the optional handoff — lives in \`.cclaw/lib/agents/architect.md\` ("Research mode" section). v8.65 is scoped to rebuild research as a dedicated multi-lens specialist; v8.62 reuses architect as the interim research dispatcher.
+The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The seven flow specialists (triage, architect, builder, plan-critic, qa-runner, reviewer, critic) are untouched.
 
 ## Triage — dispatch the \`triage\` sub-agent (fresh task flows only — research-mode and extend-mode forks above bypass this hop)
 

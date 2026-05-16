@@ -79,7 +79,12 @@ describe("v8.61 — triage as a specialist sub-agent", () => {
   });
 
   it("orchestrator body no longer carries the full triage prose (delegated to sub-agent)", () => {
-    expect(START_COMMAND_BODY.length).toBeLessThan(72000);
+    // v8.65 raised the body budget from 72000 to 81000 chars to absorb
+    // the multi-lens research orchestrator's body prose (4-phase
+    // contract, lens dispatch envelope, lens-output schema, synthesis
+    // pass, handoff prompt). The triage delegation invariant (the body
+    // does not re-implement triage inline) is preserved.
+    expect(START_COMMAND_BODY.length).toBeLessThan(81000);
     expect(START_COMMAND_BODY).toMatch(/triage[\s\S]*sub-agent|dispatch[\s\S]*triage|triage[\s\S]*specialist/iu);
   });
 

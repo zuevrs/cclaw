@@ -68,7 +68,7 @@ Rank the request against these signals. Pick the **highest** complexity any sign
 | typo, rename, comment, single-file format change, ≤30 lines, no test impact | trivial / inline |
 | 1-3 modules, ≤5 testable behaviours, no auth/payment/data-layer touch, no migration | small/medium / soft |
 | ≥4 modules touched OR ≥6 distinct behaviours OR architectural decision needed OR migration required OR auth/payment/data-layer touch OR explicit security flag | large-risky / strict |
-| user explicitly asked for "discuss first" / "design only" / "what do you think" | route to \`research\` mode (architect standalone, no AC table) — not a task escalation |
+| user explicitly asked for "discuss first" / "design only" / "what do you think" | surface the suggestion: tell user to invoke \`/cc research <topic>\` (v8.65 main-context multi-lens research mode); your slim summary's \`Notes\` field carries \`suggest research: user asked to discuss first\`. The orchestrator surfaces this advisory and continues with the heuristic-driven task ceremony unless the user re-invokes with the research prefix. |
 | user explicitly asked for "just fix it" on a single file | trivial / inline |
 | **user prompt is vague** ("make it better", "fix bugs", "add some auth") | always escalate one class from heuristic baseline; the architect resolves ambiguity silently using best judgment during \`plan.md\` authoring (no mid-flight clarify dialogue post-v8.61) |
 

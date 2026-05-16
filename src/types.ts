@@ -158,7 +158,62 @@ export type LegacyPlannerId = typeof LEGACY_PLANNER_ID;
 export const RESEARCH_AGENT_IDS = ["repo-research", "learnings-research"] as const;
 export type ResearchAgentId = (typeof RESEARCH_AGENT_IDS)[number];
 
-export type InstallableAgentId = SpecialistId | ResearchAgentId;
+/**
+ * Research-only sub-agents dispatched by the research orchestrator
+ * (the main-context flow that powers `/cc research <topic>`). The lenses
+ * run in parallel after the open-ended discovery dialogue completes; each
+ * one returns a structured per-lens findings block that the orchestrator
+ * folds into the final `research.md`.
+ *
+ * Lenses are **NOT** in {@link SPECIALISTS} on purpose:
+ *
+ * - they never become `lastSpecialist` (no checkpoint between them — the
+ *   orchestrator either waits for ALL five to return or proceeds with
+ *   partial findings on timeout);
+ * - they are not a stage in any `triage.path` (research mode bypasses
+ *   triage entirely; the orchestrator stamps sentinel values);
+ * - they cannot be dispatched by any of the seven flow specialists —
+ *   only by the research orchestrator in the main-context research
+ *   slice.
+ *
+ * Each lens has its own contract file under
+ * `.cclaw/lib/research-lenses/<lens-id>.md`. Lenses are independent: no
+ * lens cites another lens, no lens chains into another lens. The
+ * orchestrator owns the cross-lens synthesis pass that writes the final
+ * `## Synthesis` section of `research.md`.
+ *
+ * The five lenses cover the orthogonal dimensions reference projects
+ * (gstack `plan-*-review` quintet; obra-superpowers brainstorming →
+ * subagent-driven-development chain; compound continuous-notebook +
+ * adversarial-reviewer) settled on:
+ *
+ * - `research-engineer` — technical feasibility, stack fit,
+ *   implementation paths, rough effort.
+ * - `research-product` — user value, who benefits, alternatives,
+ *   market context.
+ * - `research-architecture` — fit with existing system, surface area,
+ *   coupling, scalability.
+ * - `research-history` — prior attempts via `.cclaw/knowledge.jsonl` +
+ *   git log; lessons learned + outcome signals.
+ * - `research-skeptic` — adversarial pass: failure modes, edge cases,
+ *   abuse cases, hidden costs.
+ *
+ * Each lens may dispatch the existing `repo-research` helper for
+ * codebase-specific context (engineer + architecture lenses do so by
+ * default on brownfield projects); web search via MCP is optional
+ * (lenses fall back to training knowledge when no MCP web-search tool
+ * is available).
+ */
+export const RESEARCH_LENSES = [
+  "research-engineer",
+  "research-product",
+  "research-architecture",
+  "research-history",
+  "research-skeptic"
+] as const;
+export type ResearchLensId = (typeof RESEARCH_LENSES)[number];
+
+export type InstallableAgentId = SpecialistId | ResearchAgentId | ResearchLensId;
 
 /**
  * verdict the critic returns in its slim summary. Drives Hop 4.5

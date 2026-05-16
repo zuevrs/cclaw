@@ -1,7 +1,18 @@
-import type { InstallableAgentId, ResearchAgentId, SpecialistId } from "../types.js";
+import type {
+  InstallableAgentId,
+  ResearchAgentId,
+  ResearchLensId,
+  SpecialistId
+} from "../types.js";
 import { LEARNINGS_RESEARCH_PROMPT } from "./research-prompts/learnings-research.js";
 import { REPO_RESEARCH_PROMPT } from "./research-prompts/repo-research.js";
+import {
+  RESEARCH_LENS_DESCRIPTIONS,
+  RESEARCH_LENS_PROMPTS,
+  RESEARCH_LENS_TITLES
+} from "./research-lenses/index.js";
 import { SPECIALIST_PROMPTS } from "./specialist-prompts/index.js";
+import { RESEARCH_LENSES } from "../types.js";
 
 /**
  * `activation` controls how the orchestrator invokes the agent:
@@ -42,6 +53,27 @@ export interface ResearchAgent extends CoreAgent {
   kind: "research";
 }
 
+/**
+ * Research-only sub-agent metadata. Dispatched in parallel by
+ * the research orchestrator (main-context flow that powers `/cc research
+ * <topic>`). Installed to `.cclaw/lib/research-lenses/<id>.md` (separate
+ * from `.cclaw/lib/agents/`, which is reserved for flow specialists and
+ * the two read-only research helpers `repo-research` /
+ * `learnings-research`).
+ *
+ * The kind discriminator is `"research-lens"` so the install layer
+ * (`writeAgentFiles`, harness asset writers) can write lenses to their
+ * dedicated subdir without polluting the agents/ namespace.
+ */
+export interface ResearchLensAgent {
+  id: ResearchLensId;
+  kind: "research-lens";
+  title: string;
+  activation: "on-demand";
+  description: string;
+  prompt: string;
+}
+
 export const SPECIALIST_AGENTS: SpecialistAgent[] = [
   {
     id: "triage",
@@ -58,9 +90,9 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     kind: "specialist",
     title: "Architect",
     activation: "on-demand",
-    modes: ["task", "research"],
+    modes: ["task"],
     description:
-      "v8.62 unified plan-stage specialist. Absorbs the work that was split pre-v8.62 between `design` (Phase 0/2-6: Bootstrap, Frame, Approaches, Decisions, Pre-mortem, Compose) and `ac-author` (Plan, Spec, AC, Edge cases, Topology, Feasibility, Traceability). Runs as a single on-demand sub-agent — no mid-plan user dialogue (v8.61 always-auto removed all pickers); ambiguity is resolved silently using best judgment. Writes `plan.md` (intra-flow `mode: \"task\"`) or `research.md` (standalone `mode: \"research\"`, no AC table). Depth scales with ceremonyMode: inline skips, soft writes Plan + Spec + Testable conditions + Verification + Touch surface, strict adds Frame + Approaches + Selected Direction + Decisions + Pre-mortem + Topology + Feasibility + Traceability.",
+      "v8.62 unified plan-stage specialist; v8.65 trimmed to intra-flow plan authoring only. Absorbs the work that was split pre-v8.62 between `design` (Phase 0/2-6: Bootstrap, Frame, Approaches, Decisions, Pre-mortem, Compose) and `ac-author` (Plan, Spec, AC, Edge cases, Topology, Feasibility, Traceability). Runs as a single on-demand sub-agent — no mid-plan user dialogue (v8.61 always-auto removed all pickers); ambiguity is resolved silently using best judgment. Writes `plan.md` (intra-flow `mode: \"task\"`). Depth scales with ceremonyMode: inline skips, soft writes Plan + Spec + Testable conditions + Verification + Touch surface, strict adds Frame + Approaches + Selected Direction + Decisions + Pre-mortem + Topology + Feasibility + Traceability. Research mode (`/cc research <topic>`) is handled by the v8.65 main-context multi-lens research orchestrator (five parallel lenses: engineer / product / architecture / history / skeptic) — the architect is no longer dispatched for research.",
     prompt: SPECIALIST_PROMPTS.architect
   },
   {
@@ -142,11 +174,46 @@ export const RESEARCH_AGENTS: ResearchAgent[] = [
  * Backward-compatible flat list of every installable agent. Install paths
  * (\`writeAgentFiles\`, harness asset writers, \`uninstall\`) iterate this
  * list. Specialist-only logic should use {@link SPECIALIST_AGENTS}.
+ *
+ * v8.65: research lenses are intentionally NOT included here — they
+ * install to a separate `.cclaw/lib/research-lenses/` subdirectory via
+ * {@link RESEARCH_LENS_AGENTS}. Lenses are not flow specialists; mixing
+ * them into `CORE_AGENTS` would pollute the agents/ namespace and risk
+ * the install layer treating them as flow specialists.
  */
 export const CORE_AGENTS: CoreAgent[] = [...SPECIALIST_AGENTS, ...RESEARCH_AGENTS];
+
+/**
+ * Research lenses install to `.cclaw/lib/research-lenses/`.
+ * Build the array from {@link RESEARCH_LENSES} so the source of truth
+ * for the lens roster is `src/types.ts`; lens metadata (title +
+ * description) lives in `src/content/research-lenses/index.ts`.
+ */
+export const RESEARCH_LENS_AGENTS: ResearchLensAgent[] = RESEARCH_LENSES.map(
+  (id) => ({
+    id,
+    kind: "research-lens" as const,
+    title: RESEARCH_LENS_TITLES[id],
+    activation: "on-demand" as const,
+    description: RESEARCH_LENS_DESCRIPTIONS[id],
+    prompt: RESEARCH_LENS_PROMPTS[id]
+  })
+);
 
 export function renderAgentMarkdown(agent: CoreAgent): string {
   const modes = agent.modes.map((mode) => `- ${mode}`).join("\n");
   const kindLine = agent.kind === "research" ? "kind: research-helper\n" : "";
   return `---\nname: ${agent.id}\ntitle: ${agent.title}\nactivation: ${agent.activation}\n${kindLine}---\n\n# ${agent.title}\n\n${agent.description}\n\n## Modes\n\n${modes}\n\n## Prompt\n\n${agent.prompt}\n`;
+}
+
+/**
+ * Renders a research-lens contract. Lenses install to
+ * `.cclaw/lib/research-lenses/<id>.md` with a `kind: research-lens`
+ * frontmatter field so harness UIs / readers can distinguish them from
+ * flow specialists (`.cclaw/lib/agents/`) and from the read-only
+ * research helpers `repo-research` / `learnings-research` (also in
+ * `.cclaw/lib/agents/`, marked `kind: research-helper`).
+ */
+export function renderResearchLensMarkdown(agent: ResearchLensAgent): string {
+  return `---\nname: ${agent.id}\ntitle: ${agent.title}\nactivation: ${agent.activation}\nkind: research-lens\n---\n\n# ${agent.title}\n\n${agent.description}\n\n## Prompt\n\n${agent.prompt}\n`;
 }

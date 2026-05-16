@@ -1215,23 +1215,40 @@ This slug is referenced from \`.cclaw/knowledge.jsonl\` whenever the compound qu
 `;
 
 /**
- * `research.md` template for standalone research-mode flows
+ * `research.md` template for v8.65 multi-lens research mode
  * (`/cc research <topic>` / `/cc --research <topic>`). The artifact is
- * written by the `architect` specialist when activated in standalone
- * research mode (`triage.mode == "research"`); same section layout as
- * the architect-authored prefix of `plan.md` (Frame / Approaches /
- * Selected Direction / Decisions / Pre-mortem / Not Doing / Open
- * questions / Summary), but with a research-specific frontmatter block
- * (mode / topic / generatedAt) instead of the intra-flow plan
- * frontmatter, and no AC table, Topology, or Traceability block (those
- * belong to a follow-up `/cc <task>` flow that consumes this research
- * via `flowState.priorResearch`).
+ * authored by the main-context research orchestrator after the
+ * open-ended discovery dialogue completes and all five research lenses
+ * (`research-engineer` / `research-product` / `research-architecture`
+ * / `research-history` / `research-skeptic`) return their structured
+ * findings blocks.
  *
- * The frontmatter `mode: research` field is the disambiguator between
- * this artifact and `plan.md` — readers that walk `flows/shipped/`
- * branch on this field to decide whether the slug shipped a research
- * artifact (no AC; no build / review / critic / ship stages ran) or a
- * normal plan (full pipeline).
+ * Section layout differs from pre-v8.65 (which mirrored plan.md's
+ * architect-authored prefix). v8.65 structure:
+ *
+ * - `## Discovery dialogue summary` — distilled bullets from the Phase
+ *   1 open-ended dialogue (no question cap).
+ * - `## Engineer lens` — feasibility + implementation paths + blockers
+ *   + risks + rough effort.
+ * - `## Product lens` — user value + who benefits + alternatives
+ *   + market context + open product questions.
+ * - `## Architecture lens` — surface impact + coupling + boundaries
+ *   + scalability + reusable patterns.
+ * - `## History lens` — prior attempts + lessons learned + outcome
+ *   signals + git archaeology + drift.
+ * - `## Skeptic lens` — failure modes + edge cases + abuse cases
+ *   + hidden costs + don't-proceed triggers.
+ * - `## Synthesis` — orchestrator's cross-lens distillation.
+ * - `## Recommended next step` — one of "plan with `/cc <task>`" /
+ *   "more research needed (specific area)" / "don't proceed
+ *   (skeptic blocked: <reason>)".
+ *
+ * The frontmatter `mode: research` field stays the disambiguator
+ * between this artifact and `plan.md` — readers that walk
+ * `flows/shipped/` branch on this field. The new `lenses` field lists
+ * which lenses successfully returned findings (any failed lens is
+ * marked `failed` rather than dropped from the list so the synthesis
+ * pass's coverage can be audited).
  */
 const RESEARCH_TEMPLATE = `---
 slug: SLUG-PLACEHOLDER
@@ -1244,10 +1261,18 @@ last_specialist: null
 refines: null
 shipped_at: null
 ship_commit: null
-# Architect Compose-phase ambiguity score also applies to research-mode
-# composition. Same composite (0.0-1.0) across 3 dimensions (greenfield)
-# or 4 dimensions (brownfield); informational signal only in v8.62
-# unified flow (no mid-plan picker); never a hard gate.
+# List of research lenses that returned findings for this slug.
+# Canonical order: engineer, product, architecture, history, skeptic.
+# Any lens whose dispatch timed out / errored is marked \`failed\` in
+# this list rather than dropped, so coverage gaps are auditable from
+# the artifact alone.
+lenses: [engineer, product, architecture, history, skeptic]
+# Back-compat: the v8.53 ambiguity score frontmatter fields are kept
+# (null by default) so downstream readers that branch on these stay
+# compatible. The v8.65 multi-lens orchestrator does not author these
+# directly; the synthesis pass may opt to compute one based on the
+# coverage of the five lenses, but the field stays null unless a
+# future surface re-introduces the procedural gate.
 ambiguity_score: null
 ambiguity_dimensions: null
 ambiguity_threshold: null
@@ -1258,100 +1283,197 @@ ambiguity_threshold: null
 > Topic: **TOPIC-PLACEHOLDER**.
 >
 > This artifact is the output of a \`/cc research <topic>\` flow — the
-> \`architect\` specialist's standalone research-mode pass (Bootstrap
-> → Frame → Approaches → Decisions → Pre-mortem → Compose, run in a
-> single on-demand dispatch). No build / review / critic / ship
-> stages run; the flow finalises to
-> \`.cclaw/flows/shipped/<slug>/research.md\`.
+> v8.65 main-context research orchestrator's multi-lens pass.
+>
+> Flow shape (4 phases):
+>
+> 1. **Discovery dialogue** (open-ended; no question cap; the
+>    orchestrator runs in main context so the user can iterate
+>    freely). The dialogue summary lives in the next section.
+> 2. **Parallel lens dispatch.** Five research lenses run in parallel
+>    after the user signals "ready / go ahead": engineer (technical
+>    feasibility), product (user value + alternatives), architecture
+>    (system fit + coupling + boundaries), history (prior attempts via
+>    \`.cclaw/knowledge.jsonl\` + git log), skeptic (failure modes +
+>    abuse cases).
+> 3. **Synthesis.** The orchestrator pastes each lens's findings block
+>    verbatim under the corresponding \`## <Lens> lens\` section, then
+>    composes the \`## Synthesis\` section (cross-lens distillation).
+> 4. **Finalize.** No build / review / critic / ship stages run; the
+>    flow finalises to \`.cclaw/flows/shipped/<slug>/research.md\`.
 >
 > Optional handoff: the next \`/cc <task>\` invocation on this project
 > reads the most-recent shipped research slug and stamps it into
-> \`flow-state.json > priorResearch\` so the follow-up flow's
-> Architect Bootstrap reads carry this
-> research as context.
+> \`flow-state.json > priorResearch\` so the follow-up flow's architect
+> Bootstrap reads carry this research (per-lens findings + synthesis +
+> recommendation) as Frame / Approaches / Decisions context.
 
-## Frame
+## Discovery dialogue summary
 
-_(Architect: Frame, mandatory in research mode. 2-5 sentences: what is unclear or under-explored today, who feels it, what success looks like for the RESEARCH outcome — a sharper task description, a chosen architectural direction, a vetted set of approaches — rather than for a shipped feature. What is explicitly out of scope for THIS research. Cite real evidence — \`file:path:line\`, prior shipped slugs, ticket id — when you have it.)_
+_(Research orchestrator: Phase 1 distillation. 5-15 bullets capturing what the user told the orchestrator during the open-ended dialogue — topic refinement, known constraints, prior attempts, stakeholders, scope edges. The five lenses see THIS summary (not the raw dialogue) as their shared envelope payload.)_
 
-## Spec
+- _bullet 1: what the user knows / wants_
+- _bullet 2: what the user explicitly DOESN'T know yet_
+- _bullet 3: constraints / non-negotiables the user named_
+- _bullet 4: prior attempts / context the user surfaced_
+- _bullet 5: who the user thinks benefits / is affected_
 
-_(Architect: Frame, mandatory in research mode. Four bullets — Objective / Success / Out of scope / Boundaries — adapted for research outcomes rather than shippable features.)_
+## Engineer lens
 
-- **Objective** — _what we are researching and why, in one short line. Often a restatement of the topic from the user's prompt._
-- **Success** — _high-level indicators that the research is done — what the user would observe (e.g. "user has a clear pick between approach A and B with named trade-offs"; "open questions reduced from 5 to 2")._
-- **Out of scope** — _explicit non-goals derived from this Frame + the user's topic. Mirrors the \`## Not Doing\` section below at a higher altitude._
-- **Boundaries** — _per-research "ask first" / "never do" constraints layered on top of the iron-laws. Examples: "do not propose changes outside the current monorepo", "stay within the existing auth provider"._
+_(Pasted verbatim from \`research-engineer\` lens's findings block. Sections: Feasibility (overall + 5 sub-axes) / Implementation paths (2-3 candidates with effort + trade-offs) / Blockers (with severity) / Risks during implementation / Rough effort.)_
 
-## Non-functional
+### Feasibility
 
-_(Architect: Frame, optional. Compose the four NFR rows when the research touches a product-grade tier OR carries irreversibility (data migration, public API change, auth / payment surface, performance hot-path, accessibility-sensitive UI). Skip the section entirely when neither trigger fires.)_
+- **Overall:** _<high | medium | low | unknown> — one-line rationale_
+- **Technology fit:** _<high | medium | low | unknown> — one-line rationale_
+- **Skills required:** _<high | medium | low | unknown> — one-line rationale_
+- **Time horizon:** _<small | medium | large | unknown> — one-line rationale_
+- **Reversibility:** _<high | medium | low | unknown> — one-line rationale_
+- **Verification path:** _<one-line description>_
 
-- **performance:** _budgets that bound the eventual implementation (e.g. "any chosen approach must hold p95 < 200ms over 100 RPS")._
-- **compatibility:** _runtime / dependency-version constraints (e.g. "must support Node 20+", "must not require a new database")._
-- **accessibility:** _a11y baseline that bounds the chosen approach for UI research._
-- **security:** _auth / data-classification / compliance baseline; defer threat modelling to a follow-up flow if depth is needed._
+### Implementation paths
 
-## Approaches
+1. _<path-name>_ — _<one-sentence description>_. Effort: _<small | medium | large>_. Pro: _<one bullet>_. Con: _<one bullet>_.
+2. _<path-name>_ — ...
 
-_(Architect: Approaches, mandatory in research mode. 2-3 candidate approaches to the Frame, each with name / what it is / trade-offs / effort / best-when. Drop dead options; do not pad to 3 rows for symmetry.)_
+### Blockers
 
-| Approach | What it is | Trade-offs | Effort | Best when |
-| --- | --- | --- | --- | --- |
-| _name_ | _one sentence_ | _2-4 bullets_ | _small/medium/large_ | _scenario_ |
+- _<blocker-name>_ (severity: _<hard | soft>_) — _<one-sentence description>_.
 
-## Selected Direction
+### Risks (during implementation)
 
-_(Architect: Approaches, mandatory in research mode. One paragraph naming the picked option + rationale, including why the rejected alternatives lost. On research mode this is a RECOMMENDATION, not a commitment — the follow-up \`/cc <task>\` flow that consumes this research can pick a different approach and the research stays valid as the analysis that led to the choice.)_
+- _<risk-name>_ — _<one-sentence description>_.
 
-## Decisions
+### Rough effort
 
-_(Architect: Decisions, optional. For each structural decision the selected approach implies (≥2 defensible options + blast-radius + visible failure modes), append a D-N record. On research mode these are RECOMMENDATIONS — the follow-up task flow's architect can re-derive D-N inline in plan.md, optionally citing the research's D-N as prior art.)_
+_<one-sentence size estimate, ranged not point>_
 
-### Decision D-1: _one-line title_
+## Product lens
 
-- **Choice:** _what we're recommending — one sentence._
-- **Blast-radius:** _files affected, surface touched, rollback cost — 2-4 bullets._
-- **Failure modes:**
-  - _mode 1 — what goes wrong, what the user sees_
-  - _mode 2 — what goes wrong, what the user sees_
-- **Alternatives considered:**
-  - _alt A — why rejected_
-  - _alt B — why rejected_
-- **Refs:** _file:path:line, prior shipped slugs, doc URLs if framework-specific._
+_(Pasted verbatim from \`research-product\` lens's findings block. Sections: User value (overall + 3 sub-axes) / Who benefits (primary + secondary) / Alternatives (always including "do nothing") / Market / domain context / Open product questions.)_
 
-## Pre-mortem
+### User value
 
-_(Architect: Pre-mortem, optional in research mode. 3-7 failure modes ranked by likelihood × impact. For research mode, the failure modes are about the RECOMMENDED approach landing badly in the follow-up implementation: "we picked approach A, three months later it's a regret because <X>".)_
+- **Overall:** _<high | medium | low | unknown> — one-line rationale_
+- **Impact magnitude:** _<high | medium | low | unknown> — one-line rationale_
+- **Audience size:** _<broad | narrow | single | unknown> — one-line rationale_
+- **Urgency:** _<high | medium | low | unknown> — one-line rationale_
 
-- **Failure mode 1 — _name_:** _what happened (1-2 sentences); earliest signal; mitigation._
+### Who benefits
 
-## Not Doing
+- _<actor / role>_ _(primary | secondary)_ — _<one-line description of how they benefit>_.
 
-_(Architect: Compose, mandatory in research mode. 3-5 concrete bullets that bound the research's scope. On research mode this is explicit about what the research will NOT cover — e.g. "Not deciding on the migration timeline — that's a separate \`/cc <task>\` after the architecture pick lands".)_
+### Alternatives considered
 
-- _bullet 1_
-- _bullet 2_
+1. _<alternative name>_ — Pro: _<one bullet>_. Con: _<one bullet>_.
+2. _<alternative name>_ — ...
 
-## Open questions
+_(Always include "do nothing / status quo" as one alternative.)_
 
-_(Compiled across Frame / Approaches / Decisions / Pre-mortem — any unresolved ambiguity, deferred decision, or "user input needed" point. On research mode, leaving open questions is normal — the follow-up task flow's architect may resolve them at Bootstrap or Frame.)_
+### Market / domain context
 
-- _open question 1_
+- _<bullet 1: common pattern or prior art>_.
 
-## Summary — architect (research mode)
+### Open product questions
 
-### Findings
+- _<question 1>_.
 
-- _one bullet per major finding from the research — what we learned that the user did not know going in._
+## Architecture lens
 
-### Recommendations
+_(Pasted verbatim from \`research-architecture\` lens's findings block. Sections: Surface impact / Coupling points / Boundaries affected / Scalability considerations / Reusable patterns.)_
 
-- _one bullet per recommended decision — what we suggest the user / follow-up flow do, and why._
+### Surface impact
 
-### Open questions left for the follow-up flow
+- _<surface-name>_ (direction: _<reads | writes | both>_, severity: _<shallow | moderate | deep>_) — _<one-line description; cite \`path:line\` when grounded in repo>_.
 
-- _one bullet per question that did NOT get resolved here and SHOULD be addressed when the user picks a follow-up \`/cc <task>\`._
+### Coupling points
+
+- _<coupling-description>_ (direction: _<new-dependency | tighter-coupling | looser-coupling>_, risk: _<high | medium | low>_) — _<one-line description>_.
+
+### Boundaries affected
+
+- _<boundary-name>_ (crossing: _<adds-crossing | changes-crossing | removes-crossing>_) — _<one-line implication>_.
+
+### Scalability considerations
+
+- _<bullet 1>_
+
+### Reusable patterns / precedents
+
+- _<pattern-name>_ — already used at \`<path:line>\`. _<one-line description>_.
+
+## History lens
+
+_(Pasted verbatim from \`research-history\` lens's findings block. Sections: Prior attempts / Lessons learned / Outcome signals from .cclaw/knowledge.jsonl / Git-archaeology highlights / Continuity / drift.)_
+
+### Prior attempts
+
+- \`<slug-or-sha>\` (date: _<date>_, outcome: _<shipped | reverted | manual-fix | follow-up-bug | abandoned | unknown>_) — _<one-line description>_. Cite: \`<knowledge.jsonl:line>\` | \`<git-ref>\`.
+
+### Lessons learned
+
+> **From slug \`<prior-slug>\`** (\`shippedAt: <iso>\`): _<verbatim quote from learnings.md:line>_
+
+**Why this applies here:** _<one short bullet>_
+
+### Outcome signals (from .cclaw/knowledge.jsonl)
+
+- \`reverted\`: _<count>_
+- \`manual-fix\`: _<count>_
+- \`follow-up-bug\`: _<count>_
+
+### Git-archaeology highlights
+
+- \`<short-sha>\` (date: _<date>_) — _<subject line>_. Why notable: _<one short bullet>_.
+
+### Continuity / drift
+
+_<1-2 sentences naming the directional arc, OR "No directional drift observed in the history sample.">_
+
+## Skeptic lens
+
+_(Pasted verbatim from \`research-skeptic\` lens's findings block. Sections: Failure modes (likelihood × impact) / Edge cases / Abuse cases / Hidden costs / Don't-proceed triggers.)_
+
+### Failure modes
+
+- _<failure-mode-name>_ (likelihood: _<high | medium | low>_, impact: _<high | medium | low>_) — _<one-line description>_. Earliest signal: _<one short clause>_.
+
+### Edge cases
+
+- _<edge-case-name>_ — _<one-line description; what scenario, what must hold>_.
+
+### Abuse cases
+
+- _<abuse-case-name>_ — _<one-line description; what an adversary tries, what they gain>_.
+
+### Hidden costs
+
+- _<cost-name>_ — _<one-line description; what gets paid post-ship that isn't in the effort estimate>_.
+
+### Don't-proceed triggers (if any)
+
+- _<trigger-name>_ — _<one-line description; what was found, why it should block proceeding>_.
+
+## Synthesis
+
+_(Research orchestrator: Phase 3 cross-lens distillation. 3-7 paragraphs covering:_
+
+- _**Convergence** — where 2+ lenses point the same way (e.g. "engineer + product both flag X as the blocker"; "history + skeptic both surface the schema-migration failure mode")._
+- _**Divergence** — where lenses disagree (e.g. "product says high value; skeptic flags an unmitigated abuse case"; "engineer says small effort; architecture flags deep surface impact")._
+- _**Trade-off space** — the big trade-off(s) the user / follow-up architect must navigate. Frame as concrete choices, not as abstract concerns._
+- _**Confidence and coverage** — note any lens that returned \`Confidence: low\` or was marked \`failed\` in the lenses frontmatter; the synthesis pass should be honest about coverage gaps._
+
+_The synthesis is the orchestrator's own work — NOT a verbatim paste from any lens. The five per-lens sections above carry the lens-authored content; this section is where the orchestrator does the cross-lens reasoning the user came to research for.)_
+
+## Recommended next step
+
+_(Research orchestrator: Phase 3 final recommendation. EXACTLY ONE of the three options below — the user reads this and decides what \`/cc\` invocation to run next.)_
+
+- **plan with \`/cc <task>\`** — _Research converges on a workable direction; risks are tracked but proceedable. Suggest a concrete kebab-case task description the user can type. Example: "plan with \`/cc add-redis-cache-to-search-endpoint\`"._
+- **more research needed (specific area)** — _One or more lenses returned \`Confidence: low\` AND the user gap is concrete. Name the specific area that needs more research. Example: "more research needed (data team needs to confirm the migration window before architecture path can be picked)"._
+- **don't proceed (skeptic blocked: <reason>)** — _The skeptic lens set \`Don't-proceed: yes\` AND no obvious mitigation exists within the topic's scope. Cite the specific trigger. Example: "don't proceed (skeptic blocked: irreversible data migration with no backup strategy in scope)"._
+
+After research finalises, the orchestrator surfaces a plain-prose handoff prompt: "\`research.md\` is ready at \`.cclaw/flows/shipped/<slug>/research.md\`. Recommended next: _<verbatim recommendation>_. To plan, run \`/cc <task>\` and I'll carry the research as \`priorResearch\` context."
 `;
 
 export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
@@ -1367,13 +1489,17 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },
   { id: "manifest", fileName: "manifest.md", description: "Shipped manifest template; lists AC, artifacts, refines link.", body: MANIFEST_TEMPLATE },
-  // by the `architect` specialist in standalone research activation;
-  // finalised to `.cclaw/flows/shipped/<slug>/research.md`. The
+  // Multi-lens research artifact authored by the main-context
+  // research orchestrator (not the architect; the architect no longer
+  // handles research-mode dispatch). Five per-lens sections (Engineer /
+  // Product / Architecture / History / Skeptic) plus a cross-lens
+  // Synthesis section + Recommended next step + Discovery dialogue
+  // summary. Finalised to `.cclaw/flows/shipped/<slug>/research.md`. The
   // frontmatter `mode: research` field is the disambiguator between
   // this artifact and `plan.md` — readers that walk `flows/shipped/`
   // branch on this field to decide which artifact shape the slug
   // shipped.
-  { id: "research", fileName: "research.md", description: "research-mode artifact — standalone `architect` specialist output for `/cc research <topic>` flows. Same section layout as the architect-authored prefix of plan.md (Frame / Spec / NFR / Approaches / Selected Direction / Decisions / Pre-mortem / Not Doing / Open questions / Summary), plus the research-specific frontmatter (mode: research, topic, generated_at). No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`. Ambiguity score still emitted (informational; no mid-plan picker in v8.62).", body: RESEARCH_TEMPLATE }
+  { id: "research", fileName: "research.md", description: "v8.65 multi-lens research-mode artifact — output of the main-context research orchestrator's parallel-lens flow for `/cc research <topic>` invocations. Five per-lens sections (Engineer / Product / Architecture / History / Skeptic) + cross-lens Synthesis + Recommended next step + Discovery dialogue summary, plus research-specific frontmatter (mode: research, topic, generated_at, lenses list). No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`.", body: RESEARCH_TEMPLATE }
 ];
 
 export function templateBody(id: ArtifactTemplate["id"], replacements: Record<string, string> = {}): string {
