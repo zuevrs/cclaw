@@ -30,8 +30,8 @@ function bodyBudget(fileNames: string[]): number {
 }
 
 describe("v8.31 path-aware orchestrator — body-only budget", () => {
-  it("AC-1 — start-command body stays ≤ 79000 chars (v8.59 raised by 1500 chars for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.63 raised by 1000 chars for the slice / AC separation dispatch envelope clarifiers — `## Plan / Slices` + `## Acceptance Criteria (verification)` dual-table contract in the strict plan-stage desc and the per-slice TDD + `verify(AC-N): passing` envelope in the build-stage desc; v8.65 raised by 9000 chars for the multi-lens research orchestrator: 4-phase contract + lens dispatch envelope + lens-output schema + synthesis pass + handoff prompt — the full per-lens contracts live in .cclaw/lib/research-lenses/<lens>.md so the body only carries the orchestrator-side prose)", () => {
-    expect(renderStartCommand().length).toBeLessThanOrEqual(79000);
+  it("AC-1 — start-command body stays ≤ 80000 chars (v8.59 raised by 1500 chars for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.63 raised by 1000 chars for the slice / AC separation dispatch envelope clarifiers — `## Plan / Slices` + `## Acceptance Criteria (verification)` dual-table contract in the strict plan-stage desc and the per-slice TDD + `verify(AC-N): passing` envelope in the build-stage desc; v8.65 raised by 9000 chars for the multi-lens research orchestrator: 4-phase contract + lens dispatch envelope + lens-output schema + synthesis pass + handoff prompt — the full per-lens contracts live in .cclaw/lib/research-lenses/<lens>.md so the body only carries the orchestrator-side prose; v8.66 raised by 1000 chars for parallel-by-default build-stage prose)", () => {
+    expect(renderStartCommand().length).toBeLessThanOrEqual(80000);
   });
 
   it("AC-1 — start-command body stays ≤ 545 lines (v8.59 raised by 10 lines to absorb the Detect-hop extend-mode pointer + the v8.59 prior-context consumption pointer; matches the v8.22 line-budget raise in v822-orchestrator-slim.test.ts)", () => {
@@ -55,22 +55,22 @@ describe("v8.31 path-aware orchestrator — per-path envelopes (v8.54: budgets u
     "critic-steps.md"
   ];
 
-  it("AC-2 — inline path budget = body alone, ≤ 79000 chars (v8.59 raised by 1500 chars; v8.63 raised by 1000 chars for slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; see body-only budget above for rationale)", () => {
-    expect(bodyBudget([])).toBeLessThanOrEqual(79000);
+  it("AC-2 — inline path budget = body alone, ≤ 80000 chars (v8.59 raised by 1500 chars; v8.63 raised by 1000 chars for slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default body bump; see body-only budget above for rationale)", () => {
+    expect(bodyBudget([])).toBeLessThanOrEqual(80000);
   });
 
-  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 132000 chars (v8.59 raised by 2000 chars: ~1500 chars body + ~500 chars extend-mode pointer; v8.63 raised by 1000 chars for slice / AC separation body bump; v8.65 raised by 9000 chars for the multi-lens research orchestrator's body prose riding into every dispatch)", () => {
-    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(132000);
+  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 133000 chars (v8.59 raised by 2000 chars: ~1500 chars body + ~500 chars extend-mode pointer; v8.63 raised by 1000 chars for slice / AC separation body bump; v8.65 raised by 9000 chars for the multi-lens research orchestrator's body prose riding into every dispatch; v8.66 raised by 1000 chars for parallel-by-default body bump)", () => {
+    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(133000);
   });
 
-  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 177000 chars (v8.59 raised by 2000 chars matching the non-inline path bump; v8.63 raised by 1000 chars matching the body bump; v8.65 raised by 9000 chars matching the multi-lens research orchestrator's body bump)", () => {
+  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 178000 chars (v8.59 raised by 2000 chars matching the non-inline path bump; v8.63 raised by 1000 chars matching the body bump; v8.65 raised by 9000 chars matching the multi-lens research orchestrator's body bump; v8.66 raised by 1000 chars matching the parallel-by-default body bump)", () => {
     const largeRisky = [
       ...NON_INLINE_RUNBOOKS,
       "parallel-build.md",
       "cap-reached-recovery.md",
       "adversarial-rerun.md"
     ];
-    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(177000);
+    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(178000);
   });
 
   it("AC-2 — strict ordering: large-risky > non-inline > inline (per-path adds material)", () => {

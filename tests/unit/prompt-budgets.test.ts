@@ -92,8 +92,16 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // ~+90 lines / ~+7k chars over the v8.62 envelope; budget raised to
     // 780 lines / 76000 chars (≈11% headroom over current). Growth justified
     // in CHANGELOG.md (v8.63 — separate slices from AC).
-    maxLines: 780,
-    maxChars: 76000
+    //
+    // v8.64 — parallel-by-default for multi-slice tasks: new "Topological
+    // layer dispatch" section codifies the parent-builder contract +
+    // sub-builder contract (inlined, not split to a new file). Growth lands
+    // ~+85 lines / ~+5k chars over the v8.63 envelope; budget raised to
+    // 870 lines / 82000 chars (≈6% headroom over current 757 lines / 77k
+    // chars). Growth justified in CHANGELOG.md (v8.64 — parallel-by-default
+    // for multi-slice tasks).
+    maxLines: 870,
+    maxChars: 82000
   }
 ];
 
