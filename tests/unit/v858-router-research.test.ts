@@ -365,7 +365,7 @@ describe("v8.58 — design specialist absorbs triage responsibilities (Phase 0/1
     // Phase 0 header explicitly mentions assumption capture
     expect(DESIGN_PROMPT).toMatch(/Phase 0 — Bootstrap[\s\S]+assumption capture/u);
     // Phase 0 body documents the v8.58 ownership move
-    expect(DESIGN_PROMPT).toMatch(/v8\.58 — moved from triage/u);
+    expect(DESIGN_PROMPT).toMatch(/moved from triage/u);
     // Phase 0 generates assumptions when triage.assumptions is empty
     // (the v8.58 default: router doesn't pre-seed)
     expect(DESIGN_PROMPT).toMatch(/3-7 stack \/ convention \/ target-platform assumptions/u);
@@ -377,13 +377,13 @@ describe("v8.58 — design specialist absorbs triage responsibilities (Phase 0/1
   });
 
   it("Phase 1 owns the prior-learnings query via findNearKnowledge (replaces the v8.18 orchestrator-side Hop 2.5 lookup)", () => {
-    expect(DESIGN_PROMPT).toMatch(/v8\.58 prior-learnings query/u);
+    expect(DESIGN_PROMPT).toMatch(/prior-learnings query/u);
     expect(DESIGN_PROMPT).toContain("findNearKnowledge");
   });
 
   it("Phase 2 owns surface detection + qa-stage path rewrite (v8.58 — moved from triage)", () => {
     expect(DESIGN_PROMPT).toMatch(/Surface-detection ownership/u);
-    expect(DESIGN_PROMPT).toMatch(/v8\.58 — moved from triage/u);
+    expect(DESIGN_PROMPT).toMatch(/moved from triage/u);
     expect(DESIGN_PROMPT).toContain("triage.surfaces");
     // qa-stage insertion contract preserved verbatim (only the writer moved)
     expect(DESIGN_PROMPT).toMatch(/insert\s+`"qa"`\s+between\s+`"build"`\s+and\s+`"review"`/u);
@@ -392,7 +392,7 @@ describe("v8.58 — design specialist absorbs triage responsibilities (Phase 0/1
 
 describe("v8.58 — design specialist standalone mode (research mode)", () => {
   it("design.ts defines two activation modes — intra-flow (task) and standalone (research)", () => {
-    expect(DESIGN_PROMPT).toMatch(/Activation modes \(v8\.58\)/u);
+    expect(DESIGN_PROMPT).toMatch(/### Activation modes/u);
     // Intra-flow mode (the historical default)
     expect(DESIGN_PROMPT).toMatch(/Intra-flow \(`triage\.mode == "task"`/u);
     // Standalone research mode
@@ -512,7 +512,7 @@ describe("v8.58 — triage-gate skill (lightweight router contract)", () => {
   const skillBody = triageSkill.body;
 
   it("describes the v8.58 routing contract (5 fields the router decides)", () => {
-    expect(skillBody).toMatch(/v8\.58 routing contract/u);
+    expect(skillBody).toMatch(/routing contract/u);
     expect(skillBody).toMatch(/complexity.+ceremonyMode.+path.+runMode.+mode/u);
   });
 

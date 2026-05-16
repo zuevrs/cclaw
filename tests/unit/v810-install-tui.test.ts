@@ -105,7 +105,7 @@ describe("ui.renderSummary", () => {
     recovery: 5,
     examples: 8,
     hooks: 3,
-    commands: 3
+    commands: 2
   };
 
   it("contains header, harnesses line, and one row per family", () => {

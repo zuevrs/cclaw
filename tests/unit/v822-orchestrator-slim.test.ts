@@ -139,7 +139,7 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
 
   it("AC-3 — body includes the v8.22 trigger table introducing the on-demand runbooks", () => {
     const body = renderStartCommand();
-    expect(body).toMatch(/## On-demand runbooks \(v8\.22\)/);
+    expect(body).toMatch(/## On-demand runbooks/);
     expect(body).toMatch(/\| trigger \| runbook \|/);
   });
 
@@ -228,7 +228,7 @@ describe("v8.22 orchestrator-slim — install layer writes new runbooks", () => 
       path.join(project, RUNBOOKS_DIR, "index.md"),
       "utf8"
     );
-    expect(indexBody).toContain("On-demand runbooks (v8.22)");
+    expect(indexBody).toContain("On-demand runbooks");
     for (const runbook of ON_DEMAND_RUNBOOKS) {
       expect(
         indexBody,

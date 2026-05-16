@@ -1,5 +1,5 @@
 /**
- * v8.42 — `critic` stage inserted between `review` and `ship`. The critic
+ * `critic` stage inserted between `review` and `ship`. The critic
  * runs at Hop 4.5 (after the reviewer returns `clear`/`warn`, before the
  * ship gate begins) and writes `critic.md`. The stage value is gated by
  * `ceremonyMode`: `inline` skips critic entirely; `soft` runs critic in
@@ -18,7 +18,7 @@
  * the canonical run sequence (each stage's `currentStage` mark is
  * legal only after every prior stage's preconditions are met).
  *
- * v8.52 adds `"qa"` between `build` and `review`. It is the only stage
+ * adds `"qa"` between `build` and `review`. It is the only stage
  * the orchestrator dispatches conditionally: only when
  * `triage.surfaces` includes `"ui"` or `"web"` AND `ceremonyMode != "inline"`.
  * Non-UI slugs skip directly from `build` to `review`, preserving the
@@ -35,8 +35,8 @@ export type HarnessId = (typeof HARNESS_IDS)[number];
  * specialist that runs in the MAIN orchestrator context with a multi-turn
  * user-collaborative protocol (Phases 0-7). The discovery sub-phase under
  * `plan` is now `design` -> `ac-author` (was `design` -> `planner` from
- * v8.14 through v8.27; renamed in v8.28 — see {@link LEGACY_PLANNER_ID}).
- * State files written before v8.14 with `lastSpecialist` pointing at the
+ * through v8.27; renamed in v8.28 — see {@link LEGACY_PLANNER_ID}).
+ * State files written before with `lastSpecialist` pointing at the
  * removed ids are migrated to `null` on read so the orchestrator re-runs
  * the design phase from scratch.
  */
@@ -44,7 +44,7 @@ export const DISCOVERY_SPECIALISTS = ["design", "ac-author"] as const;
 export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
 
 /**
- * v8.42 — `critic` joins the specialist roster as an on-demand sub-agent
+ * `critic` joins the specialist roster as an on-demand sub-agent
  * between `security-reviewer` and `slice-builder`. The order in this
  * array matters: it traces the canonical discovery → review → critic →
  * ship dispatch sequence the orchestrator follows. `critic` runs at
@@ -52,7 +52,7 @@ export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
  * {@link FLOW_STAGES} entry `"critic"` is the stage value the
  * orchestrator stamps while the critic dispatch is in flight.
  *
- * v8.51 — `plan-critic` joins the roster between `ac-author` and
+ * `plan-critic` joins the roster between `ac-author` and
  * `slice-builder`. plan-critic is a **pre-implementation** adversarial
  * pass that runs only on the tight gate {ceremonyMode=strict, complexity=
  * large-risky, problemType!=refines, AC count>=2}. It walks the plan
@@ -123,7 +123,7 @@ export type ResearchAgentId = (typeof RESEARCH_AGENT_IDS)[number];
 export type InstallableAgentId = SpecialistId | ResearchAgentId;
 
 /**
- * v8.42 — verdict the critic returns in its slim summary. Drives Hop 4.5
+ * verdict the critic returns in its slim summary. Drives Hop 4.5
  * routing: `pass` → continue to Hop 5 ship; `iterate` → continue to
  * ship with the iterate-severity gaps carried over to `ship.md > Risks
  * carried over`; `block-ship` → orchestrator pauses and surfaces the
@@ -132,7 +132,7 @@ export type InstallableAgentId = SpecialistId | ResearchAgentId;
 export type CriticVerdict = "pass" | "iterate" | "block-ship";
 
 /**
- * v8.42 — escalation level stamped in `critic.md > frontmatter >
+ * escalation level stamped in `critic.md > frontmatter >
  * escalation_level`. `none` = pure gap mode; `light` = one adversarial
  * technique enabled (soft mode with exactly one trigger firing);
  * `full` = all four adversarial techniques plus the §5 devil's-advocate
@@ -141,7 +141,7 @@ export type CriticVerdict = "pass" | "iterate" | "block-ship";
 export type CriticEscalation = "none" | "light" | "full";
 
 /**
- * v8.52 — verdict the qa-runner specialist returns in its slim summary.
+ * verdict the qa-runner specialist returns in its slim summary.
  * Drives the qa stage routing (between `build` and `review` on the tight
  * gate {triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"}):
  *
@@ -162,7 +162,7 @@ export type CriticEscalation = "none" | "light" | "full";
 export type QaVerdict = "pass" | "iterate" | "blocked";
 
 /**
- * v8.52 — evidence tier captured by the qa-runner in `qa.md` frontmatter
+ * evidence tier captured by the qa-runner in `qa.md` frontmatter
  * and mirrored to `flow-state.json > qaEvidenceTier`. Records which
  * verification path the specialist took for the bulk of the UI ACs:
  *
@@ -177,17 +177,17 @@ export type QaVerdict = "pass" | "iterate" | "blocked";
  *   block in qa.md and asks the user to confirm. The verdict is
  *   `blocked` until the user confirms.
  *
- * Drives the reviewer's `qa-evidence` axis (v8.52) cross-check: for any
+ * Drives the reviewer's `qa-evidence` axis cross-check: for any
  * AC with surface in {`ui`, `web`}, the reviewer expects `qa.md` with a
  * matching evidence row.
  */
 export type QaEvidenceTier = "playwright" | "browser-mcp" | "manual";
 
 /**
- * v8.52 — runtime surfaces a task may touch. Populated by the
+ * runtime surfaces a task may touch. Populated by the
  * orchestrator at triage (Hop 2) from the task description and the
  * touched-files signal, stamped under `triage.surfaces`. Drives the
- * v8.52 qa-runner gate (qa-runner dispatches only when `surfaces`
+ * qa-runner gate (qa-runner dispatches only when `surfaces`
  * includes `"ui"` or `"web"` AND `ceremonyMode != "inline"`).
  *
  * Multiple values per slug are expected — a /cc that builds an HTTP
@@ -234,7 +234,7 @@ export const SURFACES = [
 export type Surface = (typeof SURFACES)[number];
 
 /**
- * v8.51 — verdict the pre-implementation plan-critic returns in its
+ * verdict the pre-implementation plan-critic returns in its
  * slim summary. Drives the plan-critic step routing (between
  * `ac-author` and `slice-builder` on the tight gate {ceremonyMode=strict,
  * complexity=large-risky, problemType!=refines, AC count>=2}):
@@ -267,7 +267,7 @@ export type TddPhase = "red" | "green" | "refactor";
 /**
  * @deprecated v8.40+ — legacy v8.36-v8.39 record shape populated by the
  * (now-retired) commit-helper hook. The phase SHA was recorded under
- * `AcceptanceCriterionState.phases[phase]`; v8.40 dropped the mechanical
+ * `AcceptanceCriterionState.phases[phase]`; dropped the mechanical
  * gate and the AC↔SHA chain is no longer written. The interface stays so
  * old `flow-state.json` files (with `phases` data) still validate on
  * read; readers MUST treat the field as advisory only and prefer
@@ -280,7 +280,7 @@ export interface TddPhaseRecord {
 }
 
 /**
- * v8.36 — per-criterion `posture` annotation (everyinc-compound pattern).
+ * per-criterion `posture` annotation (everyinc-compound pattern).
  *
  * The ac-author stamps one of these six values on every AC stanza in
  * `plan.md` frontmatter. Slice-builder reads `posture` and selects the
@@ -290,7 +290,7 @@ export interface TddPhaseRecord {
  * strict TDD-integrity check because tests ARE the deliverable, not a
  * precondition for production code).
  *
- * The order is the canonical heuristic order from the v8.36 spec:
+ * The order is the canonical heuristic order from the spec:
  *   - test-first (default) is first so legacy plans pick it up;
  *   - characterization-first sits next because it is the closest
  *     cousin (still RED-first, just on existing rather than new code);
@@ -310,7 +310,7 @@ export type Posture = (typeof POSTURES)[number];
 /**
  * Default posture for AC frontmatter that omits the field.
  *
- * Backward compatibility: plans authored before v8.36 do not carry a
+ * Backward compatibility: plans authored before do not carry a
  * posture field; the slice-builder treats absence as `test-first` so
  * the original RED → GREEN → REFACTOR ceremony continues to apply
  * unchanged.
@@ -332,7 +332,7 @@ export interface AcceptanceCriterionState {
    */
   phases?: Partial<Record<TddPhase, TddPhaseRecord>>;
   /**
-   * v8.36 — per-criterion posture annotation. Absent means
+   * per-criterion posture annotation. Absent means
    * {@link DEFAULT_POSTURE} ("test-first"). Validators reject unknown
    * string values.
    */
@@ -345,7 +345,7 @@ export const ROUTING_CLASSES = ["trivial", "small-medium", "large-risky"] as con
 export type RoutingClass = (typeof ROUTING_CLASSES)[number];
 
 /**
- * v8.58 — flow mode dimension on `TriageDecision`. Distinguishes a normal
+ * flow mode dimension on `TriageDecision`. Distinguishes a normal
  * `/cc <task>` flow ("task" mode, the historical default and the only
  * mode pre-v8.58) from a `/cc research <topic>` flow ("research" mode, a
  * new pre-task brainstormer entry point that invokes the `design`
@@ -355,7 +355,7 @@ export type RoutingClass = (typeof ROUTING_CLASSES)[number];
  *   something. Triage routes through the full pipeline
  *   (plan → build → qa? → review → critic → ship). All existing
  *   specialists fire under their existing gates.
- * - `research` (v8.58 new) — the user wants to brainstorm/research
+ * - `research` (new) — the user wants to brainstorm/research
  *   BEFORE committing to a task. Triage is skipped (the orchestrator's
  *   Hop 1 Detect forks on the `research ` prefix or `--research` flag);
  *   only the `design` specialist runs, in its standalone-mode variant
@@ -374,7 +374,7 @@ export type ResearchMode = (typeof RESEARCH_MODES)[number];
 
 /**
  * Plan-traceability and TDD ceremony modes (v8.2+; reviewer-enforced
- * since v8.40; renamed `acMode` → `ceremonyMode` in v8.56 to align with
+ * since v8.40; renamed `acMode` → `ceremonyMode` in to align with
  * how reference projects treat AC as one element of a plan rather than
  * the organizing concept around which the entire flow is named).
  *
@@ -416,7 +416,7 @@ export type AcMode = CeremonyMode;
  *
  * - `step` (default): pause after every stage. The orchestrator renders the
  *   slim summary and waits for the user to type "continue". The original
- *   v8.2 behaviour, recommended for `strict` and unfamiliar work.
+ *   behaviour, recommended for `strict` and unfamiliar work.
  * - `auto`: render the slim summary and immediately dispatch the next stage
  *   without asking. Stops only on hard gates (block findings, security flag,
  *   ship). Recommended for `inline` / `soft` work the user has already
@@ -431,13 +431,13 @@ export type RunMode = (typeof RUN_MODES)[number];
  * Decision recorded at the triage gate that opens every new flow.
  * Persisted in flow-state.json so resumes never re-trigger triage.
  *
- * v8.56 — `acMode` renamed to `ceremonyMode` to align cclaw's vocabulary
+ * `acMode` renamed to `ceremonyMode` to align cclaw's vocabulary
  * with how reference projects treat AC as one element of a plan rather
  * than the organizing concept around which the entire flow is named.
  * Pre-v8.56 state files with `triage.acMode` are hoisted to
  * `triage.ceremonyMode` on read; see `flow-state.ts > rewriteLegacyAcMode`.
  *
- * v8.58 — triage shrinks to a **lightweight router**. New writes carry
+ * triage shrinks to a **lightweight router**. New writes carry
  * only the canonical routing fields (complexity / ceremonyMode / path /
  * runMode / mode); the classification fields (surfaces / assumptions /
  * priorLearnings / interpretationForks / criticOverride / notes) are
@@ -448,7 +448,7 @@ export type RunMode = (typeof RUN_MODES)[number];
  * strict path; ac-author Phase 0/1 on the soft path; inline gets
  * neither. The legacy fields stay on the type for one release; slated
  * for removal in v8.59+ once one full release cycle has aged out any
- * in-flight state files. The v8.52 qa-gate continues to read
+ * in-flight state files. The qa-gate continues to read
  * `triage.surfaces` literally; the WRITER moved (from triage step to
  * design Phase 2 / ac-author Phase 1), the field itself remains the
  * source of truth for the qa-runner dispatch decision.
@@ -460,7 +460,7 @@ export interface TriageDecision {
    * commit), `soft` (one TDD cycle per feature, plain commits), or
    * `strict` (per-criterion RED → GREEN → REFACTOR with posture-driven
    * commit prefixes the reviewer verifies ex-post). Selected at triage;
-   * immutable for the flow's lifetime. v8.56 rename of `acMode`; legacy
+   * immutable for the flow's lifetime. rename of `acMode`; legacy
    * field is hoisted on read for one release.
    */
   ceremonyMode: CeremonyMode;
@@ -477,7 +477,7 @@ export interface TriageDecision {
    * `.cclaw/state/triage-audit.jsonl` (see `src/triage-audit.ts >
    * appendTriageAudit`). New orchestrator prompts emit a per-decision
    * audit line instead of stuffing the bit into the routing state. The
-   * field stays in the schema as optional so v8.0-v8.43 state files
+   * field stays in the schema as optional so v8.0-state files
    * still validate on read; new flows should leave it absent and let
    * the audit log carry the signal. Slated for removal once no
    * supported flow-state.json schema version writes it.
@@ -487,7 +487,7 @@ export interface TriageDecision {
    * Step-by-step (default) or autopilot. Persisted across resumes so the
    * user only picks once per flow.
    *
-   * Optional in TypeScript so v8.2 state files (which lack `runMode`) still
+   * Optional in TypeScript so state files (which lack `runMode`) still
    * validate; readers MUST default to `step` on absent (non-inline paths).
    *
    * On v8.14+ flows that take the inline / trivial path, `runMode` is
@@ -499,7 +499,7 @@ export interface TriageDecision {
   /**
    * v8.58 — flow mode dimension. `"task"` (default; pre-v8.58 behaviour;
    * full pipeline through plan → build → qa? → review → critic → ship)
-   * or `"research"` (v8.58 new; standalone design specialist only,
+   * or `"research"` (new; standalone design specialist only,
    * outputs `research.md`, no plan handoff). Pre-v8.58 state files
    * lack this field; readers MUST default to `"task"` on absent.
    * Selected by the orchestrator's Hop 1 Detect step based on the
@@ -531,7 +531,7 @@ export interface TriageDecision {
    * to `triage.assumptions`. Kept on the type as optional + deprecated
    * so pre-v8.58 state files continue to validate; readers (specialists,
    * resume paths) still consume the field when it is present (back-compat
-   * with a v8.56 flow paused mid-design). Slated for removal in v8.59+
+   * with a flow paused mid-design). Slated for removal in v8.59+
    * once one full release cycle has aged out in-flight state files.
    */
   assumptions?: string[] | null;
@@ -552,12 +552,12 @@ export interface TriageDecision {
    *
    * @deprecated v8.58 — the orchestrator no longer writes this field.
    * v8.14+ already lean on design Phase 1 for ambiguity surfacing;
-   * v8.58 formalises the removal of the orchestrator-side writer.
+   * formalises the removal of the orchestrator-side writer.
    * Kept on the type as optional + deprecated for one release.
    */
   interpretationForks?: string[] | null;
   /**
-   * `true` only on the v8.14 zero-question fast path: trivial complexity
+   * `true` only on the zero-question fast path: trivial complexity
    * with high confidence, where the orchestrator skipped the structured
    * triage ask entirely and went straight to the inline edit. The
    * one-sentence announce-and-execute path leaves an explicit audit trail
@@ -574,11 +574,11 @@ export interface TriageDecision {
    * signal now lives in the audit log entry's `autoExecuted` column;
    * downstream readers do not branch on this field, so leaving it
    * absent on new flows is safe. Field kept in schema for backward
-   * compat with v8.14-v8.43 state files.
+   * compat with v8.14-state files.
    */
   autoExecuted?: boolean | null;
   /**
-   * v8.18 — prior shipped slugs whose tag/surface profile matched the
+   * prior shipped slugs whose tag/surface profile matched the
    * current task at triage time. Populated by the orchestrator between
    * Hop 2 (triage persistence) and Hop 2.5 (pre-flight) via
    * `findNearKnowledge(triage.taskSummary, …)`. Read by `design`,
@@ -606,11 +606,11 @@ export interface TriageDecision {
    * pre-v8.58 state files (which may carry the field) continue to
    * validate. Specialists that read this field still consume it
    * verbatim when present (back-compat resume path); when absent on
-   * new v8.58 flows the specialists rely on their own lookup paths.
+   * new flows the specialists rely on their own lookup paths.
    */
   priorLearnings?: unknown[] | null;
   /**
-   * v8.20 — `true` when the user picked `keep-iterating-anyway` at the
+   * `true` when the user picked `keep-iterating-anyway` at the
    * 5-iteration review cap, which reset `reviewCounter` to 3 and bought
    * two more review rounds. Telemetry stamp so a future "why did this
    * flow take 7 review iterations?" audit can answer without re-reading
@@ -618,7 +618,7 @@ export interface TriageDecision {
    *
    * Optional, defaults to absent / `false`. Set exactly once per flow at
    * the moment the override picker fires; never cleared by ship.
-   * Backward compat: v8.19 state files without the field validate
+   * Backward compat: state files without the field validate
    * unchanged.
    *
    * @deprecated v8.44 — write-only audit telemetry relocated to
@@ -626,13 +626,13 @@ export interface TriageDecision {
    * appendTriageAudit`). The "did the user buy two extra review
    * rounds?" signal now lives in the audit log entry's
    * `iterationOverride` column. Field kept in schema for backward
-   * compat with v8.20-v8.43 state files; new orchestrator prompts
+   * compat with v8.20-state files; new orchestrator prompts
    * append an audit line at the moment the override picker fires
    * instead of writing here.
    */
   iterationOverride?: boolean | null;
   /**
-   * v8.23 — set when Hop 1 (Detect) auto-downgraded `ceremonyMode` because the
+   * set when Hop 1 (Detect) auto-downgraded `ceremonyMode` because the
    * project lacks a usable VCS. Today the only value is `"no-git"`, which
    * means the orchestrator detected the absence of `.git/` at projectRoot
    * and forced `ceremonyMode` from `strict` to `soft` (strict requires per-criterion
@@ -653,7 +653,7 @@ export interface TriageDecision {
    */
   downgradeReason?: string | null;
   /**
-   * v8.43 — set by the orchestrator when the user picks
+   * set by the orchestrator when the user picks
    * `[2] accept-and-ship` at the Hop 4.5 block-ship picker (see
    * `.cclaw/lib/runbooks/critic-stage.md > Verdict handling`). The
    * critic returned `block-ship` and the user chose to ship anyway. The
@@ -675,18 +675,18 @@ export interface TriageDecision {
    * surface (`.cclaw/state/triage-audit.jsonl`) so the triage object
    * stays a pure routing decision. The orchestrator no longer writes
    * this field; the audit-log entry captures the override signal
-   * instead (mirroring the v8.44 relocation of `userOverrode` /
+   * instead (mirroring the relocation of `userOverrode` /
    * `autoExecuted` / `iterationOverride`). Kept on the type as
    * optional + deprecated for one release.
    */
   criticOverride?: boolean;
   /**
-   * v8.43 — free-text per-decision notes attached to the triage. The
+   * free-text per-decision notes attached to the triage. The
    * critic uses this to record skip rationale (e.g. the
    * `docs-only-trivial` exemption skip reason cited in
    * `.cclaw/lib/agents/critic.md > Skip conditions`). Originally
-   * referenced in prose as `triageNotes` in the v8.42 critic prompt;
-   * v8.43 lifts it into the canonical `triage.notes` slot on the
+   * referenced in prose as `triageNotes` in the critic prompt;
+   * lifts it into the canonical `triage.notes` slot on the
    * `TriageDecision` so the field has a declared home and a typed
    * validator entry.
    *
@@ -698,14 +698,14 @@ export interface TriageDecision {
    * @deprecated v8.58 — the orchestrator's lightweight router no
    * longer writes narrative notes at triage. Critic skip rationale
    * continues to land in `.cclaw/state/triage-audit.jsonl` via the
-   * v8.44 audit-log surface; specialists capture narrative context
+   * audit-log surface; specialists capture narrative context
    * in their own artifacts (`plan.md`, `research.md`). Kept on the
    * type as optional + deprecated for one release; readers (resume
    * paths, critic) still consume the field verbatim when present.
    */
   notes?: string;
   /**
-   * v8.52 — surfaces this slug touches. Drives the v8.52 qa-runner
+   * surfaces this slug touches. Drives the qa-runner
    * gate: qa dispatches only when `surfaces` includes `"ui"` or
    * `"web"` AND `ceremonyMode != "inline"`. See {@link Surface} for
    * the vocabulary.
@@ -715,7 +715,7 @@ export interface TriageDecision {
    * emits the union of detected surfaces, not a single primary
    * classification.
    *
-   * v8.58 — the **writer** of this field moved from the triage step
+   * the **writer** of this field moved from the triage step
    * (orchestrator Hop 2, pre-v8.58) to the specialist that already
    * has the codebase context to decide:
    *   - **strict path**: design Phase 2 (Frame) writes the surfaces
@@ -725,7 +725,7 @@ export interface TriageDecision {
    *     list before authoring the `## Spec` section of `plan.md`.
    *   - **inline path**: not written; downstream readers fall back to
    *     a permissive default (no surface-specific routing fires).
-   * The field itself is NOT deprecated — the v8.52 qa-runner gate
+   * The field itself is NOT deprecated — the qa-runner gate
    * reads it literally and `surfaces` remains the canonical signal
    * for visual-review opt-in. Only the WRITER moved.
    *

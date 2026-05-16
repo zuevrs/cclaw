@@ -1,5 +1,5 @@
 /**
- * v8.50 - detection helpers for the three outcome capture paths.
+ * detection helpers for the three outcome capture paths.
  *
  * The PURE detection helpers in the top of this file take serialised
  * inputs (git-log strings, task-description strings, shipped-slug
@@ -35,12 +35,12 @@ export interface RevertCandidate {
 }
 
 /**
- * v8.50 - parse `git log --grep="^revert" --oneline -N` output into
+ * parse `git log --grep="^revert" --oneline -N` output into
  * a list of {@link RevertCandidate}.
  *
  * Accepted shapes (one commit per line):
  *
- * - `<sha> Revert "feat(v8.42): critic stage"` - conventional shape.
+ * - `<sha> Revert "feat: critic stage"` - conventional shape.
  * - `<sha> revert: fix a bad merge` - lowercase `revert:` prefix.
  * - `<sha> Reverts "fix the auth bug from v8.42"` - `Reverts` is
  *   accepted (gerund used by some git frontends).
@@ -72,7 +72,7 @@ export function parseRevertCommits(gitLog: string): RevertCandidate[] {
 }
 
 /**
- * v8.50 - a revert-to-slug match for {@link findRevertedSlugs}. The
+ * a revert-to-slug match for {@link findRevertedSlugs}. The
  * `source` field is the pre-formatted `outcome_signal_source` string
  * ready to pass to `setOutcomeSignal`.
  */
@@ -84,7 +84,7 @@ export interface RevertedSlugMatch {
 }
 
 /**
- * v8.50 - match each {@link RevertCandidate} against the supplied
+ * match each {@link RevertCandidate} against the supplied
  * list of shipped slugs. Match heuristic: word-boundary slug token
  * inside `revertedSubject` (or raw `subject` when the quoted form is
  * absent). False-positive rate is low because cclaw slugs follow the
@@ -112,7 +112,7 @@ export function findRevertedSlugs(
 }
 
 /**
- * v8.50 - does `haystack` reference `slug` as a slug-cased token?
+ * does `haystack` reference `slug` as a slug-cased token?
  *
  * Word-boundary match on the verbatim slug, case-sensitive. Slug-
  * cased tokens (`20260514-foo`, `auth-bypass`) do not appear in
@@ -127,7 +127,7 @@ export function isSlugReference(haystack: string, slug: string): boolean {
 }
 
 /**
- * v8.50 - bug-keyword heuristic for {@link findFollowUpBugSlugs}.
+ * bug-keyword heuristic for {@link findFollowUpBugSlugs}.
  *
  * The capture path stamps `follow-up-bug` ONLY when the task
  * description mentions a shipped slug AND the surrounding prose
@@ -159,7 +159,7 @@ function mentionsBugKeyword(text: string): boolean {
 }
 
 /**
- * v8.50 - a follow-up-bug match for {@link findFollowUpBugSlugs}.
+ * a follow-up-bug match for {@link findFollowUpBugSlugs}.
  *
  * `targetSlug` is the slug whose `outcome_signal` should be set to
  * `"follow-up-bug"` (i.e. the slug being REFERENCED, not the new
@@ -172,7 +172,7 @@ export interface FollowUpBugMatch {
 }
 
 /**
- * v8.50 - detect follow-up-bug references in a task description.
+ * detect follow-up-bug references in a task description.
  *
  * Fires when BOTH conditions hold:
  *
@@ -220,7 +220,7 @@ export interface CommitCandidate {
 }
 
 /**
- * v8.50 - parse a `git log --oneline` (or
+ * parse a `git log --oneline` (or
  * `--pretty=format:"%H %s"`) output into {@link CommitCandidate} list.
  */
 export function parseCommitLog(gitLog: string): CommitCandidate[] {
@@ -242,7 +242,7 @@ export function parseCommitLog(gitLog: string): CommitCandidate[] {
 }
 
 /**
- * v8.50 - does a commit subject look like a hot-fix / post-ship fix?
+ * does a commit subject look like a hot-fix / post-ship fix?
  *
  * Accepted shapes:
  *
@@ -265,7 +265,7 @@ export function looksLikeFixCommit(subject: string): boolean {
 }
 
 /**
- * v8.50 - a manual-fix match for {@link findManualFixCandidates}.
+ * a manual-fix match for {@link findManualFixCandidates}.
  */
 export interface ManualFixMatch {
   sha: string;
@@ -276,7 +276,7 @@ export interface ManualFixMatch {
 }
 
 /**
- * v8.50 - detect post-ship manual-fix commits on the slug's
+ * detect post-ship manual-fix commits on the slug's
  * `touchSurface`.
  *
  * Fires when a commit in the trailing window:
@@ -331,7 +331,7 @@ function findMatchingSurface(
 }
 
 /**
- * v8.50 - apply follow-up-bug outcome signals at a fresh slug start.
+ * apply follow-up-bug outcome signals at a fresh slug start.
  *
  * The orchestrator calls this from Hop 1 (Detect, fresh start) with
  * the user's task description. The helper:

@@ -55,7 +55,7 @@ export const LIB_ROOT = `${RUNTIME_ROOT}/lib`;
 
 export const FLOW_STATE_REL_PATH = `${STATE_REL_PATH}/flow-state.json`;
 /**
- * v8.44 — append-only audit log for write-only triage telemetry.
+ * append-only audit log for write-only triage telemetry.
  *
  * One JSONL line per triage decision capturing fields that used to be
  * stuffed into `flow-state.json > triage` (userOverrode, autoExecuted,
@@ -70,7 +70,6 @@ export const FLOW_STATE_REL_PATH = `${STATE_REL_PATH}/flow-state.json`;
  */
 export const TRIAGE_AUDIT_REL_PATH = `${STATE_REL_PATH}/triage-audit.jsonl`;
 export const KNOWLEDGE_LOG_REL_PATH = `${RUNTIME_ROOT}/knowledge.jsonl`;
-export const IDEAS_REL_PATH = `${RUNTIME_ROOT}/ideas.md`;
 
 export const SHIPPED_DIR_REL_PATH = `${FLOWS_ROOT}/shipped`;
 export const CANCELLED_DIR_REL_PATH = `${FLOWS_ROOT}/cancelled`;

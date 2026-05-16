@@ -1,5 +1,26 @@
 # Changelog
 
+## 8.60.0 — Cleanup slug (command retirement + annotation scrub)
+
+### Removed commands
+
+- **`/cclaw-review`** and **`/cclaw-critic`** — utility escape valves around the full `/cc` flow; use cases proved too niche to maintain. Specialist contracts remain for in-flow review and critic steps only.
+- **`/cc-idea`** — backlog primitive overlapped with `/cc research` in user mental model. Retired `src/content/idea-command.ts`, `src/content/utility-commands.ts`, harness command files, and `.cclaw/lib/templates/ideas.md` seed.
+
+### Install / upgrade
+
+- `RETIRED_COMMAND_FILES` (`cc-idea.md`, `cclaw-review.md`, `cclaw-critic.md`) swept from every enabled harness's commands directory on `cclaw install` / sync.
+- Orphan command cleanup keeps only `cc.md` + `cc-cancel.md` per harness.
+- `RETIRED_TEMPLATE_FILES` removes `ideas.md` from `.cclaw/lib/templates/` on upgrade.
+
+### Version annotations
+
+- Inline `// v8.X — …`, prompt-body `> **v8.X — …**`, and parenthetical `(v8.Y; …)` attributions scrubbed from `src/`. Functional mentions kept (`@deprecated`, `pre-v8.X`, migration gates, runtime deprecation messages). **CHANGELOG remains the single source of release history.**
+
+### README
+
+- New **When to use which command** table: `/cc <task>`, `/cc research <topic>`, `/cc extend <slug> <task>`, `/cc-cancel` (4 commands total, was 7).
+
 ## 8.59.0 — Continuation flow (`/cc extend <slug>`)
 
 ### Why

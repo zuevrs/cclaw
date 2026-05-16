@@ -59,7 +59,7 @@ function isResearchMode(value: unknown): value is ResearchMode {
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
 
-/** v8.0–v8.1 schema. Auto-migrated to v3 on read. */
+/** v8.0–schema. Auto-migrated to v3 on read. */
 export const LEGACY_V8_FLOW_STATE_SCHEMA_VERSION = 2;
 
 export interface FlowStateV82 {
@@ -78,7 +78,7 @@ export interface FlowStateV82 {
   securityFlag: boolean;
   buildProfile?: BuildProfile;
   /**
-   * v8.20 — cap-tracker that may be reset by the user. Increments on
+   * cap-tracker that may be reset by the user. Increments on
    * every reviewer dispatch in parallel with {@link reviewIterations}.
    * When it reaches 5 the orchestrator does not dispatch another
    * reviewer until the user picks an option from the review-cap picker
@@ -87,22 +87,22 @@ export interface FlowStateV82 {
    * more rounds — and stamps `triage.iterationOverride: true` so the
    * extension is auditable.
    *
-   * Optional in TypeScript so v8.19 state files (which lack the field)
-   * still validate; readers MUST default to `0` on absent. v8.19 flows
-   * resumed on v8.20 start at 0 even if `reviewIterations` already
+   * Optional in TypeScript so state files (which lack the field)
+   * still validate; readers MUST default to `0` on absent. flows
+   * resumed on start at 0 even if `reviewIterations` already
    * reflects prior dispatches — the cap is a fresh budget on resume,
    * which is the intentionally permissive fallback.
    */
   reviewCounter?: number;
   /**
-   * v8.42 — counts critic dispatches for the active flow.
+   * counts critic dispatches for the active flow.
    *
    * Hard-capped at 2 (initial dispatch + at-most-one rerun when the user
    * picks `fix and re-review` at the block-ship picker). A third dispatch
    * is structurally not supported and triggers the critic-cap-reached
    * picker, mirroring the v8.20 5-iteration cap for reviewer.
    *
-   * Optional in TypeScript so v8.41 state files (which lack the field)
+   * Optional in TypeScript so state files (which lack the field)
    * still validate; readers MUST default to `0` on absent. Distinct from
    * {@link reviewIterations} — critic dispatches do not increment the
    * reviewer counter, by design (see `.cclaw/flows/v842-critic-design/
@@ -110,7 +110,7 @@ export interface FlowStateV82 {
    */
   criticIteration?: number;
   /**
-   * v8.42 — verdict returned by the most-recent critic dispatch.
+   * verdict returned by the most-recent critic dispatch.
    *
    * `pass`/`iterate` allow the orchestrator to advance to Hop 5 (ship);
    * `block-ship` pauses for the user's block-ship picker. Absence means
@@ -120,13 +120,13 @@ export interface FlowStateV82 {
    */
   criticVerdict?: CriticVerdict;
   /**
-   * v8.42 — open-gap count (severity != `fyi`) from the most-recent
+   * open-gap count (severity != `fyi`) from the most-recent
    * critic dispatch. Surfaced in `ship.md > Risks carried over` for
    * `iterate` verdicts; otherwise advisory.
    */
   criticGapsCount?: number;
   /**
-   * v8.42 — escalation level from the most-recent critic dispatch.
+   * escalation level from the most-recent critic dispatch.
    *
    * `none` = pure gap mode; `light` = one §8 trigger fired in soft mode;
    * `full` = `adversarial` mode (strict mode + any §8 trigger). The
@@ -134,7 +134,7 @@ export interface FlowStateV82 {
    */
   criticEscalation?: CriticEscalation;
   /**
-   * v8.51 — verdict returned by the most-recent plan-critic dispatch.
+   * verdict returned by the most-recent plan-critic dispatch.
    *
    * `pass` — plan was approved; advance to slice-builder.
    * `revise` — bounce to ac-author for one revise loop (max).
@@ -149,7 +149,7 @@ export interface FlowStateV82 {
    */
   planCriticVerdict?: PlanCriticVerdict | null;
   /**
-   * v8.51 — counts plan-critic dispatches for the active flow.
+   * counts plan-critic dispatches for the active flow.
    *
    * Hard-capped at 1: initial dispatch (=0 before fire / =1 after the
    * first return), at-most-one rerun on a `revise` verdict (=1 after
@@ -165,7 +165,7 @@ export interface FlowStateV82 {
    */
   planCriticIteration?: number;
   /**
-   * v8.51 — ISO timestamp of the most-recent plan-critic dispatch.
+   * ISO timestamp of the most-recent plan-critic dispatch.
    *
    * Stamped by the orchestrator immediately after the slim summary
    * returns (alongside `planCriticVerdict` / `planCriticIteration`).
@@ -177,7 +177,7 @@ export interface FlowStateV82 {
    */
   planCriticDispatchedAt?: string;
   /**
-   * v8.52 — verdict returned by the most-recent qa-runner dispatch.
+   * verdict returned by the most-recent qa-runner dispatch.
    *
    * `pass` — every UI AC has evidence (Playwright / browser-MCP /
    *   manual-confirmed); advance to review.
@@ -197,7 +197,7 @@ export interface FlowStateV82 {
    */
   qaVerdict?: QaVerdict | null;
   /**
-   * v8.52 — counts qa-runner dispatches for the active flow.
+   * counts qa-runner dispatches for the active flow.
    *
    * Hard-capped at 1: initial dispatch (=0 before fire / =1 after the
    * first return) and at-most-one rerun on an `iterate` verdict (=1
@@ -212,7 +212,7 @@ export interface FlowStateV82 {
    */
   qaIteration?: number;
   /**
-   * v8.52 — ISO timestamp of the most-recent qa-runner dispatch.
+   * ISO timestamp of the most-recent qa-runner dispatch.
    *
    * Stamped by the orchestrator immediately after the slim summary
    * returns (alongside {@link qaVerdict} / {@link qaIteration} /
@@ -225,7 +225,7 @@ export interface FlowStateV82 {
    */
   qaDispatchedAt?: string;
   /**
-   * v8.52 — evidence tier the qa-runner declared in its slim summary,
+   * evidence tier the qa-runner declared in its slim summary,
    * mirrored from `qa.md` frontmatter. Drives the reviewer's
    * `qa-evidence` axis: `playwright` is the strongest tier (CI-runnable
    * test), `browser-mcp` is reviewable but session-bound, `manual` is
@@ -243,7 +243,7 @@ export interface FlowStateV82 {
    */
   triage: TriageDecision | null;
   /**
-   * v8.58 — pointer to a prior `/cc research <topic>` flow whose
+   * pointer to a prior `/cc research <topic>` flow whose
    * `research.md` should be loaded as context by the active task
    * flow's triage / design / ac-author. Written by the orchestrator
    * at Hop 0 (Detect) when the user accepts the optional "ready to
@@ -273,7 +273,7 @@ export interface FlowStateV82 {
     path: string;
   } | null;
   /**
-   * v8.59 — pointer to a prior **shipped** slug whose plan/build/learnings
+   * pointer to a prior **shipped** slug whose plan/build/learnings
    * (and optional review/critic/qa) should be loaded as context by the
    * active task flow's design / ac-author / reviewer / critic. Stamped
    * by the orchestrator at Hop 0 (Detect) when the user invokes
@@ -305,7 +305,7 @@ export interface FlowStateV82 {
    * Optional in TypeScript: pre-v8.59 state files lack the field and
    * MUST validate unchanged; readers default to `null`/absent meaning
    * "no parent linked, this is a cold-start /cc flow". Distinct from
-   * {@link priorResearch} (the v8.58 research→task handoff): the two
+   * {@link priorResearch} (the research→task handoff): the two
    * fields are orthogonal and can coexist on a single flow (a `/cc
    * extend <slug>` flow that also happens to follow a `/cc research`
    * ship picks up BOTH context sources).
@@ -316,7 +316,7 @@ export interface FlowStateV82 {
 }
 
 /**
- * v8.59 — orchestrator-level pointer to a parent shipped slug, set when
+ * orchestrator-level pointer to a parent shipped slug, set when
  * the user invokes `/cc extend <slug> <task>`. See
  * {@link FlowStateV82.parentContext} for the full semantics.
  *
@@ -332,7 +332,7 @@ export interface ParentContext {
 }
 
 /**
- * v8.59 — pre-derived absolute paths to a parent's shipped artifacts.
+ * pre-derived absolute paths to a parent's shipped artifacts.
  * `plan` is mandatory (its presence was the validation gate); every
  * other field is optional because the parent may have shipped with a
  * shorter path (e.g. inline mode has no `review.md`).
@@ -396,7 +396,7 @@ export function isDiscoverySpecialist(value: unknown): value is "design" | "ac-a
 }
 
 /**
- * v8.14 retired `brainstormer` and `architect`. Recognise the legacy ids so
+ * retired `brainstormer` and `architect`. Recognise the legacy ids so
  * migration paths can rewrite them to `null` (forcing a re-run of the
  * `design` phase) instead of crashing on read.
  */
@@ -405,10 +405,10 @@ export function isLegacyDiscoverySpecialist(value: unknown): value is "brainstor
 }
 
 /**
- * v8.28 renamed the `planner` specialist to `ac-author`. Recognise the
- * legacy id on read so a `flow-state.json` written by v8.14–v8.27 cclaw
+ * renamed the `planner` specialist to `ac-author`. Recognise the
+ * legacy id on read so a `flow-state.json` written by v8.14–cclaw
  * with `lastSpecialist: "planner"` is auto-rewritten to `"ac-author"`
- * inside {@link rewriteLegacyPlanner}, mirroring the v8.14 discovery-
+ * inside {@link rewriteLegacyPlanner}, mirroring the discovery-
  * specialist migration shape (`rewriteLegacyDiscoverySpecialist`). The
  * planner contract was a one-shot dispatcher with no per-phase
  * checkpointing — the rename preserves semantics, so the right migration
@@ -526,7 +526,6 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   if (triage.runMode !== undefined && triage.runMode !== null && !isRunMode(triage.runMode)) {
     throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
   }
-  // v8.58 — `triage.mode` is the optional "task" | "research" flag the
   // orchestrator stamps at Hop 1 (Detect) to record which entry point
   // started the flow. Pre-v8.58 state files lack the field; readers
   // default to `"task"` (the historical single-mode behaviour).
@@ -625,7 +624,7 @@ export function assumptionsOf(triage: TriageDecision | null | undefined): readon
 /**
  * Read a triage decision's runMode with the documented default.
  *
- * v8.2 state files do not record runMode; treat them as `step` so existing
+ * state files do not record runMode; treat them as `step` so existing
  * flows keep their pause-between-stages behaviour byte-for-byte.
  */
 export function runModeOf(triage: TriageDecision | null | undefined): RunMode {
@@ -741,7 +740,6 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     throw new Error(`Invalid buildProfile: ${String(state.buildProfile)}`);
   }
   assertTriageOrNull(state.triage);
-  // v8.58 — `priorResearch` is optional and accepts `null` as the
   // explicit-cleared sentinel. When present-and-non-null it must be a
   // plain object with three string fields. Pre-v8.58 state files lack
   // the field entirely; readers default to `null`/absent.
@@ -760,10 +758,9 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
       throw new Error("flow-state.priorResearch.path must be a non-empty string");
     }
   }
-  // v8.59 — `parentContext` is optional and accepts `null` as the
   // explicit-cleared sentinel. When present-and-non-null it must be a
   // plain object whose `slug` is a non-empty string, `status` is
-  // exactly `"shipped"` (v8.59 only valid value; widened in v8.60+),
+  // exactly `"shipped"` (only valid value; widened in v8.60+),
   // and `artifactPaths.plan` is a non-empty string (presence of
   // plan.md was the validation gate at `/cc extend`). Optional
   // sibling artifact paths (build/review/critic/learnings/qa) must be
@@ -784,7 +781,7 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     }
     if (pc.status !== "shipped") {
       throw new Error(
-        `flow-state.parentContext.status must be "shipped" (v8.59 only valid value); got ${JSON.stringify(pc.status)}`
+        `flow-state.parentContext.status must be "shipped" (only valid value); got ${JSON.stringify(pc.status)}`
       );
     }
     if (pc.shippedAt !== undefined && typeof pc.shippedAt !== "string") {
@@ -837,7 +834,7 @@ export function migrateFlowState(value: unknown): FlowStateV82 {
     return migrated;
   }
   throw new LegacyFlowStateError(
-    `Unsupported flow-state schema. cclaw v8.2 only migrates from schemaVersion 2 (v8.0/v8.1). Saw ${String(raw.schemaVersion)}. Delete .cclaw/state/flow-state.json to start fresh.`,
+    `Unsupported flow-state schema. cclaw only migrates from schemaVersion 2 (v8.0/v8.1). Saw ${String(raw.schemaVersion)}. Delete .cclaw/state/flow-state.json to start fresh.`,
     raw.schemaVersion
   );
 }
@@ -850,7 +847,7 @@ export function migrateFlowState(value: unknown): FlowStateV82 {
  * design / architect -> design here because either case usually means
  * the discovery phase needs to be redone end-to-end (the existing plan.md
  * has the old brainstormer/architect output split across two files and the
- * v8.14 design phase expects inline sections in plan.md only).
+ * design phase expects inline sections in plan.md only).
  */
 function rewriteLegacyDiscoverySpecialist(
   raw: Record<string, unknown>
@@ -863,10 +860,10 @@ function rewriteLegacyDiscoverySpecialist(
 
 /**
  * v8.28: rewrite `lastSpecialist: "planner"` to `"ac-author"` so a
- * `flow-state.json` written by v8.14–v8.27 cclaw resumes cleanly under
+ * `flow-state.json` written by v8.14–cclaw resumes cleanly under
  * the renamed specialist id. Unlike `rewriteLegacyDiscoverySpecialist`
- * (which resets to `null` because the v8.14 discovery split / merge
- * meant the previous artifacts could not be reused), the v8.28 rename
+ * (which resets to `null` because the discovery split / merge
+ * meant the previous artifacts could not be reused), the rename
  * is **semantics-preserving** — the planner / ac-author contract is the
  * same, only the id changed — so the rewrite is a direct mapping.
  *
@@ -903,7 +900,7 @@ function rewriteLegacyPlanner(
  *
  * When BOTH `acMode` and `ceremonyMode` are present (mid-flight resume of
  * a project that already migrated), `ceremonyMode` wins and the legacy
- * `acMode` is dropped silently. This matches the v8.28 planner rewrite
+ * `acMode` is dropped silently. This matches the planner rewrite
  * shape; cclaw never relies on conflicting fields surviving.
  *
  * Slated for removal in v8.57+ once one full release cycle has aged out

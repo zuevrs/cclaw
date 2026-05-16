@@ -19,10 +19,9 @@ export async function ensureRunSystem(projectRoot: string): Promise<void> {
   if (!(await exists(statePath))) {
     await writeFlowState(projectRoot, createInitialFlowState());
   }
-  // v8.44 — touch the write-only triage audit log so the file exists
   // on a fresh install (the orchestrator's `fs.appendFile` call would
   // create it lazily, but the smoke test asserts the file is present
-  // after init for the v8.44 audit-log surface).
+  // after init for the audit-log surface).
   const auditPath = path.join(projectRoot, TRIAGE_AUDIT_REL_PATH);
   if (!(await exists(auditPath))) {
     await writeFileSafe(auditPath, "");

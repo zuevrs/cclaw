@@ -12,9 +12,8 @@ export interface ArtifactTemplate {
     | "decisions"
     | "learnings"
     | "manifest"
-    | "ideas"
     /**
-     * v8.58 — `research.md` template for standalone research-mode
+     * `research.md` template for standalone research-mode
      * flows (`/cc research <topic>`). Written by the `design`
      * specialist when activated in standalone mode; same section
      * layout as the design portion of `plan.md` but with a
@@ -50,7 +49,7 @@ ac:
     posture: test-first
 last_specialist: null
 refines: null
-# v8.59 — parent_slug mirrors the orchestrator-level pointer set when the
+# parent_slug mirrors the orchestrator-level pointer set when the
 # flow was initialised via /cc extend <slug> <task>. The orchestrator's
 # Detect hop seeds this field at slug-init when flowState.parentContext is
 # set; ac-author Phase 1.7 (when run) confirms the value. Distinct from
@@ -58,7 +57,7 @@ refines: null
 # (also written by the v8.59 extend init for back-compat with the
 # knowledge-store chain + qa-runner skip / plan-critic skip / design
 # ambiguity-score brownfield gates), while parent_slug is the
-# v8.59-native pointer that downstream tooling can rely on without
+# native pointer that downstream tooling can rely on without
 # ambiguity. The two values are kept in sync at extend init; if they
 # drift (e.g. user manual edit), parent_slug is authoritative.
 parent_slug: null
@@ -67,7 +66,7 @@ ship_commit: null
 review_iterations: 0
 security_flag: false
 feasibility_stamp: null  # green | yellow | red — set by ac-author before AC lock-in (T1-2)
-# v8.53 — design Phase 6 ambiguity score. Composite (0.0-1.0) across 3 dimensions
+# design Phase 6 ambiguity score. Composite (0.0-1.0) across 3 dimensions
 # (greenfield: goal / constraints / success) or 4 dimensions (brownfield: + context).
 # Soft signal at Phase 7 picker; never a hard gate. Absent on pre-v8.53 plans.
 ambiguity_score: null
@@ -81,7 +80,7 @@ ambiguity_threshold: null
 
 ## Extends
 
-_(v8.59 — present only when this flow was initialised via \`/cc extend <slug> <task>\`. ac-author Phase 1.7 authors this section verbatim from \`flowState.parentContext\`. Drop the entire section on cold-start \`/cc <task>\` flows. Format:_
+_(present only when this flow was initialised via \`/cc extend <slug> <task>\`. ac-author Phase 1.7 authors this section verbatim from \`flowState.parentContext\`. Drop the entire section on cold-start \`/cc <task>\` flows. Format:_
 
 _\`refines: <parent-slug>\` (shipped \`<parent.shippedAt>\` if known). Parent decision summary: one-line synthesis of the highest-blast-radius D-N from the parent's plan.md, or "see parent's plan for context" when no decisions were recorded._
 
@@ -94,7 +93,7 @@ _- [critic](../shipped/<parent-slug>/critic.md) — when present_
 _- [qa](../shipped/<parent-slug>/qa.md) — when present_
 _- [learnings](../shipped/<parent-slug>/learnings.md) — when present_
 
-_The relative paths use \`../shipped/<parent-slug>/\` to walk from the active \`flows/<new-slug>/\` directory to the parent's shipped directory. The reviewer's parent-contradictions cross-check (v8.59) reads this section to validate the new flow does not silently undo a parent decision.)_
+_The relative paths use \`../shipped/<parent-slug>/\` to walk from the active \`flows/<new-slug>/\` directory to the parent's shipped directory. The reviewer's parent-contradictions cross-check reads this section to validate the new flow does not silently undo a parent decision.)_
 
 ## Frame
 
@@ -152,7 +151,7 @@ _(AC author authors this. AC-aligned, not horizontal-layer. Each unit ships an e
 
 ## Spec
 
-_(v8.46 — mandatory on every plan.md (strict and soft). Four bullets capture the requirement-side contract that AC alone do not carry: intent + scope + non-goals + per-slug constraints. On small-medium plans the ac-author fills this section; on large-risky plans design Phase 2 (Frame) fills it alongside the NFR rows. Each bullet MUST be filled — write "none" or "n/a" when genuinely nothing applies; \`<TBD>\` or empty values are not acceptable. Existing legacy plans without this section continue to work; the section appears only on plans authored on v8.46+.)_
+_(mandatory on every plan.md (strict and soft). Four bullets capture the requirement-side contract that AC alone do not carry: intent + scope + non-goals + per-slug constraints. On small-medium plans the ac-author fills this section; on large-risky plans design Phase 2 (Frame) fills it alongside the NFR rows. Each bullet MUST be filled — write "none" or "n/a" when genuinely nothing applies; \`<TBD>\` or empty values are not acceptable. Existing legacy plans without this section continue to work; the section appears only on plans authored on v8.46+.)_
 
 - **Objective**: _what we are building and why, in one short line._
 - **Success**: _how we know it is done — high-level indicators (e.g. "users can rename a task without losing comments"), NOT the AC bullets below._
@@ -174,7 +173,7 @@ The AC block is the source of truth. Every strict-mode commit produced inside th
 - \`dependsOn\` is a list of AC ids that must be \`status: committed\` before this AC enters slice-builder. Use \`none\` (or empty) when the AC has no predecessors. The reviewer cross-checks the dependency graph against the AC commit order — out-of-order commits are a \`required\` finding.
 - \`touchSurface\` is the list of repo-relative paths the AC is allowed to modify.
 - \`rollback\` is the explicit revert / disable / migration-rollback strategy if this AC ships and breaks in production. Required in strict mode; one short sentence per AC. "Same as AC-N" is acceptable for siblings that share the same rollback path. \`none\` is **not** acceptable — every AC has a rollback story, even if it is "revert the single commit".
-- \`posture\` (v8.36) is one of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The slice-builder reads this field to select the commit ceremony (which posture-driven prefix sequence to write); the reviewer's \`src/posture-validation.ts:POSTURE_COMMIT_PREFIXES\` mapping is the canonical source for which prefixes are expected per posture, and \`src/posture-validation.ts:validatePostureTouchSurface\` cross-checks the \`docs-only\` and \`tests-as-deliverable\` postures against the touchSurface. See \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle).
+- \`posture\` is one of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The slice-builder reads this field to select the commit ceremony (which posture-driven prefix sequence to write); the reviewer's \`src/posture-validation.ts:POSTURE_COMMIT_PREFIXES\` mapping is the canonical source for which prefixes are expected per posture, and \`src/posture-validation.ts:validatePostureTouchSurface\` cross-checks the \`docs-only\` and \`tests-as-deliverable\` postures against the touchSurface. See \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle).
 
 Each AC must point at a real \`file:line\` or destination path.
 
@@ -217,7 +216,7 @@ status: active
 ceremony_mode: soft
 last_specialist: null
 refines: null
-# v8.59 — see PLAN_TEMPLATE above for parent_slug semantics. Same field,
+# see PLAN_TEMPLATE above for parent_slug semantics. Same field,
 # same authority rules (extend init seeds; ac-author Phase 1.7 confirms;
 # parent_slug wins on drift).
 parent_slug: null
@@ -233,7 +232,7 @@ security_flag: false
 
 ## Extends
 
-_(v8.59 — present only when this flow was initialised via \`/cc extend <slug> <task>\`. ac-author Phase 1.7 authors this section verbatim from \`flowState.parentContext\` on soft flows. Drop the entire section on cold-start \`/cc <task>\` flows. Format is identical to the strict PLAN_TEMPLATE — \`refines: <parent-slug>\` line + parent decision summary + bulleted artifact links. See PLAN_TEMPLATE comment for the exact shape.)_
+_(present only when this flow was initialised via \`/cc extend <slug> <task>\`. ac-author Phase 1.7 authors this section verbatim from \`flowState.parentContext\` on soft flows. Drop the entire section on cold-start \`/cc <task>\` flows. Format is identical to the strict PLAN_TEMPLATE — \`refines: <parent-slug>\` line + parent decision summary + bulleted artifact links. See PLAN_TEMPLATE comment for the exact shape.)_
 
 ## Plan
 
@@ -241,7 +240,7 @@ _(AC author authors this. One short paragraph describing the change end-to-end. 
 
 ## Spec
 
-_(v8.46 — mandatory. Four bullets capturing the requirement-side contract. Each bullet MUST be filled — "none" or "n/a" are acceptable when genuinely nothing applies; \`<TBD>\` and empty values are not. The ac-author authors this on small-medium (soft) plans.)_
+_(mandatory. Four bullets capturing the requirement-side contract. Each bullet MUST be filled — "none" or "n/a" are acceptable when genuinely nothing applies; \`<TBD>\` and empty values are not. The ac-author authors this on small-medium (soft) plans.)_
 
 - **Objective**: _what we are building and why, in one short line._
 - **Success**: _how we know it is done — high-level indicators, NOT the testable conditions below._
@@ -300,7 +299,7 @@ For every AC, append one row with **all six columns filled** before the AC is co
 
 | AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
 | --- | --- | --- | --- | --- | --- |
-| AC-1 | _file:path:line refs from discovery_ | _failing test name + 1-3 line failure excerpt_ | _full-suite command + PASS summary_ | _shape change applied, or "Refactor: skipped — <reason>" (v8.49 default; no empty commit needed)_ | _red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped")_ |
+| AC-1 | _file:path:line refs from discovery_ | _failing test name + 1-3 line failure excerpt_ | _full-suite command + PASS summary_ | _shape change applied, or "Refactor: skipped — <reason>" (default; no empty commit needed)_ | _red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped")_ |
 
 ## Watched-RED proofs
 
@@ -319,7 +318,7 @@ _AC-1: npm test src/lib/__       47 passed, 0 failed (in 1.8s)_
 
 ## REFACTOR notes
 
-_(Per AC: one-line shape change applied, or explicit "Refactor: skipped — <reason>" (v8.49 default — no empty commit needed; the reviewer reads this row), or legacy "skipped: <reason>" empty-commit marker. Silence is not acceptable; the gate forces the question.)_
+_(Per AC: one-line shape change applied, or explicit "Refactor: skipped — <reason>" (default — no empty commit needed; the reviewer reads this row), or legacy "skipped: <reason>" empty-commit marker. Silence is not acceptable; the gate forces the question.)_
 
 - AC-1: extracted \`hasViewEmail\` helper from inline check.
 - AC-2: Refactor: skipped — 8-line addition, idiomatic; nothing to extract.
@@ -348,7 +347,7 @@ _(Append one fix-iteration block per review iteration that returned \`block\`. S
 
 - \`git commit -m "red(AC-1): …"\` → _SHA_ (test files only)
 - \`git commit -m "green(AC-1): …"\` → _SHA_ (production diff)
-- \`git commit -m "refactor(AC-1): …"\` → _SHA_ (real refactor) **OR** omit the refactor commit entirely and declare \`Refactor: skipped — <reason>\` in the AC's REFACTOR notes column above (v8.49 default). The legacy \`git commit --allow-empty -m "refactor(AC-1) skipped: <reason>"\` empty-marker is still accepted for backwards compat on already-shipped slugs.
+- \`git commit -m "refactor(AC-1): …"\` → _SHA_ (real refactor) **OR** omit the refactor commit entirely and declare \`Refactor: skipped — <reason>\` in the AC's REFACTOR notes column above (default). The legacy \`git commit --allow-empty -m "refactor(AC-1) skipped: <reason>"\` empty-marker is still accepted for backwards compat on already-shipped slugs.
 
 ## Notes
 
@@ -380,7 +379,7 @@ _(One paragraph mirroring \`flows/SLUG-PLACEHOLDER/plan.md\` Plan section.)_
 - **RED**: _\`<runner command>\` → N failing (expected). Cite the assertion that fails (≤3 lines)._
 - **GREEN**: _One sentence on the minimal change. \`<full-suite command>\` → all passing._
 - **Coverage**: _Verdict \`full\` / \`partial\` / \`refactor-only\` + which branches are anchored by which test file:line. \`partial\` is valid (name the uncovered branch + reason); absent line is not._
-- **REFACTOR**: _One-line shape change applied, or "Refactor: skipped — <reason>" (v8.49 default; no empty commit needed). Legacy "skipped: <reason>" empty-marker commit is still accepted._
+- **REFACTOR**: _One-line shape change applied, or "Refactor: skipped — <reason>" (default; no empty commit needed). Legacy "skipped: <reason>" empty-marker commit is still accepted._
 - **Commit**: _\`<one-line message>\` (\`<SHA>\`)._
 - **Follow-ups**: _\`info\` items deferred to a separate slug, or "none"._
 
@@ -407,7 +406,7 @@ zero_block_streak: 0
 
 # Review — SLUG-PLACEHOLDER
 
-This is the review log. \`reviewer\` (and \`security-reviewer\`, when relevant) append findings here. The loop is producer ↔ critic: iteration N proposes findings, \`slice-builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-discipline skill (v8.16 merge of review-loop + security-review)).
+This is the review log. \`reviewer\` (and \`security-reviewer\`, when relevant) append findings here. The loop is producer ↔ critic: iteration N proposes findings, \`slice-builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-discipline skill (merge of review-loop + security-review)).
 
 ## Run summary
 
@@ -548,7 +547,7 @@ _(Skipped in gap mode unless escalation fires. Emitted in full in adversarial mo
 
 ## 4. Criterion check (are the verifiable plan criteria the right criteria, not are they met?)
 
-_(Goal-backward, per criterion. Re-read the user's original prompt and verify each verifiable plan criterion actually solves the user-stated problem. v8.56 scope: every row in the AC table, every entry in \`## Edge cases\`, and every measurable row in \`## Non-functional\`.)_
+_(Goal-backward, per criterion. Re-read the user's original prompt and verify each verifiable plan criterion actually solves the user-stated problem. scope: every row in the AC table, every entry in \`## Edge cases\`, and every measurable row in \`## Non-functional\`.)_
 
 | Criterion | Source | User asked for | Criterion promises | Aligned? | Drift note (if any) |
 | --- | --- | --- | --- | --- | --- |
@@ -627,7 +626,7 @@ token_budget_used: 0                          # orchestrator stamps this from th
 
 # Plan critic — SLUG-PLACEHOLDER
 
-This artifact captures the pre-implementation plan-critic pass over the slug. plan-critic runs BETWEEN \`ac-author\` and \`slice-builder\`, only on the tight gate \`{ceremonyMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}\`. It walks the plan itself (goal coverage / granularity / dependencies / parallelism / risk catalog) before any code is written. Distinct from the v8.42 post-implementation \`critic\` (which runs at Hop 4.5, after build/review); both ship together because they catch different problem classes.
+This artifact captures the pre-implementation plan-critic pass over the slug. plan-critic runs BETWEEN \`ac-author\` and \`slice-builder\`, only on the tight gate \`{ceremonyMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}\`. It walks the plan itself (goal coverage / granularity / dependencies / parallelism / risk catalog) before any code is written. Distinct from the post-implementation \`critic\` (which runs at Hop 4.5, after build/review); both ship together because they catch different problem classes.
 
 plan-critic is read-only on the codebase. Every finding cites \`plan.md > §section\` or the user's \`/cc <task>\` prompt verbatim. The plan-critic is structurally cheaper than the post-impl critic — there is no build.md or review.md to read.
 
@@ -1183,7 +1182,7 @@ This slug is referenced from \`.cclaw/knowledge.jsonl\` whenever the compound qu
 `;
 
 /**
- * v8.58 — `research.md` template for standalone research-mode flows
+ * `research.md` template for standalone research-mode flows
  * (`/cc research <topic>` / `/cc --research <topic>`). The artifact is
  * written by the `design` specialist when activated in standalone mode
  * (`triage.mode == "research"`); same section layout as the design
@@ -1210,7 +1209,7 @@ last_specialist: null
 refines: null
 shipped_at: null
 ship_commit: null
-# v8.53 — design Phase 6 ambiguity score also applies to research-mode
+# design Phase 6 ambiguity score also applies to research-mode
 # composition. Same composite (0.0-1.0) across 3 dimensions (greenfield)
 # or 4 dimensions (brownfield); soft signal at Phase 7 picker; never a
 # hard gate.
@@ -1321,35 +1320,26 @@ _(Compiled across Phases 1 / 3 / 4 / 5 — any unresolved ambiguity, deferred de
 - _one bullet per question that did NOT get resolved here and SHOULD be addressed when the user picks a follow-up \`/cc <task>\`._
 `;
 
-const IDEAS_TEMPLATE = `# .cclaw/ideas.md
-
-This file is a free-form idea backlog. Entries are appended by \`/cc-idea\` and never auto-promoted to plans. To act on an idea, invoke \`/cc <task>\` describing it.
-
-Each entry begins with an ISO timestamp, then a single-line summary, then the body.
-`;
-
 export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "plan", fileName: "plan.md", description: "Strict-mode plan template (AC table, parallelSafe, touchSurface, traceability block).", body: PLAN_TEMPLATE },
   { id: "plan-soft", fileName: "plan-soft.md", description: "Soft-mode plan template (bullet-list testable conditions, no AC IDs).", body: PLAN_TEMPLATE_SOFT },
   { id: "build", fileName: "build.md", description: "Strict-mode build log (six-column TDD table, RED proofs, GREEN suite evidence).", body: BUILD_TEMPLATE },
   { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
-  { id: "critic", fileName: "critic.md", description: "v8.42 critic template — critic step falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ceremony_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), Criterion check, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
-  { id: "plan-critic", fileName: "plan-critic.md", description: "v8.51 plan-critic template — pre-implementation adversarial pass between ac-author and slice-builder. Frontmatter (slug, stage=plan-critic, posture_inherited, ceremony_mode, ac_count, dispatched_at, iteration, predictions_made, findings, verdict). Body: goal coverage, granularity, dependency accuracy, parallelism feasibility, risk catalog, pre-commitment predictions, verdict (pass | revise | cancel), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed revise loop. Verdict: pass (advance to slice-builder), revise (bounce to ac-author once), cancel (user picker).", body: PLAN_CRITIC_TEMPLATE },
-  { id: "qa", fileName: "qa.md", description: "v8.52 qa-runner template — behavioural-QA pass for UI surfaces between build and review. Frontmatter (slug, stage=qa, specialist=qa-runner, dispatched_at, iteration, surfaces, evidence_tier, ui_acs_total/pass/fail/pending, predictions_made, findings, verdict). Body: surfaces under QA, browser tool detection, §3 pre-commitment predictions (3-5), per-criterion evidence (one block per UI-tagged AC with Status pass/fail/pending-user), findings (failures only), verdict (pass | iterate | blocked), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed iterate loop. Verdict: pass (advance to review), iterate (bounce to slice-builder once), blocked (user picker — browser tools unavailable AND manual steps required).", body: QA_TEMPLATE },
+  { id: "critic", fileName: "critic.md", description: "critic template — critic step falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ceremony_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), Criterion check, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
+  { id: "plan-critic", fileName: "plan-critic.md", description: "plan-critic template — pre-implementation adversarial pass between ac-author and slice-builder. Frontmatter (slug, stage=plan-critic, posture_inherited, ceremony_mode, ac_count, dispatched_at, iteration, predictions_made, findings, verdict). Body: goal coverage, granularity, dependency accuracy, parallelism feasibility, risk catalog, pre-commitment predictions, verdict (pass | revise | cancel), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed revise loop. Verdict: pass (advance to slice-builder), revise (bounce to ac-author once), cancel (user picker).", body: PLAN_CRITIC_TEMPLATE },
+  { id: "qa", fileName: "qa.md", description: "qa-runner template — behavioural-QA pass for UI surfaces between build and review. Frontmatter (slug, stage=qa, specialist=qa-runner, dispatched_at, iteration, surfaces, evidence_tier, ui_acs_total/pass/fail/pending, predictions_made, findings, verdict). Body: surfaces under QA, browser tool detection, §3 pre-commitment predictions (3-5), per-criterion evidence (one block per UI-tagged AC with Status pass/fail/pending-user), findings (failures only), verdict (pass | iterate | blocked), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed iterate loop. Verdict: pass (advance to review), iterate (bounce to slice-builder once), blocked (user picker — browser tools unavailable AND manual steps required).", body: QA_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). v8.14+ inlines D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },
   { id: "manifest", fileName: "manifest.md", description: "Shipped manifest template; lists AC, artifacts, refines link.", body: MANIFEST_TEMPLATE },
-  { id: "ideas", fileName: "ideas.md", description: "Append-only idea backlog seed.", body: IDEAS_TEMPLATE },
-  // v8.58 — `research.md` for standalone research-mode flows. Written
   // by the `design` specialist in standalone activation; finalized to
   // `.cclaw/flows/shipped/<slug>/research.md` on Phase 7 `accept
   // research`. The frontmatter `mode: research` field is the
   // disambiguator between this artifact and `plan.md` — readers that
   // walk `flows/shipped/` branch on this field to decide which
   // artifact shape the slug shipped.
-  { id: "research", fileName: "research.md", description: "v8.58 research-mode artifact — standalone `design` specialist output for `/cc research <topic>` flows. Same section layout as the design portion of plan.md (Frame / Spec / NFR / Approaches / Selected Direction / Decisions / Pre-mortem / Not Doing / Open questions / Summary), plus the research-specific frontmatter (mode: research, topic, generated_at). No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`. Phase 6 ambiguity score still emitted (soft signal at Phase 7 picker).", body: RESEARCH_TEMPLATE }
+  { id: "research", fileName: "research.md", description: "research-mode artifact — standalone `design` specialist output for `/cc research <topic>` flows. Same section layout as the design portion of plan.md (Frame / Spec / NFR / Approaches / Selected Direction / Decisions / Pre-mortem / Not Doing / Open questions / Summary), plus the research-specific frontmatter (mode: research, topic, generated_at). No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`. Phase 6 ambiguity score still emitted (soft signal at Phase 7 picker).", body: RESEARCH_TEMPLATE }
 ];
 
 export function templateBody(id: ArtifactTemplate["id"], replacements: Record<string, string> = {}): string {
@@ -1367,14 +1357,14 @@ export function planTemplateForSlug(slug: string): string {
 }
 
 /**
- * v8.58 — render the standalone research-mode artifact for a fresh
+ * render the standalone research-mode artifact for a fresh
  * `/cc research <topic>` flow. The orchestrator calls this immediately
  * after stamping the sentinel triage block (`triage.mode == "research"`)
  * and before dispatching design in standalone mode; the templated file
  * lands at `.cclaw/flows/<slug>/research.md` for design Phase 0 to
  * pick up. The placeholders match the template body verbatim:
  *
- * - `SLUG-PLACEHOLDER` — the v8.58 research-mode slug (always
+ * - `SLUG-PLACEHOLDER` — the research-mode slug (always
  *   `YYYYMMDD-research-<semantic-kebab>` per the Detect step's
  *   research-mode fork; the `-research-` infix is mandatory).
  * - `TOPIC-PLACEHOLDER` — the topic line, i.e. the user's
@@ -1405,7 +1395,7 @@ export function manifestTemplate(slug: string, shipCommit: string, shippedAt: st
 }
 
 /**
- * v8.59 — render the `## Extends` section that ac-author Phase 1.7
+ * render the `## Extends` section that ac-author Phase 1.7
  * writes at the top of plan.md when `flowState.parentContext` is set.
  * The function takes the structured `ParentContext` (the orchestrator
  * stamped it into flow-state at extend init) and an optional

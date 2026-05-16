@@ -52,14 +52,14 @@ export interface AutoTriggerSkill {
 /**
  * Load a per-skill markdown body from disk at module-import time.
  *
- * v8.15 split the 24 inline template literals out of this file into
- * `src/content/skills/<id>.md`. v8.16 merged 13 of those source files
+ * split the 24 inline template literals out of this file into
+ * `src/content/skills/<id>.md`. merged 13 of those source files
  * into 6 thematic groups (ac-discipline, commit-hygiene,
  * tdd-and-verification, api-evolution, review-discipline,
  * debug-and-browser), leaving 17 skill bodies on disk. v8.27-v8.33
  * added five frontier-aesthetic skills (code-simplification,
  * context-engineering, performance-optimization, frontend-ui-engineering,
- * ci-cd-and-automation); v8.44 retired all five — none of the specialist
+ * ci-cd-and-automation); retired all five — none of the specialist
  * prompts referenced them, so the on-disk count is back to 17. Each
  * `.md` is the single editable source of truth; this loader pulls them
  * back in so `AUTO_TRIGGER_SKILLS[i].body` keeps the same string
@@ -131,7 +131,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "ac-discipline",
     fileName: "ac-discipline.md",
-    description: "v8.16 merge of ac-quality + ac-traceability (revised for v8.40 — hook removed). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the posture-driven commit-prefix contract (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies ex-post via git log --grep. AC-quality always-on for AC authoring; AC-traceability active only when ceremony_mode=strict, no chain enforced in soft / inline modes.",
+    description: "merge of ac-quality + ac-traceability (revised — hook removed). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the posture-driven commit-prefix contract (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies ex-post via git log --grep. AC-quality always-on for AC authoring; AC-traceability active only when ceremony_mode=strict, no chain enforced in soft / inline modes.",
     triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:ac-author", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ceremony_mode:strict"],
     stages: ["plan", "build", "review"],
     body: readSkill("ac-discipline.md")
@@ -155,7 +155,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "review-discipline",
     fileName: "review-discipline.md",
-    description: "v8.16 merge of review-loop + security-review. Wraps every reviewer / security-reviewer invocation with the shared Findings table, Five-axis pass, Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
+    description: "merge of review-loop + security-review. Wraps every reviewer / security-reviewer invocation with the shared Findings table, Five-axis pass, Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
     triggers: ["specialist:reviewer", "specialist:security-reviewer", "security-flag:true", "diff:auth|secrets|supply-chain|pii"],
     stages: ["review"],
     body: readSkill("review-discipline.md")
@@ -163,7 +163,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "tdd-and-verification",
     fileName: "tdd-and-verification.md",
-    description: "v8.16 merge of tdd-cycle + verification-loop + refactor-safety. Always-on whenever stage=build. Granularity scales with ceremony_mode (inline = optional, soft = one cycle per feature, strict = full RED → GREEN → REFACTOR per criterion). The verification gate (build → typecheck → lint → test → security → diff) wraps every handoff; refactor-safety governs behaviour-preserving slugs and the REFACTOR step.",
+    description: "merge of tdd-cycle + verification-loop + refactor-safety. Always-on whenever stage=build. Granularity scales with ceremony_mode (inline = optional, soft = one cycle per feature, strict = full RED → GREEN → REFACTOR per criterion). The verification gate (build → typecheck → lint → test → security → diff) wraps every handoff; refactor-safety governs behaviour-preserving slugs and the REFACTOR step.",
     triggers: [
       "stage:build",
       "specialist:slice-builder",
@@ -179,7 +179,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "commit-hygiene",
     fileName: "commit-hygiene.md",
-    description: "v8.16 merge of commit-message-quality + surgical-edit-hygiene (revised for v8.40 — hook removed). Enforces commit-message conventions AND the always-on rules for slice-builder commits: posture-driven subject-line prefix in strict mode (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):); no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
+    description: "merge of commit-message-quality + surgical-edit-hygiene (revised — hook removed). Enforces commit-message conventions AND the always-on rules for slice-builder commits: posture-driven subject-line prefix in strict mode (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):); no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
     triggers: ["always-on", "specialist:slice-builder", "before:git-commit"],
     stages: ["build", "ship"],
     body: readSkill("commit-hygiene.md")
@@ -243,7 +243,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "debug-and-browser",
     fileName: "debug-and-browser.md",
-    description: "v8.16 merge of debug-loop + browser-verification. Two diagnostic loops on a running system, sharing the 'hypothesis before probe' protocol. debug-loop: 3-5 ranked hypotheses, ten-rung loop ladder cheapest first, tagged debug logs, multi-run protocol, 'no seam' is itself a finding. browser-verification: DevTools-driven five-check pass (console hygiene / network / a11y / layout / perf) with browser content treated as untrusted data.",
+    description: "merge of debug-loop + browser-verification. Two diagnostic loops on a running system, sharing the 'hypothesis before probe' protocol. debug-loop: 3-5 ranked hypotheses, ten-rung loop ladder cheapest first, tagged debug logs, multi-run protocol, 'no seam' is itself a finding. browser-verification: DevTools-driven five-check pass (console hygiene / network / a11y / layout / perf) with browser content treated as untrusted data.",
     triggers: [
       "stop-the-line",
       "specialist:slice-builder:fix-only",
@@ -261,7 +261,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "qa-and-browser",
     fileName: "qa-and-browser.md",
-    description: "v8.52 — acceptance-discipline sibling of debug-and-browser. Drives the qa-runner specialist's per-UI-AC verification on the v8.52 qa stage. Browser tool hierarchy (Playwright > browser-MCP > manual), one-evidence-per-UI-AC rubric, 3-5 pre-commitment predictions before verification, manual-step fallback when no browser tools available. Verdict semantics: pass / iterate (max 1) / blocked (browser tools unavailable AND manual user step required). Reviewer cross-checks the artifact via the v8.52 qa-evidence axis.",
+    description: "acceptance-discipline sibling of debug-and-browser. Drives the qa-runner specialist's per-UI-AC verification on the qa stage. Browser tool hierarchy (Playwright > browser-MCP > manual), one-evidence-per-UI-AC rubric, 3-5 pre-commitment predictions before verification, manual-step fallback when no browser tools available. Verdict semantics: pass / iterate (max 1) / blocked (browser tools unavailable AND manual user step required). Reviewer cross-checks the artifact via the qa-evidence axis.",
     triggers: [
       "stage:qa",
       "specialist:qa-runner",
@@ -280,7 +280,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "api-evolution",
     fileName: "api-evolution.md",
-    description: "v8.16 merge of api-and-interface-design + breaking-changes. Design phase's checklist (Phase 4) for public interfaces (Hyrum's Law: pin shape / order / silence / timing; one-version rule; untrusted third-party validation; two-adapter rule; consistent error model) AND the breaking-change discipline that manages an existing interface's deprecation (Churn Rule, Strangler Pattern, Zombie Code lifecycle, coexistence rules, CHANGELOG template).",
+    description: "merge of api-and-interface-design + breaking-changes. Design phase's checklist (Phase 4) for public interfaces (Hyrum's Law: pin shape / order / silence / timing; one-version rule; untrusted third-party validation; two-adapter rule; consistent error model) AND the breaking-change discipline that manages an existing interface's deprecation (Churn Rule, Strangler Pattern, Zombie Code lifecycle, coexistence rules, CHANGELOG template).",
     triggers: [
       "specialist:design",
       "decision:public-interface",
@@ -297,7 +297,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "completion-discipline",
     fileName: "completion-discipline.md",
-    description: "v8.48 — Iron Law concentrating verification-before-completion. No `✅ complete` slim summary, no `Recommended next: continue`, no Findings row close, no `ship.md > status: shipped` without paired fresh evidence (command + exit code + log lines, OR test output, OR git-log proof, OR file:line citation). Bans the sycophantic completion vocabulary (`should work`, `looks good`, `probably works`, `I think this is done`). Always-on across every specialist and every stage; the reviewer's Verification story table, slice-builder's self_review[], and orchestrator's per-criterion verified flag are all enforcement surfaces deferring to this skill.",
+    description: "Iron Law concentrating verification-before-completion. No `✅ complete` slim summary, no `Recommended next: continue`, no Findings row close, no `ship.md > status: shipped` without paired fresh evidence (command + exit code + log lines, OR test output, OR git-log proof, OR file:line citation). Bans the sycophantic completion vocabulary (`should work`, `looks good`, `probably works`, `I think this is done`). Always-on across every specialist and every stage; the reviewer's Verification story table, slice-builder's self_review[], and orchestrator's per-criterion verified flag are all enforcement surfaces deferring to this skill.",
     triggers: [
       "always-on",
       "before:slim-summary",
@@ -312,7 +312,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "receiving-feedback",
     fileName: "receiving-feedback.md",
-    description: "v8.48 — anti-sycophancy guard for receiving review.md findings, critic.md gaps, security-reviewer findings, and user-named defects. Bans the bare-acknowledgement vocabulary (`good point`, `you're right`, `let me address that`, `I see your concern`, `great catch`). Installs the four-step response pattern: restate the finding in own words → classify against the ship gate (block-ship / iterate / fyi) → declare a plan (fix / push-back-with-evidence / accept-warning) → cite evidence. Fires on build (fix-only), review (re-iteration), and ship (pre-merge sweep).",
+    description: "anti-sycophancy guard for receiving review.md findings, critic.md gaps, security-reviewer findings, and user-named defects. Bans the bare-acknowledgement vocabulary (`good point`, `you're right`, `let me address that`, `I see your concern`, `great catch`). Installs the four-step response pattern: restate the finding in own words → classify against the ship gate (block-ship / iterate / fyi) → declare a plan (fix / push-back-with-evidence / accept-warning) → cite evidence. Fires on build (fix-only), review (re-iteration), and ship (pre-merge sweep).",
     triggers: [
       "input:review.md",
       "input:critic.md",
@@ -327,7 +327,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "pre-edit-investigation",
     fileName: "pre-edit-investigation.md",
-    description: "v8.48 — GateGuard-style fact-forcing gate that triggers before the slice-builder's FIRST Write/Edit/MultiEdit operation on a file. Mandatory three probes before editing: (1) `git log --oneline -10 -- <path>` for recent edits, (2) `rg \"<symbol>\" --type <lang>` for usage sites, (3) full file read (not just the edit window). Investigation evidence lands in build.md's Discovery column; the reviewer's `edit-discipline` axis (v8.48+, axis #8) flags missing or partial Discovery as severity=required. Exceptions: fresh files with no history, RED-phase test file edits, post-format passes.",
+    description: "GateGuard-style fact-forcing gate that triggers before the slice-builder's FIRST Write/Edit/MultiEdit operation on a file. Mandatory three probes before editing: (1) `git log --oneline -10 -- <path>` for recent edits, (2) `rg \"<symbol>\" --type <lang>` for usage sites, (3) full file read (not just the edit window). Investigation evidence lands in build.md's Discovery column; the reviewer's `edit-discipline` axis (v8.48+, axis #8) flags missing or partial Discovery as severity=required. Exceptions: fresh files with no history, RED-phase test file edits, post-format passes.",
     triggers: [
       "before:Write",
       "before:Edit",
@@ -360,12 +360,12 @@ export const AUTO_TRIGGER_DISPATCH_STAGES: ReadonlyArray<Exclude<AutoTriggerStag
 ];
 
 /**
- * v8.49 — compact one-line bullet for embedding in a specialist prompt.
+ * compact one-line bullet for embedding in a specialist prompt.
  *
- * The v8.18 shape emitted three lines per skill (id + ~200-char
+ * The shape emitted three lines per skill (id + ~200-char
  * description + comma-separated trigger list). With 20 skills and 6
  * specialist dispatch surfaces, each per-dispatch prompt carried 4-6 KB
- * of duplicated description prose. v8.49 collapses each bullet to a
+ * of duplicated description prose. collapses each bullet to a
  * single line: id + on-disk path. Full descriptions and trigger lists
  * are written once at install time to `.cclaw/lib/skills-index.md`
  * (see {@link SKILLS_INDEX_BODY}); the per-dispatch block is now a
@@ -381,8 +381,8 @@ function renderSkillBullet(skill: AutoTriggerSkill): string {
 
 /**
  * Render the stage-scoped block of auto-trigger skills suitable for
- * interpolation into a specialist prompt. v8.19 introduces the `stage`
- * parameter; v8.49 collapses each bullet to a one-line pointer (id +
+ * interpolation into a specialist prompt. introduces the `stage`
+ * parameter; collapses each bullet to a one-line pointer (id +
  * on-disk path) and moves the full descriptions / trigger lists to
  * `.cclaw/lib/skills-index.md` (written by install).
  *
@@ -398,8 +398,8 @@ function renderSkillBullet(skill: AutoTriggerSkill): string {
  *
  * Two token-budget wins composed:
  *
- *  1. v8.19 stage filtering — out-of-scope skills are not emitted.
- *  2. v8.49 compact bullet — emitted skills carry id + path only.
+ *  1. stage filtering — out-of-scope skills are not emitted.
+ *  2. compact bullet — emitted skills carry id + path only.
  *
  * The v819-skill-windowing suite asserts a 20%+ stage-vs-full ratio
  * reduction; the v849 overcomplexity-sweep suite asserts the v8.18
@@ -439,7 +439,7 @@ export function buildAutoTriggerBlock(stage?: AutoTriggerStage): string {
 }
 
 /**
- * v8.49 — render the full auto-trigger skills index. Written once at
+ * render the full auto-trigger skills index. Written once at
  * install time to `.cclaw/lib/skills-index.md` so specialists can
  * reference it on demand instead of the per-dispatch prompt carrying
  * every skill's description verbatim.
@@ -457,7 +457,7 @@ export function buildAutoTriggerBlock(stage?: AutoTriggerStage): string {
 export function renderSkillsIndex(): string {
   const heading = `# cclaw auto-trigger skills index`;
   const preface = [
-    "Auto-generated by `cclaw install` from `src/content/skills.ts > AUTO_TRIGGER_SKILLS`. v8.49 moved the per-skill description + trigger prose out of every specialist prompt and into this single index — specialist prompts now embed a compact `id → file` pointer block (rendered via `buildAutoTriggerBlock(stage)`), and read this file when they need the full description / triggers / stage tags for a skill.",
+    "Auto-generated by `cclaw install` from `src/content/skills.ts > AUTO_TRIGGER_SKILLS`. moved the per-skill description + trigger prose out of every specialist prompt and into this single index — specialist prompts now embed a compact `id → file` pointer block (rendered via `buildAutoTriggerBlock(stage)`), and read this file when they need the full description / triggers / stage tags for a skill.",
     "",
     "Every skill's full body lives at `.cclaw/lib/skills/<id>.md`; this file is the index over those bodies, not a substitute for them."
   ].join("\n");
@@ -509,7 +509,7 @@ export function renderSkillsIndex(): string {
 }
 
 /**
- * v8.49 — the rendered skills-index body. Written by `install.ts` to
+ * the rendered skills-index body. Written by `install.ts` to
  * `.cclaw/lib/skills-index.md`. Computed once at module-import time
  * since `AUTO_TRIGGER_SKILLS` is itself static after import.
  */

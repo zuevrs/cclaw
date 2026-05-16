@@ -5,7 +5,7 @@ import { TRIAGE_AUDIT_REL_PATH } from "./constants.js";
 import { ensureDir } from "./fs-utils.js";
 
 /**
- * v8.44 — write-only audit telemetry shape for a single triage
+ * write-only audit telemetry shape for a single triage
  * decision. Mirrors what used to live on `TriageDecision` as
  * `userOverrode` / `autoExecuted` / `iterationOverride` plus enough
  * routing context that a later "why did this slug …?" audit can answer
@@ -26,11 +26,11 @@ export interface TriageAuditEntry {
   complexity: "trivial" | "small-medium" | "large-risky";
   /** Final classification after override (often equal to `complexity`). */
   finalComplexity?: "trivial" | "small-medium" | "large-risky";
-  /** Final ceremony mode after override. v8.56 rename of `acMode`. */
+  /** Final ceremony mode after override. rename of `acMode`. */
   ceremonyMode?: "inline" | "soft" | "strict";
   /** Did the user override the orchestrator's recommendation at the triage gate? */
   userOverrode?: boolean;
-  /** Was this the v8.14 zero-question fast path (trivial / high-confidence auto-execute)? */
+  /** Was this the zero-question fast path (trivial / high-confidence auto-execute)? */
   autoExecuted?: boolean;
   /** Did the user pick `keep-iterating-anyway` at the 5-iteration review cap? */
   iterationOverride?: boolean;

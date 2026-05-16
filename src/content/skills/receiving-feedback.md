@@ -63,7 +63,7 @@ State the finding back in your own words. One sentence. The restatement proves y
 
 Place the finding against the ship gate. One of:
 
-- **`block-ship`** — fixing is mandatory before ship (any `critical` row; any `required` row in strict mode; any `required + architecture` row in soft mode per the v8.20 priors).
+- **`block-ship`** — fixing is mandatory before ship (any `critical` row; any `required` row in strict mode; any `required + architecture` row in soft mode per the priors).
 - **`iterate`** — fixing is recommended but does not block (most `required` rows in soft mode; most `consider` rows in any mode when the iteration count is well under cap).
 - **`fyi`** — informational; no fix required, but the lesson carries to `learnings.md`.
 
@@ -117,7 +117,7 @@ The reviewer's row-close citations are the audit trail; the orchestrator's run-m
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical "looks good to me" sycophancy rows live in `.cclaw/lib/anti-rationalizations.md` under category `completion` (v8.49). The rows below stay here because they cover receive-feedback-specific framings (polite-prelude, false-sympathy + silent disagreement, "let me address that" placeholder, aggregate fixes).
+**Cross-cutting rationalizations:** the canonical "looks good to me" sycophancy rows live in `.cclaw/lib/anti-rationalizations.md` under category `completion`. The rows below stay here because they cover receive-feedback-specific framings (polite-prelude, false-sympathy + silent disagreement, "let me address that" placeholder, aggregate fixes).
 
 The reflex to acknowledge-without-analyzing is the most common scope-discipline break in the receive-feedback surface. Table maps every excuse to its rebuttal.
 
@@ -156,7 +156,7 @@ slice-builder's response in the next build.md fix-iteration block:
 
 **F-2 response:**
 - Restated F-2: my GREEN diff at `src/lib/permissions.ts:18` does not handle `claims === null`; the function throws instead of returning `false`.
-- Classified: block-ship (strict mode, severity=required, axis=correctness — per the v8.20 architecture priors block-ship rule, this required row gates ship until closed).
+- Classified: block-ship (strict mode, severity=required, axis=correctness — per the architecture priors block-ship rule, this required row gates ship until closed).
 - Plan: fix — write RED test asserting `hasViewEmail(null) === false` in `tests/unit/permissions.test.ts`, then GREEN at `src/lib/permissions.ts:18` adding `if (claims === null) return false;` guard.
 - Evidence (after fix lands): RED `red(AC-1): hasViewEmail null-guard` (SHA bbbcccc); GREEN `green(AC-1): fix F-2 — null-guard` (SHA dddeeee); npm test → 48 passed, 0 failed.
 

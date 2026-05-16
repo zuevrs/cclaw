@@ -7,7 +7,7 @@ trigger: before the FIRST `Write` / `Edit` / `MultiEdit` operation a slice-build
 
 cclaw's slice-builder is the only specialist that writes code. The most common defect class in slice-builder output is **editing a file before fully understanding its current state** — modifying a function based on a partial read, missing a recent unrelated edit that conflicts with the planned change, breaking an invariant a sibling caller depends on. Each instance produces a fix-only round-trip; cumulatively, it is the largest source of `axis=correctness` findings in the v8.40+ baseline.
 
-This skill installs a fact-forcing gate before the first edit of any file: three mandatory facts must be gathered (recent edits, usage sites, full file read) before the slice-builder may write. Adapted from the GateGuard runtime hook pattern (deny → force → allow), implemented prompt-only because cclaw's v8.40 removal of mechanical hooks moved this discipline into prompt-level review. The reviewer enforces the rule ex-post via the `edit-discipline` axis from v8.48 onwards — a slice that lacks pre-edit evidence is flagged at handoff.
+This skill installs a fact-forcing gate before the first edit of any file: three mandatory facts must be gathered (recent edits, usage sites, full file read) before the slice-builder may write. Adapted from the GateGuard runtime hook pattern (deny → force → allow), implemented prompt-only because cclaw's removal of mechanical hooks moved this discipline into prompt-level review. The reviewer enforces the rule ex-post via the `edit-discipline` axis from onwards — a slice that lacks pre-edit evidence is flagged at handoff.
 
 ## When to use
 
@@ -101,13 +101,13 @@ The Discovery column in `build.md` is the **durable record** of investigation ev
 
 ## Verification
 
-The reviewer's `edit-discipline` axis — axis #8 in the eight-axis review, shipped in v8.48 — enforces the rule ex-post. The check: for every file the slice-builder edited (per `git show --stat <commits>`), the build log's Discovery column must cite Probe 1 + Probe 2 + Probe 3 outputs. A file with edits but no Discovery entries is `severity=required (axis=edit-discipline)`. A file with partial Discovery (one or two probes, not all three) is `severity=consider (axis=edit-discipline)` with a recommended fix-only run for the missing probes.
+The reviewer's `edit-discipline` axis — axis #8 in the eight-axis review, available — enforces the rule ex-post. The check: for every file the slice-builder edited (per `git show --stat <commits>`), the build log's Discovery column must cite Probe 1 + Probe 2 + Probe 3 outputs. A file with edits but no Discovery entries is `severity=required (axis=edit-discipline)`. A file with partial Discovery (one or two probes, not all three) is `severity=consider (axis=edit-discipline)` with a recommended fix-only run for the missing probes.
 
 When the slice-builder declares an exception (fresh file with no history, test file in RED phase, post-format pass), the build log MUST cite the exception with one line ("Pre-edit investigation skipped: fresh file with no history"); the reviewer accepts the skip when the cited reason matches one of the "When NOT to apply" cases above.
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical "I read this file last week" / "AC names the exact line" / "touchSurface is enough" / drive-by rows live in `.cclaw/lib/anti-rationalizations.md` under category `edit-discipline` (v8.49). The rows below stay here because they cover investigation-specific framings (Probe 1/2/3 filter rules, post-edit-recorded probes, generic-symbol scope rule); the catalog covers the cross-cutting "investigate before edit" prose.
+**Cross-cutting rationalizations:** the canonical "I read this file last week" / "AC names the exact line" / "touchSurface is enough" / drive-by rows live in `.cclaw/lib/anti-rationalizations.md` under category `edit-discipline`. The rows below stay here because they cover investigation-specific framings (Probe 1/2/3 filter rules, post-edit-recorded probes, generic-symbol scope rule); the catalog covers the cross-cutting "investigate before edit" prose.
 
 The "I already know this file" reflex is how pre-edit-investigation breaks. The table below names every excuse a slice-builder will produce; pair it with the rebuttal and pick the right column.
 

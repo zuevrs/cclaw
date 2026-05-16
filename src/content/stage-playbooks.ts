@@ -136,7 +136,7 @@ Open this section **only when \`triage.complexity == "large-risky"\` and the pat
 
 The discovery sub-phase runs a **two-step** chain: \`design\` (main context, multi-turn) → \`ac-author\` (sub-agent). \`currentStage\` stays \`"plan"\` for both; \`lastSpecialist\` rotates through \`design\` then \`ac-author\`.
 
-### v8.14 collapse context
+### collapse context
 
 Pre-v8.14 ran a three-step \`brainstormer → architect → ac-author\` chain of one-shot sub-agents, with a checkpoint-question between each. That ceremony was thin — the brainstormer's "Frame" and the architect's "decisions" both came from one shot of the model with no user dialog. v8.14 replaces the first two steps with a **single \`design\` specialist that runs in main context** across seven multi-turn phases (Bootstrap, Clarify, Frame, Approaches, Decisions inline, Pre-mortem, Compose, Sign-off), so framing and structural decisions emerge from a real user-collaborative pass instead of two short summaries.
 
@@ -162,7 +162,7 @@ The user can also bypass the heuristic explicitly with \`/cc <task> --discovery=
 1. **Activate \`design\` in main context** (read \`.cclaw/lib/agents/design.md\` as a skill the orchestrator itself follows; do NOT dispatch as a sub-agent).
    - The orchestrator picks the **posture** before activation: \`deep\` when any of (security-sensitive keyword, \`security_flag\` preset, irreversibility / migration / schema / breaking-change / data-loss / payment / gdpr / pci in the prompt, \`refines:\` points to a slug with \`security_flag: true\`); \`guided\` otherwise. The design prompt may escalate to \`deep\` mid-flight if Phase 3 surfaces irreversibility the orchestrator missed.
    - The orchestrator follows the design.md prompt phases 0-7 directly in this conversation. **v8.47+ pacing:** only **Phase 1** (Clarify, when 0-3 clarifying questions are needed — one batched \`askUserQuestion\` call) and **Phase 7** (Sign-off, always — three-option picker: \`approve\` / \`request-changes\` / \`reject\`) emit user-facing output and end the turn. Phases 0 (Bootstrap), 2 (Frame), 3 (Approaches), 4 (Decisions), 5 (Pre-mortem, deep only), 6 (Compose + self-review), and 6.5 (ADR proposal) all execute SILENTLY in the same orchestrator turn — append plan.md sections as you go; do not pause.
-   - Output: appends Frame, Spec (v8.46), optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, and Summary — design block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires. **No separate \`decisions.md\` is written; v8.14 inlined that file into the Decisions section of plan.md.**
+   - Output: appends Frame, Spec, optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, and Summary — design block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files when Phase 6.5 fires. **No separate \`decisions.md\` is written; inlined that file into the Decisions section of plan.md.**
    - On Phase 7 \`approve\`: orchestrator patches \`lastSpecialist: "design"\` and \`plan.md\` frontmatter (\`last_specialist: design\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`) → **ends the turn**. The next \`/cc\` continues with ac-author.
    - On Phase 7 \`request-changes\`: design re-runs the affected silent phases (Phase 2 / 3 / 4 / 5 / 6) internally and re-emits Phase 7 with the revised plan.md. **Revise cap = 3 iterations**; on the 4th request, design escalates explicitly (\`approve as-is\` / \`reject\` / \`revise one more time\`). Orchestrator does not patch \`lastSpecialist\` until the user picks \`approve\`.
    - On Phase 7 \`reject\`: design appends a brief \`## Design rejected\` note to plan.md and surfaces the rejection. Orchestrator does NOT patch \`lastSpecialist: design\`; the user is routed to \`/cc-cancel\` or re-triage.
@@ -183,7 +183,7 @@ const BUILD_PLAYBOOK = `# Stage runbook — build (TDD cycle)
 
 > NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. THE RED FAILURE IS THE SPEC.
 
-Build refuses to commit production code that is not preceded by a recorded RED test. As of v8.40 the cycle is enforced by **prompt + commit-message-prefix contract** (no hook): each AC's commits carry an explicit \`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` (or posture-specific \`test\` / \`docs\`) prefix that the reviewer scans at handoff time via \`git log --grep="(AC-N):"\`. Missing or out-of-order commits are A-1 findings (severity=required).
+Build refuses to commit production code that is not preceded by a recorded RED test. As of the cycle is enforced by **prompt + commit-message-prefix contract** (no hook): each AC's commits carry an explicit \`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` (or posture-specific \`test\` / \`docs\`) prefix that the reviewer scans at handoff time via \`git log --grep="(AC-N):"\`. Missing or out-of-order commits are A-1 findings (severity=required).
 
 ## 1. Pick the next pending AC
 
@@ -254,7 +254,7 @@ git add src/path/to/refactored.ts
 git commit -m "refactor(AC-N): <one-line shape change>"
 \`\`\`
 
-If no refactor lands, **v8.49 default is the build.md row declaration** (no empty commit needed): write \`Refactor: skipped — <one-line reason>\` in the AC row's REFACTOR notes column. The reviewer reads the literal \`Refactor: skipped\` token from the row and treats the refactor slot as satisfied. The legacy path — \`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\` — is still accepted for backwards compat on already-shipped slugs. A row that records neither a SHA, the build.md \`Refactor: skipped\` token, nor the empty marker is treated as missing-refactor (A-1, severity=required).
+If no refactor lands, **default is the build.md row declaration** (no empty commit needed): write \`Refactor: skipped — <one-line reason>\` in the AC row's REFACTOR notes column. The reviewer reads the literal \`Refactor: skipped\` token from the row and treats the refactor slot as satisfied. The legacy path — \`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\` — is still accepted for backwards compat on already-shipped slugs. A row that records neither a SHA, the build.md \`Refactor: skipped\` token, nor the empty marker is treated as missing-refactor (A-1, severity=required).
 
 ## 6. Append the AC row to builds/<slug>.md
 
@@ -262,7 +262,7 @@ After REFACTOR, the AC row in \`.cclaw/flows/<slug>/build.md\` carries:
 
 | AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
 | --- | --- | --- | --- | --- | --- |
-| AC-N | tests/path:line, fixtures... | test name + failure excerpt | command + PASS summary | one-line shape change applied **or** "Refactor: skipped — <reason>" (v8.49 default; no empty commit) | red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped") |
+| AC-N | tests/path:line, fixtures... | test name + failure excerpt | command + PASS summary | one-line shape change applied **or** "Refactor: skipped — <reason>" (default; no empty commit) | red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped") |
 
 The build is complete for this AC only when all six columns are filled.
 
@@ -288,17 +288,17 @@ Before transitioning to review, every AC must satisfy:
 3. **red_test_written** — failing test exists, recorded with watched-RED proof.
 4. **red_fails_for_right_reason** — RED captured a real assertion failure, not a syntax error.
 5. **green_full_suite** — full relevant suite green after GREEN, not the single test.
-6. **refactor_completed_or_skipped_with_reason** — REFACTOR ran, or was explicitly skipped with a one-line reason. The skip declaration may live in the AC's \`build.md\` row REFACTOR notes column (v8.49 default — literal token \`Refactor: skipped — <reason>\`) OR as a legacy \`refactor(AC-N) skipped: <reason>\` empty-marker commit; either satisfies the gate.
+6. **refactor_completed_or_skipped_with_reason** — REFACTOR ran, or was explicitly skipped with a one-line reason. The skip declaration may live in the AC's \`build.md\` row REFACTOR notes column (default — literal token \`Refactor: skipped — <reason>\`) OR as a legacy \`refactor(AC-N) skipped: <reason>\` empty-marker commit; either satisfies the gate.
 7. **traceable_to_plan** — AC commits reference plan AC ids and the plan's file set.
-8. **commit_chain_intact** — \`git log --grep="(AC-N):" --oneline\` shows the posture-appropriate commit sequence (e.g. \`red(AC-N)\` before \`green(AC-N)\` for \`test-first\` / \`characterization-first\` postures; \`refactor(AC-N)\` only for \`refactor-only\`; \`test(AC-N)\` only for \`tests-as-deliverable\`; \`docs(AC-N)\` only for \`docs-only\`). For \`test-first\` / \`characterization-first\` postures the refactor slot may be satisfied by EITHER a \`refactor(AC-N)\` commit OR the v8.49 build.md \`Refactor: skipped — <reason>\` row token; chain integrity is preserved across both representations.
+8. **commit_chain_intact** — \`git log --grep="(AC-N):" --oneline\` shows the posture-appropriate commit sequence (e.g. \`red(AC-N)\` before \`green(AC-N)\` for \`test-first\` / \`characterization-first\` postures; \`refactor(AC-N)\` only for \`refactor-only\`; \`test(AC-N)\` only for \`tests-as-deliverable\`; \`docs(AC-N)\` only for \`docs-only\`). For \`test-first\` / \`characterization-first\` postures the refactor slot may be satisfied by EITHER a \`refactor(AC-N)\` commit OR the build.md \`Refactor: skipped — <reason>\` row token; chain integrity is preserved across both representations.
 
-All eight gates are now reviewer-enforced ex-post via prompt + git log + \`build.md\` inspection (v8.40 retired the mechanical pre-commit gate cclaw used to ship). The slice-builder's \`self_review[]\` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running \`git log --grep\` against the plan's AC list.
+All eight gates are now reviewer-enforced ex-post via prompt + git log + \`build.md\` inspection (retired the mechanical pre-commit gate cclaw used to ship). The slice-builder's \`self_review[]\` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running \`git log --grep\` against the plan's AC list.
 
 ## 10. Common pitfalls
 
 - Skipping RED because "the implementation is obvious". The cycle is the contract; obvious code still gets a test.
 - Single test passes, full suite fails, but commit anyway. That is not GREEN; it is a regression.
-- REFACTOR phase silently skipped. v8.49 default: write \`Refactor: skipped — <reason>\` in the AC's build.md row REFACTOR notes column (no empty commit needed). The legacy empty-marker commit is still accepted; absence of both is the missing-refactor finding.
+- REFACTOR phase silently skipped. default: write \`Refactor: skipped — <reason>\` in the AC's build.md row REFACTOR notes column (no empty commit needed). The legacy empty-marker commit is still accepted; absence of both is the missing-refactor finding.
 - Writing production code in the RED commit. Stage and commit test files only in the RED phase.
 - Skipping the per-criterion prefix (\`red(AC-N): ...\`) "just this once" or committing without an AC id. The reviewer's \`git log --grep\` scan misses it and the AC reads as missing → A-1 finding, fix-only bounce.
 - \`git add -A\` inside build. Stage AC-related files only.
@@ -499,7 +499,7 @@ The compound quality gate captures \`flows/<slug>/learnings.md\` only when at le
 
 ### 7a. Learnings hard-stop (T1-13)
 
-Prior versions silently skipped the learnings capture when none of the four signals fired. v8.13 makes this **non-silent**: when the quality gate fails AND the slug touched ≥2 modules OR ran ≥3 commits, the orchestrator **pauses before ship** and surfaces a structured ask:
+Prior versions silently skipped the learnings capture when none of the four signals fired. makes this **non-silent**: when the quality gate fails AND the slug touched ≥2 modules OR ran ≥3 commits, the orchestrator **pauses before ship** and surfaces a structured ask:
 
 > The compound quality gate did not fire (no design D-N recorded, fewer than 3 review iterations, no security review). Do you want to capture a one-paragraph learning anyway? [capture / skip-this-time / never-on-this-slug]
 
@@ -529,7 +529,7 @@ Run the action implied by \`finalization_mode\` and record the result back into 
 
 Ship-stage ends when:
 
-- \`flows/shipped/<slug>/ship.md\` exists with shipped-frontmatter (the v8.12 manifest replacement; \`legacy-artifacts: true\` also yields a separate \`manifest.md\`),
+- \`flows/shipped/<slug>/ship.md\` exists with shipped-frontmatter (the manifest replacement; \`legacy-artifacts: true\` also yields a separate \`manifest.md\`),
 - flow-state is reset,
 - the user is told push/PR status (whether approved or skipped),
 - the rollback plan is sticky in \`flows/<slug>/ship.md\` (the future operator opens this if anything goes wrong).

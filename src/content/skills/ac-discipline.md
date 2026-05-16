@@ -41,7 +41,7 @@ Three checks per AC:
 
 ## When to add an AC mid-flight
 
-You don't. Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it should be a follow-up (`/cc-idea`) or a fresh slug.
+You don't. Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it should be a fresh slug.
 
 ## ac-traceability
 
@@ -58,7 +58,7 @@ In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/c
    - **Posture-appropriate sequence.** For `test-first` / `characterization-first` postures, `green(AC-N)` must follow a `red(AC-N)` in git-log order; for `refactor-only`, only `refactor(AC-N)` is expected; for `tests-as-deliverable`, only `test(AC-N)`; for `docs-only`, only `docs(AC-N)`. See `src/posture-validation.ts:POSTURE_COMMIT_PREFIXES` for the canonical mapping.
    - **RED stages test files only.** `git show <red-SHA> --stat` for a `test-first` / `characterization-first` AC must list test files only; mixing in production files is an A-1 finding (severity=required, axis=correctness).
 4. The slice-builder appends the AC↔SHA row to `flows/<slug>/build.md` as the durable record; the row's `commits` column carries the SHA(s).
-5. The reviewer's final pass (`reviewer mode=release` at ship gate) verifies the chain is complete via `git log --grep="(AC-N):" --oneline` against the plan's AC list. There is no separate `runCompoundAndShip` gate (v8.40 dropped it — reviewer is the only ship gate).
+5. The reviewer's final pass (`reviewer mode=release` at ship gate) verifies the chain is complete via `git log --grep="(AC-N):" --oneline` against the plan's AC list. There is no separate `runCompoundAndShip` gate (dropped it — reviewer is the only ship gate).
 
 ## In soft / inline modes
 
@@ -78,7 +78,7 @@ In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/c
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical commit-prefix / amend-after-push / bundling rows live in `.cclaw/lib/anti-rationalizations.md` under category `commit-discipline` (v8.49). The rows below stay here because they cover AC-discipline-specific framings (bundling-under-AC-2, vague verification, mid-build AC addition, refinement renumbering); the catalog covers the cross-cutting commit-chain prose.
+**Cross-cutting rationalizations:** the canonical commit-prefix / amend-after-push / bundling rows live in `.cclaw/lib/anti-rationalizations.md` under category `commit-discipline`. The rows below stay here because they cover AC-discipline-specific framings (bundling-under-AC-2, vague verification, mid-build AC addition, refinement renumbering); the catalog covers the cross-cutting commit-chain prose.
 
 AC discipline is the first thing that pressures an agent to "just commit something" when iteration is slow. Catch yourself thinking the left column; do the right column. Surface the rationalization in `## Summary → Potential concerns` when you obey the right column anyway.
 

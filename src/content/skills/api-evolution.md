@@ -168,7 +168,7 @@ Coexistence is not always possible (e.g. wire-format changes for older clients y
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical commit-discipline + completion rows live in `.cclaw/lib/anti-rationalizations.md` (v8.49). The rows below stay here because they are API-evolution-specific (speculative ports, internal-API Hyrum's Law, CLI flag rename without alias, error-model mixing, big-bang vs strangler) and have no cross-cutting analogue.
+**Cross-cutting rationalizations:** the canonical commit-discipline + completion rows live in `.cclaw/lib/anti-rationalizations.md`. The rows below stay here because they are API-evolution-specific (speculative ports, internal-API Hyrum's Law, CLI flag rename without alias, error-model mixing, big-bang vs strangler) and have no cross-cutting analogue.
 
 Public-interface design is where speculative abstraction and "we'll handle it later" most often slip past the gate. Catch yourself thinking the left column; do the right column. Surface the rationalization in `plan.md > ## Decisions` D-N rationale when you obey the right column.
 

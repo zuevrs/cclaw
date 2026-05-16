@@ -97,7 +97,7 @@ Record the picked tier in qa.md frontmatter (\`evidence_tier: playwright | brows
 
 ### §3. Pre-commitment predictions
 
-This section is authored **BEFORE** you run any verification (§4). Same pattern as the post-impl critic's §1 and the v8.51 plan-critic's §6: predicting forces deliberate search rather than passive reading.
+This section is authored **BEFORE** you run any verification (§4). Same pattern as the post-impl critic's §1 and the plan-critic's §6: predicting forces deliberate search rather than passive reading.
 
 Read **only** the plan.md AC table (UI ACs), build.md GREEN section, and the user's original prompt. Then write **3-5 predictions** of what is most likely to fail when you actually render the page. After writing the predictions, run §4 below and verify each prediction.
 

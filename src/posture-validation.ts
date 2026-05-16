@@ -1,10 +1,10 @@
 /**
- * v8.40 — posture-aware TDD validation helpers used by the reviewer
+ * posture-aware TDD validation helpers used by the reviewer
  * during ex-post inspection of the build's git log.
  *
- * Before v8.40 the same predicate logic lived inline inside
+ * Before the same predicate logic lived inline inside
  * `commit-helper.mjs` (which mechanically rejected commits whose
- * touchSurface contradicted the declared posture). v8.40 retired the
+ * touchSurface contradicted the declared posture). retired the
  * hook and made TDD ordering a prompt-and-prefix contract; this module
  * is where the reviewer (and any orchestrator-side tooling) pulls the
  * same rules from.

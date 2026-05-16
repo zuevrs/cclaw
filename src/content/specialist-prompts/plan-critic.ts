@@ -38,15 +38,15 @@ plan-critic ships a single mode — \`pre-impl-review\`. There is no \`gap\` / \
 The orchestrator's dispatch table (start-command.ts) enforces the gate. plan-critic runs ONLY when ALL of these hold:
 
 1. \`triage.ceremonyMode == "strict"\` (soft / inline plans don't carry the granularity surface that plan-critic exists to pressure-test);
-2. \`triage.complexity != "trivial"\` (trivial flows have no plan to critique; small-medium + large-risky strict plans both get the pass — see "v8.54 widening" below);
+2. \`triage.complexity != "trivial"\` (trivial flows have no plan to critique; small-medium + large-risky strict plans both get the pass — see "widening" below);
 3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs are explicit extensions of prior shipped work; their plan already shipped once and was pressure-tested by the production reality of the prior slug);
 4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency / parallelism surface to critique).
 
 You verify the gate from your own envelope at the top of Phase 0 below. If you observe the gate failing — i.e. the orchestrator dispatched you in error — return a slim summary with \`Confidence: low\` and \`Notes: dispatched against the plan-critic gate\` and stop without writing plan-critic.md. The orchestrator's deterministic gate makes this a defensive check; in practice it never fires.
 
-### v8.54 widening (vs v8.51-v8.53 gate)
+### widening (vs v8.51-gate)
 
-Prior versions required \`triage.complexity == "large-risky"\` — the narrowest gate in the reference cohort (chachamaru's \`plan_critic\` runs on every Phase 0; gsd-v1's plan-checker runs across complexity tiers). v8.54 drops the large-risky requirement and keeps the other three conditions. The widened gate now triggers on small-medium strict flows too, on the empirical observation that small-medium plans with ≥2 AC carry enough granularity / dependency surface to benefit from a pre-implementation adversarial pass. Trivial flows remain skipped (no plan stage exists).
+Prior versions required \`triage.complexity == "large-risky"\` — the narrowest gate in the reference cohort (chachamaru's \`plan_critic\` runs on every Phase 0; gsd-v1's plan-checker runs across complexity tiers). drops the large-risky requirement and keeps the other three conditions. The widened gate now triggers on small-medium strict flows too, on the empirical observation that small-medium plans with ≥2 AC carry enough granularity / dependency surface to benefit from a pre-implementation adversarial pass. Trivial flows remain skipped (no plan stage exists).
 
 ## When NOT to run
 
@@ -58,7 +58,7 @@ The negative space of the gate above:
 - \`triage.problemType == "refines"\` → the refining plan inherits granularity from the parent slug, which already shipped + survived its post-impl critic pass.
 - AC count == 1 → the single-AC plan has no dependency graph and no parallelism choices to second-guess.
 
-Wide gating beyond the v8.54 widening would still 2x ceremony for marginal benefit. The gate above (post-widening) is the **only** correct combination; do not propose further widening from inside a finding.
+Wide gating beyond the widening would still 2x ceremony for marginal benefit. The gate above (post-widening) is the **only** correct combination; do not propose further widening from inside a finding.
 
 ## ceremonyMode awareness (defensive)
 

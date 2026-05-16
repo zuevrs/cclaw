@@ -1,5 +1,5 @@
 /**
- * v8.59 — parent-context resolver for the `/cc extend <slug>` entry point.
+ * parent-context resolver for the `/cc extend <slug>` entry point.
  *
  * The orchestrator's Detect hop accepts `/cc extend <slug> <task>` as a
  * new fresh-flow entry point that initialises the new slug with a
@@ -39,7 +39,7 @@ import { parseArtifact } from "./artifact-frontmatter.js";
 import type { ParentArtifactPaths, ParentContext } from "./flow-state.js";
 
 /**
- * v8.59 — resolution result for `loadParentContext`.
+ * resolution result for `loadParentContext`.
  *
  * `ok`: the slug resolves to a shipped flow with a non-empty
  * `plan.md`. `context` carries the structured `ParentContext`
@@ -71,7 +71,7 @@ export type ParentContextErrorReason =
   | "corrupted";
 
 /**
- * v8.59 — does `slug` resolve to a shipped flow with a non-empty
+ * does `slug` resolve to a shipped flow with a non-empty
  * `plan.md`? Returns a discriminated union — either `{ ok: true,
  * context }` with the structured pointer, or `{ ok: false, reason,
  * message }` with the validator failure mode.
@@ -177,7 +177,7 @@ export async function loadParentContext(
 }
 
 /**
- * v8.59 — read the parent's `ship.md > frontmatter.shipped_at` field
+ * read the parent's `ship.md > frontmatter.shipped_at` field
  * as a best-effort lookup. Returns `null` on any failure (missing
  * ship.md, unreadable file, missing frontmatter, missing field,
  * non-string value). Never throws — the orchestrator's `/cc extend`
@@ -203,7 +203,7 @@ async function readShippedAt(projectRoot: string, slug: string): Promise<string 
 }
 
 /**
- * v8.59 — stat the parent's shipped directory for every optional
+ * stat the parent's shipped directory for every optional
  * artifact (build / review / critic / learnings / qa) and return the
  * paths that actually exist. `plan` is always included (its presence
  * was the validation gate); the other five are included only when
@@ -237,7 +237,7 @@ async function resolveArtifactPaths(
 }
 
 /**
- * v8.59 — list every shipped slug under `.cclaw/flows/shipped/`,
+ * list every shipped slug under `.cclaw/flows/shipped/`,
  * filtered to entries whose name begins with the canonical date
  * prefix (`YYYYMMDD-`). Used by the orchestrator's Detect hop to
  * (a) sanity-check that the project has any shipped slugs at all
@@ -273,7 +273,7 @@ export async function listShippedSlugs(projectRoot: string): Promise<string[]> {
 }
 
 /**
- * v8.59 — re-export of `ARTIFACT_FILE_NAMES` keyed by the
+ * re-export of `ARTIFACT_FILE_NAMES` keyed by the
  * `ParentArtifactPaths` field names. Exists so callers that need
  * to render a friendly artifact list (e.g. the `## Extends` section
  * helper in `artifact-templates.ts`) don't import from

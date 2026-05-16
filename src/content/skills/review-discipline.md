@@ -144,7 +144,7 @@ Decision: clear (signal #2). F-2 carries to ships/<slug>.md and learnings/<slug>
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical completion / verification rows (sycophancy, "should pass", "the full suite is slow") live in `.cclaw/lib/anti-rationalizations.md` under categories `completion` and `verification` (v8.49). The rows below stay here because they cover reviewer-discipline-specific framings (convergence signal #2, five-axis silence, severity padding, soft-mode architecture bypass).
+**Cross-cutting rationalizations:** the canonical completion / verification rows (sycophancy, "should pass", "the full suite is slow") live in `.cclaw/lib/anti-rationalizations.md` under categories `completion` and `verification`. The rows below stay here because they cover reviewer-discipline-specific framings (convergence signal #2, five-axis silence, severity padding, soft-mode architecture bypass).
 
 The reviewer's discipline is the first thing the slug shape pressures an agent to skip when iterations get long. Catch yourself thinking the left column; do the right column instead. Surface the rationalization verbatim in the iteration's slim-summary `Notes:` when you obey the right column anyway, so the audit trail records the discipline.
 
@@ -155,9 +155,9 @@ The reviewer's discipline is the first thing the slug shape pressures an agent t
 | "F-2 is fixed by F-1's commit, I'll close it without re-checking." | Closing a row is itself a claim. Cite the fix SHA / test name / file:line that proves the close. A close without evidence is the next iteration's reopen. |
 | "Severity `required` everywhere makes it look serious." | Padding severity makes the gradient useless. `nit` / `consider` / `required` / `critical` are a routing signal; collapse them and the orchestrator can't decide what blocks ship. |
 | "I'll skip the Findings this iteration; the findings are short." | The ledger is the resume contract. Iteration N+1 reads it before walking the diff; skipping breaks fix-only dispatch and supersession tracking. |
-| "Architecture severity `required` doesn't block in soft mode anyway." | v8.20 architecture-severity gate fires across **every** ceremonyMode (not just strict). Treating it as soft-mode-skippable is a known bypass the gate is designed to catch. |
+| "Architecture severity `required` doesn't block in soft mode anyway." | architecture-severity gate fires across **every** ceremonyMode (not just strict). Treating it as soft-mode-skippable is a known bypass the gate is designed to catch. |
 | "The diff is small — no real review needed, I'll fast-pass it." | Small diffs hide concentrated risk. The Failure Modes checklist runs every iteration; "I trust myself on this one" is the rationalization the audit catches. |
-| "Two-pass mode is overkill for this slug." | Two-pass is the v8.24 default on every large-risky OR security-flagged slug. `config.reviewerTwoPass: false` is the audit-trailed opt-out; "felt like overkill" is not. |
+| "Two-pass mode is overkill for this slug." | Two-pass is the default on every large-risky OR security-flagged slug. `config.reviewerTwoPass: false` is the audit-trailed opt-out; "felt like overkill" is not. |
 
 ## Common pitfalls
 

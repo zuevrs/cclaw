@@ -4,18 +4,27 @@
 
 cclaw drops a `/cc` slash command into Claude Code, Cursor, OpenCode, or Codex. It routes the task, picks the right amount of ceremony, and runs the work through a fixed pipeline: route → plan → build → qa → review → critic → ship. Each stage emits a slim summary back to the harness and writes a tracked artifact under `.cclaw/flows/<slug>/`. Sub-agents are isolated; the orchestrator keeps the slug's history.
 
-cclaw v8.59 ships three entry points: `/cc <task>` (the historical default — runs the full route → plan → build → ship pipeline), `/cc research <topic>` (a standalone brainstorming entry that runs the `design` specialist in research mode and stops at the synthesis artifact), and `/cc extend <slug> <task>` (v8.59 — a continuation flow that initialises a new slug with a previously-shipped parent slug's plan / build / learnings loaded as context). See [Modes](#modes) below.
+cclaw installs `/cc` and `/cc-cancel` into each harness. Inside `/cc`, three entry modes cover task work, research, and continuation flows — see [When to use which command](#when-to-use-which-command) and [Modes](#modes).
 
 ## Why cclaw
 
 - **Pipeline, not autopilot.** Every stage pauses at a structured gate so the human can read the artifact, edit it, or `/cc-cancel`. There is no "let it run for an hour and hope".
 - **Two-model review.** A read-only reviewer walks ten axes; an adversarial critic falsifies what the reviewer cleared. They share no context and write to separate artifacts (`review.md`, `critic.md`).
 - **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Small/medium tasks get a soft-mode plan and a single TDD cycle. Large-risky tasks get a full per-criterion build with a pre-implementation plan-critic gate.
-- **Lightweight router.** v8.58 — the routing hop is zero-question by default (no structured ask, no clarifying prompt). Explicit override flags (`/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>`) short-circuit the heuristic when you want to pin a ceremony level. Classification work (surface detection, assumption capture, prior-learnings, interpretation forks) moved into the specialist that already has the codebase context — `design` Phase 0-2 on strict, `ac-author` Phase 0-1 on soft.
-- **Research mode.** v8.58 — `/cc research <topic>` is a separate entry point for pre-task uncertainty: brainstorming, scope exploration, architecture comparison. Runs the `design` specialist standalone (Phase 0 Bootstrap → Phase 6 Compose), emits a `research.md` synthesis artifact, and stops. Optional handoff into a follow-up `/cc <clarified task>` flow that consumes the research as `priorResearch` context.
-- **Continuation flow.** v8.59 — `/cc extend <slug> <task>` is a third entry point for iterative work that explicitly builds on a previously-shipped slug. Loads the parent's `plan.md` / `build.md` / `learnings.md` (and `review.md` / `critic.md` / `qa.md` when present) into `flowState.parentContext`. Triage inherits `ceremonyMode` / `runMode` / `surfaces` from the parent (explicit `--strict` / `--soft` / `--inline` flags still override). The new flow's `plan.md` carries a `## Extends` section + `parent_slug:` frontmatter that points back at the parent.
+- **Lightweight router.** The routing hop is zero-question by default (no structured ask, no clarifying prompt). Explicit override flags (`/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>`) short-circuit the heuristic when you want to pin a ceremony level. Classification work (surface detection, assumption capture, prior-learnings, interpretation forks) moved into the specialist that already has the codebase context — `design` Phase 0-2 on strict, `ac-author` Phase 0-1 on soft.
+- **Research mode.** `/cc research <topic>` is a separate entry point for pre-task uncertainty: brainstorming, scope exploration, architecture comparison. Runs the `design` specialist standalone (Phase 0 Bootstrap → Phase 6 Compose), emits a `research.md` synthesis artifact, and stops. Optional handoff into a follow-up `/cc <clarified task>` flow that consumes the research as `priorResearch` context.
+- **Continuation flow.** `/cc extend <slug> <task>` loads a previously-shipped slug as parent context for iterative work that explicitly builds on a previously-shipped slug. Loads the parent's `plan.md` / `build.md` / `learnings.md` (and `review.md` / `critic.md` / `qa.md` when present) into `flowState.parentContext`. Triage inherits `ceremonyMode` / `runMode` / `surfaces` from the parent (explicit `--strict` / `--soft` / `--inline` flags still override). The new flow's `plan.md` carries a `## Extends` section + `parent_slug:` frontmatter that points back at the parent.
 - **Same runtime, four harnesses.** Claude Code, Cursor, OpenCode, and Codex all read the same `.cclaw/` install. Each harness gets the same `/cc` body plus harness-namespaced ambient rules.
-- **Compound learnings.** Non-trivial slugs emit a `learnings.md`. Future runs read prior shipped lessons through `knowledge.jsonl` before authoring a plan; v8.50 outcome signals (`good` / `unknown` / `manual-fix` / `follow-up-bug` / `reverted`) down-weight priors that didn't hold up.
+- **Compound learnings.** Non-trivial slugs emit a `learnings.md`. Future runs read prior shipped lessons through `knowledge.jsonl` before authoring a plan; outcome signals (`good` / `unknown` / `manual-fix` / `follow-up-bug` / `reverted`) down-weight priors that didn't hold up.
+
+## When to use which command
+
+| Intent | Command | What it does |
+| --- | --- | --- |
+| Execute a task end-to-end (code change) | `/cc <task>` | Full flow: triage → plan → build → review → critic → ship |
+| Think / brainstorm / research a topic without committing to a task | `/cc research <topic>` | Standalone exploration; outputs `research.md`; optional handoff to `/cc <task>` |
+| Extend a previously-shipped slug with related work | `/cc extend <slug> <task>` | New flow with parent's plan/build/learnings loaded as context |
+| Cancel the active flow | `/cc-cancel` | Discards current `.cclaw/flows/<slug>/`, frees the orchestrator |
 
 ## Quickstart
 
@@ -161,15 +170,6 @@ After ship, the orchestrator moves the artifacts to `.cclaw/flows/shipped/<slug>
 | **Parallel build** | Up to 5 slices on git worktrees when AC are independent and ≥2 touch-surface clusters. `ceremonyMode: strict` required. |
 | **Multi-harness install** | Claude Code, Cursor, OpenCode, Codex — same `.cclaw/` runtime, different harness adapters. |
 
-## Utility commands
-
-Beyond the main `/cc` flow, cclaw installs two **direct-callable utility commands** into each enabled harness. They are escape valves for ad-hoc moments — when the full plan → build → review → critic → ship ceremony is too heavy for the task at hand. Both commands reuse the same specialist contracts the `/cc` flow dispatches, but skip flow state, triage, the artifact tree, and slug tracking.
-
-- **`/cclaw-review [<git-ref-or-paths>]`** — run the reviewer's 10-axis pass directly on a diff or set of files. Default: staged changes (`git diff --cached`); falls back to `git diff HEAD` when nothing is staged. Accepts a git ref or ref range (e.g. `HEAD~3..HEAD`) or one or more file paths. Pass `--out <path>` to write findings as markdown.
-- **`/cclaw-critic <path>`** — run the critic's adversarial 8-section protocol (predictions, gap analysis, 4 falsification techniques, lens sweep, criterion check, goal-backward, realist check, verdict) against any document: a plan written outside cclaw, a design doc, an RFC, a PR description, an ADR, a README. Pass `--out <path>` to write findings as markdown.
-
-Both commands emit findings directly to chat. Neither touches `.cclaw/state/flow-state.json`, `.cclaw/flows/<slug>/`, or any flow artifact. For the full slug ceremony (AC, plan traceability, per-criterion commits, post-implementation critic), use `/cc <task>` instead.
-
 ## Harnesses supported
 
 | Harness | Detection | Status |
@@ -213,7 +213,6 @@ The runtime is under 1 KLOC. The prompt content is where the work lives. If you 
 ```
 .cclaw/
   config.yaml               flow defaults
-  ideas.md                  /cc-idea drops land here
   state/
     flow-state.json         active flow state (~500 bytes)
     knowledge.jsonl         compound learnings index

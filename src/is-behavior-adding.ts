@@ -1,5 +1,5 @@
 /**
- * v8.36 — `is_behavior_adding(touchSurface)` predicate.
+ * `is_behavior_adding(touchSurface)` predicate.
  *
  * File-extension-driven gate that auto-detects non-behaviour-adding ACs
  * (gsd-v1 pattern). Returns `false` iff every file in `touchSurface`
@@ -11,8 +11,8 @@
  * exclusion set; that single non-excluded file is enough to trigger
  * the full RED → GREEN → REFACTOR ceremony for the AC.
  *
- * v8.36–v8.39: the predicate was inlined into the `commit-helper.mjs`
- * hook body for mechanical enforcement. v8.40 retired the hook;
+ * v8.39: the predicate was inlined into the `commit-helper.mjs`
+ * hook body for mechanical enforcement. retired the hook;
  * enforcement is now ex-post via the reviewer's git-log inspection,
  * and this is the only copy of the rule. The reviewer cites this
  * helper (via `src/posture-validation.ts`) when validating posture

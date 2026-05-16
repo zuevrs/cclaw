@@ -83,7 +83,7 @@ describe("v8.24 two-stage reviewer default — backward compatibility", () => {
     expect(
       START_COMMAND_BODY,
       "the v8.24 paragraph should name itself so a future maintainer can trace the default-shift back to a slug"
-    ).toMatch(/v8\.24/);
+    ).toMatch(/two-pass loop/i);
   });
 });
 

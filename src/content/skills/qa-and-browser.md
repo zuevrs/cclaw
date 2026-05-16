@@ -1,6 +1,6 @@
 ---
 name: qa-and-browser
-trigger: when stage = qa (the v8.52 qa-runner dispatch); when triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"; on build when the slug touches UI files (*.tsx, *.jsx, *.vue, *.svelte, *.html, *.css) and the project ships a browser app (so the slice-builder can pre-commit a Playwright test before qa runs); on review when the diff includes any UI file (so the reviewer's qa-evidence axis cross-checks qa.md)
+trigger: when stage = qa (the qa-runner dispatch); when triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"; on build when the slug touches UI files (*.tsx, *.jsx, *.vue, *.svelte, *.html, *.css) and the project ships a browser app (so the slice-builder can pre-commit a Playwright test before qa runs); on review when the diff includes any UI file (so the reviewer's qa-evidence axis cross-checks qa.md)
 ---
 
 # Skill: qa-and-browser
@@ -9,7 +9,7 @@ The reviewer walks the diff. The page renders on a screen. They are **different 
 
 > "Tests green" is not "page works". This skill closes that gap.
 
-It is the v8.52 sibling of `debug-and-browser.md`. The two split cleanly:
+It is the sibling of `debug-and-browser.md`. The two split cleanly:
 
 - `debug-and-browser.md` — **diagnostic** discipline (stop-the-line, ranked hypotheses, cheapest reproduction loop, tagged debug logs). Runs when something is *broken* on a live system.
 - `qa-and-browser.md` (this skill) — **acceptance** discipline (per-UI-AC evidence, browser-tool hierarchy, evidence-tier rubric, manual-step fallback). Runs when something is *supposed to work* on a live system and we need proof.
@@ -82,7 +82,7 @@ Each row in `Per-AC evidence` follows the template in `qa.md > Per-AC evidence`:
 
 Before running any verification step, the qa-runner writes **3-5 things that might fail** in a `## Pre-commitment predictions` block. The act of predicting in writing forces real verification later (vs the rationalisation "I expected it to work, so I did not check"). The reviewer's `qa-evidence` axis verifies the block is present and non-trivial when `evidence_tier != playwright` (Playwright specs are themselves predictions in executable form).
 
-This mirrors the v8.51 plan-critic's pre-implementation predictions pattern: predictions made before the work activate real testing afterwards.
+This mirrors the plan-critic's pre-implementation predictions pattern: predictions made before the work activate real testing afterwards.
 
 ## Anti-rationalizations (referenced, not duplicated)
 

@@ -75,7 +75,6 @@ export function parseArtifact(raw: string, sourcePath?: string): ParsedArtifact 
   if (frontmatter.ac !== undefined && !Array.isArray(frontmatter.ac)) {
     throw new FrontmatterError("Frontmatter `ac` must be an array.", sourcePath);
   }
-  // v8.36 — validate per-criterion `posture` annotation. Unknown values are
   // rejected with a clear error citing the AC id + the bad value so
   // the ac-author can fix the typo. Missing posture is fine (it
   // defaults to `test-first` downstream).

@@ -26,8 +26,6 @@ import { DECISION_PROTOCOL } from "./content/decision-protocol.js";
 import { META_SKILL } from "./content/meta-skill.js";
 import { renderStartCommand } from "./content/start-command.js";
 import { renderCancelCommand } from "./content/cancel-command.js";
-import { renderIdeaCommand } from "./content/idea-command.js";
-import { UTILITY_COMMAND_FILES } from "./content/utility-commands.js";
 import { ensureDir, exists, removePath, writeFileSafe } from "./fs-utils.js";
 import { ensureRunSystem } from "./run-persistence.js";
 import { createDefaultConfig, readConfig, renderConfig, type CclawConfig } from "./config.js";
@@ -44,7 +42,7 @@ import { ironLawsMarkdown } from "./content/iron-laws.js";
 import type { ProgressEvent, SummaryCounts } from "./ui.js";
 
 /**
- * v8.55 — per-harness layout for the ambient cclaw rules surface that
+ * per-harness layout for the ambient cclaw rules surface that
  * lives outside `/cc`. Each harness gets its own activation contract;
  * the field captures both the file path and the activation mode so the
  * install summary can render the correct per-harness guidance.
@@ -141,20 +139,20 @@ const HARNESS_LAYOUTS: Record<HarnessId, HarnessLayout> = {
 };
 
 /**
- * v8.40 — files cclaw used to ship under `.cclaw/hooks/` but no longer
+ * files cclaw used to ship under `.cclaw/hooks/` but no longer
  * writes. The installer removes each on every `cclaw install` (and the
  * whole `.cclaw/hooks/` directory after the files are gone) so existing
- * v8.38/v8.39 projects upgrade cleanly. Idempotent; emits one progress
+ * v8.38/projects upgrade cleanly. Idempotent; emits one progress
  * event per removed entry.
  *
- * v8.40 retired all hooks: `session-start.mjs` (advisory ping) and
+ * retired all hooks: `session-start.mjs` (advisory ping) and
  * `commit-helper.mjs` (mechanical TDD gate). The Iron Law is now a
  * prompt rule + git-log inspection in the reviewer; no `.mjs` ships
  * under `.cclaw/hooks/` and the directory itself is removed when
  * empty.
  *
  * Earlier retired entries kept in the list so an install that skipped
- * the v8.38 cleanup (e.g. upgrade from v8.36 straight to v8.40) still
+ * the cleanup (e.g. upgrade from straight to v8.40) still
  * gets a clean hooks dir before it disappears.
  */
 const RETIRED_HOOK_FILES: readonly string[] = [
@@ -167,7 +165,7 @@ const RETIRED_HOOK_FILES: readonly string[] = [
  * Per-harness hook config files that earlier cclaw versions wrote to
  * wire `session-start.mjs` into the harness session.start event. v8.40
  * removes both the hook and its wiring; this list drives the install
- * cleanup so a project upgraded from v8.38/v8.39 ends up with no
+ * cleanup so a project upgraded from v8.38/ends up with no
  * cclaw-owned hooks file in the harness root.
  */
 const RETIRED_HARNESS_HOOK_FILES: readonly { dir: string; fileName: string }[] = [
@@ -176,6 +174,15 @@ const RETIRED_HARNESS_HOOK_FILES: readonly { dir: string; fileName: string }[] =
   { dir: ".codex", fileName: "hooks.json" },
   { dir: ".opencode/plugins", fileName: "cclaw-plugin.mjs" }
 ];
+
+/** Retired in v8.60 — swept on install / sync / uninstall. */
+const RETIRED_COMMAND_FILES: readonly string[] = [
+  "cc-idea.md",
+  "cclaw-review.md",
+  "cclaw-critic.md"
+];
+
+const RETIRED_TEMPLATE_FILES: readonly string[] = ["ideas.md"];
 
 export interface SyncOptions {
   cwd: string;
@@ -189,7 +196,7 @@ export interface SyncOptions {
    */
   interactive?: boolean;
   /**
-   * v8.17 — skip the orphan-skill scan that runs after the install layer
+   * skip the orphan-skill scan that runs after the install layer
    * writes `.cclaw/lib/skills/*.md`. Default `false` (scan runs and
    * `fs.rm`s any `.md` file in that directory not in
    * `AUTO_TRIGGER_SKILLS` ∪ {`cclaw-meta.md`}). Use only as an emergency
@@ -199,7 +206,7 @@ export interface SyncOptions {
    */
   skipOrphanCleanup?: boolean;
   /**
-   * v8.35 — when true, write a CONTEXT.md stub at the project root if
+   * when true, write a CONTEXT.md stub at the project root if
    * one does not already exist. Default `false`: CONTEXT.md is an
    * opt-in convention, the install layer must never overwrite a file
    * the user (or another tool) authored. Surfaced behind the
@@ -267,10 +274,10 @@ async function writeRuntimeSkills(projectRoot: string): Promise<void> {
 }
 
 /**
- * v8.22 — generic orphan-`.md`-file garbage collector for a managed
+ * generic orphan-`.md`-file garbage collector for a managed
  * subdirectory under `.cclaw/lib/`. Lifted out of v8.17's
  * skill-specific `cleanupOrphanSkills` so the same loud, idempotent
- * scan can run against `lib/skills/` (v8.17) and `lib/runbooks/`
+ * scan can run against `lib/skills/` and `lib/runbooks/`
  * (v8.22, when this PR adds 10 on-demand runbook files alongside the
  * 4 stage-runbooks shipped since v8.4).
  *
@@ -287,7 +294,7 @@ async function writeRuntimeSkills(projectRoot: string): Promise<void> {
  * event when N > 0. On a healthy install (N = 0) the scan emits
  * nothing — zero noise. The per-file `detail` is the file basename; the
  * summary `detail` starts with `<N> orphan <noun ...> removed` so the
- * v8.17 regex `/^N orphan skill files? /` continues to match.
+ * regex `/^N orphan skill files? /` continues to match.
  *
  * Idempotent: running `cclaw sync` twice in a row on a clean install
  * produces zero orphan events on the second pass.
@@ -319,7 +326,7 @@ async function cleanupOrphans(
 }
 
 /**
- * v8.17 wrapper: orphan-clean `.cclaw/lib/skills/`. Expected set is
+ * wrapper: orphan-clean `.cclaw/lib/skills/`. Expected set is
  * `AUTO_TRIGGER_SKILLS` ∪ {`cclaw-meta.md`}.
  */
 async function cleanupOrphanSkills(
@@ -340,14 +347,14 @@ async function cleanupOrphanSkills(
 }
 
 /**
- * v8.22 wrapper: orphan-clean `.cclaw/lib/runbooks/`. Expected set is
+ * wrapper: orphan-clean `.cclaw/lib/runbooks/`. Expected set is
  * the 4 `STAGE_PLAYBOOKS` filenames + `index.md` + the surviving
  * `ON_DEMAND_RUNBOOKS` filenames. Loud-and-idempotent like the v8.17
  * skill scan; emits `Removed orphan runbook` and `Cleaned orphan
  * runbooks` so callers can distinguish runbook events from skill
  * events.
  *
- * v8.54 — the merged-away runbook files (self-review-gate.md,
+ * the merged-away runbook files (self-review-gate.md,
  * ship-gate.md, discovery.md, plan-small-medium.md, critic-stage.md,
  * plan-critic-stage.md) are not in the expected set, so the orphan
  * scan removes them on upgrade. The `RETIRED_RUNBOOK_FILES` constant
@@ -391,12 +398,6 @@ async function writeTemplates(projectRoot: string, legacyArtifacts: boolean): Pr
   );
 }
 
-async function writeIdeasSeed(projectRoot: string): Promise<void> {
-  const target = path.join(projectRoot, RUNTIME_ROOT, "ideas.md");
-  if (await exists(target)) return;
-  await writeFileSafe(target, templateBody("ideas"));
-}
-
 async function writeStageRunbooks(projectRoot: string): Promise<void> {
   const dir = path.join(projectRoot, LIB_ROOT, "runbooks");
   for (const playbook of STAGE_PLAYBOOKS) {
@@ -436,8 +437,8 @@ async function writeMetaSkill(projectRoot: string): Promise<void> {
 }
 
 /**
- * v8.49 — write the auto-trigger skills index to `.cclaw/lib/skills-index.md`.
- * v8.49 collapses the per-dispatch specialist prompt block to a compact
+ * write the auto-trigger skills index to `.cclaw/lib/skills-index.md`.
+ * collapses the per-dispatch specialist prompt block to a compact
  * one-line-per-skill pointer; the full per-skill description + trigger
  * list lives in this index, written once at install time so specialists
  * can read it on demand instead of the prompt carrying it verbatim.
@@ -456,7 +457,7 @@ async function writeSkillsIndex(projectRoot: string): Promise<void> {
 }
 
 /**
- * Write the shared anti-rationalization catalog (v8.49) to
+ * Write the shared anti-rationalization catalog to
  * `.cclaw/lib/anti-rationalizations.md`. Specialists and skills reference
  * rows from this file by category (`completion`, `verification`,
  * `edit-discipline`, `commit-discipline`, `posture-bypass`) instead of
@@ -475,7 +476,7 @@ async function writeAntiRationalizationsCatalog(
 }
 
 /**
- * v8.55 — render the ambient rules body for the harness's native rules
+ * render the ambient rules body for the harness's native rules
  * system. Cursor takes the MDC variant (frontmatter + body); the other
  * three harnesses take the plain markdown body. The same compact
  * content rides every harness; only the wrapper format differs to
@@ -485,21 +486,59 @@ function rulesBodyFor(layout: HarnessLayout): string {
   return layout.rules.format === "mdc" ? CCLAW_RULES_MDC : CCLAW_RULES_MARKDOWN;
 }
 
+async function cleanupOrphanCommands(
+  projectRoot: string,
+  harnesses: readonly HarnessId[],
+  emit: (step: string, detail?: string) => void
+): Promise<number> {
+  const expected = new Set<string>(["cc.md", "cc-cancel.md"]);
+  let removed = 0;
+  for (const harness of harnesses) {
+    removed += await cleanupOrphans(
+      projectRoot,
+      HARNESS_LAYOUTS[harness].commandsDir,
+      expected,
+      { singular: "command", plural: "commands" },
+      emit
+    );
+  }
+  return removed;
+}
+
+async function removeRetiredCommandFiles(
+  projectRoot: string,
+  harnesses: readonly HarnessId[],
+  emit: (step: string, detail?: string) => void
+): Promise<void> {
+  for (const harness of harnesses) {
+    const commandsDir = path.join(projectRoot, HARNESS_LAYOUTS[harness].commandsDir);
+    for (const fileName of RETIRED_COMMAND_FILES) {
+      const target = path.join(commandsDir, fileName);
+      if (await exists(target)) {
+        await fs.rm(target, { force: true });
+        emit("Removed retired command", `${HARNESS_LAYOUTS[harness].commandsDir}/${fileName}`);
+      }
+    }
+  }
+}
+
+async function removeRetiredTemplateFiles(
+  projectRoot: string,
+  emit: (step: string, detail?: string) => void
+): Promise<void> {
+  for (const fileName of RETIRED_TEMPLATE_FILES) {
+    const target = path.join(projectRoot, LIB_ROOT, "templates", fileName);
+    if (await exists(target)) {
+      await fs.rm(target, { force: true });
+      emit("Removed retired template", `${LIB_ROOT}/templates/${fileName}`);
+    }
+  }
+}
+
 async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): Promise<void> {
   await ensureDir(path.join(projectRoot, layout.commandsDir));
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc.md"), renderStartCommand());
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc-cancel.md"), renderCancelCommand());
-  await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc-idea.md"), renderIdeaCommand());
-  // v8.57 — utility slash commands. Direct-callable shims that expose
-  // the reviewer / critic specialists outside the full /cc flow. Each
-  // file ships next to cc.md / cc-cancel.md / cc-idea.md so the harness
-  // surfaces them through the same slash-command discovery mechanism.
-  for (const utility of UTILITY_COMMAND_FILES) {
-    await writeFileSafe(
-      path.join(projectRoot, layout.commandsDir, utility.fileName),
-      utility.render()
-    );
-  }
 
   await ensureDir(path.join(projectRoot, layout.agentsDir));
   for (const agent of CORE_AGENTS) {
@@ -514,7 +553,6 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
     await writeFileSafe(path.join(projectRoot, layout.skillsDir, skill.fileName), skill.body);
   }
 
-  // v8.55 — ambient rules surface. Each harness gets the rules body
   // wrapped in its native format (Cursor MDC vs plain markdown) at its
   // namespaced path. Idempotent: re-running install overwrites the
   // file with the current content rather than appending; the cclaw
@@ -526,16 +564,16 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
 }
 
 /**
- * v8.44 — retired `.cclaw/lib/` subdirectories. The installer removes
+ * retired `.cclaw/lib/` subdirectories. The installer removes
  * each on every `cclaw install` (and emits one progress event per
  * removed dir) so existing v8.43 / earlier projects upgrade cleanly.
  *
- * v8.44 retired `examples` — the `.cclaw/lib/examples/` directory was
- * written by install since v8.0 but no agent code path programmatically
- * read from it. The v8.12 cleanup already emptied the EXAMPLES content
- * module; v8.44 takes out the directory + writer + smoke assertion.
+ * retired `examples` — the `.cclaw/lib/examples/` directory was
+ * written by install since but no agent code path programmatically
+ * read from it. The cleanup already emptied the EXAMPLES content
+ * module; takes out the directory + writer + smoke assertion.
  *
- * v8.54 retired `research` and `recovery` — both modules exported empty
+ * retired `research` and `recovery` — both modules exported empty
  * arrays since v8.12 (no specialist or runbook ever read from
  * `.cclaw/lib/research/` or `.cclaw/lib/recovery/`). The cleanup pass
  * removes the lingering empty directories on upgrade.
@@ -543,8 +581,8 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
 const RETIRED_LIB_DIRS: readonly string[] = ["examples", "research", "recovery"];
 
 /**
- * v8.54 — retired on-demand runbook files. Earlier installs wrote these
- * under `.cclaw/lib/runbooks/`. v8.54 merged or lifted their content
+ * retired on-demand runbook files. Earlier installs wrote these
+ * under `.cclaw/lib/runbooks/`. merged or lifted their content
  * into surviving runbooks (handoff-gates.md, critic-steps.md, plan.md
  * "Path: small/medium" / "Path: large-risky" sections). The orphan
  * cleaner removes the stale `.md` files on upgrade.
@@ -572,7 +610,7 @@ async function removeRetiredLibDirs(
 }
 
 /**
- * v8.40 — clean up the now-retired `.cclaw/hooks/` directory plus its
+ * clean up the now-retired `.cclaw/hooks/` directory plus its
  * historical `.mjs` files, and the per-harness hook-config files that
  * pointed at `session-start.mjs`. Idempotent: emits one progress
  * event per removed entry, nothing on a clean install.
@@ -580,7 +618,7 @@ async function removeRetiredLibDirs(
  * Strategy:
  *  1. Delete each known retired hook file under `.cclaw/hooks/`.
  *  2. If `.cclaw/hooks/` is now empty, remove the directory itself
- *     (the v8.40 install no longer needs it).
+ *     (the install no longer needs it).
  *  3. For every harness, remove the cclaw-owned hooks config file
  *     (`.claude/hooks/hooks.json`, `.cursor/hooks.json`,
  *     `.codex/hooks.json`, `.opencode/plugins/cclaw-plugin.mjs`).
@@ -625,7 +663,7 @@ async function writeConfig(projectRoot: string, config: CclawConfig): Promise<st
 }
 
 /**
- * v8.35 — write the CONTEXT.md stub at the project root when the user
+ * write the CONTEXT.md stub at the project root when the user
  * opts in via `--with-context` and the file does not already exist.
  *
  * Returns `"created" | "exists" | "skipped"` so the install summary can
@@ -746,14 +784,24 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
 
   await writeAntipatterns(projectRoot);
   await writeDecisionProtocol(projectRoot);
-  await writeIdeasSeed(projectRoot);
   emit("Wrote anti-patterns + decision protocol", "antipatterns.md + decision-protocol.md");
+
+  await removeRetiredTemplateFiles(projectRoot, emit);
+  await removeRetiredCommandFiles(projectRoot, harnesses, emit);
 
   for (const harness of harnesses) {
     await writeHarnessAssets(projectRoot, HARNESS_LAYOUTS[harness]);
   }
   emit("Wired harnesses", `${harnesses.join(", ")} → commands · agents · skills · rules`);
-  // v8.55 — emit one progress event per harness rules file so the
+
+  if (options.skipOrphanCleanup) {
+    emit(
+      "Skipped orphan cleanup",
+      "--skip-orphan-cleanup set; stale harness command files will not be removed"
+    );
+  } else {
+    await cleanupOrphanCommands(projectRoot, harnesses, emit);
+  }
   // operator sees which path each rules file landed at. Cursor's MDC
   // file is the only auto-load path; the other three require a
   // one-line `@`-reference from the user's root memory file, which
@@ -789,11 +837,7 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     recovery: 0,
     examples: 0,
     hooks: 0,
-    // v8.57 — three flow commands (cc, cc-cancel, cc-idea) plus the new
-    // utility command count from UTILITY_COMMAND_FILES (currently 2:
-    // cclaw-review, cclaw-critic). Sourcing from the constant means a
-    // future v8.58 utility command flips the count automatically.
-    commands: 3 + UTILITY_COMMAND_FILES.length
+    commands: 2
   };
   return { installedHarnesses: harnesses, configPath, counts };
 }
@@ -809,18 +853,13 @@ export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
   await removePath(path.join(projectRoot, RUNTIME_ROOT));
   for (const harness of harnesses as HarnessId[]) {
     const layout = HARNESS_LAYOUTS[harness];
-    // v8.57 — utility command files (`cclaw-review.md`, `cclaw-critic.md`)
-    // ship alongside the cc.md / cc-cancel.md / cc-idea.md trio; uninstall
-    // sweeps them via the same per-harness commands directory pass.
-    const utilityFiles = UTILITY_COMMAND_FILES.map((u) => u.fileName);
-    for (const filename of ["cc.md", "cc-cancel.md", "cc-idea.md", ...utilityFiles]) {
+    for (const filename of ["cc.md", "cc-cancel.md", ...RETIRED_COMMAND_FILES]) {
       await removePath(path.join(projectRoot, layout.commandsDir, filename));
     }
     for (const agent of CORE_AGENTS) {
       await removePath(path.join(projectRoot, layout.agentsDir, `${agent.id}.md`));
     }
     await removePath(path.join(projectRoot, layout.skillsDir));
-    // v8.55 — remove the harness-namespaced rules file written by
     // `writeHarnessAssets`. For Cursor this is `.cursor/rules/cclaw.mdc`;
     // for the other three it is `.harness/cclaw-rules.md`. The cleanup
     // is idempotent (removePath is force: true).
@@ -842,7 +881,6 @@ export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
       if (remaining.length === 0) await removePath(path.join(projectRoot, layout.agentsDir));
     }
   }
-  // v8.40 — scrub the retired `.cclaw/hooks/` directory and per-harness
   // hook-config artefacts. Belt-and-suspenders: uninstall already
   // removes the whole `.cclaw/` tree above (so `.cclaw/hooks/` goes
   // with it), but the per-harness hooks.json / cclaw-plugin.mjs survive
@@ -861,7 +899,7 @@ export function planSeedForSlug(slug: string): string {
 }
 
 /**
- * v8.55 — render the per-harness rules activation guidance block the
+ * render the per-harness rules activation guidance block the
  * CLI prints after a successful install. The block names each enabled
  * harness with its native rules path and the action the user has to
  * take (none for Cursor; one-line `@`-reference for the other three).
@@ -892,8 +930,10 @@ export function renderHarnessRulesGuidance(
 
 export const HARNESS_LAYOUT_TABLE = HARNESS_LAYOUTS;
 export {
+  RETIRED_COMMAND_FILES,
   RETIRED_HOOK_FILES,
   RETIRED_HARNESS_HOOK_FILES,
   RETIRED_LIB_DIRS,
-  RETIRED_RUNBOOK_FILES
+  RETIRED_RUNBOOK_FILES,
+  RETIRED_TEMPLATE_FILES
 };

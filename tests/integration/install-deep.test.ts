@@ -16,7 +16,7 @@ describe("install — deep content", () => {
     // v8.54: `decisions.md` is gated behind config.legacyArtifacts; on the
     // default install the template is intentionally absent (the design
     // phase inlines D-N rows into plan.md > ## Decisions).
-    for (const fileName of ["plan.md", "build.md", "review.md", "ship.md", "learnings.md", "manifest.md", "ideas.md", "iron-laws.md"]) {
+    for (const fileName of ["plan.md", "build.md", "review.md", "ship.md", "learnings.md", "manifest.md", "iron-laws.md"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "lib", "templates", fileName));
       expect(stat.isFile()).toBe(true);
     }
@@ -31,14 +31,12 @@ describe("install — deep content", () => {
     }
   });
 
-  it("seeds .cclaw/ideas.md but does not overwrite an existing file on resync", async () => {
+  it("v8.60 — does not install ideas.md template (retired with /cc-idea)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    const ideasPath = path.join(project, ".cclaw", "ideas.md");
-    await fs.appendFile(ideasPath, "\n## 2026-05-07T00:00:00Z — keep me\n\nsentinel\n", "utf8");
-    await syncCclaw({ cwd: project, harnesses: ["cursor"] });
-    const body = await fs.readFile(ideasPath, "utf8");
-    expect(body).toContain("sentinel");
+    await expect(
+      fs.access(path.join(project, ".cclaw", "lib", "templates", "ideas.md"))
+    ).rejects.toBeTruthy();
   });
 
   it("does NOT generate AGENTS.md or CLAUDE.md (cclaw v8 keeps the project root clean)", async () => {

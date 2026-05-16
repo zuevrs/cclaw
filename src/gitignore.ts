@@ -6,8 +6,8 @@ import { exists, writeFileSafe } from "./fs-utils.js";
  * cclaw .gitignore patterns.
  *
  * Only the *transient* parts of .cclaw/ are ignored. The artifact tree
- * (`.cclaw/flows/`, `.cclaw/lib/`, `.cclaw/config.yaml`, `.cclaw/ideas.md`,
- * `.cclaw/knowledge.jsonl`, hooks, etc.) is meant to be committed so the
+ * (`.cclaw/flows/`, `.cclaw/lib/`, `.cclaw/config.yaml`,
+ * `.cclaw/knowledge.jsonl`, etc.) is meant to be committed so the
  * team and graph tools can index the work history.
  *
  * - `.cclaw/state/` — per-developer flow-state.json. Mutates every session.

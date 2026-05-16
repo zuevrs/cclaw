@@ -86,7 +86,7 @@ async function assertHarnessFootprint(
   const selectedSet = new Set(selected);
   for (const harness of HARNESS_IDS) {
     if (selectedSet.has(harness)) {
-      for (const fileName of ["cc.md", "cc-cancel.md", "cc-idea.md"]) {
+      for (const fileName of ["cc.md", "cc-cancel.md"]) {
         const stat = await fs.stat(path.join(project, HARNESS_TO_COMMANDS_DIR[harness], fileName));
         expect(stat.isFile(), `${harness} should have ${fileName}`).toBe(true);
       }
@@ -104,7 +104,7 @@ async function assertHarnessFootprint(
         `${harness} hooks config must NOT exist in v8.40 (hooks retired)`
       ).rejects.toBeTruthy();
     } else {
-      for (const fileName of ["cc.md", "cc-cancel.md", "cc-idea.md"]) {
+      for (const fileName of ["cc.md", "cc-cancel.md"]) {
         await expect(
           fs.access(path.join(project, HARNESS_TO_COMMANDS_DIR[harness], fileName)),
           `${harness} must NOT have ${fileName} when not selected`
