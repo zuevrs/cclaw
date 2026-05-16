@@ -2,19 +2,19 @@
 
 **A multi-stage planning + review harness for coding agents.**
 
-cclaw drops a `/cc` slash command into Claude Code, Cursor, OpenCode, or Codex. It routes the task, picks the right amount of ceremony, and runs the work through a fixed pipeline: route → plan → build → qa → review → critic → ship. Each stage emits a slim summary back to the harness and writes a tracked artifact under `.cclaw/flows/<slug>/`. Sub-agents are isolated; the orchestrator keeps the slug's history.
+cclaw drops a `/cc` slash command into Claude Code, Cursor, OpenCode, or Codex. It routes the task, picks the right amount of ceremony, and runs the work through a fixed pipeline: triage → plan → build → qa → review → critic → ship. Each stage emits a slim summary back to the harness and writes a tracked artifact under `.cclaw/flows/<slug>/`. Sub-agents are isolated; the orchestrator keeps the slug's history.
 
-cclaw installs `/cc` and `/cc-cancel` into each harness. Inside `/cc`, three entry modes cover task work, research, and continuation flows — see [When to use which command](#when-to-use-which-command) and [Modes](#modes).
+cclaw installs `/cc` and `/cc-cancel` into each harness. Inside `/cc`, three entry modes cover task work, research, and continuation flows.
 
 ## Why cclaw
 
-- **Pipeline, not autopilot, but no friction either.** v8.61 — the flow runs end-to-end without approval pickers at plan / review / critic gates (always-auto). Hard failures stop and report with a clear status block; the user resumes with `/cc` (continue) or `/cc-cancel` (discard). See [Failure handling](#failure-handling-v861-always-auto) below.
+- **One pipeline, depth scales.** Every task runs `triage → architect → builder → reviewer → critic → ship`. Plan-stage depth scales with `ceremonyMode` (lite for soft, rich for strict) instead of branching to a different specialist stack.
+- **Always-auto, hard stops on failure.** The flow runs end-to-end without approval pickers at plan / review / critic gates. Hard failures stop and report with a plain-prose status block; resume with `/cc`, discard with `/cc-cancel`.
 - **Two-model review.** A read-only reviewer walks ten axes; an adversarial critic falsifies what the reviewer cleared. They share no context and write to separate artifacts (`review.md`, `critic.md`).
-- **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Small/medium tasks get a soft-mode plan and a single TDD cycle. Large-risky tasks get a full per-criterion build with a pre-implementation plan-critic gate.
-- **Unified flow shape (v8.62).** One pipeline for every task: triage → architect → builder → reviewer → critic → ship. Plan-stage depth scales with `ceremonyMode` (lite for soft, rich for strict) instead of branching to a different specialist stack. Three flow paths collapsed into one.
-- **Lightweight router as a sub-agent.** v8.61 — triage moved from the main orchestrator context to a dedicated `triage` specialist (one of seven sub-agents). The router is still zero-question by default (no structured ask, no clarifying prompt). Explicit override flags (`/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>`) short-circuit the heuristic when you want to pin a ceremony level. Classification work (surface detection, assumption capture, prior-learnings, interpretation forks) moved into the specialist that already has the codebase context — the `architect`'s Bootstrap + Frame phases on strict and soft.
-- **Powerful research mode (v8.65).** `/cc research <topic>` is a separate entry point for pre-task uncertainty: brainstorming, scope exploration, architecture comparison. v8.65 rebuilt research as a **multi-lens main-context orchestrator**: open-ended discovery dialogue (no question cap), then five parallel research lenses (engineer / product / architecture / history / skeptic) auto-dispatched when you signal "ready / go ahead". The orchestrator synthesises the per-lens findings into a rich `research.md` with a cross-lens distillation and a recommended next step. Optional handoff into a follow-up `/cc <clarified task>` flow that consumes the research as `priorResearch` context.
-- **Continuation flow.** `/cc extend <slug> <task>` loads a previously-shipped slug as parent context for iterative work that explicitly builds on a previously-shipped slug. Loads the parent's `plan.md` / `build.md` / `learnings.md` (and `review.md` / `critic.md` / `qa.md` when present) into `flowState.parentContext`. Triage inherits `ceremonyMode` / `surfaces` from the parent under v8.61 always-auto (legacy `runMode` parents fold to `auto`; explicit `--strict` / `--soft` / `--inline` flags still override). The new flow's `plan.md` carries a `## Extends` section authored by the `architect` (Bootstrap → parent-context linkage step) plus `parent_slug:` frontmatter that points back at the parent.
+- **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Small/medium tasks get a soft-mode plan + a single TDD cycle. Large-risky tasks get a per-slice build with a pre-implementation plan-critic gate.
+- **Parallel by default.** Independent slices in a plan run in parallel — N independent slices finish in the time of the longest, not the sum.
+- **Research as a separate entry point.** `/cc research <topic>` runs an open-ended discovery dialogue and dispatches five parallel research lenses (engineer / product / architecture / history / skeptic). Output: a synthesised `research.md`. Optional handoff into a follow-up `/cc <task>` that consumes it as context.
+- **Continuation flow.** `/cc extend <slug> <task>` loads a previously-shipped slug's `plan.md` / `build.md` / `learnings.md` (and `review.md` / `critic.md` / `qa.md` when present) as load-bearing context.
 - **Same runtime, four harnesses.** Claude Code, Cursor, OpenCode, and Codex all read the same `.cclaw/` install. Each harness gets the same `/cc` body plus harness-namespaced ambient rules.
 - **Compound learnings.** Non-trivial slugs emit a `learnings.md`. Future runs read prior shipped lessons through `knowledge.jsonl` before authoring a plan; outcome signals (`good` / `unknown` / `manual-fix` / `follow-up-bug` / `reverted`) down-weight priors that didn't hold up.
 
@@ -23,7 +23,7 @@ cclaw installs `/cc` and `/cc-cancel` into each harness. Inside `/cc`, three ent
 | Intent | Command | What it does |
 | --- | --- | --- |
 | Execute a task end-to-end (code change) | `/cc <task>` | Full flow: triage → plan → build → review → critic → ship |
-| Think / brainstorm / research a topic without committing to a task | `/cc research <topic>` | v8.65 powerful research mode: open-ended discovery dialogue + 5 parallel research lenses (engineer / product / architecture / history / skeptic) + synthesised `research.md`; optional handoff to `/cc <task>` |
+| Think / brainstorm / research a topic without committing to a task | `/cc research <topic>` | Open-ended discovery dialogue + 5 parallel research lenses + synthesised `research.md`; optional handoff to `/cc <task>` |
 | Extend a previously-shipped slug with related work | `/cc extend <slug> <task>` | New flow with parent's plan/build/learnings loaded as context |
 | Cancel the active flow | `/cc-cancel` | Discards current `.cclaw/flows/<slug>/`, frees the orchestrator |
 
@@ -35,15 +35,11 @@ npx cclaw-cli@latest
 
 # Inside your harness:
 /cc add caching to the search endpoint
-
-# v8.61 — the flow runs always-auto: plan → build → review → critic → ship
-# without approval pickers. cclaw stops only when a hard failure fires
-# (build broken, reviewer can't converge in 3 fixes, critic block-ship,
-# catastrophic git/dispatch failure). Resume with /cc; discard with
-# /cc-cancel. See "If something goes wrong" below.
 ls .cclaw/flows/20260515-search-caching/
 # plan.md  build.md  review.md  critic.md  ship.md
 ```
+
+The flow runs end-to-end. cclaw stops only on a hard failure (build broken, reviewer can't converge in 3 fixes, critic block-ship, catastrophic git/dispatch failure). Resume with `/cc`; discard with `/cc-cancel`. See [Failure handling](#failure-handling) below.
 
 For CI / scripted installs, use the non-interactive escape hatch:
 
@@ -53,7 +49,7 @@ npx cclaw-cli@latest --non-interactive install --harness=cursor
 
 There is no `cclaw plan`, `cclaw build`, or `cclaw status`. Flow control lives inside `/cc`.
 
-### `/cc` invocation matrix (v8.61)
+### `/cc` invocation matrix
 
 | Invocation | Active flow? | Behaviour |
 | --- | --- | --- |
@@ -66,88 +62,74 @@ There is no `cclaw plan`, `cclaw build`, or `cclaw status`. Flow control lives i
 | `/cc-cancel` | yes | Cancel active flow (move artifacts to `flows/cancelled/<slug>/`, reset state). |
 | `/cc-cancel` | no | Error: "No active flow to cancel." |
 
-### If something goes wrong
-
-cclaw v8.61 runs always-auto, so the recovery loop is uniform:
-
-1. cclaw stops at the first hard failure and writes a status block to chat naming the stage, the reason, and the recovery options.
-2. You read the status block (the artifact under `.cclaw/flows/<slug>/` carries the full detail).
-3. You decide: `/cc` to continue (after editing the diff / plan / review.md as needed), or `/cc-cancel` to discard the slug entirely.
-
-There is no in-chat picker, no `[y/n]` ask, no "approve this?" gate. The status block is plain prose; recovery is always one of two typed commands.
-
 ## Modes
 
-v8.59 ships three top-level entry points. All invocations use the same `/cc` slash-command surface; the orchestrator picks which mode to run based on the first token after `/cc`.
+Three top-level entry points share the `/cc` slash-command surface. The orchestrator picks the mode from the first token after `/cc`.
 
-### `/cc <task>` — task mode (the historical default)
+### `/cc <task>` — task mode
 
-Runs the full route → plan → build → ship pipeline. v8.61 — the router moved to a `triage` sub-agent dispatch (Hop 2 of the orchestrator). It still picks `complexity` × `ceremonyMode` × `path` from heuristics and announces the choice in one line, then dispatches the first specialist. No clarifying questions; no structured ask. If you want to pin a ceremony level explicitly, pass one of:
+Runs the full triage → plan → build → review → critic → ship pipeline. The `triage` sub-agent picks `complexity × ceremonyMode × path` from heuristics, announces the choice in one line, and dispatches the first specialist. No clarifying questions; no structured ask.
+
+Pin a ceremony level explicitly with mutually-exclusive flags:
 
 ```bash
 /cc --inline <task>    # forces inline edit (one commit, no plan)
 /cc --soft <task>      # forces soft-mode plan → build → review → ship
-/cc --strict <task>    # forces strict + architect's full Frame → Compose pass + per-criterion commits + plan-critic gate
+/cc --strict <task>    # forces strict + architect's full Frame → Compose pass + per-slice commits + plan-critic gate
 ```
 
-The flags are mutually exclusive. v8.61 retired the user-facing `--mode=auto` / `--mode=step` runMode toggle — both are accepted on the parser for back-compat but collapse to `auto` (the only behavioural mode in v8.61). When the project has no `.git/`, the router auto-downgrades strict → soft even with `--strict` (per-criterion commits need a SHA chain to be useful).
+When the project has no `.git/`, the router auto-downgrades strict → soft even with `--strict` (per-slice commits need a SHA chain to be useful).
 
-What used to live at the router — surface detection, assumption capture, prior-learnings lookup, interpretation forks — now lives inside the specialist that has the codebase context to do it well: the `architect`'s Bootstrap + Frame phases on strict + soft, nothing on inline. Pre-v8.58 state files continue to validate verbatim; readers default to `mode: "task"` when the field is absent.
+Classification work — surface detection, assumption capture, prior-learnings lookup, interpretation forks — lives inside the `architect`'s Bootstrap + Frame phases on strict + soft, nothing on inline.
 
-### `/cc research <topic>` — powerful research mode (v8.65 multi-lens orchestrator)
+### `/cc research <topic>` — research mode
 
-v8.65 rebuilt research mode from the ground up. The flow is now a **main-context orchestrator** that runs in four phases and emits a rich `research.md` covering five orthogonal lenses + cross-lens synthesis + recommended next step. Output: `.cclaw/flows/<slug>/research.md`. No build / review / critic / ship.
+A separate entry point for pre-task uncertainty: brainstorming, scope exploration, architecture comparison. Runs as a main-context orchestrator in four phases. Output: `.cclaw/flows/<slug>/research.md`. No build / review / critic / ship.
 
 ```bash
 /cc research storage strategy for shared agent memory
 /cc --research auth library trade-offs                 # equivalent
 ```
 
-**Phase 1 — open-ended discovery dialogue.** The orchestrator opens with `"Hi. What are you researching? Tell me what you know and what you don't."` and runs an **uncapped** dialogue with you (no fixed question budget; no auto-advance). You iterate freely — refine the topic, name constraints, surface prior attempts, name stakeholders, mark scope edges. The orchestrator proceeds to Phase 2 only when you signal `ready` / `go ahead` / `finalize` / etc. (or you can pivot back into dialogue at any time).
+**Phase 1 — open-ended discovery dialogue.** The orchestrator opens with `"Hi. What are you researching? Tell me what you know and what you don't."` and runs an **uncapped** dialogue (no fixed question budget; no auto-advance). You refine the topic, name constraints, surface prior attempts, name stakeholders, mark scope edges. The orchestrator proceeds only when you signal `ready` / `go ahead` / `finalize`.
 
-**Phase 2 — parallel lens dispatch (5 lenses).** When you signal ready, the orchestrator distils the dialogue into a 5-15 bullet summary and **auto-dispatches all five research lenses in parallel** with the topic + dialogue summary as their shared envelope. Each lens returns a structured per-lens findings block:
+**Phase 2 — parallel lens dispatch (5 lenses).** The orchestrator distils the dialogue into a 5-15 bullet summary and dispatches all five research lenses in parallel:
 
-| Lens | What it covers | Output |
-| --- | --- | --- |
-| `research-engineer` | Technical feasibility, stack fit, blockers, implementation paths, risks, rough effort | Feasibility (overall + 5 sub-axes) + 2-3 implementation paths with trade-offs + blockers + risks + effort estimate |
-| `research-product` | User / product value, who benefits, alternatives considered (always including "do nothing"), market / domain context | User-value tag + primary/secondary actors + alternatives + market context + open product questions |
-| `research-architecture` | System fit, surface impact, coupling, boundaries, scalability, reusable in-repo patterns | Surface impact (per-module severity) + coupling points + boundaries crossed + scalability notes + precedents |
-| `research-history` | Prior attempts via `.cclaw/knowledge.jsonl` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift | Prior attempts with citations + lessons (verbatim quotes from prior `learnings.md`) + outcome signal counts + git-archaeology highlights |
-| `research-skeptic` | Adversarial pass: failure modes (likelihood × impact), edge cases, abuse cases, hidden costs, don't-proceed triggers | Failure modes + edge cases + abuse cases + hidden costs + (optional) explicit don't-proceed triggers |
+| Lens | What it covers |
+| --- | --- |
+| `research-engineer` | Technical feasibility, stack fit, blockers, implementation paths, risks, effort estimate |
+| `research-product` | User / product value, who benefits, alternatives (always including "do nothing"), market context |
+| `research-architecture` | System fit, surface impact, coupling, boundaries, scalability, in-repo precedents |
+| `research-history` | Prior attempts via `.cclaw/knowledge.jsonl` + git log; lessons; outcome signals |
+| `research-skeptic` | Failure modes, edge cases, abuse cases, hidden costs, don't-proceed triggers |
 
-Engineer + architecture lenses may dispatch the existing `repo-research` helper for brownfield codebase context. Engineer / product / architecture / skeptic lenses may optionally use a web-search MCP tool when one is wired (e.g. `user-exa`); they fall back to training knowledge with a `Notes:` tag when no tool is available. History lens reads `.cclaw/knowledge.jsonl` + git log directly. **Lenses run independently — no lens cites another lens; no lens chains into another lens.**
+Engineer + architecture lenses may dispatch the `repo-research` helper for brownfield context. Engineer / product / architecture / skeptic lenses may use a web-search MCP tool when one is wired (e.g. `user-exa`), falling back to training knowledge with a `Notes:` tag otherwise. History lens reads `.cclaw/knowledge.jsonl` + git log directly. **Lenses run independently** — no lens cites or chains into another.
 
-**Phase 3 — synthesis.** The orchestrator pastes each lens's findings verbatim into the corresponding `## <Lens> lens` section of `research.md`, then runs a **cross-lens synthesis pass** that covers convergence (where 2+ lenses agree), divergence (where lenses disagree), trade-off space (the big choices the user must navigate), and confidence + coverage gaps. Finally, the orchestrator authors a **recommended next step**: exactly one of `plan with /cc <task>` (research converges; proceedable), `more research needed (specific area)` (a lens returned low confidence on a concrete gap), or `don't proceed (skeptic blocked: <reason>)` (skeptic set an unmitigated don't-proceed trigger).
+**Phase 3 — synthesis.** The orchestrator pastes each lens's findings verbatim into the matching `## <Lens> lens` section of `research.md`, then runs a cross-lens synthesis covering convergence (where 2+ lenses agree), divergence, the trade-off space, and confidence + coverage gaps. It then writes a recommended next step: exactly one of `plan with /cc <task>`, `more research needed (specific area)`, or `don't proceed (skeptic blocked: <reason>)`.
 
-**Phase 4 — finalize.** `git mv` the artifact into `.cclaw/flows/shipped/<slug>/research.md`. Plain-prose handoff:
+**Phase 4 — finalize.** `git mv` the artifact into `.cclaw/flows/shipped/<slug>/research.md` and emit a plain-prose handoff. The next `/cc <task>` invocation on the same project reads `flow-state.json > priorResearch` and consumes the most-recent shipped research as input to its plan stage. The handoff is optional — if research finalises and you never run a follow-up `/cc`, nothing else fires.
 
-> `research.md` is ready at `.cclaw/flows/shipped/<slug>/research.md`. Recommended next: _<verbatim Phase 3 recommendation>_. Ready to plan? Run `/cc <task>` and I'll carry the research as `priorResearch` context.
+Research mode skips the router entirely — no triage gate, no `complexity` / `ceremonyMode` heuristic. The five lenses live in `src/content/research-lenses/`, install to `.cclaw/lib/research-lenses/<lens>.md`, and are NOT in the core `SPECIALISTS` array.
 
-The next `/cc <task>` invocation on the same project reads `flow-state.json > priorResearch` and consumes the most-recent shipped research as input to its plan stage (the architect's Bootstrap phase includes the research artifact in its reads). The handoff is optional — if research finalises and you never run a follow-up `/cc`, nothing else fires.
+### `/cc extend <slug> <task>` — continuation mode
 
-Research mode skips the router entirely. There is no triage gate; no `complexity` / `ceremonyMode` heuristic runs. The orchestrator stamps a sentinel triage block (`mode: "research"`, `ceremonyMode: "strict"`, `path: ["plan"]`) so downstream readers that assume `triage` is present continue to work.
-
-The five lenses are **research-only sub-agents** — they live in `src/content/research-lenses/`, install to `.cclaw/lib/research-lenses/<lens>.md`, and are NOT in the core `SPECIALISTS` array (which stays at 7). The standard `/cc <task>` flow is untouched.
-
-### `/cc extend <slug> <task>` — continuation mode (v8.59 new entry point)
-
-Initialises a new flow that explicitly **extends a previously-shipped slug**. The orchestrator loads the parent's `plan.md`, `build.md`, `learnings.md`, and (when present) `review.md` / `critic.md` / `qa.md` as `flowState.parentContext` and surfaces them to `architect` / `reviewer` / `critic` as load-bearing context. Things already settled by the parent are NOT re-decided in the new flow.
+Initialises a new flow that explicitly extends a previously-shipped slug. The orchestrator loads the parent's `plan.md`, `build.md`, `learnings.md`, and (when present) `review.md` / `critic.md` / `qa.md` as `flowState.parentContext` and surfaces them to `architect` / `reviewer` / `critic` as load-bearing context. Things already settled by the parent are not re-decided.
 
 ```bash
 /cc extend 20260514-auth-flow add SAML login                   # canonical
 /cc extend 20260514-auth-flow --strict refactor session store  # ceremony override wins over inheritance
-/cc extend 20260514-cli-help fix typo in --help                # inheritance + always-auto
+/cc extend 20260514-cli-help fix typo in --help                # inheritance
 ```
 
-The orchestrator runs the same pipeline as a standard `/cc <task>` (plan → build → qa? → review → critic → ship); the only difference is at init:
+The orchestrator runs the same pipeline as `/cc <task>`; the only difference is at init:
 
-- **Parent validation.** `loadParentContext(projectRoot, <slug>)` (`src/parent-context.ts`) confirms the slug is shipped + has a non-empty `plan.md`. Four failure modes are explicit: `in-flight` (slug still active), `cancelled` (under `flows/cancelled/`), `corrupted` (shipped but `plan.md` missing), `missing` (slug not found anywhere). Each surfaces a one-line error and ends the turn.
-- **State stamp.** The new flow's `flow-state.json > parentContext` carries the parent's slug + status + shippedAt + structured artifact paths. Plan.md frontmatter carries `parent_slug: <parent>` (v8.59-native) plus `refines: <parent>` (back-compat with the knowledge-store chain, qa-runner skip rule, plan-critic skip gate, architect's Bootstrap brownfield path).
-- **Triage inheritance.** The new flow's `ceremonyMode` / `surfaces` default to the parent's values. `runMode` is v8.61 always-auto regardless of the parent (legacy `step` parents fold to `auto`). Explicit `--strict` / `--soft` / `--inline` flags override the ceremonyMode inheritance. A security-keyword escalation heuristic (`security` / `auth` / `migration` / `schema` / `payment` / `gdpr` / `pci`) auto-escalates a soft/inline parent → strict for the new flow.
-- **Specialist consumption.** The `architect`'s Bootstrap → Phase 0.5 (parent-context linkage) reads parent's `## Spec` / `## Decisions` / `## Selected Direction` and authors a mandatory `## Extends` section at the top of `plan.md` with parent slug + 1-line decision summary + clickable links to parent artifacts. `reviewer` runs a lightweight parent-contradictions cross-check (silent reversals of a parent D-N are `required` findings). `critic` §3 adds a skeptic question on parent decision contradictions.
+- **Parent validation.** `loadParentContext` confirms the slug is shipped + has a non-empty `plan.md`. Four failure modes are explicit: `in-flight`, `cancelled`, `corrupted`, `missing`. Each surfaces a one-line error and ends the turn.
+- **State stamp.** `flow-state.json > parentContext` carries the parent's slug + status + shippedAt + structured artifact paths. Plan.md frontmatter carries `parent_slug: <parent>` and `refines: <parent>`.
+- **Triage inheritance.** `ceremonyMode` / `surfaces` default to the parent's values. Explicit `--strict` / `--soft` / `--inline` flags override. A security-keyword heuristic (`security` / `auth` / `migration` / `schema` / `payment` / `gdpr` / `pci`) auto-escalates a soft/inline parent → strict for the new flow.
+- **Specialist consumption.** The architect's Bootstrap reads the parent's `## Spec` / `## Decisions` / `## Selected Direction` and authors a mandatory `## Extends` section at the top of `plan.md`. The reviewer runs a parent-contradictions cross-check (silent reversals of a parent decision are `required` findings). The critic adds a skeptic question on parent decision contradictions.
 - **Knowledge-store integration.** When `parentContext` is set, `findNearKnowledge` prepends the parent's `knowledge.jsonl` entry to the top of the prior-learnings result (load-bearing context overrides Jaccard ranking).
 
-v8.59 loads the **immediate** parent only — multi-level chains (`grandparent → parent → child`) are not auto-walked. Specialists may use `findRefiningChain` on demand when transitive context is needed; multi-level auto-loading at orchestrator level is v8.60+ scope.
+Only the **immediate** parent is auto-loaded. Specialists may use `findRefiningChain` on demand when transitive context is needed.
 
 ```mermaid
 flowchart LR
@@ -155,23 +137,24 @@ flowchart LR
     A -->|"extend <slug> <task>"| E[Extend mode]
     A -->|"<task>"| T[Task mode]
 
-    R --> D1[architect standalone<br/>Bootstrap → Compose]
-    D1 --> RM["research.md"]
+    R --> RD[Open-ended discovery dialogue]
+    RD --> RL[Dispatch 5 lenses in parallel]
+    RL --> RM["research.md (synthesis + recommendation)"]
     RM --> H{Handoff?}
     H -->|"accept research"| END[Finalize]
     H -->|next /cc| T
 
     E --> LC[loadParentContext<br/>shipped + plan.md required]
     LC -->|ok| EI[Stamp parentContext<br/>+ refines + parent_slug]
-    EI --> EHE[Triage inheritance<br/>ceremonyMode/surfaces<br/>runMode = auto v8.61]
+    EI --> EHE[Triage inheritance<br/>ceremonyMode/surfaces]
     EHE --> T
     LC -->|in-flight/cancelled<br/>/missing/corrupted| EERR[Surface error<br/>end turn]
 
-    T --> RT[Router<br/>complexity × ceremonyMode × path]
+    T --> RT[Triage sub-agent<br/>complexity × ceremonyMode × path]
     RT -->|inline| INL[Build inline]
-    RT -->|soft| PL[architect Bootstrap+Frame<br/>surfaces, assumptions, priorLearnings via learnings-research]
-    RT -->|strict| DS[architect full ceremony<br/>Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose]
-    PL --> BD[plan → build → review → critic → ship<br/>specialists read parentContext]
+    RT -->|soft| PL[architect Bootstrap+Frame]
+    RT -->|strict| DS[architect full ceremony]
+    PL --> BD[plan → build → review → critic → ship]
     DS --> BD
 ```
 
@@ -183,20 +166,20 @@ You type:
 /cc add caching to the search endpoint
 ```
 
-The orchestrator runs through these stages in order, chaining automatically (v8.61 always-auto). The slim-summary blocks the orchestrator emits sit under `## Triage`, `## Plan`, `## Build`, `## QA`, `## Review`, `## Critic`, `## Ship` section headers in chat. Artifacts land on disk.
+The orchestrator runs through these stages, chaining automatically. Slim-summary blocks land under `## Triage`, `## Plan`, `## Build`, `## QA`, `## Review`, `## Critic`, `## Ship` headers in chat. Artifacts land on disk.
 
-- **Triage (v8.61 sub-agent).** The orchestrator dispatches the `triage` specialist with the raw `/cc` argument. Triage returns a 5-field decision in one slim summary — complexity: small-medium · ceremony mode: soft · path: plan → build → review → critic → ship · runMode: auto · mode: task. Slug: `20260515-search-caching`. Zero clarifying asks. The decision is persisted to `flow-state.json > triage` and is immutable for the slug. (v8.58 — surface detection / assumption capture / prior-learnings lookup moved into the architect's Bootstrap + Frame phases on every non-inline path; v8.61 — the triage routing prose moved out of the orchestrator body into `triage.md`.)
-- **Plan.** The `architect` writes `plan.md` silently — Spec section (Objective / Success / Out of scope / Boundaries), Frame, **Plan / Slices** (SL-N work units — HOW we build), **Acceptance Criteria (verification)** (AC-N verification rows back-referencing slices via the `Verifies` column — HOW we prove done), Edge cases, Topology, Feasibility stamp, Traceability block. 4 slices, 3 AC, 2 prior lessons surfaced via the read-only `learnings-research` helper. Confidence: high. v8.62 — no mid-plan dialogue; if the architect's pick turns out wrong the reviewer surfaces it at review time.
-- **Build.** `builder` runs one TDD cycle **per slice**: RED → GREEN → REFACTOR. Each work commit carries an `SL-N` prefix (`red(SL-1):` / `green(SL-1):` / `refactor(SL-1):`) the reviewer reads via `git log --grep="(SL-N):"`. v8.64 — slices are dispatched in **topological layers** with **independent slices running in parallel by default**: a task with N independent slices finishes in the time of the longest slice, not Σ(slice times). Single-slice layers run inline (zero overhead); plan-critic §4b verifies independence claims against surface overlap so parallel sub-builders never race on shared files. After all slices land, builder writes one `verify(AC-N): passing` commit per AC (empty diff when slice tests already cover the AC; test-files-only diff when the AC needs broader verification — perf budget, integration, contract). The reviewer cross-checks both chains. Tests: 14 passing (was 11). Coverage delta: +2.3%. Build failures trigger an auto-fix loop (up to 3 iterations); failure after 3 stops and reports.
-- **Review.** Ten-axis reviewer opens 2 findings on the first iteration: cache-key collision on case-sensitive queries (`correctness`, `required`) and missing TTL refresh on stale entries (`architecture`, `consider`). Reviewer `critical` / `required-no-fix` triggers an auto-dispatch fix-only loop (up to 3 iterations); failure after 3 stops and reports. v8.62 — the reviewer's `security` axis absorbed the retired `security-reviewer` specialist's threat-model + sensitive-change coverage; on `security_flag: true` slugs the reviewer walks the threat-model checklist verbatim in a single dispatch.
+- **Triage.** The orchestrator dispatches `triage` with the raw `/cc` argument. Triage returns a 5-field decision in one slim summary — complexity: small-medium · ceremony mode: soft · path: plan → build → review → critic → ship · runMode: auto · mode: task. Slug: `20260515-search-caching`. Zero clarifying asks. Persisted to `flow-state.json > triage`; immutable for the slug.
+- **Plan.** The `architect` writes `plan.md` silently — Spec (Objective / Success / Out of scope / Boundaries), Frame, **Plan / Slices** (SL-N work units — how we build), **Acceptance Criteria** (AC-N verification rows back-referencing slices via the `Verifies` column — how we prove done), Edge cases, Topology, Feasibility stamp, Traceability block. 4 slices, 3 AC, 2 prior lessons surfaced via the read-only `learnings-research` helper. Confidence: high.
+- **Build.** `builder` runs one TDD cycle per slice: RED → GREEN → REFACTOR. Each work commit carries an `SL-N` prefix (`red(SL-1):` / `green(SL-1):` / `refactor(SL-1):`) the reviewer reads via `git log --grep="(SL-N):"`. Slices are dispatched in topological layers with independent slices running in parallel by default; a task with N independent slices finishes in the time of the longest slice, not Σ. Single-slice layers run inline (zero overhead); plan-critic verifies independence claims against surface overlap so parallel sub-builders never race. After all slices land, `builder` writes one `verify(AC-N): passing` commit per AC (empty diff when slice tests already cover the AC; test-files-only diff when the AC needs broader verification — perf budget, integration, contract). Tests: 14 passing (was 11). Coverage delta: +2.3%. Build failures trigger an auto-fix loop (up to 3 iterations); failure after 3 stops and reports.
+- **Review.** Ten-axis reviewer opens 2 findings on the first iteration: cache-key collision on case-sensitive queries (`correctness`, `required`) and missing TTL refresh on stale entries (`architecture`, `consider`). Reviewer `critical` / `required-no-fix` triggers an auto-dispatch fix-only loop (up to 3 iterations); failure after 3 stops and reports. On `security_flag: true` slugs the reviewer walks the threat-model checklist verbatim in the `security` axis.
 - **Critic.** Adversarial falsificationist pass — predictions, gap analysis, Criterion check across AC + Edge cases + NFR rows, goal-backward verification, realist check. Verdict: pass. `block-ship` stops immediately (no auto-iteration — re-running on unchanged code returns the same verdict).
-- **Ship.** All 3 AC committed. `ship.md` carries the release-notes draft and the AC↔commit map. Chains automatically to push under v8.61 always-auto.
+- **Ship.** All 3 AC committed. `ship.md` carries the release-notes draft and the AC↔commit map. Chains automatically to push.
 
 After ship, the orchestrator moves the artifacts to `.cclaw/flows/shipped/<slug>/` and (when the slug earned capture) appends one row to `.cclaw/state/knowledge.jsonl`.
 
-### Failure handling (v8.61 always-auto)
+## Failure handling
 
-cclaw stops at hard failures per a fixed matrix. The recovery loop is always the same: read the status block, decide, type `/cc` (continue) or `/cc-cancel` (discard).
+cclaw stops at hard failures per a fixed matrix. The recovery loop is always the same: read the status block, decide, type `/cc` (continue) or `/cc-cancel` (discard). No in-chat picker, no `[y/n]` ask, no "approve this?" gate.
 
 | Failure | Behaviour |
 | --- | --- |
@@ -217,22 +200,21 @@ To proceed: /cc to continue (continues from the saved state), or /cc-cancel to d
 
 | Surface | Count + detail |
 | --- | --- |
-| **Specialists** | 7 sub-agents: `triage` (on-demand routing dispatch at Hop 2 of every fresh `/cc <task>`; emits a 5-field slim summary the orchestrator parses), `architect` (the only plan-stage specialist; runs as a single on-demand dispatch on every non-inline path, covers Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose phases silently; absorbs classification work — assumption capture, surface detection, prior-learnings dispatch, interpretation forks; v8.63 — authors both `## Plan / Slices` and `## Acceptance Criteria (verification)` tables), `builder` (per-slice RED → GREEN → REFACTOR cycles on strict with `<type>(SL-N):` prefixes plus one `verify(AC-N): passing` commit per AC after slices land; single-cycle on soft), `plan-critic` (pre-implementation gate, strict + complexity≠trivial + AC≥2; v8.63 — also checks slice-AC separation, slice quality, AC verifiability, coverage gaps), `qa-runner` (UI/web surfaces, ceremonyMode≠inline), `reviewer` (ten-axis review with both slice + AC traceability chains on v8.63 strict; on `security_flag: true` walks the threat-model checklist in the `security` axis verbatim — the v8.62 absorption of the retired `security-reviewer` specialist), `critic` (post-implementation adversarial pass with v8.63 §4b slice + AC coverage check). Each runs in isolation with a mandatory contract read. |
+| **Specialists** | 7 sub-agents: `triage` (routing dispatch at Hop 2 of every fresh `/cc <task>`; emits a 5-field slim summary the orchestrator parses), `architect` (the only plan-stage specialist; runs as a single on-demand dispatch on every non-inline path, covers Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose silently; absorbs classification work — assumption capture, surface detection, prior-learnings dispatch, interpretation forks; authors both `## Plan / Slices` and `## Acceptance Criteria` tables), `builder` (per-slice RED → GREEN → REFACTOR cycles on strict with `<type>(SL-N):` prefixes plus one `verify(AC-N): passing` commit per AC after slices land; single-cycle on soft), `plan-critic` (pre-implementation gate on strict + complexity≠trivial + AC≥2; checks slice-AC separation, slice quality, AC verifiability, coverage gaps), `qa-runner` (UI/web surfaces, ceremonyMode≠inline), `reviewer` (ten-axis review with both slice + AC traceability chains on strict; walks the threat-model checklist verbatim in the `security` axis on `security_flag: true`), `critic` (post-implementation adversarial pass with slice + AC coverage check). Each runs in isolation with a mandatory contract read. |
 | **Research helpers** | `repo-research` (brownfield scan) and `learnings-research` (prior shipped lessons) dispatched in parallel before every plan. |
-| **Research lenses (v8.65)** | 5 research-only sub-agents dispatched in parallel by the main-context research orchestrator on `/cc research <topic>` after the open-ended discovery dialogue completes: `research-engineer` (feasibility + implementation paths + risks), `research-product` (user value + alternatives + market context), `research-architecture` (system fit + coupling + boundaries + scalability), `research-history` (prior attempts via `knowledge.jsonl` + git log; outcome signals), `research-skeptic` (failure modes + edge cases + abuse cases + hidden costs). NOT in `SPECIALISTS`; install to `.cclaw/lib/research-lenses/<lens>.md`. |
-| **Ceremony modes** | `strict` (per-slice RED → GREEN → REFACTOR with `<type>(SL-N):` prefixes + per-AC `verify(AC-N): passing` commits — dual-chain reviewer cross-check), `soft` (single feature-level TDD cycle, plain commit), `inline` (one commit, no plan). Triage picks the mode; readers accept the legacy `acMode` key for one release. |
-| **Plan template** | 15 sections (`Frame`, `Non-functional`, `Approaches`, `Selected Direction`, `Decisions`, `Pre-mortem`, `Not Doing`, `Plan`, `Spec`, `Plan / Slices` (SL-N work units — v8.63), `Acceptance Criteria (verification)` (AC-N verification rows referencing slices via `Verifies` — v8.63), `Feasibility stamp`, `Edge cases`, `Topology`, `Traceability block`) in strict mode; 6 sections (`Plan`, `Spec`, `Testable conditions`, `Verification`, `Touch surface`, `Notes`) in soft mode. v8.63 separates work-units (slices) from verification (AC); pre-v8.63 archived flows used a single `## Acceptance Criteria` table that conflated the two. |
+| **Research lenses** | 5 research-only sub-agents dispatched in parallel by the main-context research orchestrator on `/cc research <topic>` after the open-ended discovery dialogue completes: `research-engineer` (feasibility + paths + risks), `research-product` (user value + alternatives + market context), `research-architecture` (system fit + coupling + boundaries + scalability), `research-history` (prior attempts via `knowledge.jsonl` + git log; outcome signals), `research-skeptic` (failure modes + edge cases + abuse cases + hidden costs). NOT in `SPECIALISTS`; install to `.cclaw/lib/research-lenses/<lens>.md`. |
+| **Ceremony modes** | `strict` (per-slice RED → GREEN → REFACTOR with `<type>(SL-N):` prefixes + per-AC `verify(AC-N): passing` commits — dual-chain reviewer cross-check), `soft` (single feature-level TDD cycle, plain commit), `inline` (one commit, no plan). Triage picks the mode. |
+| **Plan template** | 15 sections strict (`Frame`, `Non-functional`, `Approaches`, `Selected Direction`, `Decisions`, `Pre-mortem`, `Not Doing`, `Plan`, `Spec`, `Plan / Slices`, `Acceptance Criteria (verification)`, `Feasibility stamp`, `Edge cases`, `Topology`, `Traceability block`); 6 sections soft (`Plan`, `Spec`, `Testable conditions`, `Verification`, `Touch surface`, `Notes`). Work-units (slices) are separate from verification (AC). |
 | **Postures** | 6 per-criterion postures (`test-first`, `characterization-first`, `tests-as-deliverable`, `refactor-only`, `docs-only`, `bootstrap`). Each maps to a fixed commit-shape recipe the reviewer enforces ex-post. |
 | **Review** | 10 reviewer axes — 8 base (`correctness`, `readability`, `architecture`, `security`, `perf`, `test-quality`, `complexity-budget`, `edit-discipline`) plus 2 gated (`qa-evidence` when qa-runner ran, `nfr-compliance` when `## Non-functional` is non-empty). Append-only findings table, convergence detector, severity-aware ship gate. |
-| **Critic step** | Falsificationist pass after review clears: §1 predictions, §2 gap analysis, §3 four adversarial techniques + 6 human-perspective lenses (executor / stakeholder / skeptic for plan-stage, security / new-hire / ops for code-stage; adversarial mode only), §4 Criterion check (AC + Edge cases + NFR), §5 goal-backward, §6 realist check, §7 verdict, §8 summary. |
-| **Auto-trigger skills** | 21 skills (`triage-gate`, `plan-authoring`, `tdd-and-verification`, `review-discipline`, `commit-hygiene`, `completion-discipline`, `pre-edit-investigation`, `qa-and-browser`, `debug-and-browser`, `ac-discipline`, `source-driven`, `summary-format`, `documentation-and-adrs`, `parallel-build`, `refinement`, `flow-resume`, `receiving-feedback`, `anti-slop`, `conversation-language`, `api-evolution`, `pre-flight-assumptions`). Auto-applied per stage, not user-invoked. |
-| **On-demand runbooks** | 13 runbooks loaded by trigger (`dispatch-envelope`, `parallel-build`, `finalize`, `cap-reached-recovery`, `adversarial-rerun`, `handoff-gates`, `handoff-artifacts`, `compound-refresh`, `pause-resume`, `critic-steps`, `qa-stage`, `extend-mode`, `always-auto-failure-handling`). Kept out of the orchestrator body to hold the prompt budget. v8.61 added `always-auto-failure-handling` as the canonical failure-routing matrix. |
-| **Anti-rationalization catalog** | v8.49 — `.cclaw/lib/anti-rationalizations.md` carries the cross-cutting rebuttal table (posture-bypass, completion-discipline, edit-discipline, verification rows). Each specialist's prompt cites the catalog and adds its own specialist-specific rows. |
-| **Outcome signals** | v8.50 — 5-value enum (`good`, `unknown`, `manual-fix`, `follow-up-bug`, `reverted`) recorded on `knowledge.jsonl` rows. Three capture paths (orchestrator scans on every `/cc` for follow-up-bug references; compound time scans for revert commits and same-touch-surface manual-fix commits). Prior-learnings lookup multiplies similarity by signal weight before threshold filtering. |
-| **Ambiguity score** | `plan.md` frontmatter still carries the three ambiguity fields (`ambiguity_score` / `ambiguity_dimensions` / `ambiguity_threshold`, default threshold `0.2`) for back-compat with the v8.53 brownfield gates; v8.62 retired the procedural authoring beat alongside the dead `design` specialist's Phase 7 picker. |
-| **Discipline skills** | v8.48 — `completion-discipline` (no `✅ complete` without paired fresh evidence), `pre-edit-investigation` (three-probe gate before any edit), `receiving-feedback` (builder fix-only response protocol), plus the v8.48 `edit-discipline` reviewer axis. |
-| **Harness-embedded rules** | v8.55 — every supported harness installs cclaw's Iron Laws + anti-rationalizations + antipatterns into its own ambient surface (`.cursor/rules/`, `.claude/`, `.codex/`, `.opencode/`). cclaw never touches root `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md`. |
-| **Parallel build** | Up to 5 slices on git worktrees when AC are independent and ≥2 touch-surface clusters. `ceremonyMode: strict` required. |
+| **Critic step** | Falsificationist pass after review clears: §1 predictions, §2 gap analysis, §3 four adversarial techniques + 6 human-perspective lenses (executor / stakeholder / skeptic for plan-stage, security / new-hire / ops for code-stage), §4 Criterion check (AC + Edge cases + NFR), §5 goal-backward, §6 realist check, §7 verdict, §8 summary. |
+| **Auto-trigger skills** | 21 skills (`triage-gate`, `plan-authoring`, `tdd-and-verification`, `review-discipline`, `commit-hygiene`, `completion-discipline`, `pre-edit-investigation`, `qa-and-browser`, `debug-and-browser`, `ac-discipline`, `source-driven`, `summary-format`, `documentation-and-adrs`, `parallel-build`, `refinement`, `flow-resume`, `receiving-feedback`, `anti-slop`, `conversation-language`, `api-evolution`, `pre-flight-assumptions`). Auto-applied per stage. |
+| **On-demand runbooks** | 13 runbooks loaded by trigger (`dispatch-envelope`, `parallel-build`, `finalize`, `cap-reached-recovery`, `adversarial-rerun`, `handoff-gates`, `handoff-artifacts`, `compound-refresh`, `pause-resume`, `critic-steps`, `qa-stage`, `extend-mode`, `always-auto-failure-handling`). Kept out of the orchestrator body to hold the prompt budget. |
+| **Anti-rationalization catalog** | `.cclaw/lib/anti-rationalizations.md` carries the cross-cutting rebuttal table (posture-bypass, completion-discipline, edit-discipline, verification rows). Each specialist's prompt cites the catalog and adds specialist-specific rows. |
+| **Outcome signals** | 5-value enum (`good`, `unknown`, `manual-fix`, `follow-up-bug`, `reverted`) recorded on `knowledge.jsonl` rows. Three capture paths (orchestrator scans on every `/cc` for follow-up-bug references; compound time scans for revert commits and same-touch-surface manual-fix commits). Prior-learnings lookup multiplies similarity by signal weight before threshold filtering. |
+| **Discipline skills** | `completion-discipline` (no `✅ complete` without paired fresh evidence), `pre-edit-investigation` (three-probe gate before any edit), `receiving-feedback` (builder fix-only response protocol), plus `edit-discipline` as a reviewer axis. |
+| **Harness-embedded rules** | Every supported harness installs cclaw's Iron Laws + anti-rationalizations + antipatterns into its own ambient surface (`.cursor/rules/`, `.claude/`, `.codex/`, `.opencode/`). cclaw never touches root `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md`. |
+| **Parallel build** | Independent slices run in parallel by default (up to 5 sub-builders on git worktrees). Triggered automatically when a layer has ≥2 slices with `independent: true` and disjoint touch-surface clusters; single-slice layers run inline. `ceremonyMode: strict` required. |
 | **Multi-harness install** | Claude Code, Cursor, OpenCode, Codex — same `.cclaw/` runtime, different harness adapters. |
 
 ## Harnesses supported
@@ -256,21 +238,21 @@ reviewerTwoPass: false              # opt-in: spec-review + code-quality-review 
 compoundRefreshEvery: 5             # how often to dedup knowledge.jsonl
 compoundRefreshFloor: 10            # minimum entries before refresh kicks in
 captureLearningsBypass: false       # true = silent skip on non-trivial slugs
-legacy-artifacts: false             # true brings back v8.11-era extra artifacts
+legacy-artifacts: false             # true brings back legacy extra artifacts
 architect:
-  ambiguity_threshold: 0.2          # v8.53 — ambiguity soft-warning threshold; v8.62 — surfaced via the architect's slim summary now that the design Phase 7 picker is gone
+  ambiguity_threshold: 0.2          # ambiguity soft-warning threshold
 ```
 
 ## Architecture deep dive
 
-The runtime is under 1 KLOC. The prompt content is where the work lives. If you want to understand how `/cc` actually works, read the source — the on-disk reference lives under `src/content/`:
+The runtime is under 1 KLOC. The prompt content is where the work lives. To understand how `/cc` actually works, read the source under `src/content/`:
 
-- [`src/content/start-command.ts`](src/content/start-command.ts) — orchestrator body (detect, dispatch, always-auto chain, critic step, ship, compound, finalize). v8.61 dropped the inline triage prose; the orchestrator dispatches the `triage` sub-agent at Hop 2.
-- [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 7 specialist contracts (v8.62 collapsed `design` + `ac-author` → `architect`, renamed `slice-builder` → `builder`, absorbed `security-reviewer` into `reviewer.ts`'s `security` axis).
+- [`src/content/start-command.ts`](src/content/start-command.ts) — orchestrator body (detect, dispatch, always-auto chain, critic step, ship, compound, finalize).
+- [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 7 specialist contracts.
 - [`src/content/skills/`](src/content/skills/) — 21 auto-trigger skill bodies.
-- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 13 on-demand runbooks the orchestrator opens by trigger (v8.61 added `always-auto-failure-handling`).
+- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 13 on-demand runbooks loaded by trigger.
 - [`src/content/artifact-templates.ts`](src/content/artifact-templates.ts) — plan / build / qa / review / critic / plan-critic / ship / learnings templates.
-- [`src/content/anti-rationalizations.ts`](src/content/anti-rationalizations.ts) — cross-cutting rebuttal catalog (v8.49+).
+- [`src/content/anti-rationalizations.ts`](src/content/anti-rationalizations.ts) — cross-cutting rebuttal catalog.
 - [`CHANGELOG.md`](CHANGELOG.md) — release history.
 
 ## Artifact tree (after install)
@@ -281,25 +263,25 @@ The runtime is under 1 KLOC. The prompt content is where the work lives. If you 
   state/
     flow-state.json         active flow state (~500 bytes)
     knowledge.jsonl         compound learnings index
-    triage-audit.jsonl      v8.44 audit log
+    triage-audit.jsonl      routing audit log
   flows/
     <slug>/                 one folder per active task
       plan.md
       build.md
-      qa.md                 (v8.52+, UI/web slugs only)
+      qa.md                 (UI/web slugs only)
       review.md
-      critic.md             (v8.42+)
-      plan-critic.md        (v8.51+, strict + complexity≠trivial + AC≥2)
+      critic.md
+      plan-critic.md        (strict + complexity≠trivial + AC≥2)
       ship.md
-      research.md           (v8.58+, /cc research <topic> only — v8.65 multi-lens synthesis: discovery dialogue summary + 5 per-lens findings + cross-lens synthesis + recommended next step)
+      research.md           (/cc research <topic> only)
     shipped/<slug>/         finalized tasks (including research-mode flows)
     cancelled/<slug>/       /cc-cancel destination
   lib/
-    agents/                 7 specialist contracts (v8.62 unified-flow roster: triage / architect / builder / plan-critic / qa-runner / reviewer / critic; plus 2 read-only research helpers: learnings-research / repo-research)
-    research-lenses/        v8.65 — 5 research-only lens contracts: research-engineer / research-product / research-architecture / research-history / research-skeptic. NOT in SPECIALISTS; dispatched only by the main-context research orchestrator on /cc research <topic>.
+    agents/                 7 specialist contracts + 2 read-only research helpers (learnings-research / repo-research)
+    research-lenses/        5 research-only lens contracts
     skills/                 21 auto-trigger skill bodies
     templates/              artifact templates
-    runbooks/               13 on-demand runbooks (v8.61 + always-auto-failure-handling.md)
+    runbooks/               13 on-demand runbooks
     patterns/               reference patterns
     anti-rationalizations.md
     antipatterns.md
@@ -307,7 +289,7 @@ The runtime is under 1 KLOC. The prompt content is where the work lives. If you 
 
 ## CLI surface
 
-Two invocations cover every use case. There is no `cclaw plan` / `cclaw status` / `cclaw build` / `cclaw ship` — flow control lives inside `/cc`. The bare subcommand surface (`init`, `sync`, `upgrade`) was retired in v8.29 + v8.37.
+Two invocations cover every use case. There is no `cclaw plan` / `cclaw status` / `cclaw build` / `cclaw ship` — flow control lives inside `/cc`.
 
 ```bash
 # Interactive (humans): opens a TUI menu — Install / Uninstall / Quit
