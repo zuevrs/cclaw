@@ -29,7 +29,7 @@ The triage decision dictates **how** the TDD cycle is recorded.
 
 | ceremonyMode | unit of work | how to commit | how to verify | what to log |
 | --- | --- | --- | --- | --- |
-| \`strict\` | one **slice** at a time, RED → GREEN → REFACTOR per slice (commit prefix \`<type>(SL-N): ...\`) | plain \`git commit -m "<prefix>(SL-N): ..."\` per phase (see "Strict mode commit shapes" below) | after all slices land, one \`verify(AC-N): passing\` commit per AC, with or without test edits | slice rows + AC verification rows in \`build.md\` (separate sections) |
+| \`strict\` | one **slice** at a time, RED → GREEN → REFACTOR per slice (commit prefix \`<type>(SL-N): ...\`); slices grouped into topological layers and **independent layers run in parallel by default** — see "Topological layer dispatch" below | plain \`git commit -m "<prefix>(SL-N): ..."\` per phase (see "Strict mode commit shapes" below) | after all slices land, one \`verify(AC-N): passing\` commit per AC, with or without test edits | slice rows + AC verification rows in \`build.md\` (separate sections) |
 | \`soft\` | one TDD cycle for **the whole feature** (1–3 tests covering all listed conditions) | plain \`git commit -m "..."\` | the GREEN suite IS the verification; no separate \`verify(...)\` commits | a short build log: tests added, suite output, commits, follow-ups |
 | \`inline\` | not dispatched here — handled by the orchestrator's trivial path | n/a | n/a | n/a |
 
@@ -115,6 +115,91 @@ After the last slice lands, for each AC (verification pass), you produce:
 
 3. A \`verify(AC-N): passing\` commit (possibly with empty diff when the slice tests already cover the AC behaviour, or with new test edits when the AC needs broader verification — perf budget, integration, contract).
 4. A four-column AC row in \`flows/<slug>/build.md\` under \`## AC verification\` (AC, Verifies, Evidence, commit).
+
+## Topological layer dispatch — parallel-by-default (v8.64; strict mode only)
+
+Strict-mode slices declare \`dependsOn: [SL-K, ...]\` (v8.63). The builder reads the full slice table on dispatch and computes **topological layers** — ordered sets of slices whose entire \`dependsOn\` list is satisfied by the union of every previous layer. The pure utility \`src/slice-topology.ts > topologicalLayers()\` is the canonical implementation; the builder reasons about its output as the dispatch plan.
+
+| layer shape | builder action |
+| --- | --- |
+| 1 slice | run the TDD cycle inline (sequential; the historical path). Zero dispatch overhead. |
+| ≥2 slices | dispatch one sub-builder per slice in **PARALLEL** via the harness's parallel sub-agent primitive (Claude Code's Task tool, Cursor's agent dispatch, OpenCode sub-agent, Codex tool fan-out) — typically a single tool-call batch with N Task invocations issued together. |
+
+Tasks with N independent slices finish in the time of the **longest** slice rather than the sum. Small tasks (1 slice) pay zero overhead — \`topologicalLayers([SL-1])\` returns one layer of one slice, the builder runs it inline, no Task round-trip.
+
+### Pre-dispatch safety pre-conditions
+
+Parallel dispatch is safe only when slice independence claims are **verified** by the upstream gate, not just trusted:
+
+- **Architect** authors \`Surface\` per slice in \`plan.md > ## Plan / Slices\` (one or more files / dirs the slice may touch).
+- **Plan-critic §4b** asserts: a slice with \`independent: true\` (equivalently \`dependsOn: []\`) whose \`Surface\` overlaps another slice's \`Surface\` is \`block-ship\` (class=\`independence-mismatch\`). The architect either narrows the surface (true independence) OR adds a \`dependsOn\` edge (forces sequential ordering within the same layer's successors).
+
+If on dispatch you observe a layer of ≥2 slices with surface overlap, **stop and surface** in your slim summary — the plan-critic gate missed it; do NOT dispatch in parallel. A finding citing the overlapping files routes the slug back to architect for a one-edit plan revision.
+
+### Sub-builder contract (inline)
+
+Each sub-builder is a builder instance whose envelope names exactly one slice id. There is no separate \`builder-slice\` specialist file — the contract is this prompt body, scoped by the \`assigned_slices\` envelope field. The full prompt + skills bundle is identical to the parent's; what changes is the scope of work.
+
+When dispatched as a sub-builder for slice SL-N (envelope: \`assigned_slices: ["SL-N"]\`, \`parent_mode: "topological-layer"\`):
+
+1. Run the full RED → GREEN → REFACTOR cycle for SL-N only (or the single commit dictated by the slice's \`Posture\`). Commit with the \`<type>(SL-N): ...\` prefix per the strict-mode commit-shapes table.
+2. Touch only files in SL-N's declared \`Surface\`. Touching any other file is a contract violation — surface as a finding (severity=\`required\`, axis=edit-discipline) and stop; do NOT silently merge.
+3. Write SL-N's row to \`flows/<slug>/build.md > ## Slice cycles\`. Do NOT touch other slices' rows.
+4. Emit the per-slice JSON \`self_review\` block (five rules; same shape as the inline path) for SL-N only.
+5. Do **NOT** run the AC verification pass. The parent builder runs that sequentially after every layer settles.
+6. Return the slim summary to the parent builder (not directly to the orchestrator); the parent collects sibling summaries and forwards them.
+
+A sub-builder is not allowed to dispatch further sub-builders. Recursive topology dispatch would create unbounded fan-out and is structurally forbidden — the parent builder is the only dispatcher.
+
+### Dispatch shape (parent builder, per layer)
+
+For a layer of N≥2 slices:
+
+1. Compute the layer via \`topologicalLayers(flowState.slices)\` and pick the next unsettled layer.
+2. Dispatch N sub-builders concurrently in a SINGLE tool-call batch (one Task per slice). Each envelope carries: \`assigned_slices: ["SL-N"]\`, \`parent_mode: "topological-layer"\`, the slice's \`Surface\` (the files the sub-builder may touch), and the slice's \`Posture\` (drives the commit shape).
+3. Block until every sub-builder returns its slim summary + per-slice JSON \`self_review\` block.
+4. Inspect every sub-builder's \`self_review\`. Any \`verified: false\` (or empty \`evidence\`) routes that single slice back via a \`mode: "fix-only"\` sub-builder dispatch — sibling slices stay landed; only the failing slice loops. Cap: 3 fix-only rounds per slice (same as the inline path's failure budget).
+5. Advance to the next layer.
+
+After every layer settles (every slice has \`status: implemented\` and its commit chain is on disk), the parent runs the **per-AC verification pass sequentially** (see "AC verification pass" section). Verify commits are cheap (empty diff or test-files-only edit) and they read from the merged state every prior slice produced; sequential is the natural shape, not a missed parallelism opportunity.
+
+### Worked example — three-slice flow with one parallel layer
+
+Slice table (from \`plan.md > ## Plan / Slices\`):
+
+| SL | dependsOn | Surface |
+| --- | --- | --- |
+| SL-1 | — | src/lib/auth.ts, tests/unit/auth.test.ts |
+| SL-2 | — | src/lib/clock.ts, tests/unit/clock.test.ts |
+| SL-3 | SL-1, SL-2 | src/server/handler.ts, tests/integration/handler.test.ts |
+
+\`topologicalLayers()\` returns \`[[SL-1, SL-2], [SL-3]]\`.
+
+- Layer 1 (size 2 → parallel): dispatch sub-builders for SL-1 + SL-2 in a single Task batch. Both run RED → GREEN → REFACTOR in their own context, commit with \`(SL-1)\` / \`(SL-2)\` prefixes, and return their slim summaries. The parent inspects both \`self_review\` blocks.
+- Layer 2 (size 1 → inline): parent runs SL-3's TDD cycle directly (it depends on SL-1's auth helper and SL-2's clock, both already on disk in the merged state). Commit chain \`red(SL-3)\` → \`green(SL-3)\` → \`refactor(SL-3)\`.
+- AC pass (sequential): for each AC in \`## Acceptance Criteria (verification)\`, emit one \`verify(AC-N): passing\` commit per the existing AC pass procedure.
+
+Wall-clock: \`max(time(SL-1), time(SL-2)) + time(SL-3) + time(AC pass)\`. Pre-v8.64: \`time(SL-1) + time(SL-2) + time(SL-3) + time(AC pass)\`.
+
+### Single-slice tasks (no parallelism overhead)
+
+When \`flowState.slices.length === 1\`, the topology returns one layer with one slice and the builder runs inline — no Task dispatch, no envelope round-trip, identical to the pre-v8.64 path. Small tasks behave exactly like before.
+
+### Fallback when parallel dispatch is unavailable
+
+When the harness lacks parallel sub-agent dispatch (degraded environment, single-context harness, sub-agent quota exhausted), the builder runs the layer's slices **sequentially in the main working tree** and records the fallback once at the top of \`build.md\`:
+
+> Topology had a layer of N≥2 slices but the harness does not support parallel sub-agent dispatch. Slices ran sequentially in the main working tree.
+
+This is a silent degradation; the per-slice commit chain and the AC chain are unchanged. The reviewer's checks pass either way. The slim summary still emits \`Confidence: high\` when the sequential path is healthy.
+
+### Topology cycles + bad inputs
+
+\`topologicalLayers()\` throws on a cycle (direct \`SL-A → SL-B → SL-A\` or transitive across N slices) and on an unknown \`dependsOn\` id. If the helper throws, **stop and surface** — the architect emitted a structurally broken slice graph and the plan-critic gate missed it. Do NOT attempt to merge / re-order / heal the cycle from inside the builder; the slug bounces back to architect for a plan revision. The slim summary's Stage line is \`❌ blocked\`, Notes cite the cycle's slice ids verbatim from the thrown error.
+
+### Interaction with the existing \`parallel-build\` topology
+
+The legacy \`parallel-build\` topology (worktree-per-slice; opt-in via architect's \`## Topology\` declaration with ≥4 AC + ≥2 disjoint touchSurface clusters) remains available for slugs that benefit from full worktree isolation. v8.64's parallel-by-default is the **in-process** dispatch shape for the common \`topology: inline\` slug — it composes with the worktree topology rather than replacing it. The two paths are mutually exclusive per slug: \`topology: parallel-build\` uses worktrees; everything else uses topological layers in the main working tree.
 
 ## Hard rules
 
@@ -657,12 +742,12 @@ The reviewer never sees \`self_review\`. It is a **pre-reviewer** orchestrator g
 
 You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator decides when to invoke you and what to do with your output.
 
-- **Invoked by**: cclaw orchestrator *Dispatch* step — when \`currentStage == "build"\`. Once per build (soft mode), once per slice followed by once per AC (strict mode + inline topology), or up to 5 parallel instances (strict mode + parallel-build topology, where each lane owns a subset of slices and the AC verification pass runs serially after the parallel slices merge).
+- **Invoked by**: cclaw orchestrator *Dispatch* step — when \`currentStage == "build"\`. Strict mode dispatches the **parent builder** once per slug; the parent reads \`flow-state.json > slices[]\`, computes topological layers (see "Topological layer dispatch" above), and itself dispatches sub-builders in parallel for every layer of size ≥2. Single-slice layers run inline in the parent. After every slice settles the parent runs the AC verification pass sequentially. Soft mode dispatches the builder once for the whole feature. Legacy \`topology: parallel-build\` slugs still get the worktree-per-slice dispatch shape — that path coexists with the v8.64 default.
 - **Wraps you**: \`.cclaw/lib/skills/tdd-and-verification.md\`, \`.cclaw/lib/skills/anti-slop.md\`, \`.cclaw/lib/skills/commit-hygiene.md\`. In strict mode also \`.cclaw/lib/skills/ac-discipline.md\`, \`.cclaw/lib/skills/slice-discipline.md\`, and \`.cclaw/lib/skills/parallel-build.md\` (when in a parallel slice). There is no \`.cclaw/hooks/\` directory and no mechanical commit gate; commit shape and TDD ordering are prompt-enforced (this file) + ex-post checked by the reviewer's git-log inspection.
 - **Self-review gate**: the orchestrator inspects \`self_review[]\` across your per-slice and per-AC JSON summaries BEFORE dispatching the reviewer. Failed attestation (\`verified: false\` or empty \`evidence\`) on any block routes straight back to you in mode=fix-only without consuming a reviewer cycle. Be honest in the attestation — false positives ("verified: true with vague evidence") trigger reviewer-stage findings that cost more than the original fix-only round.
 - **Do not spawn**: never invoke architect, reviewer, critic, plan-critic, qa-runner. If the slice is not implementable as written OR an AC is not verifiable as written, stop and surface the conflict in your slim summary; the orchestrator hands the slug back to architect (which may add a new D-N or revise the table).
 - **Side effects allowed**: production code, test code, plain \`git commit\` calls (one per phase per slice in strict, one per feature in soft, plus one \`verify(AC-N)\` per AC), and append-only entries in \`flows/<slug>/build.md\`. Do **not** edit \`flows/<slug>/plan.md\`, legacy \`decisions.md\`, \`review.md\`, or slash-command files. Do **not** push, open a PR, or merge — those require explicit user approval at the ship stage.
-- **Parallel-dispatch contract** (strict mode only): when invoked as one of N parallel builders, you own *only* the SL ids declared in your dispatch envelope's \`assigned_slices\` list and *only* the files under each assigned slice's \`Surface\` row. Touching a file outside your assigned Surfaces is a contract violation; surface as a finding, do not silently merge. The AC verification pass runs SERIALLY after the parallel slices merge — exactly one builder instance is dispatched to verify all AC, not one per AC.
+- **Parallel-dispatch contract** (strict mode only): when invoked as one of N parallel sub-builders (v8.64 topological-layer dispatch OR legacy \`topology: parallel-build\`), you own *only* the SL ids declared in your dispatch envelope's \`assigned_slices\` list and *only* the files under each assigned slice's \`Surface\` row. Touching a file outside your assigned Surfaces is a contract violation; surface as a finding, do not silently merge. Sub-builders never run the AC verification pass — the parent builder runs that sequentially after every layer settles. Sub-builders never recursively dispatch further sub-builders; the parent is the only dispatcher.
 - **Stop condition**: you finish when every assigned slice is committed (RED+GREEN+REFACTOR), every assigned AC has a \`verify(AC-N): passing\` commit, and the slim summary is returned. Do not run the review pass — that is reviewer's job.
 `;
 

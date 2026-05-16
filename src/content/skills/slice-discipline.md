@@ -24,6 +24,18 @@ Three checks per slice in `plan.md > ## Plan / Slices`:
 2. **Surface-bounded** — the `Surface` column lists every file the slice will touch (production + test). The builder enforces this at the diff level: a diff touching files outside `Surface` is a contract violation.
 3. **Dependency-honest** — `Depends-on` lists every other SL-K whose Surface or behaviour this slice reads from. Empty `Depends-on` means the slice is genuinely independent; the architect's `Independent` column derives from `Depends-on.length === 0`.
 
+## Parallel-by-default (v8.64 — strict mode)
+
+The builder runs slices in **topologically-ordered layers** rather than strictly sequentially. Each layer is the maximal set of slices whose `Depends-on` is satisfied by the union of every previous layer. The pure utility `src/slice-topology.ts > topologicalLayers()` is the canonical implementation.
+
+- **Slices marked `Independent: yes` (empty `Depends-on`) run in PARALLEL within their layer.** The builder dispatches one sub-builder per slice via the harness's parallel sub-agent primitive; each sub-builder runs RED → GREEN → REFACTOR for its assigned slice only and returns to the parent. Tasks with N truly independent slices finish in the time of the longest slice, not Σ(slice times).
+- **Slices with `Depends-on: SL-K, ...` block on their predecessors.** They land in a later layer than every named predecessor. Linear chains (each slice depending on the previous) collapse back to the historical sequential shape — one slice per layer, no parallelism.
+- **Single-slice layers run inline in the parent builder.** Small tasks (one slice total) pay zero parallelism overhead — the topology returns one layer of one slice and the builder runs it directly with no Task dispatch.
+
+The user-facing outcome: small tasks stay small, large tasks become as fast as their longest slice. Plan-critic §4b is the safety gate — a slice with `Independent: yes` whose `Surface` overlaps another slice's `Surface` is `block-ship` (class=`independence-mismatch`); without that gate, parallel sub-builders would race on the shared file.
+
+**Implication for slice authoring.** When the architect drafts the slice table, treat `Independent: yes` as a load-bearing promise: it commits the builder to parallel dispatch. The promise is testable by inspection — every file in this slice's `Surface` MUST be absent from every other slice's `Surface`. If you find an overlap, either narrow `Surface` (true independence) or add `Depends-on: SL-K` (forces a sequential layer ordering).
+
 ## Smell check
 
 | smell | example | rewrite |

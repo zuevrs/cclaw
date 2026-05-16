@@ -1,6 +1,57 @@
 # Changelog
 
 
+## 8.66.0 — Parallel-by-default for multi-slice tasks (skips v8.65)
+
+### Why
+
+v8.63 separated work-units (`SL-N` slices) from verification (`AC-N`) and stamped each slice with `dependsOn: SliceId[]` plus a derived `independent: boolean` flag. The builder kept running slices **sequentially** anyway — even when three slices were declared independent with disjoint surfaces. A task with three independent slices took `time(SL-1) + time(SL-2) + time(SL-3)` when it could have taken `max(time(SL-1), time(SL-2), time(SL-3))`.
+
+User's framing: "if задача мелкая - то без лишних церемоний. если объемная - то еще и с параллельностью. чтобы по скорости она была как мелкая." (small tasks: no extra ceremony; large tasks: parallelism so they feel as fast as small ones).
+
+Reference patterns: obra-superpowers' subagent-driven-development plays sliced tasks via parallel sub-builders; the Cursor SDK's parallel agent dispatch is the canonical multi-step automation shape. cclaw had the metadata (slice independence) and the on-demand sub-agent dispatch model; v8.64 wires them together.
+
+### What changed
+
+**Deliverable 1 — Topological sort utility** (`src/slice-topology.ts`).
+
+- New pure utility `topologicalLayers<S extends LayerableSlice>(slices: readonly S[]): S[][]` groups slices into ordered layers — each layer is the maximal set of slices whose `dependsOn` is satisfied by the union of every previous layer. Empty input returns `[]`; a single slice returns one layer of one slice; three independent slices return one layer of three; a linear chain returns N layers of one; a diamond returns three layers; cycles + unknown ids throw informative errors. Determinism: within-layer ordering follows numeric suffix sort (`SL-1` < `SL-2` < `SL-10`) so the orchestrator and reviewer agree on dispatch order.
+
+**Deliverable 2 — Builder dispatches parallel sub-builders for multi-slice layers** (`src/content/specialist-prompts/builder.ts`).
+
+- New "Topological layer dispatch (parallel-by-default — v8.64; strict mode only)" section codifies the contract: parent builder reads `flowState.slices` on dispatch, computes layers via `topologicalLayers()`, and for each layer dispatches one sub-builder per slice via the harness's parallel sub-agent primitive (Claude Code Task tool, Cursor agent dispatch, OpenCode sub-agent, Codex tool fan-out) in a SINGLE tool-call batch. Single-slice layers run inline (zero overhead). After every layer settles, the parent runs the per-AC verification pass sequentially.
+- Sub-builder contract inlined — there is no separate `builder-slice.ts` file. Sub-builders are builder instances scoped by `assigned_slices: ["SL-N"]` + `parent_mode: "topological-layer"`; they own exactly one slice and its `Surface`, run the full TDD cycle, and return to the parent. Recursive sub-builder dispatch is forbidden; the parent is the only dispatcher.
+- Worked example + cycle handling + fallback for harnesses lacking parallel sub-agent dispatch (silent degradation to sequential in the main working tree) included verbatim.
+
+**Deliverable 3 — Plan-critic gates parallel safety** (`src/content/specialist-prompts/plan-critic.ts`).
+
+- §4b `independent` flag accuracy check elevated from `iterate` to **`block-ship` (class=`independence-mismatch`)** when a slice with `independent: true` has surface overlap with another slice. v8.64's parallel dispatch would race sub-builders on the shared file; the pre-build gate catches the mismatch before the build burns context. The fix is one architect edit: narrow `Surface` (true independence) OR add a `dependsOn` edge (forces a later topological layer). The downgraded `iterate` severity is preserved for the case where the flag is stale but a `dependsOn` is already declared (no race risk).
+
+**Deliverable 4 — Reviewer edit-discipline retargeted to per-slice surface** (`src/content/specialist-prompts/reviewer.ts`).
+
+- Sub-check 1 now groups commits by `(SL-N)` token (was `(AC-N)`) and asserts each slice's diff is a subset of its declared `Surface`. Cross-slice file touches inside a single `(SL-N)` commit are severity=required immediately — under parallel dispatch the sub-builder violated its assigned-slice contract. A per-AC verify-commit-must-be-test-only check runs adjacent. Pre-v8.63 archived flows still use the legacy `(AC-N)` grouping.
+
+**Deliverable 5 — Orchestrator dispatch envelope carries topology hint** (`src/content/start-command.ts`).
+
+- Build-stage section documents the v8.64 default: orchestrator pre-computes layers via `topologicalLayers()` and passes the layer shape (`{layers: [[SL-1, SL-2], [SL-3]]}`) in the builder dispatch envelope; the parent builder rechecks defensively on dispatch. The legacy `topology: parallel-build` worktree path remains opt-in for slugs that benefit from full worktree isolation.
+
+**Deliverable 6 — slice-discipline skill + README** (`src/content/skills/slice-discipline.md`, `README.md`).
+
+- New "Parallel-by-default (v8.64 — strict mode)" paragraph in `slice-discipline.md` explains that slices marked `Independent: yes` run in parallel layers, slices with `Depends-on` block on predecessors, and authoring `Independent: yes` is a load-bearing promise that commits the builder to parallel dispatch.
+- README's Build paragraph adds one sentence noting tasks with N independent slices finish in the time of the longest slice.
+
+**Deliverable 7 — Topology utility tests** (`tests/unit/slice-topology.test.ts`).
+
+- Empty input / single slice / three independent slices / linear chain / fan-in / fan-out / diamond / 2-node cycle / 3-node transitive cycle / duplicate id / unknown dependsOn id. 13 cases, all pinning a specific invariant of `topologicalLayers`.
+
+**Deliverable 8 — Tripwire test** (`tests/unit/v864-parallel-default.test.ts`).
+
+- Builder contract mentions parallel layer dispatch + sub-builder contract + topological layers. Plan-critic §4b mentions independence-mismatch class as block-ship for parallel safety. Reviewer edit-discipline scans `(SL-N)` grouping. Slice-topology utility exports `topologicalLayers`. Slice-discipline skill mentions parallel-by-default.
+
+### Clean break
+
+Single-slice tasks are byte-for-byte unchanged at the builder level — the topology returns one layer of one slice and the parent runs it inline. Multi-slice tasks gain parallel dispatch automatically when their slices' `dependsOn` allows. Plans authored against pre-v8.64 architect prose (which did not surface the parallel-safety implication of `independent: true`) continue to validate; the strengthened plan-critic gate flags surface overlap when the field is set, but the gate runs at architect-handoff time, so existing shipped slugs in `flows/shipped/` are unaffected.
+
 ## 8.65.0 — Powerful research mode (5 lenses + open-ended dialogue)
 
 ### Why
