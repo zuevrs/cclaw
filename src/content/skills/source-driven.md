@@ -1,6 +1,6 @@
 ---
 name: source-driven
-trigger: when design (deep posture, Phase 4 D-N) or ac-author is dispatched/active in strict mode AND the task is framework-specific
+trigger: when the architect (Decisions phase D-N or Plan-tier AC) is dispatched/active in strict mode AND the task is framework-specific
 ---
 
 # Skill: source-driven
@@ -20,7 +20,7 @@ Framework-specific code (React hooks, Django views, Next.js routing, Prisma migr
 
 | Triage | Stack signal | Apply? |
 | --- | --- | --- |
-| `strict` (large-risky / security-flagged) | framework-specific code in scope | **always** — required for design (D-N records) and ac-author |
+| `strict` (large-risky / security-flagged) | framework-specific code in scope | **always** — required for the architect (Decisions D-N records and AC sources) |
 | `soft` (small-medium) | framework-specific code in scope | **opt-in** — enable when the user asks for "source-driven" or "verified" implementation |
 | `inline` (trivial) | any | **never** — single-line edits don't need citations |
 | any | pure logic (loops, data structures, internal helpers) | skip — correctness is version-independent |
@@ -151,7 +151,7 @@ B) Match existing code (useState) — keeps codebase consistent.
 → Which approach do you prefer?
 ```
 
-Do not silently adopt one. The user picks; the decision goes inline in `plan.md` under `## Decisions` (design Phase 4) or in the plan body (ac-author mode).
+Do not silently adopt one. v8.62 unified flow forbids mid-plan user dialogue, so the architect picks the most-defensible option inline (citing both the codebase precedent and the doc source), records it in `plan.md` under `## Decisions` (Decisions phase D-N on strict) or in the plan body (soft / small-medium), and surfaces the conflict in the slim summary so the user sees the call without being blocked on it.
 
 ### Step 4 — Cite sources inline
 
@@ -209,9 +209,8 @@ Honesty about what you couldn't verify is more valuable than confident guessing.
 
 ## Specialist contracts
 
-- **ac-author** in `source_driven` envelope: every framework-specific AC carries a `sources` block (URL + which AC it supports + fetched timestamp + version). AC without a citation in framework code → reviewer F-N axis=correctness, severity=required.
-- **design** (Phase 4) in `source_driven` envelope: every `D-N` whose decision rests on framework behaviour (rendering model, state management strategy, persistence pattern, security posture) carries a `sources` block inline. Design without a citation surfaces "I could not find current documentation; this decision is based on training data" — explicit, not silent.
-- **slice-builder** in `source_driven` envelope: pulls the URL from `plan.md` (inline D-N) into the code comment when implementing the pattern. Does not independently re-fetch (design/ac-author already did the work).
+- **architect** in `source_driven` envelope: every framework-specific AC carries a `sources` block (URL + which AC it supports + fetched timestamp + version). AC without a citation in framework code → reviewer F-N axis=correctness, severity=required. On strict mode the architect's Decisions phase ALSO attaches a `sources` block to every `D-N` whose decision rests on framework behaviour (rendering model, state management strategy, persistence pattern, security posture); a decision without a citation surfaces "I could not find current documentation; this decision is based on training data" — explicit, not silent.
+- **builder** in `source_driven` envelope: pulls the URL from `plan.md` (inline D-N or AC `sources`) into the code comment when implementing the pattern. Does not independently re-fetch (the architect already did the work).
 - **reviewer** runs the citation check as part of the `correctness` axis pass. Open finding when:
   - a framework-specific AC has no `sources` block;
   - a citation URL is to a non-authoritative source (Stack Overflow, blog, training data);
@@ -219,7 +218,7 @@ Honesty about what you couldn't verify is more valuable than confident guessing.
 
 ## MCP integration (when the harness has `user-context7`)
 
-cclaw recognises `user-context7` as the source-of-truth fetcher. When `source_driven: true` is in the envelope, the ac-author / design (Phase 4 D-N) SHOULD prefer:
+cclaw recognises `user-context7` as the source-of-truth fetcher. When `source_driven: true` is in the envelope, the architect (Plan-tier AC and Decisions-phase D-N) SHOULD prefer:
 
 1. `mcp_user-context7_resolve-library-id` to map a package name to a Context7 library id.
 2. `mcp_user-context7_get-library-docs` to fetch the relevant docs at the detected version.

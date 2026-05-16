@@ -1,88 +1,43 @@
 import { describe, expect, it } from "vitest";
 import { assertFlowStateV82, FLOW_STATE_SCHEMA_VERSION } from "../../src/flow-state.js";
-import { START_COMMAND_BODY } from "../../src/content/start-command.js";
-import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
+import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import type { TriageDecision } from "../../src/types.js";
 
 /**
- * v8.21 preflight-fold. The legacy orchestrator Hop 2.5 produced two
- * back-to-back assumption asks on large-risky flows (Hop 2.5 then
- * design Phase 0 / Phase 1) and a friction-only hop on small-medium
- * (Hop 2.5 with no corresponding design phase). v8.21 folds the
- * surface into the first specialist's first turn:
+ * v8.21 preflight-fold — re-pinned for v8.62 unified flow.
  *
- *  - large-risky → design Phase 0 / Phase 1 owns the assumption surface
- *  - small-medium → ac-author Phase 0 owns it (new mini-section)
- *  - inline → unchanged, no surface
+ * Pre-v8.21 the orchestrator's Hop 2.5 ran a separate `pre-flight-
+ * assumptions` ask before dispatching the first specialist. v8.21 folded
+ * the surface into the first specialist's first turn (design Phase 0 on
+ * large-risky, ac-author Phase 0 on small-medium).
  *
- * `triage.assumptions` stays a first-class field on flow-state.json;
- * the wire format is identical to v8.20. Only the capture surface
- * moved.
+ * v8.61 retired mid-plan dialogue (always-auto). v8.62 unified flow goes
+ * further: there is no more design / ac-author split, no more Phase 0
+ * user ask. The single `architect` specialist's Bootstrap phase owns
+ * assumption capture for every non-inline flow, and resolves vagueness
+ * silently using best judgment. The skill-body fold from v8.21 still
+ * stands — what changed is the fold target (single architect Bootstrap
+ * phase instead of two phase-0 surfaces).
+ *
+ * `triage.assumptions` stays a first-class field on flow-state.json so
+ * a state file written by any pre-v8.62 release continues to validate.
  */
-describe("v8.21 preflight-fold", () => {
+describe("v8.21 preflight-fold (v8.62 unified flow re-pin)", () => {
   const preFlightSkill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "pre-flight-assumptions");
   const triageGateSkill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "triage-gate");
 
-  describe("AC-1 — large-risky removes the separate preflight ask", () => {
-    it("start-command body documents the fold (no separate preflight AskQuestion)", () => {
-      // The legacy step ran `pre-flight-assumptions.md` and surfaced a
-      // structured ask with Proceed / Edit one / Edit several. v8.21
-      // names the fold explicitly so the orchestrator does not run
-      // both surfaces in series.
-      expect(START_COMMAND_BODY).toContain("## Preflight (folded into specialist Phase 0)");
-      expect(START_COMMAND_BODY).toMatch(/no separate preflight/iu);
+  describe("AC-1 — v8.62 unified flow: the architect's Bootstrap phase owns assumption capture for every non-inline flow (no separate preflight ask, no mid-plan dialogue)", () => {
+    it("architect prompt declares assumption-capture ownership in the Bootstrap phase (replaces both design Phase 0 and ac-author Phase 0)", () => {
+      expect(ARCHITECT_PROMPT).toMatch(/Bootstrap|Phase 0|assumption-capture|assumption capture/i);
+      expect(ARCHITECT_PROMPT).toContain("triage.assumptions");
     });
 
-    it("start-command names design Phase 0 as the large-risky owner", () => {
-      expect(START_COMMAND_BODY).toMatch(/large-risky[\s\S]*?design Phase 0/u);
-    });
-
-    it("design.ts Phase 0 explicitly mentions the v8.21 fold (assumption-capture ownership; v8.58 renamed the surface)", () => {
-      // v8.58 — when the v8.58 router stopped pre-seeding `triage.assumptions`
-      // (the router is lightweight; the specialist captures), Phase 0's
-      // ownership block was renamed to "Assumption-capture ownership" with the
-      // explicit "v8.58 — moved from triage" qualifier. The substring
-      // "Assumption-capture ownership" subsumes the v8.21 "Assumption-surface
-      // ownership" wording: v8.21 folded the preflight surface into design,
-      // v8.58 deepens the fold by also folding the orchestrator-side capture.
-      expect(DESIGN_PROMPT).toContain("Assumption-capture ownership");
-      expect(DESIGN_PROMPT).toContain("triage.assumptions");
-    });
-  });
-
-  describe("AC-2 — small-medium inlines into ac-author's first turn", () => {
-    it("ac-author.ts has a Phase 0 mini-section for small-medium", () => {
-      expect(AC_AUTHOR_PROMPT).toContain("Phase 0 — Assumption confirmation");
-    });
-
-    it("ac-author Phase 0 only runs on triage.complexity == 'small-medium'", () => {
-      expect(AC_AUTHOR_PROMPT).toMatch(/small-medium[\s\S]*?Phase 0/u);
-    });
-
-    it("ac-author Phase 0 opens with the assumptions ask and waits one turn", () => {
-      expect(AC_AUTHOR_PROMPT).toContain("I'm working from these assumptions");
-      expect(AC_AUTHOR_PROMPT).toMatch(/Tell me if any is wrong/iu);
-    });
-
-    it("ac-author Phase 0 persists the agreed list to triage.assumptions", () => {
-      expect(AC_AUTHOR_PROMPT).toMatch(/Persist[\s\S]*?triage\.assumptions/iu);
-    });
-
-    it("ac-author Phase 0 skips when triage.assumptions is already populated", () => {
-      expect(AC_AUTHOR_PROMPT).toContain("Skip Phase 0 silently");
-      expect(AC_AUTHOR_PROMPT).toMatch(/triage\.assumptions[^\n]*already populated/u);
-    });
-  });
-
-  describe("AC-3 — inline path bypass unchanged", () => {
-    it("start-command says the inline path has no assumption surface", () => {
-      expect(START_COMMAND_BODY).toMatch(/inline.*no assumption surface|inline path has no assumption|inline.*has no/iu);
-    });
-
-    it("start-command's trivial path section still skips plan/review/ship", () => {
-      expect(START_COMMAND_BODY).toMatch(/Skip plan\/review\/ship/u);
+    it("architect resolves assumptions silently — no clarifying questions, no dialogue (v8.62 unified flow forbids mid-plan dialogue)", () => {
+      expect(ARCHITECT_PROMPT).toMatch(/(silently|silent|no.*clarifying|no.*dialogue|best judgment)/i);
+      // The dead Phase 1 (Clarify) dialogue surface must NOT be reinstated.
+      expect(ARCHITECT_PROMPT).not.toMatch(/Phase 1 — Clarify/);
+      expect(ARCHITECT_PROMPT).not.toMatch(/at most three clarifying questions/i);
     });
   });
 
@@ -163,42 +118,37 @@ describe("v8.21 preflight-fold", () => {
     });
   });
 
-  describe("AC-5 — migration: pre-populated triage.assumptions short-circuits Phase 0", () => {
-    it("ac-author Phase 0 says 'skip silently' when triage.assumptions is populated", () => {
-      expect(AC_AUTHOR_PROMPT).toContain("Skip Phase 0 silently");
-      expect(AC_AUTHOR_PROMPT).toMatch(/already populated/u);
-    });
-
-    it("design Phase 0 reads pre-populated triage.assumptions as ground truth", () => {
-      expect(DESIGN_PROMPT).toMatch(/already populated[\s\S]*?read it verbatim|read it verbatim[\s\S]*?ground truth/u);
-    });
-
-    it("start-command's skip rules include resume-from-paused (v8.61: 'Continuing under /cc') and mid-flight migration", () => {
-      expect(START_COMMAND_BODY).toMatch(/Continuing under `\/cc`[\s\S]*?Phase 0[\s\S]*?does not re-prompt/u);
-      expect(START_COMMAND_BODY).toMatch(/pre-v8\.21[\s\S]*?legacy preflight[\s\S]*?captured/u);
+  describe("AC-5 — migration: pre-populated triage.assumptions is treated as ground truth", () => {
+    it("architect Bootstrap reads pre-populated triage.assumptions as ground truth (no re-capture)", () => {
+      expect(ARCHITECT_PROMPT).toMatch(/already populated|already filled|pre-populated|round-trip/i);
     });
   });
 
-  describe("AC-8 — skill bodies updated", () => {
+  describe("AC-8 — skill bodies updated (v8.62)", () => {
     it("pre-flight-assumptions.md becomes a thin reference doc (no separate user-facing ask)", () => {
       expect(preFlightSkill).toBeDefined();
       expect(preFlightSkill!.body).toContain("reference doc");
       expect(preFlightSkill!.body).toMatch(/fold/iu);
     });
 
-    it("pre-flight-assumptions.md names both fold targets (design Phase 0 + ac-author Phase 0)", () => {
-      expect(preFlightSkill!.body).toContain("design Phase 0");
-      expect(preFlightSkill!.body).toContain("ac-author Phase 0");
+    it("pre-flight-assumptions.md names the v8.62 fold target (architect Bootstrap)", () => {
+      // v8.62 — the v8.21 fold targeted both `design Phase 0` and
+      // `ac-author Phase 0`; v8.62 collapses both into the single
+      // `architect` Bootstrap phase.
+      expect(preFlightSkill!.body).toMatch(/architect.*Bootstrap|Bootstrap.*architect/i);
     });
 
     it("triage-gate.md no longer claims a separate 'Hop 2.5' step in the flow diagram", () => {
       expect(triageGateSkill).toBeDefined();
-      // The flow-diagram phrasing pre-v8.21 was: "runs the `pre-flight-
-      // assumptions` skill (Hop 2.5) before dispatching the first
-      // specialist". v8.21 drops the parenthetical step name and
-      // re-routes the surface to the first specialist's first turn.
       expect(triageGateSkill!.body).not.toMatch(/pre-flight-assumptions.*\(Hop 2\.5\)/u);
-      expect(triageGateSkill!.body).toMatch(/no separate "Hop 2\.5"|first specialist's first turn/u);
+      // v8.62 — the legacy phrasing "first specialist's first turn"
+      // was rewritten to ``architect`'s first dispatch`` (with code-
+      // spanning backticks around `architect`) after the unified-flow
+      // collapse. The regex tolerates optional code-span backticks
+      // and any apostrophe between `architect` and "s first dispatch".
+      expect(triageGateSkill!.body).toMatch(
+        /no separate "Hop 2\.5"|first specialist.s first turn|architect`?.s first dispatch/
+      );
     });
   });
 });

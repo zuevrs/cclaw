@@ -31,12 +31,12 @@ const PLAN_CRITIC = "plan-critic" as const;
 const CRITIC_STEPS_FILENAME = "critic-steps.md";
 
 describe("v8.51 plan-critic — registry anchors", () => {
-  it("plan-critic is in SPECIALISTS between ac-author and reviewer", () => {
+  it("plan-critic is in SPECIALISTS between architect/builder and reviewer (v8.62 unified flow: `ac-author` renamed to `architect`, `slice-builder` renamed to `builder`; plan-critic still runs after the plan-stage author and before the reviewer)", () => {
     expect((SPECIALISTS as readonly string[]).includes(PLAN_CRITIC)).toBe(true);
     const planCriticIdx = SPECIALISTS.indexOf(PLAN_CRITIC);
-    const acAuthorIdx = SPECIALISTS.indexOf("ac-author");
+    const architectIdx = SPECIALISTS.indexOf("architect");
     const reviewerIdx = SPECIALISTS.indexOf("reviewer");
-    expect(planCriticIdx).toBeGreaterThan(acAuthorIdx);
+    expect(planCriticIdx).toBeGreaterThan(architectIdx);
     expect(planCriticIdx).toBeLessThan(reviewerIdx);
   });
 
@@ -122,9 +122,9 @@ describe("v8.51 plan-critic — critic-steps runbook (v8.54 merged)", () => {
     expect(runbook!.body).toMatch(/widening/i);
   });
 
-  it("critic-steps runbook declares verdict routing (pass → slice-builder; revise → ac-author; cancel → stop-and-report under v8.61 always-auto)", () => {
-    expect(runbook!.body).toMatch(/pass.*slice-builder/i);
-    expect(runbook!.body).toMatch(/revise.*ac-author/i);
+  it("critic-steps runbook declares verdict routing (pass → builder; revise → architect; cancel → stop-and-report under v8.61 always-auto) — v8.62 renamed `slice-builder` → `builder` and `ac-author` → `architect`", () => {
+    expect(runbook!.body).toMatch(/pass.*builder/i);
+    expect(runbook!.body).toMatch(/revise.*architect/i);
     expect(runbook!.body).toMatch(/cancel[\s\S]*stop and report|cancel[\s\S]*always-auto-failure-handling/i);
   });
 
@@ -145,7 +145,7 @@ describe("v8.51 plan-critic — flow-state validator surface", () => {
     currentSlug: "v851-plan-critic",
     currentStage: "plan" as const,
     ac: [],
-    lastSpecialist: "ac-author" as const,
+    lastSpecialist: "architect" as const,
     startedAt: "2026-05-14T18:00:00.000Z",
     reviewIterations: 0,
     securityFlag: false,

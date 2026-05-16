@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  DESIGN_PROMPT,
-  AC_AUTHOR_PROMPT,
+  ARCHITECT_PROMPT,
   REVIEWER_PROMPT,
-  SECURITY_REVIEWER_PROMPT,
-  SLICE_BUILDER_PROMPT,
+  BUILDER_PROMPT,
   RESEARCH_PROMPTS
 } from "../../src/content/specialist-prompts/index.js";
 
@@ -27,6 +25,15 @@ import {
  * (e.g., a prose paragraph) inflate chars without inflating lines, and
  * short lines (e.g., a code block) inflate lines without inflating chars.
  * Both axes catch different runaway-growth patterns.
+ *
+ * v8.62 — roster collapse:
+ *   * `design` retired, fully absorbed into `architect`; the prior `design`
+ *     budget (530 lines / 61000 chars) and prior `ac-author` budget (640
+ *     lines / 60000 chars) collapse into a single `architect` line.
+ *   * `slice-builder` renamed to `builder` (same budget envelope).
+ *   * `security-reviewer` retired, threat-model / taint / secrets / supply-
+ *     chain prose absorbed into `reviewer`'s `security` axis (~+100 lines /
+ *     +12k chars over the v8.59 reviewer body).
  */
 
 interface PromptBudget {
@@ -38,116 +45,45 @@ interface PromptBudget {
 
 const PROMPT_BUDGETS: PromptBudget[] = [
   {
-    id: "design",
-    body: DESIGN_PROMPT,
-    // v8.47 raised the design budget from 32000 to 42000 chars (~31% bump). The
-    // two-turn-max pacing rewrite added: explicit [SILENT] / [ENDS TURN] markers
-    // on every phase header, a new Iron rule subsection warning against
-    // silent-phase pauses, Phase 7 fully rewritten with a three-option picker
-    // (approve / request-changes / reject) + 3-iteration revise cap + explicit-
-    // escalation prose for the 4th request + Design rejected handling, the
-    // anti-rationalization table grew by 2 rows (pause-to-confirm-Frame /
-    // ask-mid-flight-about-D-2), and Common pitfalls grew by 2 bullets
-    // (pause-between-silent-phases / request-changes-not-free-retry). Current
-    // size ~41k chars; 42000 leaves ~2.5% headroom. The growth is justified in
-    // CHANGELOG.md (v8.47 — design phases UX collapse); see CHANGELOG.md >
-    // 8.47.0 for the bump rationale.
-    //
-    // v8.53 raised the design budget from 460/42000 to 470/47000 to absorb the
-    // Phase 6 ambiguity-score sub-section (~4k chars) and the Phase 7 warning-
-    // prefix block (~700 chars). The new content includes the 3-dimension
-    // (greenfield) + 4-dimension (brownfield) scoring rubric, the weighted-
-    // sum formula, the frontmatter emission shape, the threshold lookup
-    // contract (config.yaml > design.ambiguity_threshold), and the soft-
-    // signal warning that fires when composite > threshold. Current size
-    // ~45k chars; 47000 leaves ~4% headroom. The growth is justified in
-    // CHANGELOG.md (v8.53 — critic enhancements: multi-perspective lenses +
-    // ambiguity score); see CHANGELOG.md > 8.53.0 for the bump rationale.
-    //
-    // v8.58 raised the design budget from 470/47000 to 530/61000 to absorb the
-    // v8.58 router-collapse — design now owns three responsibilities previously
-    // carried by the orchestrator's triage step (assumption capture in Phase 0,
-    // interpretation forks in Phase 1, surface detection + qa-stage insertion
-    // in Phase 2) AND introduces the standalone research-mode activation
-    // (`triage.mode == "research"`; outputs `research.md`; emits a two-option
-    // Phase 7 picker; no ac-author handoff). The new content includes:
-    //   * Activation modes subsection — task vs research (~2k chars)
-    //   * Phase 0 assumption-capture-from-scratch block (~2k chars; replaces
-    //     the v8.21 fold prose which presumed a triage-pre-seeded list)
-    //   * Phase 0 priorResearch handoff read (~700 chars)
-    //   * Phase 1 prior-learnings query relocated from the orchestrator
-    //     (`findNearKnowledge` lookup + `patchFlowState` write; ~1.5k chars)
-    //   * Phase 1 interpretation-forks ownership block (~700 chars)
-    //   * Phase 2 surface-detection + qa-stage insertion contract (~2.5k chars)
-    //   * Phase 7 standalone-mode picker variant + finalize semantics + handoff
-    //     prompt prose (~2k chars)
-    // Total v8.58 add: ~10k chars. Current size ~57k chars; 61000 leaves ~7%
-    // headroom for the v8.58.x patch-release surface. Growth is justified in
-    // CHANGELOG.md (v8.58 — Lightweight router + research mode + design
-    // standalone); see CHANGELOG.md > 8.58.0 for the bump rationale.
-    maxLines: 530,
-    maxChars: 61000
-  },
-  {
-    id: "ac-author",
-    body: AC_AUTHOR_PROMPT,
-    // v8.59 raised the ac-author budget from 600 lines / 56000 chars to
-    // 640 lines / 60000 chars to absorb the new Phase 1.7 parent-context
-    // linkage block. The new section authors the mandatory `## Extends`
-    // section in plan.md when `flowState.parentContext` is non-null,
-    // confirms the `refines:` frontmatter, surfaces parent testable
-    // conditions as inheritance defaults on the soft path, and points
-    // at the reviewer's parent-contradictions cross-check. Body is
-    // ~18 lines and ~2.6k chars. Growth is justified in CHANGELOG.md
-    // (v8.59 — Continuation flow / `/cc extend <slug>`).
-    maxLines: 640,
-    maxChars: 60000
+    id: "architect",
+    body: ARCHITECT_PROMPT,
+    // v8.62 — `architect` is the v8.59 `ac-author` body (~640 lines / 60k
+    // chars) PLUS the dead `design` specialist's Phase 0/2-6 prose
+    // (Bootstrap / Frame / Approaches / Decisions / Pre-mortem / Compose)
+    // PLUS the standalone research-mode branch lifted from `design`'s
+    // Phase 7 picker variant. v8.61 already dropped mid-plan dialogue, so
+    // Phase 1 (Clarify) and Phase 7 (Sign-off) are NOT carried over. The
+    // resulting body lands well inside the combined `design` + `ac-author`
+    // envelope thanks to the dropped dialogue prose, but allocate a single
+    // generous budget here so a future expansion of the Posture table or
+    // a new posture variant does not immediately blow the ceiling. The
+    // 1200-line / 110000-char budget matches the design.md escalation
+    // trigger ("Architect file grows past 1200 lines after B1 — STOP and
+    // report") so this test fires alongside the implementation tripwire.
+    maxLines: 1200,
+    maxChars: 110000
   },
   {
     id: "reviewer",
     body: REVIEWER_PROMPT,
-    // v8.52 raised the reviewer budget from 660 lines / 62000 chars to
-    // 690 lines / 68000 chars to absorb the new qa-evidence axis
-    // (gated; sub-checks 1-3, anti-rationalizations, slim-summary
-    // counter update with `qae=N`, `qa.md` named in Inputs). The axis
-    // body itself is ~40 lines and ~4k chars; the surrounding axis-
-    // table row and slim-summary counter prose add ~5 lines and ~300
-    // chars. Growth is justified in CHANGELOG.md (v8.52 — qa-and-
-    // browser stage; reviewer axis).
-    //
-    // v8.59 raised the reviewer budget from 690 lines / 68000 chars to
-    // 710 lines / 71000 chars to absorb the new parent-contradictions
-    // cross-check section (runs when `flowState.parentContext` is set).
-    // The block teaches the reviewer to detect silent reversals of
-    // parent D-N decisions and to spot-check parent `block-ship` findings
-    // overridden via `triage.criticOverride`. Body is ~10 lines and
-    // ~2k chars. Growth justified in CHANGELOG.md (v8.59 —
-    // Continuation flow / `/cc extend <slug>`).
-    maxLines: 710,
-    maxChars: 71000
+    // v8.59 raised the reviewer budget to 710 lines / 71000 chars. v8.62
+    // bumps to 850 lines / 85000 chars to absorb the former
+    // `security-reviewer` specialist's threat-model + taint + secrets +
+    // supply-chain checklist into reviewer's existing `security` axis.
+    // The integrated section grows the security-axis prose ~+100 lines /
+    // ~+12k chars (full threat-model coverage, sensitive-change protocol,
+    // Z-N severity, security-axis bypass guardrails). Growth justified in
+    // CHANGELOG.md (v8.62 — unified flow + kill design + remove
+    // security-reviewer).
+    maxLines: 850,
+    maxChars: 85000
   },
   {
-    id: "security-reviewer",
-    body: SECURITY_REVIEWER_PROMPT,
-    maxLines: 240,
-    maxChars: 19000
-  },
-  {
-    id: "slice-builder",
-    body: SLICE_BUILDER_PROMPT,
-    // v8.40 raised the slice-builder budget from 56000 to 60000 chars.
-    // The full hooks removal moved mechanical commit-helper enforcement
-    // out of the .mjs file and into prompt-level discipline: the prompt
-    // now teaches the posture-driven commit-prefix recipe, the reviewer's
-    // git-log inspection contract, the strict-mode commit-shape table,
-    // and the v8.40-specific anti-rationalization rows that previously
-    // lived in the hook's error messages. The growth is justified in
-    // CHANGELOG.md (v8.40 — full hooks removal). v8.48 raised the budget
-    // from 60000 to 62000 chars to absorb the pre-edit-investigation
-    // gate (hard rule #18 cites the three probes + new-file exception),
-    // the per-AC `AC verified:` slim-summary line + its semantics
-    // paragraph, and the RED-phase Discovery probe block (~500 chars).
-    // Growth justified in CHANGELOG.md (v8.48 — discipline skills triad).
+    id: "builder",
+    body: BUILDER_PROMPT,
+    // v8.62 — `builder` is the v8.48 `slice-builder` body verbatim (rename
+    // only; AC-as-unit semantics unchanged). The 720-line / 62000-char
+    // envelope carries over.
     maxLines: 720,
     maxChars: 62000
   }

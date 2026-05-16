@@ -31,85 +31,122 @@ export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 /**
- * v8.14: `brainstormer` + `architect` collapsed into a single `design`
- * specialist that runs in the MAIN orchestrator context with a multi-turn
- * user-collaborative protocol (Phases 0-7). The discovery sub-phase under
- * `plan` is now `design` -> `ac-author` (was `design` -> `planner` from
- * through v8.27; renamed in v8.28 — see {@link LEGACY_PLANNER_ID}).
- * State files written before with `lastSpecialist` pointing at the
- * removed ids are migrated to `null` on read so the orchestrator re-runs
- * the design phase from scratch.
+ * v8.62: `design` (the v8.14 multi-turn brainstormer) and `ac-author`
+ * (the v8.28 plan author) collapsed into a single `architect` specialist
+ * that runs as an **on-demand** sub-agent (no mid-plan user dialogue —
+ * v8.61 always-auto removed every picker). The `plan` stage's
+ * discovery surface is now just `architect`; there is no `design then
+ * ac-author` chain. The reason for collapsing: v8.61 already deleted
+ * `design`'s sign-off picker (Phase 7) and clarify dialogue (Phase 1);
+ * a "main-context coordinator" specialist that never asks the user
+ * questions is structurally the same as an "on-demand sub-agent" — the
+ * split was carrying no weight. The `mode: "research"` envelope flag
+ * still routes a standalone non-AC dispatch through the same architect
+ * (writes `research.md` instead of `plan.md`).
+ *
+ * Pre-v8.62 state files with `lastSpecialist == "design"` or
+ * `lastSpecialist == "ac-author"` are handled permissively by
+ * `flow-state.ts` validators (string field, no hard migration) — the
+ * orchestrator simply re-dispatches architect on the next `/cc`.
  */
-export const DISCOVERY_SPECIALISTS = ["design", "ac-author"] as const;
+export const DISCOVERY_SPECIALISTS = ["architect"] as const;
 export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
 
 /**
- * `critic` joins the specialist roster as an on-demand sub-agent
- * between `security-reviewer` and `slice-builder`. The order in this
- * array matters: it traces the canonical discovery → review → critic →
- * ship dispatch sequence the orchestrator follows. `critic` runs at
- * Hop 4.5 (between Hop 4 review and Hop 5 ship); the new
- * {@link FLOW_STAGES} entry `"critic"` is the stage value the
- * orchestrator stamps while the critic dispatch is in flight.
+ * v8.62: specialist count drops 9 → 7. Removed: `design` (absorbed into
+ * `architect`) and `security-reviewer` (absorbed into `reviewer`'s
+ * `security` axis). Renamed: `ac-author` → `architect`; `slice-builder`
+ * → `builder`. Surviving roster: `triage`, `architect`, `builder`,
+ * `plan-critic`, `qa-runner`, `reviewer`, `critic`. The order in this
+ * array traces the canonical pipeline (triage → plan → build → qa →
+ * review → critic → ship).
  *
- * `plan-critic` joins the roster between `ac-author` and
- * `slice-builder`. plan-critic is a **pre-implementation** adversarial
- * pass that runs only on the tight gate {ceremonyMode=strict, complexity=
- * large-risky, problemType!=refines, AC count>=2}. It walks the plan
- * itself (goal coverage / granularity / dependencies / parallelism /
- * risk catalog) before any code is written, and writes a single
- * `flows/<slug>/plan-critic.md` artifact. Distinct from the v8.42
- * `critic` specialist (post-implementation, walks what was built);
- * both ship in tandem because they catch different problem classes.
+ * Background on the joiners that remain:
+ * - `critic` (v8.42) is an on-demand sub-agent that runs at the critic
+ *   stage between `review` and `ship`. It walks what was built (gap
+ *   analysis + adversarial lenses).
+ * - `plan-critic` (separate from `critic`) is a pre-implementation
+ *   adversarial pass that runs at the plan stage on the tight gate
+ *   {ceremonyMode=strict, complexity=large-risky, problemType!=refines,
+ *   AC count>=2}. It walks the plan itself (goal coverage / granularity
+ *   / dependencies / parallelism / risk catalog) before any code is
+ *   written and writes `flows/<slug>/plan-critic.md`.
  */
 export const SPECIALISTS = [
-  ...DISCOVERY_SPECIALISTS,
+  "triage",
+  "architect",
+  "builder",
   "plan-critic",
-  "reviewer",
-  "security-reviewer",
-  "critic",
   "qa-runner",
-  "slice-builder",
-  "triage"
+  "reviewer",
+  "critic"
 ] as const;
 export type SpecialistId = (typeof SPECIALISTS)[number];
 
 /**
- * Removed in v8.14. Kept as a type-level reminder for migration paths and
- * `legacyArtifacts: true` opt-in mode. Do not add new entries.
+ * Pre-v8.62 specialist ids that no longer exist. Kept as a type-level
+ * reminder for permissive validators that accept old `lastSpecialist`
+ * strings on read without migrating. Do not add new entries.
+ *
+ * - `design` / `ac-author`: absorbed into {@link DISCOVERY_SPECIALISTS}'s
+ *   `architect` (v8.62).
+ * - `slice-builder`: renamed to `builder` (v8.62; AC-as-unit-of-work
+ *   semantics unchanged).
+ * - `security-reviewer`: absorbed into `reviewer`'s `security` axis
+ *   (v8.62; full threat-model + sensitive-change protocol moved to
+ *   the reviewer prompt).
+ * - `brainstormer`: removed v8.14, kept here for the same back-compat
+ *   reason.
  */
-export const LEGACY_DISCOVERY_SPECIALISTS = ["brainstormer", "architect"] as const;
+export const LEGACY_SPECIALIST_IDS = [
+  "design",
+  "ac-author",
+  "slice-builder",
+  "security-reviewer",
+  "brainstormer"
+] as const;
+export type LegacySpecialistId = (typeof LEGACY_SPECIALIST_IDS)[number];
+
+/**
+ * @deprecated v8.62 — use {@link LEGACY_SPECIALIST_IDS}. Kept as a
+ * re-export so pre-v8.62 import sites continue to type-check.
+ *
+ * Note: the second entry historically named the v8.14 retired
+ * "architect" id, which is a NAME COLLISION with the v8.62 current
+ * `architect` specialist (different concept). New code MUST NOT use
+ * this constant; consult {@link LEGACY_SPECIALIST_IDS} instead, which
+ * names the post-v8.62 retired ids (`design`, `ac-author`, `slice-builder`,
+ * `security-reviewer`, `brainstormer`) and leaves the current
+ * `architect` out of the legacy list.
+ */
+export const LEGACY_DISCOVERY_SPECIALISTS = ["brainstormer"] as const;
 export type LegacyDiscoverySpecialistId = (typeof LEGACY_DISCOVERY_SPECIALISTS)[number];
 
 /**
- * v8.28: `planner` specialist renamed to `ac-author` to disambiguate the
- * specialist role from the `plan` stage and `plan.md` artifact. The two
- * names coexist for **one release**:
+ * v8.28: `planner` specialist renamed to `ac-author`. v8.62: `ac-author`
+ * renamed to `architect` (absorbing `design`'s Phase 0/2-6 work).
+ * The original `"planner"` token is kept here as a canonical legacy id
+ * for permissive validators that may still encounter it in very old
+ * `flow-state.json` files.
  *
- * - on read, `flow-state.json` files with `lastSpecialist: "planner"` are
- *   rewritten to `"ac-author"` by `rewriteLegacyPlanner` in `flow-state.ts`;
- * - on write, the orchestrator and all specialist prompts emit `"ac-author"`;
- * - on dispatch, `SPECIALISTS` no longer carries `"planner"`, so the
- *   orchestrator cannot accidentally dispatch to the old id.
- *
- * The plan is to remove this legacy id in v8.29+ once one full release
- * cycle has aged out any in-flight state files. Until then, this constant
- * is the canonical place to spell the old name — every other reference
- * to `"planner"` in source has been removed.
+ * Permissive read path: `lastSpecialist` is a string field; the
+ * validator does not enforce membership in `SPECIALISTS`, so old values
+ * (`planner`, `ac-author`, `design`, `slice-builder`, `security-reviewer`)
+ * round-trip on read without rewrites. The orchestrator re-dispatches
+ * the current specialist set on the next `/cc`.
  *
  * Shipped flow artifacts under `flows/shipped/<slug>/` keep their
- * historical text untouched — the migration only rewrites the active
- * `flow-state.json` field, not on-disk artifact prose.
+ * historical text untouched.
  */
 export const LEGACY_PLANNER_ID = "planner" as const;
 export type LegacyPlannerId = typeof LEGACY_PLANNER_ID;
 
 /**
- * Lightweight read-only research helpers, dispatched by `ac-author` or by the
- * `design` phase (mostly on `deep` posture, in Phase 2 Frame or Phase 4
- * Decisions) BEFORE the dispatcher writes its artifact. They exist to
- * gather context (live repo signals; prior cclaw lessons) so the
- * dispatcher does not have to crawl the codebase or knowledge log itself.
+ * Lightweight read-only research helpers, dispatched by the `architect`
+ * (mostly during Frame / Decisions / Pre-mortem on strict mode) BEFORE
+ * the architect writes its artifact. They exist to gather context
+ * (live repo signals; prior cclaw lessons) so the architect does not
+ * have to crawl the codebase or knowledge log itself.
  *
  * Research helpers are not in {@link SpecialistId} on purpose:
  *
@@ -149,7 +186,7 @@ export type CriticEscalation = "none" | "light" | "full";
  * - `pass` — every UI AC has evidence (Playwright test result / browser
  *   MCP screenshot / manual-steps confirmation); proceed to review.
  * - `iterate` — at least one UI AC failed verification; bounce back to
- *   slice-builder with qa findings as additional context, max 1 iteration
+ *   builder with qa findings as additional context, max 1 iteration
  *   enforced by `qaIteration` (cap=1).
  * - `blocked` — browser tooling unavailable AND manual steps required;
  *   surface user picker (`proceed-without-qa-evidence` /
@@ -237,19 +274,19 @@ export type Surface = (typeof SURFACES)[number];
 /**
  * verdict the pre-implementation plan-critic returns in its
  * slim summary. Drives the plan-critic step routing (between
- * `ac-author` and `slice-builder` on the tight gate {ceremonyMode=strict,
+ * `architect` and `builder` on the tight gate {ceremonyMode=strict,
  * complexity=large-risky, problemType!=refines, AC count>=2}):
  *
- * - `pass` — advance to slice-builder dispatch (no ceremony).
- * - `revise` (iteration 0) — bounce to ac-author with plan-critic
- *   findings prepended; ac-author updates plan.md and the orchestrator
+ * - `pass` — advance to builder dispatch (no ceremony).
+ * - `revise` (iteration 0) — bounce to architect with plan-critic
+ *   findings prepended; architect updates plan.md and the orchestrator
  *   re-dispatches plan-critic (iteration 1).
  * - `revise` (iteration 1) — orchestrator surfaces the user picker
- *   (cancel / accept-warnings-and-proceed / re-design); no third
+ *   (cancel / accept-warnings-and-proceed / re-architect); no third
  *   plan-critic dispatch is allowed (1 revise loop max).
  * - `cancel` (any iteration) — structural plan problem (goal-coverage
- *   gap requiring re-design, dependency cycle that can't be untangled);
- *   orchestrator surfaces the cancel picker (cancel-slug / re-design)
+ *   gap requiring re-author, dependency cycle that can't be untangled);
+ *   orchestrator surfaces the cancel picker (cancel-slug / re-architect)
  *   immediately, no silent fallback.
  *
  * Distinct from {@link CriticVerdict} on purpose: the post-impl critic
@@ -283,8 +320,8 @@ export interface TddPhaseRecord {
 /**
  * per-criterion `posture` annotation (everyinc-compound pattern).
  *
- * The ac-author stamps one of these six values on every AC stanza in
- * `plan.md` frontmatter. Slice-builder reads `posture` and selects the
+ * The architect stamps one of these six values on every AC stanza in
+ * `plan.md` frontmatter. Builder reads `posture` and selects the
  * commit ceremony (which posture-driven subject-line prefix sequence to
  * write); reviewer reads `src/posture-validation.ts:POSTURE_COMMIT_PREFIXES`
  * to scope posture-specific checks (e.g. tests-as-deliverable skips the
@@ -312,7 +349,7 @@ export type Posture = (typeof POSTURES)[number];
  * Default posture for AC frontmatter that omits the field.
  *
  * Backward compatibility: plans authored before do not carry a
- * posture field; the slice-builder treats absence as `test-first` so
+ * posture field; the builder treats absence as `test-first` so
  * the original RED → GREEN → REFACTOR ceremony continues to apply
  * unchanged.
  */
@@ -349,23 +386,23 @@ export type RoutingClass = (typeof ROUTING_CLASSES)[number];
  * flow mode dimension on `TriageDecision`. Distinguishes a normal
  * `/cc <task>` flow ("task" mode, the historical default and the only
  * mode pre-v8.58) from a `/cc research <topic>` flow ("research" mode, a
- * new pre-task brainstormer entry point that invokes the `design`
+ * pre-task brainstormer entry point that invokes the `architect`
  * specialist in standalone mode).
  *
  * - `task` (default; pre-v8.58 behaviour) — the user wants to build
  *   something. Triage routes through the full pipeline
  *   (plan → build → qa? → review → critic → ship). All existing
  *   specialists fire under their existing gates.
- * - `research` (new) — the user wants to brainstorm/research
- *   BEFORE committing to a task. Triage is skipped (the orchestrator's
- *   Hop 1 Detect forks on the `research ` prefix or `--research` flag);
- *   only the `design` specialist runs, in its standalone-mode variant
- *   (Phase 0 Bootstrap → Phase 1 Clarify → Phase 2 Frame → Phase 3
- *   Approaches → Phase 4 Decisions → Phase 5 Pre-mortem → Phase 6
- *   Compose → Phase 7 Sign-off, where Phase 7's picker is the
- *   two-option `accept research` / `revise` instead of intra-flow
- *   `approve` / `request-changes` / `reject`). Output is
- *   `.cclaw/flows/<slug>/research.md`; no plan handoff.
+ * - `research` (v8.58; rewired to architect in v8.62) — the user wants
+ *   to brainstorm/research BEFORE committing to a task. Triage is
+ *   skipped (the orchestrator's Hop 1 Detect forks on the `research `
+ *   prefix or `--research` flag); only the `architect` specialist runs,
+ *   in its standalone-mode variant (architect dispatches with
+ *   `mode: "research"` envelope marker → silent Bootstrap → Frame →
+ *   Approaches → Decisions → Pre-mortem → Compose synthesis pass; no
+ *   AC table, no Plan/Spec/Topology/Feasibility/Traceability sections).
+ *   Output is `.cclaw/flows/<slug>/research.md`; no plan handoff. v8.65
+ *   will rebuild this as a multi-lens dedicated research specialist.
  *
  * Pre-v8.58 state files do not carry this field; readers MUST default
  * to `"task"` on absent.
@@ -459,14 +496,13 @@ export type RunMode = (typeof RUN_MODES)[number];
  * soft-deprecated — they remain on the type as optional `@deprecated
  * v8.58` fields so pre-v8.58 state files continue to validate, but new
  * orchestrator writes leave them absent. The work each represented
- * moved to the specialist that already does it: design Phase 0-2 on the
- * strict path; ac-author Phase 0/1 on the soft path; inline gets
- * neither. The legacy fields stay on the type for one release; slated
- * for removal in v8.59+ once one full release cycle has aged out any
- * in-flight state files. The qa-gate continues to read
- * `triage.surfaces` literally; the WRITER moved (from triage step to
- * design Phase 2 / ac-author Phase 1), the field itself remains the
- * source of truth for the qa-runner dispatch decision.
+ * moved to the architect (post-v8.62 unified flow). The legacy fields
+ * stay on the type for one release; slated for removal in v8.63+
+ * once one full release cycle has aged out any in-flight state files.
+ * The qa-gate continues to read `triage.surfaces` literally; the
+ * WRITER moved (from triage step to the architect's Frame/Spec write
+ * step), the field itself remains the source of truth for the qa-runner
+ * dispatch decision.
  */
 export interface TriageDecision {
   complexity: RoutingClass;
@@ -518,13 +554,14 @@ export interface TriageDecision {
   /**
    * v8.58 — flow mode dimension. `"task"` (default; pre-v8.58 behaviour;
    * full pipeline through plan → build → qa? → review → critic → ship)
-   * or `"research"` (new; standalone design specialist only,
-   * outputs `research.md`, no plan handoff). Pre-v8.58 state files
-   * lack this field; readers MUST default to `"task"` on absent.
-   * Selected by the orchestrator's Hop 1 Detect step based on the
-   * task prefix / flag (`research ` / `--research`) — NOT by the
-   * triage classification heuristic. Immutable for the lifetime of
-   * the flow (research-mode flows do not flip to task-mode mid-run).
+   * or `"research"` (v8.58; rewired to architect in v8.62; standalone
+   * architect specialist only, outputs `research.md`, no plan handoff).
+   * Pre-v8.58 state files lack this field; readers MUST default to
+   * `"task"` on absent. Selected by the orchestrator's Hop 1 Detect
+   * step based on the task prefix / flag (`research ` / `--research`)
+   * — NOT by the triage classification heuristic. Immutable for the
+   * lifetime of the flow (research-mode flows do not flip to task-mode
+   * mid-run).
    */
   mode?: ResearchMode;
   /**
@@ -544,13 +581,14 @@ export interface TriageDecision {
    * assumptions are needed", which is rare but valid.
    *
    * @deprecated v8.58 — the orchestrator no longer writes this field at
-   * the triage step. The assumption-capture surface moved to design
-   * Phase 0 (strict path) and ac-author Phase 0 (soft path); both write
+   * the triage step. The assumption-capture surface moved to the
+   * architect's Bootstrap step (v8.62 unified flow; pre-v8.62 was split
+   * across design Phase 0 / ac-author Phase 0). The architect writes
    * the captured list to `plan.md` under `## Assumptions` rather than
    * to `triage.assumptions`. Kept on the type as optional + deprecated
    * so pre-v8.58 state files continue to validate; readers (specialists,
    * resume paths) still consume the field when it is present (back-compat
-   * with a flow paused mid-design). Slated for removal in v8.59+
+   * with a flow paused mid-plan). Slated for removal in v8.63+
    * once one full release cycle has aged out in-flight state files.
    */
   assumptions?: string[] | null;
@@ -558,11 +596,13 @@ export interface TriageDecision {
    * Interpretation forks recorded at Hop 2.5 (sub-step before the
    * assumptions question). **Legacy field.** On pre-v8.14 flows the
    * orchestrator surfaced 2-4 distinct interpretations of an ambiguous
-   * prompt and let the user pick. v8.14+ handles ambiguity inside the
-   * `design` specialist's Phase 1 (Clarify), which can ask live follow-up
-   * questions instead of relying on a one-shot fork list. The field stays
-   * in the schema so legacy state files validate; new flows leave it
-   * `null`/absent and lean on design Phase 1 instead.
+   * prompt and let the user pick. v8.14-v8.60 handled ambiguity inside
+   * the `design` specialist's Phase 1 (Clarify). v8.61 removed Phase 1
+   * (always-auto, no mid-plan dialogue) and v8.62 absorbed `design`
+   * into `architect`; the architect now resolves ambiguity silently
+   * using best judgment, surfacing assumptions in `plan.md` instead of
+   * asking the user. The field stays in the schema so legacy state
+   * files validate; new flows leave it `null`/absent.
    *
    * Each entry is the verbatim chosen-interpretation sentence (so
    * downstream specialists see the user's framing, not the orchestrator's
@@ -570,9 +610,9 @@ export interface TriageDecision {
    * surfaced, the field is `null` or absent.
    *
    * @deprecated v8.58 — the orchestrator no longer writes this field.
-   * v8.14+ already lean on design Phase 1 for ambiguity surfacing;
-   * formalises the removal of the orchestrator-side writer.
-   * Kept on the type as optional + deprecated for one release.
+   * v8.61 + v8.62 closed the surface entirely (no more clarify dialogue
+   * anywhere in the pipeline). Kept on the type as optional + deprecated
+   * for one release.
    */
   interpretationForks?: string[] | null;
   /**
@@ -600,8 +640,8 @@ export interface TriageDecision {
    * prior shipped slugs whose tag/surface profile matched the
    * current task at triage time. Populated by the orchestrator between
    * Hop 2 (triage persistence) and Hop 2.5 (pre-flight) via
-   * `findNearKnowledge(triage.taskSummary, …)`. Read by `design`,
-   * `ac-author`, and `reviewer` as background context (the spec calls them
+   * `findNearKnowledge(triage.taskSummary, …)`. Read by `architect`
+   * and `reviewer` as background context (the spec calls them
    * "what we already know nearby" / "priors when scoring findings").
    *
    * Persistence rule: **omit the field entirely when empty** — the
@@ -618,14 +658,13 @@ export interface TriageDecision {
    * deeper shape checks when readers parse it.
    *
    * @deprecated v8.58 — the orchestrator no longer performs the Hop 2.5
-   * prior-learnings lookup. `ac-author` already dispatches
-   * `learnings-research` at Phase 3, which reads `knowledge.jsonl`
-   * directly; `design` Phase 1 / Phase 4 can do the same on demand.
-   * Kept on the type as optional + deprecated for one release so
-   * pre-v8.58 state files (which may carry the field) continue to
-   * validate. Specialists that read this field still consume it
-   * verbatim when present (back-compat resume path); when absent on
-   * new flows the specialists rely on their own lookup paths.
+   * prior-learnings lookup. The architect dispatches `learnings-research`
+   * on demand, which reads `knowledge.jsonl` directly. Kept on the type
+   * as optional + deprecated for one release so pre-v8.58 state files
+   * (which may carry the field) continue to validate. Specialists that
+   * read this field still consume it verbatim when present (back-compat
+   * resume path); when absent on new flows the architect runs its own
+   * lookup.
    */
   priorLearnings?: unknown[] | null;
   /**
@@ -735,13 +774,12 @@ export interface TriageDecision {
    * classification.
    *
    * the **writer** of this field moved from the triage step
-   * (orchestrator Hop 2, pre-v8.58) to the specialist that already
-   * has the codebase context to decide:
-   *   - **strict path**: design Phase 2 (Frame) writes the surfaces
-   *     list to `flow-state.json` via a `patchFlowState` call after
-   *     Frame resolves.
-   *   - **soft path**: ac-author Phase 1 (Surface scan) writes the
-   *     list before authoring the `## Spec` section of `plan.md`.
+   * (orchestrator Hop 2, pre-v8.58) to the architect (post-v8.62
+   * unified flow; pre-v8.62 was split across design Phase 2 / ac-author
+   * Phase 1):
+   *   - **strict / soft path**: architect writes the surfaces list to
+   *     `flow-state.json` via a `patchFlowState` call after authoring
+   *     `## Frame` + `## Spec`.
    *   - **inline path**: not written; downstream readers fall back to
    *     a permissive default (no surface-specific routing fires).
    * The field itself is NOT deprecated — the qa-runner gate

@@ -31,26 +31,23 @@ describe("v8.12 cleanup", () => {
       );
     });
 
-    it("design runs in main context — no Recommended next enum (orchestrator owns advancement)", () => {
-      // v8.14: design replaced brainstormer+architect with a main-context
-      // specialist. It returns no slim summary; instead Phase 7 sign-off
-      // emits an explicit approve/revise picker, and the orchestrator
-      // updates flow-state.json directly. So design does NOT carry the
-      // Recommended next enum the way sub-agent specialists do.
-      expect(SPECIALIST_PROMPTS["design"]).not.toMatch(/Recommended next:\s*</u);
-      expect(SPECIALIST_PROMPTS["design"]).toMatch(/main orchestrator context/u);
-      expect(SPECIALIST_PROMPTS["design"]).toMatch(/Phase 7 — Sign-off/u);
+    it("v8.62 — `architect` is on-demand and emits a slim summary like every other specialist (no Phase 7 sign-off picker, no main-context coordinator role; mid-plan dialogue is gone)", () => {
+      const architect = SPECIALIST_PROMPTS["architect"];
+      // v8.62: the dead `design` specialist's main-context coordinator
+      // contract is gone — architect runs as an on-demand sub-agent and
+      // returns a slim summary. The Recommended next enum is therefore
+      // optional (the architect's primary handoff is the plan.md artifact
+      // plus the architect-flavoured slim summary), but the prompt must
+      // NOT reinstate the dead "main orchestrator context" / "Phase 7"
+      // language.
+      expect(architect).not.toMatch(/main orchestrator context/u);
+      expect(architect).not.toMatch(/Phase 7 — Sign-off/u);
+      expect(architect).toMatch(/on-demand specialist/u);
     });
 
     it("reviewer ships the full canonical enum", () => {
       expect(SPECIALIST_PROMPTS["reviewer"]).toMatch(
         /Recommended next:\s*<continue \| review-pause \| fix-only \| cancel \| accept-warns-and-ship>/u
-      );
-    });
-
-    it("security-reviewer ships the no-warn-accept subset (continue | fix-only | cancel)", () => {
-      expect(SPECIALIST_PROMPTS["security-reviewer"]).toMatch(
-        /Recommended next:\s*<continue \| fix-only \| cancel>/u
       );
     });
   });
@@ -183,8 +180,18 @@ describe("v8.12 cleanup", () => {
       expect(config.legacyArtifacts).toBe(false);
     });
 
-    it("orchestrator documents the flag for users who want the old layout", () => {
-      expect(START_COMMAND_BODY).toMatch(/legacy-artifacts: true/u);
+    it("orchestrator no longer documents the legacy-artifacts flag verbatim (v8.62 unified-flow start-command rewrite trimmed the legacy-artifacts callout from the prose; the flag lives in config.ts + meta-skill + on-demand runbooks)", () => {
+      // v8.62 — the start-command body was rewritten to remove the legacy
+      // dispatch matrix (design → ac-author chain, security-reviewer
+      // envelope, etc). The legacy-artifacts opt-in flag is no longer
+      // documented inline in the orchestrator body; it persists in
+      // `config.ts > createDefaultConfig().legacyArtifacts`, in
+      // `meta-skill.md`'s opt-in catalog, and in the runbooks that
+      // actually branch on the flag (artifact-templates, finalize). This
+      // tripwire confirms the legacy-artifacts plumbing still ships even
+      // though the start-command no longer mentions it.
+      expect(START_COMMAND_BODY).not.toMatch(/legacy-?artifacts/iu);
+      expect(META_SKILL).toMatch(/legacy-?artifacts/iu);
     });
 
     it("meta-skill documents the legacy-artifacts opt-in", () => {

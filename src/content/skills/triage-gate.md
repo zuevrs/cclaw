@@ -5,7 +5,7 @@ trigger: at the start of every new /cc invocation, before any specialist runs
 
 # Skill: triage-gate
 
-Every new flow opens with a **triage gate**. The router reshapes the gate from a heavy classification step into a **lightweight router**. The router decides only complexity, ceremonyMode, path, runMode, and mode; the heavy work that used to live here — surface detection, assumption capture, prior-learnings lookup, interpretation forks — moved into the specialist that already has the codebase context to do it (design Phase 0-2 on strict; ac-author Phase 0-1 on soft; nothing on inline).
+Every new flow opens with a **triage gate**. The router reshapes the gate from a heavy classification step into a **lightweight router**. The router decides only complexity, ceremonyMode, path, runMode, and mode; the heavy work that used to live here — surface detection, assumption capture, prior-learnings lookup, interpretation forks — moved into the specialist that already has the codebase context to do it (the `architect`'s Bootstrap / Frame phases on strict + soft; nothing on inline).
 
 The default behaviour is **zero questions**. The orchestrator announces what it decided in one short line and proceeds straight to the dispatch (or, on inline, straight to the edit). Three explicit override flags — `/cc --inline` / `/cc --soft` / `/cc --strict` — short-circuit the heuristic when the user wants a different ceremony than the heuristic would pick.
 
@@ -14,13 +14,13 @@ The default behaviour is **zero questions**. The orchestrator announces what it 
 - Always at the start of `/cc <task>` when no active flow exists AND the task argument does NOT start with the research-mode token (`research `) or carry the `--research` flag — research flows skip the router entirely (see `/cc.md > Detect — research-mode fork`).
 - Skipped on `/cc` (no argument) when an active flow is detected — see `flow-resume.md`.
 - Skipped on `/cc-cancel` (never opens a flow).
-- Skipped on `/cc research <topic>` and `/cc --research <topic>` — these dispatch design in standalone mode with a sentinel triage block; the router runs no heuristics.
+- Skipped on `/cc research <topic>` and `/cc --research <topic>` — these dispatch the `architect` in standalone research mode with a sentinel triage block; the router runs no heuristics.
 
 ## When NOT to apply
 
 - **Active flow detected** (`flow-state.json > currentSlug != null`). The saved triage is read as ground truth; `flow-resume.md` runs instead and the router does NOT re-prompt.
 - **`/cc-cancel`** shelves the active flow and never opens a new one.
-- **Research-mode entry point** (`/cc research <topic>` / `/cc --research <topic>`). The Detect step's research fork stamps a sentinel triage block (`mode: "research"`, `complexity: "large-risky"`, `ceremonyMode: "strict"`, `path: ["plan"]`, `runMode: null`) and dispatches design standalone; the router runs no heuristics.
+- **Research-mode entry point** (`/cc research <topic>` / `/cc --research <topic>`). The Detect step's research fork stamps a sentinel triage block (`mode: "research"`, `complexity: "large-risky"`, `ceremonyMode: "strict"`, `path: ["plan"]`, `runMode: null`) and dispatches the architect in standalone research mode; the router runs no heuristics.
 - **Resume from a pre-v8.58 flow with populated `triage` already on disk.** The orchestrator reads the saved triage (including pre-v8.58 fields like `triage.surfaces` / `triage.priorLearnings` / `triage.assumptions`); the router is not re-opened mid-flow.
 
 ## routing contract
@@ -29,16 +29,16 @@ The router stamps exactly five fields on `flow-state.json > triage`:
 
 1. **`complexity`** — heuristic-driven: `trivial` / `small-medium` / `large-risky` (see §"Heuristics — how to pick" below).
 2. **`ceremonyMode`** — mapped from complexity: `trivial → inline`, `small-medium → soft`, `large-risky → strict`. Override flags pin this directly.
-3. **`path`** — `["build"]` for inline; `["plan", "build", "review", "critic", "ship"]` for soft + strict. The v8.52 `"qa"` insertion happens later, at the design Phase 2 / ac-author Phase 1 surface-write step; not at this router hop.
+3. **`path`** — `["build"]` for inline; `["plan", "build", "review", "critic", "ship"]` for soft + strict. The v8.52 `"qa"` insertion happens later, at the `architect`'s Frame-phase surface-write step; not at this router hop.
 4. **`runMode`** — `null` on inline (no stages to chain); `"step"` (default) or `"auto"` on soft + strict (from `--mode=` or the default).
 5. **`mode`** — `"task"` for every `/cc <task>` entry. `"research"` is stamped only by the Detect research-mode fork; never by this router.
 
 The router does NOT decide (moved out):
 
-- **`surfaces`** — moved to design Phase 2 (strict) / ac-author Phase 1 (soft) / not-written (inline). The qa-runner gate reads `triage.surfaces` literally; only the WRITER moved.
-- **`assumptions`** — moved to design Phase 0 (strict) / ac-author Phase 0 (soft) / not-captured (inline).
-- **`priorLearnings`** — moved to design Phase 1 / Phase 4 (strict) / ac-author Phase 3's `learnings-research` dispatch (soft) / not-queried (inline).
-- **`interpretationForks`** — moved to design Phase 1 (strict) / ac-author Phase 0 (soft) / not-surfaced (inline).
+- **`surfaces`** — moved to the `architect`'s Frame phase (strict + soft) / not-written (inline). The qa-runner gate reads `triage.surfaces` literally; only the WRITER moved.
+- **`assumptions`** — moved to the `architect`'s Bootstrap phase (strict + soft) / not-captured (inline).
+- **`priorLearnings`** — moved to the `architect`'s Bootstrap and Decisions phases on strict / Bootstrap-tier `learnings-research` dispatch on soft / not-queried (inline).
+- **`interpretationForks`** — moved to the `architect`'s Bootstrap phase (strict + soft) / not-surfaced (inline). The `architect` resolves forks with best judgment and records the chosen interpretation in `plan.md`; v8.61 always-auto + v8.62 unified flow forbid mid-plan clarifying dialogue.
 - **`criticOverride`** — relocated to the v8.44 `.cclaw/state/triage-audit.jsonl` audit log surface.
 - **`notes`** — narrative context lives in `plan.md` / `research.md`.
 
@@ -92,14 +92,14 @@ Rank the request against these signals. The router picks the **highest** complex
 | --- | --- |
 | typo, rename, comment, single-file format change, ≤30 lines, no test impact | trivial / inline |
 | 1-3 modules, ≤5 testable behaviours, no auth/payment/data-layer touch, no migration | small/medium / soft |
-| ≥4 modules touched OR ≥6 distinct behaviours OR architectural decision needed OR migration required OR auth/payment/data-layer touch OR explicit security flag | large-risky / strict (plan stage expands into discovery sub-phase) |
-| user explicitly asked for "discuss first" / "design only" / "what do you think" | large-risky (forces discovery sub-phase under plan) |
+| ≥4 modules touched OR ≥6 distinct behaviours OR architectural decision needed OR migration required OR auth/payment/data-layer touch OR explicit security flag | large-risky / strict (architect runs full Frame → Approaches → Decisions → Pre-mortem → Compose) |
+| user explicitly asked for "discuss first" / "think it through" / "what do you think" | large-risky (forces full architect ceremony) OR direct to `/cc research <topic>` if no implementation is wanted yet |
 | user explicitly asked for "just fix it" on a single file | trivial / inline |
-| **user prompt is vague** ("make it better", "fix bugs", "add some auth") | always escalate one class from heuristic baseline; design Phase 1 (Clarify) or ac-author Phase 0 (assumption check) then asks the user to specify mid-flight |
+| **user prompt is vague** ("make it better", "fix bugs", "add some auth") | always escalate one class from heuristic baseline; the architect resolves ambiguity silently with best judgment (v8.62 unified flow forbids mid-plan dialogue), recording the chosen interpretation in `plan.md > ## Plan` |
 
 The "highest wins" rule is intentional. Agents underestimate scope more often than they overestimate; if any signal says large-risky, route to large-risky.
 
-note: prior versions surfaced a confidence dimension (`high` / `medium` / `low`) and used it to gate the structured-ask path. routes zero-question regardless of confidence; vague prompts escalate one class (so design Phase 1 / ac-author Phase 0 picks up the clarification surface), but the user is never interrupted at the router. The confidence dimension lives only inside the rationale string now (`rationale: "small-medium (medium confidence): 3 modules, ~150 LOC"`), not as a separate field.
+note: prior versions surfaced a confidence dimension (`high` / `medium` / `low`) and used it to gate the structured-ask path. routes zero-question regardless of confidence; vague prompts escalate one class (so the `architect`'s Bootstrap phase has more ceremony to absorb the ambiguity), but the user is never interrupted at the router OR mid-plan. The confidence dimension lives only inside the rationale string now (`rationale: "small-medium (medium confidence): 3 modules, ~150 LOC"`), not as a separate field.
 
 ## What the orchestrator records
 
@@ -130,10 +130,10 @@ The triage block is **immutable for the lifetime of the flow** — with one exce
 | path value | what runs | when |
 | --- | --- | --- |
 | `["build"]` (inline trivial) | direct edit + commit, no plan, no review | `complexity == "trivial"` OR `--inline` flag |
-| `["plan", "build", "review", "critic", "ship"]` (small/medium) | one ac-author sub-agent for plan; one slice-builder for build; one reviewer for review; critic; ship fan-out | `complexity == "small-medium"` OR `--soft` flag |
-| `["plan", "build", "review", "critic", "ship"]` (large-risky) | **plan stage expands** into design (main context, multi-turn) → ac-author; build/review/critic/ship behave as small/medium plus parallel-build fan-out and adversarial pre-mortem when applicable | `complexity == "large-risky"` OR `--strict` flag |
+| `["plan", "build", "review", "critic", "ship"]` (small/medium) | one `architect` sub-agent for plan (writes `plan.md` silently in one dispatch); one `builder` for build; one `reviewer` for review (ten-axis); critic; ship fan-out | `complexity == "small-medium"` OR `--soft` flag |
+| `["plan", "build", "review", "critic", "ship"]` (large-risky) | **same shape as soft** but the `architect` runs the full ceremony (Frame → Approaches → Decisions → Pre-mortem → Compose) inside the single dispatch; `plan-critic` runs between architect and builder; build/review/critic/ship behave as small/medium plus parallel-build fan-out when applicable | `complexity == "large-risky"` OR `--strict` flag |
 
-`triage.path` at the router hop holds the canonical four-or-five stages: `plan`, `build`, `review`, `critic`, `ship`. **`discovery` is never an entry in `path`.** **The `"qa"` stage is NOT inserted at this router hop in v8.58** — the qa-stage insertion moved to the design Phase 2 / ac-author Phase 1 surface-write step (which has the codebase context to detect UI / web surfaces). When that write detects UI / web surfaces and `ceremonyMode != "inline"`, the same write rewrites `triage.path` to insert `"qa"` between `"build"` and `"review"`. The qa-runner gate continues to read the rewritten path; only the writer moved.
+`triage.path` at the router hop holds the canonical four-or-five stages: `plan`, `build`, `review`, `critic`, `ship`. **`discovery` is never an entry in `path`.** **The `"qa"` stage is NOT inserted at this router hop in v8.58** — the qa-stage insertion moved to the `architect`'s Frame-phase surface-write step (which has the codebase context to detect UI / web surfaces). When that write detects UI / web surfaces and `ceremonyMode != "inline"`, the same write rewrites `triage.path` to insert `"qa"` between `"build"` and `"review"`. The qa-runner gate continues to read the rewritten path; only the writer moved.
 
 The path-validation rule is: `triage.path` ⊆ `{plan, build, qa, review, critic, ship}`. Any state file that contains a `"discovery"` entry is from an older schema and must be normalised — strip the `"discovery"` entry and continue with the remaining stages.
 
@@ -166,7 +166,7 @@ The gate is **never skipped silently**. supports three explicit skip forms:
 
 1. **Override flag** — `/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>` short-circuit the heuristic; the chosen ceremonyMode is stamped verbatim and the audit log records `userOverrode: true` whenever the choice differs from the heuristic.
 2. **Active flow** — `flow-resume.md` resumes the saved triage; the router does not re-prompt.
-3. **Research-mode entry point** — `/cc research <topic>` / `/cc --research <topic>` stamp a sentinel triage and dispatch design standalone; the router runs no heuristics.
+3. **Research-mode entry point** — `/cc research <topic>` / `/cc --research <topic>` stamp a sentinel triage and dispatch the architect in standalone research mode; the router runs no heuristics.
 
 v8.57 supported `--triage=trivial` / `--triage=small-medium` / `--triage=large-risky` and `--no-triage`. v8.58 removes these flags in favour of `--inline` / `--soft` / `--strict` (more explicit about the ceremonyMode choice). Pre-v8.58 invocations with `--triage=` flags are treated as unknown arguments (one-line `unknown flag, ignored` note) and fall back to the zero-question path.
 
@@ -192,27 +192,27 @@ User: `/cc Add a status pill to the approvals dashboard.`
 ─ small-medium / soft / plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-status-pill
 ```
 
-Then dispatches ac-author Phase 0 (assumption capture happens inside the specialist, not at the router).
+Then dispatches the `architect` (Bootstrap — assumption capture happens inside the specialist, not at the router).
 
 ### Large-risky — zero-question (default)
 
 User: `/cc Migrate the user store from Postgres to DynamoDB.`
 
 ```
-─ large-risky / strict / design → plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-user-store-migration
+─ large-risky / strict / plan → build → review → critic → ship  ·  runMode=auto  ·  slug=20260515-user-store-migration
 ```
 
-Then dispatches design Phase 0 (assumption capture, surface detection, prior-learnings lookup all happen inside design, not at the router).
+Then dispatches the `architect` (Bootstrap — assumption capture, surface detection, prior-learnings lookup all happen inside the architect, not at the router).
 
 ### Override flag — explicit choice
 
 User: `/cc --strict Clean up the auth helper.`
 
 ```
-─ large-risky / strict / design → plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-auth-helper-cleanup
+─ large-risky / strict / plan → build → review → critic → ship  ·  runMode=auto  ·  slug=20260515-auth-helper-cleanup
 ```
 
-Heuristic would have picked `small-medium / soft` (single helper file, ~80 LOC), but the user pinned `--strict`. The audit log records `userOverrode: true`. Then dispatches design Phase 0.
+Heuristic would have picked `small-medium / soft` (single helper file, ~80 LOC), but the user pinned `--strict`. The audit log records `userOverrode: true`. Then dispatches the `architect` (Bootstrap).
 
 ### Vague prompt — escalate one class
 
@@ -221,10 +221,10 @@ User: `/cc Make auth less broken.`
 Heuristic baseline: `small-medium`. Vague-prompt rule escalates one class:
 
 ```
-─ large-risky / strict / design → plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-auth-improvements
+─ large-risky / strict / plan → build → review → critic → ship  ·  runMode=auto  ·  slug=20260515-auth-improvements
 ```
 
-Then dispatches design; Phase 1 (Clarify) asks the user to specify which auth surface is broken (interpretation forks live in design now, not at the router).
+Then dispatches the `architect`. The architect's Bootstrap and Frame phases resolve the ambiguity silently with best judgment (which auth surface is broken, what "less broken" means) and record the chosen interpretation in `plan.md > ## Plan`; v8.62 unified flow forbids mid-plan clarifying dialogue. If the user wants exploratory thinking before committing to a task, the correct entry point is `/cc research <topic>` instead.
 
 ## Common rationalizations
 
@@ -234,7 +234,7 @@ Then dispatches design; Phase 1 (Clarify) asks the user to specify which auth su
 | --- | --- |
 | "This is obviously trivial — skip the router entirely." | v8.58's router is zero-question by default; there is no separate skip. The router runs the heuristic and announces in one line, whether or not the result is trivial. |
 | "User said 'just fix it' — go straight to inline." | "just fix it" is a heuristic signal but not a free pass. The router still checks file count / LOC / sensitive surface; if any signal says large-risky, route to large-risky. The user can pass `--inline` if they want to override. |
-| "Vague prompt — let me ask a clarifying question at the router." | The router does not ask. Vague prompts escalate one class so design Phase 1 (or ac-author Phase 0) picks up the clarification surface inside the specialist, not at the router. |
+| "Vague prompt — let me ask a clarifying question at the router." | The router does not ask. Vague prompts escalate one class so the `architect`'s Bootstrap / Frame phases have more ceremony to absorb the ambiguity (silently, using best judgment); v8.62 unified flow forbids mid-plan dialogue. If the user genuinely wants to think before writing code, the correct entry point is `/cc research <topic>`. |
 | "Let me render the legacy v8.14 combined-form ask to be safe." | v8.58 removed the combined-form ask. The router is zero-question + override flags only; do not synthesize a structured ask at this hop. |
 | "Mid-flight the user wants to switch from step to auto — let me patch `triage.runMode`." | lifts immutability for `runMode` only: the user passes `/cc --mode=auto` and the orchestrator patches `triage.runMode`. `complexity` / `ceremonyMode` / `path` / `mode` stay immutable — those require `/cc-cancel` + fresh `/cc`. Inline path rejects the toggle. |
 | "Mid-flight the user wants to switch from soft to strict — `/cc --strict` should re-triage." | override flags ONLY work on a fresh `/cc <task>` (no active flow). On a resume, the `--strict` flag is ignored with a one-line `override flags only apply to fresh /cc; resume continues with saved ceremonyMode` note. |
@@ -245,9 +245,9 @@ Then dispatches design; Phase 1 (Clarify) asks the user to specify which auth su
 ## Common pitfalls
 
 - **Rendering a structured ask at the router.** v8.58's router is zero-question. If you find yourself about to invoke `AskUserQuestion` / `AskQuestion` / `prompt` / an "ask" content block at this hop, stop — the router is wrong.
-- **Asking a clarifying question at the router because the prompt is vague.** Vague prompts escalate one complexity class; the clarification surface is owned by design Phase 1 (strict) or ac-author Phase 0 (soft), not the router.
+- **Asking a clarifying question at the router because the prompt is vague.** Vague prompts escalate one complexity class; the architect's Bootstrap / Frame phases resolve the ambiguity silently with best judgment (v8.62 unified flow forbids mid-plan dialogue). The router does NOT ask, and neither does the architect — the user sees only the announcement and, later, the finished `plan.md`.
 - **Writing `triage.surfaces` / `triage.assumptions` / `triage.priorLearnings` / `triage.interpretationForks` at the router.** Those fields are populated by the specialist that consumes them. The router writes only `complexity` / `ceremonyMode` / `path` / `runMode` / `mode` / `rationale` / `decidedAt`.
-- **Inserting `"qa"` into `triage.path` at the router.** The qa-stage insertion moved to the design Phase 2 / ac-author Phase 1 surface-write step. The router writes `["plan", "build", "review", "critic", "ship"]` (or `["build"]` on inline); the specialist rewrites to insert `"qa"` when UI / web surfaces are detected.
+- **Inserting `"qa"` into `triage.path` at the router.** The qa-stage insertion moved to the `architect`'s Frame-phase surface-write step. The router writes `["plan", "build", "review", "critic", "ship"]` (or `["build"]` on inline); the architect rewrites to insert `"qa"` when UI / web surfaces are detected.
 - **Synthesizing a combined-form ask from the v8.14-prose.** The combined form is removed in v8.58; do not reach for it as a fallback.
 - **Confusing the ceremonyMode flags (`--inline` / `--soft` / `--strict`) with the runMode flags (`--mode=auto` / `--mode=step`).** They are orthogonal — a single `/cc` can carry both (`/cc --strict --mode=auto <task>` is valid).
 - **Re-running the router on resume.** Resume reads the saved triage and continues from `currentStage`; never re-runs the router.
@@ -255,4 +255,4 @@ Then dispatches design; Phase 1 (Clarify) asks the user to specify which auth su
 
 ## Next step
 
-After the router announces (or after an override flag fires), the orchestrator dispatches the first specialist directly. The assumption surface, surface detection, and prior-learnings lookup all live inside the first specialist's first turn — design Phase 0-2 on strict, ac-author Phase 0-1 on soft, none on inline. `triage.assumptions` / `triage.surfaces` / `triage.priorLearnings` are first-class fields on `flow-state.json` and continue to be populated (just by the specialist, not by the orchestrator). On the inline path, the orchestrator goes straight to the build dispatch — there is no assumption surface (a one-line edit has no assumptions worth surfacing).
+After the router announces (or after an override flag fires), the orchestrator dispatches the first specialist directly. The assumption surface, surface detection, and prior-learnings lookup all live inside the `architect`'s first dispatch — the Bootstrap and Frame phases on strict + soft, nothing on inline. `triage.assumptions` / `triage.surfaces` / `triage.priorLearnings` are first-class fields on `flow-state.json` and continue to be populated (just by the architect, not by the orchestrator). On the inline path, the orchestrator goes straight to the build dispatch — there is no assumption surface (a one-line edit has no assumptions worth surfacing).

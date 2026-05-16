@@ -118,15 +118,15 @@ describe("v8.42 — critic prompt covers known-bad scenarios", () => {
   });
 });
 
-describe("v8.42 — specialist count end-to-end (v8.61: 9 specialists + 2 research helpers)", () => {
-  it("CORE_AGENTS contains 9 specialists + 2 research helpers (v8.61 added triage)", () => {
+describe("v8.62 — specialist count end-to-end (unified flow: 7 specialists + 2 research helpers)", () => {
+  it("CORE_AGENTS contains 7 specialists + 2 research helpers (v8.62 unified flow drops `design` (absorbed into `architect`) and `security-reviewer` (absorbed into `reviewer`'s `security` axis); renames `ac-author` → `architect`, `slice-builder` → `builder`)", () => {
     const specialists = CORE_AGENTS.filter((a) => a.kind === "specialist");
     const research = CORE_AGENTS.filter((a) => a.kind === "research");
-    expect(specialists).toHaveLength(9);
+    expect(specialists).toHaveLength(7);
     expect(research).toHaveLength(2);
   });
 
-  it("init writes the 11 expected agent files (v8.61 added triage.md)", async () => {
+  it("init writes the 9 expected agent files (v8.62 unified flow roster — `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`, `triage` plus the two research helpers)", async () => {
     let project: string | null = null;
     try {
       project = await createTempProject();
@@ -134,16 +134,14 @@ describe("v8.42 — specialist count end-to-end (v8.61: 9 specialists + 2 resear
       const entries = await fs.readdir(path.join(project, ".cclaw", "lib", "agents"));
       const md = entries.filter((e) => e.endsWith(".md")).sort();
       expect(md).toEqual([
-        "ac-author.md",
+        "architect.md",
+        "builder.md",
         "critic.md",
-        "design.md",
         "learnings-research.md",
         "plan-critic.md",
         "qa-runner.md",
         "repo-research.md",
         "reviewer.md",
-        "security-reviewer.md",
-        "slice-builder.md",
         "triage.md"
       ]);
     } finally {

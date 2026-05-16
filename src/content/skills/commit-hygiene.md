@@ -1,6 +1,6 @@
 ---
 name: commit-hygiene
-trigger: before every git commit produced inside an active cclaw flow; always-on for slice-builder
+trigger: before every git commit produced inside an active cclaw flow; always-on for builder
 ---
 
 # Skill: commit-hygiene
@@ -39,7 +39,7 @@ The reviewer's posture-aware chain check keys off the subject-line prefix. The p
 
 In strict mode it is OK to amend the most recent commit when (a) the commit has NOT been pushed, AND (b) the amend fixes the subject prefix (e.g. correcting `fix bug` → `red(AC-3): reproduce off-by-one`). Once another commit has landed on top, do NOT amend — write a fixup commit instead: `git commit --allow-empty -m "<prefix>(AC-N): re-record subject for <orig-SHA>"`. Both paths keep the reviewer's `git log --grep` scan honest.
 
-After a push, never amend (it requires force-push, which the slice-builder never does — that is the orchestrator's ship-stage call).
+After a push, never amend (it requires force-push, which the builder never does — that is the orchestrator's ship-stage call).
 
 ## surgical-edit-hygiene
 
@@ -99,7 +99,7 @@ The three rules above run **alongside** the `## Summary` block. The block's thre
 - `### Noticed but didn't touch` — pre-existing dead code, drive-by-fix temptations you resisted, formatting noise you saw, code smells outside the AC surface.
 - `### Potential concerns` — ambiguities your implementation surfaced, edge cases the AC didn't cover, rollback gotchas.
 
-A slice-builder that ships an AC and writes "no drive-by edits noticed" in the `Noticed but didn't touch` block when the diff actually contains one is a **contract violation**. The reviewer catches the drive-by; the absence of the bullet is itself a finding (axis=readability, severity=consider).
+A builder that ships an AC and writes "no drive-by edits noticed" in the `Noticed but didn't touch` block when the diff actually contains one is a **contract violation**. The reviewer catches the drive-by; the absence of the bullet is itself a finding (axis=readability, severity=consider).
 
 ## Reviewer finding template — drive-by edit
 
@@ -149,7 +149,7 @@ refactor(AC-1) skipped: 2-line fix, no extraction warranted
 Build summary:
 
 ```
-## Summary — slice-builder
+## Summary — builder
 ### Changes made
 - Fixed off-by-one in `paginate()` (`src/lib/paginate.ts:84`); last page now renders.
 - Removed unused `Math.ceil` import made unreferenced by the fix.
@@ -162,7 +162,7 @@ Build summary:
 
 ## Worked example — WRONG
 
-Same AC, but the slice-builder also "improved":
+Same AC, but the builder also "improved":
 
 ```
 src/lib/paginate.ts: -2 lines, +2 lines (the fix)        ← OK
@@ -176,7 +176,7 @@ Reviewer findings:
 - F-1 architecture consider (A-4) — drive-by reformat in lines 14-26.
 - F-2 correctness required (A-5) — `legacyPaginate` deletion unrelated to AC-1.
 
-Both findings block the slice from going to compound until the slice-builder splits the diff: one commit for AC-1, drive-by reverts in a separate commit (or in a follow-up slug for the "real" cleanups).
+Both findings block the slice from going to compound until the builder splits the diff: one commit for AC-1, drive-by reverts in a separate commit (or in a follow-up slug for the "real" cleanups).
 
 ## Common rationalizations
 
@@ -197,4 +197,4 @@ The drive-by reflex and the dead-code-cleanup reflex are how scope discipline br
 
 ## Composition
 
-This skill is **always-on** for slice-builder and for any specialist that produces a commit (which today means slice-builder only — design, ac-author, reviewer, security-reviewer do not commit code). The reviewer reads this skill at the top of every iteration and uses the finding templates above verbatim.
+This skill is **always-on** for builder and for any specialist that produces a commit (which today means builder only — architect, plan-critic, qa-runner, reviewer, critic do not commit code). The reviewer reads this skill at the top of every iteration and uses the finding templates above verbatim.

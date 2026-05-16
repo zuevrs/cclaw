@@ -1,6 +1,6 @@
 ---
 name: receiving-feedback
-trigger: when a specialist or the orchestrator receives review.md findings, critic.md gaps / verdicts, security-reviewer findings, or any user feedback that names a defect in upstream output; auto-fires at build (fix-only loop), review (re-iteration), and ship (final pre-merge sweep)
+trigger: when a specialist or the orchestrator receives review.md findings (including the reviewer's `security`-axis findings absorbed from the former `security-reviewer`), critic.md gaps / verdicts, or any user feedback that names a defect in upstream output; auto-fires at build (fix-only loop), review (re-iteration), and ship (final pre-merge sweep)
 ---
 
 # Skill: receiving-feedback
@@ -13,12 +13,12 @@ This skill replaces the sycophantic-acknowledge reflex with a structured respons
 
 Always-on when a specialist or the orchestrator is processing **feedback that names a defect in their own prior output**. Concretely, the four triggering surfaces:
 
-1. **Reviewer findings** — slice-builder receiving F-N rows from `review.md`'s Findings table (every iteration of the review-fix loop, every `severity ∈ {critical, required, consider, nit}` row that targets slice-builder's diff).
-2. **Critic gaps / verdicts** — slice-builder OR ac-author receiving `critic.md > ## Gap analysis` rows (G-N records) or a `Verdict: block-ship` / `Verdict: iterate` line. The critic is read-only on the codebase; the receiver is whoever owns the file the gap targets.
+1. **Reviewer findings** — builder receiving F-N rows from `review.md`'s Findings table (every iteration of the review-fix loop, every `severity ∈ {critical, required, consider, nit}` row that targets builder's diff).
+2. **Critic gaps / verdicts** — builder OR architect receiving `critic.md > ## Gap analysis` rows (G-N records) or a `Verdict: block-ship` / `Verdict: iterate` line. The critic is read-only on the codebase; the receiver is whoever owns the file the gap targets.
 3. **Security-reviewer findings** — same as reviewer findings, scoped to the security axis. Severity escalates faster (every `critical` security finding blocks ship in every ceremonyMode); the response pattern below still applies.
 4. **User feedback that points at a defect** — the user typing `/cc` with prose saying "AC-2 missed the edge case where X" or "the plan doesn't mention Y". Treat this as a finding (severity inferred from prose; default to `required` when the user names a concrete miss).
 
-Fires on `stages: ["build", "review", "ship"]` because the receive-feedback moment can land at any of those stages (slice-builder in build, reviewer in review-iteration, both at ship-gate fix-only).
+Fires on `stages: ["build", "review", "ship"]` because the receive-feedback moment can land at any of those stages (builder in build, reviewer in review-iteration, both at ship-gate fix-only).
 
 ## When NOT to apply
 
@@ -85,7 +85,7 @@ The evidence lands **in the same response** as the plan, not in a follow-up turn
 
 ## Process
 
-When a review.md / critic.md / security-reviewer finding lands, follow this sequence (≈45-60 seconds per finding):
+When a review.md (any axis, including the reviewer's `security` axis absorbed from the former `security-reviewer`) or critic.md finding lands, follow this sequence (≈45-60 seconds per finding):
 
 1. **Read the finding to the end.** Including the proposed fix, the cited file:line, and the severity. Do not respond after reading only the first sentence.
 2. **Apply the four-step pattern above.** Restate / Classify / Plan / Evidence. Write the four lines in the same turn.
@@ -149,7 +149,7 @@ Review block 1 contains:
 
 > F-2 | correctness | required | AC-1 | `src/lib/permissions.ts:18` | the GREEN diff does not handle the null-claims branch; throws on `claims === null` instead of returning `false`. → Add null-guard before the property access.
 
-slice-builder's response in the next build.md fix-iteration block:
+builder's response in the next build.md fix-iteration block:
 
 ```markdown
 ### Fix iteration 1 — review block 1
@@ -185,7 +185,7 @@ Violations:
 - No plan (the next iteration cannot know what code is changing).
 - Aggregate response (one prose line for "F-2 and the other findings"; the row-close citations break).
 
-The reviewer will re-flag this as a process finding (`severity=consider`, `axis=readability`, citing this skill); the slice-builder bounces back with a real response. One iteration wasted.
+The reviewer will re-flag this as a process finding (`severity=consider`, `axis=readability`, citing this skill); the builder bounces back with a real response. One iteration wasted.
 
 ## Composition
 

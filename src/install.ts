@@ -182,6 +182,26 @@ const RETIRED_COMMAND_FILES: readonly string[] = [
   "cclaw-critic.md"
 ];
 
+/**
+ * Retired specialist agent .md files. v8.62 collapsed `design` + `ac-author`
+ * into the new `architect` specialist, renamed `slice-builder` to `builder`,
+ * and absorbed `security-reviewer` into the reviewer's `security` axis.
+ * The installer sweeps the stale `.md` files on every `cclaw install / sync`
+ * so projects upgrading from v8.61 or earlier do not carry leftover agent
+ * files that reference the removed prompts.
+ *
+ * Swept locations:
+ *   - `.cclaw/lib/agents/<file>` (shared runtime root)
+ *   - `<harness>.agents.dir/<file>` for every installed harness
+ *     (e.g. `.cursor/agents/design.md`, `.claude/agents/ac-author.md`)
+ */
+const RETIRED_AGENT_FILES: readonly string[] = [
+  "design.md",
+  "ac-author.md",
+  "slice-builder.md",
+  "security-reviewer.md"
+];
+
 const RETIRED_TEMPLATE_FILES: readonly string[] = ["ideas.md"];
 
 export interface SyncOptions {
@@ -522,6 +542,38 @@ async function removeRetiredCommandFiles(
   }
 }
 
+/**
+ * v8.62: sweep stale specialist agent files (`design.md`, `ac-author.md`,
+ * `slice-builder.md`, `security-reviewer.md`) from both the shared
+ * `.cclaw/lib/agents/` runtime root and every installed harness's
+ * `agentsDir`. Idempotent: emits one progress event per removed file,
+ * nothing on a clean install. See {@link RETIRED_AGENT_FILES}.
+ */
+async function removeRetiredAgentFiles(
+  projectRoot: string,
+  harnesses: readonly HarnessId[],
+  emit: (step: string, detail?: string) => void
+): Promise<void> {
+  const sharedAgentsDir = path.join(projectRoot, LIB_ROOT, "agents");
+  for (const fileName of RETIRED_AGENT_FILES) {
+    const target = path.join(sharedAgentsDir, fileName);
+    if (await exists(target)) {
+      await fs.rm(target, { force: true });
+      emit("Removed retired agent", `${LIB_ROOT}/agents/${fileName}`);
+    }
+  }
+  for (const harness of harnesses) {
+    const agentsDir = path.join(projectRoot, HARNESS_LAYOUTS[harness].agentsDir);
+    for (const fileName of RETIRED_AGENT_FILES) {
+      const target = path.join(agentsDir, fileName);
+      if (await exists(target)) {
+        await fs.rm(target, { force: true });
+        emit("Removed retired agent", `${HARNESS_LAYOUTS[harness].agentsDir}/${fileName}`);
+      }
+    }
+  }
+}
+
 async function removeRetiredTemplateFiles(
   projectRoot: string,
   emit: (step: string, detail?: string) => void
@@ -788,6 +840,7 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
 
   await removeRetiredTemplateFiles(projectRoot, emit);
   await removeRetiredCommandFiles(projectRoot, harnesses, emit);
+  await removeRetiredAgentFiles(projectRoot, harnesses, emit);
 
   for (const harness of harnesses) {
     await writeHarnessAssets(projectRoot, HARNESS_LAYOUTS[harness]);
@@ -858,6 +911,9 @@ export async function uninstallCclaw(options: { cwd: string }): Promise<void> {
     }
     for (const agent of CORE_AGENTS) {
       await removePath(path.join(projectRoot, layout.agentsDir, `${agent.id}.md`));
+    }
+    for (const fileName of RETIRED_AGENT_FILES) {
+      await removePath(path.join(projectRoot, layout.agentsDir, fileName));
     }
     await removePath(path.join(projectRoot, layout.skillsDir));
     // `writeHarnessAssets`. For Cursor this is `.cursor/rules/cclaw.mdc`;
@@ -930,6 +986,7 @@ export function renderHarnessRulesGuidance(
 
 export const HARNESS_LAYOUT_TABLE = HARNESS_LAYOUTS;
 export {
+  RETIRED_AGENT_FILES,
   RETIRED_COMMAND_FILES,
   RETIRED_HOOK_FILES,
   RETIRED_HARNESS_HOOK_FILES,

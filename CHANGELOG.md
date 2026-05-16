@@ -1,6 +1,54 @@
 # Changelog
 
 
+## 8.62.0 — Unified flow + kill `design` + remove `security-reviewer` + renames
+
+### Why
+
+By v8.61, three drifts had accumulated that the previous slugs were polishing around instead of fixing.
+
+1. **Three flow shapes for one mental model.** v8.50-v8.58 had quietly settled into three branches under one `/cc <task>` entry point — `inline` (build inline), `soft` (`ac-author` Phase 0-1 + plan → build → review → critic → ship, no `design`), `strict` (`design` Phase 0-7 + `ac-author` + plan → build → review → critic → ship). Per-stage prose, skills, runbooks, and tests had to enumerate the branches every time they referenced the flow. The branches existed because v8.51 read `design`'s 7-phase ceremony as load-bearing for "large-risky" slugs; the work the user actually wants (Frame, Approaches, Decisions, Pre-mortem) is independent of who authors it.
+2. **`design` is a hold-over from v8.41 multi-turn dialogue.** Phases 1 (Clarify) and 7 (Sign-off) were retired in spirit when v8.61 went always-auto — the orchestrator no longer pauses for picker output, so the design specialist had no UI surface for clarify questions or sign-off prompts. Phases 0/2-6 (Bootstrap / Frame / Approaches / Decisions / Pre-mortem / Compose) are pure authoring work that the planning specialist can do silently. Keeping `design` as a separate sub-agent forced a `design → ac-author` chain on strict slugs that added one dispatch + one slim summary + one context load with no decision actually surfaced to the orchestrator between them.
+3. **`security-reviewer` and `reviewer` overlap on every security-flagged slug.** `reviewer` already carries a `security` axis as part of its ten-axis check. `security-reviewer` repeated the same axis with deeper threat-model + taint + secrets + supply-chain prose, gated on `security_flag: true`. The orchestrator dispatched both in sequence; their findings overlapped ~80% with a hand-off step that consumed budget without producing distinct value. The expanded prose belongs inside the `security` axis itself, not in a second sub-agent.
+
+### What changed
+
+**Deliverable 1 — Unified flow shape** (`src/content/start-command.ts`, `src/content/skills/triage-gate.md`, `src/content/runbooks-on-demand.ts`, `src/content/stage-playbooks.ts`).
+
+- One shape for every `/cc <task>`: triage → architect → builder → reviewer → critic → ship. Plan-critic / qa-runner / builder fix-only / reviewer fix-only continue to slot in at the same hops as in v8.61.
+- Depth scales WITHIN the flow, not by branching across flows. `ceremonyMode: inline` keeps the build-inline shortcut for trivial slugs (no plan.md, no specialist dispatches beyond triage). `ceremonyMode: soft` runs the architect with Bootstrap + Frame + Compose only (no Approaches / Decisions / Pre-mortem sections in the plan). `ceremonyMode: strict` runs the architect with the full Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose pass. The shape is identical; the architect picks which sections to author based on the triage decision.
+- Reviewer axes scale with `surfaces[]` and `security_flag`. The orchestrator no longer dispatches a separate security sub-agent on `security_flag: true`; the reviewer dispatch envelope sets `walkSecurityChecklistVerbatim: true` and the reviewer's `security` axis carries the full threat-model + taint + secrets + supply-chain prose.
+
+**Deliverable 2 — Kill `design`, rename `ac-author` → `architect`** (`src/content/specialist-prompts/architect.ts`, `src/types.ts`, `src/install.ts`).
+
+- New `architect.ts` combines `ac-author.ts`'s existing responsibilities (Spec / AC / Edge cases / Topology / Feasibility / Traceability + posture handling) with the absorbed `design.ts` Phase 0/2-6 prose (Bootstrap stack/conventions read, Frame, Approaches, Selected Direction, Decisions, Pre-mortem, Compose synthesis pass). Single on-demand dispatch on every non-inline path. Runs silently — no mid-plan dialogue, no clarify questions, no sign-off picker. If the architect's pick turns out wrong, the reviewer surfaces it at review time and the fix-only loop runs.
+- Research-mode branch: when dispatched with `mode: "research"` (from `/cc research <topic>`), the architect outputs `research.md` instead of `plan.md`, drops the AC table, and stops at the compose-equivalent.
+- `SPECIALISTS` array: removed `design`, `ac-author`. Added `architect`. Length unchanged conceptually (the chain became a single specialist); see also Deliverable 4.
+- `RETIRED_AGENT_FILES` (new in this slug, mirrors v8.60's `RETIRED_COMMAND_FILES`) carries `design.md`, `ac-author.md`, `slice-builder.md`, `security-reviewer.md` so pre-v8.62 installs get the dead specialist contracts swept on the next `cclaw install` / sync. The sweep emits a `Removed retired agent` progress event per removed file and is idempotent on clean installs.
+
+**Deliverable 3 — Rename `slice-builder` → `builder`** (`src/content/specialist-prompts/builder.ts`, `src/install.ts`).
+
+- File rename, export rename (`SLICE_BUILDER_PROMPT` → `BUILDER_PROMPT`, `sliceBuilderPrompt` → `builderPrompt`), internal name references "slice-builder" → "builder". TDD cycle (RED → GREEN → REFACTOR per AC) and AC-as-unit semantics preserved verbatim — the slice / AC separation is scheduled for v8.63, not here.
+
+**Deliverable 4 — Remove `security-reviewer`, absorb into `reviewer.security`** (`src/content/specialist-prompts/reviewer.ts`, `src/content/start-command.ts`).
+
+- `reviewer.ts`'s `security` axis grew ~70 lines absorbing the retired `security-reviewer.ts`'s threat-model checklist, taint analysis prose, secrets-handling rules, sensitive-change protocol (auth / billing / data-export / schema-migration), and supply-chain checks. The 5-tier severity scale (`critical` / `required` / `consider` / `nit` / `fyi`) is retained.
+- Orchestrator drops the security-reviewer dispatch envelope entirely. The reviewer dispatch envelope adds `walkSecurityChecklistVerbatim: true` when `triage.security_flag === true`.
+
+**Deliverable 5 — Specialist count 9 → 7** (`src/types.ts`, `src/content/core-agents.ts`, `tests/unit/types.test.ts`, `tests/unit/core-agents.test.ts`, `tests/unit/specialist-prompts.test.ts`, `tests/unit/install.test.ts`, `scripts/smoke-init.mjs`).
+
+- Final roster: `triage`, `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`. Activation: every specialist is `on-demand` post-v8.62 (no main-context multi-turn protocol remaining).
+- New tripwire test `tests/unit/v862-unified-flow.test.ts` asserts the roster, the absence of `design.ts` / `ac-author.ts` / `slice-builder.ts` / `security-reviewer.ts` on disk, the new authorship stamps in PLAN_TEMPLATE / PLAN_TEMPLATE_SOFT, the architect's absorbed phases, the reviewer's absorbed security prose, the absence of `design` / `security-reviewer` dispatch envelopes in `start-command.ts`, and the permissive `flow-state` validator behaviour on legacy `lastSpecialist` values.
+
+**Deliverable 6 — Plan template authorship stamps** (`src/content/artifact-templates.ts`).
+
+- `PLAN_TEMPLATE` (strict) and `PLAN_TEMPLATE_SOFT`: `_(Design Phase X)_` / `_(design)_` / `_(ac-author)_` authorship attributions rewritten to `_(Architect)_`. Soft template carries lighter "architect authors this" prose without explicit per-phase stamps. Ambiguity fields in frontmatter (`ambiguity_score`, `ambiguity_dimensions`, `ambiguity_threshold`) are retained for back-compat with v8.53 brownfield gates even though the procedural authoring beat is retired alongside the dead Phase 7 picker.
+
+### Clean break
+
+No migration code for pre-v8.62 state files carrying `lastSpecialist: "design"` / `"ac-author"` / `"slice-builder"` / `"security-reviewer"`. The `assertFlowStateV82` validator is permissive on `lastSpecialist` (any string accepted on read); new writes use the new specialist IDs. Existing flows in flight at upgrade time may need `/cc-cancel` + restart to clear stale dispatch envelopes. The user explicitly waived the migration; the alternative was carrying four dead specialist IDs through every read path forever.
+
+
 ## 8.61.0 — Triage to sub-agent + always-auto + `/cc` auto-continue
 
 ### Why

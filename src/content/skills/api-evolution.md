@@ -1,6 +1,6 @@
 ---
 name: api-evolution
-trigger: when design (Phase 4 D-N) proposes a public interface, persistence shape, RPC schema, or cross-module contract; auto-applies on slugs whose touchSurface includes a public API surface; when the diff modifies public API surface or persisted contracts
+trigger: when the architect (Decisions phase D-N) proposes a public interface, persistence shape, RPC schema, or cross-module contract; auto-applies on slugs whose touchSurface includes a public API surface; when the diff modifies public API surface or persisted contracts
 ---
 
 # Skill: api-evolution
@@ -9,7 +9,7 @@ This merged skill covers both halves of the public-interface lifecycle: how a ne
 
 ## When to use
 
-Auto-applies in two cases. **Design phase** — during Phase 4 (Decisions) when proposing a new public interface (HTTP endpoint, RPC method, library export, file format, environment-variable schema, queue payload), or when the slug's `touchSurface` includes any path that is part of a public API surface. **Build / review** — when the diff modifies an existing public interface, persisted contract, or migration shape. Not used for internal helpers that never cross a module / process / repo / service boundary.
+Auto-applies in two cases. **Architect Decisions phase** — when proposing a new public interface (HTTP endpoint, RPC method, library export, file format, environment-variable schema, queue payload), or when the slug's `touchSurface` includes any path that is part of a public API surface. **Build / review** — when the diff modifies an existing public interface, persisted contract, or migration shape. Not used for internal helpers that never cross a module / process / repo / service boundary.
 
 ## When NOT to apply
 
@@ -24,13 +24,13 @@ Auto-applies in two cases. **Design phase** — during Phase 4 (Decisions) when 
 
 > "With a sufficient number of users of an API, all observable behaviors of your system will be depended on by somebody, regardless of what you promise in the contract." — **Hyrum's Law**
 
-This skill is the **design phase's** checklist for **outward-facing contracts**: HTTP endpoints, RPC methods, library exports, file formats, environment-variable schemas, queue payloads. Internal helpers do not need it; once a shape crosses a module / process / repo / service boundary, it does.
+This skill is the **architect's Decisions-phase** checklist for **outward-facing contracts**: HTTP endpoints, RPC methods, library exports, file formats, environment-variable schemas, queue payloads. Internal helpers do not need it; once a shape crosses a module / process / repo / service boundary, it does.
 
 ## Hyrum's Law
 
 Every observable behaviour of your interface — return shape, error message wording, header order, sort order, default value, edge-case coercion — will be depended on by **somebody**, even when the docs explicitly forbid it. Plan for that.
 
-Practical implications the design phase MUST surface inline in `plan.md` `## Decisions` for any public interface:
+Practical implications the architect's Decisions phase MUST surface inline in `plan.md` `## Decisions` for any public interface:
 
 1. **Pin the shape exhaustively.** Document return type, error type, every status code, every header that downstream sees. Untyped or "varies" surfaces become observation contracts.
 2. **Pin the order.** If a list is returned, declare the sort key and direction. Consumers will assume "the order they saw" if you don't.
@@ -47,7 +47,7 @@ When you take a dependency on a library, framework, or sibling module, **do not 
 - Module `a` exports a `Date` from your custom `utc` library; module `b` exports a `Date` from `date-fns`. The downstream caller now owns both. **Type-incompatible siblings.** Pick one; deprecate the other.
 - Service `auth` returns a `User` shape; service `profile` returns its own `User` shape with three different fields. Downstream needs both. **Schema fork.** Unify the shape OR explicitly name them `AuthUser` / `ProfileUser` so the fork is visible.
 
-The design phase surfaces one-version violations as `required` findings; the resolution is documented inline in `plan.md` under `## Decisions` "D-N — version pin".
+The architect's Decisions phase surfaces one-version violations as `required` findings; the resolution is documented inline in `plan.md` under `## Decisions` "D-N — version pin".
 
 ## Untrusted third-party API responses
 
@@ -88,9 +88,9 @@ The reviewer cites a missed validation on third-party data as **F-N | security |
 
 Do **not** introduce a port / interface / abstraction unless **at least two adapters** are concretely justified — typically one for production and one for tests, OR two production adapters (e.g. Postgres and SQLite, S3 and local-fs).
 
-Specifically, do NOT introduce a port "in case we ever want to swap out X". A speculative port is dead code with extra surface area; it slows the codebase and survives the refactor that finally removes it. The "we might want to swap this someday" reflex during design is the canonical `required` finding here.
+Specifically, do NOT introduce a port "in case we ever want to swap out X". A speculative port is dead code with extra surface area; it slows the codebase and survives the refactor that finally removes it. The "we might want to swap this someday" reflex during interface design is the canonical `required` finding here.
 
-When proposing an interface, the design phase MUST name the adapters inline in `plan.md` `## Decisions`:
+When proposing an interface, the architect's Decisions phase MUST name the adapters inline in `plan.md` `## Decisions`:
 
 ```markdown
 ## D-3 — Storage port
@@ -108,7 +108,7 @@ The reviewer cites a single-adapter port as **F-N | architecture | required | Hy
 
 ## Consistent error model
 
-Every public interface ships with a consistent error model. The design phase picks one shape and pins it:
+Every public interface ships with a consistent error model. The architect's Decisions phase picks one shape and pins it:
 
 - **Result type** — `{ ok: true, value }` or `{ ok: false, error }` (Rust / Go / fp-ts style).
 - **Throw + typed catch** — exceptions carry a discriminator field the caller switches on.
@@ -119,13 +119,13 @@ The choice depends on the language and the surface; what matters is **consistenc
 
 ## Versioning guidance
 
-When a public interface changes shape, the design phase's `## Decisions` D-N inline in `plan.md` records:
+When a public interface changes shape, the architect's `## Decisions` D-N inline in `plan.md` records:
 
 - **Backwards-compatible** — additive only (new optional field, new endpoint). Bump the **minor** version. Document the addition in CHANGELOG.
 - **Breaking** — renamed, removed, type-changed, semantic-changed. Bump the **major** version. The breaking-changes section of this skill kicks in. Coexistence (new + old together) is preferred over hard cutover.
 - **Deprecation** — old surface stays available; new surface is the recommended path. Document the sunset date and the migration step.
 
-For internal-only APIs without a version number, the design phase names the **release window** during which the deprecation alias stays alive.
+For internal-only APIs without a version number, the architect names the **release window** during which the deprecation alias stays alive.
 
 ## Hard rules
 
@@ -137,7 +137,7 @@ For internal-only APIs without a version number, the design phase names the **re
 
 ## Composition
 
-The design phase (Phase 4) reads this skill before authoring any inline D-N that introduces or changes a public interface. The reviewer reads it for any review iteration on a slug whose `touchSurface` includes a public API. The ac-author does NOT read this skill — interface design is the design phase's surface, not the ac-author's; if the slug only has a ac-author pass (small/medium routing skipped design), the ac-author adds a `## Concerns` bullet pointing at this skill as a follow-up.
+The architect reads this skill before authoring any inline D-N (Decisions phase) that introduces or changes a public interface. The reviewer reads it for any review iteration on a slug whose `touchSurface` includes a public API. On soft / small-medium flows the architect runs in Plan-tier mode (no full Decisions ceremony); the architect still reads this skill when the touchSurface includes a public API and either authors an inline D-N or surfaces a `## Concerns` bullet pointing at this skill as a follow-up.
 
 ## breaking-changes
 
@@ -164,7 +164,7 @@ When possible, ship the new path alongside the old. Examples:
 - new env var name accepted along with the old (with a deprecation log line);
 - new function exported with the new name; old name aliased to it.
 
-Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to the design phase; the decision must be recorded inline in `flows/<slug>/plan.md` under `## Decisions`.
+Coexistence is not always possible (e.g. wire-format changes for older clients you cannot upgrade). When it is not possible, surface this back to the architect (Decisions phase); the decision must be recorded inline in `flows/<slug>/plan.md` under `## Decisions`.
 
 ## Common rationalizations
 
@@ -200,7 +200,7 @@ Three patterns that cover the lifecycle of an API or contract from "still works,
 
 Practically: the team that ships the deprecation owns the migration of every consumer they can identify. They do NOT throw the deprecation over the wall and tell every downstream team to fix their code "by the deadline".
 
-When design (Phase 4) or ac-author introduces a deprecation:
+When the architect (Decisions phase) introduces a deprecation:
 
 1. **Identify consumers.** Search the org for callers (`rg` in monorepo, dependency-graph tools across repos, package-registry usage stats).
 2. **Choose the migration cost split.** Either (a) the deprecator ships an adapter that wraps the old surface to use the new one (zero migration cost for consumers, higher cost for the deprecator), OR (b) the deprecator pairs with each consumer's owner to land the migration commit (higher coordination cost, but the new shape is the only shape after the cutover).
@@ -230,7 +230,7 @@ A migration that jumps from phase 0 to phase 4 in one slug is **F-N | architectu
 
 Symptom: `git log` shows the last meaningful change was 2-3+ years ago; the original author has left; nobody on the current team can describe what it does or why; but multiple production paths still call it.
 
-The design phase's response when zombie code is identified:
+The architect's response when zombie code is identified:
 
 1. **Either assign an owner and maintain it properly** — surface as a finding (`F-N | architecture | required`); the orchestrator opens a follow-up slug to write tests, document, and refactor.
 2. **Or deprecate it with a concrete migration plan** — apply the Churn Rule and the Strangler Pattern to retire the code.

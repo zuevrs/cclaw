@@ -9,10 +9,9 @@ import {
   readContextGlossary
 } from "../../src/context-glossary.js";
 import {
-  AC_AUTHOR_PROMPT,
-  DESIGN_PROMPT,
-  REVIEWER_PROMPT,
-  SLICE_BUILDER_PROMPT
+  ARCHITECT_PROMPT,
+  BUILDER_PROMPT,
+  REVIEWER_PROMPT
 } from "../../src/content/specialist-prompts/index.js";
 import { initCclaw } from "../../src/install.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
@@ -29,9 +28,10 @@ import { createTempProject, removeProject } from "../helpers/temp-project.js";
  * The contract:
  *   - **Missing CONTEXT.md is a no-op.** Specialists silently skip it.
  *   - **Present CONTEXT.md is read once per dispatch.** Each specialist
- *     (`design`, `ac-author`, `slice-builder`, `reviewer`) carries a
- *     "Phase 0: read CONTEXT.md if it exists" line at the top of its
- *     input list.
+ *     (`architect`, `builder`, `reviewer` — v8.62 unified flow roster;
+ *     `architect` absorbs the v8.62-retired `design`'s reads, `builder`
+ *     is the v8.62 rename of `slice-builder`) carries a "Phase 0: read
+ *     CONTEXT.md if it exists" line at the top of its input list.
  *   - **The template is a stub.** When the user opts in (via
  *     `cclaw install --with-context` or by manually creating the file),
  *     the stub seeds H2 sections + 1-2 line definitions for the
@@ -43,9 +43,9 @@ import { createTempProject, removeProject } from "../helpers/temp-project.js";
  *          sections covering the canonical cclaw vocabulary.
  *   AC-2 — `readContextGlossary` returns the file body when present;
  *          returns null when absent (no-op).
- *   AC-3 — Every flow-stage specialist (`design`, `ac-author`,
- *          `slice-builder`, `reviewer`) carries the CONTEXT.md read in
- *          its inputs / Phase 0 section.
+ *   AC-3 — Every flow-stage specialist (`architect`, `builder`,
+ *          `reviewer` — v8.62 unified flow roster) carries the
+ *          CONTEXT.md read in its inputs / Phase 0 section.
  *   AC-4 — `contextGlossaryPath` joins the projectRoot + canonical
  *          file name; the file name is `CONTEXT.md` (uppercase, at
  *          project root, mirroring the mattpocock convention).
@@ -137,22 +137,17 @@ describe("v8.35 — specialist prompts read CONTEXT.md (item 8)", () => {
   const READ_LINE_RE = /CONTEXT\.md/;
   const READ_IF_EXISTS_RE = /CONTEXT\.md.{0,80}(if it exists|when present|when it exists|when the file exists|optional|may exist)|optional.{0,60}CONTEXT\.md|read.{0,80}CONTEXT\.md/iu;
 
-  it("AC-3 — design prompt reads CONTEXT.md", () => {
-    expect(DESIGN_PROMPT, "design specialist must reference CONTEXT.md").toMatch(READ_LINE_RE);
+  it("AC-3 — architect prompt reads CONTEXT.md (v8.62 — `architect` is the v8.62 rename of `ac-author` and absorbs the dead `design` specialist's CONTEXT.md read)", () => {
+    expect(ARCHITECT_PROMPT, "architect specialist must reference CONTEXT.md").toMatch(READ_LINE_RE);
     expect(
-      DESIGN_PROMPT,
-      "design must declare the read-if-exists semantics so it never errors when the file is absent"
+      ARCHITECT_PROMPT,
+      "architect must declare the read-if-exists semantics so it never errors when the file is absent"
     ).toMatch(READ_IF_EXISTS_RE);
   });
 
-  it("AC-3 — ac-author prompt reads CONTEXT.md", () => {
-    expect(AC_AUTHOR_PROMPT).toMatch(READ_LINE_RE);
-    expect(AC_AUTHOR_PROMPT).toMatch(READ_IF_EXISTS_RE);
-  });
-
-  it("AC-3 — slice-builder prompt reads CONTEXT.md", () => {
-    expect(SLICE_BUILDER_PROMPT).toMatch(READ_LINE_RE);
-    expect(SLICE_BUILDER_PROMPT).toMatch(READ_IF_EXISTS_RE);
+  it("AC-3 — builder prompt reads CONTEXT.md (v8.62 — `builder` is the v8.62 rename of `slice-builder`; CONTEXT.md read contract unchanged)", () => {
+    expect(BUILDER_PROMPT).toMatch(READ_LINE_RE);
+    expect(BUILDER_PROMPT).toMatch(READ_IF_EXISTS_RE);
   });
 
   it("AC-3 — reviewer prompt reads CONTEXT.md", () => {
@@ -165,9 +160,8 @@ describe("v8.35 — specialist prompts read CONTEXT.md (item 8)", () => {
     // hard-requires the file. Both "if it exists" and "when present"
     // are acceptable guard phrases; the test checks both ways.
     for (const [name, body] of [
-      ["design", DESIGN_PROMPT],
-      ["ac-author", AC_AUTHOR_PROMPT],
-      ["slice-builder", SLICE_BUILDER_PROMPT],
+      ["architect", ARCHITECT_PROMPT],
+      ["builder", BUILDER_PROMPT],
       ["reviewer", REVIEWER_PROMPT]
     ] as const) {
       expect(

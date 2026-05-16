@@ -33,8 +33,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { researchTemplateForSlug, templateBody } from "../../src/content/artifact-templates.js";
 import { renderStartCommand } from "../../src/content/start-command.js";
-import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
+import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { TRIAGE_PROMPT } from "../../src/content/specialist-prompts/triage.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import { assertFlowStateV82, migrateFlowState } from "../../src/flow-state.js";
@@ -138,7 +137,7 @@ describe("v8.58 — soft-deprecated TriageDecision fields", () => {
         currentSlug: "20260515-prev858",
         currentStage: "build" as const,
         ac: [],
-        lastSpecialist: "ac-author",
+        lastSpecialist: "architect",
         startedAt: "2026-05-15T00:00:00Z",
         reviewIterations: 0,
         securityFlag: false,
@@ -340,7 +339,7 @@ describe("v8.58 — start-command body (lightweight router prose)", () => {
     expect(body).toMatch(/priorResearch/u);
   });
 
-  it("v8.61 — the v8.52 qa-stage gating contract (surfaces + ceremonyMode != inline) is preserved in body or design/ac-author specialists", () => {
+  it("v8.61 — the v8.52 qa-stage gating contract (surfaces + ceremonyMode != inline) is preserved in body or in the architect specialist (v8.62 unified flow: dead `design`+`ac-author` collapsed into `architect`)", () => {
     expect(body).toMatch(/qa-(stage|runner)/iu);
     // qa gating rule still appears in the body (the surface gate is what triggers qa dispatch).
     expect(body).toMatch(/`triage\.surfaces`[\s\S]{0,80}(includes|∩).{0,40}(`"ui"`|"ui")/u);
@@ -360,89 +359,71 @@ describe("v8.58 — start-command body (lightweight router prose)", () => {
   });
 });
 
-describe("v8.58 — design specialist absorbs triage responsibilities (Phase 0/1/2)", () => {
-  it("Phase 0 owns assumption capture (v8.58 — moved from triage)", () => {
-    // Phase 0 header explicitly mentions assumption capture
-    expect(DESIGN_PROMPT).toMatch(/Phase 0 — Bootstrap[\s\S]+assumption capture/u);
-    // Phase 0 body documents the v8.58 ownership move
-    expect(DESIGN_PROMPT).toMatch(/moved from triage/u);
-    // Phase 0 generates assumptions when triage.assumptions is empty
-    // (the v8.58 default: router doesn't pre-seed)
-    expect(DESIGN_PROMPT).toMatch(/3-7 stack \/ convention \/ target-platform assumptions/u);
+describe("v8.58 — architect specialist absorbs triage responsibilities (v8.62 unified flow: dead `design`+`ac-author` collapsed into `architect`)", () => {
+  it("Bootstrap phase owns assumption capture (v8.58 — moved from triage; v8.62 — owner renamed from `design Phase 0` to `architect Bootstrap`)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/triage\.assumptions/);
   });
 
-  it("Phase 1 owns interpretation forks (v8.58 — moved from triage)", () => {
-    expect(DESIGN_PROMPT).toMatch(/Interpretation-forks ownership/u);
-    expect(DESIGN_PROMPT).toContain("triage.interpretationForks");
+  it("Frame phase owns interpretation forks (v8.58 — moved from triage; v8.62 — single architect Frame phase)", () => {
+    expect(ARCHITECT_PROMPT).toContain("triage.interpretationForks");
   });
 
-  it("Phase 1 owns the prior-learnings query via findNearKnowledge (replaces the v8.18 orchestrator-side Hop 2.5 lookup)", () => {
-    expect(DESIGN_PROMPT).toMatch(/prior-learnings query/u);
-    expect(DESIGN_PROMPT).toContain("findNearKnowledge");
+  it("v8.62 unified flow — prior-learnings query moved into the architect's dedicated `learnings-research` sub-agent dispatch (v8.58 moved the lookup out of the orchestrator; v8.62 keeps the architect's read-only dispatch as the single owner)", () => {
+    // The architect dispatches `learnings-research` (a read-only helper sub-agent)
+    // which reads `.cclaw/knowledge.jsonl` and returns lessons in the slim
+    // summary. The architect prompt does not re-implement `findNearKnowledge`
+    // inline anymore — that contract lives in `learnings-research.ts`.
+    expect(ARCHITECT_PROMPT).toMatch(/learnings-research/);
+    expect(ARCHITECT_PROMPT).toMatch(/knowledge\.jsonl/);
   });
 
-  it("Phase 2 owns surface detection + qa-stage path rewrite (v8.58 — moved from triage)", () => {
-    expect(DESIGN_PROMPT).toMatch(/Surface-detection ownership/u);
-    expect(DESIGN_PROMPT).toMatch(/moved from triage/u);
-    expect(DESIGN_PROMPT).toContain("triage.surfaces");
+  it("Frame phase owns surface detection + qa-stage path rewrite (v8.58 — moved from triage; v8.62 — single architect Frame phase)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/Surface detection|surface set|triage\.surfaces/u);
+    expect(ARCHITECT_PROMPT).toContain("triage.surfaces");
     // qa-stage insertion contract preserved verbatim (only the writer moved)
-    expect(DESIGN_PROMPT).toMatch(/insert\s+`"qa"`\s+between\s+`"build"`\s+and\s+`"review"`/u);
+    expect(ARCHITECT_PROMPT).toMatch(/insert\s+`"qa"`\s+between\s+`"build"`\s+and\s+`"review"`/u);
   });
 });
 
-describe("v8.58 — design specialist standalone mode (research mode)", () => {
-  it("design.ts defines two activation modes — intra-flow (task) and standalone (research)", () => {
-    expect(DESIGN_PROMPT).toMatch(/### Activation modes/u);
+describe("v8.58 — architect standalone mode (research mode; v8.62 — single architect specialist serves both intra-flow + research)", () => {
+  it("architect prompt defines two activation modes — intra-flow (task) and standalone (research)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/## Activation modes/u);
     // Intra-flow mode (the historical default)
-    expect(DESIGN_PROMPT).toMatch(/Intra-flow \(`triage\.mode == "task"`/u);
+    expect(ARCHITECT_PROMPT).toMatch(/Intra-flow \(`triage\.mode == "task"`/u);
     // Standalone research mode
-    expect(DESIGN_PROMPT).toMatch(/Standalone research \(`triage\.mode == "research"`/u);
+    expect(ARCHITECT_PROMPT).toMatch(/Standalone research \(`triage\.mode == "research"`/u);
   });
 
-  it("Phase 6 writes to research.md (not plan.md) when triage.mode == 'research'", () => {
-    expect(DESIGN_PROMPT).toMatch(/On standalone research mode \(`triage\.mode == "research"`\)/u);
-    expect(DESIGN_PROMPT).toContain("research.md");
+  it("architect composes research.md (not plan.md) when triage.mode == 'research'", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/research mode/iu);
+    expect(ARCHITECT_PROMPT).toContain("research.md");
   });
 
-  it("Phase 7 emits a two-option picker (accept research / revise) on standalone mode", () => {
-    expect(DESIGN_PROMPT).toMatch(/Standalone research picker/u);
-    expect(DESIGN_PROMPT).toContain("`accept research");
-    expect(DESIGN_PROMPT).toContain("`revise");
+  it("v8.62 — research-mode finalises immediately (no further specialist dispatch; no mid-plan dialogue)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/finalises the (research )?flow immediately|no further specialist dispatch/iu);
+    expect(ARCHITECT_PROMPT).toMatch(/Ready to plan/u);
+    expect(ARCHITECT_PROMPT).toContain("priorResearch");
   });
 
-  it("Phase 7 'accept research' finalises immediately (no ac-author handoff)", () => {
-    expect(DESIGN_PROMPT).toMatch(/accept research[\s\S]+finalises the flow IMMEDIATELY/u);
-    expect(DESIGN_PROMPT).toMatch(/no further specialist dispatch/u);
-    expect(DESIGN_PROMPT).toMatch(/Ready to plan/u);
-    expect(DESIGN_PROMPT).toContain("priorResearch");
-  });
-
-  it("design.ts preserves the v8.14-v8.57 intra-flow three-option picker (approve / request-changes / reject)", () => {
-    expect(DESIGN_PROMPT).toMatch(/Intra-flow picker/u);
-    expect(DESIGN_PROMPT).toContain("`approve");
-    expect(DESIGN_PROMPT).toContain("`request-changes");
-    expect(DESIGN_PROMPT).toContain("`reject");
+  it("v8.62 — no mid-plan dialogue / Phase 7 picker (v8.61 always-auto removed all pickers; v8.62 enforces it across the unified flow)", () => {
+    expect(ARCHITECT_PROMPT).not.toMatch(/Intra-flow picker/u);
+    expect(ARCHITECT_PROMPT).not.toMatch(/`approve`/u);
+    expect(ARCHITECT_PROMPT).not.toMatch(/`request-changes`/u);
+    expect(ARCHITECT_PROMPT).not.toMatch(/`reject`/u);
+    expect(ARCHITECT_PROMPT).not.toMatch(/`revise`/u);
   });
 });
 
-describe("v8.58 — ac-author absorbs soft-path triage responsibilities", () => {
-  it("ac-author Phase 0 owns assumption capture on the soft path (v8.58 — moved from triage)", () => {
-    // Phase 0 header references the v8.58 ownership
-    expect(AC_AUTHOR_PROMPT).toMatch(/v8\.58 — soft-path assumption-capture owner/u);
-    // Phase 0 fires as the common case (router doesn't pre-seed)
-    expect(AC_AUTHOR_PROMPT).toMatch(/v8\.58 default/u);
-  });
-
-  it("ac-author Phase 1.5 owns surface detection on the soft path", () => {
-    expect(AC_AUTHOR_PROMPT).toMatch(/Phase 1\.5 — Surface scan/u);
-    expect(AC_AUTHOR_PROMPT).toContain("triage.surfaces");
+describe("v8.58 — architect absorbs soft-path triage responsibilities (v8.62 — single architect for both paths)", () => {
+  it("architect prompt owns surface detection (writer ownership moved from triage; canonical vocabulary preserved)", () => {
+    expect(ARCHITECT_PROMPT).toContain("triage.surfaces");
     // qa-stage insertion contract preserved verbatim
-    expect(AC_AUTHOR_PROMPT).toMatch(/insert\s+`"qa"`\s+between\s+`"build"`\s+and\s+`"review"`/u);
+    expect(ARCHITECT_PROMPT).toMatch(/insert\s+`"qa"`\s+between\s+`"build"`\s+and\s+`"review"`/u);
   });
 
-  it("ac-author Phase 1 reads flowState.priorResearch when present (v8.58 research → task handoff)", () => {
-    expect(AC_AUTHOR_PROMPT).toContain("flowState.priorResearch");
-    expect(AC_AUTHOR_PROMPT).toMatch(/priorResearch\.path/u);
+  it("architect prompt reads flowState.priorResearch when present (v8.58 research → task handoff)", () => {
+    expect(ARCHITECT_PROMPT).toContain("flowState.priorResearch");
+    expect(ARCHITECT_PROMPT).toMatch(/priorResearch\.path/u);
   });
 });
 
@@ -495,7 +476,9 @@ describe("v8.58 — research.md artifact template", () => {
     expect(out).toMatch(/^## Pre-mortem$/mu);
     expect(out).toMatch(/^## Not Doing$/mu);
     expect(out).toMatch(/^## Open questions$/mu);
-    expect(out).toMatch(/^## Summary — design \(research mode\)$/mu);
+    // v8.62 unified flow: the "Summary —" heading author moved from
+    // dead `design` to the renamed `architect`.
+    expect(out).toMatch(/^## Summary — architect \(research mode\)$/mu);
     // No AC table / Topology / Traceability — those belong to the
     // follow-up `/cc <task>` flow that consumes this research.
     expect(out).not.toMatch(/^## Acceptance Criteria/mu);

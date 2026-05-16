@@ -18,8 +18,16 @@ function runbookBody(id: string): string {
  * specialist / template / runbook test files.
  */
 describe("v8.13 power-and-economy (anchors)", () => {
-  it("T0-6: ac-author dispatches research helpers in parallel", () => {
-    expect(SPECIALIST_PROMPTS["ac-author"]).toMatch(/research dispatch \(parallel; one always, one conditional\)/u);
+  it("T0-6: architect dispatches research helpers in parallel — one always (learnings-research), one conditional (repo-research) (v8.62 — `ac-author` renamed to `architect`, absorbing dead `design`'s Phase 0/2-6 work; the parallel research-dispatch contract is unchanged)", () => {
+    const architect = SPECIALIST_PROMPTS["architect"];
+    expect(architect).toMatch(/Research dispatch[\s\S]{0,400}up to 2 in parallel/i);
+    expect(architect).toMatch(/Always dispatch `learnings-research`/);
+    // The architect prompt phrases the conditional dispatch as
+    // "**Also dispatch `repo-research` in the same batch** ONLY when
+    // ALL of the following hold:". Earlier wording placed the closing
+    // `**` after `ONLY when`; both layouts must satisfy the gate.
+    expect(architect).toMatch(/Also dispatch `repo-research` in the same batch\*?\*?\s+\*?\*?ONLY when/);
+    expect(architect).toMatch(/do NOT serialise/i);
   });
 
   it("T0-8: ship-stage parallel reviewers share a parsed diff (v8.54: in handoff-gates runbook)", () => {
@@ -28,10 +36,21 @@ describe("v8.13 power-and-economy (anchors)", () => {
     expect(START_COMMAND_BODY).toContain("handoff-gates.md");
   });
 
-  it("T0-9: discovery auto-skip heuristic lives in the plan stage runbook (v8.54: merged from discovery.md)", () => {
+  it("T0-9: v8.62 unified flow retires the discovery sub-phase entirely; the plan stage runbook now describes a single architect dispatch with ceremony depth scaling via ceremonyMode (no two-step design → ac-author chain, no auto-skip heuristic)", () => {
+    // v8.62 collapsed the `design` + `ac-author` split into a single
+    // on-demand `architect` sub-agent that owns the entire plan-stage
+    // output. The "Discovery auto-skip" heuristic (T0-9, originally
+    // shipped in v8.13 and merged from discovery.md in v8.54) is gone
+    // because there is no longer a discovery sub-phase to skip — the
+    // architect IS the plan stage, and posture / ceremonyMode scale its
+    // depth instead. The runbook's `## 3. Decide architect ceremony
+    // depth` section documents that the legacy pickers existed pre-v8.62
+    // and have been collapsed; this tripwire locks the retirement.
     const plan = STAGE_PLAYBOOKS.find((p) => p.id === "plan")!;
-    expect(plan.body).toMatch(/Discovery auto-skip/u);
-    expect(plan.body).toMatch(/triage\.confidence` is `high`/u);
+    expect(plan.body).not.toMatch(/Discovery auto-skip/u);
+    expect(plan.body).toMatch(/architect ceremony depth/);
+    expect(plan.body).toMatch(/the architect is the only plan-stage specialist/i);
+    expect(plan.body).toMatch(/no mid-plan dialogue in v8\.62 unified flow/i);
   });
 
   it("T1-1: plan template requires dependsOn + rollback + feasibility_stamp", () => {

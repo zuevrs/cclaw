@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
-import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
+import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
+import { BUILDER_PROMPT } from "../../src/content/specialist-prompts/builder.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/critic.js";
 import { POSTURES, type Posture } from "../../src/types.js";
@@ -14,8 +14,12 @@ import { POSTURES, type Posture } from "../../src/types.js";
  * are referenced across four specialist prompts — each from a
  * different vantage:
  *
- * - **ac-author** picks the posture from a verb-heuristic table.
- * - **slice-builder** maps the posture to a commit ceremony.
+ * v8.62 unified flow updated the roster: `ac-author` → `architect`,
+ * `slice-builder` → `builder`. The four prompts still describe different
+ * aspects of each posture:
+ *
+ * - **architect** picks the posture from a verb-heuristic table.
+ * - **builder** maps the posture to a commit ceremony.
  * - **reviewer** maps the posture to a git-log expectation.
  * - **critic** maps the posture to an escalation behaviour.
  *
@@ -55,8 +59,8 @@ const CANONICAL_POSTURE_LINE =
   "Postures: `test-first` (default) | `characterization-first` | `tests-as-deliverable` | `refactor-only` | `docs-only` | `bootstrap`.";
 
 const POSTURE_SPECIALISTS: ReadonlyArray<{ id: string; body: string }> = [
-  { id: "ac-author", body: AC_AUTHOR_PROMPT },
-  { id: "slice-builder", body: SLICE_BUILDER_PROMPT },
+  { id: "architect", body: ARCHITECT_PROMPT },
+  { id: "builder", body: BUILDER_PROMPT },
   { id: "reviewer", body: REVIEWER_PROMPT },
   { id: "critic", body: CRITIC_PROMPT }
 ];

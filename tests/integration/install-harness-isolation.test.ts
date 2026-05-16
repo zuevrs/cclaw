@@ -190,7 +190,7 @@ describe("install — harness isolation tripwires (v8.29)", () => {
         await initCclaw({ cwd: p, harnesses: selection });
       }
       const checkFiles = [
-        ".cclaw/lib/agents/slice-builder.md",
+        ".cclaw/lib/agents/builder.md",
         ".cclaw/lib/skills/tdd-and-verification.md",
         ".cclaw/lib/runbooks/build.md"
       ];

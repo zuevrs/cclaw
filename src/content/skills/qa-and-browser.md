@@ -1,6 +1,6 @@
 ---
 name: qa-and-browser
-trigger: when stage = qa (the qa-runner dispatch); when triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"; on build when the slug touches UI files (*.tsx, *.jsx, *.vue, *.svelte, *.html, *.css) and the project ships a browser app (so the slice-builder can pre-commit a Playwright test before qa runs); on review when the diff includes any UI file (so the reviewer's qa-evidence axis cross-checks qa.md)
+trigger: when stage = qa (the qa-runner dispatch); when triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"; on build when the slug touches UI files (*.tsx, *.jsx, *.vue, *.svelte, *.html, *.css) and the project ships a browser app (so the builder can pre-commit a Playwright test before qa runs); on review when the diff includes any UI file (so the reviewer's qa-evidence axis cross-checks qa.md)
 ---
 
 # Skill: qa-and-browser
@@ -112,19 +112,19 @@ The qa-runner produces exactly one `qa.md` per dispatch. The template lives in `
 4. **Pre-commitment predictions** — 3-5 things that might fail, written *before* verification ran.
 5. **Findings (failures only)** — F-N rows for any AC whose `Status` is `fail`. Severity matches the reviewer's vocabulary (`required` / `fyi`).
 6. **Verdict** — `pass` / `iterate` / `blocked` + one-paragraph rationale.
-7. **Hand-off** — `for iterate: what slice-builder must fix`; `for blocked: what user must do manually`.
+7. **Hand-off** — `for iterate: what builder must fix`; `for blocked: what user must do manually`.
 
 The slim summary returned to the orchestrator carries the verdict + evidence_tier + a one-line rationale; the orchestrator stamps `qaVerdict` / `qaEvidenceTier` / `qaIteration` / `qaDispatchedAt` on flow-state.
 
 ## Verdict semantics
 
 - **`pass`** — every UI AC has evidence at `Status: pass`. Advance to review. The reviewer's `qa-evidence` axis re-reads `qa.md` and cross-checks each row against the diff.
-- **`iterate`** — at least one UI AC has `Status: fail` AND the qa-runner can articulate what would make it pass. Bounce to slice-builder with `qa.md > Hand-off` as the additional context. **Hard-capped at one iterate** (`qaIteration: 0 → 1`); a second iterate stops and reports per the v8.61 always-auto failure matrix (`runbooks/always-auto-failure-handling.md`) instead of running qa a third time.
+- **`iterate`** — at least one UI AC has `Status: fail` AND the qa-runner can articulate what would make it pass. Bounce to builder with `qa.md > Hand-off` as the additional context. **Hard-capped at one iterate** (`qaIteration: 0 → 1`); a second iterate stops and reports per the v8.61 always-auto failure matrix (`runbooks/always-auto-failure-handling.md`) instead of running qa a third time.
 - **`blocked`** — no browser tools available AND/OR a UI AC requires manual user action the qa-runner cannot script. Stop and report per the v8.61 always-auto failure matrix; the status block names the gap (missing browser tooling or required manual steps) and offers `/cc` (continue after the user installs tooling or runs the qa.md §4 manual-steps blocks) or `/cc-cancel` (discard). `blocked` is a real verdict — the qa-runner does NOT pretend qa ran; it records honestly that it could not.
 
 ## Composition
 
-- **slice-builder (stage: build)** reads this skill as encouragement to commit a Playwright test alongside the AC implementation. When the AC's `touchSurface` includes UI files AND `package.json` already ships Playwright, the slice-builder authors the spec in GREEN and notes its path in `build.md > Verification`. The qa-runner then re-runs that spec rather than re-authoring it.
+- **builder (stage: build)** reads this skill as encouragement to commit a Playwright test alongside the AC implementation. When the AC's `touchSurface` includes UI files AND `package.json` already ships Playwright, the builder authors the spec in GREEN and notes its path in `build.md > Verification`. The qa-runner then re-runs that spec rather than re-authoring it.
 - **qa-runner (stage: qa)** reads this skill for the full discipline: tier hierarchy, evidence rubric, pre-commitment predictions, verdict semantics. The artifact contract is the source of truth for `qa.md`'s shape.
 - **reviewer (stage: review)** reads this skill to evaluate the `qa-evidence` axis. For any AC with UI surface, the reviewer expects a matching `qa.md > Per-AC evidence` row with `Status: pass`; missing or failing rows fire `required` findings on the axis.
 
@@ -134,4 +134,4 @@ The slim summary returned to the orchestrator carries the verdict + evidence_tie
 - **Use the strongest tier available.** Playwright > browser-MCP > manual; silent downgrades are reviewer-territory.
 - **Pre-commitment predictions before verification.** 3-5 things that might fail, written first.
 - **`blocked` is a real verdict.** Never fake a `pass` when the qa-runner could not actually verify.
-- **Hard cap at one iterate.** Oscillation between slice-builder and qa-runner is a flow-budget leak; the v8.61 stop-and-report status block is the right escape hatch.
+- **Hard cap at one iterate.** Oscillation between builder and qa-runner is a flow-budget leak; the v8.61 stop-and-report status block is the right escape hatch.

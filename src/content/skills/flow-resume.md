@@ -54,7 +54,7 @@ If the user wants context, they can:
 1. **Triage is fully immutable in v8.61.** A resumed flow keeps its `ceremonyMode`, `complexity`, `path`, `runMode`, and `mode`. The user does not re-pick. If they want to change any, the answer is "/cc-cancel and start fresh". v8.61 retired the v8.34 mid-flight `runMode` toggle — both `--mode=auto` and `--mode=step` are honoured for back-compat but collapse to `auto` (no behaviour change).
 2. **Last-specialist context is restored** by reading `flows/<slug>/<stage>.md`. The orchestrator does not summarise from memory; it re-reads the artifact when it needs context.
 3. **Time gate.** If `flow-state.json > startedAt` is >7 days ago, the orchestrator may surface a one-line warning ("flow is stale — verify scope still applies") on the next chained stage's slim summary; never block resume.
-4. **Sub-agent dispatch resumes from the same stage.** A build that was paused mid-RED for AC-3 resumes by dispatching slice-builder for AC-3, not by restarting AC-1.
+4. **Sub-agent dispatch resumes from the same stage.** A build that was paused mid-RED for AC-3 resumes by dispatching builder for AC-3, not by restarting AC-1.
 5. **Resume after a stop-and-report status block.** When the previous turn ended with a stop-and-report status block (per `runbooks/always-auto-failure-handling.md`), `/cc` continues from the saved `currentStage`. For build-failure / reviewer-fix stops, the auto-fix iteration counter is **preserved**.
 
 ## v8.61 retirement of the mid-flight runMode toggle

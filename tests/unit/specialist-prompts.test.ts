@@ -16,11 +16,10 @@ describe("specialist prompts", () => {
     }
   });
 
-  it("each prompt declares postures/modes and an output schema", () => {
+  it("each prompt declares postures/modes and an output schema (v8.62 — `architect` uses Posture (lite/standard/strict) because it absorbed the dead `design` specialist's posture-driven phase scaling)", () => {
     for (const id of SPECIALISTS) {
       const prompt = SPECIALIST_PROMPTS[id];
-      // v8.14: design uses "Posture" instead of "Modes" (guided/deep)
-      if (id === "design") {
+      if (id === "architect") {
         expect(prompt).toMatch(/##\s+Posture/u);
       } else {
         expect(prompt).toMatch(/##\s+Modes/u);
@@ -35,8 +34,8 @@ describe("specialist prompts", () => {
     expect(prompt).toContain("Tool misuse");
   });
 
-  it("slice-builder prompt uses plain `git commit` with posture-driven prefixes", () => {
-    const prompt = SPECIALIST_PROMPTS["slice-builder"];
+  it("builder prompt uses plain `git commit` with posture-driven prefixes", () => {
+    const prompt = SPECIALIST_PROMPTS["builder"];
     expect(prompt).toContain("git commit");
     expect(prompt).toContain("red(AC-");
     expect(prompt).toContain("green(AC-");
@@ -70,43 +69,39 @@ describe("specialist prompts", () => {
     expect(kinds.has("research")).toBe(true);
   });
 
-  it("every specialist prompt ends with a Composition footer that forbids nested orchestration", () => {
+  it("every specialist prompt ends with a Composition footer that forbids nested orchestration (v8.62 — no specialist activates main-context any more; `architect` writes plan.md silently as an on-demand sub-agent, the mid-plan dialogue protocol is dead)", () => {
     for (const id of SPECIALISTS) {
       const prompt = SPECIALIST_PROMPTS[id];
       expect(prompt).toMatch(/##\s+Composition/u);
-      // v8.14: design is the one main-context specialist; everyone else is on-demand
-      if (id === "design") {
-        expect(prompt).toContain("main orchestrator context");
-      } else {
-        expect(prompt).toContain("on-demand specialist");
-      }
+      expect(prompt).toContain("on-demand specialist");
       expect(prompt).toContain("Do not spawn");
       expect(prompt).toMatch(/Stop condition/u);
     }
   });
 
-  it("slice-builder Composition footer mentions parallel-build dispatch contract", () => {
-    expect(SPECIALIST_PROMPTS["slice-builder"]).toContain("Parallel-dispatch contract");
-    expect(SPECIALIST_PROMPTS["slice-builder"]).toContain("touchSurface");
+  it("builder Composition footer mentions parallel-build dispatch contract", () => {
+    expect(SPECIALIST_PROMPTS["builder"]).toContain("Parallel-dispatch contract");
+    expect(SPECIALIST_PROMPTS["builder"]).toContain("touchSurface");
   });
 
-  it("slice-builder hard rules forbid env shims and redundant verification", () => {
-    const prompt = SPECIALIST_PROMPTS["slice-builder"];
+  it("builder hard rules forbid env shims and redundant verification", () => {
+    const prompt = SPECIALIST_PROMPTS["builder"];
     expect(prompt).toContain("No redundant verification");
     expect(prompt).toContain("No environment shims");
     expect(prompt).toContain(".cclaw/lib/skills/anti-slop.md");
   });
 
-  it("renderAgentMarkdown emits a frontmatter with name + activation", () => {
-    const acAuthor = SPECIALIST_AGENTS.find((agent) => agent.id === "ac-author")!;
-    const md = renderAgentMarkdown(acAuthor);
+  it("renderAgentMarkdown emits a frontmatter with name + activation (v8.62 — `architect` and `builder` both render as on-demand sub-agents)", () => {
+    const architect = SPECIALIST_AGENTS.find((agent) => agent.id === "architect")!;
+    const md = renderAgentMarkdown(architect);
     expect(md.startsWith("---\n")).toBe(true);
     expect(md).toContain("activation: on-demand");
-    expect(md).toContain("## Modes");
+    expect(md).toContain("## Posture");
 
-    const design = SPECIALIST_AGENTS.find((agent) => agent.id === "design")!;
-    const designMd = renderAgentMarkdown(design);
-    expect(designMd.startsWith("---\n")).toBe(true);
-    expect(designMd).toContain("activation: main-context");
+    const builder = SPECIALIST_AGENTS.find((agent) => agent.id === "builder")!;
+    const builderMd = renderAgentMarkdown(builder);
+    expect(builderMd.startsWith("---\n")).toBe(true);
+    expect(builderMd).toContain("activation: on-demand");
+    expect(builderMd).toContain("## Modes");
   });
 });

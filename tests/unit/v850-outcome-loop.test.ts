@@ -29,8 +29,7 @@ import {
 import { ensureRuntimeRoot } from "../../src/install.js";
 import { renderStartCommand } from "../../src/content/start-command.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
-import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
+import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/critic.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
@@ -585,11 +584,9 @@ describe("v8.50 — start-command body + specialist prompts surface outcome_sign
     expect(body).toMatch(/runCompoundAndShip/);
   });
 
-  it("reviewer / design / ac-author / critic prompts mention outcome_signal as a v8.50 weighting consideration", () => {
+  it("reviewer / critic prompts mention outcome_signal as a v8.50 weighting consideration; v8.62 — the architect surfaces priors via the read-only `learnings-research` helper which itself owns outcome_signal down-weighting (see `src/content/specialist-prompts/learnings-research.ts`), so the architect prompt does not duplicate the contract", () => {
     for (const [name, prompt] of [
       ["reviewer", REVIEWER_PROMPT],
-      ["design", DESIGN_PROMPT],
-      ["ac-author", AC_AUTHOR_PROMPT],
       ["critic", CRITIC_PROMPT]
     ] as const) {
       expect(
@@ -597,6 +594,13 @@ describe("v8.50 — start-command body + specialist prompts surface outcome_sign
         `${name} prompt should cite outcome_signal so down-weighted priors are treated as cautionary precedent`
       ).toMatch(/outcome_signal/);
     }
+    // The architect is intentionally allowed to omit outcome_signal:
+    // it dispatches `learnings-research` (the read-only helper) and
+    // consumes the lessons inline in the slim summary; outcome_signal
+    // down-weighting happens inside `findNearKnowledge` before the
+    // helper returns. Re-stating it in the architect prompt would
+    // be redundant. The architect MUST still mention `learnings-research`.
+    expect(ARCHITECT_PROMPT).toMatch(/learnings-research/);
   });
 });
 

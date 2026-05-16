@@ -49,6 +49,30 @@ describe("install", () => {
     }
   });
 
+  it("v8.62: install sweeps pre-v8.62 specialist agent files (design / ac-author / slice-builder / security-reviewer) from .cclaw/lib/agents/ and from every detected harness agents dir, emitting one `Removed retired agent` progress event per file", async () => {
+    project = await createTempProject({ harnessMarkers: [".cursor"] });
+    await initCclaw({ cwd: project });
+    const retiredAgents = ["design.md", "ac-author.md", "slice-builder.md", "security-reviewer.md"];
+    const libAgentsDir = path.join(project, ".cclaw", "lib", "agents");
+    const cursorAgentsDir = path.join(project, ".cursor", "agents");
+    for (const fileName of retiredAgents) {
+      await fs.writeFile(path.join(libAgentsDir, fileName), `---\nname: ${fileName}\n---\nstale\n`, "utf8");
+      await fs.writeFile(path.join(cursorAgentsDir, fileName), `---\nname: ${fileName}\n---\nstale\n`, "utf8");
+    }
+    const events: { step: string; detail?: string }[] = [];
+    await syncCclaw({ cwd: project, harnesses: ["cursor"], onProgress: (event) => events.push(event) });
+    for (const fileName of retiredAgents) {
+      await expect(fs.access(path.join(libAgentsDir, fileName))).rejects.toBeTruthy();
+      await expect(fs.access(path.join(cursorAgentsDir, fileName))).rejects.toBeTruthy();
+    }
+    const removed = events
+      .filter((event) => event.step === "Removed retired agent")
+      .map((event) => event.detail);
+    for (const fileName of retiredAgents) {
+      expect(removed.some((detail) => detail?.includes(fileName))).toBe(true);
+    }
+  });
+
   it("install cleans up an existing .cclaw/hooks/* from pre-v8.40 installs (session-start, commit-helper, stop-handoff)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
@@ -81,8 +105,8 @@ describe("install", () => {
     expect(result.installedHarnesses).toEqual(["cursor"]);
     const cc = await fs.readFile(path.join(project, ".cursor", "commands", "cc.md"), "utf8");
     expect(cc).toContain("/cc");
-    const acAuthor = await fs.readFile(path.join(project, ".cursor", "agents", "ac-author.md"), "utf8");
-    expect(acAuthor).toContain("ac-author");
+    const architect = await fs.readFile(path.join(project, ".cursor", "agents", "architect.md"), "utf8");
+    expect(architect).toContain("architect");
   });
 
   it("auto-detects multiple harnesses when several markers exist", async () => {

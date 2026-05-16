@@ -5,7 +5,7 @@ import {
   isBehaviorAdding
 } from "../../src/is-behavior-adding.js";
 import { DEFAULT_POSTURE, POSTURES } from "../../src/types.js";
-import { AC_AUTHOR_PROMPT, REVIEWER_PROMPT, SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/index.js";
+import { ARCHITECT_PROMPT, REVIEWER_PROMPT, BUILDER_PROMPT } from "../../src/content/specialist-prompts/index.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import {
   POSTURE_COMMIT_PREFIXES,
@@ -18,10 +18,11 @@ import {
  *
  * Tripwires that guard the cross-cutting integration: a single change
  * to the predicate or the posture enum must keep five surfaces in sync
- * (TS module / ac-author prompt / slice-builder prompt / reviewer
- * prompt / tdd-and-verification skill). v8.40 retired the commit-helper
- * hook; the cross-check that used to live in the .mjs body now lives in
- * `src/posture-validation.ts` (reviewer-side, ex-post).
+ * (TS module / architect prompt / builder prompt / reviewer prompt /
+ * tdd-and-verification skill — v8.62 unified flow renamed `ac-author` →
+ * `architect` and `slice-builder` → `builder`). v8.40 retired the
+ * commit-helper hook; the cross-check that used to live in the .mjs
+ * body now lives in `src/posture-validation.ts` (reviewer-side, ex-post).
  *
  * If any single surface drifts, ONE of the tests below lights up — the
  * "cleanup" tag is the convention for these v8.<N>-cleanup test files.
@@ -72,20 +73,20 @@ describe("v8.36 — predicate exports + cross-surface alignment", () => {
 });
 
 describe("v8.36 — POSTURES enum is documented in user-facing prompts", () => {
-  it("ac-author prompt names every posture value (heuristic table is the source of truth)", () => {
+  it("architect prompt names every posture value (heuristic table is the source of truth; v8.62 renamed from `ac-author`)", () => {
     for (const posture of POSTURES) {
       expect(
-        AC_AUTHOR_PROMPT,
-        `ac-author prompt must mention "${posture}" so the heuristic table covers every value`
+        ARCHITECT_PROMPT,
+        `architect prompt must mention "${posture}" so the heuristic table covers every value`
       ).toContain(posture);
     }
   });
 
-  it("slice-builder prompt names every posture value (ceremony section)", () => {
+  it("builder prompt names every posture value (ceremony section; v8.62 renamed from `slice-builder`)", () => {
     for (const posture of POSTURES) {
       expect(
-        SLICE_BUILDER_PROMPT,
-        `slice-builder prompt must mention "${posture}" — ceremony selector lives here`
+        BUILDER_PROMPT,
+        `builder prompt must mention "${posture}" — ceremony selector lives here`
       ).toContain(posture);
     }
   });
@@ -109,8 +110,8 @@ describe("v8.36 — POSTURES enum is documented in user-facing prompts", () => {
     expect(TDD_SKILL).toMatch(/posture/i);
   });
 
-  it("DEFAULT_POSTURE is referenced by name in the ac-author prompt (so legacy plans inherit it)", () => {
-    expect(AC_AUTHOR_PROMPT).toContain(DEFAULT_POSTURE);
+  it("DEFAULT_POSTURE is referenced by name in the architect prompt (so legacy plans inherit it; v8.62 renamed from `ac-author`)", () => {
+    expect(ARCHITECT_PROMPT).toContain(DEFAULT_POSTURE);
   });
 });
 

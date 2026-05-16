@@ -12,9 +12,9 @@ import {
   buildAutoTriggerBlock,
   renderSkillsIndex
 } from "../../src/content/skills.js";
-import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
+import { BUILDER_PROMPT } from "../../src/content/specialist-prompts/builder.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
-import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
+import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/critic.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 
@@ -53,17 +53,17 @@ import { STAGE_PLAYBOOKS } from "../../src/content/stage-playbooks.js";
  * tripwires.
  */
 
-describe("v8.49 AC-1 - empty `refactor(AC-N) skipped` commit elimination", () => {
-  it("slice-builder prompt documents the new build.md `Refactor: skipped - <reason>` declaration", () => {
+describe("v8.49 AC-1 - empty `refactor(AC-N) skipped` commit elimination (v8.62 renamed `slice-builder` → `builder`)", () => {
+  it("builder prompt documents the new build.md `Refactor: skipped - <reason>` declaration", () => {
     expect(
-      SLICE_BUILDER_PROMPT,
-      "slice-builder must instruct the agent to record skipped refactors via a build.md `Refactor: skipped - <reason>` line (v8.49 default)"
+      BUILDER_PROMPT,
+      "builder must instruct the agent to record skipped refactors via a build.md `Refactor: skipped - <reason>` line (v8.49 default)"
     ).toMatch(/Refactor:\s*skipped\s*[\u2014-]/);
   });
 
-  it("slice-builder prompt still mentions the legacy empty-commit path for backwards compat", () => {
+  it("builder prompt still mentions the legacy empty-commit path for backwards compat", () => {
     expect(
-      SLICE_BUILDER_PROMPT,
+      BUILDER_PROMPT,
       "the legacy `git commit --allow-empty -m \"refactor(AC-N) skipped: ...\"` path must remain documented so pre-v8.49 slugs still review cleanly"
     ).toMatch(/--allow-empty.*refactor\(AC-N\)\s*skipped/i);
   });
@@ -125,15 +125,15 @@ describe("v8.49 AC-2 - auto-trigger index dedup", () => {
 
   it("buildAutoTriggerBlock does NOT inline each skill's full description prose", () => {
     const block = buildAutoTriggerBlock("build");
-    const sliceBuilderSkill = AUTO_TRIGGER_SKILLS.find(
+    const builderSkill = AUTO_TRIGGER_SKILLS.find(
       (s) => s.fileName === "tdd-and-verification.md"
     );
     expect(
-      sliceBuilderSkill,
+      builderSkill,
       "tdd-and-verification skill must exist for this check"
     ).toBeDefined();
     expect(
-      block.includes(sliceBuilderSkill?.description ?? "__missing__"),
+      block.includes(builderSkill?.description ?? "__missing__"),
       "the auto-trigger block must NOT inline the full per-skill description (which is what blew up per-dispatch token cost pre-v8.49). The description lives in `.cclaw/lib/skills-index.md` instead."
     ).toBe(false);
   });
@@ -178,11 +178,11 @@ describe("v8.49 AC-2 - auto-trigger index dedup", () => {
     ).toBe(renderSkillsIndex());
   });
 
-  it("specialist prompts reference `.cclaw/lib/skills-index.md` instead of inlining skill bodies", () => {
+  it("specialist prompts reference `.cclaw/lib/skills-index.md` instead of inlining skill bodies (v8.62 roster: builder, reviewer, architect, critic)", () => {
     for (const [name, prompt] of [
-      ["slice-builder", SLICE_BUILDER_PROMPT],
+      ["builder", BUILDER_PROMPT],
       ["reviewer", REVIEWER_PROMPT],
-      ["design", DESIGN_PROMPT],
+      ["architect", ARCHITECT_PROMPT],
       ["critic", CRITIC_PROMPT]
     ] as const) {
       expect(
@@ -257,10 +257,10 @@ describe("v8.49 AC-3 - anti-rationalization consolidation", () => {
     ).toBe(renderAntiRationalizationsCatalog());
   });
 
-  it("specialist prompts (reviewer / design / critic) reference the catalog by file path", () => {
+  it("specialist prompts (reviewer / architect / critic) reference the catalog by file path (v8.62 roster)", () => {
     for (const [name, prompt] of [
       ["reviewer", REVIEWER_PROMPT],
-      ["design", DESIGN_PROMPT],
+      ["architect", ARCHITECT_PROMPT],
       ["critic", CRITIC_PROMPT]
     ] as const) {
       expect(
@@ -321,10 +321,10 @@ describe("v8.49 AC-3 - anti-rationalization consolidation", () => {
 });
 
 describe("v8.49 - cross-item invariants", () => {
-  it("the v8.49 sweep ships zero net specialist prompts (no new specialist added)", () => {
-    expect(typeof SLICE_BUILDER_PROMPT).toBe("string");
+  it("the v8.49 sweep ships zero net specialist prompts (no new specialist added; v8.62 roster: builder/reviewer/architect/critic)", () => {
+    expect(typeof BUILDER_PROMPT).toBe("string");
     expect(typeof REVIEWER_PROMPT).toBe("string");
-    expect(typeof DESIGN_PROMPT).toBe("string");
+    expect(typeof ARCHITECT_PROMPT).toBe("string");
     expect(typeof CRITIC_PROMPT).toBe("string");
   });
 

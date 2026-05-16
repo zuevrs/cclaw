@@ -5,7 +5,7 @@ trigger: before any "done" / "complete" / "ready" / "ready to ship" / "looks goo
 
 # Skill: completion-discipline
 
-cclaw's most expensive failure mode is **claiming work is done before verifying it**. A slice-builder that returns `Stage: build ✅ complete` without running the suite. An ac-author that returns `Confidence: high` without re-reading the plan. A reviewer that closes a finding without citing the fix evidence. Each instance costs at minimum one orchestrator round-trip; at worst, it ships a broken build because the next stage's "verification" looked at stale state.
+cclaw's most expensive failure mode is **claiming work is done before verifying it**. A builder that returns `Stage: build ✅ complete` without running the suite. An architect that returns `Confidence: high` without re-reading the plan. A reviewer that closes a finding without citing the fix evidence. Each instance costs at minimum one orchestrator round-trip; at worst, it ships a broken build because the next stage's "verification" looked at stale state.
 
 This skill makes the rule explicit: **no completion claim without fresh verification evidence**. The discipline is concentrated here so every specialist and every stage applies the same gate. The Iron Law on completion claims, the anti-slop ban on "looks good", and the reviewer's `Verification story` table are all instances of this one rule — completion-discipline is the canonical source they all defer to.
 
@@ -59,7 +59,7 @@ The evidence must be **fresh** — captured in the current dispatch / iteration,
 
 Before any completion claim, walk this checklist (≈30 seconds):
 
-1. **Name the claim.** "Build is complete for AC-1" / "Review iteration 2 returns `clear`" / "Plan ready for slice-builder dispatch". State the claim in one sentence; vague claims pass the gate the most easily.
+1. **Name the claim.** "Build is complete for AC-1" / "Review iteration 2 returns `clear`" / "Plan ready for builder dispatch". State the claim in one sentence; vague claims pass the gate the most easily.
 2. **List the evidence required.** What command, test, or citation proves this exact claim? (Step 1's specificity dictates step 2's shape.)
 3. **Run the verification fresh.** Capture command output, test result, or git log in the current turn. Do not reuse evidence from a prior turn unless the underlying state has not changed (re-using yesterday's `npm test` output to claim today's build is green is the exact failure mode this rule prevents).
 4. **Paste the evidence next to the claim.** In the slim summary's `Notes:` line, in the artifact's Summary block, in the commit body — wherever the claim lands, the evidence lands with it.
@@ -67,7 +67,7 @@ Before any completion claim, walk this checklist (≈30 seconds):
 
 ## Verification
 
-The reviewer's per-iteration **Verification story** table (`Tests run / Build run / Security checked`) is the canonical surface where this skill's evidence requirement is enforced ex-post. The slice-builder's `self_review[]` JSON attestation enforces it at handoff. The orchestrator's finalize step — per-criterion `verified` flag check, available — enforces it at ship time. Three layers of catch — the rule is the same one stated above; each layer re-asserts it in the surface most appropriate to that stage.
+The reviewer's per-iteration **Verification story** table (`Tests run / Build run / Security checked`) is the canonical surface where this skill's evidence requirement is enforced ex-post. The builder's `self_review[]` JSON attestation enforces it at handoff. The orchestrator's finalize step — per-criterion `verified` flag check, available — enforces it at ship time. Three layers of catch — the rule is the same one stated above; each layer re-asserts it in the surface most appropriate to that stage.
 
 If a downstream stage finds an upstream claim lacked evidence, that is **F-N severity=required (axis=correctness)** — the upstream claim was a violation, not a noticing.
 
@@ -104,7 +104,7 @@ The red flag is not the claim itself; the red flag is the claim without paired e
 
 ## Worked example — RIGHT
 
-slice-builder's slim summary after AC-1 commits:
+builder's slim summary after AC-1 commits:
 
 ```
 Stage: build  ✅ complete
@@ -141,6 +141,6 @@ The reviewer's Verification story will catch this, but the cost is one full revi
 
 ## Composition
 
-This skill is **always-on** — every specialist, every stage. Auto-trigger on `stages: ["always"]`; the rule fires on every dispatch return and every stage exit. The reviewer's `Verification story` table, the slice-builder's `self_review[]`, the orchestrator's finalize per-criterion `verified` check are all enforcement surfaces; this skill is the source of truth they share.
+This skill is **always-on** — every specialist, every stage. Auto-trigger on `stages: ["always"]`; the rule fires on every dispatch return and every stage exit. The reviewer's `Verification story` table, the builder's `self_review[]`, the orchestrator's finalize per-criterion `verified` check are all enforcement surfaces; this skill is the source of truth they share.
 
 Pairs with `receiving-feedback.md` (when receiving review / critic findings, the response must include fresh evidence per this skill) and with `anti-slop.md` (stale evidence and shimming-instead-of-verifying are the two flavours of evading completion-discipline).

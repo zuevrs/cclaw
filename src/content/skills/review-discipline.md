@@ -1,15 +1,15 @@
 ---
 name: review-discipline
-trigger: when reviewer or security-reviewer is invoked; when the diff touches authn / authz / secrets / supply chain / data exposure
+trigger: when reviewer is invoked; when the diff touches authn / authz / secrets / supply chain / data exposure
 ---
 
 # Skill: review-discipline
 
-This merged skill covers both review loops with a shared Findings, Five-axis pass, and Five Failure Modes contract: the generic reviewer iteration (formerly **review-loop**) and the security-specific reviewer that runs in parallel (formerly **security-review**).
+The reviewer is the single ten-axis quality gate. v8.62 absorbed the former `security-reviewer` specialist into the reviewer's `security` axis, so this skill covers the full reviewer contract — generic ten-axis pass plus security threat-modelling — with a shared Findings, axis-walk, and Five Failure Modes contract.
 
 ## When to use
 
-Invoked at the start of every `reviewer` or `security-reviewer` dispatch. Auto-applies when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (triggers `security-reviewer` alongside the regular reviewer regardless of `security_flag`). The Findings and Five-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security-review section adds the threat-model checklist on top.
+Invoked at the start of every `reviewer` dispatch. Auto-applies the deeper threat-model checklist when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (the reviewer escalates the `security` axis depth regardless of `security_flag`). The Findings and ten-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security threat-model checklist sits inline in the `security` axis when triggered.
 
 ## When NOT to apply
 
@@ -17,11 +17,11 @@ Invoked at the start of every `reviewer` or `security-reviewer` dispatch. Auto-a
 - **Mid-iteration drafts** that have not yet been committed to a slim summary. Iteration N's findings are appended when N returns; partial drafts must not be merged into the ledger.
 - **Renumbering or rewriting F-N rows.** The Findings table is append-only — supersede an old finding with `F-K supersedes F-J` instead of editing F-J in place.
 - **Convergence after one iteration with zero new findings.** Signal #2 requires **two** consecutive zero-blocking iterations; a single zero-finding pass is not enough to declare `clear`.
-- **Authoring code, fix-only patches, or rewriting build evidence.** The reviewer never edits production — that is the slice-builder's surface (under `fix-only` mode). The reviewer cites; the slice-builder closes.
+- **Authoring code, fix-only patches, or rewriting build evidence.** The reviewer never edits production — that is the builder's surface (under `fix-only` mode). The reviewer cites; the builder closes.
 
 ## review-loop
 
-Review is a producer ↔ critic loop, not a single pass. Iteration N proposes findings; `slice-builder` (in `fix-only` mode) closes them; iteration N+1 re-checks. The loop ends only when one of three convergence signals fires (see "Convergence detector" below). This is the cclaw analogue of the Karpathy "Ralph loop": short cycles, an explicit ledger, and hard rules for when to stop.
+Review is a producer ↔ critic loop, not a single pass. Iteration N proposes findings; `builder` (in `fix-only` mode) closes them; iteration N+1 re-checks. The loop ends only when one of three convergence signals fires (see "Convergence detector" below). This is the cclaw analogue of the Karpathy "Ralph loop": short cycles, an explicit ledger, and hard rules for when to stop.
 
 Every iteration runs the **Five Failure Modes** checklist:
 
@@ -66,7 +66,7 @@ Walk every diff with the five axes in mind. Per-axis checklist:
 | `correctness` | does the code match the AC verification line? edge cases? tests assert state, not interactions? | wrong branch, missing edge case, test passes for wrong reason, mocks-of-things-we-own |
 | `readability` | clear names, control flow, no dead code, no unnecessary cleverness | unclear name, long fn, hidden side effect |
 | `architecture` | pattern fit, coupling, abstraction level, diff size | new dep when stdlib works; cross-layer reach; `>300 LOC` for one logical change → split |
-| `security` | pre-screen for surfaces handled deeper by `security-reviewer` | unsanitised input, secrets in logs, missing authn/authz, encoding mismatch |
+| `security` | full threat-model coverage (absorbed from former `security-reviewer`): authn / authz, secrets / credentials, supply chain, data exposure, encoding / sanitisation, taint flow | unsanitised input, secrets in logs, missing authn/authz, encoding mismatch, supply-chain provenance gaps |
 | `perf` | hot-path quality | N+1, unbounded loop, sync-where-async, missing pagination |
 
 A reviewer that records zero findings on every axis must explicitly say so in the iteration block ("Five-axis pass: no findings on any axis"); silence is not the same as a clean review.
@@ -98,7 +98,7 @@ Tie-breaker: if iteration 5 closes the last blocking row, return `clear` (signal
 
 ## Decision values
 
-- `block` — at least one ledger row is blocking under the active ceremonyMode + open. `slice-builder` (mode=fix-only) must run next; then re-review.
+- `block` — at least one ledger row is blocking under the active ceremonyMode + open. `builder` (mode=fix-only) must run next; then re-review.
 - `warn` — open rows exist, all non-blocking, convergence detector signal #2 has fired. Ship may proceed; carry-over.
 - `clear` — signal #1 (all closed) OR signal #2 (non-blocking convergence). Ready for ship.
 - `cap-reached` — signal #3 fired with at least one open blocking row remaining.
@@ -119,7 +119,7 @@ Findings:
 - F-1 correctness/required — `src/api/list.ts:14` — missing pagination cursor.
 - F-2 perf/consider — `tests/integration/list.test.ts:31` — no negative test for empty page.
 
-Decision: block (F-1 is required-severity in strict). slice-builder (mode=fix-only) invoked next.
+Decision: block (F-1 is required-severity in strict). builder (mode=fix-only) invoked next.
 
 ## Iteration 2 — code — 2026-04-18T10:39Z
 
@@ -171,15 +171,16 @@ The reviewer's discipline is the first thing the slug shape pressures an agent t
 - Marking everything as `required` because "it might matter". Severity is graduated: `critical` for ship-breaking, `required` for must-fix-before-ship, `consider` for suggestion, `nit` for minor, `fyi` for context only. Padding severity makes it useless.
 - Walking only one or two axes when the diff touches all five. The Five-axis pass is mandatory every iteration; record "no findings" for axes you walked but found clean. Silence is a smell — say what you walked.
 
-## security-review
+## security-axis depth (absorbed from security-reviewer)
 
-The orchestrator dispatches `security-reviewer` automatically when the active task or diff touches sensitive surfaces. You can also invoke it explicitly with `/cc <task> --security-review`.
+v8.62 collapsed the former `security-reviewer` specialist into the reviewer's `security` axis. The reviewer always walks the `security` axis as part of its ten-axis pass; the depth scales with detected surfaces.
 
 ## Rules
 
-1. `security-reviewer` is a separate specialist from `reviewer`. They can run in parallel against the same diff.
-2. `security-reviewer` decisions of severity `security` are block-level: ship is blocked until they are resolved by slice-builder mode=fix-only and the security review reruns clear.
-3. `security_flag: true` in plan frontmatter triggers the compound learning gate even if no other quality signal is present.
+1. Security findings sit inline in the reviewer's Findings table under `axis=security`. There is no separate specialist dispatch.
+2. Severity-`required` (and severity-`critical`) findings on the `security` axis are block-level: ship is blocked until they are resolved by `builder` (mode=fix-only) and the reviewer re-walks the security axis clear.
+3. `security_flag: true` in plan frontmatter forces the reviewer to escalate the `security` axis to full threat-model depth (the checklist below) and triggers the compound learning gate even if no other quality signal is present.
+4. The orchestrator dispatches a single `reviewer` per iteration; the `security` axis is always walked, never gated to a separate specialist.
 
 ## Threat-model checklist (mandatory)
 

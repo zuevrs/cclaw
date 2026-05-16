@@ -6,11 +6,9 @@ import {
   buildAutoTriggerBlockForStage,
   type AutoTriggerStage
 } from "../../src/content/skills.js";
-import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
+import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
-import { SECURITY_REVIEWER_PROMPT } from "../../src/content/specialist-prompts/security-reviewer.js";
-import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
+import { BUILDER_PROMPT } from "../../src/content/specialist-prompts/builder.js";
 
 /**
  * v8.19 skill-windowing — every specialist dispatch used to embed the
@@ -69,7 +67,7 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
       expect(stagesById("flow-resume")).toEqual(["always"]);
     });
 
-    it("pre-flight-assumptions covers triage and plan (Hop 2.5 + ac-author Phase 0)", () => {
+    it("pre-flight-assumptions covers triage and plan (Hop 2.5 + architect Bootstrap-phase; v8.62 unified flow absorbed dead `design`'s Phase 0 and renamed `ac-author` to `architect`)", () => {
       expect(stagesById("pre-flight-assumptions")).toEqual(["triage", "plan"]);
     });
 
@@ -85,7 +83,7 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
       expect(stagesById("tdd-and-verification")).toEqual(["build", "review", "ship"]);
     });
 
-    it("commit-hygiene rides build + ship (slice-builder commits + reviewer release pass)", () => {
+    it("commit-hygiene rides build + ship (builder commits + reviewer release pass; v8.62 renamed `slice-builder` → `builder`)", () => {
       expect(stagesById("commit-hygiene")).toEqual(["build", "ship"]);
     });
 
@@ -100,11 +98,11 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
       expect(stagesById("flow-resume")).toEqual(["always"]);
     });
 
-    it("documentation-and-adrs lives in plan + ship (design Phase 6.5 + ship promotion)", () => {
+    it("documentation-and-adrs lives in plan + ship (architect Compose-phase ADR proposal + ship promotion; v8.62 unified flow absorbed dead `design`'s Phase 6.5 into the architect's Compose phase)", () => {
       expect(stagesById("documentation-and-adrs")).toEqual(["plan", "ship"]);
     });
 
-    it("api-evolution lives in plan + review (design-phase decisions + reviewer's Hyrum check)", () => {
+    it("api-evolution lives in plan + review (architect Decisions-phase + reviewer's Hyrum check; v8.62 absorbed `design`'s Phase 4 decisions into architect)", () => {
       expect(stagesById("api-evolution")).toEqual(["plan", "review"]);
     });
 
@@ -171,38 +169,29 @@ describe("v8.19 skill-windowing — stage-scoped skill loading", () => {
     });
   });
 
-  describe("AC-4 — specialist prompts embed the right stage block", () => {
-    it("design prompt includes the plan-stage block heading", () => {
-      expect(DESIGN_PROMPT).toContain("## Active skills (stage: `plan`)");
+  describe("AC-4 — specialist prompts embed the right stage block (v8.62 unified flow roster — architect, reviewer, builder)", () => {
+    it("architect prompt includes the plan-stage block heading (v8.62 — single plan-stage specialist after the design/ac-author collapse)", () => {
+      expect(ARCHITECT_PROMPT).toContain("## Active skills (stage: `plan`)");
     });
 
-    it("ac-author prompt includes the plan-stage block heading", () => {
-      expect(AC_AUTHOR_PROMPT).toContain("## Active skills (stage: `plan`)");
-    });
-
-    it("reviewer prompt includes the review-stage block heading", () => {
+    it("reviewer prompt includes the review-stage block heading (v8.62 absorbed `security-reviewer` into the reviewer's security axis; the reviewer is the single review-stage specialist)", () => {
       expect(REVIEWER_PROMPT).toContain("## Active skills (stage: `review`)");
     });
 
-    it("security-reviewer prompt includes the review-stage block heading", () => {
-      expect(SECURITY_REVIEWER_PROMPT).toContain("## Active skills (stage: `review`)");
+    it("builder prompt includes the build-stage block heading (v8.62 renamed from `slice-builder`)", () => {
+      expect(BUILDER_PROMPT).toContain("## Active skills (stage: `build`)");
     });
 
-    it("slice-builder prompt includes the build-stage block heading", () => {
-      expect(SLICE_BUILDER_PROMPT).toContain("## Active skills (stage: `build`)");
-    });
-
-    it("design / ac-author prompts list pre-flight-assumptions (plan-stage skill)", () => {
-      expect(DESIGN_PROMPT).toContain("**pre-flight-assumptions**");
-      expect(AC_AUTHOR_PROMPT).toContain("**pre-flight-assumptions**");
+    it("architect prompt lists pre-flight-assumptions (plan-stage skill; v8.62 absorbed dead `design`'s Phase 0 reads)", () => {
+      expect(ARCHITECT_PROMPT).toContain("**pre-flight-assumptions**");
     });
 
     it("reviewer prompt does NOT list plan-only skills (plan-authoring is plan-only)", () => {
       expect(REVIEWER_PROMPT).not.toContain("**plan-authoring**");
     });
 
-    it("slice-builder prompt does NOT list pre-flight-assumptions (plan-only)", () => {
-      expect(SLICE_BUILDER_PROMPT).not.toContain("**pre-flight-assumptions**");
+    it("builder prompt does NOT list pre-flight-assumptions (plan-only)", () => {
+      expect(BUILDER_PROMPT).not.toContain("**pre-flight-assumptions**");
     });
   });
 

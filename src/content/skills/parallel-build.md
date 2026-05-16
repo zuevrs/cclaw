@@ -1,15 +1,15 @@
 ---
 name: parallel-build
-trigger: when ac-author topology = parallel-build
+trigger: when architect topology = parallel-build
 ---
 
 # Skill: parallel-build
 
-`parallel-build` is the only parallelism allowed during build. It is opt-in. The orchestrator never picks it without ac-author naming it explicitly in `flows/<slug>/plan.md` Topology section.
+`parallel-build` is the only parallelism allowed during build. It is opt-in. The orchestrator never picks it without architect naming it explicitly in `flows/<slug>/plan.md` Topology section.
 
 ## When to use
 
-Triggered when ac-author topology in `plan.md` reads `parallel-build`. Pre-conditions in the next section gate eligibility (≥4 AC, ≥2 disjoint touchSurface clusters, every AC `parallelSafe: true`, no in-wave dependencies). On large-risky slugs with `triage.downgradeReason == "no-git"` the orchestrator suppresses parallel dispatch even when topology says parallel-build, because `git worktree` is unavailable without `.git/`. See `runbooks/parallel-build.md` for the full dispatch envelope.
+Triggered when architect topology in `plan.md` reads `parallel-build`. Pre-conditions in the next section gate eligibility (≥4 AC, ≥2 disjoint touchSurface clusters, every AC `parallelSafe: true`, no in-wave dependencies). On large-risky slugs with `triage.downgradeReason == "no-git"` the orchestrator suppresses parallel dispatch even when topology says parallel-build, because `git worktree` is unavailable without `.git/`. See `runbooks/parallel-build.md` for the full dispatch envelope.
 
 ## When NOT to apply
 
@@ -31,7 +31,7 @@ For ≤4 AC the orchestrator picks `inline` even when AC look "parallelSafe". Th
 
 ## Slice = 1+ AC with shared touchSurface
 
-A **slice** is one or more AC whose `touchSurface` arrays intersect. AC with disjoint touchSurfaces go into different slices; AC with overlapping touchSurfaces stay in the **same** slice (run sequentially inside it). Each slice is owned by exactly one slice-builder sub-agent.
+A **slice** is one or more AC whose `touchSurface` arrays intersect. AC with disjoint touchSurfaces go into different slices; AC with overlapping touchSurfaces stay in the **same** slice (run sequentially inside it). Each slice is owned by exactly one builder sub-agent.
 
 ## Hard cap: 5 parallel slices per wave
 
@@ -46,14 +46,14 @@ This 5-slice cap is intentional:
 ## Execution
 
 1. Orchestrator reads `flows/<slug>/plan.md` Topology section, extracts the slice list (max 5).
-2. For each slice, dispatch one `slice-builder` sub-agent. Pass:
+2. For each slice, dispatch one `builder` sub-agent. Pass:
    - the slice id,
    - the AC ids it owns,
    - the slice's `touchSurface` (the only paths the slice may modify),
    - the worktree path (see below).
-3. Each slice-builder runs the full TDD cycle (RED → GREEN → REFACTOR) for every AC it owns, sequentially inside the slice, in its own working tree.
-4. After all slice-builders return, the orchestrator invokes `reviewer` in mode `integration` (separate sub-agent if the harness supports it; inline otherwise). Integration reviewer checks path conflicts, double-edits, the AC↔commit chain across all slices, and integration tests covering the slice boundary.
-5. If integration finds problems, the orchestrator dispatches `slice-builder` in `fix-only` mode against the cited file:line refs.
+3. Each builder runs the full TDD cycle (RED → GREEN → REFACTOR) for every AC it owns, sequentially inside the slice, in its own working tree.
+4. After all builders return, the orchestrator invokes `reviewer` in mode `integration` (separate sub-agent if the harness supports it; inline otherwise). Integration reviewer checks path conflicts, double-edits, the AC↔commit chain across all slices, and integration tests covering the slice boundary.
+5. If integration finds problems, the orchestrator dispatches `builder` in `fix-only` mode against the cited file:line refs.
 
 ## Git-worktree pattern (when harness supports sub-agent dispatch)
 
@@ -65,7 +65,7 @@ $ git worktree add .cclaw/worktrees/<slug>-slice-2 -b cclaw/<slug>/slice-2
 $ git worktree add .cclaw/worktrees/<slug>-slice-3 -b cclaw/<slug>/slice-3
 ```
 
-Each slice-builder sub-agent runs with its worktree path as cwd. After all slices finish:
+Each builder sub-agent runs with its worktree path as cwd. After all slices finish:
 
 1. Integration reviewer reads from each worktree's branch.
 2. The orchestrator merges `cclaw/<slug>/slice-N` into the main branch one slice at a time (or fast-forward if the wave was clean).
@@ -85,5 +85,5 @@ This degradation is not an error and does not reduce review depth.
 
 - `integration` mode reviewer is mandatory after every parallel wave. No shortcut.
 - Slice-builders never read each other's worktrees mid-flight.
-- A slice-builder that detects a conflict with another slice stops and raises an integration finding instead of hand-merging.
+- A builder that detects a conflict with another slice stops and raises an integration finding instead of hand-merging.
 - More than 5 parallel slices is forbidden. Merge or split.

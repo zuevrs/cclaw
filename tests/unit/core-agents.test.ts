@@ -7,16 +7,10 @@ import {
 } from "../../src/content/core-agents.js";
 
 describe("core agents", () => {
-  it("ships nine specialists (one main-context, eight on-demand) and two research helpers — v8.42 added critic; v8.51 added plan-critic; v8.52 added qa-runner; v8.61 added triage", () => {
-    expect(SPECIALIST_AGENTS).toHaveLength(9);
+  it("ships seven specialists (all on-demand) and two research helpers — v8.62 unified flow drops `design` (absorbed into `architect`, renamed from `ac-author`) and `security-reviewer` (absorbed into `reviewer`'s `security` axis), renames `slice-builder` → `builder`, and demotes every specialist (including `architect`) to on-demand activation since v8.61 dropped the main-context dialogue protocol", () => {
+    expect(SPECIALIST_AGENTS).toHaveLength(7);
     for (const agent of SPECIALIST_AGENTS) {
       expect(agent.kind).toBe("specialist");
-    }
-    const designAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "design")!;
-    expect(designAgent.activation).toBe("main-context");
-    const subAgentSpecialists = SPECIALIST_AGENTS.filter((agent) => agent.id !== "design");
-    expect(subAgentSpecialists).toHaveLength(8);
-    for (const agent of subAgentSpecialists) {
       expect(agent.activation).toBe("on-demand");
     }
     expect(RESEARCH_AGENTS).toHaveLength(2);
@@ -27,11 +21,8 @@ describe("core agents", () => {
     expect(CORE_AGENTS).toHaveLength(SPECIALIST_AGENTS.length + RESEARCH_AGENTS.length);
   });
 
-  it("none of the legacy specialists survive (v8.42 reclaimed the legacy `critic` id for the new adversarial critic specialist; the legacy `critic` was a pre-v8.14 OMC-style id that never shipped in cclaw)", () => {
+  it("none of the legacy specialists survive — v8.62 retired `design`, `ac-author`, `slice-builder`, `security-reviewer`; earlier retirements still off the roster", () => {
     const ids = new Set(CORE_AGENTS.map((agent) => agent.id));
-    // v8.42 — `critic` is now a live specialist id, removed from this
-    // legacy-survival assertion list. The remaining entries below are
-    // genuine legacy ids that were retired across v8.7-v8.14.
     for (const legacy of [
       "researcher",
       "product-discovery",
@@ -46,10 +37,28 @@ describe("core agents", () => {
       "fixer",
       "doc-updater",
       "brainstormer",
-      "architect"
+      // v8.62 retirements:
+      "design",
+      "ac-author",
+      "slice-builder",
+      "security-reviewer"
     ]) {
       expect(ids.has(legacy as never)).toBe(false);
     }
+  });
+
+  it("v8.62 — `architect` (renamed from `ac-author`, absorbing dead `design`'s Phase 0/2-6 work) is registered as an on-demand specialist", () => {
+    const architect = SPECIALIST_AGENTS.find((agent) => agent.id === "architect");
+    expect(architect, "architect specialist must be registered in SPECIALIST_AGENTS").toBeDefined();
+    expect(architect!.activation).toBe("on-demand");
+    expect(architect!.kind).toBe("specialist");
+  });
+
+  it("v8.62 — `builder` (renamed from `slice-builder`, AC-as-unit semantics unchanged) is registered as an on-demand specialist with a fix-only mode", () => {
+    const builder = SPECIALIST_AGENTS.find((agent) => agent.id === "builder");
+    expect(builder, "builder specialist must be registered in SPECIALIST_AGENTS").toBeDefined();
+    expect(builder!.activation).toBe("on-demand");
+    expect(builder!.modes).toContain("fix-only");
   });
 
   it("v8.42 — `critic` is registered as an on-demand specialist with gap / adversarial modes", () => {
@@ -60,25 +69,20 @@ describe("core agents", () => {
     expect(critic!.modes).toEqual(["gap", "adversarial"]);
   });
 
-  it("reviewer exposes five modes", () => {
+  it("reviewer exposes five modes (v8.62 — security-reviewer's threat-model / taint / secrets / supply-chain prose absorbed into the reviewer's `security` axis, not into a new mode)", () => {
     const reviewer = SPECIALIST_AGENTS.find((agent) => agent.id === "reviewer")!;
     expect(reviewer.modes).toEqual(["code", "text-review", "integration", "release", "adversarial"]);
   });
 
-  it("slice-builder includes a fix-only mode", () => {
-    const slice = SPECIALIST_AGENTS.find((agent) => agent.id === "slice-builder")!;
-    expect(slice.modes).toContain("fix-only");
-  });
+  it("renders agent markdown with the agent's activation value (v8.62 — `architect` and `builder` both render as on-demand sub-agents)", () => {
+    const architectAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "architect")!;
+    const architectMd = renderAgentMarkdown(architectAgent);
+    expect(architectMd).toContain("activation: on-demand");
+    expect(architectMd).toContain("# ");
 
-  it("renders agent markdown with the agent's activation value", () => {
-    const designAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "design")!;
-    const designMd = renderAgentMarkdown(designAgent);
-    expect(designMd).toContain("activation: main-context");
-    expect(designMd).toContain("# ");
-
-    const acAuthorAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "ac-author")!;
-    const acAuthorMd = renderAgentMarkdown(acAuthorAgent);
-    expect(acAuthorMd).toContain("activation: on-demand");
+    const builderAgent = SPECIALIST_AGENTS.find((agent) => agent.id === "builder")!;
+    const builderMd = renderAgentMarkdown(builderAgent);
+    expect(builderMd).toContain("activation: on-demand");
   });
 
   it("research helpers render with kind: research-helper in frontmatter", () => {

@@ -1,6 +1,6 @@
 ---
 name: tdd-and-verification
-trigger: when stage=build (granularity depends on ceremony_mode — see below); before any handoff between specialists or before ship; auto-triggered for slice-builder (between phases) and reviewer (before dispatch); when the slug is identified as a pure refactor
+trigger: when stage=build (granularity depends on ceremony_mode — see below); before any handoff between specialists or before ship; auto-triggered for builder (between phases) and reviewer (before dispatch); when the slug is identified as a pure refactor
 ---
 
 # Skill: tdd-and-verification (RED → GREEN → REFACTOR + staged verification gate + refactor safety)
@@ -26,7 +26,7 @@ The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests
 ### RED — write a failing test
 
 - Touch test files **only**. No production edits in the RED commit.
-- The test must encode the AC verification line authored by ac-author.
+- The test must encode the AC verification line authored by architect.
 - The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax / import / fixture error.
 - Capture the runner output that proves the failure (command + 1-3 line excerpt). This is the **watched-RED proof**.
 - **Test files are named by the unit under test, NOT by the AC id.** Mirror the production module path: `src/lib/permissions.ts` → `tests/unit/permissions.test.ts` (or whatever the project's convention is — `*.spec.ts`, `__tests__/*.ts`, `*_test.go`, `test_*.py`). `AC-1.test.ts`, `tests/AC-2.test.ts`, `spec/ac3.spec.ts` are anti-patterns. The AC id lives **inside** the test name (`it('AC-1: tooltip shows email …', …)`), in the commit message (`red(AC-1): …`), and in the build log — never in the filename.
@@ -66,7 +66,7 @@ Silence fails the gate; "I just didn't refactor" with no row token and no commit
 
 ## Mandatory gates per AC
 
-All eight gates are reviewer-enforced ex-post (v8.40+; no mechanical commit hook). The slice-builder's `self_review[]` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running `git log --grep="(AC-N):"` against the plan's AC list and reading `build.md`.
+All eight gates are reviewer-enforced ex-post (v8.40+; no mechanical commit hook). The builder's `self_review[]` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running `git log --grep="(AC-N):"` against the plan's AC list and reading `build.md`.
 
 (a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited. *Evidence: Discovery column in build.md row.*
 (b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named. *Evidence: Discovery column citations.*
@@ -190,7 +190,7 @@ The reviewer cites a generic-fetcher mock with conditional logic as **Generic-fe
 
 ### Smell catalogue — primitive obsession & feature envy
 
-When a test reveals a structural smell in the production code, the slice-builder surfaces the smell as a finding **even if the AC does not require fixing it**. Two named smells the reviewer cites:
+When a test reveals a structural smell in the production code, the builder surfaces the smell as a finding **even if the AC does not require fixing it**. Two named smells the reviewer cites:
 
 - **Primitive obsession.** A function that takes `(string, string, number)` where each `string` has a different meaning (e.g. `(userId, accountId, ageInDays)`) is at risk of caller-side mistakes (passing args in the wrong order). The fix is a typed value object (`UserId`, `AccountId`, `Days`); refactor surfaces the type system to catch the mistake. Severity: `consider`.
 
@@ -222,11 +222,11 @@ The AC id stays the same; commit messages cite `F-N` in the subject. The reviewe
 
 ## Posture mapping (v8.36, supersedes "When NOT to apply")
 
-Every AC in strict mode carries a **`posture`** value in its `plan.md` frontmatter — a per-criterion annotation that picks the right TDD ceremony. The default is `test-first` (the standard RED → GREEN → REFACTOR cycle); the other five values cover the cases where the standard cycle is structurally absent or actively wrong. The ac-author sets the posture using the heuristic table in its prompt; the slice-builder reads it and selects the ceremony; the reviewer applies the posture-specific check ex-post via `git log --grep` and the `src/posture-validation.ts` helper.
+Every AC in strict mode carries a **`posture`** value in its `plan.md` frontmatter — a per-criterion annotation that picks the right TDD ceremony. The default is `test-first` (the standard RED → GREEN → REFACTOR cycle); the other five values cover the cases where the standard cycle is structurally absent or actively wrong. The architect sets the posture using the heuristic table in its prompt; the builder reads it and selects the ceremony; the reviewer applies the posture-specific check ex-post via `git log --grep` and the `src/posture-validation.ts` helper.
 
 The mapping is mechanical — there is no "did the agent feel like TDD today?" judgement call. Pick the row that matches the AC's posture; do exactly what that row says.
 
-| posture | ceremony required | commit shape (slice-builder writes) | verification-loop mode | reviewer checks (ex-post via `git log`) |
+| posture | ceremony required | commit shape (builder writes) | verification-loop mode | reviewer checks (ex-post via `git log`) |
 | --- | --- | --- | --- | --- |
 | **`test-first`** (default) | RED → GREEN → REFACTOR (3 commits) | `git commit -m "red(AC-N): ..."`, then `green(AC-N)`, then `refactor(AC-N): ...` (or `refactor(AC-N) skipped: <reason>`) | full (build, lint, typecheck, test, scope) | A-1 fires if `green(AC-N)` is found without a prior `red(AC-N)` by git-log order, OR if the `red(AC-N)` commit's `git show --stat` includes production files; full TDD-integrity check |
 | **`characterization-first`** | RED (pin existing behaviour) → GREEN (tiny shape fix) → REFACTOR (the real structural change) (3 commits) | same as `test-first` | full | same as `test-first` plus a check that the RED test actually exercises the code about to be refactored |
@@ -235,7 +235,7 @@ The mapping is mechanical — there is no "did the agent feel like TDD today?" j
 | **`docs-only`** | single commit; no behaviour change | `git commit -m "docs(AC-N): ..."` | `diff-only` (skip build/typecheck/lint/test gates; only working-tree cleanliness + touchSurface match) | A-1 does NOT fire; reviewer checks (a) `touchSurface` matches the exclusion set via `src/posture-validation.ts:validatePostureTouchSurface(...)` (using `isBehaviorAdding`), (b) verification ran in `diff-only` mode |
 | **`bootstrap`** | AC-1: GREEN-only (runner is being installed; no RED is possible) ⇒ subsequent AC: full `test-first` cycle | AC-1: `git commit -m "green(AC-1): ..."` (no prior RED); AC-2+: standard `red(AC-N)` → `green(AC-N)` → `refactor(AC-N)` | full | A-1 fires on AC-2+ if RED is missing; does NOT fire on AC-1 of a bootstrap slug |
 
-The reviewer's predicate-as-cross-check: `src/posture-validation.ts:validatePostureTouchSurface(posture, touchSurface)` returns a non-null error string when `posture` is `docs-only` but `touchSurface` includes a source file (anything not in the exclusion set: `*.md`, `*.json`, `*.yml|*.yaml`, `*.toml`, `*.ini`, `*.cfg`, `*.conf`, `.env*`, `tests/**`, `*.test.*`, `*.spec.*`, `__tests__/**`, `docs/**`, `.cclaw/**`, `.github/**`); the same helper enforces the symmetric rule for `tests-as-deliverable` (only test files allowed). The posture is the **annotation** the ac-author picked, the predicate is the **ex-post cross-check** that catches a contradiction.
+The reviewer's predicate-as-cross-check: `src/posture-validation.ts:validatePostureTouchSurface(posture, touchSurface)` returns a non-null error string when `posture` is `docs-only` but `touchSurface` includes a source file (anything not in the exclusion set: `*.md`, `*.json`, `*.yml|*.yaml`, `*.toml`, `*.ini`, `*.cfg`, `*.conf`, `.env*`, `tests/**`, `*.test.*`, `*.spec.*`, `__tests__/**`, `docs/**`, `.cclaw/**`, `.github/**`); the same helper enforces the symmetric rule for `tests-as-deliverable` (only test files allowed). The posture is the **annotation** the architect picked, the predicate is the **ex-post cross-check** that catches a contradiction.
 
 ### Bootstrap escape — the only AC-1 exception to RED-before-GREEN (v8.38, named)
 
@@ -253,10 +253,10 @@ Each of the five legacy "When NOT to apply" examples maps cleanly to a posture r
 
 ## When NOT to apply
 
-The posture mapping above covers every AC the slice-builder will see. Two cases live OUTSIDE the posture system because they are not "an AC with a different ceremony" — they are "no AC at all in the strict-mode sense", and so the skill itself does not apply:
+The posture mapping above covers every AC the builder will see. Two cases live OUTSIDE the posture system because they are not "an AC with a different ceremony" — they are "no AC at all in the strict-mode sense", and so the skill itself does not apply:
 
-- **`triage.ceremonyMode == "inline"`.** Trivial inline edits commit straight without the per-criterion commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo. The orchestrator never dispatches the slice-builder for inline mode, so this skill never opens.
-- **Discovery-phase artifacts** (design Phases 0-7 in main context, plan / decisions / ADR drafts before the build stage opens). Those produce prose, not behaviour; the build stage is where the posture system opens. The skill is a build-stage rule, not a discovery-stage rule.
+- **`triage.ceremonyMode == "inline"`.** Trivial inline edits commit straight without the per-criterion commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo. The orchestrator never dispatches the builder for inline mode, so this skill never opens.
+- **Architect-phase artifacts** (architect Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose, plan / decisions / ADR drafts before the build stage opens). Those produce prose, not behaviour; the build stage is where the posture system opens. The skill is a build-stage rule, not an architect-stage rule.
 
 For every other AC, pick a row from the posture mapping above and follow it. There is no third "skip TDD entirely" escape hatch beyond these two — every other "we don't need a test here" instinct maps to **`docs-only`**, **`refactor-only`**, or **`tests-as-deliverable`** posture and gets the corresponding (smaller) ceremony, not zero ceremony.
 
@@ -287,7 +287,7 @@ A **staged verification gate**. Each step runs only when the previous step passe
 1. **build** — `npm run build` (or the project's equivalent). Compilation / bundling success. Cheapest gate, catches type errors that escape the editor LSP, missing imports, etc.
 2. **typecheck** — `npm run typecheck` / `tsc --noEmit` / `pyright` / `mypy` / `go vet`. Run separately from `build` because some build pipelines emit on type errors and only fail at runtime; the typecheck gate makes the contract explicit.
 3. **lint** — `npm run lint` / `ruff check` / `golangci-lint run`. Style + obvious-bugs gate. Lint warnings count as **failures** here when the project has lint-as-error in CI; otherwise warnings pass but are recorded.
-4. **test** — the project's full relevant suite (`npm test`, `pytest`, `go test ./...`). The slice-builder's GREEN evidence is a *subset* of this gate (per-criterion suite); verification-loop runs the full repo suite.
+4. **test** — the project's full relevant suite (`npm test`, `pytest`, `go test ./...`). The builder's GREEN evidence is a *subset* of this gate (per-criterion suite); verification-loop runs the full repo suite.
 5. **security** — when the slug's `security_flag` is true OR the diff matches the security-sensitive heuristic from the review stage (see start-command.ts), run the project's security check (`npm audit --audit-level=high`, `pip-audit`, `bandit`, `govulncheck`). When the check is absent, skip with an explicit "no security check configured" line in the verification log.
 6. **diff** — `git diff --stat` + `git diff --name-only` against the slug's plan-base. Verifies the working tree is clean (no uncommitted changes) and the touched-file set matches the AC's union of touchSurfaces. Detects accidental commits to files outside the slug.
 
@@ -299,14 +299,14 @@ Run gates **in order**. On failure of any gate:
 - **Capture** the failing gate's output (command + 1-3 line failure excerpt).
 - **Decide** the recovery path:
   - If the gate is `build` / `typecheck` / `lint` and the failure is mechanical (missing semicolon, unused import, type widening): fix it, re-run from gate 1. **No reviewer dispatch yet.**
-  - If the gate is `test` and the failure is a real regression: bounce the slice back to slice-builder in `fix-only` mode citing the failing test. **No reviewer dispatch yet.**
+  - If the gate is `test` and the failure is a real regression: bounce the slice back to builder in `fix-only` mode citing the failing test. **No reviewer dispatch yet.**
   - If the gate is `security`: surface to user with the audit output; require explicit `accept-warns` for medium-severity, `fix-only` for high+.
   - If the gate is `diff`: investigate uncommitted changes — were they leftover from a fix-only loop? Stage and commit, or stash and re-run.
 
 ## Modes
 
 - **strict** (default for ship-gate): every gate must pass; failure of any blocks the next.
-- **continuous** (slice-builder between AC): runs in the background as you work; reports status after each AC's REFACTOR commit. Failures surface as warnings; build proceeds to the next AC, but the cumulative failure list must be empty before review-stage entry.
+- **continuous** (builder between AC): runs in the background as you work; reports status after each AC's REFACTOR commit. Failures surface as warnings; build proceeds to the next AC, but the cumulative failure list must be empty before review-stage entry.
 - **diff-only** (text-only changes): skip build/typecheck/lint/test/security; run only the diff gate (working tree cleanliness + touchSurface match).
 
 ## Output format
@@ -332,10 +332,10 @@ When a gate fails, the row records `fail` with the excerpt; subsequent rows are 
 
 ## When to invoke
 
-- **slice-builder** runs the loop in `continuous` mode after every AC's REFACTOR commit; in `strict` mode before returning the slim summary.
+- **builder** runs the loop in `continuous` mode after every AC's REFACTOR commit; in `strict` mode before returning the slim summary.
 - **reviewer** runs the loop in `strict` mode before deciding `clear` or `warn`; a failed gate forces `block` regardless of finding count.
 - **ship-gate** runs the loop in `strict` mode (this is the same set of gates §2 + §2a of the ship runbook codifies; verification-loop is the named skill that wraps them coherently).
-- **slice-builder fix-only** runs the loop in `strict` mode after the fix commit, before re-handing off to reviewer.
+- **builder fix-only** runs the loop in `strict` mode after the fix commit, before re-handing off to reviewer.
 
 ## Hard rules
 
