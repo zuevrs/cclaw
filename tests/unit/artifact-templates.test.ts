@@ -10,7 +10,7 @@ import { parseArtifact } from "../../src/artifact-frontmatter.js";
 describe("artifact-templates", () => {
   it("ships templates for every artifact stage", () => {
     const ids = ARTIFACT_TEMPLATES.map((template) => template.id);
-    for (const expected of ["plan", "build", "review", "ship", "decisions", "learnings", "manifest", "ideas"]) {
+    for (const expected of ["plan", "build", "review", "ship", "decisions", "learnings", "manifest"]) {
       expect(ids).toContain(expected);
     }
   });

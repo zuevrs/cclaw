@@ -298,7 +298,7 @@ This skill is dispatched by slice-builder (Phase 4) and by reviewer (iteration 1
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical "probably flaky" / "should pass" verification rows live in `.cclaw/lib/anti-rationalizations.md` under category `verification` (v8.49). The rows below stay here because they cover debug-specific framings (no-hypothesis log, throwaway-harness shortcut, untagged debug logs, browser-content-as-instructions, band-aid vs fix, no-seam diagnosis).
+**Cross-cutting rationalizations:** the canonical "probably flaky" / "should pass" verification rows live in `.cclaw/lib/anti-rationalizations.md` under category `verification`. The rows below stay here because they cover debug-specific framings (no-hypothesis log, throwaway-harness shortcut, untagged debug logs, browser-content-as-instructions, band-aid vs fix, no-seam diagnosis).
 
 Debugging discipline is the first thing under pressure when a bug "should be easy". The Phase 1 / multi-run / cheapest-loop rules look like overhead until the band-aid fails in production. Catch yourself thinking the left column; do the right column. Surface the rationalization in `debug-N.md > Outcome` when you obey the right column.
 

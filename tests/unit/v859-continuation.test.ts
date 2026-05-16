@@ -598,13 +598,13 @@ describe("v8.59 — plan templates carry parent_slug frontmatter and ## Extends 
   it("PLAN_TEMPLATE body has a placeholder `## Extends` section (ac-author Phase 1.7 rewrites it from flowState.parentContext or drops it)", () => {
     const plan = templateBody("plan");
     expect(plan).toMatch(/^## Extends$/mu);
-    expect(plan).toMatch(/v8\.59 — present only when this flow was initialised via/u);
+    expect(plan).toMatch(/present only when this flow was initialised via/u);
   });
 
   it("PLAN_TEMPLATE_SOFT body has the same `## Extends` placeholder section", () => {
     const planSoft = templateBody("plan-soft");
     expect(planSoft).toMatch(/^## Extends$/mu);
-    expect(planSoft).toMatch(/v8\.59 — present only when this flow was initialised via/u);
+    expect(planSoft).toMatch(/present only when this flow was initialised via/u);
   });
 
   it("PLAN_TEMPLATE retains `refines: null` separately from `parent_slug` (back-compat with knowledge-store chain)", () => {
@@ -620,7 +620,7 @@ describe("v8.59 — design specialist reads flowState.parentContext (Phase 0 + P
   });
 
   it("Phase 0 carries the v8.59 parent-context linkage step (reads parent's plan.md Spec/Decisions/Selected Direction)", () => {
-    expect(DESIGN_PROMPT).toMatch(/v8\.59 parent-context linkage/u);
+    expect(DESIGN_PROMPT).toMatch(/parent-context linkage/u);
     expect(DESIGN_PROMPT).toMatch(/Building on prior decisions/u);
   });
 
@@ -650,11 +650,11 @@ describe("v8.59 — ac-author writes ## Extends in Phase 1.7 (mandatory when par
 
 describe("v8.59 — reviewer adds a parent-contradictions cross-check", () => {
   it("Reviewer prompt declares the v8.59 cross-check section", () => {
-    expect(REVIEWER_PROMPT).toMatch(/Parent-contradictions cross-check \(v8\.59;/u);
+    expect(REVIEWER_PROMPT).toMatch(/lightweight cross-check/u);
   });
 
   it("Cross-check is gated on flowState.parentContext presence (pre-v8.59 flows skip)", () => {
-    expect(REVIEWER_PROMPT).toContain("flowState.parentContext");
+    expect(REVIEWER_PROMPT).toMatch(/parentContext/);
   });
 
   it("Cross-check is light, not exhaustive regression (scopes the check)", () => {
@@ -673,7 +673,7 @@ describe("v8.59 — critic §3 lens sweep includes a skeptic question on parent 
 describe("v8.59 — orchestrator body carries the v8.59 pointers (Detect fork + prior-context consumption)", () => {
   it("body contains the Detect-hop extend-mode fork heading + pointer", () => {
     const body = renderStartCommand();
-    expect(body).toMatch(/Detect — extend-mode fork \(v8\.59\)/u);
+    expect(body).toMatch(/### Detect — extend-mode fork/u);
     expect(body).toContain("runbooks/extend-mode.md");
   });
 
@@ -685,7 +685,7 @@ describe("v8.59 — orchestrator body carries the v8.59 pointers (Detect fork + 
 
   it("body carries the v8.59 prior-context consumption pointer", () => {
     const body = renderStartCommand();
-    expect(body).toMatch(/v8\.59 prior-context consumption/u);
+    expect(body).toMatch(/### prior-context consumption/u);
     expect(body).toMatch(/flowState\.parentContext/u);
   });
 

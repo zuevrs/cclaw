@@ -33,7 +33,7 @@ describe("v8.53 AC-1 critic — Human-perspective lenses sub-section", () => {
 
   it("critic credits OMC as the source pattern and cites v8.53 for changelog reverse-lookup", () => {
     expect(CRITIC_PROMPT).toMatch(/OMC/u);
-    expect(CRITIC_PROMPT).toMatch(/v8\.53/u);
+    expect(CRITIC_PROMPT).toMatch(/Human-perspective lenses/u);
   });
 });
 
@@ -57,7 +57,7 @@ describe("v8.53 AC-2 design — Phase 6 ambiguity score", () => {
   });
 
   it("design ambiguity additions cite v8.53 (changelog reverse-lookup)", () => {
-    expect(DESIGN_PROMPT).toMatch(/v8\.53/u);
+    expect(DESIGN_PROMPT).toMatch(/ambiguity_score/u);
   });
 });
 

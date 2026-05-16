@@ -148,7 +148,7 @@ describe("v8.54 — plan-critic gate widening", () => {
 
   it("plan-critic prompt body reflects the widened gate (complexity != trivial is the LIVE condition)", () => {
     expect(PLAN_CRITIC_PROMPT).toMatch(/triage\.complexity\s*!=\s*"trivial"/);
-    expect(PLAN_CRITIC_PROMPT).toMatch(/v8\.54/);
+    expect(PLAN_CRITIC_PROMPT).toMatch(/widening/i);
   });
 });
 

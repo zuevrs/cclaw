@@ -59,60 +59,17 @@ try {
   if (!existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command missing after init");
   }
-  // v8.57 — utility slash commands. /cclaw-review and /cclaw-critic
-  // expose the reviewer + critic specialists outside the full /cc flow.
-  // Both files ship alongside cc.md / cc-cancel.md / cc-idea.md in every
-  // enabled harness's commands directory; uninstall sweeps them (covered
-  // at the end of this script via the post-uninstall .cursor/commands
-  // existence checks).
-  for (const utilityCmd of ["cclaw-review.md", "cclaw-critic.md"]) {
-    if (!existsSync(join(tempDir, ".cursor", "commands", utilityCmd))) {
-      throw new Error(
-        `smoke check failed: v8.57 utility command ${utilityCmd} missing after init`
-      );
+  // v8.60 — only cc.md + cc-cancel.md ship; retired commands must not appear.
+  const commandsDir = join(tempDir, ".cursor", "commands");
+  for (const cmd of ["cc-cancel.md"]) {
+    if (!existsSync(join(commandsDir, cmd))) {
+      throw new Error(`smoke check failed: ${cmd} missing after init`);
     }
   }
-  // Spot-check command body invariants — both utility commands must
-  // reference their corresponding specialist contract by canonical
-  // agent path, document the --out flag, and explicitly skip
-  // flow-state interaction.
-  const reviewBody = readFileSync(
-    join(tempDir, ".cursor", "commands", "cclaw-review.md"),
-    "utf8"
-  );
-  if (!reviewBody.includes(".cclaw/lib/agents/reviewer.md")) {
-    throw new Error(
-      "smoke check failed: v8.57 cclaw-review.md must reference .cclaw/lib/agents/reviewer.md"
-    );
-  }
-  if (!reviewBody.includes("--out <path>")) {
-    throw new Error(
-      "smoke check failed: v8.57 cclaw-review.md must document the --out <path> flag"
-    );
-  }
-  if (!reviewBody.includes("flow-state.json")) {
-    throw new Error(
-      "smoke check failed: v8.57 cclaw-review.md must explicitly disallow flow-state interaction"
-    );
-  }
-  const criticBody = readFileSync(
-    join(tempDir, ".cursor", "commands", "cclaw-critic.md"),
-    "utf8"
-  );
-  if (!criticBody.includes(".cclaw/lib/agents/critic.md")) {
-    throw new Error(
-      "smoke check failed: v8.57 cclaw-critic.md must reference .cclaw/lib/agents/critic.md"
-    );
-  }
-  if (!criticBody.includes("--out <out-path>")) {
-    throw new Error(
-      "smoke check failed: v8.57 cclaw-critic.md must document the --out <out-path> flag"
-    );
-  }
-  if (!criticBody.includes("flow-state.json")) {
-    throw new Error(
-      "smoke check failed: v8.57 cclaw-critic.md must explicitly disallow flow-state interaction"
-    );
+  for (const retiredCmd of ["cc-idea.md", "cclaw-review.md", "cclaw-critic.md"]) {
+    if (existsSync(join(commandsDir, retiredCmd))) {
+      throw new Error(`smoke check failed: retired command ${retiredCmd} must not install after init`);
+    }
   }
   for (const dir of ["state", "flows"]) {
     if (!existsSync(join(tempDir, ".cclaw", dir))) {
@@ -494,6 +451,30 @@ try {
     );
   }
 
+  // v8.60 — retired command cleanup. Plant pre-v8.60 slash-command files and
+  // assert the next install removes them + emits progress events.
+  const staleCommandsDir = join(tempDir, ".cursor", "commands");
+  for (const retiredCmd of ["cc-idea.md", "cclaw-review.md", "cclaw-critic.md"]) {
+    writeFileSync(join(staleCommandsDir, retiredCmd), "# stale\n", "utf8");
+  }
+  writeFileSync(join(tempDir, ".cclaw", "lib", "templates", "ideas.md"), "# stale ideas\n", "utf8");
+  const retiredCmdOut = String(
+    execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
+  );
+  for (const retiredCmd of ["cc-idea.md", "cclaw-review.md", "cclaw-critic.md"]) {
+    if (existsSync(join(staleCommandsDir, retiredCmd))) {
+      throw new Error(`smoke check failed: v8.60 did not remove stale ${retiredCmd} on install`);
+    }
+  }
+  if (existsSync(join(tempDir, ".cclaw", "lib", "templates", "ideas.md"))) {
+    throw new Error("smoke check failed: v8.60 did not remove stale ideas.md template on install");
+  }
+  if (!retiredCmdOut.includes("Removed retired command")) {
+    throw new Error(
+      `smoke check failed: v8.60 retired-command cleanup did not print "Removed retired command" on install; got:\n${retiredCmdOut}`
+    );
+  }
+
   // Re-run install to assert idempotency: zero orphan output on a clean install.
   const idempotentOut = String(
     execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
@@ -522,11 +503,10 @@ try {
   if (existsSync(join(tempDir, ".cursor", "commands", "cc.md"))) {
     throw new Error("smoke check failed: cursor /cc command still exists after uninstall");
   }
-  // v8.57 — utility command files must also be removed by uninstall.
-  for (const utilityCmd of ["cclaw-review.md", "cclaw-critic.md"]) {
-    if (existsSync(join(tempDir, ".cursor", "commands", utilityCmd))) {
+  for (const retiredCmd of ["cc-idea.md", "cclaw-review.md", "cclaw-critic.md"]) {
+    if (existsSync(join(tempDir, ".cursor", "commands", retiredCmd))) {
       throw new Error(
-        `smoke check failed: v8.57 utility command ${utilityCmd} still exists after uninstall`
+        `smoke check failed: retired command ${retiredCmd} still exists after uninstall`
       );
     }
   }

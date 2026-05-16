@@ -1,5 +1,5 @@
 /**
- * v8.55 — single source of truth for the harness-embedded ambient rules
+ * single source of truth for the harness-embedded ambient rules
  * surface.
  *
  * Pre-v8.55 cclaw's discipline activated **only** inside `/cc`. Outside
@@ -9,7 +9,7 @@
  * the lone gap among 11 references (every other ref ships ambient
  * rules in CLAUDE.md / AGENTS.md / `.cursor/rules/`).
  *
- * v8.55 closes the gap by writing a **compact** ambient rules surface
+ * closes the gap by writing a **compact** ambient rules surface
  * to each enabled harness's native rules location:
  *
  *   - Cursor:      `.cursor/rules/cclaw.mdc`  (MDC + `alwaysApply: true`)
@@ -246,7 +246,7 @@ export const CCLAW_RULES_MDC: string = [
 ].join("\n");
 
 /**
- * v8.55 audit hook for the cross-reference tripwire — exposes the
+ * audit hook for the cross-reference tripwire — exposes the
  * structural list of antipattern IDs/titles + anti-rat category keys
  * the ambient surface advertises. `tests/unit/v855-harness-rules.test.ts`
  * uses these alongside {@link ANTIPATTERNS} and
@@ -259,7 +259,7 @@ export function listAntipatternIds(): string[] {
 
 /**
  * Parse `ANTIPATTERNS` markdown for `## A-N — Title` headings. Used by
- * v8.55 tests to assert {@link ANTIPATTERN_SUMMARIES} titles agree with
+ * tests to assert {@link ANTIPATTERN_SUMMARIES} titles agree with
  * the full antipattern catalog.
  */
 export function extractAntipatternHeadings(): { id: string; title: string }[] {

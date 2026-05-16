@@ -183,7 +183,7 @@ describe("v8.21 preflight-fold", () => {
     it("pre-flight-assumptions.md becomes a thin reference doc (no separate user-facing ask)", () => {
       expect(preFlightSkill).toBeDefined();
       expect(preFlightSkill!.body).toContain("reference doc");
-      expect(preFlightSkill!.body).toMatch(/v8\.21 fold/iu);
+      expect(preFlightSkill!.body).toMatch(/fold/iu);
     });
 
     it("pre-flight-assumptions.md names both fold targets (design Phase 0 + ac-author Phase 0)", () => {

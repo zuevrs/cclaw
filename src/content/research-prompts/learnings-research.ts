@@ -32,7 +32,7 @@ As of v8.12, the ac-author integrates Prior lessons **as a section of \`plan.md\
 - \`.cclaw/knowledge.jsonl\` exists but is empty (zero lines after stripping whitespace).
 - \`.cclaw/knowledge.jsonl\` exists with entries but **none score ≥ 4** for this task.
 
-In all three cases your slim summary returns \`Notes: no prior slugs apply (knowledge.jsonl absent | empty | no matches)\` and \`Recommended next: continue\`. The dispatcher writes the literal string \`No prior shipped slugs apply to this task.\` into the plan's "Prior lessons" section, no separate file is created. The 24-line greenfield ceremony from v8.11 is gone.
+In all three cases your slim summary returns \`Notes: no prior slugs apply (knowledge.jsonl absent | empty | no matches)\` and \`Recommended next: continue\`. The dispatcher writes the literal string \`No prior shipped slugs apply to this task.\` into the plan's "Prior lessons" section, no separate file is created. The 24-line greenfield ceremony from is gone.
 
 ## Selection algorithm (do this in your head; do not write it)
 

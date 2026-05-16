@@ -4,7 +4,7 @@ import { KNOWLEDGE_LOG_REL_PATH } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 
 /**
- * v8.34 — categorical classification a shipped slug carries forward.
+ * categorical classification a shipped slug carries forward.
  *
  * Compound capture stamps the field from flow signals:
  *
@@ -33,11 +33,11 @@ function isProblemType(value: unknown): value is ProblemType {
 }
 
 /**
- * v8.50 — outcome telemetry stamped on each `KnowledgeEntry` after the
+ * outcome telemetry stamped on each `KnowledgeEntry` after the
  * slug is shipped. Closes the half-real loop in `knowledge.jsonl`: pre-
- * v8.50 entries were forward-only — captured at compound time, read at
+ * entries were forward-only — captured at compound time, read at
  * triage time, never down-weighted when the slug they recorded turned
- * out to be a bad reference. v8.50 adds three automatic capture paths
+ * out to be a bad reference. adds three automatic capture paths
  * (revert detection, follow-up-bug detection, manual-fix detection)
  * that stamp this signal on the affected entry, and routes the signal
  * through `findNearKnowledge` as a Jaccard-score multiplier so down-
@@ -84,14 +84,14 @@ function isOutcomeSignal(value: unknown): value is OutcomeSignal {
 }
 
 /**
- * v8.50 — Jaccard-score multipliers per outcome signal. Applied in
+ * Jaccard-score multipliers per outcome signal. Applied in
  * {@link findNearKnowledge} AFTER the raw Jaccard similarity is
  * computed; the candidate's effective ranking score is
  * `similarity * OUTCOME_SIGNAL_MULTIPLIERS[signal]`. If the adjusted
  * score drops below the caller-supplied `threshold`, the candidate is
  * excluded (same gate the pre-v8.50 raw-similarity code used).
  *
- * The numbers are tuned for the v8.18 baseline threshold of `0.4`:
+ * The numbers are tuned for the baseline threshold of `0.4`:
  *
  * - `good` / `unknown` → `1.0` (neutral; pre-v8.50 behaviour).
  * - `manual-fix` → `0.75` (light down-weight; a candidate that
@@ -130,7 +130,7 @@ export interface KnowledgeEntry {
   tags?: string[];
   /**
    * Files / dirs the AC list of this slug touched (union across all AC).
-   * Optional because legacy entries written before v8.9 do not have it; the
+   * Optional because legacy entries written before do not have it; the
    * dedup helper treats an absent field as "no signal".
    */
   touchSurface?: string[];
@@ -144,14 +144,14 @@ export interface KnowledgeEntry {
    */
   dedupeOf?: string | null;
   /**
-   * v8.34 — categorical classification (`bug` / `knowledge` / `decision`
+   * categorical classification (`bug` / `knowledge` / `decision`
    * / `performance` / `refactor`). Optional; missing reads as "knowledge"
    * (the prior implicit default). See {@link ProblemType} for the
    * compound-stamping rules.
    */
   problemType?: ProblemType | null;
   /**
-   * v8.50 — outcome telemetry stamped after ship by one of the three
+   * outcome telemetry stamped after ship by one of the three
    * automatic capture paths (revert detection, follow-up-bug detection,
    * manual-fix detection). Drives the {@link OUTCOME_SIGNAL_MULTIPLIERS}
    * down-weight applied in {@link findNearKnowledge}.
@@ -163,7 +163,7 @@ export interface KnowledgeEntry {
    */
   outcome_signal?: OutcomeSignal;
   /**
-   * v8.50 — ISO 8601 timestamp of the most recent
+   * ISO 8601 timestamp of the most recent
    * {@link outcome_signal} write. Stamped at the moment a capture path
    * (revert / follow-up-bug / manual-fix) updates the entry. Optional
    * for backwards compat and on entries whose signal is still
@@ -171,7 +171,7 @@ export interface KnowledgeEntry {
    */
   outcome_signal_updated_at?: string;
   /**
-   * v8.50 — short free-text explanation of why the {@link outcome_signal}
+   * short free-text explanation of why the {@link outcome_signal}
    * has its current value, e.g. `"revert detected on a1b2c3d"`,
    * `"follow-up-bug slug 20260514-auth-fix"`, `"post-ship fix(AC-2) at
    * 5f2e7c1"`. The reviewer / specialists surface this string when they
@@ -248,7 +248,7 @@ function assertEntry(value: unknown): asserts value is KnowledgeEntry {
 }
 
 /**
- * v8.50 — read an entry's outcome signal, defaulting absent / `undefined`
+ * read an entry's outcome signal, defaulting absent / `undefined`
  * to `"unknown"` (the neutral value). Exists so callers don't repeat
  * the `entry.outcome_signal ?? "unknown"` fallback at every read site.
  */
@@ -257,7 +257,7 @@ export function outcomeSignalOf(entry: KnowledgeEntry): OutcomeSignal {
 }
 
 /**
- * v8.50 — Jaccard-score multiplier for an entry, derived from
+ * Jaccard-score multiplier for an entry, derived from
  * {@link outcomeSignalOf}. Absent / `undefined` signals read as
  * `"unknown"` and return `1.0` (no weighting impact). See
  * {@link OUTCOME_SIGNAL_MULTIPLIERS} for the numbers.
@@ -358,7 +358,7 @@ export async function findNearDuplicate(
 }
 
 /**
- * Tunables for {@link findNearKnowledge}. Defaults mirror the v8.18 brief
+ * Tunables for {@link findNearKnowledge}. Defaults mirror the brief
  * (window=100, threshold=0.4, limit=3) and were tuned around how compound's
  * knowledge writer populates `tags[]` + `touchSurface[]` + `notes` —
  * thresholds higher than 0.4 prune too aggressively on real-world entries
@@ -378,7 +378,7 @@ export interface NearKnowledgeOptions {
    */
   excludeSlug?: string;
   /**
-   * v8.34 — restrict the candidate pool to entries whose
+   * restrict the candidate pool to entries whose
    * {@link KnowledgeEntry.problemType} equals this value. Entries with
    * `problemType` absent / `undefined` surface ONLY under the `knowledge`
    * filter (the prior implicit default before v8.34). Entries with
@@ -389,7 +389,7 @@ export interface NearKnowledgeOptions {
    */
   problemType?: ProblemType;
   /**
-   * v8.59 — when set, the parent slug's knowledge-store entry is
+   * when set, the parent slug's knowledge-store entry is
    * **prepended** to the result regardless of Jaccard similarity (the
    * parent is load-bearing context by design — `/cc extend <slug>`
    * already told us the parent is relevant; we don't need Jaccard to
@@ -527,7 +527,7 @@ function entryTokensForSummaryMatch(entry: KnowledgeEntry): ReadonlySet<string> 
 }
 
 /**
- * v8.18 — surface prior shipped slugs that look near the current task.
+ * surface prior shipped slugs that look near the current task.
  *
  * Where {@link findNearDuplicate} answers "is this *new* entry a duplicate
  * of an already-shipped one?" (structured-vs-structured, append-time), this
@@ -567,7 +567,6 @@ export async function findNearKnowledge(
     throw new KnowledgeStoreError("parentSlug must be a non-empty string when provided.");
   }
 
-  // v8.59 — the parent-prepend branch fires regardless of taskSummary
   // emptiness; the parent is load-bearing context that the caller
   // explicitly named via `/cc extend <slug>`, so even a vacuous task
   // summary (which would short-circuit the Jaccard branch below) must
@@ -590,7 +589,7 @@ export async function findNearKnowledge(
   // explicitly named this slug via `/cc extend`, so even a slug older
   // than the standard 100-entry window must surface when called out by
   // name. Falling back to the window-only candidate pool would re-
-  // introduce the v8.18 cold-start gap the entire feature was designed
+  // introduce the cold-start gap the entire feature was designed
   // to close.
   const parentEntry = parentSlug !== undefined ? (all.find((entry) => entry.slug === parentSlug) ?? null) : null;
 
@@ -612,7 +611,6 @@ export async function findNearKnowledge(
       const scored: Array<{ entry: KnowledgeEntry; similarity: number; adjusted: number }> = [];
       for (const entry of recent) {
         if (excludeSlug && entry.slug === excludeSlug) continue;
-        // v8.59 — drop the parent's entry from the Jaccard pool so the
         // de-dup pass below doesn't have to filter it out (the parent
         // is prepended unconditionally). Skipping here is cheaper and
         // keeps the Jaccard rank ordering stable (a high-similarity
@@ -622,7 +620,6 @@ export async function findNearKnowledge(
         const entryTokens = entryTokensForSummaryMatch(entry);
         if (entryTokens.size === 0) continue;
         const similarity = jaccard(taskTokens, entryTokens);
-        // v8.50 — apply outcome-signal multiplier BEFORE the threshold gate,
         // so a down-weighted prior (e.g. `reverted: 0.2`) is excluded the
         // moment its adjusted score drops below the caller's threshold,
         // even if the raw similarity would have passed. Pre-v8.50 entries
@@ -656,7 +653,7 @@ export async function findNearKnowledge(
 }
 
 /**
- * v8.34 — does an entry's `problemType` match the requested filter?
+ * does an entry's `problemType` match the requested filter?
  *
  * Back-compat rule (v8.18): absent / `null` `problemType` surfaces ONLY
  * under the `knowledge` filter — the prior implicit default. Every
@@ -674,7 +671,7 @@ export function matchesProblemType(entry: KnowledgeEntry, filter: ProblemType): 
 }
 
 /**
- * v8.50 — write an outcome signal back to the entry whose `slug` matches
+ * write an outcome signal back to the entry whose `slug` matches
  * `targetSlug`. Reads the whole `knowledge.jsonl` into memory, mutates
  * the matched entry, writes the file back via `writeFileSafe` (the
  * existing atomic-rename pattern compound uses). Pure append semantics

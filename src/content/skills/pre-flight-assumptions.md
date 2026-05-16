@@ -5,7 +5,7 @@ trigger: reference doc only — the assumption surface moved to design Phase 0 /
 
 # Skill: pre-flight-assumptions
 
-**v8.21 fold notice — this skill is a reference doc, not a runtime step.**
+**fold notice — this skill is a reference doc, not a runtime step.**
 
 Triage answers "**how much** work is this?" and "**how should we run it?**". The assumption confirmation answers "**on what assumptions** are we doing it?". They are different questions, and the silently-defaulted-assumption problem is real: it is the most common reason a small/medium build ships the wrong feature.
 
@@ -28,7 +28,7 @@ See `triage-gate.md` for the triage gate's optional seed of `triage.assumptions`
 
 ## Where the surface lives now
 
-- **`triage.complexity == "large-risky"`** → **design Phase 0 / Phase 1** owns the assumption surface. Design Phase 0 reads any pre-seeded `triage.assumptions` from the triage gate; design Phase 1 (Clarify) opens with the assumption-confirmation question when the field is empty / absent. See `agents/design.md` Phase 0 ("Assumption-surface ownership (v8.21 fold)") and Phase 1.
+- **`triage.complexity == "large-risky"`** → **design Phase 0 / Phase 1** owns the assumption surface. Design Phase 0 reads any pre-seeded `triage.assumptions` from the triage gate; design Phase 1 (Clarify) opens with the assumption-confirmation question when the field is empty / absent. See `agents/design.md` Phase 0 ("Assumption-surface ownership (fold)") and Phase 1.
 - **`triage.complexity == "small-medium"`** → **ac-author Phase 0** (`agents/ac-author.md`) owns it. AC author Phase 0 emits a single assumption-confirmation turn, waits one turn for user reply, persists to `triage.assumptions`, proceeds to Phase 1 (Bootstrap) in the next turn. The user sees one ask, not two.
 - **`triage.path == ["build"]`** (inline / trivial) → no assumption surface. A single-file edit has no architectural assumptions worth surfacing. Folded into design Phase 0 on large-risky — the discovery specialist owns the assumption surface for design flows.
 

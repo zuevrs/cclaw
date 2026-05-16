@@ -3,7 +3,7 @@ import { FLOWS_ROOT, SHIPPED_DIR_REL_PATH } from "./constants.js";
 import type { FlowStage } from "./types.js";
 
 /**
- * v8.58 — `"research"` joins the artifact stage set as the standalone
+ * `"research"` joins the artifact stage set as the standalone
  * research-mode artifact name. `"research"` is NOT a `FlowStage` token
  * (the flow-state machine does not have a `research` stage — research
  * flows have `triage.path: ["plan"]` as a sentinel and finalise

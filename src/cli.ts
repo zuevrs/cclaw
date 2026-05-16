@@ -41,7 +41,7 @@ import { HARNESS_IDS, type CliContext, type HarnessId } from "./types.js";
 const TAGLINE = "harness-first flow toolkit for coding agents";
 
 /**
- * v8.29 — `cclaw` is TUI-first. The canonical invocation is
+ * `cclaw` is TUI-first. The canonical invocation is
  * `npx cclaw-cli@latest` (no args), which opens a top-level menu with a
  * smart default highlight based on whether `.cclaw/config.yaml` exists.
  *
@@ -50,7 +50,7 @@ const TAGLINE = "harness-first flow toolkit for coding agents";
  * invocation. The `--non-interactive` flag is the escape hatch for
  * CI / scripts / piped input.
  *
- * v8.37 — `cclaw --non-interactive sync` and `cclaw --non-interactive
+ * `cclaw --non-interactive sync` and `cclaw --non-interactive
  * upgrade` were collapsed into `cclaw --non-interactive install`.
  * Under the hood, all three previously called `syncCclaw()` /
  * `upgradeCclaw()` (themselves thin wrappers around the same idempotent
@@ -58,13 +58,13 @@ const TAGLINE = "harness-first flow toolkit for coding agents";
  * matches the code path: ONE installer (`install`), the read-only
  * commands (`knowledge`, `version`, `help`), and `uninstall`.
  *
- * v8.39 — the TUI menu finishes the v8.37 collapse: rows are now just
+ * the TUI menu finishes the collapse: rows are now just
  * `Install` / `Uninstall` / `Quit`. `Sync` and `Upgrade` were intent
  * aliases that confused the picture (three rows, one behaviour);
  * `Install` now carries both readings via its description
  * ("first-time setup OR idempotent reapply"). `Browse knowledge` and
  * `Show version` were moved off the menu — power users invoke them as
- * `cclaw --non-interactive knowledge` / `cclaw --version`. v8.39 also
+ * `cclaw --non-interactive knowledge` / `cclaw --version`. also
  * fixes a perceptible-on-slow-terminals double-render of the 6-line
  * Unicode logo: the no-arg TUI path used to emit the banner above the
  * menu AND again inside the action dispatcher; the second emission is
@@ -112,8 +112,8 @@ const HELP_COMMANDS: ReadonlyArray<readonly [string, string]> = [
   ["uninstall", "Remove cclaw assets from the current project."],
   ["version", "Print the cclaw version and exit (alias of --version)."],
   ["help", "Print this help screen and exit (alias of --help)."],
-  ["sync", "(v8.37) renamed — use `cclaw --non-interactive install` (idempotent + orphan cleanup)."],
-  ["upgrade", "(v8.37) renamed — use `cclaw --non-interactive install` after upgrading the package."]
+  ["sync", " renamed — use `cclaw --non-interactive install` (idempotent + orphan cleanup)."],
+  ["upgrade", " renamed — use `cclaw --non-interactive install` after upgrading the package."]
 ];
 
 const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
@@ -125,7 +125,7 @@ const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
   ],
   [
     "--with-context",
-    "install/sync: write a CONTEXT.md project-domain-glossary stub at the project root when the file does not already exist (v8.35; opt-in)."
+    "install/sync: write a CONTEXT.md project-domain-glossary stub at the project root when the file does not already exist."
   ],
   ["--all", "knowledge: drop the default 20-row limit and print every captured entry."],
   ["--tag=<tag>", "knowledge: filter to entries whose tags[] contains <tag>."],
@@ -135,7 +135,7 @@ const HELP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
   ],
   [
     "--type=<kind>",
-    "knowledge: filter by problemType (bug | knowledge | decision | performance | refactor); absent problemType surfaces only under --type=knowledge (v8.34)."
+    "knowledge: filter by problemType (bug | knowledge | decision | performance | refactor); absent problemType surfaces only under --type=knowledge."
   ],
   ["--json", "knowledge: emit raw jsonl pass-through (one parsed entry per line)."],
   ["--help, -h", "Show this help and exit."],
@@ -235,8 +235,8 @@ async function isInstalled(cwd: string): Promise<boolean> {
 }
 
 /**
- * v8.18 — `cclaw knowledge` command body. Surface unchanged from v8.18;
- * dispatcher rewired in v8.29 to reach this via either the TUI menu or
+ * `cclaw knowledge` command body. Surface unchanged from v8.18;
+ * dispatcher rewired in to reach this via either the TUI menu or
  * `--non-interactive knowledge` (the bare `cclaw knowledge` subcommand
  * is gone).
  */
@@ -346,7 +346,7 @@ function truncate(value: string, max: number): string {
  * non-interactive escape hatch — picker is skipped, auto-detect falls
  * through, hard error if no harness can be resolved.
  *
- * v8.39 — does NOT emit the banner. Callers emit it once at the right
+ * does NOT emit the banner. Callers emit it once at the right
  * moment: the TUI no-arg path emits it above the menu (one banner, one
  * render); the non-interactive path emits it right before dispatching.
  * Emitting inside this function as well used to double-render the
@@ -354,8 +354,8 @@ function truncate(value: string, max: number): string {
  * perceptible "lag" on terminals where redrawing box-drawing characters
  * is slow.
  *
- * v8.39 — the `action` parameter was dropped. v8.37 collapsed
- * sync / upgrade into install at the CLI surface; v8.39 finishes the
+ * the `action` parameter was dropped. collapsed
+ * sync / upgrade into install at the CLI surface; finishes the
  * collapse at the TUI surface, so the only legitimate call shape is
  * the install path.
  */
@@ -377,7 +377,6 @@ async function dispatchInstallAction(
     onProgress: makeProgressPrinter(useColor)
   });
   writeOut(renderSummary(result.counts, useColor));
-  // v8.55 — per-harness ambient rules activation guidance. Cursor is
   // auto-load; Claude Code / Codex / OpenCode need a one-line
   // `@`-reference from the user's root memory file (CLAUDE.md /
   // AGENTS.md). Emitting between the summary block and the final
@@ -391,7 +390,7 @@ async function dispatchInstallAction(
 /**
  * Run the uninstall action. Same banner-ownership rule as
  * `dispatchInstallAction`: the caller emits the banner exactly once;
- * this function does not. See the v8.39 paragraph there for the lag
+ * this function does not. See the paragraph there for the lag
  * fix rationale.
  */
 async function dispatchUninstall(
@@ -408,10 +407,10 @@ async function dispatchUninstall(
 }
 
 /**
- * Dispatcher for the TUI menu's resolved action. The v8.39 menu is
+ * Dispatcher for the TUI menu's resolved action. The menu is
  * three rows: install / uninstall / quit. Banner has already been
  * emitted above the menu by the no-arg caller in `runCli` — see the
- * v8.39 paragraph on `dispatchInstallAction` for why we do not emit
+ * paragraph on `dispatchInstallAction` for why we do not emit
  * it again here.
  *
  * `quit` is terminal — exits without touching the project.
@@ -434,7 +433,7 @@ async function dispatchMenuAction(
 
 /**
  * Non-interactive subcommand surface. Disjoint from `MenuAction` after
- * v8.39 — the TUI menu shrank to install / uninstall / quit, but the
+ * the TUI menu shrank to install / uninstall / quit, but the
  * non-interactive path still accepts `knowledge` and `version` (the two
  * read-only utilities that were dropped from the TUI rows but kept as
  * CI-friendly commands).
@@ -444,22 +443,21 @@ type NonInteractiveAction = "install" | "uninstall" | "knowledge" | "version";
 const SUBCOMMAND_TO_ACTION: Record<string, NonInteractiveAction> = {
   // `init` is kept as a backwards-compatible alias for `install` in the
   // non-interactive path; saves the muscle-memory tax for CI scripts
-  // that pinned `cclaw init` between v8.0 and v8.28. The TUI menu
+  // that pinned `cclaw init` between and v8.28. The TUI menu
   // surfaces the canonical name (`Install`).
   init: "install",
   install: "install",
   uninstall: "uninstall",
   knowledge: "knowledge",
   version: "version"
-  // v8.39 — `sync` and `upgrade` are filtered earlier by
   // `COLLAPSED_NON_INTERACTIVE_COMMANDS` (with a one-line migration
-  // hint), so they never reach this lookup. v8.37 kept them here so
+  // hint), so they never reach this lookup. kept them here so
   // the TUI menu's Sync / Upgrade rows could dispatch through this
-  // map; v8.39 collapsed those rows so the map no longer carries them.
+  // map; collapsed those rows so the map no longer carries them.
 };
 
 /**
- * v8.37 — non-interactive commands that were collapsed into `install`.
+ * non-interactive commands that were collapsed into `install`.
  * `sync` and `upgrade` previously called `syncCclaw()` and `upgradeCclaw()`
  * which are thin aliases around the idempotent installer. In CI / scripts
  * the rename was cognitive overhead with zero functional difference; we
@@ -473,7 +471,7 @@ const COLLAPSED_NON_INTERACTIVE_COMMANDS: Record<string, string> = {
 };
 
 /**
- * v8.37 — set of subcommands the non-interactive path accepts. Anything
+ * set of subcommands the non-interactive path accepts. Anything
  * not in this set OR not in `COLLAPSED_NON_INTERACTIVE_COMMANDS` is a
  * hard "unknown command" error. The TUI menu surface is broader.
  */
@@ -545,7 +543,6 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     return 2;
   }
 
-  // v8.37 — `help` is a non-interactive command (alias of the --help
   // flag). Handled BEFORE the bare-subcommand gate AND before the
   // menu-action lookup because there is no `help` MenuAction (the TUI
   // menu doesn't surface help as a menu row, and bare `cclaw help`
@@ -559,7 +556,6 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     return 0;
   }
 
-  // v8.29 — bare subcommand surface dropped. `cclaw init` /
   // `cclaw sync` / `cclaw knowledge` / etc. all require the
   // `--non-interactive` flag, which is the explicit "I am a script,
   // not a human reading the TUI" signal. The error message points at
@@ -571,7 +567,6 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     return 2;
   }
 
-  // v8.37 — non-interactive `sync` / `upgrade` were collapsed into
   // `install`. Print the one-line migration hint and exit 1 (NOT 2 —
   // the command shape is valid, the command itself is retired).
   const collapsedHint = COLLAPSED_NON_INTERACTIVE_COMMANDS[args.command];
@@ -580,7 +575,6 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     return 1;
   }
 
-  // v8.37 — the supported non-interactive command set is a small fixed
   // list. Anything not in it is an unknown command — refuse here so the
   // error names the gate explicitly rather than the older generic
   // "unknown command" emit-help path.
@@ -603,7 +597,7 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
   // TTY happens to be attached. Auto-detect + --harness fall-through
   // unchanged from v8.28. Note: sync/upgrade cases were stripped above
   // by the COLLAPSED_NON_INTERACTIVE_COMMANDS gate. install/uninstall
-  // emit the banner here (their dispatchers no longer do — v8.39 lag
+  // emit the banner here (their dispatchers no longer do — lag
   // fix); knowledge / version stay banner-less (their output is the
   // primary signal, the banner would just push it down).
   switch (subcommandAction) {

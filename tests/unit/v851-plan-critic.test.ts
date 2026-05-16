@@ -59,7 +59,7 @@ describe("v8.51 plan-critic prompt — v8.54 widened gate", () => {
 
   it("prompt requires complexity != trivial (v8.54 widened from large-risky)", () => {
     expect(PLAN_CRITIC_PROMPT).toMatch(/triage\.complexity != "trivial"|complexity != trivial/);
-    expect(PLAN_CRITIC_PROMPT).toMatch(/v8\.54 widening/);
+    expect(PLAN_CRITIC_PROMPT).toMatch(/widening/i);
   });
 
   it("prompt requires problemType != refines", () => {
@@ -119,7 +119,7 @@ describe("v8.51 plan-critic — critic-steps runbook (v8.54 merged)", () => {
 
   it("critic-steps runbook declares the v8.54 widened plan-critic gate (complexity != trivial)", () => {
     expect(runbook!.body).toMatch(/triage\.complexity != "trivial"/);
-    expect(runbook!.body).toMatch(/v8\.54 widening/);
+    expect(runbook!.body).toMatch(/widening/i);
   });
 
   it("critic-steps runbook declares verdict routing (pass → slice-builder; revise → ac-author; cancel → user picker)", () => {
@@ -207,7 +207,7 @@ describe("v8.51 plan-critic — orchestrator body wiring (v8.54: widened gate)",
   });
 
   it("body names the v8.54 widening explicitly (drops the large-risky requirement)", () => {
-    expect(body).toMatch(/v8\.54 (gate )?widening/i);
+    expect(body).toMatch(/widening/i);
   });
 });
 

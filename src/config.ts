@@ -50,15 +50,15 @@ export interface ModelPreferences {
 }
 
 /**
- * v8.53 — design phase tunables. Optional block in `.cclaw/config.yaml`;
+ * design phase tunables. Optional block in `.cclaw/config.yaml`;
  * every field is independently optional and falls back to a documented
- * default when absent. The block exists so the v8.53 ambiguity-threshold
+ * default when absent. The block exists so the ambiguity-threshold
  * knob has a typed home (we do NOT want orchestrator prompts reaching
  * for free-form `unknown` keys).
  */
 export interface DesignConfig {
   /**
-   * v8.53 — composite-ambiguity threshold for the Phase 7 warning prefix.
+   * composite-ambiguity threshold for the Phase 7 warning prefix.
    *
    * The design specialist computes an `ambiguity_score` in Phase 6 across
    * 3 dimensions (greenfield: goal / constraints / success) or 4
@@ -85,7 +85,7 @@ export interface CclawConfig {
    * `research-learnings.md` per shipped slug, plus the deleted
    * recovery / research / examples library.
    *
-   * v8.12 default behaviour:
+   * default behaviour:
    *   - `manifest.md` collapses into `ship.md` frontmatter.
    *   - `pre-mortem.md` collapses into a `## Pre-mortem (adversarial)` section
    *     appended to `review.md`.
@@ -122,7 +122,7 @@ export interface CclawConfig {
    */
   captureLearningsBypass?: boolean;
   /**
-   * v8.53 — design phase tunables. The only field today is
+   * design phase tunables. The only field today is
    * {@link DesignConfig.ambiguity_threshold}, but the block is shaped
    * to accept future design-phase knobs without churning the top-level
    * config schema.
@@ -131,7 +131,7 @@ export interface CclawConfig {
 }
 
 /**
- * v8.53 — default composite-ambiguity threshold used when
+ * default composite-ambiguity threshold used when
  * `.cclaw/config.yaml > design.ambiguity_threshold` is absent or
  * out-of-range. Exposed as a const so tests + orchestrator readers
  * share the canonical value.
@@ -139,7 +139,7 @@ export interface CclawConfig {
 export const DEFAULT_AMBIGUITY_THRESHOLD = 0.2;
 
 /**
- * v8.53 — read the configured ambiguity threshold with the documented
+ * read the configured ambiguity threshold with the documented
  * fallback. Returns {@link DEFAULT_AMBIGUITY_THRESHOLD} when the config
  * is absent, the `design` block is missing, the field is absent, or the
  * configured value is not a finite number in `[0.0, 1.0]`. Out-of-range

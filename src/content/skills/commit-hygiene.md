@@ -180,7 +180,7 @@ Both findings block the slice from going to compound until the slice-builder spl
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical `git add -A` / `WIP` / amend-after-push / bundling-rename-with-fix / skipping-prefix rows live in `.cclaw/lib/anti-rationalizations.md` under category `commit-discipline` (v8.49). The rows below stay here because they cover commit-hygiene-specific framings (dead-code-cleanup reflex, 72-char subject cap, drive-by trivialization); the catalog covers the cross-cutting commit-prefix and stage-discipline prose.
+**Cross-cutting rationalizations:** the canonical `git add -A` / `WIP` / amend-after-push / bundling-rename-with-fix / skipping-prefix rows live in `.cclaw/lib/anti-rationalizations.md` under category `commit-discipline`. The rows below stay here because they cover commit-hygiene-specific framings (dead-code-cleanup reflex, 72-char subject cap, drive-by trivialization); the catalog covers the cross-cutting commit-prefix and stage-discipline prose.
 
 The drive-by reflex and the dead-code-cleanup reflex are how scope discipline breaks. When you catch yourself thinking the left column, do the right column. Surface the rationalization in `## Summary → Noticed but didn't touch` when you resist it.
 

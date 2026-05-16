@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 /**
- * v8.35 — Project domain glossary (`CONTEXT.md`).
+ * Project domain glossary (`CONTEXT.md`).
  *
  * Adapted from mattpocock's pattern: an OPTIONAL file at the project
  * root that each flow-stage specialist reads at the start of every
@@ -94,11 +94,11 @@ A short, observable, independently verifiable statement of "what shipped means" 
 
 ## Compound capture
 
-The end-of-flow knowledge-store entry that stamps a slug's lessons, decisions, and surface coverage into \`.cclaw/state/knowledge.jsonl\`. Tagged with \`problemType\` (v8.34) and load-bearing context so future flows can find it via \`findNearKnowledge\`.
+The end-of-flow knowledge-store entry that stamps a slug's lessons, decisions, and surface coverage into \`.cclaw/state/knowledge.jsonl\`. Tagged with \`problemType\` and load-bearing context so future flows can find it via \`findNearKnowledge\`.
 
 ## Runbook
 
-An on-demand markdown file at \`.cclaw/lib/runbooks/\` that the orchestrator reads only when a trigger condition fires. Runbooks keep large, path-specific content out of the always-on orchestrator body (v8.22 + v8.31 trimming).
+An on-demand markdown file at \`.cclaw/lib/runbooks/\` that the orchestrator reads only when a trigger condition fires. Runbooks keep large, path-specific content out of the always-on orchestrator body (v8.22 + trimming).
 
 ## Triage
 

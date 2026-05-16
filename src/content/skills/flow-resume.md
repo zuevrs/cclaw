@@ -15,7 +15,6 @@ Invoked on `/cc` with no task argument (the canonical resume gesture), and on `/
 
 - **Fresh `/cc <task>` with `currentSlug == null`.** No flow to resume — `triage-gate.md` runs from a clean slate.
 - **`/cc-cancel`.** The cancel verb shelves the active flow into `flows/cancelled/<slug>/` and resets `flow-state.json`; resume is structurally meaningless after.
-- **`/cc-idea`.** Idea capture writes a single artifact and exits without touching `flow-state.json`; no resumable state is produced.
 - **Mid-stage tool output.** Resume summarises *at* a stage boundary (the saved `currentStage` is canonical); rendering a resume summary mid-dispatch leaks half-finished work into the picker.
 - **Pre-v8 state files** (`schemaVersion < 2`). detect hard-stops on those with the migration prompt; resume never runs against unmigrated state.
 
@@ -64,16 +63,15 @@ The slots inside `<...>` (relative time, next step, option text) render in the u
 | `review` | clear / warn-only convergence | "ready for ship; send `/cc` to dispatch ship" |
 | `ship` | compound complete | "flow already shipped; start a new task or invoke `/cc-cancel` to clear state" |
 
-> **v8.40+** — the resume picker shows the total AC count (`AC: N`) as a coarse sizing signal, not "N committed / M total". The legacy "committed N of M" indicator depended on a hook writing `status: committed` back to `flow-state.json` after each AC's REFACTOR commit; v8.40 drops that hook and the chain is reconstructed ex-post via `git log --grep="(AC-N):" --oneline` only when the orchestrator actually needs a precise pointer (e.g. to dispatch the next AC's slice-builder).
 
 ## Resume rules
 
-1. **Triage is preserved.** A resumed flow keeps its `ceremonyMode`, `complexity`, and `path`. The user does not re-pick. If they want to change any of those, the answer is "/cc-cancel and start fresh". The **one exception** is `runMode` — see the v8.34 mid-flight toggle below.
+1. **Triage is preserved.** A resumed flow keeps its `ceremonyMode`, `complexity`, and `path`. The user does not re-pick. If they want to change any of those, the answer is "/cc-cancel and start fresh". The **one exception** is `runMode` — see the mid-flight toggle below.
 2. **Last-specialist context is restored** by reading `flows/<slug>/<stage>.md` (which now contains the design's Decisions section inline; legacy `flows/<slug>/decisions.md` is read too when it exists from a pre-v8.14 flow). The orchestrator does not summarise from memory; it re-reads the artifact.
 3. **Time gate.** If the resume summary's "last touched" is >7 days ago, surface a warning ("flow is stale — verify scope still applies") but still allow resume.
 4. **Sub-agent dispatch resumes from the same stage.** A build that was paused mid-RED for AC-3 resumes by dispatching slice-builder for AC-3, not by restarting AC-1.
 
-## Mid-flight `runMode` toggle (v8.34)
+## Mid-flight `runMode` toggle
 
 The user can flip `triage.runMode` between `step` and `auto` at any `/cc` invocation by passing `/cc --mode=auto` or `/cc --mode=step` — including mid-flow (not just at resume / not just from a clean paused state). Common shape:
 

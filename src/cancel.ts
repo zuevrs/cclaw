@@ -74,7 +74,7 @@ export async function cancelActiveRun(
   }
 
   const cancelArtifact = `---\nslug: ${slug}\nstage: cancelled\nstatus: cancelled\ncancelled_at: ${cancelledAt}\nreason: ${JSON.stringify(reason)}\n---\n\n# ${slug} — cancelled\n\n${reason}\n\n## Artifacts\n\n${moved.map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`).join("\n") || "_No artifacts were active at cancel time._"}\n`;
-  // v8.12 default: cancellation receipt lives in `cancel.md` (the "manifest"
+  // default: cancellation receipt lives in `cancel.md` (the "manifest"
   // concept is reserved for shipped slugs, and ship's manifest is now
   // collapsed into `ship.md` frontmatter). Users on `legacyArtifacts: true`
   // still get the file under the old `manifest.md` name for back-compat.

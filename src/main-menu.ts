@@ -1,5 +1,5 @@
 /**
- * v8.29 — top-level TUI menu for `cclaw` invoked with no args.
+ * top-level TUI menu for `cclaw` invoked with no args.
  *
  * Mirrors the `harness-prompt.ts` pattern: a pure-state reducer
  * (`applyMenuKey`), a pure-render frame builder (`renderMenuFrame`), and
@@ -15,7 +15,7 @@
  * something else from the menu". Re-opening after a write would also
  * re-render the banner over the install progress lines, which is ugly.
  *
- * v8.39 — collapsed from 7 actions to 3 (`install` / `uninstall` /
+ * collapsed from 7 actions to 3 (`install` / `uninstall` /
  * `quit`). `sync` and `upgrade` were functionally aliases for `install`
  * (all three routed through the same idempotent installer with orphan
  * cleanup); the intent-naming benefit didn't justify the cognitive
@@ -49,7 +49,7 @@ export interface MenuState {
   /**
    * Whether `.cclaw/config.yaml` exists. Drives the smart-default hint
    * line above the menu rows. Both states land the cursor on `install`
-   * (v8.39 collapse): on a fresh project `install` is first-time setup,
+   * (collapse): on a fresh project `install` is first-time setup,
    * on an installed project `install` is the idempotent reapply that
    * used to be called `sync` / `upgrade`. The same row, two readings.
    */
@@ -66,8 +66,8 @@ export interface MenuUpdate {
 /**
  * Build the initial menu state. The cursor always lands on `install`:
  * on a fresh project it's first-time setup, on an existing install it's
- * the idempotent reapply (the v8.37 collapse renamed sync/upgrade to
- * install at the CLI surface; v8.39 finishes the rename at the TUI
+ * the idempotent reapply (the collapse renamed sync/upgrade to
+ * install at the CLI surface; finishes the rename at the TUI
  * surface). The `installed` flag drives only the smart-default hint
  * line above the menu rows — the row itself is the same in both cases.
  */
@@ -145,8 +145,8 @@ export function renderMenuFrame(state: MenuState, options: RenderMenuOptions): s
 
   lines.push("");
   // Hotkey range stays in sync with MENU_ACTIONS.length so future tweaks
-  // to the action list don't leave the legend stale (v8.39 lesson:
-  // hardcoded `1-7` survived the v8.37 collapse and lied to users until
+  // to the action list don't leave the legend stale (lesson:
+  // hardcoded `1-7` survived the collapse and lied to users until
   // someone noticed). 3 actions → "1-3"; if the menu grows again the
   // legend updates automatically.
   const numberRange = `1-${MENU_ACTIONS.length}`;

@@ -129,9 +129,9 @@ const FINALIZE = `# On-demand runbook — finalize (ship → shipped)
 
 Open this runbook **only after the compound step completes** and \`flows/<slug>/ship.md\` carries \`status: shipped\`. Finalize is the orchestrator's job, never a sub-agent's.
 
-## Per-AC verified gate (precondition, shipped in v8.48)
+## Per-AC verified gate (precondition, available)
 
-Before running any of the steps below, run the per-criterion verified gate. The gate is the v8.48 precondition: finalize is refused when any AC failed verification, with no silent escape hatch.
+Before running any of the steps below, run the per-criterion verified gate. The gate is the precondition: finalize is refused when any AC failed verification, with no silent escape hatch.
 
 ### Gate procedure
 
@@ -161,13 +161,13 @@ The gate **never** auto-rescues — there is no \`accept-unverified-and-finalize
 
 ### Edge cases
 
-- **\`AC verified\` line missing from slice-builder summary** — treat as \`every AC = no\`. The slice-builder is required to emit the line from v8.48 onwards (see slice-builder prompt § Slim summary). Missing line is a fix-only bounce on the slice-builder itself — the orchestrator dispatches \`slice-builder mode=fix-only\` with a one-line note: "re-emit slim summary with v8.48 \`AC verified\` line".
-- **\`AC verified\` line missing from reviewer summary** — same treatment; the reviewer is required to emit the line from v8.48 onwards. Bounce dispatches \`reviewer mode=code\` with a one-line note.
+- **\`AC verified\` line missing from slice-builder summary** — treat as \`every AC = no\`. The slice-builder is required to emit the line from onwards (see slice-builder prompt § Slim summary). Missing line is a fix-only bounce on the slice-builder itself — the orchestrator dispatches \`slice-builder mode=fix-only\` with a one-line note: "re-emit slim summary with v8.48 \`AC verified\` line".
+- **\`AC verified\` line missing from reviewer summary** — same treatment; the reviewer is required to emit the line from onwards. Bounce dispatches \`reviewer mode=code\` with a one-line note.
 - **slice-builder says \`AC-N=yes\` but reviewer says \`AC-N=no\`** — reviewer wins. The reviewer's downgrade reflects evidence in the ledger; slice-builder's claim is self-reported and the gate respects the second opinion.
 - **slice-builder says \`AC-N=no\` but reviewer says \`AC-N=yes\`** — slice-builder wins. The build couldn't verify itself; reviewer's \`yes\` is a process error (reviewer should have downgraded). Bounce to slice-builder fix-only to close AC-N legitimately, then re-review.
 - **inline ACs intermixed with strict ACs** is structurally impossible — \`ceremonyMode\` is per-flow, not per-criterion. If you observe this in the wild, the flow-state is corrupted; surface and stop.
 
-This gate ships at v8.48 and adds one network-free check to every finalize step. It exists because the older \`Open findings\` counter was too coarse — a slug could have \`Open findings: 0\` and still ship with an AC that was silently deferred ("AC-3 deferred — follow-up slug"). The per-criterion line forces the deferral to be explicit and forces the orchestrator to ask before letting the gap close silently.
+This gate ships at and adds one network-free check to every finalize step. It exists because the older \`Open findings\` counter was too coarse — a slug could have \`Open findings: 0\` and still ship with an AC that was silently deferred ("AC-3 deferred — follow-up slug"). The per-criterion line forces the deferral to be explicit and forces the orchestrator to ask before letting the gap close silently.
 
 ## Steps (in order, in the orchestrator's own context)
 
@@ -180,9 +180,9 @@ This gate ships at v8.48 and adds one network-free check to every finalize step.
    - \`ship.md\`
    - \`decisions.md\` (when present — large-risky only, pre-v8.14 shipped flows)
    - \`learnings.md\` (when written by the compound step)
-   - \`pre-mortem.md\` (only on \`legacy-artifacts: true\` — default v8.12 collapses pre-mortem into \`review.md\` as a section)
+   - \`pre-mortem.md\` (only on \`legacy-artifacts: true\` — default collapses pre-mortem into \`review.md\` as a section)
    - \`research-repo.md\` (when written by repo-research)
-   - \`research-learnings.md\` (only on \`legacy-artifacts: true\` — default v8.12 keeps learnings inline in the ac-author's slim-summary)
+   - \`research-learnings.md\` (only on \`legacy-artifacts: true\` — default keeps learnings inline in the ac-author's slim-summary)
    The word "copy" must not appear in the dispatch envelope or in your own actions. \`cp\` is forbidden here. The active directory must end up empty after the moves.
 4. **Stamp the shipped frontmatter on \`ship.md\`.** As of v8.12, manifest.md is collapsed into \`ship.md\`'s frontmatter. Update \`ship.md\`'s frontmatter to include the final flow signals (snake_case keys per artefact-frontmatter convention): \`slug\`, \`shipped_at\`, \`ceremony_mode\`, \`complexity\`, \`security_flag\`, \`review_iterations\`, \`ac_count\`, \`finalization_mode\`. Body of \`ship.md\` keeps the AC↔commit map (strict) or condition checklist (soft); add an "## Artefact index" section listing the artefacts that ended up in the shipped dir (one bullet per file). Users on the opt-in \`legacy-artifacts: true\` config still get a separate \`manifest.md\` in addition.
 5. **Post-condition check (mandatory).** \`flows/<slug>/\` (the active directory) must be empty. If it is not, you have made a mistake — list the residue, surface it to the user, do NOT continue. The most common cause is mistakenly using \`cp\` instead of \`git mv\`/\`mv\`. Once the active dir is empty, \`rmdir flows/<slug>\` to remove the now-empty directory.
@@ -203,13 +203,13 @@ Open this runbook **only when \`flow-state.json > reviewCounter\` reaches 5** wi
 
 ## Review-cap picker (v8.20+)
 
-Track the cap with \`flow-state.json > reviewCounter\` (v8.20-introduced sibling of \`reviewIterations\`; \`reviewIterations\` continues to be the monotonic lifetime counter, \`reviewCounter\` is the cap-budget that the user can extend). Increment \`reviewCounter\` on every reviewer dispatch in parallel with \`reviewIterations\`. v8.19 flows resumed on v8.20 start at \`reviewCounter: 0\` even if \`reviewIterations\` already reflects prior dispatches — the cap is a fresh budget on resume.
+Track the cap with \`flow-state.json > reviewCounter\` (introduced sibling of \`reviewIterations\`; \`reviewIterations\` continues to be the monotonic lifetime counter, \`reviewCounter\` is the cap-budget that the user can extend). Increment \`reviewCounter\` on every reviewer dispatch in parallel with \`reviewIterations\`. flows resumed on start at \`reviewCounter: 0\` even if \`reviewIterations\` already reflects prior dispatches — the cap is a fresh budget on resume.
 
 **When \`reviewCounter\` reaches \`5\`**, do NOT dispatch another reviewer. Surface a structured \`AskQuestion\` picker with these options and stop:
 
 1. \`cancel-and-replan\` — Apply the cap-reached split-plan below: orchestrator authors the recommended split into \`review.md\` and asks the user to confirm the follow-up slug names. The current slug is parked; the user picks the first split slug to start, or \`/cc-cancel\` to discard.
 2. \`accept-warns-and-ship\` — Treat every remaining open ledger row as a \`warn\` (only valid if no row is \`critical\` AND, per the architecture priors rule, no row is \`required + architecture\`; if either invariant fails, the option is greyed out and the picker explains why). Proceed to ship gate with the carry-over.
-3. \`keep-iterating-anyway\` — Reset \`reviewCounter\` to \`3\`, buying two more rounds before the picker fires again. Append a v8.44 audit-log entry to \`.cclaw/state/triage-audit.jsonl\` with \`iterationOverride: true\` (telemetry: a future "why did this flow take 7 review iterations?" audit can answer without re-reading the iteration log; the entry lives in the audit log instead of \`triage.iterationOverride\` so routing state stays clean) and resume normal review-pause dispatch.
+3. \`keep-iterating-anyway\` — Reset \`reviewCounter\` to \`3\`, buying two more rounds before the picker fires again. Append a audit-log entry to \`.cclaw/state/triage-audit.jsonl\` with \`iterationOverride: true\` (telemetry: a future "why did this flow take 7 review iterations?" audit can answer without re-reading the iteration log; the entry lives in the audit log instead of \`triage.iterationOverride\` so routing state stays clean) and resume normal review-pause dispatch.
 
 The picker is not skippable on autopilot; \`runMode: auto\` pauses here like any other hard gate.
 
@@ -317,7 +317,7 @@ Inputs: \`.cclaw/flows/<slug>/plan.md\`, build.md, review.md.
 
 **Shared diff context (single parse pass).** Before the parallel dispatch, run \`git diff --stat <plan-base>..HEAD\` and \`git diff --name-only <plan-base>..HEAD\` once in the orchestrator's context. Pass the parsed shape (touched files list, additions/deletions per file, total LOC delta) to **every** parallel reviewer in the dispatch envelope under a \`Shared diff:\` block. Each reviewer reads its own filtered subset (release-mode reads everything; adversarial-mode skims for hot paths; security-reviewer prioritises files matching sensitive patterns). This avoids three independent \`git diff\` calls and three independent file-list parses — savings: 1-2 seconds per ship + ~1-2K tokens × 3 (diff parse boilerplate). The reviewers still independently \`git show <SHA>\` per finding to read commit-level context; only the aggregated diff shape is shared.
 
-Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan. As of v8.12 the adversarial reviewer's pre-mortem section is appended to \`review.md\` (no separate \`pre-mortem.md\` file unless \`legacy-artifacts: true\`).
+Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan. As of the adversarial reviewer's pre-mortem section is appended to \`review.md\` (no separate \`pre-mortem.md\` file unless \`legacy-artifacts: true\`).
 
 After ship, run the compound learning gate.
 
@@ -430,7 +430,7 @@ Open this runbook **after every stage exit** — both at the end of plan / build
 - Each stage exit (or discovery checkpoint) **rewrites both files from scratch** — they are idempotent snapshots, not appended logs. Stale data is the v8.11-era ship.md bug applied to handoff state; the fix is "always re-author".
 - \`runCompoundAndShip\` moves both files into \`shipped/<slug>/\` alongside the canonical 7 stages (the T0-10 directory scan handles them automatically). Shipped flows preserve their final HANDOFF.json + .continue-here.md as a record of how the slug ended.
 - \`/cc-cancel\` moves both into \`cancelled/<slug>/\`.
-- The detect step may consult \`HANDOFF.json\` as a fallback when \`flow-state.json\` is missing or unparseable (v8.13 hardening: file may be deleted by accident, but HANDOFF.json snapshots can rebuild the resume context).
+- The detect step may consult \`HANDOFF.json\` as a fallback when \`flow-state.json\` is missing or unparseable (hardening: file may be deleted by accident, but HANDOFF.json snapshots can rebuild the resume context).
 
 ## When the orchestrator rewrites
 
@@ -534,21 +534,21 @@ cclaw has **two** critic specialists that share a dispatch envelope shape and th
 
 | stage | when | reads | output | verdicts |
 | --- | --- | --- | --- | --- |
-| **plan-critic** (v8.51) | between ac-author and slice-builder | plan.md only (read-only on the codebase) | flows/<slug>/plan-critic.md | \`pass\` / \`revise\` / \`cancel\` |
-| **critic** (v8.42) | between reviewer-clear and ship | plan.md + build.md + review.md + diff | flows/<slug>/critic.md | \`pass\` / \`iterate\` / \`block-ship\` |
+| **plan-critic** | between ac-author and slice-builder | plan.md only (read-only on the codebase) | flows/<slug>/plan-critic.md | \`pass\` / \`revise\` / \`cancel\` |
+| **critic** | between reviewer-clear and ship | plan.md + build.md + review.md + diff | flows/<slug>/critic.md | \`pass\` / \`iterate\` / \`block-ship\` |
 
 Both stages ship together because they catch different problem classes — plan-critic walks the plan itself ("is this plan structurally buildable?"); the post-impl critic walks the built diff ("did we build the right thing well?"). The orchestrator opens the matching section below for the transition in flight.
 
 ## Shared cross-stage rules
 
 - **Pre-commitment predictions** are authored BEFORE the rest of the protocol runs (plan-critic §6; post-impl critic §1). Same discipline shape: 3-5 predictions naming verification paths and final outcomes (\`confirmed\` / \`refuted\` / \`partial\`); the discipline activates deliberate search instead of passive reading.
-- **Anti-rationalization pointer.** Both specialists reference the shared \`.cclaw/lib/anti-rationalizations.md\` catalog (v8.49) for cross-cutting rationalizations; only specialist-unique rows live inline in the prompt body.
+- **Anti-rationalization pointer.** Both specialists reference the shared \`.cclaw/lib/anti-rationalizations.md\` catalog for cross-cutting rationalizations; only specialist-unique rows live inline in the prompt body.
 - **Iteration cap = 1.** Each specialist dispatches at most twice per slug (iteration 0 + one allowed retry). A third dispatch is structurally forbidden — the orchestrator surfaces a cap-reached user picker instead.
 - **Slim summary shape.** Both return a ≤7-line slim summary with \`specialist\`, \`verdict\`, severity-bucketed findings count, \`iteration\`, \`confidence\`, and an optional \`notes\` line (required when confidence != high).
 
 ## Pre-implementation pass (plan-critic, v8.51)
 
-The orchestrator opens this section **on every \`ac-author\` slim-summary return** when the v8.51 gate evaluates to true. plan-critic is the v8.51 pre-implementation adversarial specialist that runs between \`ac-author\` and \`slice-builder\` on a tight subset of flows. It walks what is **missing or wrong** in the plan itself (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + pre-commitment predictions) rather than the post-impl critic's "did we build the right thing well?" pass. The contract that drives the dispatch lives in \`.cclaw/lib/agents/plan-critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+The orchestrator opens this section **on every \`ac-author\` slim-summary return** when the gate evaluates to true. plan-critic is the pre-implementation adversarial specialist that runs between \`ac-author\` and \`slice-builder\` on a tight subset of flows. It walks what is **missing or wrong** in the plan itself (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + pre-commitment predictions) rather than the post-impl critic's "did we build the right thing well?" pass. The contract that drives the dispatch lives in \`.cclaw/lib/agents/plan-critic.md\`; this section covers what the orchestrator does *around* the dispatch.
 
 ### plan-critic gating (the four AND conditions — orchestrator enforces deterministically)
 
@@ -559,14 +559,14 @@ plan-critic runs ONLY when ALL of these hold:
 3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs extend prior shipped work; the parent slug already shipped + survived its post-impl critic).
 4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency surface).
 
-For any other combination, plan-critic is **structurally skipped**. The orchestrator advances directly from ac-author's slim summary to slice-builder dispatch, as today. The gate is **AND** across all four; the v8.54 widening dropped the prior \`complexity == "large-risky"\` requirement (reference patterns — chachamaru \`plan_critic\` runs on every Phase 0, gsd-v1 plan-checker runs across complexity tiers — showed cclaw's prior gate was the narrowest in the cohort and likely under-fired on strict small-medium flows; trivial flows still skipped because they have no plan to critique). Further widening any condition is a v8.55+ scope decision, not a within-slug runtime call.
+For any other combination, plan-critic is **structurally skipped**. The orchestrator advances directly from ac-author's slim summary to slice-builder dispatch, as today. The gate is **AND** across all four; the widening dropped the prior \`complexity == "large-risky"\` requirement (reference patterns — chachamaru \`plan_critic\` runs on every Phase 0, gsd-v1 plan-checker runs across complexity tiers — showed cclaw's prior gate was the narrowest in the cohort and likely under-fired on strict small-medium flows; trivial flows still skipped because they have no plan to critique). Further widening any condition is a v8.55+ scope decision, not a within-slug runtime call.
 
 ### plan-critic dispatch envelope
 
 \`\`\`
 Dispatch plan-critic
 ─ Required first read: .cclaw/lib/agents/plan-critic.md  (your contract — gate, 5-dimension protocol, verdict, slim summary)
-─ Required second read: .cclaw/lib/anti-rationalizations.md  (v8.49 catalog; the prompt body cites it)
+─ Required second read: .cclaw/lib/anti-rationalizations.md  (catalog; the prompt body cites it)
 ─ Stage: plan-critic
 ─ Slug: <slug>
 ─ Ceremony mode: strict  (gate enforces; always strict)
@@ -647,7 +647,7 @@ The plan-critic returns one of three verdicts. The orchestrator branches on (ver
 - Dispatch other specialists. Composition is the orchestrator's job.
 - Exceed 7k input+output tokens. Approaching the cap is itself a finding (\`confidence: low\`, recommend split).
 - Propose alternative approaches. The design phase chose; plan-critic catches mistakes in the chosen plan, not relitigates the choice.
-- Emit multi-perspective lens findings (security / a11y / perf as parallel sweeps). That is v8.53 scope for the post-impl critic; plan-critic stays focused on the five dimensions.
+- Emit multi-perspective lens findings (security / a11y / perf as parallel sweeps). That is scope for the post-impl critic; plan-critic stays focused on the five dimensions.
 
 ### plan-critic legacy migration (pre-v8.51 \`flow-state.json\`)
 
@@ -660,7 +660,7 @@ The migration is one-pass and idempotent — a slug whose plan-critic has alread
 
 ## Post-implementation pass (critic, v8.42)
 
-The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the v8.42 on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
 
 ### critic ceremonyMode gating (Q1, no flag exposed)
 
@@ -673,7 +673,7 @@ The orchestrator opens this section **on every transition from \`review\` to \`c
 ### critic escalation triggers (§8, OR-conditions — any one fires escalation on \`ceremonyMode: strict\`)
 
 1. **Architectural-tier change** — touchSurface includes ≥2 files marked \`tier: architectural\` in plan.md OR the build introduced one.
-2. **Test-first + zero failing tests in build.md** — slug posture is \`test-first\` AND the TDD log shows zero \`RED\` rows (v8.42 Q5: narrow trigger, do NOT widen to "missing RED excerpt"; the difference matters — a slug with \`RED\` rows that lack a captured excerpt is a build.md audit-trail gap to be flagged, not a critic escalator).
+2. **Test-first + zero failing tests in build.md** — slug posture is \`test-first\` AND the TDD log shows zero \`RED\` rows (Q5: narrow trigger, do NOT widen to "missing RED excerpt"; the difference matters — a slug with \`RED\` rows that lack a captured excerpt is a build.md audit-trail gap to be flagged, not a critic escalator).
 3. **Large surface size** — \`git diff --stat\` reports ≥10 files OR ≥500 net lines changed since the plan committed.
 4. **\`security_flag: true\`** OR security-reviewer ran during review.
 5. **\`reviewIterations >= 4\`** — the slug needed near-cap iterations to converge; hidden complexity signal.
@@ -689,7 +689,7 @@ Mapping fired-triggers count to \`criticEscalation\`:
 ### critic cap & rerun rules
 
 - **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — surfacing the critic-cap-reached picker (same shape as the v8.20 5-iteration reviewer cap).
-- **Re-run trigger:** ONLY when the user picks \`[1] fix and re-review\` at the block-ship picker. The orchestrator re-dispatches \`slice-builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the v8.20 cap still applies), then re-runs \`critic\` (increments \`criticIteration\`).
+- **Re-run trigger:** ONLY when the user picks \`[1] fix and re-review\` at the block-ship picker. The orchestrator re-dispatches \`slice-builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the cap still applies), then re-runs \`critic\` (increments \`criticIteration\`).
 - **Independence:** critic dispatches do NOT increment \`reviewIterations\`. The two counters are independent; the critic-cap-reached picker fires only on a third critic dispatch, even if the reviewer-cap is far from reached.
 
 ### critic verdict handling (slim summary → orchestrator routing)
@@ -728,16 +728,16 @@ Mapping fired-triggers count to \`criticEscalation\`:
 
 **After ship begins (user approved continue or auto-chain fired):** \`currentStage\` advances to \`"ship"\`. The critic fields stay; they are immutable for the rest of the flow.
 
-### Q4 dogfood — when this is the v8.42 implementation slug
+### Q4 dogfood — when this is the implementation slug
 
-The v8.42 slug introduces the critic itself. The acceptance criterion (Q4) is that *this* slug runs through *its own* critic stage during review. If the critic returns \`block-ship\` on its own implementation, the orchestrator records the block-ship reason in \`learnings.md\` and the user invokes \`[2] accept-and-ship\` (manual override; \`triage.criticOverride: true\`). The override is documented in the slug's PR body under \`## Critic self-dogfood findings\` per the v8.42 process checklist. This is a one-time bootstrap exception — every subsequent slug treats \`block-ship\` as a hard gate by default.
+The slug introduces the critic itself. The acceptance criterion (Q4) is that *this* slug runs through *its own* critic stage during review. If the critic returns \`block-ship\` on its own implementation, the orchestrator records the block-ship reason in \`learnings.md\` and the user invokes \`[2] accept-and-ship\` (manual override; \`triage.criticOverride: true\`). The override is documented in the slug's PR body under \`## Critic self-dogfood findings\` per the process checklist. This is a one-time bootstrap exception — every subsequent slug treats \`block-ship\` as a hard gate by default.
 
 ### critic legacy migration (pre-v8.42 \`flow-state.json\`)
 
 A state file with \`currentStage: "review"\` AND \`lastSpecialist: "reviewer"\` AND no \`criticVerdict\` field is treated as **pre-critic intermediate**:
 
 - If the slug directory is \`flows/<slug>/\` (still active, not yet shipped): on the next \`/cc\`, the orchestrator emits the one-line migration note (\`Legacy state (pre-v8.42) detected; the critic stage will run on next /cc.\`) and dispatches critic before advancing to ship.
-- If the slug directory is \`flows/shipped/<slug>/\` (post-v8.41 ship already completed): the state is left alone. The shipped artifact set is immutable; the orchestrator does NOT retroactively run critic on a shipped slug.
+- If the slug directory is \`flows/shipped/<slug>/\` (post-ship already completed): the state is left alone. The shipped artifact set is immutable; the orchestrator does NOT retroactively run critic on a shipped slug.
 
 The migration is one-pass and idempotent — a slug whose critic has already run shows \`criticVerdict\` set, so the legacy branch is never re-entered.
 
@@ -749,12 +749,12 @@ The migration is one-pass and idempotent — a slug whose critic has already run
 - Exceed 20k input+output tokens. Approaching the cap is itself a finding (\`Confidence: low\`, recommend split).
 - Re-walk the reviewer's eight axes. The critic reads \`review.md > ## Findings\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
 
-The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see v8.42 Q2).
+The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see Q2).
 `;
 
 const QA_STAGE = `# On-demand runbook — qa step (v8.52+)
 
-The orchestrator opens this runbook **on every slice-builder GREEN slim-summary return** when the v8.52 qa gate evaluates to true. \`qa-runner\` is the v8.52 behavioural-acceptance specialist that runs between \`build\` and \`review\` on UI-touching slugs in non-inline mode. It walks the **rendered page** (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. The contract that drives the dispatch lives in \`.cclaw/lib/agents/qa-runner.md\`; this runbook covers what the orchestrator does *around* the dispatch.
+The orchestrator opens this runbook **on every slice-builder GREEN slim-summary return** when the qa gate evaluates to true. \`qa-runner\` is the behavioural-acceptance specialist that runs between \`build\` and \`review\` on UI-touching slugs in non-inline mode. It walks the **rendered page** (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. The contract that drives the dispatch lives in \`.cclaw/lib/agents/qa-runner.md\`; this runbook covers what the orchestrator does *around* the dispatch.
 
 Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires on stop-the-line) and from \`reviewer.md > qa-evidence axis\` (post-qa cross-check that qa.md rows match the diff). The three together close the behavioural-QA gap that pre-v8.52 cclaw only handled implicitly through the reviewer's nine-axis pass.
 
@@ -896,13 +896,13 @@ For slugs where \`triage.surfaces\` was never populated (the field was added in 
 
 const EXTEND_MODE = `# On-demand runbook — extend-mode entry point (v8.59+)
 
-The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts with the literal token \`extend \` (case-insensitive, exactly one space)**. The Detect hop fires before the v8.58 research-mode fork — \`extend\` always wins. This runbook covers the full extend-mode contract: argument parsing, parent validation, slug-init patches, triage inheritance, and the four error sub-cases. Specialist consumption of \`parentContext\` lives further down the orchestrator body under \`### v8.59 prior-context consumption\`; this runbook does not duplicate that section.
+The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts with the literal token \`extend \` (case-insensitive, exactly one space)**. The Detect hop fires before the research-mode fork — \`extend\` always wins. This runbook covers the full extend-mode contract: argument parsing, parent validation, slug-init patches, triage inheritance, and the four error sub-cases. Specialist consumption of \`parentContext\` lives further down the orchestrator body under \`### prior-context consumption\`; this runbook does not duplicate that section.
 
 ## Trigger evaluation order (Detect hop)
 
-1. **Git-check sub-step (v8.23)** — \`.git/\` presence; force \`ceremonyMode: soft\` if absent.
-2. **extend-mode fork (v8.59; this runbook)** — argument starts with \`extend \`.
-3. **research-mode fork (v8.58)** — argument starts with \`research \` OR carries \`--research\`.
+1. **Git-check sub-step** — \`.git/\` presence; force \`ceremonyMode: soft\` if absent.
+2. **extend-mode fork** — argument starts with \`extend \`.
+3. **research-mode fork** — argument starts with \`research \` OR carries \`--research\`.
 4. **Default routes** — fresh / resume / collision / pre-v8 state per the Detect table.
 
 The order matters: \`/cc extend <slug> research <topic>\` enters extend mode, not research. The user wanting a research flow that extends a parent runs \`/cc research <topic>\` directly without the \`extend\` prefix.
@@ -940,7 +940,7 @@ The slug resolves to a shipped flow with a non-empty \`plan.md\`. Continue with 
 
 1. **Build a slug for the follow-up flow** — canonical \`YYYYMMDD-<semantic-kebab>\` from the \`<task>\` text. Same naming rules as a standard \`/cc <task>\` (date prefix mandatory; same-day collision suffix \`-2\`, \`-3\`, etc.).
 2. **Stamp \`flow-state.json > parentContext\`** — patch the new flow's state with the resolved \`ParentContext\` (slug + status: "shipped" + optional shippedAt + artifactPaths) via \`patchFlowState\`. This is the single source of truth for the parent linkage; specialists read this field, not \`refines\`.
-3. **Seed \`refines:\` in plan.md frontmatter** — write \`refines: <parent-slug>\` so the legacy v8.58 knowledge-store chain (\`findRefiningChain\`), qa-runner skip rule, plan-critic skip gate, and design Phase 6 ambiguity-score brownfield path keep working unchanged. The two writes (\`parentContext\` + \`refines\`) are kept in sync by the same init code path; user manual edits to plan.md after init are out of scope. \`parent_slug:\` mirrors the pointer (v8.59-native field); \`parent_slug:\` wins on drift.
+3. **Seed \`refines:\` in plan.md frontmatter** — write \`refines: <parent-slug>\` so the legacy v8.58 knowledge-store chain (\`findRefiningChain\`), qa-runner skip rule, plan-critic skip gate, and design Phase 6 ambiguity-score brownfield path keep working unchanged. The two writes (\`parentContext\` + \`refines\`) are kept in sync by the same init code path; user manual edits to plan.md after init are out of scope. \`parent_slug:\` mirrors the pointer (native field); \`parent_slug:\` wins on drift.
 4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`runMode\` / \`surfaces\` on the new triage decision, unless the user passed an explicit override flag.
 5. **Proceed to triage announcement → first dispatch.** The new flow runs the same pipeline as a standard \`/cc <task>\` (plan → build → qa? → review → critic → ship). Only the parent-context loading at init is new.
 
@@ -955,7 +955,7 @@ Surface the resolution's \`message\` field verbatim to the user and end the turn
 | \`"corrupted"\` | shipped dir exists but \`plan.md\` is missing | \`Shipped slug '<slug>' is corrupted (plan.md missing under flows/shipped/<slug>/). Cannot use as parent context.\` |
 | \`"missing"\` | slug not found under \`flows/\` or \`flows/shipped/\` or \`flows/cancelled/\` | \`Unknown slug '<slug>'. Run 'cclaw --non-interactive knowledge' to list shipped slugs.\` |
 
-The error message is plain prose, ends the turn, and does NOT consume any of the user's quota of clarifying questions (the lightweight router from v8.58 still asks zero questions; extend mode does not change that contract).
+The error message is plain prose, ends the turn, and does NOT consume any of the user's quota of clarifying questions (the lightweight router from still asks zero questions; extend mode does not change that contract).
 
 ## Sub-cases — argument shapes that the parser must handle
 
@@ -969,11 +969,11 @@ The error message is plain prose, ends the turn, and does NOT consume any of the
 
 ## Multi-level chaining
 
-v8.59 loads the **immediate** parent only. If \`parentContext.slug\` itself has \`refines:\` (its parent has a grandparent), the orchestrator does NOT auto-load the grandparent's artifacts. Specialists may walk the chain on demand via \`findRefiningChain\` in \`src/knowledge-store.ts\` when transitive context is needed (the helper walks parent → grandparent → great-grandparent until it hits a slug with no \`refines:\`). Multi-level auto-loading at orchestrator level is v8.60+ scope; the constraint here keeps the v8.59 context-loading bounded.
+loads the **immediate** parent only. If \`parentContext.slug\` itself has \`refines:\` (its parent has a grandparent), the orchestrator does NOT auto-load the grandparent's artifacts. Specialists may walk the chain on demand via \`findRefiningChain\` in \`src/knowledge-store.ts\` when transitive context is needed (the helper walks parent → grandparent → great-grandparent until it hits a slug with no \`refines:\`). Multi-level auto-loading at orchestrator level is v8.60+ scope; the constraint here keeps the context-loading bounded.
 
 ## Triage inheritance (fires only when \`parentContext\` is set at flow init)
 
-When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the orchestrator runs an **inheritance sub-step** BEFORE the v8.58 lightweight router's heuristic classifier. The sub-step reads the parent's shipped \`ship.md\` / \`plan.md\` frontmatter (best-effort; missing fields fall through to the router default) and seeds the new flow's triage with the parent's values:
+When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the orchestrator runs an **inheritance sub-step** BEFORE the lightweight router's heuristic classifier. The sub-step reads the parent's shipped \`ship.md\` / \`plan.md\` frontmatter (best-effort; missing fields fall through to the router default) and seeds the new flow's triage with the parent's values:
 
 - \`ceremonyMode\` ← parent's \`ceremony_mode\` (or pre-v8.56 \`ac_mode\`) from plan.md frontmatter, OR the value implied by the parent's ship.md when plan.md frontmatter is absent.
 - \`runMode\` ← parent's \`run_mode\` from ship.md frontmatter (when present).
@@ -984,9 +984,9 @@ When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the or
 1. **Explicit override flag from the current \`/cc extend\`** — \`--strict\` / \`--soft\` / \`--inline\` for ceremonyMode; \`--mode=auto\` / \`--mode=step\` for runMode. Always wins; inheritance is bypassed for that field. Audit log records \`userOverrode: true\` when the chosen value differs from the parent's value.
 2. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the v8.23 no-git auto-downgrade audit shape.
 3. **Parent inheritance** — fields not pinned by (1) or (2) inherit from parent's frontmatter.
-4. **Router default** — fields not seeded by (1)-(3) fall through to the v8.58 lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
+4. **Router default** — fields not seeded by (1)-(3) fall through to the lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
 
-The inheritance is one-way: the new flow's triage values are immutable for its lifetime (except \`runMode\` via the v8.34 mid-flight toggle); changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init.
+The inheritance is one-way: the new flow's triage values are immutable for its lifetime (except \`runMode\` via the mid-flight toggle); changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init.
 
 ### Worked examples
 
@@ -1017,11 +1017,11 @@ When \`userOverrode: true\` is recorded, the entry also includes a \`overrideFie
 
 ## What the orchestrator does NOT do at extend init
 
-- **Auto-load grandparent artifacts.** v8.59 immediate-parent-only; multi-level traversal is opt-in via \`findRefiningChain\` from specialists.
-- **Auto-detect extend intent from task text.** v8.59 ships the explicit \`/cc extend <slug>\` entry point only. Auto-detection (recognising "extend feature X" / "continue X" / "after slug Y" in a plain \`/cc <task>\`) is deferred to a future release — the v8.58 lightweight router is zero-question by default and adding a combined-form ask ("Looks like you're extending <slug>. Use parent context? [y/n]") would conflict with that contract. The deferred decision is recorded in \`.cclaw/flows/v859-continuation/design.md\` under "Decisions > D-7: auto-detection deferred".
+- **Auto-load grandparent artifacts.** immediate-parent-only; multi-level traversal is opt-in via \`findRefiningChain\` from specialists.
+- **Auto-detect extend intent from task text.** ships the explicit \`/cc extend <slug>\` entry point only. Auto-detection (recognising "extend feature X" / "continue X" / "after slug Y" in a plain \`/cc <task>\`) is deferred to a future release — the lightweight router is zero-question by default and adding a combined-form ask ("Looks like you're extending <slug>. Use parent context? [y/n]") would conflict with that contract. The deferred decision is recorded in \`.cclaw/flows/v859-continuation/design.md\` under "Decisions > D-7: auto-detection deferred".
 - **Re-read parent state during the flow.** \`parentContext\` is stamped once at init and treated as immutable. If the parent's artifacts change after extend init (the parent is unshipped, re-shipped, or modified out-of-band), the new flow's view is stale and that is by design — specialists read the paths via \`await exists(path)\` and treat missing as a no-op skip.
 - **Validate task overlap with the parent.** The orchestrator does not check whether the \`<task>\` text is coherent with the parent's scope; that's design's job (Phase 0 reads parent plan.md and surfaces the "Building on prior decisions" framing, then Phase 1 clarifies any contradictions).
-- **Walk the knowledge store.** \`findNearKnowledge\` (v8.18) still runs at the specialist that consumes the result (\`ac-author\` Phase 3 on soft; \`design\` Phase 1 / Phase 4 on strict). When \`parentContext\` is set, the lookup augments rather than replaces; the parent's \`learnings.md\` ride alongside the global knowledge-store top-3 picks.
+- **Walk the knowledge store.** \`findNearKnowledge\` still runs at the specialist that consumes the result (\`ac-author\` Phase 3 on soft; \`design\` Phase 1 / Phase 4 on strict). When \`parentContext\` is set, the lookup augments rather than replaces; the parent's \`learnings.md\` ride alongside the global knowledge-store top-3 picks.
 
 ## Backwards compatibility
 
@@ -1106,7 +1106,7 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   }
 ];
 
-export const ON_DEMAND_RUNBOOKS_INDEX_SECTION = `## On-demand runbooks (v8.22)
+export const ON_DEMAND_RUNBOOKS_INDEX_SECTION = `## On-demand runbooks
 
 These runbooks are opened only when the orchestrator hits a specific trigger (a dispatch, a parallel-build, a cap-reached review, etc.). The full \`/cc\` body keeps short pointers to each; the body lives here so the prompt budget stays under control.
 

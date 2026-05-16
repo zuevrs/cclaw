@@ -14,12 +14,12 @@ trigger: when /cc detects an existing plan (active or shipped) for the new task
 
 ## When to use
 
-Triggered by `flow-resume.md` detection when a fresh `/cc <task>` collides with an active flow or fuzzy-matches a recently shipped slug. Skipped on `/cc` (no argument) — that's pure resume, not refinement. Skipped on `/cc-cancel` and `/cc-idea`.
+Triggered by `flow-resume.md` detection when a fresh `/cc <task>` collides with an active flow or fuzzy-matches a recently shipped slug. Skipped on `/cc` (no argument) — that's pure resume, not refinement. Skipped on `/cc-cancel`.
 
 ## When NOT to apply
 
 - **Resume gesture (`/cc` with no task argument).** That is a pure resume of the active slug; `flow-resume.md` runs, not refinement.
-- **`/cc-cancel` and `/cc-idea`.** Cancel shelves; idea captures. Neither opens a refinement decision.
+- **`/cc-cancel`.** Cancel shelves the active flow; no refinement decision is opened.
 - **Fresh task with no slug-fuzzy-match.** The picker doesn't fire when the prompt has nothing nearby; `triage-gate.md` runs from a clean slate.
 - **User picked "new" at the collision picker.** The picker output is a fork: refinement-vs-new. Once "new" was chosen, the refinement decision tree is closed for the rest of the flow.
 

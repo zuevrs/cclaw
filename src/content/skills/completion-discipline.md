@@ -67,13 +67,13 @@ Before any completion claim, walk this checklist (≈30 seconds):
 
 ## Verification
 
-The reviewer's per-iteration **Verification story** table (`Tests run / Build run / Security checked`) is the canonical surface where this skill's evidence requirement is enforced ex-post. The slice-builder's `self_review[]` JSON attestation enforces it at handoff. The orchestrator's finalize step — per-criterion `verified` flag check, shipped in v8.48 — enforces it at ship time. Three layers of catch — the rule is the same one stated above; each layer re-asserts it in the surface most appropriate to that stage.
+The reviewer's per-iteration **Verification story** table (`Tests run / Build run / Security checked`) is the canonical surface where this skill's evidence requirement is enforced ex-post. The slice-builder's `self_review[]` JSON attestation enforces it at handoff. The orchestrator's finalize step — per-criterion `verified` flag check, available — enforces it at ship time. Three layers of catch — the rule is the same one stated above; each layer re-asserts it in the surface most appropriate to that stage.
 
 If a downstream stage finds an upstream claim lacked evidence, that is **F-N severity=required (axis=correctness)** — the upstream claim was a violation, not a noticing.
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical "should pass" / "looks good to me" / "I'll claim complete now" rows live in `.cclaw/lib/anti-rationalizations.md` under category `completion` (v8.49). The rows below stay here because they cover completion-specific framings (stale-evidence citation rule, `Confidence: high + Notes:` hedge, verification line transcription); the catalog covers the shared rebuttal prose so the cross-cutting set stays consistent across surfaces.
+**Cross-cutting rationalizations:** the canonical "should pass" / "looks good to me" / "I'll claim complete now" rows live in `.cclaw/lib/anti-rationalizations.md` under category `completion`. The rows below stay here because they cover completion-specific framings (stale-evidence citation rule, `Confidence: high + Notes:` hedge, verification line transcription); the catalog covers the shared rebuttal prose so the cross-cutting set stays consistent across surfaces.
 
 The "claim now, evidence later" reflex is how completion-discipline breaks. The table below names every excuse a specialist will produce; pair it with the rebuttal and pick the right column.
 
@@ -135,7 +135,7 @@ Violations:
 - "Looks good" — forbidden phrase (sycophancy, no evidence).
 - `What changed:` carries no command, no exit code, no SHA.
 - `Confidence: high` without paired evidence.
-- No `AC verified:` line — the orchestrator's finalize check shipped in v8.48 will refuse ship.
+- No `AC verified:` line — the orchestrator's finalize check shipped in will refuse ship.
 
 The reviewer's Verification story will catch this, but the cost is one full review iteration; the cheaper path is to follow the Process checklist above before authoring the summary.
 

@@ -51,7 +51,7 @@ export interface CompoundQualitySignals {
 }
 
 /**
- * v8.50 - synthetic git outputs and overrides for the outcome-loop
+ * synthetic git outputs and overrides for the outcome-loop
  * capture paths. Pass these in tests to make detection deterministic
  * without a live `git` repo; production callers leave the field absent
  * and let `runCompoundAndShip` shell out to the real `git` binary.
@@ -99,7 +99,7 @@ export interface CompoundRunOptions {
   /** Override or disable the near-duplicate scan (e.g. for tests). */
   dedupOptions?: NearDuplicateOptions | { disable: true };
   /**
-   * v8.50 - synthetic git probes for the outcome-loop capture paths.
+   * synthetic git probes for the outcome-loop capture paths.
    * Tests pass synthetic strings; production leaves this absent and
    * lets `runCompoundAndShip` invoke the real `git` binary at the
    * project root.
@@ -115,14 +115,14 @@ export interface CompoundRunResult {
   knowledgeEntry?: KnowledgeEntry;
   dedupeMatch?: NearDuplicateMatch | null;
   /**
-   * v8.50 - outcome signals stamped on prior shipped slugs as a result
+   * outcome signals stamped on prior shipped slugs as a result
    * of revert detection during this compound pass. Empty array when no
    * revert reference matched a known shipped slug, when the probe was
    * disabled, or when no learning was captured this pass.
    */
   revertedSlugMatches?: RevertedSlugMatch[];
   /**
-   * v8.50 - manual-fix candidates detected against THIS slug's
+   * manual-fix candidates detected against THIS slug's
    * `touchSurface` in the trailing 24h window. The first match (when
    * any) is what `outcome_signal: "manual-fix"` was stamped from; the
    * array is surfaced for audit / test visibility.
@@ -141,7 +141,7 @@ export function shouldCaptureLearning(signals: CompoundQualitySignals): boolean 
 }
 
 /**
- * v8.50 - run `git log` for the revert-detection probe. Best-effort:
+ * run `git log` for the revert-detection probe. Best-effort:
  * a missing `.git/`, a binary that's not on PATH, or a non-zero exit
  * code degrades to `""` (no detection). We never throw - compound
  * MUST NOT fail because the outcome-loop probe couldn't run.
@@ -160,7 +160,7 @@ function runRevertProbe(projectRoot: string): string {
 }
 
 /**
- * v8.50 - run `git log` for the manual-fix probe. Same best-effort
+ * run `git log` for the manual-fix probe. Same best-effort
  * rules as {@link runRevertProbe}; an empty `touchSurface` short-
  * circuits the call so we don't pull the whole repo's last-24h log
  * when the slug never declared a surface.
@@ -206,7 +206,7 @@ function runManualFixProbe(
 }
 
 /**
- * v8.50 - parse `git log --name-only --pretty=format:%H` output into a
+ * parse `git log --name-only --pretty=format:%H` output into a
  * per-SHA file map. The format alternates SHA lines with file-list
  * lines separated by blank lines; this is the shape git emits when
  * `--name-only` is paired with a custom pretty-format.
@@ -237,8 +237,8 @@ function parseNameOnlyLog(raw: string): Map<string, string[]> {
 }
 
 /**
- * v8.50 - does `<projectRoot>/.git/` exist? Cheap pre-check so we
- * don't spawn `git` on plain working trees (the v8.23 no-git path).
+ * does `<projectRoot>/.git/` exist? Cheap pre-check so we
+ * don't spawn `git` on plain working trees (the no-git path).
  */
 function gitAvailable(projectRoot: string): boolean {
   try {
@@ -278,7 +278,7 @@ function renderManifest(
 }
 
 /**
- * v8.12 default: append a shipped-frontmatter block + Artefact index section
+ * default: append a shipped-frontmatter block + Artefact index section
  * to the existing `ship.md` so its frontmatter carries everything the old
  * `manifest.md` did. We do not rewrite the body — `slice-builder` and the
  * orchestrator authored the AC↔commit map and Summary section earlier;
@@ -421,7 +421,6 @@ export async function runCompoundAndShip(
     await appendKnowledgeEntry(projectRoot, knowledgeEntry);
   }
 
-  // v8.50 - run the three outcome-loop capture paths AFTER the new
   // entry is appended (so the manual-fix path can stamp its own
   // entry) but BEFORE the artifact move (so a downstream `readKnowledgeLog`
   // sees the stamped signal immediately). We don't capture
@@ -521,7 +520,7 @@ export async function runCompoundAndShip(
 }
 
 /**
- * v8.50 - run revert-detection and manual-fix-detection against the
+ * run revert-detection and manual-fix-detection against the
  * just-shipped slug. Stamps `outcome_signal` via `setOutcomeSignal`
  * on every match found.
  *
@@ -586,7 +585,7 @@ async function captureOutcomeSignals(
   // Manual-fix detection - looks at THIS slug's touchSurface for
   // post-ship fix(AC-N) / hotfix-shape commits in the trailing 24h.
   // Self-reporting (the slug we just shipped marks itself), which is
-  // the honest-but-noisy v8.50 default - see the CHANGELOG entry's
+  // the honest-but-noisy default - see the CHANGELOG entry's
   // limitations section.
   let manualFixLog: string;
   let manualFixFiles: ReadonlyMap<string, readonly string[]>;

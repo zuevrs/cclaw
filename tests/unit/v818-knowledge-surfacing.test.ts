@@ -162,7 +162,7 @@ describe("v8.18 orchestrator wiring — triage.priorLearnings", () => {
     // and the `triage.priorLearnings` back-compat read so pre-v8.58 state
     // files continue to validate; the section header changed from
     // "Prior-learnings lookup" to "v8.58 prior-learnings consumption".
-    expect(START_COMMAND_BODY).toMatch(/^### v8\.58 prior-learnings consumption/mu);
+    expect(START_COMMAND_BODY).toMatch(/^### prior-learnings consumption/mu);
     expect(START_COMMAND_BODY).toContain("findNearKnowledge");
     expect(START_COMMAND_BODY).toContain("triage.priorLearnings");
   });
