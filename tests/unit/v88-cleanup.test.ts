@@ -55,12 +55,13 @@ describe("v8.8 cleanup (anchors)", () => {
     expect(missing).toEqual([]);
   });
 
-  it("B3: builder keeps the strict (per-AC prefixed commits) vs soft (plain commit) split (v8.62 renamed from slice-builder; AC-as-unit semantics unchanged)", () => {
+  it("B3: builder keeps the strict (per-slice prefixed commits + per-AC verify commits) vs soft (plain commit) split (v8.62 renamed from slice-builder; v8.63 separated work-units (slices, SL-N) from verification (AC, AC-N))", () => {
     const builder = SPECIALIST_PROMPTS["builder"];
     expect(builder).toMatch(/In strict mode/);
-    expect(builder).toMatch(/red\(AC-/);
-    expect(builder).toMatch(/green\(AC-/);
-    expect(builder).toMatch(/refactor\(AC-/);
+    expect(builder).toMatch(/red\(SL-/);
+    expect(builder).toMatch(/green\(SL-/);
+    expect(builder).toMatch(/refactor\(SL-/);
+    expect(builder).toMatch(/verify\(AC-/);
     expect(builder).toMatch(/soft mode/i);
     expect(builder).toMatch(/plain `git commit`/);
   });

@@ -1,6 +1,68 @@
 # Changelog
 
 
+## 8.63.0 — Separate slices (work-units) from AC (verification)
+
+### Why
+
+cclaw's `## Acceptance Criteria` table had been carrying three distinct concepts in one row since v8.40:
+
+1. **Requirements.** What observable behaviour the slug must produce — the AC text itself.
+2. **Work units.** Which test → which production code → which commits — the implementation plan, encoded via `touchSurface` + posture + `parallelSafe`.
+3. **Verification.** Which test asserts the AC actually holds on the merged state — the verification line + RED/GREEN/REFACTOR commit chain.
+
+The conflation made the AC table do too much. Reviewer prompts read AC-as-work-unit (per-AC TDD cycles, per-AC touchSurface enforcement, per-AC commit prefix `<type>(AC-N): ...`). Critic prompts read AC-as-requirement (does this verifiable plan criterion actually solve the user-stated problem?). Plan-critic prompts read AC-as-both (granularity at the AC level + dependency graph at the AC level + verification feasibility at the AC level). The references cclaw cites as design influences (compound, gsd-v1, addyosmani, mattpocock, oh-my-claudecode) all separate work-units from verification — they author one table for what-to-build and another for how-to-prove. cclaw was the outlier conflating the two into one table where work-unit slot and verification slot drifted into each other's prose.
+
+The cost was modest but real: review-stage churn on "the AC's touchSurface lists a file the verify line never exercises" (work-unit drift inside an AC), build-stage churn on "this AC needs two slices but the AC table can only hold one row" (work-unit too big), critic-stage churn on "AC-3 promises what the user asked for but the AC's commit chain proves a different behaviour" (verification drift inside an AC). Splitting the table is the smallest move that resolves all three churn classes at once.
+
+### What changed
+
+**Deliverable 1 — Plan template split** (`src/content/artifact-templates.ts`).
+
+- `PLAN_TEMPLATE` (strict) now has TWO distinct tables: `## Plan / Slices` (SL-N rows with `Surface`, `dependsOn`, `independent`, `posture`) and `## Acceptance Criteria (verification)` (AC-N rows with verification line, `touchSurface`, `parallelSafe`, and a `Verifies` column listing the slice ids this AC proves correct). Architect authors both; the dependency graph between them lives in the `Verifies` column.
+- `PLAN_TEMPLATE_SOFT` unchanged — soft mode runs one TDD cycle for the whole feature; no slice/AC separation surfaces.
+
+**Deliverable 2 — Types + flow-state validators** (`src/types.ts`, `src/flow-state.ts`).
+
+- New `Slice` / `SliceState` types modelled symmetrically to the existing `AcceptanceCriterion` / `AcceptanceCriterionState`. Slice carries `id` (SL-N), `surface`, `dependsOn`, `independent`, `posture`, and an optional verification back-reference set. Flow-state validators accept the new fields permissively on read so pre-v8.63 flow-state.json files validate unchanged.
+
+**Deliverable 3 — Architect contract authors both tables** (`src/content/specialist-prompts/architect.ts`).
+
+- Architect's Compose phase now authors `## Plan / Slices` BEFORE `## Acceptance Criteria (verification)`, with the AC rows' `Verifies` column referencing slice ids. The architect's slim summary reports both counts (`5 slices, 3 AC`). Research-mode branch unchanged — research.md never had AC, will never have slices.
+
+**Deliverable 4 — Builder runs per slice, verifies per AC** (`src/content/specialist-prompts/builder.ts`).
+
+- Strict-mode builder cycles per slice (`<type>(SL-N): ...` commits), not per AC. After all slices in the plan have landed through REFACTOR, builder writes one `verify(AC-N): passing` commit per AC. The verify commit's diff is empty (when slice tests already cover the AC's observable behaviour — Path V1) OR contains test-files-only (when the AC needs broader verification — perf budget, integration, contract — Path V2). Production code lives in slice commits only; verify commits never touch `src/**` / `lib/**` / `app/**`.
+- build.md is now two sections: `## Slice cycles` (SL-N rows with Discovery + RED proof + GREEN evidence + REFACTOR notes + commits) and `## AC verification` (AC-N rows with `Verifies` slice ids + Path V1/V2 + evidence + verify SHA).
+
+**Deliverable 5 — Reviewer cross-checks both chains** (`src/content/specialist-prompts/reviewer.ts`).
+
+- Posture-aware TDD check now keys off SL-N for the slice work chain. New AC verification chain check inspects `git log --grep="verify(AC-N): passing" --oneline` per AC (exactly one verify commit per AC; diff empty or test-files-only; landed AFTER all slices in the AC's `Verifies` list landed). Archived-flow legacy commit shapes (`red(AC-N)` / `green(AC-N)` / `refactor(AC-N)` / `refactor(AC-N) skipped: ...`) preserved verbatim for pre-v8.63 archived slugs — same posture recipe, AC-N token instead of SL-N.
+- `edit-discipline` axis split into two sub-checks: slice work commits must touch only files in the slice's `Surface`; verify commits must touch only test files (or stay empty).
+
+**Deliverable 6 — Critic §4b slice + AC coverage** (`src/content/specialist-prompts/critic.ts`).
+
+- New §4b sub-section runs after §4 (Criterion check) in strict mode. Three checks: AC verification coverage (every AC has at least one `verify(AC-N): passing` commit), slice work coverage (every SL-N has at least one `(SL-N):` commit), slice → AC mapping integrity (every slice in an AC's `Verifies` list has its own work commits; orphan slices are `iterate`-severity findings). Archived-flow detection (no `## Plan / Slices` section) reverts to the legacy single-table check.
+
+**Deliverable 7 — Plan-critic §4b slice-AC separation** (`src/content/specialist-prompts/plan-critic.ts`).
+
+- New §4b sub-section gates ship on: both tables present, slice quality (well-bounded Surface, accurate `dependsOn`, `independent` flag matches actual surface overlap), AC verifiability (measurable assertion verb, populated `Verifies` column, slice references that actually exist), coverage gaps (AC without slices → `block-ship`; slice without verifying AC → `iterate` orphan).
+
+**Deliverable 8 — Skill + runbook scrub** (`src/content/skills/slice-discipline.md` (new), `src/content/stage-playbooks.ts`, `src/content/start-command.ts`).
+
+- New `slice-discipline.md` auto-trigger skill on `stage:build` codifies the per-slice TDD recipe plus the per-AC verify pass — read alongside `tdd-and-verification.md` by the builder.
+- Build playbook updated: every work unit (SL-N for v8.63 new flows, AC-N for archived flows) goes through RED → GREEN → REFACTOR; new step 6.5 codifies the per-AC verify pass; existing AC-N examples retained for the archived-flow recipe.
+- Start-command's plan-stage and build-stage dispatch envelopes carry v8.63 clarifiers ("write Slices + AC distinctly per the plan template"; "work per slice; emit `verify(AC-N): passing` after merged state passes").
+
+**Deliverable 9 — Tripwire test** (`tests/unit/v863-slice-ac-separation.test.ts`).
+
+- Pins the contract: `Slice` / `SliceState` exported from `src/types.ts`; PLAN_TEMPLATE contains both `## Plan / Slices` AND `## Acceptance Criteria` sections; architect contract mentions slices + AC distinctly; builder contract mentions per-slice TDD AND `verify(AC-N)` verification commits; reviewer contract mentions both slice and AC traceability chains.
+
+### Clean break
+
+Pre-v8.63 archive flows in `flows/shipped/` keep their single-AC-table format verbatim — no migration. Reviewer accepts the legacy `red(AC-N)` / `green(AC-N)` / `refactor(AC-N) skipped: ...` commit shapes when `plan.md` has no `## Plan / Slices` table (the archived-shape detector). New flows starting at v8.63 use the dual-table shape. Pre-v8.63 flow-state.json validates unchanged.
+
+
 ## 8.62.0 — Unified flow + kill `design` + remove `security-reviewer` + renames
 
 ### Why

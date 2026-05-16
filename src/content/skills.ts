@@ -137,6 +137,14 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     body: readSkill("ac-discipline.md")
   },
   {
+    id: "slice-discipline",
+    fileName: "slice-discipline.md",
+    description: "Companion to ac-discipline for the slice side of the slice / AC separation (v8.63+). Three-check rubric for every slice entry (atomic / surface-bounded / dependency-honest) AND the posture-driven commit-prefix contract (red(SL-N): / green(SL-N): / refactor(SL-N): / test(SL-N): / docs(SL-N):) the reviewer verifies ex-post via git log --grep. Slice quality always-on for slice authoring; slice-traceability active only when ceremony_mode=strict.",
+    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:architect", "specialist:builder", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ceremony_mode:strict"],
+    stages: ["plan", "build", "review"],
+    body: readSkill("slice-discipline.md")
+  },
+  {
     id: "refinement",
     fileName: "refinement.md",
     description: "Activates when /cc detects an existing plan match.",

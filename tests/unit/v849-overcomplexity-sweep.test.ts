@@ -53,7 +53,7 @@ import { STAGE_PLAYBOOKS } from "../../src/content/stage-playbooks.js";
  * tripwires.
  */
 
-describe("v8.49 AC-1 - empty `refactor(AC-N) skipped` commit elimination (v8.62 renamed `slice-builder` → `builder`)", () => {
+describe("v8.49 AC-1 - empty `refactor(AC-N) skipped` commit elimination (v8.62 renamed `slice-builder` → `builder`; v8.63 — slice work commits carry SL-N, AC retained for verification only — the legacy empty-commit shape is now `refactor(SL-N) skipped:` for the builder; the reviewer still accepts `refactor(AC-N) skipped:` for pre-v8.63 archived flows)", () => {
   it("builder prompt documents the new build.md `Refactor: skipped - <reason>` declaration", () => {
     expect(
       BUILDER_PROMPT,
@@ -61,21 +61,21 @@ describe("v8.49 AC-1 - empty `refactor(AC-N) skipped` commit elimination (v8.62 
     ).toMatch(/Refactor:\s*skipped\s*[\u2014-]/);
   });
 
-  it("builder prompt still mentions the legacy empty-commit path for backwards compat", () => {
+  it("builder prompt still mentions the legacy empty-commit path for backwards compat (v8.63 — now keyed off the slice id, SL-N)", () => {
     expect(
       BUILDER_PROMPT,
-      "the legacy `git commit --allow-empty -m \"refactor(AC-N) skipped: ...\"` path must remain documented so pre-v8.49 slugs still review cleanly"
-    ).toMatch(/--allow-empty.*refactor\(AC-N\)\s*skipped/i);
+      "the legacy `git commit --allow-empty -m \"refactor(SL-N) skipped: ...\"` path must remain documented so pre-v8.49 (now pre-v8.63) slugs still review cleanly"
+    ).toMatch(/--allow-empty.*refactor\(SL-N\)\s*skipped/i);
   });
 
-  it("reviewer prompt accepts BOTH the build.md row token AND the legacy empty commit", () => {
+  it("reviewer prompt accepts BOTH the build.md row token AND the legacy empty commit (v8.63 — reviewer still reads the AC-N variant for pre-v8.63 archived slugs; SL-N variant must also be accepted for new flows)", () => {
     expect(
       REVIEWER_PROMPT,
       "reviewer must accept the v8.49 build.md `Refactor: skipped` row token (the new preferred path)"
     ).toMatch(/Refactor:\s*skipped/);
     expect(
       REVIEWER_PROMPT,
-      "reviewer must still accept the legacy `refactor(AC-N) skipped:` empty commit pattern"
+      "reviewer must still accept the legacy `refactor(AC-N) skipped:` empty commit pattern for pre-v8.63 archived flows"
     ).toMatch(/refactor\(AC-N\)\s*skipped/);
   });
 

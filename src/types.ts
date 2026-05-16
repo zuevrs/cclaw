@@ -300,6 +300,17 @@ export type PlanCriticVerdict = "pass" | "revise" | "cancel";
 export type ArtifactStatus = "active" | "shipped";
 export type AcceptanceCriterionStatus = "pending" | "committed";
 
+/**
+ * Branded id type for acceptance criteria. Used by
+ * {@link SliceState.verifiesAcIds} and {@link AcceptanceCriterionState.verifiedBy}
+ * back-references so the slice↔AC mapping is type-checked at writer
+ * sites (slim summaries, plan-md parsers). The validator on read only
+ * checks that the value is a string matching `AC-N` shape; readers
+ * MUST accept `string` and downcast (legacy state files predate the
+ * brand).
+ */
+export type AcceptanceCriterionId = `AC-${number}`;
+
 export type TddPhase = "red" | "green" | "refactor";
 
 /**
@@ -375,6 +386,103 @@ export interface AcceptanceCriterionState {
    * string values.
    */
   posture?: Posture;
+  /**
+   * Back-reference from this AC to the slices that verify it. Each
+   * slice id matches the `SL-N` shape (see {@link SliceId}). The
+   * architect populates this field when authoring the `##
+   * Acceptance Criteria (verification)` table in plan.md; reviewer /
+   * plan-critic / critic read it to validate slice↔AC coverage.
+   *
+   * Optional for back-compat: pre-v8.63 state files lack this field
+   * entirely. New strict-mode flows MUST emit at least one slice id
+   * per AC (otherwise plan-critic surfaces a coverage-gap finding).
+   * Soft/inline flows leave it absent (slice tables are strict-only).
+   */
+  verifiedBy?: SliceId[];
+}
+
+/**
+ * Branded id type for plan slices (work units). Slices are the unit
+ * of work the builder TDDs against; one or more slices verify each
+ * acceptance criterion. The `SL-N` shape mirrors `AC-N` so the two
+ * tables in plan.md read symmetrically. Validators on read accept
+ * the permissive `string` shape (no rewrite) — pre-v8.63 state
+ * files lack slices entirely, so the brand only constrains new
+ * writes.
+ */
+export type SliceId = `SL-${number}`;
+
+/**
+ * Lifecycle status for a plan slice.
+ *
+ * - `pending` — author wrote the slice into plan.md but builder has
+ *   not started TDD on it yet.
+ * - `in-progress` — builder dispatched on this slice (RED, GREEN, or
+ *   REFACTOR commits may be present but the cycle isn't complete).
+ * - `implemented` — slice's TDD cycle is complete and the slice's
+ *   commit chain landed; AC verification hasn't run yet.
+ * - `verified` — implementation landed AND every AC that lists this
+ *   slice in `verifies` has a corresponding `verify(AC-N): passing`
+ *   commit on top of the slice chain.
+ * - `skipped` — slice was authored but the builder marked it
+ *   intentionally not implemented (e.g. cancelled mid-flow, or the
+ *   slice turned out to be subsumed by another). The reviewer's
+ *   `plan-traceability` axis treats `skipped` as an explicit
+ *   non-commit signal rather than a missing commit.
+ */
+export type SliceStatus = "pending" | "in-progress" | "implemented" | "verified" | "skipped";
+
+/**
+ * A plan slice as authored by the architect in plan.md's `## Plan
+ * / Slices` table. Slices are work units (HOW to build); acceptance
+ * criteria (in the separate `## Acceptance Criteria` table) are
+ * verification (HOW we know it works).
+ *
+ * The `Slice` shape is the in-memory representation parsers emit
+ * from plan.md; the persisted form on `flow-state.json` is
+ * {@link SliceState} (adds `status` + `commit` lifecycle fields).
+ *
+ * Architect's responsibility: determine `dependsOn` accurately.
+ * Heuristic: slice A depends on slice B iff A's implementation
+ * needs to read or write the same files / symbols / features that
+ * B introduces. Empty `dependsOn` ⇒ `independent: true`.
+ */
+export interface Slice {
+  id: SliceId;
+  title: string;
+  surface: Surface[];
+  dependsOn: SliceId[];
+  independent: boolean;
+  posture?: Posture;
+}
+
+/**
+ * Persisted slice state. Mirrors {@link Slice} fields and adds the
+ * builder's lifecycle stamps:
+ *
+ * - `status` — see {@link SliceStatus}. Default is `pending` when
+ *   architect writes the plan; builder transitions on dispatch.
+ * - `commit` — first commit SHA (or short hash) on this slice's
+ *   TDD chain. Used by the reviewer's `plan-traceability` axis to
+ *   prove an implementation commit exists per slice.
+ * - `verifiesAcIds` — convenience back-reference: the AC ids whose
+ *   `verifiedBy` lists this slice. Optional; readers MUST tolerate
+ *   absence and recompute from {@link AcceptanceCriterionState.verifiedBy}
+ *   on the fly.
+ *
+ * Optional on {@link FlowStateV82}; pre-v8.63 state files lack the
+ * slices field entirely and continue to validate on read.
+ */
+export interface SliceState {
+  id: SliceId;
+  title: string;
+  surface: Surface[];
+  dependsOn: SliceId[];
+  independent: boolean;
+  status: SliceStatus;
+  posture?: Posture;
+  commit?: string;
+  verifiesAcIds?: AcceptanceCriterionId[];
 }
 
 export type BuildProfile = "default" | "bootstrap";

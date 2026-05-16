@@ -83,9 +83,17 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     body: BUILDER_PROMPT,
     // v8.62 — `builder` is the v8.48 `slice-builder` body verbatim (rename
     // only; AC-as-unit semantics unchanged). The 720-line / 62000-char
-    // envelope carries over.
-    maxLines: 720,
-    maxChars: 62000
+    // envelope carries over from v8.59.
+    //
+    // v8.63 — slice / AC separation: the builder now runs two passes
+    // (per-slice TDD work pass + per-AC verification pass), with two
+    // distinct JSON self-review blocks (five rules per slice + three rules
+    // per AC) and a new "AC verification pass" prose section. Growth lands
+    // ~+90 lines / ~+7k chars over the v8.62 envelope; budget raised to
+    // 780 lines / 76000 chars (≈11% headroom over current). Growth justified
+    // in CHANGELOG.md (v8.63 — separate slices from AC).
+    maxLines: 780,
+    maxChars: 76000
   }
 ];
 

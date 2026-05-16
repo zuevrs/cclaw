@@ -179,11 +179,12 @@ describe("v8.62 — builder prompt rename preserves slice-builder semantics", ()
     expect(BUILDER_PROMPT.length).toBeGreaterThan(1000);
   });
 
-  it("builder keeps the strict/soft split (red(AC-N) / green(AC-N) / refactor(AC-N) commit prefixes on strict; plain `git commit` on soft)", () => {
+  it("builder keeps the strict/soft split (v8.63 — slice work commits use SL-N prefixes; AC verification commits use AC-N; soft mode keeps plain `git commit`)", () => {
     expect(BUILDER_PROMPT).toMatch(/In strict mode/);
-    expect(BUILDER_PROMPT).toMatch(/red\(AC-/);
-    expect(BUILDER_PROMPT).toMatch(/green\(AC-/);
-    expect(BUILDER_PROMPT).toMatch(/refactor\(AC-/);
+    expect(BUILDER_PROMPT).toMatch(/red\(SL-/);
+    expect(BUILDER_PROMPT).toMatch(/green\(SL-/);
+    expect(BUILDER_PROMPT).toMatch(/refactor\(SL-/);
+    expect(BUILDER_PROMPT).toMatch(/verify\(AC-/);
     expect(BUILDER_PROMPT).toMatch(/soft mode/i);
     expect(BUILDER_PROMPT).toMatch(/plain `git commit`/);
   });

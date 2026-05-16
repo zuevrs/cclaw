@@ -1,6 +1,7 @@
 import {
   CEREMONY_MODES,
   FLOW_STAGES,
+  POSTURES,
   RESEARCH_MODES,
   ROUTING_CLASSES,
   RUN_MODES,
@@ -13,11 +14,13 @@ import {
   type CriticVerdict,
   type FlowStage,
   type PlanCriticVerdict,
+  type Posture,
   type QaEvidenceTier,
   type QaVerdict,
   type ResearchMode,
   type RoutingClass,
   type RunMode,
+  type SliceState,
   type SpecialistId,
   type Surface,
   type TriageDecision
@@ -28,6 +31,15 @@ const CRITIC_ESCALATIONS = ["none", "light", "full"] as const;
 const PLAN_CRITIC_VERDICTS = ["pass", "revise", "cancel"] as const;
 const QA_VERDICTS = ["pass", "iterate", "blocked"] as const;
 const QA_EVIDENCE_TIERS = ["playwright", "browser-mcp", "manual"] as const;
+const SLICE_STATUSES = ["pending", "in-progress", "implemented", "verified", "skipped"] as const;
+
+function isSliceStatus(value: unknown): value is SliceState["status"] {
+  return typeof value === "string" && (SLICE_STATUSES as readonly string[]).includes(value);
+}
+
+function isPosture(value: unknown): value is Posture {
+  return typeof value === "string" && (POSTURES as readonly string[]).includes(value);
+}
 
 function isCriticVerdict(value: unknown): value is CriticVerdict {
   return typeof value === "string" && (CRITIC_VERDICTS as readonly string[]).includes(value);
@@ -67,6 +79,27 @@ export interface FlowStateV82 {
   currentSlug: string | null;
   currentStage: FlowStage | null;
   ac: AcceptanceCriterionState[];
+  /**
+   * Plan slices (work units) authored by the architect in
+   * strict-mode plan.md. Distinct from {@link ac} (acceptance
+   * criteria are verification; slices are work units). The builder
+   * runs TDD per slice (commit prefix `<type>(SL-N): ...`); after
+   * all slices land, the builder writes `verify(AC-N): passing`
+   * commits to prove each AC.
+   *
+   * Optional in TypeScript: pre-v8.63 state files lack this field
+   * entirely and continue to validate on read (clean break — only
+   * new strict-mode flows starting at v8.63 emit slices). Soft/inline
+   * flows do not populate slices either; the field stays absent.
+   *
+   * Validators on read accept the legacy permissive shape: each entry
+   * MUST be an object with string `id` / `title`, an array of valid
+   * {@link Surface} tokens, a `dependsOn` array of strings, a boolean
+   * `independent`, and a {@link SliceStatus} `status`. Optional
+   * `commit` / `posture` / `verifiesAcIds` are checked only when
+   * present.
+   */
+  slices?: SliceState[];
   /**
    * Most recent specialist dispatch (audit / debugging surface; the
    * orchestrator's stage routing reads {@link currentStage}, not this
@@ -520,6 +553,77 @@ function assertAcArray(value: unknown): asserts value is AcceptanceCriterionStat
         }
       }
     }
+    // optional back-reference to the slices that verify this AC.
+    // Permissive: pre-v8.63 state files lack this field, and even
+    // post-v8.63 soft/inline flows leave it absent.
+    if (ac.verifiedBy !== undefined) {
+      if (!Array.isArray(ac.verifiedBy)) {
+        throw new Error("flow-state.ac.verifiedBy must be an array when present");
+      }
+      for (const sliceId of ac.verifiedBy) {
+        if (typeof sliceId !== "string" || sliceId.length === 0) {
+          throw new Error("flow-state.ac.verifiedBy entries must be non-empty strings");
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Validate `flow-state.slices` array. Permissive on read so pre-v8.63
+ * state files (which lack the field entirely) continue to round-trip;
+ * new strict-mode flows MUST emit slices when the architect's
+ * plan.md contains a `## Plan / Slices` table.
+ */
+function assertSliceArray(value: unknown): asserts value is SliceState[] {
+  if (!Array.isArray(value)) throw new Error("flow-state.slices must be an array when present");
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) {
+      throw new Error("flow-state.slices entries must be objects");
+    }
+    const slice = item as Partial<SliceState>;
+    if (typeof slice.id !== "string" || slice.id.length === 0) {
+      throw new Error("flow-state.slices entries require a non-empty string id");
+    }
+    if (typeof slice.title !== "string") {
+      throw new Error("flow-state.slices entries require a string title");
+    }
+    if (!Array.isArray(slice.surface)) {
+      throw new Error("flow-state.slices entries require a surface array");
+    }
+    for (const s of slice.surface) {
+      if (!isSurface(s)) throw new Error(`Invalid slice.surface entry: ${String(s)}`);
+    }
+    if (!Array.isArray(slice.dependsOn)) {
+      throw new Error("flow-state.slices entries require a dependsOn array");
+    }
+    for (const dep of slice.dependsOn) {
+      if (typeof dep !== "string" || dep.length === 0) {
+        throw new Error("flow-state.slices.dependsOn entries must be non-empty strings");
+      }
+    }
+    if (typeof slice.independent !== "boolean") {
+      throw new Error("flow-state.slices entries require boolean independent");
+    }
+    if (!isSliceStatus(slice.status)) {
+      throw new Error(`Invalid slice.status: ${String(slice.status)}`);
+    }
+    if (slice.posture !== undefined && !isPosture(slice.posture)) {
+      throw new Error(`Invalid slice.posture: ${String(slice.posture)}`);
+    }
+    if (slice.commit !== undefined && typeof slice.commit !== "string") {
+      throw new Error("flow-state.slices.commit must be a string when present");
+    }
+    if (slice.verifiesAcIds !== undefined) {
+      if (!Array.isArray(slice.verifiesAcIds)) {
+        throw new Error("flow-state.slices.verifiesAcIds must be an array when present");
+      }
+      for (const acId of slice.verifiesAcIds) {
+        if (typeof acId !== "string" || acId.length === 0) {
+          throw new Error("flow-state.slices.verifiesAcIds entries must be non-empty strings");
+        }
+      }
+    }
   }
 }
 
@@ -683,6 +787,9 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     throw new Error(`Invalid currentStage: ${String(state.currentStage)}`);
   }
   assertAcArray(state.ac);
+  if (state.slices !== undefined) {
+    assertSliceArray(state.slices);
+  }
   if (
     state.lastSpecialist !== null &&
     state.lastSpecialist !== undefined &&
