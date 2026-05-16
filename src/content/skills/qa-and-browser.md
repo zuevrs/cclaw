@@ -119,8 +119,8 @@ The slim summary returned to the orchestrator carries the verdict + evidence_tie
 ## Verdict semantics
 
 - **`pass`** — every UI AC has evidence at `Status: pass`. Advance to review. The reviewer's `qa-evidence` axis re-reads `qa.md` and cross-checks each row against the diff.
-- **`iterate`** — at least one UI AC has `Status: fail` AND the qa-runner can articulate what would make it pass. Bounce to slice-builder with `qa.md > Hand-off` as the additional context. **Hard-capped at one iterate** (`qaIteration: 0 → 1`); a second iterate surfaces the user picker instead of running qa a third time.
-- **`blocked`** — no browser tools available AND/OR a UI AC requires manual user action the qa-runner cannot script. Surface the user picker (`proceed-without-qa-evidence` / `pause-for-manual-qa` / `skip-qa`). `blocked` is a real verdict — the qa-runner does NOT pretend qa ran; it records honestly that it could not.
+- **`iterate`** — at least one UI AC has `Status: fail` AND the qa-runner can articulate what would make it pass. Bounce to slice-builder with `qa.md > Hand-off` as the additional context. **Hard-capped at one iterate** (`qaIteration: 0 → 1`); a second iterate stops and reports per the v8.61 always-auto failure matrix (`runbooks/always-auto-failure-handling.md`) instead of running qa a third time.
+- **`blocked`** — no browser tools available AND/OR a UI AC requires manual user action the qa-runner cannot script. Stop and report per the v8.61 always-auto failure matrix; the status block names the gap (missing browser tooling or required manual steps) and offers `/cc` (continue after the user installs tooling or runs the qa.md §4 manual-steps blocks) or `/cc-cancel` (discard). `blocked` is a real verdict — the qa-runner does NOT pretend qa ran; it records honestly that it could not.
 
 ## Composition
 
@@ -134,4 +134,4 @@ The slim summary returned to the orchestrator carries the verdict + evidence_tie
 - **Use the strongest tier available.** Playwright > browser-MCP > manual; silent downgrades are reviewer-territory.
 - **Pre-commitment predictions before verification.** 3-5 things that might fail, written first.
 - **`blocked` is a real verdict.** Never fake a `pass` when the qa-runner could not actually verify.
-- **Hard cap at one iterate.** Oscillation between slice-builder and qa-runner is a flow-budget leak; the user picker is the right escape hatch.
+- **Hard cap at one iterate.** Oscillation between slice-builder and qa-runner is a flow-budget leak; the v8.61 stop-and-report status block is the right escape hatch.

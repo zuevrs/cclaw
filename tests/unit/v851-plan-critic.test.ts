@@ -122,10 +122,10 @@ describe("v8.51 plan-critic — critic-steps runbook (v8.54 merged)", () => {
     expect(runbook!.body).toMatch(/widening/i);
   });
 
-  it("critic-steps runbook declares verdict routing (pass → slice-builder; revise → ac-author; cancel → user picker)", () => {
+  it("critic-steps runbook declares verdict routing (pass → slice-builder; revise → ac-author; cancel → stop-and-report under v8.61 always-auto)", () => {
     expect(runbook!.body).toMatch(/pass.*slice-builder/i);
     expect(runbook!.body).toMatch(/revise.*ac-author/i);
-    expect(runbook!.body).toMatch(/cancel.*user picker|cancel picker/i);
+    expect(runbook!.body).toMatch(/cancel[\s\S]*stop and report|cancel[\s\S]*always-auto-failure-handling/i);
   });
 
   it("critic-steps runbook declares the planCritic flow-state patches", () => {

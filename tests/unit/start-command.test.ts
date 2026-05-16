@@ -30,14 +30,17 @@ describe("start command (/cc) markdown", () => {
     expect(body).toMatch(/Dispatch envelope/);
   });
 
-  it("explains the resume path when an active flow is detected", () => {
-    expect(body).toMatch(/flow[- ]resume/i);
-    expect(body).toMatch(/\[r\]/);
-    expect(body).toMatch(/\[s\]/);
+  it("v8.61 — describes the deterministic /cc dispatch matrix that replaced the resume picker", () => {
+    expect(body).toMatch(/Detect — `\/cc` invocation matrix \(v8\.61\)/);
+    // No more r/s/n picker — the resume decision is silent on /cc no-args.
+    expect(body).not.toMatch(/\[r\]/);
+    expect(body).not.toMatch(/\[s\]/);
     expect(body).not.toMatch(/\[c\] Cancel/);
-    expect(body).toMatch(/`\/cc-cancel` is \*\*not\*\* offered/);
-    expect(body).toMatch(/conveying: resume — dispatch the next specialist/);
-    expect(body).toMatch(/conveying: show — open the artifact for/);
+    // The matrix must enumerate the four entry-point shapes (no-args, task, research, extend) for both active and non-active flow states.
+    expect(body).toMatch(/Continue silently/);
+    expect(body).toMatch(/Active flow: <slug>/);
+    expect(body).toMatch(/No active flow\. Start with/);
+    expect(body).toMatch(/No active flow to cancel/);
   });
 
   it("documents the three AC modes (inline/soft/strict) at the build stage", () => {

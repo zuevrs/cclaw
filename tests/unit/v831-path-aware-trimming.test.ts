@@ -114,8 +114,13 @@ describe("v8.31 path-aware orchestrator — lifted content preserved in PLAN_PLA
     expect(PLAN_PLAYBOOK).toMatch(/design.*main context.*multi-turn/iu);
   });
 
-  it("AC-5 — pause-resume runbook still carries the Confidence-as-hard-gate table", () => {
+  it("AC-5 — pause-resume runbook still carries the Confidence-as-hard-gate prose (v8.61: collapsed from a step/auto table into an always-auto bullet list)", () => {
     const r = ON_DEMAND_RUNBOOKS.find((rb) => rb.fileName === "pause-resume.md")!.body;
-    expect(r).toMatch(/\| Confidence \| step mode \| auto mode \|/);
+    // v8.61 collapsed the step/auto distinction; the Confidence hard-gate
+    // contract now lives as a bullet list under "Confidence as a hard gate
+    // (always-auto)". The semantic invariant (high → chain, medium → render
+    // + chain, low → hard gate) is preserved.
+    expect(r).toMatch(/Confidence as a hard gate/);
+    expect(r).toMatch(/`low`.*hard gate/u);
   });
 });

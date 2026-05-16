@@ -49,7 +49,7 @@ Pre-v8.58 state files that already carry the moved fields are read verbatim by s
 In every case where no override flag is present, the router runs the heuristic and proceeds without asking:
 
 1. Run the §"Heuristics" classification to pick complexity / ceremonyMode / path.
-2. Pick `runMode` from `--mode=` (if present) or the default (`step` on soft + strict, `null` on inline).
+2. Pick `runMode`: `auto` on soft + strict, `null` on inline. v8.61 retired the user-facing `step` / `auto` choice; the orchestrator always runs `auto` on non-inline paths.
 3. Stamp `mode: "task"`.
 4. Build the slug (`YYYYMMDD-<semantic-kebab>`).
 5. Patch `flow-state.json > triage` with the five fields + `rationale` + `decidedAt`.
@@ -57,7 +57,7 @@ In every case where no override flag is present, the router runs the heuristic a
 7. Emit a one-line announcement in the user's language, e.g.:
 
 ```
-─ small-medium / soft / plan → build → review → critic → ship  ·  runMode=step  ·  slug=20260515-status-pill
+─ small-medium / soft / plan → build → review → critic → ship  ·  runMode=auto  ·  slug=20260515-status-pill
 ```
 
 Mechanical tokens (`small-medium` / `soft` / stage names / `runMode` / `slug`) stay English; descriptive prose around them is in the user's language. The user is NOT asked anything at this hop; there is no structured ask. Proceed straight to the first dispatch.
@@ -69,15 +69,15 @@ Three flags short-circuit the heuristic; each maps directly to a ceremonyMode:
 | Flag | Effect |
 | --- | --- |
 | `/cc --inline <task>` | `complexity: "trivial"`, `ceremonyMode: "inline"`, `path: ["build"]`, `runMode: null`, `mode: "task"`. Stamp `rationale: "user override: --inline"`. |
-| `/cc --soft <task>` | `ceremonyMode: "soft"`, `path: ["plan", "build", "review", "critic", "ship"]`, `runMode: "step"` (or `--mode=`'s value), `mode: "task"`. `complexity` = heuristic's value. Append `+ user override: --soft` to rationale. |
-| `/cc --strict <task>` | `ceremonyMode: "strict"`, `path: ["plan", "build", "review", "critic", "ship"]`, `runMode: "step"` (or `--mode=`'s value), `mode: "task"`. `complexity: "large-risky"`. Append `+ user override: --strict` to rationale. |
+| `/cc --soft <task>` | `ceremonyMode: "soft"`, `path: ["plan", "build", "review", "critic", "ship"]`, `runMode: "auto"`, `mode: "task"`. `complexity` = heuristic's value. Append `+ user override: --soft` to rationale. |
+| `/cc --strict <task>` | `ceremonyMode: "strict"`, `path: ["plan", "build", "review", "critic", "ship"]`, `runMode: "auto"`, `mode: "task"`. `complexity: "large-risky"`. Append `+ user override: --strict` to rationale. |
 
 Flag parsing rules:
 
 - The flags do NOT consume the task text — `/cc --strict refactor the auth module` parses as "strict ceremonyMode + task = refactor the auth module".
 - The flags are **mutually exclusive**. `/cc --inline --soft <task>` surfaces a one-line note (`mutually exclusive ceremonyMode flags; using the last one (--soft)`) and proceeds with the last flag.
 - A flag value that does not match (`--ceremony=fast`) is ignored with a one-line `unknown ceremonyMode flag, ignored` note; the router falls back to the zero-question path.
-- The v8.34 `--mode=auto` / `--mode=step` runMode toggle is **orthogonal** to the ceremonyMode flags. `/cc --strict --mode=auto <task>` is valid and stamps `ceremonyMode: "strict"` + `runMode: "auto"` in one triage write.
+- The v8.34 `--mode=auto` / `--mode=step` runMode toggle is preserved on the parser surface for back-compat but v8.61 retired the behavioural distinction — both values collapse to `auto`. `--mode=step` emits a one-line `step-mode retired in v8.61; flow runs auto` note.
 - The audit log records `userOverrode: true` whenever the chosen ceremonyMode differs from the heuristic's recommendation.
 
 ## Legacy v8.14-v8.57 combined-form ask (REMOVED in v8.58)
@@ -114,12 +114,12 @@ After the heuristic runs (or an override flag fires), patch `.cclaw/state/flow-s
     "mode": "task",
     "rationale": "3 modules, ~150 LOC, no auth touch.",
     "decidedAt": "2026-05-08T12:34:56Z",
-    "runMode": "step"
+    "runMode": "auto"
   }
 }
 ```
 
-`runMode` is `step` by default on non-inline paths; `auto` when the user explicitly passed `--mode=auto`; `null` on inline / trivial paths (no stages to chain). `mode` is `"task"` for every `/cc <task>` entry; pre-v8.58 state files lack the field and readers default to `"task"`.
+v8.61 — `runMode` is `auto` on every non-inline path and `null` on inline / trivial paths (no stages to chain). The user-facing `step` / `auto` choice was retired; `--mode=step` is accepted as a back-compat no-op. `mode` is `"task"` for every `/cc <task>` entry; pre-v8.58 state files lack the field and readers default to `"task"`.
 
 The `userOverrode` and `autoExecuted` bits (write-only telemetry) live in the audit log at `.cclaw/state/triage-audit.jsonl`, NOT on the triage object — append the audit-log entry immediately after persisting the triage write.
 

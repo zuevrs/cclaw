@@ -173,8 +173,8 @@ describe("v8.21 preflight-fold", () => {
       expect(DESIGN_PROMPT).toMatch(/already populated[\s\S]*?read it verbatim|read it verbatim[\s\S]*?ground truth/u);
     });
 
-    it("start-command's skip rules include resume-from-paused and mid-flight migration", () => {
-      expect(START_COMMAND_BODY).toMatch(/Resume from a paused flow[\s\S]*?Phase 0[\s\S]*?does not re-prompt/u);
+    it("start-command's skip rules include resume-from-paused (v8.61: 'Continuing under /cc') and mid-flight migration", () => {
+      expect(START_COMMAND_BODY).toMatch(/Continuing under `\/cc`[\s\S]*?Phase 0[\s\S]*?does not re-prompt/u);
       expect(START_COMMAND_BODY).toMatch(/pre-v8\.21[\s\S]*?legacy preflight[\s\S]*?captured/u);
     });
   });

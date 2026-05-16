@@ -35,6 +35,7 @@ import { researchTemplateForSlug, templateBody } from "../../src/content/artifac
 import { renderStartCommand } from "../../src/content/start-command.js";
 import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
 import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
+import { TRIAGE_PROMPT } from "../../src/content/specialist-prompts/triage.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import { assertFlowStateV82, migrateFlowState } from "../../src/flow-state.js";
 import { ARTIFACT_FILE_NAMES, activeArtifactPath, shippedArtifactPath } from "../../src/artifact-paths.js";
@@ -302,28 +303,30 @@ describe("v8.58 — start-command body (lightweight router prose)", () => {
     expect(body).toMatch(/`mode`/u);
   });
 
-  it("documents the moved-out classification fields (surfaces / assumptions / priorLearnings / interpretationForks / criticOverride / notes)", () => {
-    expect(body).toMatch(/moved out/iu);
-    expect(body).toContain("`surfaces`");
-    expect(body).toContain("`assumptions`");
-    expect(body).toContain("`priorLearnings`");
-    expect(body).toContain("`interpretationForks`");
-    expect(body).toContain("`criticOverride`");
-    expect(body).toContain("`notes`");
+  it("v8.61 — the lightweight-router classification surface (moved-out fields) is documented in the triage sub-agent prompt", () => {
+    // v8.61 — the triage prose moved from the orchestrator body into the
+    // triage specialist (.cclaw/lib/agents/triage.md). The v8.58 invariant
+    // (router decides 5 fields and writes none of the 6 moved-out
+    // classification fields) is enforced at the sub-agent contract layer.
+    expect(TRIAGE_PROMPT).toMatch(/specialist that consumes them|moved out|moved into the specialists/iu);
+    expect(TRIAGE_PROMPT).toContain("assumptions");
+    expect(TRIAGE_PROMPT).toContain("surfaces");
+    expect(TRIAGE_PROMPT).toContain("priorLearnings");
+    expect(TRIAGE_PROMPT).toContain("interpretationForks");
   });
 
-  it("documents the three override flags (--inline / --soft / --strict) as the explicit-choice short-circuit", () => {
-    expect(body).toContain("`/cc --inline <task>`");
-    expect(body).toContain("`/cc --soft <task>`");
-    expect(body).toContain("`/cc --strict <task>`");
-    expect(body).toMatch(/mutually exclusive/iu);
+  it("v8.61 — the three override flags (--inline / --soft / --strict) live in the triage sub-agent prompt", () => {
+    expect(TRIAGE_PROMPT).toContain("--inline");
+    expect(TRIAGE_PROMPT).toContain("--soft");
+    expect(TRIAGE_PROMPT).toContain("--strict");
+    expect(TRIAGE_PROMPT).toMatch(/mutually exclusive/iu);
   });
 
   it("documents the /cc research <topic> entry point fork in Detect", () => {
     expect(body).toMatch(/research-mode (entry point|fork)/iu);
     expect(body).toContain("`research `");
     expect(body).toContain("`--research`");
-    expect(body).toMatch(/skips? triage entirely/iu);
+    expect(body).toMatch(/skips? triage (entirely|dispatch entirely)/iu);
   });
 
   it("documents the v8.58 sentinel triage block for research-mode flows (mode: research / strict / path: [plan])", () => {
@@ -337,26 +340,23 @@ describe("v8.58 — start-command body (lightweight router prose)", () => {
     expect(body).toMatch(/priorResearch/u);
   });
 
-  it("preserves the v8.52 qa-stage gating contract (surfaces + ceremonyMode != inline) — only the writer moved", () => {
+  it("v8.61 — the v8.52 qa-stage gating contract (surfaces + ceremonyMode != inline) is preserved in body or design/ac-author specialists", () => {
     expect(body).toMatch(/qa-(stage|runner)/iu);
-    expect(body).toMatch(/surfaces include[s]? `"ui"` or `"web"`/u);
+    // qa gating rule still appears in the body (the surface gate is what triggers qa dispatch).
+    expect(body).toMatch(/`triage\.surfaces`[\s\S]{0,80}(includes|∩).{0,40}(`"ui"`|"ui")/u);
   });
 
-  it("removes the legacy v8.14-v8.57 combined-form combined-ask path (kept only as a 'removed' breadcrumb)", () => {
-    // The router is zero-question by default. The legacy
-    // "Combined-form structured ask" header is gone; the body retains
-    // at most one breadcrumb noting the removal so harness operators
-    // upgrading from v8.57 see the contract change.
-    const combinedFormMentions = body.match(/combined-form/giu) ?? [];
-    expect(combinedFormMentions.length).toBeLessThanOrEqual(2);
-    expect(body).toMatch(/combined-form[\s\S]{0,80}removed/u);
-    // No actual two-question structured-ask invocation remains.
+  it("v8.61 — no legacy v8.14-v8.57 combined-form combined-ask path remains anywhere", () => {
+    // The router is zero-question by default; v8.61 makes that the only
+    // contract (the v8.58 'removed' breadcrumb was lifted out alongside
+    // the rest of the triage prose).
     expect(body).not.toContain("askUserQuestion(\n  questions:");
+    expect(TRIAGE_PROMPT).not.toContain("askUserQuestion(\n  questions:");
   });
 
-  it("describes the v8.58 zero-question announcement (one-line, no structured ask)", () => {
-    expect(body).toMatch(/one-line announcement/iu);
-    expect(body).toMatch(/zero-question/iu);
+  it("v8.61 — the v8.58 zero-question rule moved into the triage sub-agent prompt", () => {
+    expect(TRIAGE_PROMPT).toMatch(/Zero-question rule/iu);
+    expect(TRIAGE_PROMPT).toMatch(/zero-question/iu);
   });
 });
 

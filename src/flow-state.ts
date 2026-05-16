@@ -471,7 +471,7 @@ function inferTriageFromLegacy(state: {
     rationale: "Auto-migrated from cclaw 8.0/8.1 flow-state (no triage recorded; preserved as strict).",
     decidedAt: state.startedAt,
     userOverrode: false,
-    runMode: "step"
+    runMode: "auto"
   };
 }
 
@@ -624,15 +624,16 @@ export function assumptionsOf(triage: TriageDecision | null | undefined): readon
 /**
  * Read a triage decision's runMode with the documented default.
  *
- * state files do not record runMode; treat them as `step` so existing
- * flows keep their pause-between-stages behaviour byte-for-byte.
+ * The user-facing `step` / `auto` choice was retired in v8.61; the
+ * orchestrator no longer branches on this value. Pre-v8.61 state files
+ * carrying `runMode: "step"` continue to validate via the optional type
+ * signature (back-compat), but the helper always returns `"auto"` so
+ * any remaining call site reads a single value. Inline paths still
+ * write `runMode: null`; the helper folds null / undefined / "step"
+ * alike to `"auto"`.
  */
-export function runModeOf(triage: TriageDecision | null | undefined): RunMode {
-  // v8.14: triage.runMode is `null` on inline / trivial paths (no stages
-  // to chain). Treat null and undefined the same way and return "step"; the
-  // inline path never reads this value before completing, so the fallback
-  // is purely defensive.
-  return triage?.runMode ?? "step";
+export function runModeOf(_triage: TriageDecision | null | undefined): RunMode {
+  return "auto";
 }
 
 /**
