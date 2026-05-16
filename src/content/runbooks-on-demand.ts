@@ -122,7 +122,7 @@ Dispatch slice-builder
   - Render an explicit warning to the user in their language naming the cause (e.g., "harness does not support parallel sub-agents — falling back to sequential build, will run AC-1..AC-N one after another"), AND
   - Use the harness's structured ask to surface a single \`accept-fallback\` option (and inform the user they may invoke \`/cc-cancel\` themselves if the loss of parallelism makes the work not worth doing under sequential timing) — the orchestrator must wait for the user's explicit \`accept-fallback\` reply before dispatching the sequential slice-builder. The parallel→sequential decision changes wall-clock substantially; the user gets to make the call.
   - Record the fallback in \`flows/<slug>/build.md\` frontmatter (\`subAgentDispatch: inline-fallback\`, \`fallback_reason: <one-line>\`, \`fallback_accepted_at: <iso>\`) so the reviewer sees it. The fallback is not an error, but it is a visible event with a recorded user-acknowledgement.
-- \`auto\` runMode does **not** affect the integration-reviewer ask: a parallel wave that produces a block finding always asks the user before fix-only.
+- v8.61 always-auto applies to chained stages; the integration-reviewer ask above still surfaces because a parallel→sequential fallback materially changes wall-clock budgets, and that is a user-visible decision rather than an internal verdict.
 `;
 
 const FINALIZE = `# On-demand runbook — finalize (ship → shipped)
@@ -205,13 +205,12 @@ Open this runbook **only when \`flow-state.json > reviewCounter\` reaches 5** wi
 
 Track the cap with \`flow-state.json > reviewCounter\` (introduced sibling of \`reviewIterations\`; \`reviewIterations\` continues to be the monotonic lifetime counter, \`reviewCounter\` is the cap-budget that the user can extend). Increment \`reviewCounter\` on every reviewer dispatch in parallel with \`reviewIterations\`. flows resumed on start at \`reviewCounter: 0\` even if \`reviewIterations\` already reflects prior dispatches — the cap is a fresh budget on resume.
 
-**When \`reviewCounter\` reaches \`5\`**, do NOT dispatch another reviewer. Surface a structured \`AskQuestion\` picker with these options and stop:
+**When \`reviewCounter\` reaches \`5\`**, do NOT dispatch another reviewer. Stop and report per the v8.61 always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). The reviewer auto-fix loop is capped at 3 iterations by the always-auto matrix; a slug reaching \`reviewCounter == 5\` means a prior \`keep-iterating-anyway\` override (see below) bought two extra rounds and the flow still failed to converge. The status block names the iteration count, the residual blockers, and the canonical recovery options:
 
-1. \`cancel-and-replan\` — Apply the cap-reached split-plan below: orchestrator authors the recommended split into \`review.md\` and asks the user to confirm the follow-up slug names. The current slug is parked; the user picks the first split slug to start, or \`/cc-cancel\` to discard.
-2. \`accept-warns-and-ship\` — Treat every remaining open ledger row as a \`warn\` (only valid if no row is \`critical\` AND, per the architecture priors rule, no row is \`required + architecture\`; if either invariant fails, the option is greyed out and the picker explains why). Proceed to ship gate with the carry-over.
-3. \`keep-iterating-anyway\` — Reset \`reviewCounter\` to \`3\`, buying two more rounds before the picker fires again. Append a audit-log entry to \`.cclaw/state/triage-audit.jsonl\` with \`iterationOverride: true\` (telemetry: a future "why did this flow take 7 review iterations?" audit can answer without re-reading the iteration log; the entry lives in the audit log instead of \`triage.iterationOverride\` so routing state stays clean) and resume normal review-pause dispatch.
+1. \`/cc-cancel\` to discard the slug and reapply the cap-reached split-plan below (orchestrator authors the recommended split into \`review.md\`, the user starts the first split slug fresh).
+2. \`/cc\` (continue) after the user edits the diff to address residual findings. Resume re-dispatches reviewer with \`reviewCounter\` reset to 3 (the v8.61 always-auto matrix replaces the legacy \`keep-iterating-anyway\` picker with explicit user re-invocation; the audit-log entry stamped on resume records \`iterationOverride: true\` for telemetry).
 
-The picker is not skippable on autopilot; \`runMode: auto\` pauses here like any other hard gate.
+The split-plan and architecture severity gates below stay verbatim — they describe the *content* the orchestrator authors into \`review.md\` before the stop-and-report, not the picker mechanics.
 
 ## Cap-reached split-plan (T1-10)
 
@@ -224,11 +223,11 @@ When the 5th iteration ends without \`clear\` or \`warn\`, the review **does not
 
 After this block is authored, the orchestrator surfaces a structured ask to the user with the split options (or "discard, re-triage from scratch"). \`/cc-cancel\` remains available as a typed command for nuking the slug.
 
-## Architecture severity gates ship (v8.20+)
+## Architecture severity gates ship (v8.20+; v8.61 always-auto stop-and-report)
 
-The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every ceremonyMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate: when the open ledger contains any \`required + architecture\` row, the ship picker does NOT offer \`continue\` until the user explicitly picks \`accept-warns-and-ship\` for the architecture finding(s). Other \`severity=required\` findings continue to follow the standard ceremonyMode table (gate in strict, carry-over in soft).
+The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every ceremonyMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate: when the open ledger contains any \`required + architecture\` row, the always-auto chain stops and reports (per \`runbooks/always-auto-failure-handling.md\`) rather than auto-advancing. The status block names the \`required + architecture\` finding(s) and offers \`/cc\` (continue after the user edits the diff to resolve the architecture finding, or accepts the warning by editing review.md to downgrade the row before resume) or \`/cc-cancel\` (discard). Other \`severity=required\` findings continue to follow the standard ceremonyMode table (gate in strict, carry-over in soft).
 
-Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the ship picker's option list becomes \`accept-warns-and-ship\` (highlighted as the path past the architecture gate) / \`fix-only\` (re-dispatch slice-builder to address) / \`stay-paused\`. The \`continue\` (silent advance) option is not offered.
+Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the orchestrator does NOT auto-advance to ship. The legacy in-chat picker options (\`accept-warns-and-ship\`, \`fix-only\`, \`stay-paused\`) are retired in v8.61 — the user resolves the gate by editing the relevant artifact and re-invoking \`/cc\`, or discards with \`/cc-cancel\`.
 `;
 
 const ADVERSARIAL_RERUN = `# On-demand runbook — adversarial pre-mortem rerun
@@ -478,54 +477,106 @@ This makes the catalogue discoverable to future agents/humans who don't already 
 The discoverability check runs **once per slug** (only when ship completes), and respects the user's \`never\` choice for the rest of the session.
 `;
 
-const PAUSE_RESUME = `# On-demand runbook — pause and resume mechanics (step / auto / Confidence gate)
+const PAUSE_RESUME = `# On-demand runbook — pause and resume mechanics (v8.61 always-auto)
 
 The orchestrator opens this runbook on every stage exit when \`triage.path\` is **non-inline** (i.e., the path contains any of \`plan\` / \`review\` / \`ship\`, not just \`build\`). Inline / trivial paths set \`runMode: null\` and never pause — they skip pause/resume entirely, so they never open this runbook.
 
-The orchestrator body keeps the orchestrator-wide invariants (\`/cc\` is the only resume verb, end-of-turn is the pause mechanism in step, Confidence: low is a hard gate in both modes). The full mechanics — including the per-mode procedure, the hard-gate enumeration, the Confidence × mode table, and the resume-from-fresh-session rules — live here so the orchestrator body stays slim on inline and small-medium paths that don't need every detail loaded.
+v8.61 — the user-facing \`step\` / \`auto\` choice was retired. Every non-inline flow runs **always-auto** end-to-end with no approval pickers at the plan / review / critic gates. The orchestrator chains stages automatically; \`/cc\` is the resume verb that fires only after a stop-and-report status block (see \`runbooks/always-auto-failure-handling.md\` for the failure matrix and the canonical status-block shape). The orchestrator body keeps the orchestrator-wide invariants (\`/cc\` is the only resume verb, \`Confidence: low\` is a hard gate, hard failures route per the always-auto matrix). The full mechanics — including the resume-from-fresh-session rules and the chain-vs-stop decision — live here.
 
-## \`step\` mode (default; safer; recommended for \`strict\` work)
+## Always-auto chain rule
 
-After every dispatch returns: (1) render the slim summary; (2) re-author \`HANDOFF.json\` + \`.continue-here.md\` (see \`runbooks/handoff-artifacts.md\`); (3) state the next stage in plain language ("Plan is ready (5 testable conditions). Send \`/cc\` to continue with build."); (4) **End your turn** — do NOT call \`askUserQuestion\`, do NOT wait for a magic word; the pause IS the end of the turn; \`flow-state.json\` + \`HANDOFF.json\` carry the resume point.
+After every dispatch returns: (1) render the slim summary to the user (the artifact is on disk for the next stage's sub-agent); (2) re-author \`HANDOFF.json\` + \`.continue-here.md\` (see \`runbooks/handoff-artifacts.md\`); (3) **immediately dispatch the next stage** in \`triage.path\` — no waiting, no approval picker — UNLESS one of the always-auto hard-failure conditions fires (see \`runbooks/always-auto-failure-handling.md\`).
 
-This is cclaw's **single resume mechanism**. Mid-session and cross-session pauses both end the turn; \`/cc\` is the only verb that moves the flow forward. No "type continue" magic word; no clickable Continue button mid-turn.
+Inside the design phase, the v8.47+ pacing rule still fires: Phase 1 (Clarify, conditional) + Phase 7 (Sign-off, mandatory) pauses fire regardless of the always-auto chain rule (see \`runbooks/discovery.md\`). These are not "approval pickers" — they are specialist-internal turn boundaries the design specialist owns. The orchestrator chains automatically once Phase 7 returns \`approve\`.
 
-If the user wants \`fix-only\` or \`show\` semantics, they say so in plain text on the next \`/cc\` and the orchestrator routes accordingly: "/cc fix-only" → slice-builder mode=fix-only against cited findings; "/cc show" → open the current-stage artifact and stop; otherwise → advance to the next stage.
+## Stop-and-report (the only thing that ends the turn)
 
-## \`auto\` mode (autopilot; faster; recommended for \`inline\` / \`soft\` work)
+The orchestrator ends its turn ONLY when a hard-failure condition fires (per the always-auto matrix in \`runbooks/always-auto-failure-handling.md\`). The stop-and-report status block is plain prose; the user re-invokes \`/cc\` (continue) or \`/cc-cancel\` (discard) from the command palette. There is no in-chat picker.
 
-After every dispatch returns: (1) render the slim summary; (2) immediately dispatch the next stage in \`triage.path\` — no waiting, no question — UNLESS inside the design phase (v8.47+ pacing: Phase 1 conditional + Phase 7 mandatory pauses fire regardless of runMode; see \`runbooks/discovery.md\`).
-
-Stop unconditionally only on these **hard gates** (autopilot **always** asks here):
-
-- \`reviewer\` returned \`block\` (open findings) → ask "dispatch fix-only" / "stay paused".
-- \`security-reviewer\` raised any finding → same shape.
-- \`reviewer\` returned \`cap-reached\` → see \`runbooks/cap-reached-recovery.md\`.
-- A slim summary has \`Confidence: low\` → see "Confidence as a hard gate" below.
-- About to run \`ship\` (last stage) → ask "Ship now?" once. Ship always confirms in autopilot.
-- Inside the design phase — Phase 1 (Clarify, conditional) + Phase 7 (Sign-off, mandatory) pauses fire regardless of runMode (v8.47+ two-turn-max pacing; see design.md).
-
-Auto mode never silently skips a hard gate; it just removes the cosmetic pause between green non-discovery stages. \`Cancel\` is **never** a clickable option; \`Stay paused\` (end turn) is the always-present safe-out.
-
-## Confidence as a hard gate (both modes)
+## Confidence as a hard gate (always-auto)
 
 Every slim summary carries a \`Confidence: high | medium | low\` line — a quality signal for the dispatch that just returned, not a prediction of the next stage:
 
-| Confidence | step mode | auto mode |
-| --- | --- | --- |
-| \`high\` | normal pause; render summary, end the turn (\`/cc\` advances) | normal flow; chain to next stage |
-| \`medium\` | normal pause; mention confidence in the user-facing line ("Plan ready (medium confidence — see Notes). Send \`/cc\` to continue."); end the turn. The \`Notes:\` line is required when confidence is medium | render the summary inline ("medium — see Notes"); chain anyway |
-| \`low\` | hard gate. End the turn, surface \`Notes\` verbatim. User replies with \`/cc expand\` (re-dispatch with richer envelope), \`/cc show\` (open artifact), \`/cc override\` (acknowledge risk + advance), or \`/cc-cancel\` (nuke). | hard gate. Stop chaining. Ask: \`Expand <stage>\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\`. Only \`Override and continue\` resumes auto-chaining. |
+- \`high\` — chain to next stage normally.
+- \`medium\` — render the summary inline ("medium — see Notes"); chain anyway. The \`Notes:\` line is required when confidence is medium.
+- \`low\` — **hard gate.** Stop chaining and surface the stop-and-report status block (per \`runbooks/always-auto-failure-handling.md\`) with the specialist's \`Notes\` verbatim. User reads, decides, and recovers via \`/cc\` (continue under a follow-up) or \`/cc-cancel\` (discard).
 
-A specialist returning \`Confidence: low\` MUST write a non-empty \`Notes:\` line explaining the dimension that drove confidence down (missing input, unverified citation, partial coverage). Repeated low-confidence on the same stage is a routing signal: re-triage with a richer path or split the slug rather than re-dispatching the same specialist. Override is sticky to **this stage only**.
+A specialist returning \`Confidence: low\` MUST write a non-empty \`Notes:\` line explaining the dimension that drove confidence down (missing input, unverified citation, partial coverage). Repeated low-confidence on the same stage is a routing signal: re-triage with a richer path or split the slug rather than re-dispatching the same specialist.
 
-## Common rules for both modes
+## Common rules
 
-Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentStage\`, \`triage\` (with \`runMode\`), \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters detect → resume summary → continue from \`currentStage\` with the saved runMode.
+Resume from a fresh session works because everything is on disk: \`flow-state.json\` has \`currentSlug\` + \`currentStage\` + \`triage\`, \`flows/<slug>/*.md\` carries the artifacts. The next \`/cc\` invocation enters Detect, finds the active flow, and continues silently from \`currentStage\` (see the Detect dispatch matrix in the orchestrator body).
 
-Resuming a paused \`auto\` flow re-enters auto mode silently. Resuming a paused \`step\` flow renders the slim summary again and ends the turn (the same end-of-turn rule applies on resume). The user's next \`/cc\` continues.
+\`/cc-cancel\` is the **only** way to discard an active flow; it is never offered as a clickable option in any structured question. The orchestrator surfaces it as plain prose inside the stop-and-report status block ("\`/cc-cancel\` to discard").
+`;
 
-\`/cc-cancel\` is the **only** way to discard an active flow; it is never offered as a clickable option in any structured question. The orchestrator surfaces it as plain prose ("send \`/cc-cancel\` to discard this flow") only when the user appears stuck — not as the default.
+const ALWAYS_AUTO_FAILURE_HANDLING = `# On-demand runbook — always-auto failure handling (v8.61+)
+
+The orchestrator opens this runbook on every chain decision after a specialist returns its slim summary. v8.61 replaces the user-facing \`step\` / \`auto\` choice with a deterministic failure matrix: the flow chains stages automatically until a failure condition fires; on failure the orchestrator either auto-fixes (capped at 3 iterations) or stops immediately and surfaces a stop-and-report status block.
+
+## Failure routing matrix (locked)
+
+| Failure | Behaviour |
+| --- | --- |
+| Build failure (\`suite-status: failed\` or compile error) | Auto-fix loop: dispatch \`slice-builder\` in \`fix-only\` mode with the failure context prepended. Cap = 3 iterations. After the 3rd failed iteration, stop and report. |
+| Reviewer \`block\` OR \`Recommended next: fix-only\` with ≥1 \`required\`/\`critical\` finding | Auto-fix loop: dispatch \`slice-builder\` in \`fix-only\` mode with the findings prepended. Cap = 3 iterations. After the 3rd failed iteration, stop and report. The v8.13 hard cap of 5 review/fix iterations still applies; the v8.61 cap of 3 is the tighter of the two. |
+| Critic \`verdict: block-ship\` | **Stop immediately and report.** No auto-iteration — re-running the critic on unchanged code produces the same verdict; the user must edit the diff (or accept the ship as-is) and re-invoke \`/cc\`. |
+| Catastrophic (git operation fail, sub-agent dispatch fail, file I/O fail) | Stop and report. Include the underlying error message in the status block's \`Reason:\` field. |
+| \`Recommended next: cancel\` | Stop and report. The specialist recommended stopping; the user decides whether to \`/cc\` (continue under a follow-up) or \`/cc-cancel\` (discard). |
+| \`Confidence: low\` (any specialist) | Stop and report. Surface the Notes verbatim in the status block. |
+| plan-critic \`verdict: cancel\` OR \`verdict: revise\` after iter 1 | Stop and report. The plan-critic believes the plan is structurally broken (cancel) or the revise loop hit the iteration cap (revise iter 1). |
+| qa-runner \`verdict: blocked\` OR \`verdict: iterate\` after iter 1 | Stop and report. Browser tooling unavailable / manual steps required (blocked) or qa iterate loop hit the iteration cap (iterate iter 1). |
+| reviewer \`status: cap-reached\` (5th review/fix iteration without convergence) | Stop and report. See \`runbooks/cap-reached-recovery.md\` for the split-plan procedure. |
+
+## Stop-and-report status block (uniform shape)
+
+When any of the above fires, the orchestrator writes ONE structured status block in plain prose (user's language), then ends its turn. The block uses this shape:
+
+\`\`\`
+Stopped at <stage> (<slug>).
+Reason: <one short sentence; e.g. "Build failure after 3 auto-fix iterations" or "Critic verdict: block-ship">.
+Artifact: <relative path to the most relevant artifact; e.g. .cclaw/flows/<slug>/critic.md>.
+What changed since last stop: <one short sentence; omit if first stop>.
+To continue: /cc (no args) — orchestrator continues from <currentStage>.
+To discard: /cc-cancel — moves artifacts to .cclaw/flows/cancelled/<slug>/.
+\`\`\`
+
+The block is **plain prose**, not a structured ask. There is no option list, no "[1] continue [2] discard" picker. The user re-invokes \`/cc\` or \`/cc-cancel\` from their command palette. The status block stays in the chat log so the user can re-read it; it is not interactive.
+
+## Recovery rules
+
+- **\`/cc\` (no args) after stop** — the orchestrator reads \`flow-state.json\` + \`HANDOFF.json\` and continues from the saved \`currentStage\`. For build-failure / reviewer-fix stops, the auto-fix iteration counter is **preserved**; if the user wants a fresh 3-iteration budget after their own manual fix, they delete \`.cclaw/state/<slug>-fix-iter.json\` or invoke \`/cc-cancel\` + a fresh \`/cc\`.
+- **\`/cc-cancel\` after stop** — runs the standard cancel runtime; artifacts move to \`cancelled/<slug>/\`, state resets.
+- **\`/cc <new-task>\` after stop** — errors per the Detect matrix (active flow exists). User must \`/cc-cancel\` first.
+
+## Auto-fix iteration counter
+
+The orchestrator maintains a small JSON sidecar at \`.cclaw/state/<slug>-fix-iter.json\` recording the per-stage fix iteration count:
+
+\`\`\`json
+{
+  "buildFixIterations": 1,
+  "reviewerFixIterations": 0,
+  "lastFailureKind": "build",
+  "lastFailureAt": "2026-05-15T12:34:56Z"
+}
+\`\`\`
+
+The counter increments on every fix-only dispatch and resets when the corresponding stage returns a clean slim summary (build → \`suite-status: passed\`; reviewer → \`decision: clear\`). The orchestrator reads the counter at every chain decision; on the 4th failed iteration the orchestrator surfaces the stop-and-report status block instead of dispatching another fix.
+
+## Catastrophic failure handling
+
+Catastrophic failures (git ops fail, sub-agent dispatch fail, file I/O fail) are distinct from "the sub-agent's verdict failed" — they mean the orchestrator itself could not complete a step. Always-auto treats them identically to other stops: write the stop-and-report status block with the underlying error message in \`Reason:\`, end the turn. Do NOT auto-retry catastrophic failures; the user must decide whether the underlying issue (disk full, network down, git index corrupted) is recoverable.
+
+## Anti-rationalization table
+
+| rationalization | truth |
+| --- | --- |
+| "Build failure — surely 4 retries is fine, the code is almost there." | Cap is 3 for a reason. Past iter 3 the auto-fix loop has consistently failed to find the issue; stop and report so the user can decide. |
+| "Critic block-ship — maybe one more round and the verdict will flip." | No. The critic walks code that didn't change; the verdict will be identical. Stop and report; the user edits the diff. |
+| "Catastrophic error — let me retry once before reporting." | No. Catastrophic = orchestrator-level failure (git, dispatch, I/O). Retry policy is the user's call; report immediately. |
+| "Confidence: low on the slim summary — maybe the specialist was being conservative." | No. The specialist set \`Confidence: low\` because it could not verify. Stop and surface the Notes; the user decides. |
+| "I'll auto-cancel and start fresh after the 3rd failed iteration." | No. Auto-cancel is never the right move — the user might have made progress they want to keep. Stop and let the user decide between \`/cc\` and \`/cc-cancel\`. |
 `;
 
 const CRITIC_STEPS = `# On-demand runbook — critic steps (pre-implementation + post-implementation)
@@ -542,8 +593,8 @@ Both stages ship together because they catch different problem classes — plan-
 ## Shared cross-stage rules
 
 - **Pre-commitment predictions** are authored BEFORE the rest of the protocol runs (plan-critic §6; post-impl critic §1). Same discipline shape: 3-5 predictions naming verification paths and final outcomes (\`confirmed\` / \`refuted\` / \`partial\`); the discipline activates deliberate search instead of passive reading.
-- **Anti-rationalization pointer.** Both specialists reference the shared \`.cclaw/lib/anti-rationalizations.md\` catalog for cross-cutting rationalizations; only specialist-unique rows live inline in the prompt body.
-- **Iteration cap = 1.** Each specialist dispatches at most twice per slug (iteration 0 + one allowed retry). A third dispatch is structurally forbidden — the orchestrator surfaces a cap-reached user picker instead.
+- **Anti-rationalization pointer.** Both specialists reference the shared \`.cclaw/lib/anti-rationalizations.md\` catalog (v8.49) for cross-cutting rationalizations; only specialist-unique rows live inline in the prompt body.
+- **Iteration cap = 1.** Each specialist dispatches at most twice per slug (iteration 0 + one allowed retry). A third dispatch is structurally forbidden — the orchestrator stops and reports per the v8.61 always-auto failure matrix instead.
 - **Slim summary shape.** Both return a ≤7-line slim summary with \`specialist\`, \`verdict\`, severity-bucketed findings count, \`iteration\`, \`confidence\`, and an optional \`notes\` line (required when confidence != high).
 
 ## Pre-implementation pass (plan-critic, v8.51)
@@ -592,21 +643,21 @@ Dispatch plan-critic
 
 The plan-critic returns one of three verdicts. The orchestrator branches on (verdict, iteration):
 
-| verdict | iteration | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
-| --- | --- | --- | --- | --- |
-| \`pass\` | 0 or 1 | \`"plan"\` → advance to \`"build"\` | step pauses end-of-stage; auto chains to build | no user gate; advance straight to slice-builder dispatch. \`iterate\` and \`fyi\` rows in plan-critic.md ride along as advisory notes for slice-builder + reviewer to see. |
-| \`revise\` | 0 | stays \`"plan"\`, \`lastSpecialist: "plan-critic"\` | both modes proceed silently | dispatch \`ac-author\` again, with plan-critic.md §8 hand-off block prepended to the dispatch envelope's \`Inputs\` line. ac-author updates plan.md, then the orchestrator re-dispatches plan-critic (iteration 1). |
-| \`revise\` | 1 | stays \`"plan"\` | both modes hard-gate | surface the revise-cap-reached user picker: \`[cancel]\` (out-of-band \`/cc-cancel\`), \`[accept-warnings-and-proceed]\` (advance to slice-builder anyway; stamps \`triage.planCriticOverride: true\` if you want to capture the override for audit — currently not a stamped field, surface as conversation), \`[re-design]\` (route back to design phase Phase 1 with the surfaced constraints). |
-| \`cancel\` | 0 or 1 | stays \`"plan"\` | both modes hard-gate | surface the cancel picker IMMEDIATELY: \`[cancel-slug]\` (user types \`/cc-cancel\` out-of-band), \`[re-design]\` (route back to design phase Phase 1). No silent fallback — \`cancel\` means the plan is structurally not buildable. |
+| verdict | iteration | \`currentStage\` after | what the orchestrator does (v8.61 always-auto) |
+| --- | --- | --- | --- |
+| \`pass\` | 0 or 1 | \`"plan"\` → advance to \`"build"\` | chain to slice-builder dispatch. \`iterate\` and \`fyi\` rows in plan-critic.md ride along as advisory notes for slice-builder + reviewer to see. |
+| \`revise\` | 0 | stays \`"plan"\`, \`lastSpecialist: "plan-critic"\` | dispatch \`ac-author\` again, with plan-critic.md §8 hand-off block prepended to the dispatch envelope's \`Inputs\` line. ac-author updates plan.md, then the orchestrator re-dispatches plan-critic (iteration 1). |
+| \`revise\` | 1 | stays \`"plan"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). The plan-critic revise loop hit the iteration cap; recovery via \`/cc\` (continue under a follow-up after the user edits plan.md or accepts the warnings) or \`/cc-cancel\` (discard). |
+| \`cancel\` | 0 or 1 | stays \`"plan"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). \`cancel\` means the plan is structurally not buildable; recovery via \`/cc\` (continue after re-designing) or \`/cc-cancel\` (discard). |
 
-**Confidence: low** in the plan-critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The plan-critic MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator offers \`Expand plan-critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
+**Confidence: low** in the plan-critic's slim summary stops and reports per the v8.61 always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). The plan-critic MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
 
 ### plan-critic iteration cap enforcement
 
 - \`planCriticIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return.
-- The orchestrator dispatches plan-critic **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`revise\` from iter 0). A third dispatch is structurally not allowed — the orchestrator surfaces the revise-cap-reached picker instead.
-- A flow that goes \`revise\` (iter 0) → ac-author revise → \`revise\` (iter 1) is the canonical "1 revise loop max" path. After the second \`revise\`, the user picker decides whether to cancel, accept warnings and proceed to slice-builder, or re-design.
-- A \`cancel\` verdict at any iteration immediately surfaces the cancel picker; iteration does not advance.
+- The orchestrator dispatches plan-critic **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`revise\` from iter 0). A third dispatch is structurally not allowed — the orchestrator stops and reports per the v8.61 always-auto failure matrix instead.
+- A flow that goes \`revise\` (iter 0) → ac-author revise → \`revise\` (iter 1) is the canonical "1 revise loop max" path. After the second \`revise\`, the orchestrator emits the stop-and-report status block; the user resumes with \`/cc\` (continue after editing the plan) or \`/cc-cancel\` (discard).
+- A \`cancel\` verdict at any iteration immediately stops and reports (per \`runbooks/always-auto-failure-handling.md\`); iteration does not advance.
 - The iteration cap is independent of \`reviewIterations\` (post-impl review loop) and \`criticIteration\` (post-impl critic). All three counters are tracked separately.
 
 ### plan-critic FlowState patches
@@ -694,13 +745,13 @@ Mapping fired-triggers count to \`criticEscalation\`:
 
 ### critic verdict handling (slim summary → orchestrator routing)
 
-| critic \`Verdict:\` | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
-| --- | --- | --- | --- |
-| \`pass\` | \`"ship"\` | step pauses end-of-stage; auto chains to ship | no user gate; advance straight to ship |
-| \`iterate\` | \`"ship"\` | step pauses end-of-stage; auto chains to ship | open critic gaps with severity \`iterate\` are copied verbatim into \`ship.md > ## Risks carried over\`; one line to the user ("Critic returned iterate (\<N\> gaps carried over). Continuing to ship.") |
-| \`block-ship\` | stays \`"critic"\` | both modes hard-gate | surface the block-ship picker: \`[1] fix and re-review\` (consumes the one allowed rerun), \`[2] accept-and-ship\` (strict-mode escape hatch; stamps \`triage.criticOverride: true\` for audit trail), \`[3] /cc-cancel\` (out-of-band). Single-line summary cites the \`block-ship\` G-N / F-N anchors verbatim. |
+| critic \`Verdict:\` | \`currentStage\` after | what the orchestrator does (v8.61 always-auto) |
+| --- | --- | --- |
+| \`pass\` | \`"ship"\` | chain to ship |
+| \`iterate\` | \`"ship"\` | open critic gaps with severity \`iterate\` are copied verbatim into \`ship.md > ## Risks carried over\`; one line to the user ("Critic returned iterate (\<N\> gaps carried over). Continuing to ship.") then chain to ship |
+| \`block-ship\` | stays \`"critic"\` | **stop immediately and report** per the v8.61 always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). No auto-iteration on critic block-ship — re-running the critic on unchanged code produces the same verdict. Recovery via \`/cc\` (continue under a follow-up after editing the diff; consumes the one allowed critic rerun) or \`/cc-cancel\` (discard). Single-line summary cites the \`block-ship\` G-N / F-N anchors verbatim. |
 
-**Confidence: low** in the critic's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator offers \`Expand critic\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
+**Confidence: low** in the critic's slim summary stops and reports per the v8.61 always-auto failure matrix. The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
 
 ### critic FlowState patches
 
@@ -808,21 +859,21 @@ Dispatch qa-runner
 
 qa-runner returns one of three verdicts. The orchestrator branches on (verdict, iteration):
 
-| verdict | iteration | \`currentStage\` after | \`triage.runMode\` behaviour | what the orchestrator does |
-| --- | --- | --- | --- | --- |
-| \`pass\` | 0 or 1 | \`"qa"\` → advance to \`"review"\` | step pauses end-of-stage; auto chains to review | no user gate; advance straight to reviewer dispatch. The reviewer's \`qa-evidence\` axis re-reads qa.md and cross-checks each row against the diff. \`fyi\` findings ride along as advisory notes. |
-| \`iterate\` | 0 | stays \`"qa"\`, \`lastSpecialist: "qa-runner"\` | both modes proceed silently | dispatch \`slice-builder\` again in **fix-only** mode, with qa.md §7 hand-off block prepended to the dispatch envelope's \`Inputs\` line. slice-builder addresses each \`required\` finding (RED → GREEN cycle for the failed UI behaviour), then the orchestrator re-runs the build verification cycle and re-dispatches qa-runner (iteration 1). |
-| \`iterate\` | 1 | stays \`"qa"\` | both modes hard-gate | surface the iterate-cap-reached user picker: \`[cancel]\` (out-of-band \`/cc-cancel\`), \`[accept-warnings-and-proceed-to-review]\` (advance to reviewer anyway; the surviving \`required\` findings ride into review.md as evidence the reviewer's \`qa-evidence\` axis will fire on), \`[re-design]\` (route back to design phase Phase 1 with the surfaced UI constraints). |
-| \`blocked\` | 0 or 1 | stays \`"qa"\` | both modes hard-gate | surface the blocked user picker IMMEDIATELY: \`[proceed-without-qa-evidence]\` (advance to reviewer with qa.md noting the gap; \`qa-evidence\` axis fires \`required\`), \`[pause-for-manual-qa]\` (user follows qa.md §4 manual-steps blocks, then the orchestrator stamps Status: pass on confirmed ACs and re-evaluates verdict), \`[skip-qa]\` (advance to reviewer; qa.md frontmatter records \`evidence_tier: manual\` + \`verdict: blocked\` for the audit trail). No silent fallback — \`blocked\` means qa could not actually run. |
+| verdict | iteration | \`currentStage\` after | what the orchestrator does (v8.61 always-auto) |
+| --- | --- | --- | --- |
+| \`pass\` | 0 or 1 | \`"qa"\` → advance to \`"review"\` | chain to reviewer dispatch. The reviewer's \`qa-evidence\` axis re-reads qa.md and cross-checks each row against the diff. \`fyi\` findings ride along as advisory notes. |
+| \`iterate\` | 0 | stays \`"qa"\`, \`lastSpecialist: "qa-runner"\` | dispatch \`slice-builder\` again in **fix-only** mode, with qa.md §7 hand-off block prepended to the dispatch envelope's \`Inputs\` line. slice-builder addresses each \`required\` finding (RED → GREEN cycle for the failed UI behaviour), then the orchestrator re-runs the build verification cycle and re-dispatches qa-runner (iteration 1). |
+| \`iterate\` | 1 | stays \`"qa"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). The qa iterate loop hit the iteration cap; recovery via \`/cc\` (continue under a follow-up after the user resolves the failed UI behaviour) or \`/cc-cancel\` (discard). |
+| \`blocked\` | 0 or 1 | stays \`"qa"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). \`blocked\` means qa could not actually run (browser tooling unavailable AND manual steps required); recovery via \`/cc\` (continue under a follow-up after the user installs browser tooling or runs the qa.md §4 manual-steps blocks) or \`/cc-cancel\` (discard). |
 
-**Confidence: low** in the qa-runner's slim summary is a hard gate in both \`step\` and \`auto\` modes (same rule as every other specialist). The qa-runner MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator offers \`Expand qa-runner\` / \`Show artifact\` / \`Override and continue\` / \`Stay paused\` per the standard pause/resume invariants.
+**Confidence: low** in the qa-runner's slim summary stops and reports per the v8.61 always-auto failure matrix. The qa-runner MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
 
 ## Iteration cap enforcement
 
 - \`qaIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return.
-- The orchestrator dispatches qa-runner **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`iterate\` from iter 0). A third dispatch is structurally not allowed — the orchestrator surfaces the iterate-cap-reached picker instead.
-- A flow that goes \`iterate\` (iter 0) → slice-builder fix → \`iterate\` (iter 1) is the canonical "1 iterate loop max" path. After the second \`iterate\`, the user picker decides whether to cancel, accept warnings and proceed to review, or re-design.
-- A \`blocked\` verdict at any iteration immediately surfaces the blocked picker; iteration does not advance until the user makes a choice.
+- The orchestrator dispatches qa-runner **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`iterate\` from iter 0). A third dispatch is structurally not allowed — the orchestrator stops and reports per the v8.61 always-auto failure matrix instead.
+- A flow that goes \`iterate\` (iter 0) → slice-builder fix → \`iterate\` (iter 1) is the canonical "1 iterate loop max" path. After the second \`iterate\`, the orchestrator emits the stop-and-report status block; the user resumes with \`/cc\` (continue after editing) or \`/cc-cancel\` (discard).
+- A \`blocked\` verdict at any iteration immediately stops and reports (per \`runbooks/always-auto-failure-handling.md\`); iteration does not advance.
 - The iteration cap is independent of \`reviewIterations\` (post-impl review loop), \`criticIteration\` (post-impl critic), and \`planCriticIteration\` (pre-impl plan-critic). All four counters are tracked separately.
 
 ## FlowState patches
@@ -976,28 +1027,28 @@ loads the **immediate** parent only. If \`parentContext.slug\` itself has \`refi
 When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the orchestrator runs an **inheritance sub-step** BEFORE the lightweight router's heuristic classifier. The sub-step reads the parent's shipped \`ship.md\` / \`plan.md\` frontmatter (best-effort; missing fields fall through to the router default) and seeds the new flow's triage with the parent's values:
 
 - \`ceremonyMode\` ← parent's \`ceremony_mode\` (or pre-v8.56 \`ac_mode\`) from plan.md frontmatter, OR the value implied by the parent's ship.md when plan.md frontmatter is absent.
-- \`runMode\` ← parent's \`run_mode\` from ship.md frontmatter (when present).
+- \`runMode\` ← v8.61 always-auto; the new flow stamps \`runMode: "auto"\` on every non-inline parent and \`null\` when the parent was inline. The parent's stored \`run_mode\` is ignored (legacy \`step\` parents fold to \`auto\` on extend).
 - \`surfaces\` ← parent's \`surfaces\` from plan.md / triage block (when present).
 
 ### Precedence rules (highest → lowest, evaluated in this order)
 
-1. **Explicit override flag from the current \`/cc extend\`** — \`--strict\` / \`--soft\` / \`--inline\` for ceremonyMode; \`--mode=auto\` / \`--mode=step\` for runMode. Always wins; inheritance is bypassed for that field. Audit log records \`userOverrode: true\` when the chosen value differs from the parent's value.
+1. **Explicit override flag from the current \`/cc extend\`** — \`--strict\` / \`--soft\` / \`--inline\` for ceremonyMode. v8.61 retired the user-facing runMode toggle; \`--mode=step\` / \`--mode=auto\` are accepted on the parser but collapse to \`auto\` (legacy back-compat note). Always wins; inheritance is bypassed for that field. Audit log records \`userOverrode: true\` when the chosen value differs from the parent's value.
 2. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the v8.23 no-git auto-downgrade audit shape.
-3. **Parent inheritance** — fields not pinned by (1) or (2) inherit from parent's frontmatter.
-4. **Router default** — fields not seeded by (1)-(3) fall through to the lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
+3. **Parent inheritance** — fields not pinned by (1) or (2) inherit from parent's frontmatter (ceremonyMode + surfaces). \`runMode\` is *not* inherited under v8.61 (always-auto on non-inline; null on inline).
+4. **Router default** — fields not seeded by (1)-(3) fall through to the v8.58 lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
 
-The inheritance is one-way: the new flow's triage values are immutable for its lifetime (except \`runMode\` via the mid-flight toggle); changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init.
+The inheritance is one-way: the new flow's triage values are immutable for its lifetime; changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init. v8.61 retired the v8.34 mid-flight \`runMode\` toggle — runMode is now structurally immutable.
 
 ### Worked examples
 
-| user invocation | parent's \`ceremony_mode\` | parent's \`run_mode\` | new flow's \`ceremonyMode\` | new flow's \`runMode\` | rationale |
-| --- | --- | --- | --- | --- | --- |
-| \`/cc extend 20260514-auth-flow add OIDC\` | strict | step | strict | step | rule 3 (pure inheritance) |
-| \`/cc extend 20260514-auth-flow --soft tighten error copy\` | strict | step | soft | step | rule 1 (explicit flag wins on ceremonyMode); rule 3 inherits runMode |
-| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | step | strict | step | rule 2 (escalation heuristic — \`migration\` keyword) |
-| \`/cc extend 20260514-auth-flow --mode=auto tighten error copy\` | strict | step | strict | auto | rule 1 (explicit toggle wins on runMode); rule 3 inherits ceremonyMode |
-| \`/cc extend 20260514-cli-help fix typo\` | inline | (null) | inline | (null) | rule 3 (inheritance); inline path has no runMode |
-| \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (unknown) | (router heuristic decides) | (router heuristic decides) | rule 4 (router fallthrough) |
+| user invocation | parent's \`ceremony_mode\` | new flow's \`ceremonyMode\` | new flow's \`runMode\` | rationale |
+| --- | --- | --- | --- | --- |
+| \`/cc extend 20260514-auth-flow add OIDC\` | strict | strict | auto | rule 3 (ceremonyMode inheritance); v8.61 always-auto |
+| \`/cc extend 20260514-auth-flow --soft tighten error copy\` | strict | soft | auto | rule 1 (explicit flag wins on ceremonyMode); v8.61 always-auto |
+| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | strict | auto | rule 2 (escalation heuristic — \`migration\` keyword); v8.61 always-auto |
+| \`/cc extend 20260514-auth-flow --mode=auto tighten error copy\` | strict | strict | auto | rule 1 (parser accepts \`--mode=auto\` for back-compat); v8.61 always-auto |
+| \`/cc extend 20260514-cli-help fix typo\` | inline | inline | (null) | rule 3 (inheritance); inline path has no runMode |
+| \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (router heuristic decides) | auto (unless heuristic picked inline) | rule 4 (router fallthrough) |
 
 The audit log entry for the new flow's triage decision records:
 
@@ -1005,8 +1056,8 @@ The audit log entry for the new flow's triage decision records:
 {
   "decidedAt": "<iso>",
   "ceremonyMode": "strict",
-  "runMode": "step",
-  "rationale": "extend-mode inheritance from 20260514-auth-flow (parent: ceremony_mode=strict, run_mode=step)",
+  "runMode": "auto",
+  "rationale": "extend-mode inheritance from 20260514-auth-flow (parent: ceremony_mode=strict; runMode=auto under v8.61 always-auto)",
   "parentSlug": "20260514-auth-flow",
   "inheritanceSource": "parent-frontmatter",
   "userOverrode": false
@@ -1083,8 +1134,14 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "pause-resume",
     fileName: "pause-resume.md",
-    title: "Pause / resume mechanics (step / auto / Confidence gate)",
+    title: "Pause / resume mechanics (always-auto + Confidence gate)",
     body: PAUSE_RESUME
+  },
+  {
+    id: "always-auto-failure-handling",
+    fileName: "always-auto-failure-handling.md",
+    title: "Always-auto failure handling (v8.61+)",
+    body: ALWAYS_AUTO_FAILURE_HANDLING
   },
   {
     id: "critic-steps",

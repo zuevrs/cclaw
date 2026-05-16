@@ -115,23 +115,28 @@ describe("v8.20 review-loop polish", () => {
       expect(() => assertFlowStateV82(v819State)).not.toThrow();
     });
 
-    it("cap-reached picker options live in the cap-reached-recovery runbook (v8.22 split)", () => {
+    it("cap-reached runbook routes through the v8.61 always-auto stop-and-report (no in-chat picker)", () => {
       const cr = runbookBody("cap-reached-recovery");
       expect(cr).toMatch(/reviewCounter.*reach[^.]*5|cap[^.]*5/iu);
-      expect(cr).toContain("cancel-and-replan");
-      expect(cr).toContain("accept-warns-and-ship");
-      expect(cr).toContain("keep-iterating-anyway");
+      expect(cr).toMatch(/stop and report|stop-and-report/iu);
+      expect(cr).toContain("always-auto-failure-handling.md");
+      expect(cr).toMatch(/\/cc-cancel/u);
       expect(START_COMMAND_BODY).toContain("cap-reached-recovery.md");
     });
 
-    it("cap-reached runbook specifies keep-iterating-anyway resets reviewCounter to 3", () => {
+    it("cap-reached runbook still surfaces the split-plan as the recommended recovery content", () => {
       const cr = runbookBody("cap-reached-recovery");
-      expect(cr).toMatch(/keep-iterating-anyway[\s\S]*reset[\s\S]*?3/iu);
+      expect(cr).toMatch(/split[-\s]plan|cap-reached split/iu);
     });
 
-    it("cap-reached runbook specifies keep-iterating-anyway stamps triage.iterationOverride", () => {
+    it("cap-reached runbook resets reviewCounter to 3 on user-driven /cc resume (legacy keep-iterating-anyway semantics)", () => {
       const cr = runbookBody("cap-reached-recovery");
-      expect(cr).toContain("triage.iterationOverride");
+      expect(cr).toMatch(/reviewCounter[\s\S]*reset[\s\S]*?3/iu);
+    });
+
+    it("cap-reached runbook stamps iterationOverride: true on the audit log when resume buys extra rounds", () => {
+      const cr = runbookBody("cap-reached-recovery");
+      expect(cr).toContain("iterationOverride");
     });
 
     it("TriageDecision schema accepts iterationOverride boolean", () => {

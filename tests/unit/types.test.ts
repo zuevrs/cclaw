@@ -10,8 +10,8 @@ describe("types", () => {
     expect(HARNESS_IDS).toEqual(["claude", "cursor", "opencode", "codex"]);
   });
 
-  it("ships exactly eight specialists (v8.42 added the adversarial critic between security-reviewer and slice-builder; v8.51 added the pre-implementation plan-critic between ac-author and reviewer; v8.52 added the behavioural-QA qa-runner between critic and slice-builder)", () => {
-    expect(SPECIALISTS).toHaveLength(8);
+  it("ships exactly nine specialists (v8.42 added the adversarial critic between security-reviewer and slice-builder; v8.51 added the pre-implementation plan-critic between ac-author and reviewer; v8.52 added the behavioural-QA qa-runner between critic and slice-builder; v8.61 added the lightweight-router triage at the end of the list)", () => {
+    expect(SPECIALISTS).toHaveLength(9);
     expect(SPECIALISTS).toEqual([
       "design",
       "ac-author",
@@ -20,7 +20,8 @@ describe("types", () => {
       "security-reviewer",
       "critic",
       "qa-runner",
-      "slice-builder"
+      "slice-builder",
+      "triage"
     ]);
   });
 });

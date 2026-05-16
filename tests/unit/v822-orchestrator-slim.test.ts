@@ -110,9 +110,10 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
     "critic-steps.md",
     "qa-stage.md",
     "extend-mode.md",
+    "always-auto-failure-handling.md",
   ];
 
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files)", () => {
+  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files; v8.61: +1 always-auto-failure-handling → 13 files)", () => {
     const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
     expect(fileNames).toEqual([...expectedRunbookFiles].sort());
   });

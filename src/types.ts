@@ -69,7 +69,8 @@ export const SPECIALISTS = [
   "security-reviewer",
   "critic",
   "qa-runner",
-  "slice-builder"
+  "slice-builder",
+  "triage"
 ] as const;
 export type SpecialistId = (typeof SPECIALISTS)[number];
 
@@ -414,15 +415,29 @@ export type AcMode = CeremonyMode;
 /**
  * How aggressively the orchestrator advances through the flow.
  *
- * - `step` (default): pause after every stage. The orchestrator renders the
- *   slim summary and waits for the user to type "continue". The original
- *   behaviour, recommended for `strict` and unfamiliar work.
- * - `auto`: render the slim summary and immediately dispatch the next stage
- *   without asking. Stops only on hard gates (block findings, security flag,
- *   ship). Recommended for `inline` / `soft` work the user has already
- *   scoped tightly.
+ * The user-facing `step` / `auto` choice was retired in v8.61. Every
+ * non-inline flow now runs `auto` end-to-end with no approval pickers at
+ * the plan / review / critic gates; hard failures route through the
+ * always-auto failure matrix (build → auto-fix loop capped 3; reviewer
+ * critical → auto-fix loop capped 3; critic block-ship → stop
+ * immediately; catastrophic → stop and report). Recovery is via `/cc`
+ * (continue) or `/cc-cancel` (discard).
  *
- * Selected at the triage gate; user can override per flow.
+ * - `auto` — the only writeable value on current orchestrator writes. On
+ *   inline / trivial paths `triage.runMode` is `null` because there are
+ *   no stages to chain.
+ * - `step` — preserved in the type signature for back-compat so pre-v8.61
+ *   state files (which may carry `runMode: "step"`) continue to validate
+ *   on read. The orchestrator no longer branches on this value —
+ *   pre-v8.61 flows that resume on current versions behave as `auto`
+ *   regardless. Clean break per the v8.61 CHANGELOG; users with
+ *   in-flight v8.60 flows carrying `step` should expect auto behaviour
+ *   on the next `/cc`.
+ *
+ * Selected by the triage sub-agent (see
+ * `src/content/specialist-prompts/triage.ts`); user override flags
+ * (`--mode=auto` / `--mode=step`) are accepted for back-compat but both
+ * collapse to `auto` (step mode retired in v8.61).
  */
 export const RUN_MODES = ["step", "auto"] as const;
 export type RunMode = (typeof RUN_MODES)[number];
@@ -484,16 +499,20 @@ export interface TriageDecision {
    */
   userOverrode?: boolean;
   /**
-   * Step-by-step (default) or autopilot. Persisted across resumes so the
-   * user only picks once per flow.
+   * Collapsed to `"auto"` for every non-inline path and `null` for
+   * inline (the user-facing `step` / `auto` choice was retired in
+   * v8.61). The orchestrator no longer branches on this value at the
+   * plan / review / critic gates. Pre-v8.61 state files carrying
+   * `runMode: "step"` continue to validate (the type still admits both
+   * values from {@link RUN_MODES} for back-compat) but run as `auto`
+   * on the next `/cc`.
    *
-   * Optional in TypeScript so state files (which lack `runMode`) still
-   * validate; readers MUST default to `step` on absent (non-inline paths).
+   * Optional in TypeScript so v8.2 state files (which lack `runMode`)
+   * still validate; readers consume the field for back-compat audit
+   * trails only.
    *
-   * On v8.14+ flows that take the inline / trivial path, `runMode` is
-   * written as `null` because there are no stages to chain — the
-   * step-vs-auto choice is structurally meaningless when
-   * `triage.path == ["build"]`.
+   * On v8.14+ inline / trivial flows, `runMode` is written as `null`
+   * because there are no stages to chain.
    */
   runMode?: RunMode | null;
   /**

@@ -1,5 +1,69 @@
 # Changelog
 
+
+## 8.61.0 — Triage to sub-agent + always-auto + `/cc` auto-continue
+
+### Why
+
+Three friction points the entry-point UX had accumulated by v8.59:
+
+1. **Triage runs inline.** After v8.58's lightweight-router refactor, the router decides only 5 fields (`complexity` / `ceremonyMode` / `path` / `runMode` / `mode`) with zero questions by default. The full routing prose still lived in the orchestrator body as Hop 2 — ~200 lines that fired on every `/cc <task>` and consumed main-context tokens for a decision that has no codebase context.
+2. **`runMode` toggle is noise.** `runMode: step` vs `runMode: auto` surfaced approval pickers at every plan / review / critic gate (`approve plan? [y/n]` / `accept review findings? [y/n]` / `accept critic verdict? [y/n]`). The toggle existed because earlier cclaw releases didn't trust the sub-agent slim summaries; v8.42+ critic + v8.51+ plan-critic both removed the structural reason to pause. The pickers became friction without value.
+3. **`/cc` invocation has implicit forks.** Resume picker (`[r] resume / [s] save / [n] new`), `/cc <task>` on an active slug silently re-triages, etc. Every fork was a tiny decision the orchestrator made *for* the user and announced after the fact. The user-facing model needs to be deterministic: `/cc` always means continue, `/cc <task>` always means start.
+
+### What changed
+
+**Deliverable 1 — Triage moves to a sub-agent** (`src/content/specialist-prompts/triage.ts`, `src/content/start-command.ts`, `src/types.ts`, `src/install.ts`).
+
+- New `triage` specialist (`src/content/specialist-prompts/triage.ts`) carrying the canonical routing contract — 5-field decision (complexity / ceremonyMode / path / runMode / mode), zero-question rule, override flag handling (`--inline` / `--soft` / `--strict`), heuristic table, no-git auto-downgrade, triage-inheritance rules for extend-mode, slim-summary shape. ~200 lines of prose lifted verbatim from the orchestrator's Hop 2.
+- `SPECIALISTS` constant gains `triage` (length 8 → 9). Activation: `on-demand` (dispatched at Hop 2 of every fresh `/cc <task>`; research-mode and extend-mode skip per the orchestrator body's Detect step). Title / description registered in `src/content/core-agents.ts`.
+- `src/install.ts` installs `.cclaw/lib/agents/triage.md` alongside the other 8 specialist contracts; smoke test expects 9 agent files.
+- Orchestrator body (`src/content/start-command.ts`) drops the full Hop 2 prose and replaces it with a concise dispatch directive: "Dispatch the `triage` sub-agent with the raw `/cc` argument + project state. Receive the 5-field decision. Stamp `flow-state.json > triage`." Body size drops from ~74k to ~69k chars.
+
+**Deliverable 2 — Always-auto mode** (`src/types.ts`, `src/flow-state.ts`, `src/content/start-command.ts`, `src/content/runbooks-on-demand.ts`, `src/content/skills/*.md`).
+
+- The user-facing `step` / `auto` choice was retired. Every non-inline flow runs always-auto end-to-end. No approval pickers at plan / review / critic gates; the orchestrator chains stages automatically.
+- `runMode` field in `TriageDecision` is now structurally `"auto"` on non-inline paths and `null` on inline / trivial paths. Legacy `step` values in pre-v8.61 state files fold to `auto` on read (`runModeOf` always returns `"auto"`). The v8.34 mid-flight `--mode=step` / `--mode=auto` toggle is preserved on the parser surface for back-compat but collapses to `auto` (one-line note `step-mode retired in v8.61; flow runs auto`).
+- Failure routing matrix (user-locked decisions; canonical contract in the new `always-auto-failure-handling.md` runbook):
+  - **Build failure** → auto-fix loop, up to 3 iterations. Failure after 3 → stop and report.
+  - **Reviewer `critical` / `required-no-fix`** → auto-dispatch fix-only loop, up to 3 iterations. Failure after 3 → stop and report.
+  - **Critic `block-ship`** → stop immediately and report. No auto-iteration (re-running on unchanged code returns the same verdict).
+  - **Catastrophic** (git op fail, dispatch fail, missing tool) → stop and report.
+  - **`Confidence: low`** from any specialist → stop and report.
+- The "stop and report" status block is plain prose. Recovery is always `/cc` (continue from the saved state) or `/cc-cancel` (discard). No in-chat picker.
+
+**Deliverable 3 — `/cc` auto-continue + auto-start dispatch matrix** (`src/content/start-command.ts`, `src/content/skills/flow-resume.md`).
+
+- Deterministic 10-row matrix replaces the legacy resume picker:
+
+| Invocation | Active flow? | Behaviour |
+| --- | --- | --- |
+| `/cc` (no args) | yes | Continue the active flow silently. |
+| `/cc` (no args) | no | Error: "No active flow. Start with `/cc <task>` / `/cc research <topic>` / `/cc extend <slug> <task>`." |
+| `/cc <task>` | yes | Error: "Active flow: `<slug>` (stage: `<stage>`). Continue with `/cc`. Cancel with `/cc-cancel`." No auto-cancel, no queuing. |
+| `/cc <task>` | no | Start a new flow (dispatch triage). |
+| `/cc research <topic>` | yes / no | Error / start (same shape). |
+| `/cc extend <slug> <task>` | yes / no | Error / start (same shape). |
+| `/cc-cancel` | yes | Cancel active flow (move artifacts to `flows/cancelled/<slug>/`, reset state). |
+| `/cc-cancel` | no | Error: "No active flow to cancel." |
+
+- Active-flow detection: read `.cclaw/state/flow-state.json`. A flow is **active** when `currentSlug != null` (finalize resets `currentSlug` to `null` after moving artifacts to `flows/shipped/<slug>/`).
+- The `flow-resume` skill was rewritten as a reference doc for the matrix — the picker logic moved out, only the matrix mechanics, plain-prose error shape, silent-continue rule, and v8.61 retirement of the `runMode` toggle remain.
+
+**Deliverable 4 — New on-demand runbook `always-auto-failure-handling.md`** (`src/content/runbooks-on-demand.ts`).
+
+- 13th on-demand runbook. Carries the failure-routing matrix (verbatim from the user-locked decisions), the uniform stop-and-report status block shape, the auto-fix iteration counter (`autoFixIterations` on `FlowState`), recovery rules, and the catastrophic-failure subcases. Extracted from `start-command.ts` to keep the orchestrator body under its character budget.
+
+**Deliverable 5 — Documentation + version bump**.
+
+- README updated: `/cc` invocation matrix table, "If something goes wrong" recovery section, failure-handling matrix, worked-example updated to mention triage sub-agent + always-auto chain, specialist count 8 → 9, on-demand runbook count 12 → 13.
+- Pre-v8.58 state files with `runMode: "step"` continue to validate (clean break — user explicitly waived back-compat). The value folds to `auto` on the next stage transition.
+- Skill and runbook sweeps: `triage-gate.md`, `pause-resume.md`, `qa-and-browser.md`, `cap-reached-recovery`, `critic-steps`, `plan-critic`, `extend-mode` updated to remove `step`-mode branches and point to `always-auto-failure-handling.md` for hard-gate routing.
+
+### Clean break
+
+No migration of pre-v8.61 state files carrying `runMode: "step"`. Existing flows in flight at upgrade time may need `/cc-cancel` + restart to clear stale state. The user explicitly waived back-compat; the alternative was carrying a behavioural fork inside the orchestrator forever.
+
 ## 8.60.0 — Cleanup slug (command retirement + annotation scrub)
 
 ### Removed commands

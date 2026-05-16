@@ -8,12 +8,12 @@ cclaw installs `/cc` and `/cc-cancel` into each harness. Inside `/cc`, three ent
 
 ## Why cclaw
 
-- **Pipeline, not autopilot.** Every stage pauses at a structured gate so the human can read the artifact, edit it, or `/cc-cancel`. There is no "let it run for an hour and hope".
+- **Pipeline, not autopilot, but no friction either.** v8.61 — the flow runs end-to-end without approval pickers at plan / review / critic gates (always-auto). Hard failures stop and report with a clear status block; the user resumes with `/cc` (continue) or `/cc-cancel` (discard). See [Failure handling](#failure-handling-v861-always-auto) below.
 - **Two-model review.** A read-only reviewer walks ten axes; an adversarial critic falsifies what the reviewer cleared. They share no context and write to separate artifacts (`review.md`, `critic.md`).
 - **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Small/medium tasks get a soft-mode plan and a single TDD cycle. Large-risky tasks get a full per-criterion build with a pre-implementation plan-critic gate.
-- **Lightweight router.** The routing hop is zero-question by default (no structured ask, no clarifying prompt). Explicit override flags (`/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>`) short-circuit the heuristic when you want to pin a ceremony level. Classification work (surface detection, assumption capture, prior-learnings, interpretation forks) moved into the specialist that already has the codebase context — `design` Phase 0-2 on strict, `ac-author` Phase 0-1 on soft.
+- **Lightweight router as a sub-agent.** v8.61 — triage moved from the main orchestrator context to a dedicated `triage` specialist (one of nine sub-agents). The router is still zero-question by default (no structured ask, no clarifying prompt). Explicit override flags (`/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>`) short-circuit the heuristic when you want to pin a ceremony level. Classification work (surface detection, assumption capture, prior-learnings, interpretation forks) moved into the specialist that already has the codebase context — `design` Phase 0-2 on strict, `ac-author` Phase 0-1 on soft.
 - **Research mode.** `/cc research <topic>` is a separate entry point for pre-task uncertainty: brainstorming, scope exploration, architecture comparison. Runs the `design` specialist standalone (Phase 0 Bootstrap → Phase 6 Compose), emits a `research.md` synthesis artifact, and stops. Optional handoff into a follow-up `/cc <clarified task>` flow that consumes the research as `priorResearch` context.
-- **Continuation flow.** `/cc extend <slug> <task>` loads a previously-shipped slug as parent context for iterative work that explicitly builds on a previously-shipped slug. Loads the parent's `plan.md` / `build.md` / `learnings.md` (and `review.md` / `critic.md` / `qa.md` when present) into `flowState.parentContext`. Triage inherits `ceremonyMode` / `runMode` / `surfaces` from the parent (explicit `--strict` / `--soft` / `--inline` flags still override). The new flow's `plan.md` carries a `## Extends` section + `parent_slug:` frontmatter that points back at the parent.
+- **Continuation flow.** `/cc extend <slug> <task>` loads a previously-shipped slug as parent context for iterative work that explicitly builds on a previously-shipped slug. Loads the parent's `plan.md` / `build.md` / `learnings.md` (and `review.md` / `critic.md` / `qa.md` when present) into `flowState.parentContext`. Triage inherits `ceremonyMode` / `surfaces` from the parent under v8.61 always-auto (legacy `runMode` parents fold to `auto`; explicit `--strict` / `--soft` / `--inline` flags still override). The new flow's `plan.md` carries a `## Extends` section + `parent_slug:` frontmatter that points back at the parent.
 - **Same runtime, four harnesses.** Claude Code, Cursor, OpenCode, and Codex all read the same `.cclaw/` install. Each harness gets the same `/cc` body plus harness-namespaced ambient rules.
 - **Compound learnings.** Non-trivial slugs emit a `learnings.md`. Future runs read prior shipped lessons through `knowledge.jsonl` before authoring a plan; outcome signals (`good` / `unknown` / `manual-fix` / `follow-up-bug` / `reverted`) down-weight priors that didn't hold up.
 
@@ -35,8 +35,11 @@ npx cclaw-cli@latest
 # Inside your harness:
 /cc add caching to the search endpoint
 
-# After cclaw pauses at a gate, type /cc again to resume.
-# Artifacts land in .cclaw/flows/<slug>/.
+# v8.61 — the flow runs always-auto: plan → build → review → critic → ship
+# without approval pickers. cclaw stops only when a hard failure fires
+# (build broken, reviewer can't converge in 3 fixes, critic block-ship,
+# catastrophic git/dispatch failure). Resume with /cc; discard with
+# /cc-cancel. See "If something goes wrong" below.
 ls .cclaw/flows/20260515-search-caching/
 # plan.md  build.md  review.md  critic.md  ship.md
 ```
@@ -49,13 +52,36 @@ npx cclaw-cli@latest --non-interactive install --harness=cursor
 
 There is no `cclaw plan`, `cclaw build`, or `cclaw status`. Flow control lives inside `/cc`.
 
+### `/cc` invocation matrix (v8.61)
+
+| Invocation | Active flow? | Behaviour |
+| --- | --- | --- |
+| `/cc` (no args) | yes | Continue the active flow silently. No "resume?" picker. |
+| `/cc` (no args) | no | Error: "No active flow. Start with `/cc <task>`, `/cc research <topic>`, or `/cc extend <slug> <task>`." |
+| `/cc <task>` | yes | Error: "Active flow: `<slug>` (stage: `<stage>`). Continue with `/cc`. Cancel with `/cc-cancel`." cclaw does NOT auto-cancel or queue. |
+| `/cc <task>` | no | Start a new flow (dispatch triage). |
+| `/cc research <topic>` | yes / no | Same pattern — error when active, start when not. |
+| `/cc extend <slug> <task>` | yes / no | Same pattern — error when active, start when not. |
+| `/cc-cancel` | yes | Cancel active flow (move artifacts to `flows/cancelled/<slug>/`, reset state). |
+| `/cc-cancel` | no | Error: "No active flow to cancel." |
+
+### If something goes wrong
+
+cclaw v8.61 runs always-auto, so the recovery loop is uniform:
+
+1. cclaw stops at the first hard failure and writes a status block to chat naming the stage, the reason, and the recovery options.
+2. You read the status block (the artifact under `.cclaw/flows/<slug>/` carries the full detail).
+3. You decide: `/cc` to continue (after editing the diff / plan / review.md as needed), or `/cc-cancel` to discard the slug entirely.
+
+There is no in-chat picker, no `[y/n]` ask, no "approve this?" gate. The status block is plain prose; recovery is always one of two typed commands.
+
 ## Modes
 
 v8.59 ships three top-level entry points. All invocations use the same `/cc` slash-command surface; the orchestrator picks which mode to run based on the first token after `/cc`.
 
 ### `/cc <task>` — task mode (the historical default)
 
-Runs the full route → plan → build → ship pipeline with all the gates. The router (formerly "triage") is zero-question by default — it picks `complexity` × `ceremonyMode` × `path` from heuristics and announces the choice in one line, then dispatches the first specialist. No clarifying questions; no structured ask. If you want to pin a ceremony level explicitly, pass one of:
+Runs the full route → plan → build → ship pipeline. v8.61 — the router moved to a `triage` sub-agent dispatch (Hop 2 of the orchestrator). It still picks `complexity` × `ceremonyMode` × `path` from heuristics and announces the choice in one line, then dispatches the first specialist. No clarifying questions; no structured ask. If you want to pin a ceremony level explicitly, pass one of:
 
 ```bash
 /cc --inline <task>    # forces inline edit (one commit, no plan)
@@ -63,7 +89,7 @@ Runs the full route → plan → build → ship pipeline with all the gates. The
 /cc --strict <task>    # forces strict + design Phase 0-7 + per-criterion commits + plan-critic gate
 ```
 
-The flags are mutually exclusive and orthogonal to the `--mode=auto` / `--mode=step` runMode toggle (`/cc --strict --mode=auto <task>` is valid). When the project has no `.git/`, the router auto-downgrades strict → soft even with `--strict` (per-criterion commits need a SHA chain to be useful).
+The flags are mutually exclusive. v8.61 retired the user-facing `--mode=auto` / `--mode=step` runMode toggle — both are accepted on the parser for back-compat but collapse to `auto` (the only behavioural mode in v8.61). When the project has no `.git/`, the router auto-downgrades strict → soft even with `--strict` (per-criterion commits need a SHA chain to be useful).
 
 What used to live at the router — surface detection, assumption capture, prior-learnings lookup, interpretation forks — now lives inside the specialist that has the codebase context to do it well: `design` Phase 0-2 (strict), `ac-author` Phase 0-1 (soft), nothing (inline). Pre-v8.58 state files continue to validate verbatim; readers default to `mode: "task"` when the field is absent.
 
@@ -91,14 +117,14 @@ Initialises a new flow that explicitly **extends a previously-shipped slug**. Th
 ```bash
 /cc extend 20260514-auth-flow add SAML login                   # canonical
 /cc extend 20260514-auth-flow --strict refactor session store  # ceremony override wins over inheritance
-/cc extend 20260514-cli-help --mode=auto fix typo in --help    # runMode override wins
+/cc extend 20260514-cli-help fix typo in --help                # inheritance + always-auto
 ```
 
 The orchestrator runs the same pipeline as a standard `/cc <task>` (plan → build → qa? → review → critic → ship); the only difference is at init:
 
 - **Parent validation.** `loadParentContext(projectRoot, <slug>)` (`src/parent-context.ts`) confirms the slug is shipped + has a non-empty `plan.md`. Four failure modes are explicit: `in-flight` (slug still active), `cancelled` (under `flows/cancelled/`), `corrupted` (shipped but `plan.md` missing), `missing` (slug not found anywhere). Each surfaces a one-line error and ends the turn.
 - **State stamp.** The new flow's `flow-state.json > parentContext` carries the parent's slug + status + shippedAt + structured artifact paths. Plan.md frontmatter carries `parent_slug: <parent>` (v8.59-native) plus `refines: <parent>` (back-compat with the knowledge-store chain, qa-runner skip rule, plan-critic skip gate, design Phase 6 brownfield path).
-- **Triage inheritance.** The new flow's `ceremonyMode` / `runMode` / `surfaces` default to the parent's values. Explicit `--strict` / `--soft` / `--inline` / `--mode=auto` / `--mode=step` flags override inheritance. A security-keyword escalation heuristic (`security` / `auth` / `migration` / `schema` / `payment` / `gdpr` / `pci`) auto-escalates a soft/inline parent → strict for the new flow.
+- **Triage inheritance.** The new flow's `ceremonyMode` / `surfaces` default to the parent's values. `runMode` is v8.61 always-auto regardless of the parent (legacy `step` parents fold to `auto`). Explicit `--strict` / `--soft` / `--inline` flags override the ceremonyMode inheritance. A security-keyword escalation heuristic (`security` / `auth` / `migration` / `schema` / `payment` / `gdpr` / `pci`) auto-escalates a soft/inline parent → strict for the new flow.
 - **Specialist consumption.** `design` Phase 0 reads parent's `## Spec` / `## Decisions` / `## Selected Direction` and surfaces "Building on prior decisions: …". `ac-author` Phase 1.7 authors a mandatory `## Extends` section at the top of `plan.md` with parent slug + 1-line decision summary + clickable links to parent artifacts. `reviewer` runs a lightweight parent-contradictions cross-check (silent reversals of a parent D-N are `required` findings). `critic` §3 adds a skeptic question on parent decision contradictions.
 - **Knowledge-store integration.** When `parentContext` is set, `findNearKnowledge` prepends the parent's `knowledge.jsonl` entry to the top of the prior-learnings result (load-bearing context overrides Jaccard ranking).
 
@@ -118,7 +144,7 @@ flowchart LR
 
     E --> LC[loadParentContext<br/>shipped + plan.md required]
     LC -->|ok| EI[Stamp parentContext<br/>+ refines + parent_slug]
-    EI --> EHE[Triage inheritance<br/>ceremonyMode/runMode/surfaces]
+    EI --> EHE[Triage inheritance<br/>ceremonyMode/surfaces<br/>runMode = auto v8.61]
     EHE --> T
     LC -->|in-flight/cancelled<br/>/missing/corrupted| EERR[Surface error<br/>end turn]
 
@@ -138,22 +164,41 @@ You type:
 /cc add caching to the search endpoint
 ```
 
-The orchestrator runs through these stages in order, pausing at each gate. The slim-summary blocks the orchestrator emits sit under `## Triage`, `## Plan`, `## Build`, `## QA`, `## Review`, `## Critic`, `## Ship` section headers in chat. Artifacts land on disk.
+The orchestrator runs through these stages in order, chaining automatically (v8.61 always-auto). The slim-summary blocks the orchestrator emits sit under `## Triage`, `## Plan`, `## Build`, `## QA`, `## Review`, `## Critic`, `## Ship` section headers in chat. Artifacts land on disk.
 
-- **Triage (lightweight router).** complexity: small-medium · ceremony mode: soft · path: plan → build → review → critic → ship · slug: `20260515-search-caching` · mode: task. The router runs zero-question by default — no clarifying ask. The decision is persisted to `flow-state.json > triage` and is immutable for the slug. (v8.58 — surface detection / assumption capture / prior-learnings lookup moved into `ac-author` Phase 0-1 on the soft path; they used to live here.)
+- **Triage (v8.61 sub-agent).** The orchestrator dispatches the `triage` specialist with the raw `/cc` argument. Triage returns a 5-field decision in one slim summary — complexity: small-medium · ceremony mode: soft · path: plan → build → review → critic → ship · runMode: auto · mode: task. Slug: `20260515-search-caching`. Zero clarifying asks. The decision is persisted to `flow-state.json > triage` and is immutable for the slug. (v8.58 — surface detection / assumption capture / prior-learnings lookup moved into `ac-author` Phase 0-1 on the soft path; v8.61 — the triage routing prose moved out of the orchestrator body into `triage.md`.)
 - **Plan.** `ac-author` writes `plan.md` — Spec section (Objective / Success / Out of scope / Boundaries), Frame, Acceptance Criteria, Edge cases, Topology, Feasibility stamp, Traceability block. 3 AC, 2 prior lessons surfaced from `knowledge.jsonl`. Confidence: high.
-- **Build.** `slice-builder` runs one TDD cycle per criterion: RED → GREEN → REFACTOR. Each commit carries an `AC-N` prefix the reviewer reads via `git log --grep`. Tests: 14 passing (was 11). Coverage delta: +2.3%.
-- **Review.** Ten-axis reviewer opens 2 findings on the first iteration: cache-key collision on case-sensitive queries (`correctness`, `required`) and missing TTL refresh on stale entries (`architecture`, `consider`). Fix-only re-review closes both findings.
-- **Critic.** Adversarial falsificationist pass — predictions, gap analysis, Criterion check across AC + Edge cases + NFR rows, goal-backward verification, realist check. Verdict: pass.
-- **Ship.** All 3 AC committed. `ship.md` carries the release-notes draft and the AC↔commit map. The picker asks before pushing.
+- **Build.** `slice-builder` runs one TDD cycle per criterion: RED → GREEN → REFACTOR. Each commit carries an `AC-N` prefix the reviewer reads via `git log --grep`. Tests: 14 passing (was 11). Coverage delta: +2.3%. Build failures trigger an auto-fix loop (up to 3 iterations); failure after 3 stops and reports.
+- **Review.** Ten-axis reviewer opens 2 findings on the first iteration: cache-key collision on case-sensitive queries (`correctness`, `required`) and missing TTL refresh on stale entries (`architecture`, `consider`). Reviewer `critical` / `required-no-fix` triggers an auto-dispatch fix-only loop (up to 3 iterations); failure after 3 stops and reports.
+- **Critic.** Adversarial falsificationist pass — predictions, gap analysis, Criterion check across AC + Edge cases + NFR rows, goal-backward verification, realist check. Verdict: pass. `block-ship` stops immediately (no auto-iteration — re-running on unchanged code returns the same verdict).
+- **Ship.** All 3 AC committed. `ship.md` carries the release-notes draft and the AC↔commit map. Chains automatically to push under v8.61 always-auto.
 
 After ship, the orchestrator moves the artifacts to `.cclaw/flows/shipped/<slug>/` and (when the slug earned capture) appends one row to `.cclaw/state/knowledge.jsonl`.
+
+### Failure handling (v8.61 always-auto)
+
+cclaw stops at hard failures per a fixed matrix. The recovery loop is always the same: read the status block, decide, type `/cc` (continue) or `/cc-cancel` (discard).
+
+| Failure | Behaviour |
+| --- | --- |
+| Build failure | Auto-fix loop, up to 3 iterations. After 3 unresolved → stop and report. |
+| Reviewer `critical` / `required-no-fix` | Auto-dispatch fix-only loop, up to 3 iterations. After 3 unresolved → stop and report. |
+| Critic `block-ship` | Stop immediately and report. No auto-iteration. |
+| Catastrophic (git op fail, dispatch fail, missing tool) | Stop and report. |
+| `Confidence: low` from any specialist | Stop and report. The specialist's `Notes:` line is surfaced verbatim. |
+
+The status block names the stage, the reason, and the recovery options. Example:
+
+```
+Stopped at review (iteration 3). Reason: reviewer returned 2 critical findings after fix-only loop hit the 3-iteration cap.
+To proceed: /cc to continue (continues from the saved state), or /cc-cancel to discard the slug.
+```
 
 ## What you get
 
 | Surface | Count + detail |
 | --- | --- |
-| **Specialists** | 8 sub-agents: `design` (two activation modes — intra-flow brainstormer for strict large-risky tasks, standalone researcher for `/cc research <topic>`; same Phase 0-6, only Phase 7 picker differs), `ac-author` (absorbs classification work on the soft path: Phase 0 assumption capture, Phase 1.5 surface detection), `plan-critic` (pre-implementation gate, strict + complexity≠trivial + AC≥2), `slice-builder`, `qa-runner` (UI/web surfaces, ceremonyMode≠inline), `reviewer`, `security-reviewer`, `critic` (post-implementation adversarial pass). Each runs in isolation with a mandatory contract read. |
+| **Specialists** | 9 sub-agents: `triage` (v8.61 — on-demand routing dispatch at Hop 2 of every fresh `/cc <task>`; emits a 5-field slim summary the orchestrator parses), `design` (two activation modes — intra-flow brainstormer for strict large-risky tasks, standalone researcher for `/cc research <topic>`; same Phase 0-6, only Phase 7 picker differs), `ac-author` (absorbs classification work on the soft path: Phase 0 assumption capture, Phase 1.5 surface detection), `plan-critic` (pre-implementation gate, strict + complexity≠trivial + AC≥2), `slice-builder`, `qa-runner` (UI/web surfaces, ceremonyMode≠inline), `reviewer`, `security-reviewer`, `critic` (post-implementation adversarial pass). Each runs in isolation with a mandatory contract read. |
 | **Research helpers** | `repo-research` (brownfield scan) and `learnings-research` (prior shipped lessons) dispatched in parallel before every plan. |
 | **Ceremony modes** | `strict` (per-criterion RED → GREEN → REFACTOR + AC↔commit chain), `soft` (single feature-level TDD cycle, plain commit), `inline` (one commit, no plan). Triage picks the mode; readers accept the legacy `acMode` key for one release. |
 | **Plan template** | 14 sections (`Frame`, `Non-functional`, `Approaches`, `Selected Direction`, `Decisions`, `Pre-mortem`, `Not Doing`, `Plan`, `Spec`, `Acceptance Criteria`, `Feasibility stamp`, `Edge cases`, `Topology`, `Traceability block`) in strict mode; 6 sections (`Plan`, `Spec`, `Testable conditions`, `Verification`, `Touch surface`, `Notes`) in soft mode. AC is one section among many. |
@@ -161,7 +206,7 @@ After ship, the orchestrator moves the artifacts to `.cclaw/flows/shipped/<slug>
 | **Review** | 10 reviewer axes — 8 base (`correctness`, `readability`, `architecture`, `security`, `perf`, `test-quality`, `complexity-budget`, `edit-discipline`) plus 2 gated (`qa-evidence` when qa-runner ran, `nfr-compliance` when `## Non-functional` is non-empty). Append-only findings table, convergence detector, severity-aware ship gate. |
 | **Critic step** | Falsificationist pass after review clears: §1 predictions, §2 gap analysis, §3 four adversarial techniques + 6 human-perspective lenses (executor / stakeholder / skeptic for plan-stage, security / new-hire / ops for code-stage; adversarial mode only), §4 Criterion check (AC + Edge cases + NFR), §5 goal-backward, §6 realist check, §7 verdict, §8 summary. |
 | **Auto-trigger skills** | 21 skills (`triage-gate`, `plan-authoring`, `tdd-and-verification`, `review-discipline`, `commit-hygiene`, `completion-discipline`, `pre-edit-investigation`, `qa-and-browser`, `debug-and-browser`, `ac-discipline`, `source-driven`, `summary-format`, `documentation-and-adrs`, `parallel-build`, `refinement`, `flow-resume`, `receiving-feedback`, `anti-slop`, `conversation-language`, `api-evolution`, `pre-flight-assumptions`). Auto-applied per stage, not user-invoked. |
-| **On-demand runbooks** | 12 runbooks loaded by trigger (`dispatch-envelope`, `parallel-build`, `finalize`, `cap-reached-recovery`, `adversarial-rerun`, `handoff-gates`, `handoff-artifacts`, `compound-refresh`, `pause-resume`, `critic-steps`, `qa-stage`, `extend-mode`). Kept out of the orchestrator body to hold the prompt budget. |
+| **On-demand runbooks** | 13 runbooks loaded by trigger (`dispatch-envelope`, `parallel-build`, `finalize`, `cap-reached-recovery`, `adversarial-rerun`, `handoff-gates`, `handoff-artifacts`, `compound-refresh`, `pause-resume`, `critic-steps`, `qa-stage`, `extend-mode`, `always-auto-failure-handling`). Kept out of the orchestrator body to hold the prompt budget. v8.61 added `always-auto-failure-handling` as the canonical failure-routing matrix. |
 | **Anti-rationalization catalog** | v8.49 — `.cclaw/lib/anti-rationalizations.md` carries the cross-cutting rebuttal table (posture-bypass, completion-discipline, edit-discipline, verification rows). Each specialist's prompt cites the catalog and adds its own specialist-specific rows. |
 | **Outcome signals** | v8.50 — 5-value enum (`good`, `unknown`, `manual-fix`, `follow-up-bug`, `reverted`) recorded on `knowledge.jsonl` rows. Three capture paths (orchestrator scans on every `/cc` for follow-up-bug references; compound time scans for revert commits and same-touch-surface manual-fix commits). Prior-learnings lookup multiplies similarity by signal weight before threshold filtering. |
 | **Ambiguity score** | v8.53 — design Phase 6 emits a composite ambiguity score (3 dims on greenfield, 4 dims on brownfield) into `plan.md` frontmatter. Phase 7 prefixes a soft warning when the composite exceeds threshold (default `0.2`, configurable). Informational signal, never a hard gate. |
@@ -200,10 +245,10 @@ design:
 
 The runtime is under 1 KLOC. The prompt content is where the work lives. If you want to understand how `/cc` actually works, read the source — the on-disk reference lives under `src/content/`:
 
-- [`src/content/start-command.ts`](src/content/start-command.ts) — orchestrator body (detect, triage, dispatch, pause/resume, critic step, ship, compound, finalize).
-- [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 8 specialist contracts.
+- [`src/content/start-command.ts`](src/content/start-command.ts) — orchestrator body (detect, dispatch, always-auto chain, critic step, ship, compound, finalize). v8.61 dropped the inline triage prose; the orchestrator dispatches the `triage` sub-agent at Hop 2.
+- [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 9 specialist contracts (v8.61 added `triage.ts`).
 - [`src/content/skills/`](src/content/skills/) — 21 auto-trigger skill bodies.
-- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 11 on-demand runbooks the orchestrator opens by trigger.
+- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 13 on-demand runbooks the orchestrator opens by trigger (v8.61 added `always-auto-failure-handling`).
 - [`src/content/artifact-templates.ts`](src/content/artifact-templates.ts) — plan / build / qa / review / critic / plan-critic / ship / learnings templates.
 - [`src/content/anti-rationalizations.ts`](src/content/anti-rationalizations.ts) — cross-cutting rebuttal catalog (v8.49+).
 - [`CHANGELOG.md`](CHANGELOG.md) — release history.
@@ -230,10 +275,10 @@ The runtime is under 1 KLOC. The prompt content is where the work lives. If you 
     shipped/<slug>/         finalized tasks (including research-mode flows)
     cancelled/<slug>/       /cc-cancel destination
   lib/
-    agents/                 8 specialist contracts
+    agents/                 9 specialist contracts (v8.61 + triage.md)
     skills/                 21 auto-trigger skill bodies
     templates/              artifact templates
-    runbooks/               11 on-demand runbooks
+    runbooks/               13 on-demand runbooks (v8.61 + always-auto-failure-handling.md)
     patterns/               reference patterns
     anti-rationalizations.md
     antipatterns.md

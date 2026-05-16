@@ -52,7 +52,9 @@ import { createTempProject, removeProject } from "../helpers/temp-project.js";
  */
 
 const SKILLS = AUTO_TRIGGER_SKILLS;
-const FLOW_RESUME = SKILLS.find((s) => s.id === "flow-resume");
+// v8.61 — flow-resume.md mid-flight runMode tests retired; the v8.34 toggle is now
+// a back-compat no-op (the orchestrator always runs auto).
+void SKILLS;
 
 describe("v8.34 — KnowledgeEntry `problemType` field (item 5)", () => {
   let project: string;
@@ -212,64 +214,40 @@ describe("v8.34 — KnowledgeEntry `problemType` field (item 5)", () => {
   });
 });
 
-describe("v8.34 — mid-flight runMode toggle (item 6)", () => {
+describe("v8.34 — mid-flight runMode toggle (item 6; retired in v8.61 always-auto)", () => {
   const body = renderStartCommand();
 
-  it("AC-5 — start-command body documents `/cc --mode=auto` flag", () => {
+  it("AC-5 — start-command body still documents `/cc --mode=auto` flag (accepted for back-compat in v8.61)", () => {
     expect(
       body,
-      "the orchestrator body must document the `/cc --mode=auto` toggle so the harness namespace router knows to forward the flag"
-    ).toMatch(/\/cc\s+--mode=auto/);
+      "the orchestrator body must still document the `/cc --mode=auto` toggle so the harness namespace router knows to forward the flag (v8.61 honours it as a no-op for back-compat)"
+    ).toMatch(/\/cc\s+--mode=auto|--mode=auto/);
   });
 
-  it("AC-5 — start-command body documents `/cc --mode=step` flag", () => {
-    expect(body).toMatch(/\/cc\s+--mode=step/);
+  it("AC-5 — start-command body still documents `/cc --mode=step` flag (accepted for back-compat in v8.61)", () => {
+    expect(body).toMatch(/--mode=step/);
   });
 
-  it("AC-5 — start-command body names runMode as the only mutable triage field (mid-flight toggle is the v8.34 exception)", () => {
-    // The existing "triage decision is **immutable**" rule still holds for
-    // complexity / ceremonyMode / path, but runMode is now mid-flight-toggleable.
+  it("v8.61 — start-command body declares the always-auto retirement of the step/auto toggle", () => {
     expect(
       body,
-      "the body must explicitly call out the runMode exception so future readers don't infer the toggle violates the immutability invariant"
-    ).toMatch(/runMode.{0,200}except|except.{0,200}runMode|runMode.{0,200}mid-flight toggle|mid-flight.{0,200}runMode/iu);
+      "the body must spell out that v8.61 retired the step/auto choice and the flow always runs auto"
+    ).toMatch(/always[- ]auto|v8\.61 always[- ]auto|step.+retired|step mode.+retired/iu);
   });
 
-  it("AC-5 — start-command body declares the inline-path rejection message verbatim", () => {
+  it("v8.61 — start-command body names runMode as immutable (the v8.34 mid-flight toggle was retired with always-auto)", () => {
+    // v8.61: the v8.34 mid-flight toggle is retired (--mode=step is now a no-op).
+    // The triage decision is fully immutable (complexity / ceremonyMode / path / runMode / mode).
     expect(
       body,
-      "the inline path must reject the toggle with the literal note `inline path has no runMode` — it's the contract the orchestrator surfaces to the user"
-    ).toMatch(/inline path has no runMode/);
+      "the body must spell out that the triage decision is fully immutable in v8.61"
+    ).toMatch(/triage decision is \*\*immutable\*\*/);
   });
 
-  it("AC-5 — start-command body documents that the toggle persists across `/cc` invocations (patches flow-state.json > triage.runMode)", () => {
-    // Pin the contract that the toggle is sticky: the next /cc reads the
-    // patched runMode, not the original triage runMode.
+  it("v8.61 — start-command body still references `triage.runMode` (so persistence + audit-log readers find the field name)", () => {
     expect(
       body,
-      "the body must spell out the persistence rule so the orchestrator does not silently revert on the next /cc"
-    ).toMatch(/triage\.runMode|flow-state\.json[\s\S]{0,200}runMode|patches[\s\S]{0,200}runMode/iu);
-  });
-
-  it("AC-6 — flow-resume.md documents the toggle (resume-time entry point for `/cc --mode=...`)", () => {
-    expect(FLOW_RESUME, "flow-resume.md must be registered").toBeDefined();
-    const body = FLOW_RESUME!.body;
-    expect(
-      body,
-      "flow-resume.md must document the toggle so the user reads about it at the moment they `/cc` to advance the flow"
-    ).toMatch(/\/cc\s+--mode=(auto|step)/);
-  });
-
-  it("AC-6 — flow-resume.md describes the toggle as mid-flight (not just at resume) — both senses of 'mid-flight' acceptable", () => {
-    const body = FLOW_RESUME!.body;
-    expect(
-      body,
-      "the doc must clarify that the toggle works anywhere along the flow, including mid-stage / between dispatches — not just on `/cc` from a fresh paused state"
-    ).toMatch(/mid[- ]flight|mid[- ]flow|any.{0,30}\/cc|between stages/iu);
-  });
-
-  it("AC-6 — flow-resume.md names the inline-path rejection (same string as start-command)", () => {
-    const body = FLOW_RESUME!.body;
-    expect(body).toMatch(/inline path has no runMode/);
+      "the field name must survive so readers parsing flow-state.json find the canonical key"
+    ).toMatch(/triage\.runMode|flow-state\.json[\s\S]{0,200}runMode/iu);
   });
 });

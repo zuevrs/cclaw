@@ -113,6 +113,16 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     modes: ["build", "fix-only"],
     description: "Implements AC slices and post-review scoped fixes. In strict mode every commit carries a posture-driven subject-line prefix (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies via git log --grep.",
     prompt: SPECIALIST_PROMPTS["slice-builder"]
+  },
+  {
+    id: "triage",
+    kind: "specialist",
+    title: "Triage",
+    activation: "on-demand",
+    modes: ["heuristic", "override"],
+    description:
+      "v8.61 lightweight router moved to a sub-agent. Decides exactly five fields (complexity, ceremonyMode, path, runMode, mode) for every fresh `/cc <task>` (research-mode and extend-mode flows skip triage — the orchestrator's Detect hop forks before dispatch). Zero-question rule preserved verbatim from v8.58. Honours the three v8.58 override flags (--inline / --soft / --strict) and the v8.34 --mode=auto / --mode=step toggle (both now collapse to auto per v8.61 always-auto). Auto-downgrades strict to soft when .git/ is absent and stamps downgradeReason: \"no-git\". Returns a slim summary; the orchestrator persists the decision to flow-state.json.",
+    prompt: SPECIALIST_PROMPTS.triage
   }
 ];
 

@@ -141,9 +141,9 @@ describe("flow-state", () => {
     expect(isSpecialist(undefined)).toBe(false);
   });
 
-  it("runModeOf defaults to step on null / undefined / triage-without-runMode", () => {
-    expect(runModeOf(null)).toBe("step");
-    expect(runModeOf(undefined)).toBe("step");
+  it("v8.61 — runModeOf collapses every input to `auto` (always-auto retirement of step/auto choice)", () => {
+    expect(runModeOf(null)).toBe("auto");
+    expect(runModeOf(undefined)).toBe("auto");
     const triageWithoutRunMode: TriageDecision = {
       complexity: "small-medium",
       ceremonyMode: "soft",
@@ -152,8 +152,11 @@ describe("flow-state", () => {
       decidedAt: "2026-05-07T00:00:00Z",
       userOverrode: false
     };
-    expect(runModeOf(triageWithoutRunMode)).toBe("step");
+    expect(runModeOf(triageWithoutRunMode)).toBe("auto");
     expect(runModeOf({ ...triageWithoutRunMode, runMode: "auto" })).toBe("auto");
+    // Pre-v8.61 state files carrying `runMode: "step"` still validate but are
+    // collapsed to "auto" by the helper (orchestrator no longer branches on the field).
+    expect(runModeOf({ ...triageWithoutRunMode, runMode: "step" })).toBe("auto");
   });
 
   it("assumptionsOf returns [] for null / undefined / missing field; otherwise the verbatim list", () => {

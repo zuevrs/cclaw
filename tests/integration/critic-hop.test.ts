@@ -75,8 +75,8 @@ describe("v8.42 — critic step dispatch path reachable from start-command body"
     expect(renderStartCommand()).toContain(CRITIC_STEPS_FILENAME);
   });
 
-  it("body includes `critic` in the Last specialist enum", () => {
-    expect(START_COMMAND_BODY).toMatch(/Last specialist:.+\bcritic\b/);
+  it("body includes `critic` in the lastSpecialist enum (v8.61 reframed from the resume-summary 'Last specialist:' line)", () => {
+    expect(START_COMMAND_BODY).toMatch(/`lastSpecialist`\s*=[\s\S]+`critic`/);
   });
 });
 
@@ -118,15 +118,15 @@ describe("v8.42 — critic prompt covers known-bad scenarios", () => {
   });
 });
 
-describe("v8.42 — specialist count is 8 end-to-end", () => {
-  it("CORE_AGENTS contains 8 specialists + 2 research helpers", () => {
+describe("v8.42 — specialist count end-to-end (v8.61: 9 specialists + 2 research helpers)", () => {
+  it("CORE_AGENTS contains 9 specialists + 2 research helpers (v8.61 added triage)", () => {
     const specialists = CORE_AGENTS.filter((a) => a.kind === "specialist");
     const research = CORE_AGENTS.filter((a) => a.kind === "research");
-    expect(specialists).toHaveLength(8);
+    expect(specialists).toHaveLength(9);
     expect(research).toHaveLength(2);
   });
 
-  it("init writes the 10 expected agent files", async () => {
+  it("init writes the 11 expected agent files (v8.61 added triage.md)", async () => {
     let project: string | null = null;
     try {
       project = await createTempProject();
@@ -143,7 +143,8 @@ describe("v8.42 — specialist count is 8 end-to-end", () => {
         "repo-research.md",
         "reviewer.md",
         "security-reviewer.md",
-        "slice-builder.md"
+        "slice-builder.md",
+        "triage.md"
       ]);
     } finally {
       if (project) await removeProject(project);
