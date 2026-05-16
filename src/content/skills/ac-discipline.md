@@ -57,12 +57,12 @@ In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/c
    - **AC declared in plan.md.** `AC-N` cited in a commit must exist in the active plan; an unknown AC-N is an A-N finding.
    - **Posture-appropriate sequence.** For `test-first` / `characterization-first` postures, `green(AC-N)` must follow a `red(AC-N)` in git-log order; for `refactor-only`, only `refactor(AC-N)` is expected; for `tests-as-deliverable`, only `test(AC-N)`; for `docs-only`, only `docs(AC-N)`. See `src/posture-validation.ts:POSTURE_COMMIT_PREFIXES` for the canonical mapping.
    - **RED stages test files only.** `git show <red-SHA> --stat` for a `test-first` / `characterization-first` AC must list test files only; mixing in production files is an A-1 finding (severity=required, axis=correctness).
-4. The slice-builder appends the AC↔SHA row to `flows/<slug>/build.md` as the durable record; the row's `commits` column carries the SHA(s).
+4. The builder appends the AC↔SHA row to `flows/<slug>/build.md` as the durable record; the row's `commits` column carries the SHA(s).
 5. The reviewer's final pass (`reviewer mode=release` at ship gate) verifies the chain is complete via `git log --grep="(AC-N):" --oneline` against the plan's AC list. There is no separate `runCompoundAndShip` gate (dropped it — reviewer is the only ship gate).
 
 ## In soft / inline modes
 
-- In **soft mode** the slice-builder runs one TDD cycle for the whole feature and commits with a plain `git commit -m "<feat|fix|...>: <one-line>"`. There is no `red(AC-N)` / `green(AC-N)` / `refactor(AC-N)` prefix — the AC↔commit chain only exists in strict mode.
+- In **soft mode** the builder runs one TDD cycle for the whole feature and commits with a plain `git commit -m "<feat|fix|...>: <one-line>"`. There is no `red(AC-N)` / `green(AC-N)` / `refactor(AC-N)` prefix — the AC↔commit chain only exists in strict mode.
 - In **inline mode** there is no AC table at all; the orchestrator handled the trivial path directly with a single commit.
 - A soft-mode plan has bullet-list testable conditions, not numbered AC IDs. There is no `AC-N` to reference.
 - A single TDD cycle covers the whole feature; you do not run RED → GREEN → REFACTOR per condition.
@@ -72,7 +72,7 @@ In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/c
 
 - Reviewer's `git log --grep="(AC-N):"` scan misses the commit; the AC reads as missing.
 - Two options:
-  - **Amend the most recent commit** with `git commit --amend -m "red(AC-N): <description>"` (only safe when the commit has not been pushed and is the most recent — the slice-builder controls the working tree).
+  - **Amend the most recent commit** with `git commit --amend -m "red(AC-N): <description>"` (only safe when the commit has not been pushed and is the most recent — the builder controls the working tree).
   - **Re-author as a fixup commit** with the correct prefix: `git commit --allow-empty -m "red(AC-N): re-record subject for <original-SHA>"` followed by the actual missing-content commit. The empty marker preserves the audit trail and the reviewer's scan reconstructs the AC's chain.
 - Surface the mis-prefix as a Notes line in the slim summary; the reviewer treats it as a `consider`-severity finding (axis=readability) when amended cleanly, and `required` (axis=correctness) when the chain is left broken.
 

@@ -119,8 +119,8 @@ try {
   // `ship`; the template is the artifact's source-of-truth shape and
   // ships unconditionally (acMode-gated on dispatch, not install).
   // v8.51 — `plan-critic.md` template was added alongside the new
-  // pre-implementation plan-critic specialist. Runs between `ac-author`
-  // and `slice-builder` on the tight gate {acMode=strict, complexity=
+  // pre-implementation plan-critic specialist. Runs between `architect`
+  // and `builder` on the tight gate {acMode=strict, complexity=
   // large-risky, problemType!=refines, AC count>=2}; the template is
   // the artifact's source-of-truth shape and ships unconditionally
   // (gate-gated on dispatch, not install).
@@ -134,10 +134,12 @@ try {
   // does NOT write the legacy decisions template (v8.14+ inlines D-N rows in
   // plan.md > ## Decisions).
   // v8.58 — `research.md` template was added alongside the new standalone
-  // research-mode entry point (`/cc research <topic>`). The `design`
-  // specialist writes to `research.md` (instead of plan.md) when activated
-  // in standalone mode; the artifact carries the same section layout as the
-  // design portion of plan.md but with the research-specific frontmatter
+  // research-mode entry point (`/cc research <topic>`). v8.62: the
+  // `architect` specialist (renamed from `ac-author` and absorbing the
+  // dead `design` specialist's responsibilities) writes to `research.md`
+  // (instead of plan.md) when activated in standalone research mode; the
+  // artifact carries the same section layout as the architect-authored
+  // prefix of plan.md but with the research-specific frontmatter
   // (mode: research / topic / generated_at). Ships unconditionally — the
   // template is the artifact's source-of-truth shape regardless of whether
   // the project ever invokes research-mode.
@@ -151,22 +153,39 @@ try {
   }
   // v8.42 — assert the critic specialist's agent file is written too.
   // v8.51 — assert the plan-critic specialist's agent file is written
-  // too. CORE_AGENTS now includes `plan-critic` (7 specialists total:
-  // design, ac-author, reviewer, security-reviewer, critic, plan-critic,
-  // slice-builder).
+  // too. v8.62: CORE_AGENTS now includes `plan-critic` (7 specialists
+  // total: triage, architect, builder, plan-critic, qa-runner,
+  // reviewer, critic).
   if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "critic.md"))) {
     throw new Error("smoke check failed: v8.42 critic.md agent file missing after init");
   }
   if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "plan-critic.md"))) {
     throw new Error("smoke check failed: v8.51 plan-critic.md agent file missing after init");
   }
-  // v8.52 — qa-runner specialist. SPECIALIST_AGENTS now contains 8
-  // specialists (design, ac-author, reviewer, security-reviewer, critic,
-  // plan-critic, qa-runner, slice-builder). The agent file ships
-  // unconditionally; the orchestrator gates the qa stage at dispatch on
-  // triage.surfaces ∩ {ui, web} ≠ ∅ AND acMode != inline.
+  // v8.52 — qa-runner specialist. v8.62: SPECIALIST_AGENTS now contains
+  // 7 specialists (triage, architect, builder, plan-critic, qa-runner,
+  // reviewer, critic). The agent file ships unconditionally; the
+  // orchestrator gates the qa stage at dispatch on triage.surfaces ∩
+  // {ui, web} ≠ ∅ AND acMode != inline.
   if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "qa-runner.md"))) {
     throw new Error("smoke check failed: v8.52 qa-runner.md agent file missing after init");
+  }
+  // v8.62 — unified flow specialist roster. `architect` (renamed from
+  // `ac-author`, absorbing the dead `design` specialist's Phase 0-6
+  // responsibilities) and `builder` (renamed from `slice-builder`) are
+  // the canonical names; the retired files (`design.md`, `ac-author.md`,
+  // `slice-builder.md`, `security-reviewer.md`) must NOT install on a
+  // fresh project and must be swept on upgrade (covered by the
+  // retired-agent cleanup smoke check below).
+  for (const v862Agent of ["architect.md", "builder.md"]) {
+    if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", v862Agent))) {
+      throw new Error(`smoke check failed: v8.62 ${v862Agent} agent file missing after init`);
+    }
+  }
+  for (const retiredAgent of ["design.md", "ac-author.md", "slice-builder.md", "security-reviewer.md"]) {
+    if (existsSync(join(tempDir, ".cclaw", "lib", "agents", retiredAgent))) {
+      throw new Error(`smoke check failed: v8.62 retired agent ${retiredAgent} must not install on fresh project`);
+    }
   }
   // v8.17: derive the expected list from `AUTO_TRIGGER_SKILLS` so future
   // thematic merges / splits don't require touching this script. Assert
@@ -209,10 +228,9 @@ try {
   }
   // v8.52 — `qa-stage.md` on-demand runbook was added alongside the new
   // behavioural-QA qa-runner specialist. The runbook is lazy-loaded by
-  // the orchestrator on every slice-builder GREEN return when the
-  // surface gate fires (triage.surfaces ∩ {ui, web} ≠ ∅ AND acMode !=
-  // inline); install writes the file unconditionally (gate-gated on
-  // dispatch).
+  // the orchestrator on every builder GREEN return when the surface
+  // gate fires (triage.surfaces ∩ {ui, web} ≠ ∅ AND acMode != inline);
+  // install writes the file unconditionally (gate-gated on dispatch).
   if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "qa-stage.md"))) {
     throw new Error("smoke check failed: v8.52 qa-stage.md runbook missing after init");
   }
@@ -451,6 +469,34 @@ try {
     );
   }
 
+  // v8.62 — retired agent cleanup. Plant pre-v8.62 specialist agent files
+  // under .cclaw/lib/agents/ (design / ac-author / slice-builder /
+  // security-reviewer) and assert the next install removes each and emits
+  // a `Removed retired agent` progress event per file.
+  const retiredAgents = ["design.md", "ac-author.md", "slice-builder.md", "security-reviewer.md"];
+  for (const retiredAgent of retiredAgents) {
+    writeFileSync(
+      join(tempDir, ".cclaw", "lib", "agents", retiredAgent),
+      `---\nname: ${retiredAgent.replace(/\.md$/, "")}\n---\nstale ${retiredAgent} fixture\n`,
+      "utf8"
+    );
+  }
+  const retiredAgentOut = String(
+    execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
+  );
+  for (const retiredAgent of retiredAgents) {
+    if (existsSync(join(tempDir, ".cclaw", "lib", "agents", retiredAgent))) {
+      throw new Error(
+        `smoke check failed: v8.62 retired-agent cleanup did not remove .cclaw/lib/agents/${retiredAgent} after install`
+      );
+    }
+    if (!retiredAgentOut.includes(`Removed retired agent`) || !retiredAgentOut.includes(retiredAgent)) {
+      throw new Error(
+        `smoke check failed: v8.62 retired-agent cleanup did not print "Removed retired agent — ${retiredAgent}" on install; got:\n${retiredAgentOut}`
+      );
+    }
+  }
+
   // v8.60 — retired command cleanup. Plant pre-v8.60 slash-command files and
   // assert the next install removes them + emits progress events.
   const staleCommandsDir = join(tempDir, ".cursor", "commands");
@@ -487,6 +533,9 @@ try {
   }
   if (idempotentOut.includes("Removed retired lib dir")) {
     throw new Error(`smoke check failed: v8.44 retired-lib-dir cleanup should be idempotent (zero retired-lib-dir events on a clean install); got:\n${idempotentOut}`);
+  }
+  if (idempotentOut.includes("Removed retired agent")) {
+    throw new Error(`smoke check failed: v8.62 retired-agent cleanup should be idempotent (zero retired-agent events on a clean install); got:\n${idempotentOut}`);
   }
   // v8.37 — `sync` / `upgrade` non-interactive commands were collapsed
   // into `install`. The retired names now exit 1 with a migration hint;

@@ -14,7 +14,7 @@ import { writeFlowState } from "../../src/run-persistence.js";
 import { ensureDir } from "../../src/fs-utils.js";
 import { activeArtifactDir, activeArtifactPath } from "../../src/artifact-paths.js";
 import { createInitialFlowState } from "../../src/flow-state.js";
-import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
+import { BUILDER_PROMPT } from "../../src/content/specialist-prompts/builder.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
@@ -337,24 +337,24 @@ describe("v8.9 cleanup", () => {
     });
   });
 
-  describe("A5 — slice-builder coverage-assess beat", () => {
-    it("slice-builder prompt declares hard rule 17 about Coverage between GREEN and REFACTOR", () => {
-      expect(SLICE_BUILDER_PROMPT).toMatch(/17\. \*\*Coverage assessment between GREEN and REFACTOR/);
+  describe("A5 — builder coverage-assess beat (v8.62 renamed `slice-builder` → `builder`)", () => {
+    it("builder prompt declares hard rule 17 about Coverage between GREEN and REFACTOR", () => {
+      expect(BUILDER_PROMPT).toMatch(/17\. \*\*Coverage assessment between GREEN and REFACTOR/);
     });
 
-    it("slice-builder prompt enumerates the three verdicts (full / partial / refactor-only)", () => {
-      expect(SLICE_BUILDER_PROMPT).toMatch(/\*\*`full`\*\*/);
-      expect(SLICE_BUILDER_PROMPT).toMatch(/\*\*`partial`\*\*/);
-      expect(SLICE_BUILDER_PROMPT).toMatch(/\*\*`refactor-only`\*\*/);
+    it("builder prompt enumerates the three verdicts (full / partial / refactor-only)", () => {
+      expect(BUILDER_PROMPT).toMatch(/\*\*`full`\*\*/);
+      expect(BUILDER_PROMPT).toMatch(/\*\*`partial`\*\*/);
+      expect(BUILDER_PROMPT).toMatch(/\*\*`refactor-only`\*\*/);
     });
 
-    it("slice-builder prompt declares the new self_review rule `coverage-assessed`", () => {
-      expect(SLICE_BUILDER_PROMPT).toMatch(/coverage-assessed/);
+    it("builder prompt declares the new self_review rule `coverage-assessed`", () => {
+      expect(BUILDER_PROMPT).toMatch(/coverage-assessed/);
     });
 
-    it("slice-builder self-review gate now declares five rules (was four)", () => {
-      expect(SLICE_BUILDER_PROMPT).toMatch(/\*\*five mandatory rules\*\*/);
-      expect(SLICE_BUILDER_PROMPT).not.toMatch(/\*\*four mandatory rules\*\*/);
+    it("builder self-review gate now declares five rules (was four)", () => {
+      expect(BUILDER_PROMPT).toMatch(/\*\*five mandatory rules\*\*/);
+      expect(BUILDER_PROMPT).not.toMatch(/\*\*four mandatory rules\*\*/);
     });
 
     it("strict BUILD_TEMPLATE includes a `## Coverage assessment` section with the three-column table", () => {

@@ -11,7 +11,7 @@ The three-section shape is taken directly from the addyosmani-skills git-workflo
 
 ## When to use
 
-Always-on for any specialist that authors a cclaw artifact: `plan.md` (ac-author / design), `decisions.md` (design Phase 4 on legacy flows), `build.md` (slice-builder), `review.md` (reviewer / security-reviewer per iteration), `ship.md` (slice-builder at ship dispatch), `learnings.md` (the learnings sub-agent). The slim-summary contract — six lines max, `Stage: …`, `What changed: …`, `Next: …`, `Confidence: …` — is enforced on every dispatch return; the artifact Summary block is appended at write time.
+Always-on for any specialist that authors a cclaw artifact: `plan.md` (architect), `decisions.md` (architect's Decisions phase on legacy flows), `build.md` (builder), `review.md` (reviewer per iteration — security threat-modelling absorbed into the reviewer's `security` axis), `ship.md` (builder at ship dispatch), `learnings.md` (the learnings sub-agent). The slim-summary contract — six lines max, `Stage: …`, `What changed: …`, `Next: …`, `Confidence: …` — is enforced on every dispatch return; the artifact Summary block is appended at write time.
 
 ## When NOT to apply
 
@@ -41,22 +41,11 @@ Append exactly this block to the bottom of the artifact you authored. Do not ren
 ### Potential concerns
 - <one bullet per uncertainty, missing input, or risk the next stage / next reader should weigh>
 - <e.g. "AC-2 verification depends on a clock helper not yet imported in the test file">
-- <e.g. "Migration step in D-1 may interact with the seed script — flagged for security-reviewer">
+- <e.g. "Migration step in D-1 may interact with the seed script — flagged for reviewer's `security` axis to look at">
 - if there is nothing, write `None.`.
 ```
 
-The block goes at the very bottom of the artifact, after the body, after any worked examples, after any prior-iteration material. One block per artifact write. Multi-author files (plan.md on large-risky) get **one Summary per author**, with a heading suffix:
-
-```markdown
-## Summary — design
-### Changes made
-...
-## Summary — ac-author
-### Changes made
-...
-```
-
-This way the next reader sees who wrote what and can attribute the "Things I noticed" / "Potential concerns" to the right specialist.
+The block goes at the very bottom of the artifact, after the body, after any worked examples, after any prior-iteration material. One block per artifact write. The architect now authors the entire plan.md in a single dispatch (v8.62 unified flow), so plan.md carries **one Summary block** — `## Summary — architect` on large-risky / strict (to be explicit about the multi-phase ceremony that ran), or `## Summary` on small-medium / soft.
 
 ## What goes in each section
 
@@ -92,11 +81,9 @@ If there are no real concerns, write `None.` and own it.
 
 | Specialist | Block goes in |
 | --- | --- |
-| `design` | `flows/<slug>/plan.md` (heading: `## Summary — design`) — single block at the bottom of design's appended sections (Frame, Approaches, Selected Direction, optional Decisions, optional Pre-mortem, Not Doing) |
-| `ac-author` | `flows/<slug>/plan.md` (heading: `## Summary — ac-author` on large-risky; `## Summary` on small/medium) |
-| `slice-builder` | `flows/<slug>/build.md` (heading: `## Summary` per cycle in soft mode; per fix-iteration in fix-only mode; per slice in parallel-build) |
-| `reviewer` | `flows/<slug>/review.md` per iteration (heading: `## Summary — iteration N`) — sits right above the next iteration block |
-| `security-reviewer` | `flows/<slug>/review.md` security section (heading: `## Summary — security`) |
+| `architect` | `flows/<slug>/plan.md` (heading: `## Summary — architect` on large-risky; `## Summary` on small/medium). On research mode the artifact is `flows/<slug>/research.md` (heading: `## Summary — architect (research mode)`) |
+| `builder` | `flows/<slug>/build.md` (heading: `## Summary` per cycle in soft mode; per fix-iteration in fix-only mode; per slice in parallel-build) |
+| `reviewer` | `flows/<slug>/review.md` per iteration (heading: `## Summary — iteration N`) — sits right above the next iteration block. Security-axis findings (threat-model / taint / secrets / supply chain), absorbed from the former `security-reviewer`, sit inline in the same iteration block under the `security` axis tag |
 | ship synthesis | `flows/<slug>/ship.md` (heading: `## Summary`) |
 
 ## Common pitfalls
@@ -106,7 +93,7 @@ If there are no real concerns, write `None.` and own it.
 - Using `Potential concerns` as a TODO list. It is a risk register, not a backlog. Concrete, future-tense risks only.
 - Multi-author plan.md getting one combined Summary at the end. Each author writes their own.
 
-## Worked example — ac-author Summary on small/medium
+## Worked example — architect Summary on small/medium
 
 ```markdown
 ## Summary
@@ -117,10 +104,10 @@ If there are no real concerns, write `None.` and own it.
 - Recorded prior lesson from `shipped/dashboard-status-pill` (verbatim quote in `## Prior lessons applied`).
 
 ### Things I noticed but didn't touch
-- `src/components/dashboard/RequestCard.tsx:140` has a `useMemo` whose deps include `Date.now()` — re-renders every minute. Outside this slug's AC; flagging in case slice-builder or reviewer wants to surface as a follow-up.
+- `src/components/dashboard/RequestCard.tsx:140` has a `useMemo` whose deps include `Date.now()` — re-renders every minute. Outside this slug's AC; flagging in case builder or reviewer wants to surface as a follow-up.
 - `tests/unit/RequestCard.test.tsx` uses ad-hoc fixtures instead of `makeUserFixture()`; same pattern as a prior shipped slug. Not in scope here.
 
 ### Potential concerns
-- AC-1 verification depends on the `hasViewEmail` helper not yet existing; slice-builder will create it. RED test must fail because the export is missing, not because of an import error.
-- The 250ms token in AC-2 lives in `src/styles/tokens.css`, not in JS. If slice-builder reads the value from JS state instead of the CSS token, AC-2 is a flake risk.
+- AC-1 verification depends on the `hasViewEmail` helper not yet existing; builder will create it. RED test must fail because the export is missing, not because of an import error.
+- The 250ms token in AC-2 lives in `src/styles/tokens.css`, not in JS. If builder reads the value from JS state instead of the CSS token, AC-2 is a flake risk.
 ```

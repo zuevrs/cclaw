@@ -1,13 +1,13 @@
 ---
 name: documentation-and-adrs
-trigger: when design (deep posture, Phase 6.5) AND a Phase 4 D-N introduces a public interface, persistence shape, security boundary, or new dependency; on ship, when an ADR with status=PROPOSED exists for the slug
+trigger: when the architect (Compose phase) on a strict / deep posture slug AND a Decisions-phase D-N introduces a public interface, persistence shape, security boundary, or new dependency; on ship, when an ADR with status=PROPOSED exists for the slug
 ---
 
 # Skill: documentation-and-adrs
 
 A repo-wide **Architecture Decision Record (ADR) catalogue** lives at `docs/decisions/`. ADRs outlive flows: D-N records are per-slug (inline in `plan.md` under `## Decisions` for v8.14+ flows; in legacy `decisions.md` for pre-v8.14 shipped slugs) and get archived to `shipped/<slug>/` after the finalize step, but ADRs are durable, repo-scoped, and indexed by sequential numbers. The catalogue is what new contributors and future agents read to understand **why** the codebase looks the way it does.
 
-ADRs are NOT a replacement for per-slug D-N records — they are the **promoted subset** that has cross-flow durability. Design (Phase 4 + Phase 6.5) writes both: full D-N records in the slug's `plan.md` `## Decisions` section (rationale, alternatives, failure modes, refs); a thinner ADR pointing back to the slug for the long-term catalogue.
+ADRs are NOT a replacement for per-slug D-N records — they are the **promoted subset** that has cross-flow durability. The architect (Decisions + Compose phases) writes both: full D-N records in the slug's `plan.md` `## Decisions` section (rationale, alternatives, failure modes, refs); a thinner ADR pointing back to the slug for the long-term catalogue.
 
 ## When NOT to apply
 
@@ -15,7 +15,7 @@ ADRs are NOT a replacement for per-slug D-N records — they are the **promoted 
 - **Bug fixes** that preserve the public contract. No architectural decision was made.
 - **Per-feature implementation choices** anyone could trivially redo ("which CSS classes to use for this badge", "what to name this helper"). Not durable enough for the catalogue.
 - **One-off scripts, benchmarks, and migration glue.** Their decision context evaporates with the script; the ADR slot is wasted.
-- **`triage.complexity != "large-risky"` and no `--adr` flag.** Soft / inline flows do not write ADRs; the catalogue is design-specialist territory.
+- **`triage.complexity != "large-risky"` and no `--adr` flag.** Soft / inline flows do not write ADRs; the catalogue is strict-mode architect territory.
 - **Inside `shipped/<slug>/` after the finalize step.** ADRs are repo-durable; the slug artifact is archived. Writing new ADRs against a shipped slug means opening a fresh refinement slug.
 
 ## When to write an ADR (not every D-N becomes one)
@@ -65,14 +65,14 @@ PROPOSED  ──→  ACCEPTED  ──→  (sometimes)  SUPERSEDED
 
 | Status | Who sets it | When |
 | --- | --- | --- |
-| `PROPOSED` | design (Phase 6.5) | At decision time, when a Phase 4 D-N triggers an ADR. The ADR ships with `status: PROPOSED` so reviewers can see the proposed-not-yet-accepted state. |
+| `PROPOSED` | architect (Compose phase) | At decision time, when a Decisions-phase D-N triggers an ADR. The ADR ships with `status: PROPOSED` so reviewers can see the proposed-not-yet-accepted state. |
 | `ACCEPTED` | orchestrator (finalize step) | After the slug ships successfully (`flows/<slug>/ship.md` had `status: shipped`). The ADR is updated in place: `status: ACCEPTED`, plus an `accepted_at: <iso>` and the shipping `commit:` SHA. |
-| `SUPERSEDED` | a future design pass | When a later slug introduces a new ADR that replaces this one. The new ADR's `Supersedes` field cites the old ADR id; the old ADR is updated in place to `SUPERSEDED` with a `superseded_by: ADR-NNNN` line. |
-| `REJECTED` | design pass or user | When the slug is cancelled with `/cc-cancel` after the ADR was already proposed, or when the user explicitly says "we're not doing this". The ADR is kept (numbers don't get reused) with `status: REJECTED` and a one-line `rejected_because`. |
+| `SUPERSEDED` | a future architect pass | When a later slug introduces a new ADR that replaces this one. The new ADR's `Supersedes` field cites the old ADR id; the old ADR is updated in place to `SUPERSEDED` with a `superseded_by: ADR-NNNN` line. |
+| `REJECTED` | architect pass or user | When the slug is cancelled with `/cc-cancel` after the ADR was already proposed, or when the user explicitly says "we're not doing this". The ADR is kept (numbers don't get reused) with `status: REJECTED` and a one-line `rejected_because`. |
 
 ADRs are never **deleted**. The whole point of the catalogue is that even abandoned decisions remain searchable.
 
-## ADR template (design Phase 6.5 writes this)
+## ADR template (architect Compose phase writes this)
 
 ```markdown
 ---
@@ -115,16 +115,16 @@ PROPOSED — proposed by cclaw slug `<slug>` on <date>. Will be promoted to ACCE
 
 The ADR is **deliberately thinner** than the D-N record. It is the executive summary — Status, Context, Decision, Consequences, References. Anyone who needs more reads the linked D-N inline in `plan.md` (which lives in `flows/shipped/<slug>/` after the finalize step).
 
-## Design's ADR contract (Phase 6.5)
+## Architect's ADR contract (Compose phase)
 
-When design's posture is `deep` (or user passed `--adr`) AND any Phase 4 `D-N` matches a "When to write an ADR" trigger:
+When the architect's posture is `deep` (or user passed `--adr`) AND any Decisions-phase `D-N` matches a "When to write an ADR" trigger:
 
 1. Pick the next sequential ADR number. Read `docs/decisions/` to find the highest existing number.
 2. Write `docs/decisions/ADR-NNNN-<slug>.md` from the template, status `PROPOSED`.
 3. Add a line to the `D-N` Refs inline in `plan.md`: `ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)`.
-4. Mention the ADR id in the Phase 7 sign-off summary.
+4. Mention the ADR id in the architect's Summary block at the bottom of `plan.md`.
 
-Design does **not** mark the ADR `ACCEPTED` itself — that is the orchestrator's job after a successful ship.
+The architect does **not** mark the ADR `ACCEPTED` itself — that is the orchestrator's job after a successful ship.
 
 ## Orchestrator's contract — promotion at the finalize step
 
@@ -145,7 +145,7 @@ If the slug is cancelled (`/cc-cancel`) instead of shipped:
 
 ## Supersession
 
-When a later design pass's decision **replaces** an earlier ADR's choice:
+When a later architect pass's decision **replaces** an earlier ADR's choice:
 
 1. The new ADR is written normally, with `supersedes: ADR-XXXX` in its frontmatter.
 2. After the new ADR's slug ships, the finalize step also edits the **old** ADR in place: `status: ACCEPTED` → `status: SUPERSEDED`, add `superseded_by: ADR-NNNN`, add `superseded_at: <iso>`. The old ADR's body is **not** rewritten; the catalogue keeps history.
@@ -157,14 +157,14 @@ The reviewer (in `text-review` mode) flags any new ADR that proposes a decision 
 In `text-review` mode (when ship.md is being reviewed pre-finalize), the reviewer:
 
 - Verifies that every D-N in the slug's `plan.md` `## Decisions` section (or legacy `decisions.md`) that matches an "ADR trigger" has a corresponding `docs/decisions/ADR-NNNN-<slug>.md` file with status `PROPOSED`.
-- Verifies that no ADR status was set to `ACCEPTED` by design (only orchestrator may do that).
+- Verifies that no ADR status was set to `ACCEPTED` by the architect (only the orchestrator may do that).
 - Flags missing ADRs as axis=architecture, severity=`required` in strict mode (`consider` in soft).
 
 ## Worked example
 
 Slug `bm25-ranking` (large-risky, strict, tier=product-grade) ships with one D-N about BM25.
 
-Design's Phase 4 emits D-1 inline in `flows/bm25-ranking/plan.md`:
+The architect's Decisions phase emits D-1 inline in `flows/bm25-ranking/plan.md`:
 
 ```markdown
 ## Decisions
@@ -174,7 +174,7 @@ Design's Phase 4 emits D-1 inline in `flows/bm25-ranking/plan.md`:
 - **Refs:** src/server/search/scoring.ts:1, AC-2, ADR: docs/decisions/ADR-0017-bm25-search-ranking.md (PROPOSED)
 ```
 
-Design's Phase 6.5 writes `docs/decisions/ADR-0017-bm25-search-ranking.md` with `status: PROPOSED`.
+The architect's Compose phase writes `docs/decisions/ADR-0017-bm25-search-ranking.md` with `status: PROPOSED`.
 
 Slug ships successfully. The finalize step runs:
 
@@ -182,7 +182,7 @@ Slug ships successfully. The finalize step runs:
 2. Edit `docs/decisions/ADR-0017-bm25-search-ranking.md`: `status: ACCEPTED`, add `accepted_at`, `accepted_at_commit`.
 3. `git commit -m "docs(adr-0017): promote to ACCEPTED via bm25-ranking"`.
 
-Six months later, slug `vector-search` has its design phase introduce ADR-0042 with `supersedes: ADR-0017`. After `vector-search` ships, the finalize step also edits ADR-0017: `status: ACCEPTED` → `status: SUPERSEDED`, `superseded_by: ADR-0042`.
+Six months later, slug `vector-search` has its architect introduce ADR-0042 with `supersedes: ADR-0017`. After `vector-search` ships, the finalize step also edits ADR-0017: `status: ACCEPTED` → `status: SUPERSEDED`, `superseded_by: ADR-0042`.
 
 ## Common pitfalls
 

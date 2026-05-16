@@ -30,16 +30,15 @@ describe("v8.42 critic specialist — registry membership", () => {
     expect((SPECIALISTS as readonly string[]).includes("critic")).toBe(true);
   });
 
-  it("SPECIALISTS array carries exactly nine specialists (v8.42 added critic; v8.51 added plan-critic; v8.52 added qa-runner; v8.61 added triage)", () => {
-    expect(SPECIALISTS).toHaveLength(9);
+  it("SPECIALISTS array carries exactly seven specialists (v8.62 unified flow drops `design` and `security-reviewer` and renames `ac-author` → `architect`, `slice-builder` → `builder`; the critic survives)", () => {
+    expect(SPECIALISTS).toHaveLength(7);
   });
 
-  it("critic sits between security-reviewer and slice-builder in the canonical specialist order", () => {
+  it("critic sits at the tail of SPECIALISTS, after reviewer (v8.62 — security-reviewer is gone, the critic is the last on-demand sub-agent before ship)", () => {
     const criticIdx = SPECIALISTS.indexOf("critic");
-    const securityIdx = SPECIALISTS.indexOf("security-reviewer");
-    const sliceIdx = SPECIALISTS.indexOf("slice-builder");
-    expect(criticIdx).toBeGreaterThan(securityIdx);
-    expect(criticIdx).toBeLessThan(sliceIdx);
+    const reviewerIdx = SPECIALISTS.indexOf("reviewer");
+    expect(criticIdx).toBe(SPECIALISTS.length - 1);
+    expect(criticIdx).toBeGreaterThan(reviewerIdx);
   });
 
   it("SPECIALIST_PROMPTS exposes a non-empty body keyed at `critic`", () => {
@@ -170,8 +169,8 @@ describe("v8.42 critic prompt — escalation triggers (spec §8)", () => {
     expect(CRITIC_PROMPT, "trigger 3: large surface size (>10 files OR large line delta)").toMatch(
       />\s*10 files|>\s*(300|500)\s*(inserted|deleted|lines)/i
     );
-    expect(CRITIC_PROMPT, "trigger 4: security_flag OR security-reviewer ran").toMatch(
-      /security_flag|security-reviewer/i
+    expect(CRITIC_PROMPT, "trigger 4: security_flag OR reviewer's security axis flagged a finding (v8.62 — security-reviewer's threat-model coverage absorbed into reviewer's security axis)").toMatch(
+      /security_flag|security axis|security-axis/i
     );
     expect(CRITIC_PROMPT, "trigger 5: reviewIterations >= 4").toMatch(
       /reviewIterations\s*(>=|≥)\s*4/

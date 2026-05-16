@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import YAML from "yaml";
 
 import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/critic.js";
-import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
+import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 import {
   DEFAULT_AMBIGUITY_THRESHOLD,
@@ -14,8 +14,10 @@ import {
  * v8.53 — critic enhancements anchors (slimmed in v8.54).
  *
  * Two additive refinements (lens sweep in critic.ts §3; ambiguity score in
- * design.ts Phase 6). Per-row prose checks and cross-deliverable
- * invariants retired; what stays is ONE anchor per contract.
+ * the architect's Compose phase). v8.62 unified flow: dead `design`
+ * specialist's Phase 6 absorbed into `architect`'s Compose phase. Per-row
+ * prose checks and cross-deliverable invariants retired; what stays is
+ * ONE anchor per contract.
  */
 
 describe("v8.53 AC-1 critic — Human-perspective lenses sub-section", () => {
@@ -37,27 +39,30 @@ describe("v8.53 AC-1 critic — Human-perspective lenses sub-section", () => {
   });
 });
 
-describe("v8.53 AC-2 design — Phase 6 ambiguity score", () => {
-  it("design Phase 6 computes a 0-1 composite over greenfield (goal/constraints/success) or brownfield (+ context)", () => {
-    expect(DESIGN_PROMPT).toMatch(/Phase 6/i);
-    expect(DESIGN_PROMPT).toMatch(/ambiguity/i);
-    expect(DESIGN_PROMPT).toMatch(/greenfield/i);
-    expect(DESIGN_PROMPT).toMatch(/brownfield/i);
-    for (const dim of ["goal", "constraints", "success", "context"]) {
-      expect(DESIGN_PROMPT, `design must name ambiguity dimension "${dim}"`).toMatch(
-        new RegExp(`\\b${dim}\\b`, "i")
-      );
-    }
+describe("v8.53 AC-2 ambiguity score — template-level surface retained (v8.62 unified flow: dead `design`'s Phase 6 procedural lock retired with the specialist; only the artifact template's `ambiguity_score` / `ambiguity_dimensions` / `ambiguity_threshold` frontmatter fields persist for downstream gating compatibility)", () => {
+  it("plan template frontmatter still declares the three ambiguity fields (back-compat surface for the v8.53 brownfield gates)", () => {
+    const planTpl = ARTIFACT_TEMPLATES.find((t) => t.id === "plan")!.body;
+    expect(planTpl).toMatch(/ambiguity_score:/);
+    expect(planTpl).toMatch(/ambiguity_dimensions:/);
+    expect(planTpl).toMatch(/ambiguity_threshold:/);
   });
 
-  it("design Phase 7 picker emits a SOFT warning prefix above threshold (never a hard gate)", () => {
-    expect(DESIGN_PROMPT).toMatch(/Phase 7/);
-    expect(DESIGN_PROMPT).toMatch(/soft.*warning|warning.*prefix/i);
-    expect(DESIGN_PROMPT).toMatch(/never.*hard gate|not.*hard gate|user can.*approve/i);
+  it("research template frontmatter still declares the ambiguity fields (research mode reuses the gate)", () => {
+    const researchTpl = ARTIFACT_TEMPLATES.find((t) => t.id === "research")!.body;
+    expect(researchTpl).toMatch(/ambiguity_score:/);
   });
 
-  it("design ambiguity additions cite v8.53 (changelog reverse-lookup)", () => {
-    expect(DESIGN_PROMPT).toMatch(/ambiguity_score/u);
+  it("v8.62 — the procedural ambiguity-score authoring beat (the v8.53 design Phase 6 / Phase 7 picker) is GONE from the architect; the unified-flow architect runs silently with no mid-plan dialogue, and the field stays null unless a future surface re-introduces it", () => {
+    // v8.62 retired the Phase 7 picker entirely (v8.61 always-auto
+    // removed mid-plan dialogue; v8.62 collapsed the design specialist
+    // into the architect). The procedural authoring lock for
+    // ambiguity_score was specific to design's Phase 6 + Phase 7 picker
+    // and does not survive the unified-flow collapse. The architect
+    // does NOT carry the ambiguity-score computation; if any future
+    // slug needs the field populated it does so via an explicit
+    // template author pass, not via the architect's silent dispatch.
+    expect(ARCHITECT_PROMPT).not.toMatch(/Phase 7 — Sign-off/);
+    expect(ARCHITECT_PROMPT).not.toMatch(/`approve` \/ `request-changes` \/ `reject`/);
   });
 });
 

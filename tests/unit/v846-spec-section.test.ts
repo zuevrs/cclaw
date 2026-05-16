@@ -17,8 +17,10 @@ import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.j
  * Mandatory on both strict (large-risky) and soft (small-medium) plans.
  * Inline (trivial) path has no plan.md, so no Spec.
  *
- * - ac-author fills the Spec on small-medium (soft) plans.
- * - design Phase 2 (Frame) fills the Spec on large-risky (strict) plans.
+ * v8.62 unified flow: a single `architect` specialist authors the Spec
+ * regardless of path. Lite-posture runs (small-medium) fill it from the
+ * Frame paragraph; standard / strict postures (large-risky) expand it
+ * during the Frame phase. The legacy ac-author-vs-design split is gone.
  *
  * No new reviewer axis is introduced — the existing correctness /
  * architecture / complexity-budget axes implicitly cover Spec compliance
@@ -38,8 +40,7 @@ const PLAN_TEMPLATE_SOFT = (() => {
   return t.body;
 })();
 
-const AC_AUTHOR_PROMPT = SPECIALIST_PROMPTS["ac-author"];
-const DESIGN_PROMPT = SPECIALIST_PROMPTS["design"];
+const ARCHITECT_PROMPT = SPECIALIST_PROMPTS["architect"];
 
 describe("v8.46 Spec section — PLAN_TEMPLATE (strict) carries `## Spec`", () => {
   it("AC-1 — PLAN_TEMPLATE contains a `## Spec` heading", () => {
@@ -96,64 +97,34 @@ describe("v8.46 Spec section — PLAN_TEMPLATE_SOFT also carries `## Spec`", () 
   });
 });
 
-describe("v8.46 Spec section — ac-author authors Spec on small-medium path", () => {
-  it("AC-3 — ac-author prompt mentions the `## Spec` section it must author", () => {
-    expect(AC_AUTHOR_PROMPT).toContain("## Spec");
+describe("v8.46 Spec section — architect authors Spec on every path (v8.62 unified flow collapses the ac-author / design split)", () => {
+  it("AC-3 — architect prompt mentions the `## Spec` section it must author", () => {
+    expect(ARCHITECT_PROMPT).toContain("## Spec");
   });
 
-  it("AC-3 — ac-author prompt names all four Spec bullets the section requires", () => {
-    expect(AC_AUTHOR_PROMPT).toMatch(/Objective/);
-    expect(AC_AUTHOR_PROMPT).toMatch(/Success/);
-    expect(AC_AUTHOR_PROMPT).toMatch(/Out of scope/);
-    expect(AC_AUTHOR_PROMPT).toMatch(/Boundaries/);
+  it("AC-3 — architect prompt names all four Spec bullets the section requires", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/Objective/);
+    expect(ARCHITECT_PROMPT).toMatch(/Success/);
+    expect(ARCHITECT_PROMPT).toMatch(/Out of scope/);
+    expect(ARCHITECT_PROMPT).toMatch(/Boundaries/);
   });
 
-  it("AC-3 — ac-author prompt declares the Spec section mandatory and warns against empty / TBD values", () => {
-    // We look for the requirement language; the actual prose is the canonical reference.
-    expect(AC_AUTHOR_PROMPT).toMatch(/mandatory/i);
-    expect(AC_AUTHOR_PROMPT).toMatch(/<TBD>|empty|none|n\/a/i);
+  it("AC-3 — architect prompt declares the Spec section mandatory and warns against empty / TBD values", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/mandatory/i);
+    expect(ARCHITECT_PROMPT).toMatch(/<TBD>|empty|none|n\/a/i);
   });
 
-  it("AC-3 — ac-author prompt explains the small-medium vs large-risky ownership split (ac-author vs design Phase 2)", () => {
-    // The contract is: ac-author owns Spec on small-medium; design owns it on large-risky.
-    expect(AC_AUTHOR_PROMPT).toMatch(/(small.medium|design Phase 2|large.risky)[\s\S]{0,200}Spec/i);
+  it("AC-3 — architect prompt explains the posture-driven Spec depth (lite fills from Frame, strict expands during the Frame phase)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/(lite|standard|strict|posture|Frame)[\s\S]{0,300}Spec/i);
   });
 
-  it("AC-3 — ac-author self-review checklist gates on the Spec section being present and filled", () => {
-    // The checklist is the canonical authoring guard; finding the Spec inside it pins
-    // the gate so a future refactor cannot silently drop the rule.
-    const matches = AC_AUTHOR_PROMPT.match(/## Spec/g) ?? [];
+  it("AC-3 — architect self-review checklist gates on the Spec section being present and filled", () => {
+    const matches = ARCHITECT_PROMPT.match(/## Spec/g) ?? [];
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
-});
 
-describe("v8.46 Spec section — design Phase 2 authors Spec on large-risky path", () => {
-  it("AC-4 — design prompt mentions the `## Spec` section it must author in Phase 2", () => {
-    expect(DESIGN_PROMPT).toContain("## Spec");
-  });
-
-  it("AC-4 — design prompt names all four Spec bullets the section requires", () => {
-    expect(DESIGN_PROMPT).toMatch(/Objective/);
-    expect(DESIGN_PROMPT).toMatch(/Success/);
-    expect(DESIGN_PROMPT).toMatch(/Out of scope/);
-    expect(DESIGN_PROMPT).toMatch(/Boundaries/);
-  });
-
-  it("AC-4 — design prompt declares the Spec section mandatory on large-risky plans", () => {
-    expect(DESIGN_PROMPT).toMatch(/mandatory/i);
-  });
-
-  it("AC-4 — design prompt frames Spec vs NFR as complementary, not duplicative (intent vs quality)", () => {
-    // The brief explicitly calls out that Spec captures intent + scope while NFR
-    // captures quality attributes; they are NOT duplicates.
-    expect(DESIGN_PROMPT).toMatch(/(complementary|not duplicative|intent.*scope|quality attribute)/i);
-  });
-
-  it("AC-4 — design self-review checklist gates on the Spec section being present and filled", () => {
-    // The checklist is the canonical authoring guard; finding the Spec inside it pins
-    // the gate so a future refactor cannot silently drop the rule.
-    const matches = DESIGN_PROMPT.match(/## Spec/g) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+  it("AC-4 — architect prompt frames Spec vs NFR as complementary, not duplicative (intent vs quality)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/(complementary|not duplicative|intent.*scope|quality attribute)/i);
   });
 });
 

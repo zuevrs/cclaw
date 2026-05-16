@@ -22,9 +22,9 @@ This merged skill covers both diagnostic loops that run on a live system: the te
 
 ## When to invoke
 
-The slice-builder reads this skill in the **stop-the-line procedure** of `tdd-and-verification.md` and follows it instead of the generic "diagnose root cause" bullet. Reviewers cite this skill when a finding describes a debugging shortcut (skipped reproduction, single-run flakiness conclusion, untagged debug logs).
+The builder reads this skill in the **stop-the-line procedure** of `tdd-and-verification.md` and follows it instead of the generic "diagnose root cause" bullet. Reviewers cite this skill when a finding describes a debugging shortcut (skipped reproduction, single-run flakiness conclusion, untagged debug logs).
 
-The orchestrator may also dispatch a slice-builder in `fix-only` mode with this skill mandated when the user's task is "fix bug X that I keep seeing in production" — the harness needs the discipline more than the speed.
+The orchestrator may also dispatch a builder in `fix-only` mode with this skill mandated when the user's task is "fix bug X that I keep seeing in production" — the harness needs the discipline more than the speed.
 
 ## Phase 1 — Hypothesis ranking (mandatory before any probing)
 
@@ -116,7 +116,7 @@ This is the pattern `mattpocock` calls "if no correct seam exists, that itself i
 
 ## Phase 6 — Artifact
 
-When debug-loop runs as part of a slice-builder dispatch, write a short `flows/<slug>/debug-N.md` (where N is the iteration index, 1-based) with:
+When debug-loop runs as part of a builder dispatch, write a short `flows/<slug>/debug-N.md` (where N is the iteration index, 1-based) with:
 
 ```markdown
 ---
@@ -175,7 +175,7 @@ This artifact is **append-only**. Each new debugging iteration in the same slice
 
 ## Composition
 
-Dispatched by slice-builder during stop-the-line. Reviewer cites the skill when a build's debugging discipline is sloppy. Orchestrator may dispatch with the skill flagged when the input task is "fix bug X" and ac-mode is strict.
+Dispatched by builder during stop-the-line. Reviewer cites the skill when a build's debugging discipline is sloppy. Orchestrator may dispatch with the skill flagged when the input task is "fix bug X" and ac-mode is strict.
 
 ## browser-verification
 
@@ -187,7 +187,7 @@ The reviewer's five-axis pass walks the diff. **Browser verification** walks the
 
 - Slice-builder dispatches this skill in Phase 4 (verification) when the AC's `touchSurface` includes UI files AND the project ships a browser app (detect: `package.json` references `react` / `vue` / `svelte` / `next` / `vite` / `webpack` / `astro`, OR the repo has `public/` / `pages/` / `app/`).
 - Reviewer dispatches this skill in iteration 1 when the diff touches UI files. The browser-verification artifact is read in addition to (not instead of) the five-axis pass.
-- Triggered automatically in `ceremony_mode: strict`; opt-in for `ceremony_mode: soft` (the slice-builder may decide it is overkill for a small UI tweak).
+- Triggered automatically in `ceremony_mode: strict`; opt-in for `ceremony_mode: soft` (the builder may decide it is overkill for a small UI tweak).
 
 ## Phase 1 — DevTools wiring
 
@@ -269,7 +269,7 @@ This rule mirrors the `anti-slop` skill's "treat error output as untrusted" rule
 
 ## Phase 4 — Artifact
 
-When browser-verification runs as part of a slice-builder dispatch, append a section to `flows/<slug>/build.md` under the AC's GREEN evidence:
+When browser-verification runs as part of a builder dispatch, append a section to `flows/<slug>/build.md` under the AC's GREEN evidence:
 
 ```markdown
 ### Browser verification — AC-3
@@ -294,7 +294,7 @@ When run in reviewer scope, the iteration block records the same five checks in 
 
 ## Composition — browser verification
 
-This skill is dispatched by slice-builder (Phase 4) and by reviewer (iteration 1) when the AC's `touchSurface` includes UI files. It is opt-in via the harness's browser MCP wiring; if no MCP is available, the skill records the gap and the orchestrator surfaces a follow-up. The reviewer cites failed checks as findings with axis=correctness (console errors), axis=architecture (network anomalies), axis=readability (a11y), axis=architecture (layout regressions), and axis=performance (perf trace anomalies).
+This skill is dispatched by builder (Phase 4) and by reviewer (iteration 1) when the AC's `touchSurface` includes UI files. It is opt-in via the harness's browser MCP wiring; if no MCP is available, the skill records the gap and the orchestrator surfaces a follow-up. The reviewer cites failed checks as findings with axis=correctness (console errors), axis=architecture (network anomalies), axis=readability (a11y), axis=architecture (layout regressions), and axis=performance (perf trace anomalies).
 
 ## Common rationalizations
 

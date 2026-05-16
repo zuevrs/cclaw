@@ -132,7 +132,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "ac-discipline",
     fileName: "ac-discipline.md",
     description: "merge of ac-quality + ac-traceability (revised — hook removed). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the posture-driven commit-prefix contract (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies ex-post via git log --grep. AC-quality always-on for AC authoring; AC-traceability active only when ceremony_mode=strict, no chain enforced in soft / inline modes.",
-    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:ac-author", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ceremony_mode:strict"],
+    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:architect", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ceremony_mode:strict"],
     stages: ["plan", "build", "review"],
     body: readSkill("ac-discipline.md")
   },
@@ -155,8 +155,8 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "review-discipline",
     fileName: "review-discipline.md",
-    description: "merge of review-loop + security-review. Wraps every reviewer / security-reviewer invocation with the shared Findings table, Five-axis pass, Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
-    triggers: ["specialist:reviewer", "specialist:security-reviewer", "security-flag:true", "diff:auth|secrets|supply-chain|pii"],
+    description: "merge of review-loop + security-review. v8.62 unified flow absorbed the former `security-reviewer` specialist into reviewer's `security` axis — the skill now wraps every reviewer invocation with the shared Findings table, ten-axis pass (incl. the absorbed full threat-model coverage on the security axis), Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
+    triggers: ["specialist:reviewer", "security-flag:true", "diff:auth|secrets|supply-chain|pii"],
     stages: ["review"],
     body: readSkill("review-discipline.md")
   },
@@ -166,7 +166,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     description: "merge of tdd-cycle + verification-loop + refactor-safety. Always-on whenever stage=build. Granularity scales with ceremony_mode (inline = optional, soft = one cycle per feature, strict = full RED → GREEN → REFACTOR per criterion). The verification gate (build → typecheck → lint → test → security → diff) wraps every handoff; refactor-safety governs behaviour-preserving slugs and the REFACTOR step.",
     triggers: [
       "stage:build",
-      "specialist:slice-builder",
+      "specialist:builder",
       "specialist:reviewer",
       "stage:review",
       "stage:ship",
@@ -179,8 +179,8 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "commit-hygiene",
     fileName: "commit-hygiene.md",
-    description: "merge of commit-message-quality + surgical-edit-hygiene (revised — hook removed). Enforces commit-message conventions AND the always-on rules for slice-builder commits: posture-driven subject-line prefix in strict mode (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):); no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
-    triggers: ["always-on", "specialist:slice-builder", "before:git-commit"],
+    description: "merge of commit-message-quality + surgical-edit-hygiene (revised — hook removed). v8.62: `specialist:slice-builder` trigger renamed to `specialist:builder` (rename only; AC-as-unit semantics unchanged). Enforces commit-message conventions AND the always-on rules for builder commits: posture-driven subject-line prefix in strict mode (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):); no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
+    triggers: ["always-on", "specialist:builder", "before:git-commit"],
     stages: ["build", "ship"],
     body: readSkill("commit-hygiene.md")
   },
@@ -204,7 +204,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "source-driven",
     fileName: "source-driven.md",
     description: "Detect stack + versions from manifest, fetch official documentation deep-links, implement against documented patterns, cite URLs in plan/decisions/code. Default in strict mode for framework-specific work.",
-    triggers: ["ceremony_mode:strict", "specialist:ac-author", "specialist:design", "framework-specific-code-detected"],
+    triggers: ["ceremony_mode:strict", "specialist:architect", "framework-specific-code-detected"],
     stages: ["plan", "build"],
     body: readSkill("source-driven.md")
   },
@@ -226,9 +226,9 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "documentation-and-adrs",
     fileName: "documentation-and-adrs.md",
-    description: "Repo-wide ADR catalogue at docs/decisions/ADR-NNNN-<slug>.md. Design (Phase 6.5, deep posture) proposes (PROPOSED); orchestrator promotes to ACCEPTED at the finalize step after ship; supersession is in-place. Triggers when a Phase 4 D-N introduces a public interface, persistence shape, security boundary, or new dependency.",
+    description: "Repo-wide ADR catalogue at docs/decisions/ADR-NNNN-<slug>.md. v8.62: the architect (Compose phase, strict posture) proposes (PROPOSED); orchestrator promotes to ACCEPTED at the finalize step after ship; supersession is in-place. Triggers when a Decisions-phase D-N introduces a public interface, persistence shape, security boundary, or new dependency.",
     triggers: [
-      "specialist:design",
+      "specialist:architect",
       "tier:product-grade",
       "tier:ideal",
       "stage:ship",
@@ -246,13 +246,13 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     description: "merge of debug-loop + browser-verification. Two diagnostic loops on a running system, sharing the 'hypothesis before probe' protocol. debug-loop: 3-5 ranked hypotheses, ten-rung loop ladder cheapest first, tagged debug logs, multi-run protocol, 'no seam' is itself a finding. browser-verification: DevTools-driven five-check pass (console hygiene / network / a11y / layout / perf) with browser content treated as untrusted data.",
     triggers: [
       "stop-the-line",
-      "specialist:slice-builder:fix-only",
+      "specialist:builder:fix-only",
       "task:bug-fix",
       "test-failed-unclear-reason",
       "ceremony_mode:strict",
       "touch-surface:ui",
       "diff:tsx|jsx|vue|svelte|html|css",
-      "specialist:slice-builder",
+      "specialist:builder",
       "specialist:reviewer"
     ],
     stages: ["build", "review"],
@@ -271,7 +271,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
       "ceremony_mode:soft",
       "touch-surface:ui",
       "diff:tsx|jsx|vue|svelte|html|css",
-      "specialist:slice-builder",
+      "specialist:builder",
       "specialist:reviewer"
     ],
     stages: ["build", "qa", "review"],
@@ -280,9 +280,9 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "api-evolution",
     fileName: "api-evolution.md",
-    description: "merge of api-and-interface-design + breaking-changes. Design phase's checklist (Phase 4) for public interfaces (Hyrum's Law: pin shape / order / silence / timing; one-version rule; untrusted third-party validation; two-adapter rule; consistent error model) AND the breaking-change discipline that manages an existing interface's deprecation (Churn Rule, Strangler Pattern, Zombie Code lifecycle, coexistence rules, CHANGELOG template).",
+    description: "merge of api-and-interface-design + breaking-changes. v8.62: the architect's Decisions-phase checklist for public interfaces (Hyrum's Law: pin shape / order / silence / timing; one-version rule; untrusted third-party validation; two-adapter rule; consistent error model) AND the breaking-change discipline that manages an existing interface's deprecation (Churn Rule, Strangler Pattern, Zombie Code lifecycle, coexistence rules, CHANGELOG template).",
     triggers: [
-      "specialist:design",
+      "specialist:architect",
       "decision:public-interface",
       "decision:rpc-schema",
       "decision:persistence-shape",
@@ -312,11 +312,11 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "receiving-feedback",
     fileName: "receiving-feedback.md",
-    description: "anti-sycophancy guard for receiving review.md findings, critic.md gaps, security-reviewer findings, and user-named defects. Bans the bare-acknowledgement vocabulary (`good point`, `you're right`, `let me address that`, `I see your concern`, `great catch`). Installs the four-step response pattern: restate the finding in own words → classify against the ship gate (block-ship / iterate / fyi) → declare a plan (fix / push-back-with-evidence / accept-warning) → cite evidence. Fires on build (fix-only), review (re-iteration), and ship (pre-merge sweep).",
+    description: "anti-sycophancy guard for receiving review.md findings, critic.md gaps, reviewer security-axis findings (v8.62 absorbed the former `security-reviewer` specialist into reviewer's security axis), and user-named defects. Bans the bare-acknowledgement vocabulary (`good point`, `you're right`, `let me address that`, `I see your concern`, `great catch`). Installs the four-step response pattern: restate the finding in own words → classify against the ship gate (block-ship / iterate / fyi) → declare a plan (fix / push-back-with-evidence / accept-warning) → cite evidence. Fires on build (fix-only), review (re-iteration), and ship (pre-merge sweep).",
     triggers: [
       "input:review.md",
       "input:critic.md",
-      "input:security-reviewer-findings",
+      "input:reviewer-security-axis-findings",
       "input:user-feedback",
       "mode:fix-only",
       "ship-gate:findings"
@@ -327,12 +327,12 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "pre-edit-investigation",
     fileName: "pre-edit-investigation.md",
-    description: "GateGuard-style fact-forcing gate that triggers before the slice-builder's FIRST Write/Edit/MultiEdit operation on a file. Mandatory three probes before editing: (1) `git log --oneline -10 -- <path>` for recent edits, (2) `rg \"<symbol>\" --type <lang>` for usage sites, (3) full file read (not just the edit window). Investigation evidence lands in build.md's Discovery column; the reviewer's `edit-discipline` axis (v8.48+, axis #8) flags missing or partial Discovery as severity=required. Exceptions: fresh files with no history, RED-phase test file edits, post-format passes.",
+    description: "GateGuard-style fact-forcing gate that triggers before the builder's FIRST Write/Edit/MultiEdit operation on a file. Mandatory three probes before editing: (1) `git log --oneline -10 -- <path>` for recent edits, (2) `rg \"<symbol>\" --type <lang>` for usage sites, (3) full file read (not just the edit window). Investigation evidence lands in build.md's Discovery column; the reviewer's `edit-discipline` axis (v8.48+, axis #8) flags missing or partial Discovery as severity=required. Exceptions: fresh files with no history, RED-phase test file edits, post-format passes.",
     triggers: [
       "before:Write",
       "before:Edit",
       "before:MultiEdit",
-      "specialist:slice-builder",
+      "specialist:builder",
       "stage:build",
       "first-edit-of-file"
     ],

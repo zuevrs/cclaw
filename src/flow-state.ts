@@ -67,6 +67,17 @@ export interface FlowStateV82 {
   currentSlug: string | null;
   currentStage: FlowStage | null;
   ac: AcceptanceCriterionState[];
+  /**
+   * Most recent specialist dispatch (audit / debugging surface; the
+   * orchestrator's stage routing reads {@link currentStage}, not this
+   * field). Typed as `SpecialistId` for new writes — the orchestrator
+   * only writes current specialist ids — but the runtime validator
+   * accepts any string for permissive reads of pre-v8.62 state files
+   * (which may carry `"design"`, `"ac-author"`, `"slice-builder"`, or
+   * `"security-reviewer"`). Callers that narrow further should use
+   * {@link isSpecialist}; callers that only need the audit trail can
+   * treat the field as `string | null`.
+   */
   lastSpecialist: SpecialistId | null;
   startedAt: string;
   /**
@@ -136,9 +147,9 @@ export interface FlowStateV82 {
   /**
    * verdict returned by the most-recent plan-critic dispatch.
    *
-   * `pass` — plan was approved; advance to slice-builder.
-   * `revise` — bounce to ac-author for one revise loop (max).
-   * `cancel` — structural plan problem; surface cancel/re-design picker.
+   * `pass` — plan was approved; advance to builder.
+   * `revise` — bounce to architect for one revise loop (max).
+   * `cancel` — structural plan problem; surface cancel/re-architect picker.
    *
    * Absence means plan-critic has not run yet (either pre-v8.51 state,
    * gating excluded the flow, or the dispatch hasn't fired). The
@@ -182,7 +193,7 @@ export interface FlowStateV82 {
    * `pass` — every UI AC has evidence (Playwright / browser-MCP /
    *   manual-confirmed); advance to review.
    * `iterate` — at least one UI AC failed verification; bounce to
-   *   slice-builder with qa findings as additional context, max 1
+   *   builder with qa findings as additional context, max 1
    *   iteration enforced by {@link qaIteration}.
    * `blocked` — browser tooling unavailable AND manual steps required;
    *   surface user picker (`proceed-without-qa-evidence` /
@@ -245,9 +256,9 @@ export interface FlowStateV82 {
   /**
    * pointer to a prior `/cc research <topic>` flow whose
    * `research.md` should be loaded as context by the active task
-   * flow's triage / design / ac-author. Written by the orchestrator
-   * at Hop 0 (Detect) when the user accepts the optional "ready to
-   * plan?" handoff that the standalone design specialist emits at
+   * flow's triage / architect. Written by the orchestrator at Hop 0
+   * (Detect) when the user accepts the optional "ready to plan?"
+   * handoff that the standalone architect (research mode) emits at
    * the tail of a research flow; cleared automatically when the
    * task flow ships.
    *
@@ -275,7 +286,7 @@ export interface FlowStateV82 {
   /**
    * pointer to a prior **shipped** slug whose plan/build/learnings
    * (and optional review/critic/qa) should be loaded as context by the
-   * active task flow's design / ac-author / reviewer / critic. Stamped
+   * active task flow's architect / reviewer / critic. Stamped
    * by the orchestrator at Hop 0 (Detect) when the user invokes
    * `/cc extend <slug> <task>`; cleared automatically when the task
    * flow ships.
@@ -386,33 +397,46 @@ export function isRunMode(value: unknown): value is RunMode {
 }
 
 /**
- * Narrow check for the discovery specialists (v8.14+: `design`, `ac-author`).
- * Kept for backward compatibility with callers that only care about
- * discovery sub-phase routing; new state-validation paths should use
- * {@link isSpecialist}.
+ * Narrow check for the (now single) discovery specialist. v8.62 collapsed
+ * `design` + `ac-author` into `architect`, so this predicate now matches
+ * exactly one id. Kept for backward compatibility with callers that only
+ * care about discovery sub-phase routing; new state-validation paths
+ * should use {@link isSpecialist}.
  */
-export function isDiscoverySpecialist(value: unknown): value is "design" | "ac-author" {
-  return value === "design" || value === "ac-author";
+export function isDiscoverySpecialist(value: unknown): value is "architect" {
+  return value === "architect";
 }
 
 /**
- * retired `brainstormer` and `architect`. Recognise the legacy ids so
- * migration paths can rewrite them to `null` (forcing a re-run of the
- * `design` phase) instead of crashing on read.
+ * Retired discovery / plan-phase specialist ids. Recognise the legacy
+ * ids so migration paths can rewrite them to `null` (forcing the
+ * orchestrator to re-dispatch `architect` from scratch) instead of
+ * crashing on read.
+ *
+ * - `brainstormer` (v8.14): retired discovery-side specialist; pre-v8.14
+ *   state files may still carry it.
+ * - `design` (v8.62): retired; the Phase 0/2-6 work absorbed into
+ *   `architect`. Pre-v8.62 strict-path state files may still carry it.
+ * - `ac-author` (v8.62): retired; the Plan/AC/Spec authoring absorbed
+ *   into `architect`. Pre-v8.62 soft- and strict-path state files may
+ *   still carry it.
+ *
+ * NOTE: `architect` is the **current** specialist post-v8.62; it is NOT
+ * a legacy id and the predicate intentionally excludes it.
  */
-export function isLegacyDiscoverySpecialist(value: unknown): value is "brainstormer" | "architect" {
-  return value === "brainstormer" || value === "architect";
+export function isLegacyDiscoverySpecialist(
+  value: unknown
+): value is "brainstormer" | "design" | "ac-author" {
+  return value === "brainstormer" || value === "design" || value === "ac-author";
 }
 
 /**
- * renamed the `planner` specialist to `ac-author`. Recognise the
- * legacy id on read so a `flow-state.json` written by v8.14–cclaw
- * with `lastSpecialist: "planner"` is auto-rewritten to `"ac-author"`
- * inside {@link rewriteLegacyPlanner}, mirroring the discovery-
- * specialist migration shape (`rewriteLegacyDiscoverySpecialist`). The
- * planner contract was a one-shot dispatcher with no per-phase
- * checkpointing — the rename preserves semantics, so the right migration
- * is a direct rewrite to the new id rather than a `null` reset.
+ * v8.28 renamed the `planner` specialist to `ac-author`. v8.62 retired
+ * `ac-author` (absorbed into `architect`). Recognise the legacy id on
+ * read so {@link rewriteLegacyPlanner} can reset `lastSpecialist` to
+ * `null` and let the orchestrator re-dispatch the current specialist
+ * roster from scratch. Mirrors the v8.62 behaviour of
+ * {@link rewriteLegacyDiscoverySpecialist} (also resets to `null`).
  *
  * See {@link LEGACY_PLANNER_ID} in `types.ts` for the canonical
  * single-source spelling of the old name.
@@ -659,8 +683,12 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     throw new Error(`Invalid currentStage: ${String(state.currentStage)}`);
   }
   assertAcArray(state.ac);
-  if (state.lastSpecialist !== null && state.lastSpecialist !== undefined && !isSpecialist(state.lastSpecialist)) {
-    throw new Error(`Invalid lastSpecialist: ${String(state.lastSpecialist)}`);
+  if (
+    state.lastSpecialist !== null &&
+    state.lastSpecialist !== undefined &&
+    typeof state.lastSpecialist !== "string"
+  ) {
+    throw new Error(`flow-state.lastSpecialist must be a string or null`);
   }
   if (typeof state.startedAt !== "string") throw new Error("flow-state.startedAt must be a string");
   if (typeof state.reviewIterations !== "number" || state.reviewIterations < 0) {
@@ -841,14 +869,20 @@ export function migrateFlowState(value: unknown): FlowStateV82 {
 }
 
 /**
- * v8.14: rewrite `lastSpecialist: "brainstormer" | "architect"` to `null` so
- * the orchestrator re-runs the unified `design` phase. State files written
- * by pre-v8.14 cclaw on an active flow are valid in every other respect;
- * only the specialist id changed. We do NOT try to map brainstormer ->
- * design / architect -> design here because either case usually means
- * the discovery phase needs to be redone end-to-end (the existing plan.md
- * has the old brainstormer/architect output split across two files and the
- * design phase expects inline sections in plan.md only).
+ * Rewrite legacy `lastSpecialist` strings to `null` so the orchestrator
+ * re-dispatches the current specialist roster (architect / builder /
+ * etc.) instead of crashing on read.
+ *
+ * Covered legacy ids:
+ * - `brainstormer` (v8.14 retired discovery-side specialist)
+ * - `design` (v8.62 retired; absorbed into `architect`)
+ * - `ac-author` (v8.62 retired; absorbed into `architect`)
+ *
+ * Other v8.62-retired ids (`slice-builder`, `security-reviewer`) are
+ * NOT rewritten here — they pass through the permissive validator as
+ * plain strings (no rewrite) per the v8.62 "clean break" contract.
+ * The orchestrator's stage routing reads `currentStage`, not
+ * `lastSpecialist`, so the stale audit value does not break dispatch.
  */
 function rewriteLegacyDiscoverySpecialist(
   raw: Record<string, unknown>
@@ -860,30 +894,25 @@ function rewriteLegacyDiscoverySpecialist(
 }
 
 /**
- * v8.28: rewrite `lastSpecialist: "planner"` to `"ac-author"` so a
- * `flow-state.json` written by v8.14–cclaw resumes cleanly under
- * the renamed specialist id. Unlike `rewriteLegacyDiscoverySpecialist`
- * (which resets to `null` because the discovery split / merge
- * meant the previous artifacts could not be reused), the rename
- * is **semantics-preserving** — the planner / ac-author contract is the
- * same, only the id changed — so the rewrite is a direct mapping.
+ * v8.28: rewrite `lastSpecialist: "planner"` so a `flow-state.json`
+ * written by v8.14–cclaw resumes cleanly. Originally rewrote to
+ * `"ac-author"`; v8.62 retired `ac-author` (absorbed into `architect`)
+ * and the user spec calls for "no migration code — clean break", so the
+ * rewrite now maps to `null` (mirroring
+ * {@link rewriteLegacyDiscoverySpecialist}). The orchestrator
+ * re-dispatches `architect` from scratch on the next `/cc`.
  *
  * The transformation runs on **every read** of a current-schema state
- * file, so a long-resumed flow with `lastSpecialist: "planner"` on disk
- * sees the in-memory value flip to `"ac-author"` immediately; the next
- * write (any state mutation) persists the new id. Shipped flow
- * artifacts under `flows/shipped/<slug>/` are NOT rewritten — they keep
- * their historical text untouched, per the v8.28 migration story.
+ * file. Shipped flow artifacts under `flows/shipped/<slug>/` are NOT
+ * rewritten — they keep their historical text untouched.
  *
- * Slated for removal in v8.29+ once one full release cycle has aged
- * out any in-flight state files. See {@link LEGACY_PLANNER_ID} for the
- * canonical legacy-id spelling.
+ * See {@link LEGACY_PLANNER_ID} for the canonical legacy-id spelling.
  */
 function rewriteLegacyPlanner(
   raw: Record<string, unknown>
 ): Record<string, unknown> {
   if (isLegacyPlanner(raw.lastSpecialist)) {
-    return { ...raw, lastSpecialist: "ac-author" };
+    return { ...raw, lastSpecialist: null };
   }
   return raw;
 }
@@ -934,7 +963,7 @@ function migrateFromV2(raw: Record<string, unknown>): FlowStateV82 {
   const lastSpecialist = isLegacyDiscoverySpecialist(lastSpecialistRaw)
     ? null
     : isLegacyPlanner(lastSpecialistRaw)
-      ? "ac-author"
+      ? null
       : ((lastSpecialistRaw as SpecialistId | null) ?? null);
   return {
     schemaVersion: FLOW_STATE_SCHEMA_VERSION,

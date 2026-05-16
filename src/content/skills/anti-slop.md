@@ -1,6 +1,6 @@
 ---
 name: anti-slop
-trigger: always-on for any code-modifying step (slice-builder, fix-only, recovery)
+trigger: always-on for any code-modifying step (builder, fix-only, recovery)
 ---
 
 # Skill: anti-slop
@@ -50,7 +50,7 @@ When a build / test / lint fails, **fix the root cause** or **surface the failur
 - writing a fallback that hides a real error path (`return data ?? STUB_DATA` where STUB_DATA exists only to dodge an upstream failure)
 - copy-pasting a stack-trace into a try/catch as the "fix"
 
-If the real fix is out of scope for the current AC, **stop**. Surface the failure and let the orchestrator hand the slug back to ac-author. Do not "make it work" with a shim and commit. Reviewer will catch the shim, the slug will fail review, and you will redo the work properly. Save the round-trip.
+If the real fix is out of scope for the current AC, **stop**. Surface the failure and let the orchestrator hand the slug back to architect. Do not "make it work" with a shim and commit. Reviewer will catch the shim, the slug will fail review, and you will redo the work properly. Save the round-trip.
 
 ## When you are tempted to add a fallback
 

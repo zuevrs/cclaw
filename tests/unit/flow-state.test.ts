@@ -55,20 +55,41 @@ describe("flow-state", () => {
     ).toThrow(/Invalid AC status/);
   });
 
-  it("rejects unknown specialist", () => {
+  it("v8.62 — accepts any string or null `lastSpecialist` (permissive read; pre-v8.62 state files with old specialist ids continue to round-trip)", () => {
+    // v8.62 clean break: assertFlowStateV82 no longer enforces SPECIALISTS
+    // membership. The orchestrator re-dispatches the current roster on the
+    // next /cc, so a stale `lastSpecialist` string is purely informational
+    // and must not break read. Tested cases: a never-seen-before name
+    // (`fixer`) and every retired v8.62 id round-trip.
+    for (const stale of ["fixer", "design", "ac-author", "slice-builder", "security-reviewer"]) {
+      expect(() =>
+        assertFlowStateV82({
+          schemaVersion: 3,
+          currentSlug: "x",
+          currentStage: null,
+          ac: [],
+          lastSpecialist: stale,
+          startedAt: "2026-05-07T00:00:00Z",
+          reviewIterations: 0,
+          securityFlag: false,
+          triage: null
+        })
+      ).not.toThrow();
+    }
+    // Non-string / non-null still rejected.
     expect(() =>
       assertFlowStateV82({
         schemaVersion: 3,
         currentSlug: "x",
         currentStage: null,
         ac: [],
-        lastSpecialist: "fixer",
+        lastSpecialist: 42 as never,
         startedAt: "2026-05-07T00:00:00Z",
         reviewIterations: 0,
         securityFlag: false,
         triage: null
       })
-    ).toThrow(/Invalid lastSpecialist/);
+    ).toThrow(/lastSpecialist must be a string or null/);
   });
 
   it("validates triage decision (ceremonyMode, complexity, path)", () => {
@@ -127,17 +148,31 @@ describe("flow-state", () => {
     expect(isRunMode(undefined)).toBe(false);
   });
 
-  it("isSpecialist accepts the five v8.14 specialists and rejects research helpers / retired ids", () => {
-    expect(isSpecialist("design")).toBe(true);
-    expect(isSpecialist("ac-author")).toBe(true);
-    expect(isSpecialist("reviewer")).toBe(true);
-    expect(isSpecialist("security-reviewer")).toBe(true);
-    expect(isSpecialist("slice-builder")).toBe(true);
-    expect(isSpecialist("brainstormer")).toBe(false);
-    expect(isSpecialist("architect")).toBe(false);
-    expect(isSpecialist("repo-research")).toBe(false);
-    expect(isSpecialist("learnings-research")).toBe(false);
-    expect(isSpecialist("orchestrator")).toBe(false);
+  it("v8.62 — isSpecialist accepts the seven unified-flow specialists and rejects every retired id (design / ac-author / slice-builder / security-reviewer) plus research helpers", () => {
+    for (const live of [
+      "triage",
+      "architect",
+      "builder",
+      "plan-critic",
+      "qa-runner",
+      "reviewer",
+      "critic"
+    ]) {
+      expect(isSpecialist(live)).toBe(true);
+    }
+    for (const retired of [
+      "design",
+      "ac-author",
+      "slice-builder",
+      "security-reviewer",
+      "brainstormer",
+      "planner",
+      "repo-research",
+      "learnings-research",
+      "orchestrator"
+    ]) {
+      expect(isSpecialist(retired)).toBe(false);
+    }
     expect(isSpecialist(undefined)).toBe(false);
   });
 

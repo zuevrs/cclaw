@@ -47,8 +47,8 @@ describe("TDD cycle wiring (v8.40 — prompt-only, git-log-verified)", () => {
     }
   });
 
-  it("slice-builder prompt is TDD-aware with watched-RED proof and full-suite GREEN evidence", () => {
-    const prompt = SPECIALIST_PROMPTS["slice-builder"];
+  it("builder prompt is TDD-aware with watched-RED proof and full-suite GREEN evidence (v8.62 — `builder` is the v8.48 `slice-builder` body verbatim, rename only)", () => {
+    const prompt = SPECIALIST_PROMPTS["builder"];
     expect(prompt).toMatch(/RED.*GREEN.*REFACTOR/u);
     expect(prompt).toContain("watched-RED proof");
     expect(prompt).toMatch(/full[- ]?relevant suite/iu);
@@ -58,8 +58,8 @@ describe("TDD cycle wiring (v8.40 — prompt-only, git-log-verified)", () => {
     expect(prompt).toMatch(/refactor\(AC-N\)/u);
   });
 
-  it("slice-builder prompt uses plain git commit with the posture prefix recipe", () => {
-    const prompt = SPECIALIST_PROMPTS["slice-builder"];
+  it("builder prompt uses plain git commit with the posture prefix recipe", () => {
+    const prompt = SPECIALIST_PROMPTS["builder"];
     expect(prompt).toMatch(/git commit -m "red\(AC-N\)/u);
   });
 

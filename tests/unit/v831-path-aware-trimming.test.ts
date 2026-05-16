@@ -101,17 +101,19 @@ describe("v8.31 path-aware orchestrator — pause-resume runbook is wired (ancho
 describe("v8.31 path-aware orchestrator — lifted content preserved in PLAN_PLAYBOOK (v8.54)", () => {
   const PLAN_PLAYBOOK = STAGE_PLAYBOOKS.find((p) => p.id === "plan")!.body;
 
-  it("AC-5 — plan playbook covers ac-author input/output + research order (lifted from plan-small-medium.md)", () => {
-    expect(PLAN_PLAYBOOK).toMatch(/ac-author/i);
+  it("AC-5 — plan playbook covers architect input/output + research order (v8.62 — `ac-author` renamed to `architect`, absorbing dead `design`'s Phase 0/2-6 work; the plan-stage runbook still covers the same surfaces)", () => {
+    expect(PLAN_PLAYBOOK).toMatch(/architect/);
     expect(PLAN_PLAYBOOK).toMatch(/learnings-research/);
     expect(PLAN_PLAYBOOK).toMatch(/repo-research/);
     expect(PLAN_PLAYBOOK).toMatch(/brownfield/i);
     expect(PLAN_PLAYBOOK).toMatch(/touchSurface/);
   });
 
-  it("AC-5 — plan playbook covers the large-risky discovery sub-phase (lifted from discovery.md)", () => {
-    expect(PLAN_PLAYBOOK).toMatch(/Discovery auto-skip/);
-    expect(PLAN_PLAYBOOK).toMatch(/design.*main context.*multi-turn/iu);
+  it("AC-5 — plan playbook covers the large-risky architect ceremony depth (v8.62 unified flow retired the discovery sub-phase + the auto-skip heuristic; the architect's Frame/Approaches/Decisions/Pre-mortem/Compose phases scale via ceremonyMode = strict)", () => {
+    expect(PLAN_PLAYBOOK).toMatch(/architect ceremony depth/);
+    expect(PLAN_PLAYBOOK).toMatch(/Bootstrap[^a-z]+Frame[^a-z]+Approaches[^a-z]+Decisions[^a-z]+Pre-mortem[^a-z]+Compose/u);
+    expect(PLAN_PLAYBOOK).not.toMatch(/Discovery auto-skip/);
+    expect(PLAN_PLAYBOOK).not.toMatch(/main context.*multi-turn/iu);
   });
 
   it("AC-5 — pause-resume runbook still carries the Confidence-as-hard-gate prose (v8.61: collapsed from a step/auto table into an always-auto bullet list)", () => {

@@ -37,7 +37,7 @@ See `flow-resume.md` for the full resume-vs-collision UX and `plan-authoring.md`
 
 ## What the orchestrator surfaces
 
-- last_specialist of the active plan, so the user can see "stopped mid-design (Phase 4 Decisions)" or "review iteration 3 in progress".
+- last_specialist of the active plan, so the user can see "stopped mid-architect (Decisions phase)" or "review iteration 3 in progress".
 - The AC table with their statuses (`pending` / `committed`).
 - Whether `security_flag` was set.
 - A direct link to `.cclaw/flows/shipped/<slug>/ship.md` if the match is a shipped slug (`legacy-artifacts: true` also writes `manifest.md` alongside).

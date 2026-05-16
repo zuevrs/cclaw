@@ -36,7 +36,7 @@ const PLAN_TEMPLATE_SOFT = (() => {
   return t.body;
 })();
 
-const DESIGN_PROMPT = SPECIALIST_PROMPTS["design"];
+const ARCHITECT_PROMPT = SPECIALIST_PROMPTS["architect"];
 const REVIEWER_PROMPT = SPECIALIST_PROMPTS["reviewer"];
 
 describe("v8.25 NFRs first-class — PLAN_TEMPLATE (strict) gains `## Non-functional`", () => {
@@ -51,10 +51,10 @@ describe("v8.25 NFRs first-class — PLAN_TEMPLATE (strict) gains `## Non-functi
     expect(PLAN_TEMPLATE_STRICT).toMatch(/security:/);
   });
 
-  it("AC-1 — PLAN_TEMPLATE NFR section is explicitly optional / design-Phase-2-authored", () => {
+  it("AC-1 — PLAN_TEMPLATE NFR section is explicitly optional / architect-Frame-authored (v8.62 — `design` Phase 2 absorbed into `architect`'s Frame phase)", () => {
     expect(
       PLAN_TEMPLATE_STRICT,
-      "the section should be self-describing: when to fill (Phase 2 / product-grade / irreversibility) and that 'none specified' is acceptable"
+      "the section should be self-describing: when to fill (architect Frame / product-grade / irreversibility) and that 'none specified' is acceptable"
     ).toMatch(/optional|when.*tier|product-grade|irreversibility/i);
   });
 
@@ -72,23 +72,20 @@ describe("v8.25 NFRs first-class — PLAN_TEMPLATE (strict) gains `## Non-functi
   });
 });
 
-describe("v8.25 NFRs first-class — design specialist Phase 2 authors NFR section", () => {
-  it("AC-2 — design.ts mentions NFR / Non-functional in its Phase 2 (Frame) instructions", () => {
-    expect(DESIGN_PROMPT).toMatch(/Non-functional|NFR/);
+describe("v8.25 NFRs first-class — architect Frame phase authors NFR section (v8.62 unified flow absorbed `design`'s Phase 2 work into `architect`)", () => {
+  it("AC-2 — architect.ts mentions NFR / Non-functional in its Frame-phase instructions", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/Non-functional|NFR/);
   });
 
-  it("AC-2 — design.ts names the gating condition (product-grade tier or irreversibility)", () => {
+  it("AC-2 — architect.ts names the gating condition (product-grade tier or irreversibility)", () => {
     expect(
-      DESIGN_PROMPT,
-      "design specialist needs a documented trigger so it knows when to fill the NFR section"
+      ARCHITECT_PROMPT,
+      "the architect needs a documented trigger so it knows when to fill the NFR section"
     ).toMatch(/product-grade|irreversibility|irreversible|tier/i);
   });
 
-  it("AC-2 — design.ts names `## Non-functional` as a section it writes to plan.md", () => {
-    expect(
-      DESIGN_PROMPT,
-      "Phase 2 (Frame) is the canonical author of the NFR section per the v8.25 contract"
-    ).toContain("Non-functional");
+  it("AC-2 — architect.ts names `## Non-functional` as a section it writes to plan.md (Frame phase is the canonical author of the NFR section per the v8.25 contract; v8.62 absorbed the dead `design` specialist's Phase 2 ownership)", () => {
+    expect(ARCHITECT_PROMPT).toContain("Non-functional");
   });
 });
 
@@ -130,10 +127,10 @@ describe("v8.25 NFRs first-class — reviewer specialist gains `nfr-compliance` 
 });
 
 describe("v8.25 NFRs first-class — backward compatibility", () => {
-  it("AC-4 — PLAN_TEMPLATE_SOFT does NOT add `## Non-functional` (soft mode skips design Phase 2)", () => {
+  it("AC-4 — PLAN_TEMPLATE_SOFT does NOT add `## Non-functional` (soft mode skips the architect's Frame-phase NFR authoring; v8.62 unified flow keeps the strict-only gating)", () => {
     expect(
       PLAN_TEMPLATE_SOFT,
-      "NFRs are large-risky only — design Phase 2 is the canonical author and Phase 2 does not run on soft-mode flows"
+      "NFRs are large-risky only — the architect's Frame phase is the canonical author and runs the NFR sub-step only on strict-mode flows"
     ).not.toMatch(/^## Non-functional$/m);
   });
 

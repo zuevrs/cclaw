@@ -14,9 +14,9 @@ import { SPECIALISTS } from "../../src/types.js";
  * These tests are tripwires for the move's invariants.
  */
 describe("v8.61 — triage as a specialist sub-agent", () => {
-  it("SPECIALISTS includes triage and length is 9", () => {
+  it("SPECIALISTS includes triage; v8.61 expected length 9 (8 + triage); v8.62 unified flow collapsed `design` into `architect` and removed `security-reviewer` so the post-v8.62 length is 7", () => {
     expect(SPECIALISTS).toContain("triage");
-    expect(SPECIALISTS).toHaveLength(9);
+    expect(SPECIALISTS).toHaveLength(7);
   });
 
   it("SPECIALIST_PROMPTS maps triage to TRIAGE_PROMPT", () => {

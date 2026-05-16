@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
-import { SLICE_BUILDER_PROMPT } from "../../src/content/specialist-prompts/slice-builder.js";
+import { BUILDER_PROMPT } from "../../src/content/specialist-prompts/builder.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 import { COUNTS } from "../helpers/counts.js";
@@ -73,9 +73,9 @@ describe("v8.48 — pre-edit-investigation three-probe gate", () => {
   });
 });
 
-describe("v8.48 — slice-builder + reviewer integration", () => {
-  it("slice-builder references pre-edit-investigation in its build-stage discipline", () => {
-    expect(SLICE_BUILDER_PROMPT).toMatch(/pre-edit-investigation/);
+describe("v8.48 — builder + reviewer integration (v8.62 renamed `slice-builder` → `builder`)", () => {
+  it("builder references pre-edit-investigation in its build-stage discipline", () => {
+    expect(BUILDER_PROMPT).toMatch(/pre-edit-investigation/);
   });
 
   it("reviewer prompt declares edit-discipline as an axis (v8.48 added it; v8.52 widened the count)", () => {
@@ -88,8 +88,8 @@ describe("v8.48 — slice-builder + reviewer integration", () => {
 });
 
 describe("v8.48 — slim-summary per-AC `verified` contract", () => {
-  it("slice-builder slim summary mandates the `AC verified` line per AC (strict) or single token (soft)", () => {
-    expect(SLICE_BUILDER_PROMPT).toMatch(/AC verified/i);
+  it("builder slim summary mandates the `AC verified` line per AC (strict) or single token (soft)", () => {
+    expect(BUILDER_PROMPT).toMatch(/AC verified/i);
   });
 
   it("orchestrator refuses to advance when any AC is verified=no outside ceremonyMode=inline", () => {

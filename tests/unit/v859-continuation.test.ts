@@ -64,8 +64,7 @@ import {
 import { renderExtendsSection, templateBody } from "../../src/content/artifact-templates.js";
 import { renderStartCommand } from "../../src/content/start-command.js";
 import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
-import { DESIGN_PROMPT } from "../../src/content/specialist-prompts/design.js";
-import { AC_AUTHOR_PROMPT } from "../../src/content/specialist-prompts/ac-author.js";
+import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/critic.js";
 import {
@@ -614,37 +613,40 @@ describe("v8.59 — plan templates carry parent_slug frontmatter and ## Extends 
   });
 });
 
-describe("v8.59 — design specialist reads flowState.parentContext (Phase 0 + Phase 1 + Phase 5)", () => {
+describe("v8.59 — architect specialist reads flowState.parentContext (v8.62 unified flow: architect absorbed dead `design`'s Phase 0/2-6 and renamed `ac-author`)", () => {
   it("Inputs section names flowState.parentContext", () => {
-    expect(DESIGN_PROMPT).toContain("flowState.parentContext");
+    expect(ARCHITECT_PROMPT).toContain("flowState.parentContext");
   });
 
-  it("Phase 0 carries the v8.59 parent-context linkage step (reads parent's plan.md Spec/Decisions/Selected Direction)", () => {
-    expect(DESIGN_PROMPT).toMatch(/parent-context linkage/u);
-    expect(DESIGN_PROMPT).toMatch(/Building on prior decisions/u);
+  it("Bootstrap phase carries the v8.59 parent-context linkage step (reads parent's plan.md Spec/Decisions; v8.62 absorbed dead `design`'s Phase 0; the unified-flow architect reads `parentContext.artifactPaths.plan` and inherits the Decisions / Spec sections)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/parent-context linkage/u);
+    expect(ARCHITECT_PROMPT).toMatch(/parentContext\.artifactPaths\.plan/u);
+    expect(ARCHITECT_PROMPT).toMatch(/## Spec/);
+    expect(ARCHITECT_PROMPT).toMatch(/## Decisions/);
   });
 
-  it("Phase 0 describes the immediate-parent-only constraint + the findRefiningChain escape hatch (v8.60+ multi-level)", () => {
-    expect(DESIGN_PROMPT).toMatch(/findRefiningChain/u);
+  it("Bootstrap phase describes the immediate-parent-only constraint (v8.60+ multi-level chaining lives in the extend-mode runbook; v8.62 keeps that boundary)", () => {
+    // v8.62 — the inline `findRefiningChain` escape-hatch citation was
+    // dropped from the architect prompt during the unified-flow
+    // collapse; the multi-level traversal contract lives in
+    // `runbooks-on-demand.ts > extend-mode.md`. The architect's
+    // contract is the immediate-parent read.
+    expect(ARCHITECT_PROMPT).toMatch(/parent-context linkage/u);
   });
 });
 
-describe("v8.59 — ac-author writes ## Extends in Phase 1.7 (mandatory when parentContext is set)", () => {
-  it("Inputs section names flowState.parentContext", () => {
-    expect(AC_AUTHOR_PROMPT).toContain("flowState.parentContext");
+describe("v8.59 — architect writes ## Extends (mandatory when parentContext is set; v8.62 unified flow: architect absorbed dead `ac-author`'s Phase 1.7)", () => {
+  it("architect prompt includes a parent-context linkage section (replaces the legacy ac-author Phase 1.7)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/Parent-context linkage|## Extends/u);
   });
 
-  it("Phase 1.7 — Parent-context linkage exists", () => {
-    expect(AC_AUTHOR_PROMPT).toMatch(/Phase 1\.7 — Parent-context linkage/u);
+  it("architect prompt instructs authorship of the ## Extends section at the top of plan.md", () => {
+    expect(ARCHITECT_PROMPT).toContain("## Extends");
+    expect(ARCHITECT_PROMPT).toMatch(/refines: <parentContext\.slug>/u);
   });
 
-  it("Phase 1.7 instructs ac-author to author the ## Extends section at the top of plan.md", () => {
-    expect(AC_AUTHOR_PROMPT).toContain("## Extends");
-    expect(AC_AUTHOR_PROMPT).toMatch(/refines: <parentContext\.slug>/u);
-  });
-
-  it("Phase 1.7 references the reviewer's parent-contradictions cross-check (downstream awareness)", () => {
-    expect(AC_AUTHOR_PROMPT).toMatch(/parent-contradictions cross-check/u);
+  it("architect prompt references the reviewer's parent-contradictions cross-check (downstream awareness)", () => {
+    expect(ARCHITECT_PROMPT).toMatch(/parent-contradictions cross-check/u);
   });
 });
 
