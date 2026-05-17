@@ -618,6 +618,54 @@ export const RESEARCH_MODES = ["task", "research"] as const;
 export type ResearchMode = (typeof RESEARCH_MODES)[number];
 
 /**
+ * Research depth tier (v8.69). Selected at the research-mode entry
+ * point — either explicitly via the `--light` / `--standard` /
+ * `--deep-product` flag on `/cc research <topic>`, or auto-classified
+ * by the triage sub-agent's `research_depth` heuristic when no flag is
+ * present.
+ *
+ * - `light` — 2-lens research pass for fast clarification questions
+ *   ("which library does X?", "is Y still recommended?", "what does
+ *   the team currently use?"). Dispatches `research-engineer` +
+ *   `research-skeptic` only, then runs the synthesis self-review and
+ *   finalises. Cheaper / faster turn-around for narrowly-scoped
+ *   clarifications. Skips product / architecture / history lenses
+ *   because the user is not exploring a new product surface.
+ * - `standard` (default; pre-v8.69 behaviour) — full 5-lens pass
+ *   (engineer / product / architecture / history / skeptic) for
+ *   technical exploration. The orchestrator picks this when the
+ *   research is about an existing surface or a feature-tier change
+ *   ("evaluate Redis vs in-memory cache for the search endpoint",
+ *   "should we move auth to JWT?"). Same 4-phase flow as
+ *   pre-v8.69 research mode.
+ * - `deep-product` — 5-lens pass + extra probes for greenfield /
+ *   pivot wording ("should we build...", "what if we replace...",
+ *   "evaluate switching from..."). Engineer / architecture / history
+ *   lenses run unchanged; product + skeptic lenses receive folded-in
+ *   `durability` (skeptic) + `thesis` (product) + `adjacent-product`
+ *   (product) probes from the everyinc-compound brainstorming Phase
+ *   1.2 deep-product gap lenses. The probes do NOT spawn additional
+ *   lenses — they are extra prompt content the product + skeptic
+ *   lenses fold into their structured findings.
+ *
+ * Pre-v8.69 state files do not carry this field; readers MUST default
+ * to `"standard"` on absent. Immutable for the research flow's lifetime
+ * (research-depth flow doesn't flip mid-run).
+ */
+export const RESEARCH_DEPTHS = ["light", "standard", "deep-product"] as const;
+export type ResearchDepth = (typeof RESEARCH_DEPTHS)[number];
+
+/**
+ * Default research depth used when the orchestrator's Detect-hop
+ * research-mode fork sees no explicit `--light` / `--standard` /
+ * `--deep-product` flag AND no triage `research_depth` classification
+ * applies (e.g. legacy research-mode invocations that pre-date the
+ * flag, or harnesses that bypass triage entirely). Matches the
+ * pre-v8.69 behaviour: 5-lens standard pass.
+ */
+export const DEFAULT_RESEARCH_DEPTH: ResearchDepth = "standard";
+
+/**
  * Plan-traceability and TDD ceremony modes (v8.2+; reviewer-enforced
  * since v8.40; renamed `acMode` → `ceremonyMode` in to align with
  * how reference projects treat AC as one element of a plan rather than
@@ -1022,6 +1070,30 @@ export interface TriageDecision {
    * than throwing.
    */
   ambiguityScore?: number;
+  /**
+   * Research depth tier (v8.69). Set ONLY on research-mode flows
+   * (`triage.mode == "research"`); absent on `task` mode. The
+   * orchestrator's research-mode fork stamps this field at the same
+   * time it stamps the sentinel triage block — either from the
+   * explicit `--light` / `--standard` / `--deep-product` flag on the
+   * `/cc research <topic>` argument, or from the triage sub-agent's
+   * `research_depth` auto-classification (the standard `/cc <task>`
+   * triage gate is bypassed in research mode, so the
+   * auto-classification runs as part of the research-mode fork's
+   * Detect step rather than at the triage hop). See
+   * {@link ResearchDepth} for tier semantics.
+   *
+   * Pre-v8.69 research-mode state files lack this field; readers MUST
+   * default to {@link DEFAULT_RESEARCH_DEPTH} (`"standard"`) on absent
+   * so resumes of in-flight research flows behave identically to
+   * pre-v8.69. Task-mode flows leave this field absent unconditionally
+   * — the research depth has no meaning outside `/cc research`.
+   *
+   * Immutable for the flow's lifetime (research depth does not flip
+   * mid-run; `/cc-cancel` + a fresh `/cc research` is the only way to
+   * change tier).
+   */
+  research_depth?: ResearchDepth;
 }
 
 export interface CliContext {

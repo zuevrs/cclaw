@@ -13,7 +13,7 @@ cclaw installs `/cc` and `/cc-cancel` into each harness. Inside `/cc`, three ent
 - **Two-model review.** A read-only reviewer walks ten axes; an adversarial critic falsifies what the reviewer cleared. They share no context and write to separate artifacts (`review.md`, `critic.md`).
 - **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Small/medium tasks get a soft-mode plan + a single TDD cycle. Large-risky tasks get a per-slice build with a pre-implementation plan-critic gate.
 - **Parallel by default.** Independent slices in a plan run in parallel — N independent slices finish in the time of the longest, not the sum.
-- **Research as a separate entry point.** `/cc research <topic>` runs an open-ended discovery dialogue and dispatches five parallel research lenses (engineer / product / architecture / history / skeptic). Output: a synthesised `research.md`. Optional handoff into a follow-up `/cc <task>` that consumes it as context.
+- **Research as a separate entry point.** `/cc research <topic>` runs an open-ended discovery dialogue and dispatches research lenses in parallel (engineer / product / architecture / history / skeptic). Depth tiers (`--light` / `--standard` / `--deep-product`) gate the lens set; lenses dispatch first-class web search via MCP (`user-exa`, `user-context7`); synthesis runs a four-scan self-review before `research.md` lands. Optional handoff into a follow-up `/cc <task>` that consumes it as context.
 - **Continuation flow.** `/cc extend <slug> <task>` loads a previously-shipped slug's `plan.md` / `build.md` / `learnings.md` (and `review.md` / `critic.md` / `qa.md` when present) as load-bearing context.
 - **Same runtime, four harnesses.** Claude Code, Cursor, OpenCode, and Codex all read the same `.cclaw/` install. Each harness gets the same `/cc` body plus harness-namespaced ambient rules.
 - **Compound learnings.** Non-trivial slugs emit a `learnings.md`. Future runs read prior shipped lessons through `knowledge.jsonl` before authoring a plan; outcome signals (`good` / `unknown` / `manual-fix` / `follow-up-bug` / `reverted`) down-weight priors that didn't hold up.
@@ -88,24 +88,34 @@ A separate entry point for pre-task uncertainty: brainstorming, scope exploratio
 
 ```bash
 /cc research storage strategy for shared agent memory
-/cc --research auth library trade-offs                 # equivalent
+/cc --research auth library trade-offs                          # equivalent
+/cc research --light is fastify still maintained                # 2 lenses, fast clarification
+/cc research --deep-product should we replace our calendar      # 5 lenses + extra probes
 ```
+
+**Depth tiers (v8.69).** The orchestrator picks one of three tiers at the Detect-hop research-mode fork — either explicitly via `--light` / `--standard` / `--deep-product` or auto-classified from topic wording (clarification → `light`; technical exploration → `standard`; greenfield / pivot wording → `deep-product`). Mutually-exclusive flags collapse last-wins.
+
+| Depth | Lenses | Extra probes | When to use |
+| --- | --- | --- | --- |
+| `--light` | `research-engineer` + `research-skeptic` (2) | none | Clarification — "is X still maintained?", "which library does Y?", "what does the team currently use?" |
+| `--standard` (default) | all 5 lenses | none | Technical exploration — "evaluate Redis vs in-memory cache", "should we move auth to JWT?" |
+| `--deep-product` | all 5 lenses | `Thesis` + `Adjacent product` (product), `Durability` (skeptic) | Greenfield / pivot — "should we build...", "what if we replace...", "evaluate switching from..." |
 
 **Phase 1 — open-ended discovery dialogue.** The orchestrator opens with `"Hi. What are you researching? Tell me what you know and what you don't."` and runs an **uncapped** dialogue (no fixed question budget; no auto-advance). You refine the topic, name constraints, surface prior attempts, name stakeholders, mark scope edges. The orchestrator proceeds only when you signal `ready` / `go ahead` / `finalize`.
 
-**Phase 2 — parallel lens dispatch (5 lenses).** The orchestrator distils the dialogue into a 5-15 bullet summary and dispatches all five research lenses in parallel:
+**Phase 2 — parallel lens dispatch.** The orchestrator distils the dialogue into a 5-15 bullet summary and dispatches the depth-determined lens subset in parallel:
 
 | Lens | What it covers |
 | --- | --- |
 | `research-engineer` | Technical feasibility, stack fit, blockers, implementation paths, risks, effort estimate |
-| `research-product` | User / product value, who benefits, alternatives (always including "do nothing"), market context |
+| `research-product` | User / product value, who benefits, alternatives (always including "do nothing"), market context. **Deep-product** depth folds in `Thesis` + `Adjacent product` probes |
 | `research-architecture` | System fit, surface impact, coupling, boundaries, scalability, in-repo precedents |
 | `research-history` | Prior attempts via `.cclaw/knowledge.jsonl` + git log; lessons; outcome signals |
-| `research-skeptic` | Failure modes, edge cases, abuse cases, hidden costs, don't-proceed triggers |
+| `research-skeptic` | Failure modes, edge cases, abuse cases, hidden costs, don't-proceed triggers. **Deep-product** depth folds in `Durability` probe |
 
-Engineer + architecture lenses may dispatch the `repo-research` helper for brownfield context. Engineer / product / architecture / skeptic lenses may use a web-search MCP tool when one is wired (e.g. `user-exa`), falling back to training knowledge with a `Notes:` tag otherwise. History lens reads `.cclaw/knowledge.jsonl` + git log directly. **Lenses run independently** — no lens cites or chains into another.
+Engineer + architecture lenses may dispatch the `repo-research` helper for brownfield context. Engineer / product / architecture / skeptic lenses dispatch **first-class web search via MCP** (v8.69) — `user-exa` for general web search, `user-context7` for library / framework / API docs — and cite hits inline in their `### Sources` block. When no MCP tool is wired, lenses fall back to training knowledge with a `Notes:` tag stamping the fallback. History lens is memory-only (web search is out of scope). **Lenses run independently** — no lens cites or chains into another.
 
-**Phase 3 — synthesis.** The orchestrator pastes each lens's findings verbatim into the matching `## <Lens> lens` section of `research.md`, then runs a cross-lens synthesis covering convergence (where 2+ lenses agree), divergence, the trade-off space, and confidence + coverage gaps. It then writes a recommended next step: exactly one of `plan with /cc <task>`, `more research needed (specific area)`, or `don't proceed (skeptic blocked: <reason>)`.
+**Phase 3 — synthesis + self-review.** The orchestrator pastes each lens's findings verbatim into the matching `## <Lens> lens` section of `research.md`, then runs a cross-lens synthesis covering convergence (where 2+ lenses agree), divergence, the trade-off space, and confidence + coverage gaps. **Before `research.md` is written to disk**, the orchestrator walks the draft through a four-scan self-review (placeholder / contradiction / scope drift / ambiguity) and fixes findings inline; cleanups land in `## Synthesis > ### Self-review notes`. It then writes a recommended next step: exactly one of `plan with /cc <task>`, `more research needed (specific area)`, or `don't proceed (skeptic blocked: <reason>)`.
 
 **Phase 4 — finalize.** `git mv` the artifact into `.cclaw/flows/shipped/<slug>/research.md` and emit a plain-prose handoff. The next `/cc <task>` invocation on the same project reads `flow-state.json > priorResearch` and consumes the most-recent shipped research as input to its plan stage. The handoff is optional — if research finalises and you never run a follow-up `/cc`, nothing else fires.
 
