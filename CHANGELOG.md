@@ -1,6 +1,51 @@
 # Changelog
 
 
+## 8.67.0 — Pre-plan clarify mode + assumption surface
+
+### Why
+
+Pre-v8.67 the architect resolved ambiguity silently: when `/cc <task>` didn't pin down what "done" meant, the architect picked a default interpretation, baked it into `plan.md`, and the user only discovered the wrong assumption after build had already burned context. Correcting it cost a full re-architect cycle — the most expensive cycle in cclaw's flow.
+
+References that informed the shape: obra-superpowers' brainstorming skill (HARD-GATE + one-question-at-a-time, scaling sections by complexity), forrestchang / Karpathy's Think Before Coding (silent assumptions are the inverse of thinking-before-coding), addyosmani's spec-driven-development (the ASSUMPTIONS I'M MAKING block), and everyinc-compound's ce-brainstorm Phase 1.2 gap lenses (evidence / specificity / counterfactual / attachment). v8.67 wires those patterns into cclaw's triage → architect → plan.md pipeline.
+
+### What changed
+
+**Deliverable 1 — Triage computes an `ambiguity_score` (0-100)** (`src/content/specialist-prompts/triage.ts`, `src/types.ts`).
+
+- New `## Ambiguity score` section in the triage prompt names four signals (vague-verbs without targets, missing acceptance criteria, multiple plausible interpretations, no concrete file/function/symbol names) and the +25/+25/+30/+20 weights that combine into the integer score; explicit anchors (file paths, test names, AC references) subtract from the total. Triage slim summary gains a mandatory `Ambiguity score: <0-100> (signals: ...)` line.
+- `TriageDecision.ambiguityScore?: number` is the persisted form; pre-v8.67 state files lack the field and downstream specialists treat absence as `0` (no clarify).
+
+**Deliverable 2 — `clarify.ambiguity_threshold` config knob** (`src/config.ts`).
+
+- New `ClarifyConfig` interface + `clarify.ambiguity_threshold` field on `CclawConfig`. `DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD = 60`. `clarifyAmbiguityThresholdOf(config)` reads the knob with clamping (values outside `[0, 100]` fall back to default). Projects that want Clarify to fire more often lower the threshold; CI / batch pipelines raise it.
+
+**Deliverable 3 — Architect Clarify phase (Phase −1)** (`src/content/specialist-prompts/architect.ts`).
+
+- New `### Phase −1 — Clarify` section, executed BEFORE Bootstrap, fires when `triage.ambiguityScore >= clarify_threshold` AND `triage.ceremonyMode != "inline"`. Below threshold OR inline path: skipped silently. Protocol: one question per turn, maximum 5 across the whole phase, early-exit on user signal (`go` / `ready` / `proceed` / "looks right" / "no more questions") or when ambiguity resolves before the cap.
+- Signal → question template mapping uses the four ce-brainstorm gap lenses (specificity / evidence / counterfactual / attachment). Architect walks the signals in the order triage listed them and asks the strongest-signal question first.
+- Anti-rationalization table calls out the common failure modes (lowering the score to skip Clarify, batching questions, padding to 5, hiding "obvious" inferences from `## Assumptions`).
+
+**Deliverable 4 — Plan template gains `## Assumptions (correct me now)`** (`src/content/artifact-templates.ts`).
+
+- New mandatory section on both strict and soft templates. Positioned at the very top of plan.md — after `## Extends` (when present) and before `## Frame` (strict) or `## Plan` (soft). 3-7 short bullets; user-pinned answers (from Clarify) are bare, architect-silent inferences carry the literal `(architect inference)` tag.
+
+**Deliverable 5 — Orchestrator emits ack-window prose after plan write** (`src/content/start-command.ts`).
+
+- Preflight section updated to declare the v8.67 Clarify gate (entry condition + skip rules). `#### plan` section gains a "Post-plan ack-window prose" paragraph: after the architect's slim summary returns and `flow-state.json` is patched, the orchestrator emits one line in plain prose — `Plan written to .cclaw/flows/<slug>/plan.md. Read the `## Assumptions (correct me now)` section — if any are wrong, edit the plan or run `/cc-cancel` and restart. Continue with `/cc` to proceed to build.` That line IS the natural pause; `/cc` (no args) auto-continues to plan-critic / builder.
+
+**Deliverable 6 — `ambiguity-discipline` skill** (`src/content/skills/ambiguity-discipline.md`, `src/content/skills.ts`).
+
+- New auto-trigger skill scoped to the `triage` + `plan` stages. Codifies the contract (where each surface lives), the four gap lenses, hard rules (one question per turn, max 5, early-exit honour, threshold IS the gate), the anti-rationalization table, and a worked example (`/cc improve onboarding` — score 95, two Clarify questions resolve specificity + evidence, three bullets land in `## Assumptions (correct me now)`).
+
+**Deliverable 7 — Tripwire test** (`tests/unit/v867-clarify-mode.test.ts`).
+
+- 25 assertions across 6 describe blocks: triage prompt + slim summary line + four-signal coverage; config knob defaults + clamping; `TriageDecision.ambiguityScore` round-trip; architect prompt Phase −1 + gate fields + max-5 cap + early-exit signals; plan template Assumptions section + position + inference tag; start-command body Clarify mention + ack-window prose + render equality; skill wiring (AUTO_TRIGGER_SKILLS membership, stage tags, source file existence, install-layer write).
+
+### Clean break
+
+Pre-v8.67 state files lack `triage.ambiguityScore` and the architect treats absence as `0` (Clarify never fires; behaviour is byte-for-byte identical to v8.66). The `## Assumptions (correct me now)` section is added to both plan templates — slugs in `.cclaw/flows/shipped/` keep their pre-v8.67 plan body unchanged on disk, and new slugs land the section automatically. The config knob defaults to 60; projects that explicitly set `clarify: { ambiguity_threshold: <n> }` in `.cclaw/config.yaml` opt into a custom threshold. The orchestrator body grew by ~1.6k chars to absorb the ack-window prose + Clarify-gate paragraph (78260 → 79886, well under the 80000 budget).
+
 ## 8.66.0 — Parallel-by-default for multi-slice tasks (skips v8.65)
 
 ### Why

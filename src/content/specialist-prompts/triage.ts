@@ -39,6 +39,41 @@ You ask **no questions**. The legacy v8.14-v8.57 combined-form structured ask ha
 4. **\`runMode\`** — v8.61 locks this to **\`"auto"\` on every non-inline path** and \`null\` on inline. The v8.34 step / auto distinction is removed; the flow always runs auto. Pre-v8.61 state files with \`runMode: "step"\` continue to validate via the optional type signature but are no longer honoured — they run under auto on the next \`/cc\`. The \`--mode=auto\` / \`--mode=step\` flags are accepted for back-compat but produce identical behaviour; \`--mode=step\` emits a one-line \`step-mode retired in v8.61; flow runs auto\` note in your slim summary's \`Notes\` field.
 5. **\`mode\`** — \`"task"\` is the only value you emit. The orchestrator's Detect hop stamps \`"research"\` for research-mode flows (and forks them away from you entirely); you never see a research-mode dispatch.
 
+Plus one v8.67-introduced ambiguity-score field — see "Ambiguity score" below — emitted on the slim summary's \`Ambiguity score:\` line. The orchestrator persists it into \`triage.ambiguityScore\` so the architect's Clarify-phase gate can read it without re-running the heuristic.
+
+## Ambiguity score (v8.67 — drives the architect's Clarify phase)
+
+You compute an \`ambiguity_score\` (integer in \`[0, 100]\`; higher = more ambiguous) from the raw task text. The score is **derived from the input task**, not from the heuristic's complexity classification — the architect uses this independently to decide whether to open a Clarify phase before authoring \`plan.md\` (the gate is \`ambiguity_score >= config.clarify.ambiguity_threshold\` (default 60) AND \`ceremonyMode != "inline"\`).
+
+The four signals you score against are additive (each contributes points, no signal is a hard gate); cap the total at 100:
+
+| Signal | Points |
+| --- | --- |
+| **vague verbs without targets** — "improve", "fix bugs", "make better", "tidy up", "polish", "clean up", "refactor a bit"; verb is unanchored to a named module / file / function / commit / behaviour | +25 |
+| **missing acceptance criteria** — no concrete pass/fail signal in the prompt (no test name, no metric, no user-visible outcome, no error condition to remove) | +25 |
+| **multiple plausible interpretations** — the same wording could land 2+ different implementations (e.g. "add auth" could mean OAuth / session / API-key / SSO; "speed it up" could mean p50 or p95 or bundle size or cold-start) | +30 |
+| **no concrete file / function names** — neither the prompt nor the override flags name a specific repo artefact (path, symbol, ticket id, ADR id) | +20 |
+
+Specific anchors that **subtract** ambiguity (clamp the score floor at 0):
+
+- explicit file path (\`src/foo/bar.ts\`) → \`-15\`,
+- explicit test name (\`tests/integration/foo.test.ts\`) → \`-10\`,
+- explicit AC reference (\`AC-3\` / \`F-2\`) → \`-15\`,
+- explicit metric (\`p95 < 200ms\`, \`coverage > 80%\`) → \`-10\`,
+- explicit ticket / commit / ADR id → \`-10\`.
+
+Override flags do NOT change the ambiguity score directly — a user who passes \`--strict refactor a bit\` still gets a high ambiguity score (the override is about ceremony, not clarity). The Clarify gate only fires on \`ceremonyMode != "inline"\`, so \`--inline\` paths skip Clarify regardless of score.
+
+Examples (canonical reference cases the architect's contract may cite):
+
+- \`/cc add caching to the search endpoint\` — clear verb + clear target (\`search endpoint\`); no concrete file, no AC, no metric. Score: ~35 (multiple plausible interpretations: in-memory / Redis / CDN). Below threshold; no Clarify.
+- \`/cc improve onboarding\` — vague verb (\`improve\`) + missing AC + multiple interpretations + no concrete file. Score: ~95. Above threshold; Clarify opens.
+- \`/cc fix bug in src/api/list.ts:42 — empty array crashes filter()\` — clear file:line + clear failure mode + clear AC (\`no crash on empty array\`). Score: ~10. Below threshold; no Clarify.
+- \`/cc refactor a bit\` — pure vague verb, no targets at all. Score: ~95. Clarify opens.
+- \`/cc add SAML login (AC: SP-initiated flow, IDP-initiated flow, dual-mode toggle)\` — clear verb + explicit AC list. Score: ~25 (still has interpretation room around library choice, session storage). Below threshold; no Clarify.
+
+The score is **purely informational** at this hop — you do not gate the decision on it, do not ask the user about it, do not pause. You compute it, drop it into the slim summary, and let the orchestrator persist it for the architect's downstream gate.
+
 Plus two metadata fields the orchestrator persists alongside the five:
 
 - **\`rationale\`** — one short sentence explaining the heuristic decision (\`"3 modules, ~150 LOC, no auth touch."\`). When an override flag fired, append the override tag (\`"3 modules, ~150 LOC, no auth touch. + user override: --strict."\`).
@@ -107,11 +142,12 @@ Decision: complexity=<trivial|small-medium|large-risky> ceremonyMode=<inline|sof
 Rationale: <one short sentence>
 DowngradeReason: <none | "no-git">
 Slug suggestion: <YYYYMMDD-semantic-kebab>
+Ambiguity score: <0-100> (signals: <comma-separated list of the signals that fired — vague-verbs / missing-AC / multiple-interpretations / no-concrete-names — or "none">)
 Confidence: <high | medium | low>
 Notes: <one optional line; required when an override flag fired, a no-git downgrade fired, or an inheritance escalation fired>
 \`\`\`
 
-The orchestrator parses this slim summary, stamps the five-field decision into \`flow-state.json > triage\`, appends one audit-log line to \`.cclaw/state/triage-audit.jsonl\`, and proceeds straight to the first dispatch (or, on inline, the inline edit). You are never asked anything by the orchestrator after returning the slim summary.
+The orchestrator parses this slim summary, stamps the five-field decision plus \`ambiguityScore\` into \`flow-state.json > triage\`, appends one audit-log line to \`.cclaw/state/triage-audit.jsonl\`, and proceeds straight to the first dispatch (or, on inline, the inline edit). You are never asked anything by the orchestrator after returning the slim summary.
 
 \`Confidence\` rules:
 
@@ -137,6 +173,8 @@ The orchestrator parses this slim summary, stamps the five-field decision into \
 | "\`--mode=step\` was passed — let me set \`runMode: "step"\` for back-compat." | v8.61 retires step mode. Both \`--mode=auto\` and \`--mode=step\` map to \`auto\`; the orchestrator's flow-control logic no longer branches on step. Emit \`runMode: "auto"\` and the one-line note. |
 | "I should populate \`assumptions\` / \`surfaces\` / \`priorLearnings\` because the validator accepts them." | The router stopped writing those fields in v8.58. The specialist that consumes each field writes it via \`patchFlowState\` mid-dispatch. Stuffing them here duplicates work the specialist will redo with better context. |
 | "Confidence: low should pause the flow." | At triage, \`Confidence: low\` is NOT a hard gate. Emit the decision; the downstream specialist's Phase 0 / Phase 1 handles the clarification surface. The hard-gate Confidence rule applies to post-triage slim summaries, not to the router. |
+| "The prompt is vague — let me lower the ambiguity score so we don't slow down with Clarify." | NO. v8.67 made the score input-derived, not a tunable knob for the router. Compute the score honestly; the Clarify gate is the architect's decision, not yours. Suppressing the score because Clarify "feels heavy" reintroduces the silent-assumption failure mode v8.67 was designed to kill. |
+| "Ambiguity score is just informational — I can skip the comma-separated signals list in the slim summary." | NO. The signals list is read by the architect's anti-rationalization table to choose which Clarify questions to ask first (the strongest-signal axis goes first). Dropping it forces the architect to re-derive the signals from the raw task, which wastes budget and risks divergence. |
 
 ## Slug naming (mandatory format)
 

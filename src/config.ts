@@ -56,6 +56,27 @@ export interface ModelPreferences {
  * knob has a typed home (we do NOT want orchestrator prompts reaching
  * for free-form `unknown` keys).
  */
+/**
+ * Pre-plan clarify-phase tunables (v8.67). Optional block in
+ * `.cclaw/config.yaml`; every field is independently optional and
+ * falls back to a documented default when absent. The block exists
+ * so the ambiguity-threshold knob has a typed home (we do NOT want
+ * orchestrator prompts reaching for free-form `unknown` keys).
+ */
+export interface ClarifyConfig {
+  /**
+   * threshold the architect compares `triage.ambiguityScore` against
+   * before opening the Clarify phase. `triage.ambiguityScore >= this`
+   * AND `triage.ceremonyMode != "inline"` opens Clarify; otherwise
+   * the architect skips straight to plan authoring.
+   *
+   * Default `60`. Integer in `[0, 100]`. Values outside the range
+   * fall back to the default at read time (a separate config
+   * misconfiguration note can land in `plan.md > ## Open questions`).
+   */
+  ambiguity_threshold?: number;
+}
+
 export interface DesignConfig {
   /**
    * composite-ambiguity threshold for the Phase 7 warning prefix.
@@ -128,6 +149,13 @@ export interface CclawConfig {
    * config schema.
    */
   design?: DesignConfig;
+  /**
+   * Pre-plan clarify-phase tunables (v8.67). The only field today is
+   * {@link ClarifyConfig.ambiguity_threshold}; the block is shaped so
+   * future clarify-mode knobs (max-question count, ack-window phrases)
+   * can land here without churning the top-level schema.
+   */
+  clarify?: ClarifyConfig;
 }
 
 /**
@@ -150,6 +178,35 @@ export function ambiguityThresholdOf(config: CclawConfig | null | undefined): nu
   const raw = config?.design?.ambiguity_threshold;
   if (typeof raw !== "number" || !Number.isFinite(raw)) return DEFAULT_AMBIGUITY_THRESHOLD;
   if (raw < 0 || raw > 1) return DEFAULT_AMBIGUITY_THRESHOLD;
+  return raw;
+}
+
+/**
+ * Default pre-plan clarify-threshold used when
+ * `.cclaw/config.yaml > clarify.ambiguity_threshold` is absent or
+ * out-of-range. Integer in `[0, 100]`; mirrors the v8.67 spec's
+ * default of 60 (triage scores >= 60 open the architect's Clarify
+ * phase on non-inline paths).
+ */
+export const DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD = 60;
+
+/**
+ * read the configured pre-plan clarify threshold with the documented
+ * fallback. Returns {@link DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD} when
+ * the config is absent, the `clarify` block is missing, the field is
+ * absent, or the configured value is not a finite number in
+ * `[0, 100]`. Out-of-range values fall back silently at read time;
+ * downstream specialists may surface a one-line note when they
+ * notice the misconfig.
+ */
+export function clarifyAmbiguityThresholdOf(
+  config: CclawConfig | null | undefined
+): number {
+  const raw = config?.clarify?.ambiguity_threshold;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD;
+  }
+  if (raw < 0 || raw > 100) return DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD;
   return raw;
 }
 

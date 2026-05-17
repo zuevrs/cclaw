@@ -346,6 +346,20 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     ],
     stages: ["build"],
     body: readSkill("pre-edit-investigation.md")
+  },
+  {
+    id: "ambiguity-discipline",
+    fileName: "ambiguity-discipline.md",
+    description: "Pre-plan clarify mode + assumption surface (v8.67). Triage computes `ambiguity_score` (0-100) from four signals (vague-verbs / missing-AC / multiple-interpretations / no-concrete-names); when the score crosses the configurable threshold (`config.clarify.ambiguity_threshold`, default 60) AND `ceremonyMode != \"inline\"`, the architect runs a one-question-at-a-time Clarify phase (max 5, early-exit on user 'go'/'ready'/'proceed') BEFORE Bootstrap, then surfaces every assumption — both Clarify answers and architect-silent inferences (labelled) — in plan.md's mandatory `## Assumptions (correct me now)` section. Sourced from obra-superpowers brainstorming (HARD-GATE + one-q-at-a-time), Karpathy Think Before Coding, addyosmani SPECIFY (ASSUMPTIONS I'M MAKING block), everyinc-compound ce-brainstorm Phase 1.2 (evidence/specificity/counterfactual/attachment lenses).",
+    triggers: [
+      "specialist:triage",
+      "specialist:architect",
+      "stage:triage",
+      "stage:plan",
+      "ambiguity_score>=threshold"
+    ],
+    stages: ["triage", "plan"],
+    body: readSkill("ambiguity-discipline.md")
   }
 ];
 
