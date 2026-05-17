@@ -1,7 +1,7 @@
 # Changelog
 
 
-## 8.78.0 — Iterative-clarify (per-dimension ambiguity scoring)
+## 8.82.0 — Iterative-clarify (per-dimension ambiguity scoring; v8.78 work)
 
 ### Why
 
@@ -67,6 +67,104 @@ v8.78 fuses the deep-interview math with the existing gap lenses: per-dimension 
 - Challenge-mode rotation: round 4 activates Contrarian framing ("what if the opposite were true?"), round 5 activates Simplifier framing ("what's the simplest version that would still be valuable?").
 - New `/cc research go` sub-command force-exits research-mode Phase 1 discovery (same shape as the in-prose "ready" signal; persists what the user has already said and proceeds to the Approaches Gate).
 - New types `ClarifyDimension` / `ClarifyDimensionScore` / `ClarifyRoundState`; flow state extended with `clarifyRounds[]` (optional + back-compat; pre-v8.78 state files validate unchanged).
+
+
+## 8.81.0 — Investigator v2 (assumption audit + defense-in-depth + post-mortem)
+
+### Why
+
+v8.77 added the investigator hop — a read-only diagnostic specialist between triage and architect on `triage.taskShape == "debug"` flows, running three parallel hypothesis lanes (`cause-code` / `cause-config` / `cause-measurement`) and emitting one of four verdicts (`direct-fix` / `needs-plan` / `more-investigation` / `not-a-bug`). The three-lane discipline was the right backbone — MECE across the common bug-cause taxonomy, parallel by default, evidence-driven — but field experience after v8.77 surfaced three orthogonal failure modes the lane discipline doesn't catch:
+
+1. **The lanes test correct hypotheses against wrong assumptions.** Most "wrong hypotheses" aren't really wrong — they're correct hypotheses tested against a wrong assumption ("the failing function returns what its name implies"; "the config has resolved by the time this read fires"; "the caller pre-validated"). The three lanes commit to a hypothesis BEFORE auditing those assumptions, so a lane can return high confidence on the wrong target because the foundational belief was unverified.
+2. **The lanes find the root cause but not the class.** When the same null-guard-on-input bug is the third one this quarter, fixing only the failing file leaves the door open for the next occurrence. The lanes excel at "what broke here?" but don't surface "is this pattern recurring?" or "is this class catastrophic enough to deserve multiple guards?".
+3. **The lanes find the cause but not the gap.** When a bug reaches production, the gates that should have caught it — review.md axes, critic, qa — also failed. The lanes don't surface "how did this survive review?" or "what review check would have caught this?" — that meta-pattern compounds when surfaced, and stays static when it isn't.
+
+v8.81 adds three conditional disciplines layered on top of the v8.77 three-lane backbone — none of them changes the existing lane semantics; all are additive:
+
+- **Phase 0.5 — Assumption audit** runs ALWAYS, BEFORE the three lanes, and catalogues the "this must be true" beliefs the symptom rests on.
+- **Phase 4 — Defense-in-depth tier** fires CONDITIONALLY on ≥3-file recurring patterns OR catastrophic-if-prod symptoms, and writes a 4-layer guard plan the builder implements as part of the fix commit.
+- **Phase 5 — Post-mortem** fires CONDITIONALLY on prod-discovered symptoms, and surfaces how the bug was introduced + how it survived review + which review axis would have caught it.
+
+The pattern lineage is well-established in the reference stacks:
+
+- **everyinc-compound `ce-debug`** Phase 2 ([`plugins/compound-engineering/skills/ce-debug/SKILL.md`](references/everyinc-compound/plugins/compound-engineering/skills/ce-debug/SKILL.md) lines 104-130) — "Assumption audit (before hypothesis formation)" + "Conditional defense-in-depth" + "Conditional post-mortem" — the three disciplines are introduced as a triplet, with the same trigger gates v8.81 adopts.
+- **obra-superpowers `systematic-debugging`** Phase 1 ([`skills/systematic-debugging/SKILL.md`](references/obra-superpowers/skills/systematic-debugging/SKILL.md)) — the assumption-audit framing ("don't assume — verify") + the multi-layer-instrumentation pattern.
+- **`defense-in-depth.md` reference** ([`obra-superpowers/skills/systematic-debugging/defense-in-depth.md`](references/obra-superpowers/skills/systematic-debugging/defense-in-depth.md) + [`everyinc-compound/plugins/compound-engineering/skills/ce-debug/references/defense-in-depth.md`](references/everyinc-compound/plugins/compound-engineering/skills/ce-debug/references/defense-in-depth.md)) — the canonical 4-layer model (Entry validation / Invariant check / Environment guard / Diagnostic breadcrumb), the "not every bug needs all four" rule, the "common mistakes" anti-patterns.
+
+### What changed
+
+**Deliverable 1 — Phase 0.5 Assumption audit (`src/content/specialist-prompts/investigator.ts`).**
+
+- New `### Phase 0.5 — Assumption audit` workflow section inserted between Phase 0 (Bootstrap) and Phase 1 (Hypothesis lane fan-out). Runs ALWAYS, BEFORE the three lanes — composing the audit table is mandatory on every dispatch.
+- Investigator writes a `## Assumption audit` section to `investigation.md`: a table with one row per "this must be true" belief, each row marked `verified` (with cited evidence — file:line / command output / commit SHA / config snippet) OR `assumed` (with a one-line probe command to run during Phase 1's three-lane fan-out).
+- Canonical belief catalogue (the classes the investigator scans for): framework / library behaves as expected here; function returns what its name implies; config loads before this runs; caller passes a non-null value; database / file / cache is in the state the test implies; error message points at the actual failure; symptom description itself is correct.
+- **Short-circuit branch.** When the audit's probe output unambiguously proves the symptom is misread (e.g. "endpoint returns 500" but actual response is 200; "function returns undefined" but actually returns null), the investigator MAY short-circuit to `Next step: not-a-bug` with the audit row as the reframe evidence. Short-circuit cases SKIP Phase 1's three-lane fan-out — the lanes are replaced with a single `### Lanes` placeholder block ("Lanes skipped — assumption audit short-circuited investigation; see audit row <#N>"); the slim summary's `Lanes:` line reads `cause-code=skip, cause-config=skip, cause-measurement=skip`. Short-circuit is the ONE narrow exception to the v8.77 "all three lanes always run" invariant; the skip is explicit + audited, not silent.
+
+**Deliverable 2 — Phase 4 Defense-in-depth tier (`src/content/specialist-prompts/investigator.ts`).**
+
+- New `### Phase 4 — Defense-in-depth tier (v8.81; CONDITIONAL)` workflow section between Phase 2 (Synthesis) and the renumbered Phase 6 (Compose). Fires on TWO independent OR signals:
+  - **Recurring pattern.** The root-cause pattern (e.g. "missing null guard on untrusted input", "missing await on a Promise-returning call") appears in **≥3 OTHER files** in the repo, verified via a literal `rg` count probe. Gate is **strict ≥3 other files** (failing file + three others = 4 hits total); a 2-other-files hit is "single regression" not "class of bugs" and does NOT fire.
+  - **Catastrophic-if-prod.** Symptom would have been catastrophic if it had reached production. Specific classes: data loss, security breach, payment failure, catastrophic data integrity (silently dropped column / corrupted foreign-key chain / double-applied idempotency-key). The "if-prod" framing matters — a flag-guarded experiment that crashed in staging is NOT catastrophic-if-prod; a flag-guarded experiment whose flag check was bypassed IS.
+- When the gate fires, investigator writes a `## Defense-in-depth (4 layers)` section. The four layers (canonical names; mirror the reference): **Layer 1 — Entry validation** (reject obviously invalid input at the API boundary), **Layer 2 — Invariant check** (enforce that data makes sense for THIS operation; distinct from entry validation — entry rejects bad shape, invariant rejects bad meaning), **Layer 3 — Environment guard** (refuse dangerous operations in contexts where they make no sense; e.g. refuse `git init` outside OS temp dir in tests), **Layer 4 — Diagnostic breadcrumb** (capture forensic context BEFORE the risky operation; rarely truly n/a — the breadcrumb earns its keep for the NEXT bug, so it's the layer to omit last). Each layer documented with `What:` / `Where:` (file:line) / `How it catches the class:`. Layers that don't apply are marked `n/a — <reason>` (silent omission forbidden).
+- **Slim-summary line.** When Phase 4 fires, the slim summary adds a required `Defense-in-depth: yes` line. When the gate doesn't fire, the line is omitted (default reads as `no`).
+- **Envelope propagation.** The orchestrator copies the slim-summary line onto the builder dispatch envelope as `defense-in-depth: <yes|no>` and persists it on `flow-state.json > builderEnvelope.defenseInDepth`. When `defense-in-depth: yes`, the builder reads `investigation.md > ## Defense-in-depth (4 layers)` and implements **all named (non-n/a) layers** as part of the root-cause fix commit (NOT as a separate follow-up commit — defense-in-depth is part of the fix, not a follow-up).
+
+**Deliverable 3 — Phase 5 Post-mortem (`src/content/specialist-prompts/investigator.ts`).**
+
+- New `### Phase 5 — Post-mortem (v8.81; CONDITIONAL)` workflow section between Phase 4 and the renumbered Phase 6 (Compose). Fires when the symptom source includes a production / live / users-reported / incident keyword in the original bug report from Phase 0 step 5. Canonical vocabulary the investigator scans: `production`, `prod`, `live`, `shipped`, `deployed`, `users reported`, `customer reported`, `customer complaint`, `support ticket`, `incident`, `outage`, `P0`, `P1`, `SEV-1`, `SEV-2`, `pager`, `paged`, `alert fired`, `rollback`, `hotfix`, `emergency`, `regression in prod`, explicit production URL / domain references. A single keyword hit fires the gate.
+- When the gate fires, investigator writes a `## Post-mortem` section covering four questions:
+  - **How was this introduced?** Cite the commit SHA (`git log --oneline` + `git blame -L <range> <file>` to pin the introducing commit), the author (from `git log`; evidence-only, no motive speculation), the date (with an "<N weeks ago>" framing for human pattern-match), and the commit message verbatim (the framing that helps explain why the bug looked acceptable at the time).
+  - **How did this survive review?** Probe with `git log --all --diff-filter=A -- '.cclaw/flows/*/review.md'` to see if the introducing commit had a `review.md` / `critic.md`. If yes, cite the path + the relevant axis + which finding(s) the review surfaced and why those didn't block the change. If no, state "no review.md for the introducing commit (pre-cclaw OR direct-to-main OR inline-mode commit)" — that itself is the systemic gap.
+  - **What review axis would have caught it?** Name **exactly one** axis from the reviewer's 11-axis surface + the specific finding text the axis should have produced (one sentence; the prevent-recurrence block hangs off this).
+  - **Prevent-recurrence: what review check should be added?** One specific testable check, framed as "the `<axis>` axis MUST scan for `<pattern>` when `<gate>`" (vague "review more carefully" is the failure mode the gate exists to prevent). Optional second bullet for a shared-rubric addition (`design-quality-rubric.ts`, `pre-edit-investigation.md`).
+- **Advisory output.** The post-mortem does NOT block routing — the orchestrator routes per `## Next step recommendation` regardless of post-mortem findings. The post-mortem surfaces context for human pattern-recognition + retro / engineering-review / v8.74 ethos-refresh consumption.
+- Authoring rules pin the cclaw ethos: evidence-only on the "introduced" block (no motive speculation; read-only on attribution); diagnostic-not-punitive framing on the "survived review" block (process gaps, not person gaps — the Boil the Lake principle applies); exactly-one-axis discipline on the "axis would have caught it" block (multi-axis attribution dilutes the prevent-recurrence signal).
+
+**Deliverable 4 — Slim-summary + body-section list updated (`src/content/specialist-prompts/investigator.ts`).**
+
+- The investigator prompt's `## Output — slim summary` section now declares the conditional `Defense-in-depth: <yes | no>` line (required when Phase 4 fired; omitted when the gate didn't fire).
+- The `Notes:` line is now also required when Phase 5 fired (names the post-mortem trigger keyword).
+- The body-sections list in Phase 6 (Compose) grew from 9 to 12 entries:
+  1. `## Symptom` (Phase 0)
+  2. `## Assumption audit` (Phase 0.5; ALWAYS present)
+  3. `### Lane: cause-code` (Phase 1)
+  4. `### Lane: cause-config` (Phase 1)
+  5. `### Lane: cause-measurement` (Phase 1; replaced by single `### Lanes` placeholder when short-circuited)
+  6. `## Root cause (working hypothesis)` (Phase 2)
+  7. `## Convergence / divergence notes` (Phase 2)
+  8. `## Next step recommendation` (Phase 2)
+  9. `## Fix scope` (Phase 2; only on `direct-fix`)
+  10. `## Defense-in-depth (4 layers)` (Phase 4; only when gate fired)
+  11. `## Post-mortem` (Phase 5; only when gate fired)
+  12. `## Summary` (standard three-section block)
+
+**Deliverable 5 — Tests + anti-rationalization table (`tests/unit/v881-investigator-v2.test.ts`, new file; 44 assertions across 8 AC blocks).**
+
+- AC-1 (Phase 0.5 Assumption audit): pins ordering before Phase 1, the verified/assumed dichotomy, the canonical 7-class belief catalogue, the evidence shapes for verified rows, the probe-command requirement for assumed rows, the short-circuit branch to `not-a-bug`, the "still compose the section even when short-circuiting" rule, the body-section ordering (after `## Symptom`).
+- AC-2 (Phase 4 gate): pins the CONDITIONAL marker, the ≥3-OTHER-files signal (verified via `rg`), the catastrophic-if-prod signal (data loss / security / payment / data integrity), the OR semantics between the two signals, the skip-when-neither-fires invariant.
+- AC-3 (Phase 4 layers): pins all four canonical layer names verbatim (Entry validation / Invariant check / Environment guard / Diagnostic breadcrumb), the per-layer `What:` / `Where:` / `How it catches the class:` documentation shape, the section name in body (`## Defense-in-depth (4 layers)`).
+- AC-4 (Phase 4 envelope): pins the slim-summary `Defense-in-depth: yes|no` line, the builder envelope flag (`defense-in-depth: <yes|no>`), the all-named-layers-as-part-of-fix-commit rule.
+- AC-5 (Phase 5 Post-mortem): pins the CONDITIONAL marker, the prod / live / users-reported / incident trigger keywords, the canonical incident vocabulary (P0/P1/SEV/outage/hotfix/rollback), the advisory-not-routing nature, the four canonical questions (introduced / survived review / which axis / prevent-recurrence), the commit SHA / author / date evidence rule, the review.md / critic.md citation, the exactly-one-axis rule, the testable prevent-recurrence rule, the body-section ordering (after `## Defense-in-depth`, before `## Summary`).
+- AC-6 (Builder envelope): pins the slim-summary → builder-envelope wiring, the `builderEnvelope.defenseInDepth` flow-state persistence, the default-`no` back-compat, the all-named-layers behavior, the lowercase-kebab convention.
+- AC-7 (back-compat): the v8.77 three-lane invariants (three canonical lanes, four canonical verdicts, seven slim-summary lines, read-only contract, iteration cap, MECE PARALLEL fan-out) are all preserved.
+- AC-8 (anti-rationalization table grew): the table grew by 8+ new rows (all tagged `(v8.81)`) covering: audit-skip rationalization, lazy-short-circuit rationalization, strict-≥3-files rationalization, vague-catastrophic rationalization, force-all-four-layers rationalization, "too trivial for post-mortem" rationalization, post-mortem-blame rationalization, multi-axis attribution rationalization.
+
+**Deliverable 6 — README investigator section extended (`README.md`).**
+
+- Existing v8.77 "Debug-branch routing" paragraph preserved verbatim.
+- New paragraph appended documenting the v8.81 three conditional disciplines: Phase 0.5 Assumption audit (always; before lanes), Phase 4 Defense-in-depth (conditional on ≥3 files OR catastrophic-if-prod), Phase 5 Post-mortem (conditional on prod keywords). References to the borrowed patterns + the four canonical defense-in-depth layers + the four canonical post-mortem questions inlined.
+
+**Deliverable 7 — Bumped to 8.81.0 (`package.json` + this `CHANGELOG.md` entry).**
+
+### Test count
+
+1903 → 1947 tests across 103 files (+44 in `tests/unit/v881-investigator-v2.test.ts`).
+
+### Compatibility
+
+Purely additive. Pre-v8.81 state files validate unchanged — `builderEnvelope.defenseInDepth` is optional and absent reads as `"no"`. Pre-v8.77 state files also continue to validate (the v8.77 back-compat layer is preserved). The v8.77 three-lane discipline, four-verdict vocabulary, slim-summary shape (seven required + one optional `Notes:` line), and `priorInvestigation` envelope propagation are all preserved — the v8.81 changes layer new sections on top, they do NOT mutate any existing v8.77 contract.
+
+The investigator prompt grew from 236 lines / 28k chars to ~415 lines / ~56k chars; the investigator is NOT in the `PROMPT_BUDGETS` budget tripwire (per the v8.77 release shape — the investigator wraps its prose around a fixed three-lane discipline, so the budget tripwire wasn't introduced; the budget for investigator prose is implicitly bounded by the lanes' own scope).
 
 
 ## 8.77.0 — Investigator (debug-branch)
