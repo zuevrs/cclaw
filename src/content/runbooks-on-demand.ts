@@ -1280,6 +1280,130 @@ Detect-hop fork stamps \`research_depth: deep-product\`. Phase 2 dispatches all 
 | "The recommendation contradicts the skeptic — but it's a really cool plan, I'll keep it." | NO. The contradiction scan exists exactly to catch this. If the skeptic flagged a don't-proceed AND the recommendation says proceed, fix the recommendation. Resolving the contradiction is more important than \"saving the cool plan\". |
 `;
 
+const RESEARCH_REVISION = `# On-demand runbook — research revision loop (v8.71+)
+
+The orchestrator opens this runbook whenever a \`/cc research <topic>\` flow lands at \`research.md\` and the user invokes one of \`/cc research revise <area>\` / \`/cc research push-back <claim>\` / \`/cc research accept\`. The runbook is the canonical procedure; the body of \`/cc\` carries only short pointers.
+
+## §1 — Lifecycle gate (between Phase 3 synthesis and Phase 4 finalize)
+
+Pre-v8.71 research mode shipped a four-phase straight-line flow (discovery → lens-dispatch → synthesis → finalize). v8.71 inserts an explicit **awaiting-user-review** gate between Phase 3 and Phase 4. The gate exists because reference patterns converged on the user-review surface — obra-superpowers' \`brainstorming/SKILL.md\` calls it the "User Review Gate" and runs it after every brainstorming pass; addyosmani's \`idea-refine/SKILL.md\` codifies divergent → converge → user-pick; everyinc-compound's \`ce-brainstorm/SKILL.md\` Phase 2.5 is a confirmation gate before any artifact ships.
+
+The gate is mandatory on every research flow regardless of depth tier (\`light\` / \`standard\` / \`deep-product\`). Phase 3 ends with \`research.md\` on disk + the orchestrator stamping \`flow-state.json > researchState: "awaiting-user-review"\`; the orchestrator then surfaces a one-paragraph prompt in plain prose:
+
+> "research.md is ready at .cclaw/flows/<slug>/research.md. Recommended next: <verbatim Phase 3 recommendation>. Options:
+> - \`/cc research revise <area>\` — re-run targeted lens(es) and refresh the synthesis.
+> - \`/cc research push-back <claim>\` — challenge a specific claim; re-runs skeptic + the lens that authored the claim.
+> - \`/cc research accept\` — finalize and emit the handoff prompt."
+
+The orchestrator then **ends its turn**. The gate is a structural pause, not a stop-and-report — there is no failure here, just an iteration surface. \`/cc-cancel\` works as usual (discards the in-flight research).
+
+## §2 — \`/cc research revise <area>\` — broad re-dispatch
+
+The \`<area>\` argument names which per-lens section the user wants re-run. The orchestrator parses \`<area>\` against the depth-tier lens set and re-dispatches every matching lens:
+
+| \`<area>\` token | lenses re-dispatched (standard / deep-product) |
+| --- | --- |
+| \`engineer\` / \`technical\` / \`feasibility\` | \`research-engineer\` |
+| \`product\` / \`user-value\` / \`market\` | \`research-product\` |
+| \`architecture\` / \`coupling\` / \`boundaries\` | \`research-architecture\` |
+| \`history\` / \`prior-attempts\` / \`learnings\` | \`research-history\` |
+| \`skeptic\` / \`risk\` / \`failure-mode\` / \`abuse\` | \`research-skeptic\` |
+| \`synthesis\` / \`recommendation\` / \`recommended-next\` | (re-runs synthesis only; no lens re-dispatch) |
+| \`all\` / \`everything\` | every lens in the depth-tier set |
+
+On \`light\` depth (\`research-engineer\` + \`research-skeptic\` only), \`<area>\` tokens that name lenses NOT in the light set (\`product\` / \`architecture\` / \`history\`) are a no-op with a one-line note ("requested area is skipped on light depth; use \`/cc research <topic>\` again with \`--standard\` to widen coverage"). The state stays at \`awaiting-user-review\`.
+
+### Steps
+
+1. Stamp \`flow-state.json > researchState: "revising"\` and append a new entry to \`flow-state.json > revisions[]\` with \`kind: "revise"\`, \`at: <iso-now>\`, \`area: <verbatim user arg>\`, \`lensesRedispatched: <computed from area>\`, \`change\` absent (filled at §2.4 below).
+2. Re-dispatch each lens in \`lensesRedispatched\` with the same envelope shape Phase 2 used PLUS a new \`Revision context:\` line carrying the prior lens findings + the user's \`<area>\` argument. The lens MAY return identical findings (no change warranted) OR rewritten findings (incorporating the revision context) — the lens's slim summary's \`Notes:\` line stamps "no change" / "revised" so the orchestrator can compose §2.4's \`change\` field.
+3. Re-run the synthesis pass on the post-revision draft (Phase 3 steps 3 + 5 — re-compose \`## Synthesis\`, run the four-scan self-review). Skip Phase 3 step 1 (per-lens findings paste) for lenses that returned "no change"; preserve their prior sections verbatim.
+4. Author the \`change\` field on the most-recent \`revisions[]\` entry — one sentence describing what concretely changed (e.g. "Engineer > Implementation paths rewritten to reflect fastify v6 release; Synthesis convergence paragraph 1 re-anchored on hono"). On a "no change" outcome, write "No structural change after re-dispatch (lenses confirmed prior findings)." verbatim.
+5. Append the matching row to \`research.md > ## Revision history\`: \`| <iso> | revise | <area> | <comma-sep lensesRedispatched> | <change> |\`.
+6. Re-stamp \`flow-state.json > researchState: "awaiting-user-review"\` (state cycles back; the user can iterate again or accept).
+7. Surface the §1 prompt again with the **post-revision** \`research.md\` path so the user can re-read.
+
+### Failure handling
+
+- \`<area>\` parses to zero matching lenses AND is not \`synthesis\` / \`all\` → surface "unknown research area: <verbatim>; valid: engineer / product / architecture / history / skeptic / synthesis / all" in plain prose; state stays at \`awaiting-user-review\`; no entry appended.
+- a re-dispatched lens returns \`Confidence: low\` AND the \`Notes:\` line names a thin-coverage gap → fall back to Phase 2's lens re-dispatch budget (1 re-dispatch per lens, total cap 2). After the cap, write the lens's findings as-is and stamp the synthesis self-review's "Could not fix inline: <description>" bullet.
+
+## §3 — \`/cc research push-back <claim>\` — targeted challenge
+
+The \`<claim>\` argument names a specific claim the user wants the orchestrator to challenge. The orchestrator parses \`<claim>\` to detect (a) which lens authored the claim (search per-lens sections for the verbatim or fuzzy match) and (b) the claim's polarity. Re-dispatches **two** lenses: the skeptic (always; counter-argument generator) and the authoring lens (re-checks its own claim with the push-back framing).
+
+### Steps
+
+1. Stamp \`flow-state.json > researchState: "revising"\` and append a new entry to \`flow-state.json > revisions[]\` with \`kind: "push-back"\`, \`at: <iso-now>\`, \`area: <verbatim claim>\`, \`lensesRedispatched: ["research-skeptic", <authoring-lens-id>]\` (de-dup if the authoring lens IS skeptic — re-dispatch once).
+2. Re-dispatch the skeptic with a \`Push-back context:\` envelope carrying the verbatim claim + a directive: "find counter-arguments, edge cases, or evidence that contradicts the claim". The skeptic's findings block returns under \`### Counter-arguments to <claim>\` (verbatim heading) — the orchestrator inserts this subsection under the existing Skeptic lens body in \`research.md\`.
+3. Re-dispatch the authoring lens with a \`Push-back context:\` envelope carrying the verbatim claim + a directive: "re-check the claim under push-back; either reaffirm with stronger evidence OR retract / qualify". The lens's slim summary \`Notes:\` line stamps "reaffirmed" / "qualified" / "retracted" so the orchestrator can author §3.5's \`change\` field.
+4. Re-run the synthesis pass focused on the divergence paragraph (Phase 3 step 3); the \`## Synthesis\` divergence section gains an explicit "Push-back outcome on <claim>: <reaffirmed | qualified | retracted>" sentence. Re-run the four-scan self-review on the modified synthesis.
+5. Author the \`change\` field on the most-recent \`revisions[]\` entry — one sentence describing the push-back outcome (e.g. "Skeptic surfaced 2 counter-arguments to engineer's 'fastify-is-best' claim; engineer qualified to 'fastify-is-best for plugin-heavy stacks; hono wins on cold-start'").
+6. Append the matching row to \`research.md > ## Revision history\`: \`| <iso> | push-back | <claim> | research-skeptic + <authoring-lens-id> | <change> |\`.
+7. Re-stamp \`flow-state.json > researchState: "awaiting-user-review"\`. Surface the §1 prompt again.
+
+### Failure handling
+
+- \`<claim>\` does not match any lens section by fuzzy search → surface "could not locate claim: <verbatim>; please cite the lens section + a verbatim phrase" in plain prose; state stays at \`awaiting-user-review\`; no entry appended.
+- the skeptic returns "no counter-arguments found" → still append the row (with \`change: "Skeptic confirmed prior position; no counter-arguments surfaced"\`); the user reads this as the audit trail and may accept or push back further.
+
+## §4 — \`/cc research accept\` — finalize
+
+The terminal sub-command. The orchestrator finalises the flow exactly as the pre-v8.71 Phase 4 finalize ran:
+
+1. Append a final entry to \`flow-state.json > revisions[]\` with \`kind: "accept"\`, \`at: <iso-now>\`, \`area: ""\` (empty — accept has no argument), \`lensesRedispatched: []\`, \`change: "User accepted research as final."\`. Append the matching row to \`research.md > ## Revision history\`: \`| <iso> | accept | — | — | User accepted research as final. |\`.
+2. Stamp \`flow-state.json > researchState: "accepted"\` (terminal).
+3. \`git mv\` \`research.md\` (and the assets dir if present) into \`.cclaw/flows/shipped/<slug>/\`.
+4. Reset \`flow-state.json > currentSlug\` to \`null\` (and \`researchState\` stays \`"accepted"\` only on the just-shipped slug — the field is part of the slug's research-mode lifecycle, not the orchestrator-wide state).
+5. Surface the **handoff prompt** in plain prose:
+
+> "research.md is ready at .cclaw/flows/shipped/<slug>/research.md. Recommended next: <verbatim Phase 3 recommendation>. Ready to plan? Run \`/cc <task>\` and I'll carry the research as \`priorResearch\` context."
+
+The next \`/cc <task>\` invocation reads the most-recent shipped research slug under \`flows/shipped/\` and stamps it into \`flow-state.json > priorResearch: { slug, topic, path }\`; the architect's Bootstrap on that follow-up flow reads \`priorResearch.path\` and includes the research artifact AND its \`## Revision history\` block as Frame / Approaches / Decisions context.
+
+### Sub-cases
+
+- **\`/cc research accept\` invoked without a prior \`revise\` / \`push-back\`** — valid; the user reviewed once and approved on first pass. Append the accept entry; the revision history table contains exactly one row.
+- **High iteration count (≥5 revise / push-back entries before accept)** — the orchestrator surfaces a one-line note before finalize ("Accepting after <N> revisions; high-iteration flows tend to indicate the topic needs Phase 1 re-run with a tighter framing.") for self-audit; does not block finalize.
+
+## §5 — State transitions
+
+| from | event | to |
+| --- | --- | --- |
+| (none) | research-mode fork fires | \`discovery\` |
+| \`discovery\` | user signals "ready" | \`lens-dispatch\` |
+| \`lens-dispatch\` | all lenses returned (or partial after re-dispatch cap) | \`synthesis\` |
+| \`synthesis\` | self-review pass complete + \`research.md\` written to disk | \`awaiting-user-review\` |
+| \`awaiting-user-review\` | \`/cc research revise <area>\` | \`revising\` |
+| \`awaiting-user-review\` | \`/cc research push-back <claim>\` | \`revising\` |
+| \`awaiting-user-review\` | \`/cc research accept\` | \`accepted\` (terminal — finalize fires) |
+| \`revising\` | revision lands + synthesis re-run + \`research.md\` rewritten | \`awaiting-user-review\` |
+
+Pre-v8.71 research-mode flows did not stamp \`researchState\`; resume on a stopped pre-v8.71 flow restarts from Phase 1 (no graceful resume — the field is the only way to track lifecycle position, and absence implies the field was never written).
+
+## §6 — Revision history table shape
+
+The \`research.md > ## Revision history\` table mirrors \`flow-state.json > revisions[]\` verbatim. Five columns:
+
+| timestamp (ISO) | kind | area / claim | lenses re-dispatched | change |
+| --- | --- | --- | --- | --- |
+| \`2026-05-17T14:32:00Z\` | revise | engineer | research-engineer | Engineer > Implementation paths rewritten to reflect fastify v6 release. |
+| \`2026-05-17T14:48:12Z\` | push-back | "fastify-is-best" claim | research-skeptic, research-engineer | Engineer qualified to "fastify-is-best for plugin-heavy stacks; hono wins on cold-start". |
+| \`2026-05-17T14:55:00Z\` | accept | — | — | User accepted research as final. |
+
+The table is **append-only**: the orchestrator never mutates a prior row (the audit trail is the contract). On a fresh research flow with zero revisions before accept, the table contains exactly one row (the accept entry); the section heading still ships in the template so readers always find it.
+
+## §7 — Anti-rationalization
+
+| rationalization | truth |
+| --- | --- |
+| "User-review gate slows the user down — let me skip it on light depth where lens count is small." | NO. The gate is depth-tier-agnostic. Light depth still produces a synthesis the user MUST audit before priorResearch flows downstream; skipping the gate is the failure mode this gate was designed to catch. |
+| "Push-back claim doesn't fuzzy-match a lens section — I'll just re-dispatch the skeptic alone and call it a push-back." | NO. The contract requires both skeptic AND the authoring lens; without the authoring lens the push-back has no opportunity to qualify / retract. Surface the "could not locate claim" prompt and let the user re-cite. |
+| "User invoked revise then accept then revise — the accept was terminal so the second revise is illegal." | The accept IS terminal; once \`researchState == "accepted"\` the slug is shipped. The "second revise" is actually a fresh \`/cc research <topic>\` flow on the now-shipped slug; treat it as a new flow. |
+| "Revision count hit 5; let me block accept and force the user to re-run Phase 1." | NO. The high-iteration note is informational, not a block. The user may have legitimate reasons to iterate ≥5 times; surface the note and continue. |
+| "I'll skip the Revision history append on a no-change revise — saves a row." | NO. Every revise / push-back / accept appends a row, even on no-change outcomes. The audit trail is the contract; absent rows are structurally undetectable later. |
+`;
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -1364,6 +1488,12 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "research-depth-and-self-review.md",
     title: "Research depth tiers + synthesis self-review (v8.69+)",
     body: RESEARCH_DEPTH_AND_SELF_REVIEW
+  },
+  {
+    id: "research-revision",
+    fileName: "research-revision.md",
+    title: "Research revision loop (v8.71+ — revise / push-back / accept)",
+    body: RESEARCH_REVISION
   }
 ];
 

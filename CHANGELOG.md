@@ -1,6 +1,60 @@
 # Changelog
 
 
+## 8.71.0 — Research revision loop
+
+### Why
+
+Pre-v8.71 the v8.65 multi-lens research orchestrator ran a four-phase straight-line flow (discovery → lens-dispatch → synthesis → finalize). Once `research.md` landed on disk, the flow finalised and the user's only recovery channel for a thin / drifty / contestable section was a fresh `/cc research` start. Reference patterns convergent on a user-review surface between synthesis and finalize — obra-superpowers' `brainstorming/SKILL.md` "User Review Gate", addyosmani's `idea-refine/SKILL.md` divergent-then-converge with user-pick, and everyinc-compound's `ce-brainstorm/SKILL.md` Phase 2.5 confirmation gate. v8.71 ports the gate into cclaw research mode and adds three sub-commands so the user can iterate without throwing the artifact away.
+
+### What changed
+
+**Deliverable 1 — Three new `/cc research` sub-commands** (`src/content/start-command.ts`).
+
+- `/cc research revise <area>` — re-dispatches the lens(es) covering `<area>` (engineer / product / architecture / history / skeptic / synthesis / all), re-runs the synthesis pass, and rewrites `research.md`. After the rewrite the lifecycle cycles back to `awaiting-user-review` so the user can iterate again or accept.
+- `/cc research push-back <claim>` — re-dispatches `research-skeptic` plus the lens that authored the cited claim. The skeptic surfaces counter-arguments under a verbatim `### Counter-arguments to <claim>` heading; the authoring lens reaffirms / qualifies / retracts. Synthesis re-runs focused on the divergence paragraph. Same cycle-back to `awaiting-user-review`.
+- `/cc research accept` — terminal sub-command. Appends an `accept` row to `## Revision history`, stamps `researchState: "accepted"`, runs Phase 4 finalize (`git mv` to `flows/shipped/<slug>/`), emits the handoff prompt.
+
+**Deliverable 2 — Phase 3.5 awaiting-user-review gate** (`src/content/start-command.ts`).
+
+- New mandatory phase between Phase 3 synthesis and Phase 4 finalize. The orchestrator stamps `flow-state.json > researchState: "awaiting-user-review"`, surfaces the three-option prompt in plain prose, and ends its turn. The gate is depth-tier-agnostic (fires on `light` / `standard` / `deep-product` alike); skipping it is the failure mode the gate was designed to catch.
+- Phase 4 finalize fires only after `/cc research accept`. Pre-v8.71 flows finalised straight from Phase 3; the new gate is the only structural change to the four-phase shape (the rest of the synthesis self-review / lens dispatch / discovery dialogue is preserved verbatim).
+
+**Deliverable 3 — Lifecycle types + flow-state persistence** (`src/types.ts`, `src/flow-state.ts`).
+
+- New `RESEARCH_STATES = ["discovery", "lens-dispatch", "synthesis", "awaiting-user-review", "revising", "accepted"] as const` + `ResearchState` type. The orchestrator stamps `FlowState.researchState` at every Phase boundary so a `/cc` continue after a stop-and-report can resume the research lifecycle without re-parsing `research.md`. Pre-v8.71 state files lack the field; readers default to `null`/absent (pre-v8.71 research flows ran without an explicit lifecycle marker; resume on a stopped pre-v8.71 flow restarts from Phase 1).
+- New `ResearchRevision` interface + `FlowState.revisions?: ResearchRevision[]` field. Each entry records `kind` (revise / push-back / accept), `at` (ISO timestamp), `area` (verbatim user arg), `lensesRedispatched` (computed from the area mapping), and `change` (one-sentence post-revision description). The array is append-only; entries are NEVER mutated or removed (the audit trail is the contract).
+- `assertFlowStateV82` validates both new fields: `researchState` must be one of the canonical values (or `null`/absent); `revisions[]` entries must carry a valid `kind`, non-empty ISO `at`, string `area`, and `lensesRedispatched` array of valid lens ids.
+
+**Deliverable 4 — `## Revision history` section in research.md** (`src/content/artifact-templates.ts`).
+
+- `RESEARCH_TEMPLATE` gains a `## Revision history` section at the bottom (after `## Recommended next step`). The 5-column table mirrors `flow-state.json > revisions[]` verbatim: timestamp / kind / area-or-claim / lenses re-dispatched / change. The orchestrator appends one row per `/cc research revise|push-back|accept` invocation; the section heading ships in the template even when zero revisions occurred (a clean accept produces a one-row table).
+
+**Deliverable 5 — `research-revision.md` on-demand runbook** (`src/content/runbooks-on-demand.ts`).
+
+- New on-demand runbook carries the full procedure: §1 lifecycle gate, §2 `revise` (lens-set mapping, steps, failure handling), §3 `push-back` (authoring-lens search, skeptic counter-args, qualify / retract), §4 `accept` (finalize + handoff prompt), §5 state-transition table (every from→to pair), §6 revision-history table shape, §7 anti-rationalization. The orchestrator body carries only a one-paragraph pointer; ~95% of v8.71 prose lives in the runbook. The runbook is registered in `ON_DEMAND_RUNBOOKS` and ships unconditionally on install.
+
+**Deliverable 6 — Tests** (`tests/unit/v871-research-revision.test.ts` — new file, 36 tripwire tests; updates to `v822-orchestrator-slim.test.ts`, `v831-path-aware-trimming.test.ts`).
+
+- New `v871-research-revision.test.ts` carries the tripwire suite — `RESEARCH_STATES` ordering + `ResearchState` type derivation, `FlowState.researchState` + `FlowState.revisions[]` writes (compile-time round-trip), validators (accept canonical state values + null + absent; reject unknown state strings; accept well-formed revisions; reject invalid kind / unknown lens / missing timestamp), orchestrator body declares the three sub-commands + Phase 3.5 awaiting-user-review gate + each lifecycle state inline + runbook pointer + Phase 4 finalize gating on accept, runbook is registered + opens with the canonical heading + documents all three sub-commands + lens-set mapping + push-back contract + state transitions + revision-history table shape + reference patterns + append-only invariant + failure handling, RESEARCH_TEMPLATE carries the `## Revision history` heading + 5-column table + section ordering + sub-command names + append-only semantics + runbook pointer, package.json version + CHANGELOG entry.
+- `v822-orchestrator-slim.test.ts` raises start-command body budgets `82000 → 84000 chars / 550 → 560 lines` (deliberate ~2k char + 10-line bump for the Phase 3.5 awaiting-user-review pointer + the invocation-matrix row routing /cc research revise|push-back|accept). Combined ceiling raises `205000 → 220000 chars` to absorb the new ~12k-char `research-revision.md` runbook.
+- `v831-path-aware-trimming.test.ts` raises start-command body budgets `82000 → 84000 chars / 550 → 560 lines`; per-path budgets raise by 2000 chars (non-inline 133000 → 135000; large-risky 178000 → 180000) to match the body bump. The expected runbook list grows by one (`research-revision.md`).
+
+### Migration notes
+
+**No breaking changes.** The new `FlowState.researchState` and `FlowState.revisions` fields are optional; pre-v8.71 state files lack both and continue to validate (readers default to `null`/absent and `[]` respectively). Pre-v8.71 research flows are unaffected on resume — the orchestrator restarts from Phase 1 (no graceful resume; the field is the only way to track lifecycle position, and absence implies the field was never written).
+
+The four-phase shape (discovery → lens-dispatch → synthesis → finalize) is preserved verbatim; v8.71 inserts Phase 3.5 between synthesis and finalize. The synthesis self-review pass (v8.69) runs unchanged; the depth-tier lens-set gating (v8.69) runs unchanged. The handoff prompt (Phase 4) is unchanged — finalize still emits "research.md is ready at .cclaw/flows/shipped/<slug>/research.md. Recommended next: <verbatim>. Ready to plan? Run /cc <task>...".
+
+The follow-up `/cc <task>` flow's architect Bootstrap reads `research.md` end-to-end as `priorResearch` context, including the new `## Revision history` block. The audit trail is preserved across the research → task handoff so the architect sees which areas the user iterated on.
+
+### Budget bumps documented inline
+
+- **Start-command body char budget** `82000 → 84000` (deliberate ~2k char bump for the Phase 3.5 awaiting-user-review pointer + the invocation-matrix row + the inline lifecycle vocabulary). ~95% of v8.71 prose lives in `runbooks/research-revision.md`. Documented inline in `tests/unit/v822-orchestrator-slim.test.ts` (AC-4) and `tests/unit/v831-path-aware-trimming.test.ts` (AC-1 / AC-2).
+- **Start-command body line budget** `550 → 560` (deliberate +10-line bump). Documented in both files.
+- **Combined runbook ceiling** `205000 → 220000` chars (~14k chars total — ~2k body + ~12k chars in the new `research-revision.md` runbook). Documented in `tests/unit/v822-orchestrator-slim.test.ts` (AC-4 combined ceiling).
+
+
 ## 8.70.0 — Founder mode + design-quality reviewer axis
 
 ### Why

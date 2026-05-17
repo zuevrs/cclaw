@@ -1557,6 +1557,14 @@ _(Research orchestrator: Phase 3 final recommendation. EXACTLY ONE of the three 
 - **don't proceed (skeptic blocked: <reason>)** — _The skeptic lens set \`Don't-proceed: yes\` AND no obvious mitigation exists within the topic's scope. Cite the specific trigger. Example: "don't proceed (skeptic blocked: irreversible data migration with no backup strategy in scope)"._
 
 After research finalises, the orchestrator surfaces a plain-prose handoff prompt: "\`research.md\` is ready at \`.cclaw/flows/shipped/<slug>/research.md\`. Recommended next: _<verbatim recommendation>_. To plan, run \`/cc <task>\` and I'll carry the research as \`priorResearch\` context."
+
+## Revision history
+
+_(v8.71 — append-only audit trail of \`/cc research revise <area>\` / \`/cc research push-back <claim>\` / \`/cc research accept\` invocations. The orchestrator mirrors \`flow-state.json > revisions[]\` verbatim into this table; new rows append on each invocation, prior rows are NEVER mutated. The terminal \`accept\` row closes out the table. On a fresh research flow with zero revisions before accept, this table contains exactly one row (the accept entry); the heading still ships in the template so readers always find it. Full procedure for the revision loop lives in \`runbooks/research-revision.md\`.)_
+
+| timestamp | kind | area / claim | lenses re-dispatched | change |
+| --- | --- | --- | --- | --- |
+| _<iso-8601>_ | _<revise \\| push-back \\| accept>_ | _<verbatim user arg, or \`—\` for accept>_ | _<comma-separated lens ids, or \`—\` for accept>_ | _<one-sentence description of what concretely changed in research.md, or \`User accepted research as final.\` on the accept row>_ |
 `;
 
 export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [

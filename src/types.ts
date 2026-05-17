@@ -666,6 +666,104 @@ export type ResearchDepth = (typeof RESEARCH_DEPTHS)[number];
 export const DEFAULT_RESEARCH_DEPTH: ResearchDepth = "standard";
 
 /**
+ * Lifecycle state for the `/cc research <topic>` orchestrator (v8.71).
+ *
+ * v8.65 / v8.69 ran research as a four-phase straight-line flow
+ * (discovery → lens-dispatch → synthesis → finalize). v8.71 inserts
+ * an explicit user-review gate between synthesis and finalize so the
+ * user can audit `research.md`, request targeted revisions, or push
+ * back on individual claims before the artifact ships. The state is
+ * persisted on `FlowState.researchState` and tracks where the
+ * research orchestrator is in its lifecycle:
+ *
+ * - `discovery` — Phase 1 open-ended dialogue is in flight (the
+ *   orchestrator is asking follow-up questions until the user signals
+ *   "ready").
+ * - `lens-dispatch` — Phase 2 parallel lens dispatch is in flight
+ *   (one or more of the depth-tier lens set has not yet returned).
+ * - `synthesis` — Phase 3 synthesis + self-review pass is in flight
+ *   (the orchestrator is composing the cross-lens distillation, the
+ *   recommended-next-step section, and the four-scan self-review).
+ * - `awaiting-user-review` — Phase 3 has finished and `research.md`
+ *   is on disk; the orchestrator is waiting for the user to invoke
+ *   one of `/cc research revise <area>` / `/cc research push-back
+ *   <claim>` / `/cc research accept`. The flow is paused (no
+ *   sub-agents in flight) and the `currentSlug` still points at the
+ *   research slug.
+ * - `revising` — The user invoked `/cc research revise <area>` or
+ *   `/cc research push-back <claim>`; the orchestrator is
+ *   re-dispatching the targeted lens(es), re-running the synthesis
+ *   self-review, and rewriting `research.md`. After the revision
+ *   lands the state transitions back to `awaiting-user-review` (the
+ *   user can iterate again) until the user invokes
+ *   `/cc research accept`.
+ * - `accepted` — The user invoked `/cc research accept`; the
+ *   orchestrator finalises (`git mv` to `flows/shipped/<slug>/`,
+ *   reset `currentSlug`) and emits the handoff prompt. Terminal
+ *   state — the next `/cc <task>` invocation reads the shipped slug
+ *   as `priorResearch` context.
+ *
+ * Pre-v8.71 research-mode state files lack this field; readers MUST
+ * default to `null`/absent (the pre-v8.71 four-phase flow has no
+ * persisted lifecycle marker — research either ships or is
+ * cancelled, never paused mid-flow). New writes stamp the field at
+ * every Phase boundary so resume-via-`/cc` reads the canonical
+ * lifecycle position without re-parsing artifacts.
+ */
+export const RESEARCH_STATES = [
+  "discovery",
+  "lens-dispatch",
+  "synthesis",
+  "awaiting-user-review",
+  "revising",
+  "accepted"
+] as const;
+export type ResearchState = (typeof RESEARCH_STATES)[number];
+
+/**
+ * One revision entry on a `/cc research <topic>` flow (v8.71).
+ *
+ * Every `/cc research revise <area>` and `/cc research push-back
+ * <claim>` invocation appends one entry to `FlowState.revisions[]`
+ * and the matching row to `research.md > ## Revision history`. The
+ * entry is the persistent audit trail so a reader can reconstruct
+ * the iteration arc — what was challenged, which lens(es) re-ran,
+ * and what concretely changed in the synthesis or per-lens
+ * sections.
+ *
+ * - `kind` — which sub-command triggered the revision: `revise`
+ *   (broad; re-dispatches every lens whose section is named in the
+ *   `area` argument), `push-back` (targeted; re-dispatches the
+ *   skeptic plus the lens that authored the cited claim), or
+ *   `accept` (terminal; closes out the revision history with the
+ *   handoff prompt — written exactly once and only as the last
+ *   entry).
+ * - `at` — ISO-8601 timestamp the orchestrator stamped when it
+ *   started processing the revision.
+ * - `area` — the user's argument verbatim (the `<area>` for
+ *   `revise`, the `<claim>` for `push-back`, or the empty string
+ *   for `accept`). Preserved verbatim so the audit row mirrors what
+ *   the user typed.
+ * - `lensesRedispatched` — which lens ids re-ran for this
+ *   revision (zero entries on `accept`; one or more entries on
+ *   `revise` / `push-back`). The orchestrator computes this from
+ *   the depth-tier lens set ∩ the area mapping.
+ * - `change` — one-sentence description of what the revision
+ *   actually changed in `research.md` (e.g. "rewrote Engineer >
+ *   Implementation paths to reflect new fastify v6 release"). The
+ *   orchestrator authors this from the post-revision synthesis
+ *   pass; pre-revision state files where the orchestrator has not
+ *   yet finished the change MUST leave the field absent.
+ */
+export interface ResearchRevision {
+  kind: "revise" | "push-back" | "accept";
+  at: string;
+  area: string;
+  lensesRedispatched: ResearchLensId[];
+  change?: string;
+}
+
+/**
  * Plan-traceability and TDD ceremony modes (v8.2+; reviewer-enforced
  * since v8.40; renamed `acMode` → `ceremonyMode` in to align with
  * how reference projects treat AC as one element of a plan rather than
