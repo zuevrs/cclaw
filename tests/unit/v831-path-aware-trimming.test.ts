@@ -30,12 +30,12 @@ function bodyBudget(fileNames: string[]): number {
 }
 
 describe("v8.31 path-aware orchestrator — body-only budget", () => {
-  it("AC-1 — start-command body stays ≤ 87000 chars (v8.59 raised by 1500 chars for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.63 raised by 1000 chars for the slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default build-stage prose; v8.68 raised by 200 chars for the structured implementer status pointer in the Always-auto failure handling section; v8.69 raised by 1300 chars for the research-depth + self-review pointers; v8.70 raised by 500 chars for the design-quality envelope pointer + the eleven-axis update; v8.71 raised by 2000 chars for the new Phase 3.5 awaiting-user-review pointer + the invocation-matrix row for the three new research sub-commands (revise / push-back / accept) + the inline lifecycle-state vocabulary — ~95% of the v8.71 prose lives in `runbooks/research-revision.md`; v8.72 raised by 1000 chars for the cross-model second opinion pointer under #### critic — trigger set + envelope stamp + graceful-fallback line + gstack /codex reference — ~95% of v8.72 prose lives in `src/content/specialist-prompts/critic.ts §3.5`; v8.74 raised by 2000 chars to absorb the ethos preamble paragraph under Dispatch envelope, the Required ethos read entry in the Always-ask rules, the Skills-attached `cclaw-ethos` reference doc bullet, and the v8.74-promoted cross-model trigger language under #### critic — Reversibility:one-way primary + Decisions-less keyword fallback)", () => {
-    expect(renderStartCommand().length).toBeLessThanOrEqual(96000);
+  it("AC-1 — start-command body stays ≤ 108000 chars (... v8.74 raised by 2000 chars for the ethos preamble + cross-model trigger language; v8.76 raised by 12000 chars to absorb the Phase 1.5 Approaches Gate prose + the rewritten Phase 2 lens-dispatch prose (design-signal heuristic + `--lens=design` / `--lens=-design` flags + the new `research-design` lens row + the new `Framing:` envelope field))", () => {
+    expect(renderStartCommand().length).toBeLessThanOrEqual(108000);
   });
 
-  it("AC-1 — start-command body stays ≤ 595 lines (v8.59 raised by 10 lines to absorb the Detect-hop extend-mode pointer + the v8.59 prior-context consumption pointer; v8.69 raised by 3 lines for the research-depth dispatch-envelope sub-bullet + the synthesis self-review step 6 + the depth-flag sub-case; v8.70 raised by 2 lines for the design-quality envelope-activation bullet + the eleven-axis update; v8.71 raised by 10 lines for the new Phase 3.5 awaiting-user-review pointer + the invocation-matrix row for the three new research sub-commands; v8.74 raised by 5 lines for the ethos-preamble paragraph under Dispatch envelope + the Skills-attached `cclaw-ethos` reference doc bullet + the updated Always-ask rules line; v8.75 raised by 30 lines for the new #### plan-design body section (gating + dispatch ordering + verdict routing + combined revise hand-off) plus the SPECIALISTS-roster updates and the stage-table row; matches the v8.22 line-budget raise in v822-orchestrator-slim.test.ts)", () => {
-    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(595);
+  it("AC-1 — start-command body stays ≤ 645 lines (... v8.74 raised by 5 lines for the ethos-preamble + Skills-attached bullet; v8.75 raised by 30 lines for the #### plan-design body section + SPECIALISTS roster + stage-table row; v8.76 raised by 50 lines for the new #### Phase 1.5 — approaches gate section (procedure + sub-cases + worked example) and the rewritten Phase 2 dispatch prose (design-signal heuristic + lens-toggle flags + new research-design row + `Framing:` envelope))", () => {
+    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(645);
   });
 });
 
@@ -55,22 +55,22 @@ describe("v8.31 path-aware orchestrator — per-path envelopes (v8.54: budgets u
     "critic-steps.md"
   ];
 
-  it("AC-2 — inline path budget = body alone, ≤ 87000 chars (v8.59 raised by 1500 chars; v8.63 raised by 1000 chars for slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default body bump; v8.68 raised by 200 chars for the structured implementer status pointer; v8.69 raised by 1300 chars for the research-depth + synthesis self-review pointers; v8.70 raised by 500 chars for the design-quality envelope pointer; v8.71 raised by 2000 chars for the Phase 3.5 awaiting-user-review pointer + invocation-matrix row + lifecycle vocabulary; v8.72 raised by 1000 chars for the cross-model second opinion pointer under #### critic; v8.74 raised by 2000 chars matching the body-only budget bump for the ethos-preamble + v8.74 cross-model trigger language pointers; see body-only budget above for rationale)", () => {
-    expect(bodyBudget([])).toBeLessThanOrEqual(96000);
+  it("AC-2 — inline path budget = body alone, ≤ 108000 chars (... v8.74 raised by 2000 chars matching the body-only budget bump; v8.76 raised by 12000 chars matching the body-only budget bump for the Phase 1.5 Approaches Gate + Phase 2 dispatch rewrite + design lens row + `Framing:` envelope field)", () => {
+    expect(bodyBudget([])).toBeLessThanOrEqual(108000);
   });
 
-  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 148000 chars (v8.59 raised by 2000 chars; v8.63 raised by 1000 chars for slice / AC separation body bump; v8.65 raised by 9000 chars for the multi-lens research orchestrator's body prose riding into every dispatch; v8.66 raised by 1000 chars for parallel-by-default body bump; v8.71 raised by 2000 chars matching the body bump; v8.72 raised by 1000 chars matching the cross-model second opinion body bump; v8.74 raised by 3000 chars matching the body bump + dispatch-envelope.md runbook expansion absorbing the v8.74 ethos preamble paragraph at the top of the envelope shape; v8.75 raised by 9000 chars matching the body bump for the new #### plan-design section + the SPECIALISTS-roster + stage-table updates)", () => {
-    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(148000);
+  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 160000 chars (... v8.75 raised by 9000 chars matching the body bump for the new #### plan-design section; v8.76 raised by 12000 chars matching the body bump for the Phase 1.5 Approaches Gate + Phase 2 dispatch rewrite + design lens row; no v8.76 runbook expansion)", () => {
+    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(160000);
   });
 
-  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 193000 chars (v8.59 raised by 2000 chars matching the non-inline path bump; v8.63 raised by 1000 chars matching the body bump; v8.65 raised by 9000 chars matching the multi-lens research orchestrator's body bump; v8.66 raised by 1000 chars matching the parallel-by-default body bump; v8.71 raised by 2000 chars matching the body bump; v8.72 raised by 1000 chars matching the cross-model second opinion body bump; v8.74 raised by 3000 chars matching the non-inline path bump for the ethos preamble + v8.74 cross-model trigger body+runbook bump; v8.75 raised by 9000 chars matching the non-inline path bump for the new #### plan-design section)", () => {
+  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 205000 chars (... v8.75 raised by 9000 chars matching the non-inline path bump; v8.76 raised by 12000 chars matching the non-inline path bump for the body-only v8.76 deliverables)", () => {
     const largeRisky = [
       ...NON_INLINE_RUNBOOKS,
       "parallel-build.md",
       "cap-reached-recovery.md",
       "adversarial-rerun.md"
     ];
-    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(193000);
+    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(205000);
   });
 
   it("AC-2 — strict ordering: large-risky > non-inline > inline (per-path adds material)", () => {

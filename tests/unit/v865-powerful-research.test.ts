@@ -45,14 +45,15 @@ const SRC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../
  * research-mode dispatch, etc.) lights up immediately.
  */
 
-describe("v8.65 — five research-lens files exist on disk", () => {
+describe("v8.65 + v8.76 — six research-lens files exist on disk", () => {
   const LENS_DIR = path.join(SRC_ROOT, "content/research-lenses");
 
-  it("the lens directory contains exactly the five lens .ts files + index.ts", async () => {
+  it("the lens directory contains exactly the six lens .ts files + index.ts (v8.76 added `research-design.ts`)", async () => {
     const entries = (await fs.readdir(LENS_DIR)).sort();
     expect(entries).toEqual([
       "index.ts",
       "research-architecture.ts",
+      "research-design.ts",
       "research-engineer.ts",
       "research-history.ts",
       "research-product.ts",
@@ -68,14 +69,15 @@ describe("v8.65 — five research-lens files exist on disk", () => {
   });
 });
 
-describe("v8.65 — RESEARCH_LENSES is exposed but NOT in SPECIALISTS", () => {
-  it("RESEARCH_LENSES enumerates the five lens ids in canonical order", () => {
+describe("v8.65 + v8.76 — RESEARCH_LENSES is exposed but NOT in SPECIALISTS", () => {
+  it("RESEARCH_LENSES enumerates the six lens ids in canonical order (v8.76 added `research-design`)", () => {
     expect([...RESEARCH_LENSES]).toEqual([
       "research-engineer",
       "research-product",
       "research-architecture",
       "research-history",
-      "research-skeptic"
+      "research-skeptic",
+      "research-design"
     ]);
   });
 
@@ -125,19 +127,20 @@ describe("v8.65 — RESEARCH_LENS_AGENTS registry (install metadata)", () => {
 describe("v8.65 — RESEARCH_TEMPLATE has the multi-lens structure", () => {
   const tpl = ARTIFACT_TEMPLATES.find((t) => t.id === "research")!.body;
 
-  it("frontmatter declares mode: research and the lens roster", () => {
+  it("frontmatter declares mode: research and the lens roster (v8.76 added `design` as the 6th canonical lens)", () => {
     expect(tpl).toMatch(/^---\n/u);
     expect(tpl).toContain("mode: research");
-    expect(tpl).toMatch(/lenses:\s*\[engineer,\s*product,\s*architecture,\s*history,\s*skeptic\]/u);
+    expect(tpl).toMatch(/lenses:\s*\[engineer,\s*product,\s*architecture,\s*history,\s*skeptic,\s*design\]/u);
   });
 
-  it("body contains a section for each of the five lenses", () => {
+  it("body contains a section for each of the six lenses (v8.76 added `## research-design — Design dimensions`)", () => {
     expect(tpl).toMatch(/^## Discovery dialogue summary$/mu);
     expect(tpl).toMatch(/^## Engineer lens$/mu);
     expect(tpl).toMatch(/^## Product lens$/mu);
     expect(tpl).toMatch(/^## Architecture lens$/mu);
     expect(tpl).toMatch(/^## History lens$/mu);
     expect(tpl).toMatch(/^## Skeptic lens$/mu);
+    expect(tpl).toMatch(/^## research-design — Design dimensions$/mu);
   });
 
   it("body contains a Synthesis section (the cross-lens distillation)", () => {
@@ -190,7 +193,7 @@ describe("v8.65 — start-command.ts research-mode fork (multi-lens orchestrator
     expect(body).toMatch(/discovery dialogue summary/iu);
   });
 
-  it("body names all five lenses by id in the research-mode fork section", () => {
+  it("body names all six lenses by id in the research-mode fork section (v8.76 added `research-design`)", () => {
     for (const lens of RESEARCH_LENSES) {
       expect(body, `start-command body must reference lens ${lens}`).toContain(lens);
     }
@@ -285,11 +288,11 @@ describe("v8.65 — install layer writes five research lens contracts to .cclaw/
     }
   });
 
-  it("SyncResult counts the lenses (researchLenses === 5)", async () => {
+  it("SyncResult counts the lenses (researchLenses === 6 on v8.76+; was 5 on v8.65-v8.75)", async () => {
     const project = await createTempProject();
     try {
       const result = await syncCclaw({ cwd: project, harnesses: ["cursor"] });
-      expect(result.counts.researchLenses).toBe(5);
+      expect(result.counts.researchLenses).toBe(6);
     } finally {
       await removeProject(project);
     }

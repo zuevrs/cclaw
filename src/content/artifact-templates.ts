@@ -1256,6 +1256,10 @@ This slug is referenced from \`.cclaw/knowledge.jsonl\` whenever the compound qu
  *
  * - `## Discovery dialogue summary` — distilled bullets from the Phase
  *   1 open-ended dialogue (no question cap).
+ * - `## Framings considered` (v8.76) — 2-3 candidate framings surfaced
+ *   at the Approaches Gate (Phase 1.5), with the user's selection. The
+ *   selected framings flow into every lens dispatch envelope under the
+ *   new `Framing:` field.
  * - `## Engineer lens` — feasibility + implementation paths + blockers
  *   + risks + rough effort.
  * - `## Product lens` — user value + who benefits + alternatives
@@ -1266,6 +1270,11 @@ This slug is referenced from \`.cclaw/knowledge.jsonl\` whenever the compound qu
  *   signals + git archaeology + drift.
  * - `## Skeptic lens` — failure modes + edge cases + abuse cases
  *   + hidden costs + don't-proceed triggers.
+ * - `## research-design — Design dimensions` (v8.76) — UI / UX
+ *   dimensions implicated + existing patterns to study + anti-patterns
+ *   to avoid + open design questions. Section is OMITTED entirely when
+ *   the design lens did not dispatch (light depth, or topic missed the
+ *   design-signal heuristic and user did not pass `--lens=design`).
  * - `## Synthesis` — orchestrator's cross-lens distillation.
  * - `## Recommended next step` — one of "plan with `/cc <task>`" /
  *   "more research needed (specific area)" / "don't proceed
@@ -1294,15 +1303,17 @@ ship_commit: null
 # Any lens whose dispatch timed out / errored is marked \`failed\` in
 # this list rather than dropped, so coverage gaps are auditable from
 # the artifact alone.
-lenses: [engineer, product, architecture, history, skeptic]
+lenses: [engineer, product, architecture, history, skeptic, design]
 # v8.69 multi-tier depth (light | standard | deep-product). Stamped by
 # the orchestrator's research-mode fork (parsed from \`--light\` /
 # \`--standard\` / \`--deep-product\` flag, otherwise auto-classified
 # from topic wording — see runbooks/research-depth-and-self-review.md).
 # Phase 2 lens dispatch reads this field to decide which lenses fire
-# (light = engineer + skeptic; standard = all 5; deep-product = all 5
-# with extra Thesis / Adjacent-product / Durability probes folded into
-# product + skeptic envelopes).
+# (light = engineer + skeptic; standard = engineer + product +
+# architecture + history + skeptic, +design when the v8.76
+# design-signal heuristic fires or --lens=design forces include;
+# deep-product = same set with extra Thesis / Adjacent-product /
+# Durability probes folded into product + skeptic + design envelopes).
 research_depth: standard
 # Back-compat: the v8.53 ambiguity score frontmatter fields are kept
 # (null by default) so downstream readers that branch on these stay
@@ -1334,8 +1345,8 @@ ambiguity_threshold: null
 >    \`.cclaw/knowledge.jsonl\` + git log), skeptic (failure modes +
 >    abuse cases).
 > 3. **Synthesis.** The orchestrator pastes each lens's findings block
->    verbatim under the corresponding \`## <Lens> lens\` section, then
->    composes the \`## Synthesis\` section (cross-lens distillation).
+>    verbatim under the corresponding per-lens section, then composes
+>    the cross-lens synthesis section.
 > 4. **Finalize.** No build / review / critic / ship stages run; the
 >    flow finalises to \`.cclaw/flows/shipped/<slug>/research.md\`.
 >
@@ -1347,13 +1358,25 @@ ambiguity_threshold: null
 
 ## Discovery dialogue summary
 
-_(Research orchestrator: Phase 1 distillation. 5-15 bullets capturing what the user told the orchestrator during the open-ended dialogue — topic refinement, known constraints, prior attempts, stakeholders, scope edges. The five lenses see THIS summary (not the raw dialogue) as their shared envelope payload.)_
+_(Research orchestrator: Phase 1 distillation. 5-15 bullets capturing what the user told the orchestrator during the open-ended dialogue — topic refinement, known constraints, prior attempts, stakeholders, scope edges. The dispatched lenses see THIS summary (not the raw dialogue) as their shared envelope payload.)_
 
 - _bullet 1: what the user knows / wants_
 - _bullet 2: what the user explicitly DOESN'T know yet_
 - _bullet 3: constraints / non-negotiables the user named_
 - _bullet 4: prior attempts / context the user surfaced_
 - _bullet 5: who the user thinks benefits / is affected_
+
+## Framings considered
+
+_(v8.76 Approaches Gate — Phase 1.5, between Phase 1 dialogue and Phase 2 lens dispatch. The orchestrator surfaces 2-3 candidate framings of the research question and the user picks one or more (or accepts "all" — the default; every framing flows to every lens). Each framing changes WHICH dimensions every lens emphasises; the same topic carries a different shape under different framings. Mirrors \`flow-state.json > approaches\` and \`selectedApproaches\` verbatim; immutable for audit (re-framings happen via \`/cc research push-back <framing>\`, not by mutating this list)._
+
+_The downstream lenses receive the selected framings in their dispatch envelope under the new \`Framing:\` field and grade their findings against that set rather than against the implicit "any framing".)_
+
+| id | title | summary | selected |
+| --- | --- | --- | --- |
+| _<A | kebab-slug>_ | _<4-8 words>_ | _<one-paragraph: what question this framing makes load-bearing, what gets de-emphasised, which downstream lens dispatches see the biggest shape change>_ | _<✅ if user picked / accepted "all"; ❌ otherwise>_ |
+
+_(2-3 framings stamped at the Approaches Gate. "All selected" is the canonical default — every framing carries forward into every lens envelope. A single-framing pick is the deliberate-narrowing case: the user accepted one framing and dropped the others.)_
 
 ## Engineer lens
 
@@ -1542,6 +1565,42 @@ _(v8.69 — fired when \`research_depth: deep-product\`. The Durability probe fo
 _(v8.69 — first-class web search dispatch. Citations the skeptic lens used: postmortem writeups via \`user-exa\`, vulnerability databases / advisories, abuse-case literature, durability case studies, plus the optional MCP fallback note when no web tool was available.)_
 
 - _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
+
+## research-design — Design dimensions
+
+_(v8.76 — added by the new \`research-design\` lens. Dispatched on \`standard\` / \`deep-product\` depth when the topic touches UI / UX / positioning / affordances (orchestrator heuristic + the \`--lens=design\` / \`--lens=-design\` user-toggle flags). Pasted verbatim from \`research-design\` lens's findings block. Sections: Design dimensions implicated (all seven dimensions, each graded \`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`) / Existing patterns to study (2-5 entries with citations) / Adjacent design surfaces (deep-product depth only) / Anti-patterns to avoid (including canonical AI-slop signals) / Open design questions. The rubric is the SAME seven-dimension rubric the v8.75 plan-design specialist and the v8.70 reviewer's design-quality axis use — single source of truth at \`src/content/design-quality-rubric.ts\`. When the lens was NOT dispatched (light depth, or the topic missed the design-signal heuristic and the user did not force-include via \`--lens=design\`), this section is omitted from research.md entirely; the absence is auditable from the frontmatter \`lenses\` list._
+
+### Design dimensions implicated
+
+- **visual hierarchy** _(load-bearing | relevant | tangential | out-of-scope)_ — _<one-line rationale grounded in topic / dialogue / framing>_.
+- **type system consistency** _(...)_ — _<...>_.
+- **color system** _(...)_ — _<...>_.
+- **spacing rhythm** _(...)_ — _<...>_.
+- **interaction affordances** _(...)_ — _<...>_.
+- **accessibility (WCAG AA)** _(...)_ — _<...>_.
+- **responsive behavior** _(...)_ — _<...>_.
+
+### Existing patterns to study
+
+1. _<pattern-name>_ _(dimension: <one of the seven>)_ — _<what's good>_. Study: _<what specifically>_. Source: _<URL or \`(general pattern; training knowledge)\` tag>_.
+
+### Adjacent design surfaces _(deep-product depth only)_
+
+1. _<adjacent-surface-name>_ — _<one-line description of the nearby problem + its design shape>_. Why this matters here: _<one-line>_.
+
+### Anti-patterns to avoid
+
+1. _<anti-pattern-name>_ _(dimension: <one of the seven>)_ — Why this topic is prone to it: _<one-line citing dialogue / framing>_. _(Optional citation.)_
+
+### Open design questions
+
+1. _<question>_ _(dimension: <one of the seven>)_ — Why it's open: _<one-line>_.
+
+### Sources
+
+_(v8.76 — first-class web search dispatch on the design lens. Citations the design lens used: design-system tours via \`user-exa\` / \`user-context7\` (shadcn, Radix, Material 3), pattern critiques, accessibility-spec references, plus the optional MCP fallback note when no web tool was available. Pattern claims without URL citations carry the literal \`(general pattern; training knowledge)\` tag.)_
+
+- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | \`(general pattern; training knowledge)\`)_
 
 ## Synthesis
 

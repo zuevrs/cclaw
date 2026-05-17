@@ -7,11 +7,13 @@ import {
 import { RESEARCH_LENSES, type ResearchLensId } from "../../src/types.js";
 
 /**
- * v8.65 — research-only sub-agent lens prompts. The five lenses are
- * dispatched in parallel by the research orchestrator (main-context flow
- * powering `/cc research <topic>`) and each return a structured per-lens
- * findings block. They live in `src/content/research-lenses/` and are
- * NOT part of the core `SPECIALISTS` array.
+ * v8.65 / v8.76 — research-only sub-agent lens prompts. The six lenses
+ * are dispatched in parallel by the research orchestrator (main-context
+ * flow powering `/cc research <topic>`) and each return a structured
+ * per-lens findings block. They live in `src/content/research-lenses/`
+ * and are NOT part of the core `SPECIALISTS` array. v8.76 added the
+ * sixth lens (`research-design`), conditionally dispatched on standard+
+ * depth for UI / UX / positioning / affordances topics.
  *
  * The tests below pin the structural invariants every lens must hold so
  * that drift in one lens contract surfaces immediately (the orchestrator
@@ -22,19 +24,22 @@ import { RESEARCH_LENSES, type ResearchLensId } from "../../src/types.js";
 const LENS_IDS: readonly ResearchLensId[] = RESEARCH_LENSES;
 
 describe("v8.65 research lenses — registry surfaces", () => {
-  it("RESEARCH_LENS_PROMPTS has exactly five entries, keyed by RESEARCH_LENSES", () => {
+  it("RESEARCH_LENS_PROMPTS has exactly six entries (v8.76 added `research-design`), keyed by RESEARCH_LENSES", () => {
     const keys = Object.keys(RESEARCH_LENS_PROMPTS).sort();
     expect(keys).toEqual([...LENS_IDS].sort());
+    expect(keys).toHaveLength(6);
   });
 
-  it("RESEARCH_LENS_TITLES has exactly five entries, keyed by RESEARCH_LENSES", () => {
+  it("RESEARCH_LENS_TITLES has exactly six entries (v8.76 added `research-design`), keyed by RESEARCH_LENSES", () => {
     const keys = Object.keys(RESEARCH_LENS_TITLES).sort();
     expect(keys).toEqual([...LENS_IDS].sort());
+    expect(keys).toHaveLength(6);
   });
 
-  it("RESEARCH_LENS_DESCRIPTIONS has exactly five entries, keyed by RESEARCH_LENSES", () => {
+  it("RESEARCH_LENS_DESCRIPTIONS has exactly six entries (v8.76 added `research-design`), keyed by RESEARCH_LENSES", () => {
     const keys = Object.keys(RESEARCH_LENS_DESCRIPTIONS).sort();
     expect(keys).toEqual([...LENS_IDS].sort());
+    expect(keys).toHaveLength(6);
   });
 
   it("every lens title is non-empty and starts with the 'Research — ' prefix", () => {
@@ -72,9 +77,9 @@ describe("v8.65 research lenses — every lens prompt has the canonical sections
         expect(prompt).toMatch(/\/cc research <topic>/u);
       });
 
-      it("declares the five-lens parallel dispatch contract", () => {
+      it("declares the multi-lens parallel dispatch contract (v8.65 + v8.76)", () => {
         expect(prompt).toMatch(/in parallel/iu);
-        // every lens names the sibling lenses (4 of the 5)
+        // every lens names every sibling lens (5 of the 6 on v8.76+)
         const siblings = LENS_IDS.filter((other) => other !== id);
         for (const sibling of siblings) {
           expect(prompt, `${id} must reference sibling lens ${sibling}`).toContain(sibling);

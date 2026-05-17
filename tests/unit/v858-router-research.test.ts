@@ -481,8 +481,8 @@ describe("v8.58 — research.md artifact template", () => {
     expect(out).toContain("topic: storage strategy for shared agent memory");
     expect(out).toContain("generated_at: 2026-05-15T12:34:56Z");
     expect(out).toContain("mode: research");
-    // v8.65 — lenses frontmatter declares the canonical 5-lens roster
-    expect(out).toMatch(/lenses:\s*\[engineer,\s*product,\s*architecture,\s*history,\s*skeptic\]/u);
+    // v8.65 / v8.76 — lenses frontmatter declares the canonical 6-lens roster (v8.76 added `design`)
+    expect(out).toMatch(/lenses:\s*\[engineer,\s*product,\s*architecture,\s*history,\s*skeptic,\s*design\]/u);
     // No leftover placeholders
     expect(out).not.toContain("SLUG-PLACEHOLDER");
     expect(out).not.toContain("TOPIC-PLACEHOLDER");
