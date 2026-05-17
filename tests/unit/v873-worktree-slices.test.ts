@@ -50,12 +50,17 @@ describe("v8.73 — slice-worktree.ts exports lifecycle helpers", () => {
 
   it("exports the pure path computation so callers can predict the worktree dir", () => {
     expect(typeof sliceWorktree.sliceWorktreePath).toBe("function");
+    // Use path.join in the expected value so the assertion is
+    // platform-portable (Windows uses `\\` separators); the contract
+    // is "sibling directory with -<slug>-<sliceId> suffix on the
+    // base name", not a specific separator shape.
+    const projectRoot = path.join(path.sep, "tmp", "projects", "myrepo");
     const result = sliceWorktree.sliceWorktreePath(
-      "/tmp/projects/myrepo",
+      projectRoot,
       "v123-slug",
       "SL-2"
     );
-    expect(result).toBe("/tmp/projects/myrepo-v123-slug-SL-2");
+    expect(result).toBe(path.join(path.sep, "tmp", "projects", "myrepo-v123-slug-SL-2"));
   });
 
   it("namespaces the disposable branch under cclaw/", () => {
