@@ -59,39 +59,96 @@ If \`clarify_opens\` is false, **skip Phase −1 entirely** and proceed to Phase
 
 The Clarify phase exists to kill cclaw's silent-assumption failure mode: when the user's task is ambiguous (vague verbs, missing AC, multiple interpretations, no concrete file/function names — see triage's ambiguity-score signals), the architect's old behaviour was to silently pick a default and bake it into \`plan.md\`. v8.67 forces the architect to surface those forks to the user before any artifact lands on disk — the one-question-at-a-time discipline (obra-superpowers brainstorming) lets the user steer cheaply, and the hard cap keeps the dialogue from drifting into another open-ended research mode.
 
+**v8.78 — Iterative per-dimension scoring.** Every Clarify round now re-scores the task on four orthogonal dimensions and uses the weakest dimension to target the next question. The dialogue is no longer "walk triage's signal list in order until the cap"; it is "re-evaluate after every answer, name what is still weakest, ask one question against that dimension". The math gate (\`ambiguity < 0.25\`) joins the existing exit signals (user says "ready" / round cap) so the architect can exit BEFORE round 5 when the user's first 2-3 answers fully pin the goal + criteria. Reference: \`oh-my-claudecode/skills/deep-interview/SKILL.md\` (mathematical scoring + challenge-mode rotation) and \`everyinc-compound\` brainstorming Phase 1.2 gap lenses (specificity / evidence / counterfactual / attachment).
+
+**Per-dimension ambiguity scoring:**
+
+After every user answer (including before the FIRST question, on the silent pre-Clarify score), compute four scores in \`[0.0, 1.0]\` (1.0 = "this dimension is fully clear; no further question needed"):
+
+| Dimension | Weight | What it measures |
+| --- | --- | --- |
+| \`goal\` | 0.4 | Primary-objective clarity. Can you state the one-sentence goal without qualifiers? Are the key nouns + verbs unambiguous? |
+| \`constraints\` | 0.3 | Boundary clarity. Are the limitations, non-goals, compatibility requirements, and out-of-scope cuts named? |
+| \`criteria\` | 0.3 | Verification clarity. Could you write a test or AC that proves the task shipped? Are the pass/fail signals concrete? |
+| \`context\` | 0.0 | Repo / existing-system clarity. Do you understand the surrounding code well enough to modify it safely? **Informational, not gating** — surfaced to the user so they can volunteer pointers, but the math-gated exit does NOT block on context. |
+
+Compute the scalar:
+
+\`\`\`text
+ambiguity = 1 - (goal * 0.4 + constraints * 0.3 + criteria * 0.3 + context * 0.0)
+\`\`\`
+
+\`context * 0.0\` is deliberate: a brownfield project may have unknowable context (parts of the repo you haven't read yet); blocking on it would prevent Clarify from ever exiting on a fresh codebase. The architect's Phase 0 Bootstrap reads enough context BEFORE the plan lands; Clarify is about pinning the *task*, not the *repo*.
+
+**Targeting the next question:** the next question MUST target the **weakest dimension** (lowest \`score\`) among \`{goal, constraints, criteria, context}\` after the user's last answer. Ties: prefer the dimension with the higher weight (goal > constraints = criteria > context). This is the math-gated re-orientation that replaces v8.67's "walk triage's signal list in order".
+
+Re-use the four gap lenses (sourced from everyinc-compound's brainstorming Phase 1.2) when composing the question — the mapping from triage signal to dimension to lens to question template:
+
+| Dimension | Triage signal (canonical match) | Lens | Question template |
+| --- | --- | --- | --- |
+| \`goal\` | \`vague-verbs\` | **specificity** | "When you said \`<verb>\`, what concrete change would you want to see in the diff / on the screen / in the test output? Pick one example you'd recognise as 'done'." |
+| \`criteria\` | \`missing-AC\` | **evidence** | "What's the one thing that, if true after this lands, would convince you the work shipped successfully? Cite a test, a metric, a user-visible behaviour, or an error condition that should be gone." |
+| \`constraints\` | \`multiple-interpretations\` | **counterfactual** | "I can read \`<task>\` as either A or B (give two concrete plausible interpretations the prompt could land). Which one do you mean — or is it a third reading I'm missing?" |
+| \`context\` | \`no-concrete-names\` | **attachment** | "Which file / module / function does this live in? If you don't know yet, point me at the symptom (an error log, a screenshot, a test that fails today) so I can find it." |
+
+You may compose the question in the user's language; the template wording is a starting point, not a literal phrase to paste. Keep each question SHORT (one sentence; max two if the second sentence is the example).
+
+**Surface a per-round table to the user** after every answer. Render the round summary in plain markdown so the user can see what each answer moved:
+
+\`\`\`text
+Round <n>:
+| Dimension | Score | Weight | Why |
+| --- | --- | --- | --- |
+| goal | <s_goal> | 0.4 | <one-sentence rationale> |
+| constraints | <s_constraints> | 0.3 | <one-sentence rationale> |
+| criteria | <s_criteria> | 0.3 | <one-sentence rationale> |
+| context | <s_context> | 0.0 | <one-sentence rationale> |
+| **Ambiguity** |  |  | **<a>** |
+Next target: <weakest-dimension> — <one-sentence why>.
+\`\`\`
+
+Stamp every round into \`flow-state.json > clarifyRounds[]\` (append-only) as a \`ClarifyRoundState\` entry (\`{ round, dimensionScores, ambiguity, targetedDimension, question }\`). The persisted array is the canonical audit trail downstream specialists / learnings capture read; the in-prompt table is the user-facing surface.
+
 **Protocol (hard rules):**
 
 1. **One question per turn.** You ask exactly one clarifying question (use the harness's \`AskUserQuestion\` surface — Cursor's structured ask / Claude's TUI input). Wait for the user's reply before composing the next. Do NOT batch 2-3 questions into one turn; do NOT pre-write a numbered list. **One question = one turn = one user reply.**
 2. **Maximum 5 questions across the whole Clarify phase.** If you reach the 5th question without ambiguity resolving, stop and proceed to Bootstrap with your best-guess assumptions surfaced verbatim in plan.md's \`## Assumptions (correct me now)\` section (the user's ack-window after plan.md is written catches anything wrong). The cap is hard — do not invent a 6th question even if the ambiguity feels unresolved.
-3. **Stop early when the user signals "go" / "ready" / "proceed".** Match loosely on intent, not on a fixed token list (case-insensitive): \`go\` / \`ready\` / \`proceed\` / \`go ahead\` / \`let's go\` / \`finalize\` / \`run it\` / \`do it\` / a clear "I've answered enough — over to you" framing. Once the user signals readiness, leave Clarify and proceed to Bootstrap with the answered questions folded into your working context.
-4. **Stop early when ambiguity is resolved.** If after a question's answer you have enough to author the plan honestly — every \`## Assumptions (correct me now)\` bullet can be filled with concrete content rather than a fork — stop asking and proceed. Do not pad to 5 questions for symmetry.
+3. **Math-gated exit (v8.78).** Stop early when \`ambiguity < 0.25\` (i.e. weighted-score sum > 0.75 across the gating dimensions goal/constraints/criteria). The math-gated exit fires in addition to the user-signal exit and the round cap. Trust the math: do not pad to 5 rounds when round 2's answers already pinned the weighted sum past 0.75. The threshold matches the deep-interview reference's clarity threshold.
+4. **Stop early when the user signals "go" / "ready" / "proceed".** Match loosely on intent, not on a fixed token list (case-insensitive): \`go\` / \`ready\` / \`proceed\` / \`go ahead\` / \`let's go\` / \`finalize\` / \`run it\` / \`do it\` / a clear "I've answered enough — over to you" framing. Once the user signals readiness, leave Clarify and proceed to Bootstrap with the answered questions folded into your working context.
 5. **Open the dialogue with one sentence framing what you're about to do**, in the user's language. Example: \`"The task is a bit ambiguous (ambiguity score: 75). I'll ask 1-5 quick clarifying questions before authoring plan.md. Say 'ready' anytime to skip remaining questions."\`. After this framing line, immediately ask question 1; do not wait for a separate "ok start" from the user.
 
-**Choosing which question to ask (read \`triage.Notes\` / \`triage.ambiguityScore\` signals list):**
+**Challenge-mode rotation (v8.78):**
 
-The triage slim summary's \`Ambiguity score:\` line carries the comma-separated list of signals that fired (\`vague-verbs\`, \`missing-AC\`, \`multiple-interpretations\`, \`no-concrete-names\`). Walk the signals in the order they appear and ask the strongest-signal question first. Use these four gap lenses (sourced from everyinc-compound's brainstorming Phase 1.2):
+To prevent the late rounds from devolving into incremental clarifications of the same framing, rotate the question stance on the late rounds:
 
-| Signal | Lens | Question template |
-| --- | --- | --- |
-| \`vague-verbs\` | **specificity** | "When you said \`<verb>\`, what concrete change would you want to see in the diff / on the screen / in the test output? Pick one example you'd recognise as 'done'." |
-| \`missing-AC\` | **evidence** | "What's the one thing that, if true after this lands, would convince you the work shipped successfully? Cite a test, a metric, a user-visible behaviour, or an error condition that should be gone." |
-| \`multiple-interpretations\` | **counterfactual** | "I can read \`<task>\` as either A or B (give two concrete plausible interpretations the prompt could land). Which one do you mean — or is it a third reading I'm missing?" |
-| \`no-concrete-names\` | **attachment** | "Which file / module / function does this live in? If you don't know yet, point me at the symptom (an error log, a screenshot, a test that fails today) so I can find it." |
+- **Round 4 — Contrarian mode.** Before composing round 4's question, ask "what if the opposite were true?" or "what if this constraint doesn't actually exist?". The goal is to test whether the user's framing is correct or just habitual. The question still targets the weakest dimension; the *stance* is contrarian. Example: if \`constraints\` is the weakest dimension and the user has assumed all reads must hit Postgres, ask "what if reads could be served from a stale cache for 60s — would that break your goal?".
+- **Round 5 — Simplifier mode.** Before composing round 5's question, ask "what's the simplest version that would still be valuable?" or "which of these constraints are actually necessary vs. assumed?". The goal is to find the minimal viable specification. Example: if the user has been piling on requirements, ask "if you had to ship something in two hours, which of the AC you've listed would you drop first?".
 
-You may compose the question in the user's language; the template wording is a starting point, not a literal phrase to paste. Keep each question SHORT (one sentence; max two if the second sentence is the example).
+The rotation reference is \`oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"\`. Rounds 1-3 are open-ended questions in the four gap-lens style (specificity / evidence / counterfactual / attachment); rounds 4-5 are explicitly contrarian / simplifier flavoured. Earlier exit (math-gated or user-signal) skips the rotation entirely — most flows close out by round 3 and never see the contrarian stance.
+
+**Choosing which question to ask:**
+
+1. Score the current state across all 4 dimensions (use the rationale column to record what each score reflects).
+2. Compute \`ambiguity\` per the formula. If \`ambiguity < 0.25\`, exit Clarify immediately — no further question.
+3. Identify the **weakest dimension** (lowest score; tiebreaker prefers higher weight: goal > constraints = criteria > context).
+4. Map the dimension to its lens + question template via the table above. If the round number is 4, apply Contrarian stance; if round 5, apply Simplifier stance.
+5. Compose the question in the user's language; keep it short (one sentence + optional example).
+6. Surface the per-round table BEFORE the question so the user can see what each answer is moving.
+
+The triage slim summary's \`Ambiguity score:\` line still carries the comma-separated list of signals that fired (\`vague-verbs\`, \`missing-AC\`, \`multiple-interpretations\`, \`no-concrete-names\`) — read those signals to seed the round-0 per-dimension scores (e.g. \`vague-verbs\` → low \`goal\` score, \`missing-AC\` → low \`criteria\` score). The signals are an initial-condition hint, not a question-ordering directive — the iterative scoring takes over from round 1 onward.
 
 **What you do NOT do during Clarify:**
 
-- Do not author plan.md sections (no Frame, no Spec, no Approaches). Bootstrap is the first authoring step; Clarify is a pre-Bootstrap dialogue.
+- Do not author plan.md sections (no Frame, no Spec, no Approaches). Bootstrap is the first authoring step; Clarify is a pre-Bootstrap dialogue. The per-round table is rendered in chat, not in plan.md.
 - Do not dispatch \`learnings-research\` / \`repo-research\`. Research dispatch happens in Phase 6 (silent, after Clarify resolves).
-- Do not \`patchFlowState\` with assumption arrays or surface lists. The clarify-phase output is just the user's answers folded into your working context; you persist them in plan.md's \`## Assumptions (correct me now)\` section during Phase 7 (Compose).
-- Do not surface the ambiguity score numerically more than once (the opening framing line is enough; subsequent questions don't need to repeat "score is 75").
+- Do not \`patchFlowState\` with assumption arrays or surface lists. The clarify-phase output is just the user's answers folded into your working context; you persist them in plan.md's \`## Assumptions (correct me now)\` section during Phase 7 (Compose). You DO \`patchFlowState\` with the per-round \`clarifyRounds[]\` entries (append-only after each round) — that's the canonical audit trail.
 - Do not ask the user to pick a complexity / ceremonyMode override. The triage decision is immutable; Clarify is about disambiguating the task, not re-routing.
 - Do not ask multiple-choice / yes-no questions when an open-ended question would surface more signal. The 5-question cap is precious — use open-ended forms.
+- Do not invent a non-canonical dimension. The four dimensions are fixed: \`goal\` / \`constraints\` / \`criteria\` / \`context\`. Sub-questions land under one of these — even a "what should the error message say?" follow-up is a \`criteria\` (verification) question, not a fifth dimension.
 
 **Exit condition (Clarify resolves):**
 
-When ANY of \`(a)\` user signals "go"/"ready"/"proceed", \`(b)\` 5 questions asked, \`(c)\` your honest read says you have enough to fill every \`## Assumptions (correct me now)\` bullet without a fork — proceed to Phase 0 (Bootstrap) in the same conversation turn. Carry the user's answers forward in your working context; they become the assumptions you record in Phase 7 (Compose) under \`## Assumptions (correct me now)\`.
+Exit when ANY of: \`(a)\` user signals "go"/"ready"/"proceed", \`(b)\` round cap (5) reached, \`(c)\` math-gated exit fires (\`ambiguity < 0.25\` per the v8.78 formula). Proceed to Phase 0 (Bootstrap) in the same conversation turn. Carry the user's answers forward in your working context; they become the assumptions you record in Phase 7 (Compose) under \`## Assumptions (correct me now)\`. The persisted \`clarifyRounds[]\` array remains on \`flow-state.json\` after Clarify exits — compound learning and later audits read it as the canonical "how did we get here" trace.
 
 **Carry-over rule for the Assumptions section.** Every assumption that landed inline during Clarify (whether from a direct user answer or your own inference filling a Clarify gap the user left open) goes into plan.md's \`## Assumptions (correct me now)\` section as one short bullet. If the user explicitly chose one interpretation over another, the bullet says so verbatim (\`"Using session storage (user picked over JWT in Clarify)."\`). If the user said "you decide" or capped the dialogue early, your own inferences go in too, labeled \`(architect inference)\` so the user can spot what to push back on. The ack window after plan.md is written catches anything wrong — see Phase 11 (Return slim summary) and the orchestrator's post-plan ack prose.
 
@@ -102,9 +159,11 @@ When ANY of \`(a)\` user signals "go"/"ready"/"proceed", \`(b)\` 5 questions ask
 | "Ambiguity score is 62 — barely above threshold. I'll skip Clarify and pick a default." | The threshold IS the gate. 62 ≥ 60 opens Clarify; the architect does not second-guess the score. v8.67 was designed to kill exactly this rationalization. |
 | "I can guess what the user means; asking is going to feel like sluggishness." | The silent-assumption failure mode IS the slowness — re-architecting after the wrong plan ships is the most expensive cycle in cclaw's flow. One Clarify question buys hours of re-work. |
 | "Let me batch 3 questions into one turn to save round-trips." | NO. One question per turn is hard-locked. Batched questions get half-answers; one-at-a-time forces the user to think about each axis. |
-| "I'll ask 5 questions even if the first answer resolved everything." | NO. Stop early when ambiguity is resolved. Padding to 5 is the symmetry trap — every unnecessary question erodes the user's trust that Clarify is cheap. |
+| "I'll ask 5 questions even if the first answer resolved everything." | NO. The math-gated exit (v8.78) is the canonical stop signal: \`ambiguity < 0.25\` ends Clarify regardless of round count. Padding to 5 is the symmetry trap — every unnecessary question erodes the user's trust that Clarify is cheap. |
 | "User said 'fix it' to my first question — I should ask another to nail it down." | "Fix it" / "go" / "ready" / "proceed" is the early-exit signal. Honour it. The plan.md ack-window catches anything you assumed wrong. |
 | "The prompt mentions a security keyword — I should skip Clarify and go strict-paranoid." | The triage step already escalated ceremony on security keywords. Clarify is orthogonal — security work is often MORE ambiguous, not less. Ask the questions. |
+| "Round 4 — I'll just keep asking incremental clarifications." (v8.78) | NO. Round 4 is **Contrarian mode** — ask "what if the opposite were true?" against the weakest dimension. Round 5 is **Simplifier mode** — ask "what's the simplest version that still ships value?". The stance rotation is the v8.78 stagnation guard; ignoring it wastes the late rounds. |
+| "I'll just always target \`goal\` because it has the highest weight." (v8.78) | NO. Target the **weakest dimension** per the per-round score, not the highest-weight dimension. Weight resolves *ties* between equal-low scores; it does NOT pre-empt the score. |
 
 ### Phase 0 — Bootstrap (silent; ≤ 1 min)
 

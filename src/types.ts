@@ -1584,6 +1584,128 @@ export interface TriageDecision {
   taskShape?: TaskShape;
 }
 
+/**
+ * Per-dimension ambiguity dimensions the Clarify protocol scores
+ * after every user answer. The four dimensions are orthogonal axes of
+ * "is the task understood well enough to author plan.md without silent
+ * defaults?":
+ *
+ * - `goal` — primary objective clarity. Can the architect state the
+ *   one-sentence goal of the task without qualifiers? Are the key
+ *   nouns + verbs unambiguous? Highest weight in the ambiguity formula
+ *   (0.4) because a wrong goal makes every downstream specialist
+ *   build the wrong thing.
+ * - `constraints` — boundary clarity. Are the limitations, non-goals,
+ *   compatibility requirements, and out-of-scope cuts clear? Second
+ *   weight (0.3) — a wrong constraint surfaces at plan-critic / qa
+ *   time but not before any code is written.
+ * - `criteria` — success criteria / verification clarity. Could the
+ *   architect write a test or AC that proves the task shipped? Are
+ *   the pass/fail signals concrete? Equal weight to constraints (0.3)
+ *   because cclaw's AC-driven verification depends on criteria being
+ *   pinned at plan-time.
+ * - `context` — repo / existing-system clarity (brownfield). Does the
+ *   architect understand the surrounding code well enough to modify it
+ *   safely? Weight is 0.0 in the ambiguity formula — `context` is
+ *   *informational*, not gating. Even on greenfield projects context
+ *   may be unclear; we surface it in the per-round table so the user
+ *   can volunteer pointers, but the math-gated exit threshold does
+ *   not block on it. Reference: deep-interview's brownfield context
+ *   dimension folded into the same vocabulary so cclaw stays
+ *   single-shape across project types.
+ *
+ * Reference: oh-my-claudecode/skills/deep-interview/SKILL.md
+ * (mathematical scoring of {goal,constraints,criteria,context}) +
+ * everyinc-compound/plugins/compound-engineering/skills/ce-brainstorm
+ * Phase 1.2 gap lenses (specificity/evidence/counterfactual/attachment;
+ * already in cclaw's triage ambiguity-score signals — the four
+ * dimensions are the same lenses re-projected onto the per-round
+ * scoring surface).
+ */
+export const CLARIFY_DIMENSIONS = [
+  "goal",
+  "constraints",
+  "criteria",
+  "context"
+] as const;
+export type ClarifyDimension = (typeof CLARIFY_DIMENSIONS)[number];
+
+/**
+ * One per-dimension score the architect / research orchestrator
+ * computes after every Clarify answer (v8.78 iterative-clarify
+ * protocol). `score` is a float in `[0.0,
+ * 1.0]` where 1.0 = "this dimension is fully clear; no further question
+ * needed" and 0.0 = "still wide open". `rationale` is a one-sentence
+ * explanation of why the score landed where it did (what gap remains
+ * or what answer pinned it).
+ *
+ * Validators clamp `score` to `[0.0, 1.0]` on write rather than
+ * throwing; out-of-range scores are a writer bug, not a flow-state
+ * corruption.
+ */
+export interface ClarifyDimensionScore {
+  dimension: ClarifyDimension;
+  score: number;
+  rationale: string;
+}
+
+/**
+ * One round of iterative Clarify dialogue (v8.78). Each round records the
+ * per-dimension scores after the user's answer to that round's
+ * question, the resulting ambiguity scalar (per the formula
+ * `1 - (goal*0.4 + constraints*0.3 + criteria*0.3 + context*0.0)`),
+ * the dimension the orchestrator targeted with the NEXT question
+ * (the weakest dimension on the post-answer scores), and the question
+ * the orchestrator asked.
+ *
+ * The round array is the persistent audit trail mirrored verbatim
+ * under plan.md / research.md's Clarify per-round table. Append-only
+ * (rounds are never mutated after the orchestrator advances).
+ *
+ * - `round` — 1-indexed round number.
+ * - `dimensionScores` — array of 4 entries, one per
+ *   {@link CLARIFY_DIMENSIONS} value, in canonical order.
+ * - `ambiguity` — scalar in `[0.0, 1.0]`; lower = clearer. Math-gated
+ *   exit fires when `ambiguity < 0.25`.
+ * - `targetedDimension` — the dimension the next question targets
+ *   (weakest dimension after this round's answer). On the final
+ *   round (math-gated exit, round cap, or user "ready" signal) the
+ *   field still names the weakest dimension; downstream readers
+ *   ignore it on terminal rounds.
+ * - `question` — the question the orchestrator actually asked this
+ *   round (verbatim, post-template-fill). On round 1 this is the
+ *   opening question; on subsequent rounds it is the question
+ *   targeting the prior round's `targetedDimension`.
+ */
+export interface ClarifyRoundState {
+  round: number;
+  dimensionScores: ClarifyDimensionScore[];
+  ambiguity: number;
+  targetedDimension: ClarifyDimension;
+  question: string;
+}
+
+/**
+ * Default ambiguity threshold for the math-gated Clarify exit (v8.78).
+ * `ambiguity < EXIT_THRESHOLD` ends the dialogue (in addition to the
+ * existing "user signals ready" / "round cap reached" exits). 0.25
+ * matches the deep-interview reference's "clarity threshold" framing
+ * and corresponds to a weighted-score sum > 0.75 across the gating
+ * dimensions (goal + constraints + criteria).
+ */
+export const CLARIFY_EXIT_AMBIGUITY_THRESHOLD = 0.25;
+
+/**
+ * Round caps for the iterative Clarify dialogue (v8.78). The architect
+ * Phase −1 cap stays at 5 (v8.67 contract); research-mode Phase 1's
+ * cap is higher (8) because research discovery has more axes to pin
+ * (research is exploratory by definition, so the budget allows
+ * deeper questioning). Both surfaces share the same math-gated exit
+ * threshold ({@link CLARIFY_EXIT_AMBIGUITY_THRESHOLD}).
+ */
+export const CLARIFY_ARCHITECT_ROUND_CAP = 5;
+export const CLARIFY_RESEARCH_ROUND_CAP = 8;
+
 export interface CliContext {
   cwd: string;
   stdout: NodeJS.WriteStream;
