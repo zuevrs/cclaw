@@ -282,11 +282,13 @@ describe("v8.75 — design-quality-discipline skill auto-triggers at plan + revi
 });
 
 describe("v8.75 — version bump", () => {
-  it("AC-6 — package.json bumps to 8.75.0", async () => {
+  it("AC-6 — package.json bumps to 8.75.0 (or higher; subsequent releases are back-compat)", async () => {
     const pkg = JSON.parse(
       await fs.readFile(path.join(process.cwd(), "package.json"), "utf-8")
-    );
-    expect(pkg.version).toBe("8.75.0");
+    ) as { version: string };
+    const [major, minor] = pkg.version.split(".").map((n) => Number.parseInt(n, 10));
+    expect(major).toBe(8);
+    expect(minor).toBeGreaterThanOrEqual(75);
   });
 
   it("AC-6 — CHANGELOG.md carries a v8.75 entry", async () => {

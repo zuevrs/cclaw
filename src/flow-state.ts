@@ -19,6 +19,7 @@ import {
   type Posture,
   type QaEvidenceTier,
   type QaVerdict,
+  type ResearchApproach,
   type ResearchLensId,
   type ResearchMode,
   type ResearchRevision,
@@ -414,6 +415,52 @@ export interface FlowStateV82 {
    * revision).
    */
   revisions?: ResearchRevision[];
+  /**
+   * Candidate framings surfaced at the v8.76 Approaches Gate (research
+   * mode Phase 1.5 — between Phase 1 discovery dialogue and Phase 2
+   * lens dispatch). The orchestrator distils 2-3 framings from the
+   * dialogue summary, surfaces them to the user, and stamps the array
+   * here before the gate fires. See {@link ResearchApproach} for the
+   * field semantics + worked example.
+   *
+   * Set ONLY on research-mode flows. Pre-v8.76 state files lack this
+   * field; readers MUST default to absent / empty (`[]`). Pre-v8.76
+   * research flows dispatched lenses against an implicit single
+   * framing (whatever the orchestrator settled on during dialogue
+   * distillation) — the absence of this field on legacy state is the
+   * canonical "pre-Approaches-Gate" signal, not an error.
+   *
+   * Immutable for the flow's lifetime once stamped — re-framings are
+   * surfaced as `/cc research push-back` invocations on the existing
+   * v8.71 push-back machinery, NOT by mutating this array. The
+   * audit trail keeps the original framings visible.
+   */
+  approaches?: ResearchApproach[];
+  /**
+   * Indices into {@link FlowStateV82.approaches} that the user
+   * selected at the Approaches Gate. Stamped immediately after the
+   * user's pick (or after the orchestrator stamps the default "all"
+   * selection — every framing flows to every lens). The orchestrator
+   * carries the selected framings forward in every lens dispatch
+   * envelope as `framing: string[]` (the title-or-summary strings the
+   * lenses see, not the indices).
+   *
+   * Conventions:
+   *
+   * - A non-empty array of zero-based indices into `approaches[]` (eg.
+   *   `[0, 2]` selects framings A and C from a 3-framing surface).
+   * - An array equal to `[0..approaches.length - 1]` (every index)
+   *   is the canonical "all" selection — the orchestrator stamps
+   *   this verbatim when the user says "all" or accepts the default.
+   *   Readers MUST NOT special-case empty arrays as "all"; empty is
+   *   reserved for back-compat with pre-v8.76 state files only.
+   *
+   * Set ONLY on research-mode flows. Pre-v8.76 state files lack this
+   * field; readers MUST default to absent. Immutable once stamped
+   * (re-selection is a `/cc research push-back` invocation, not a
+   * mutation of this array).
+   */
+  selectedApproaches?: number[];
   /**
    * Slice ids whose sub-builder worktree branch failed to
    * fast-forward merge back into the parent after the per-slice TDD
@@ -1059,6 +1106,47 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
       }
       if (r.change !== undefined && typeof r.change !== "string") {
         throw new Error("flow-state.revisions[].change must be a string when present");
+      }
+    }
+  }
+  if (state.approaches !== undefined) {
+    if (!Array.isArray(state.approaches)) {
+      throw new Error("flow-state.approaches must be an array when present");
+    }
+    for (const approach of state.approaches) {
+      if (typeof approach !== "object" || approach === null) {
+        throw new Error("flow-state.approaches entries must be objects");
+      }
+      const a = approach as Partial<ResearchApproach>;
+      if (typeof a.id !== "string" || a.id.length === 0) {
+        throw new Error("flow-state.approaches[].id must be a non-empty string");
+      }
+      if (typeof a.title !== "string" || a.title.length === 0) {
+        throw new Error("flow-state.approaches[].title must be a non-empty string");
+      }
+      if (typeof a.summary !== "string" || a.summary.length === 0) {
+        throw new Error("flow-state.approaches[].summary must be a non-empty string");
+      }
+    }
+  }
+  if (state.selectedApproaches !== undefined) {
+    if (!Array.isArray(state.selectedApproaches)) {
+      throw new Error("flow-state.selectedApproaches must be an array when present");
+    }
+    const approachCount = Array.isArray(state.approaches) ? state.approaches.length : 0;
+    for (const idx of state.selectedApproaches) {
+      if (typeof idx !== "number" || !Number.isInteger(idx) || idx < 0) {
+        throw new Error(
+          "flow-state.selectedApproaches entries must be non-negative integers (indices into approaches[])"
+        );
+      }
+      // Soft validation: bounds-checked when approaches[] is present on the same state.
+      // Tolerant on mid-flight transient writes where selectedApproaches lands before
+      // approaches is fully validated. Test-only assertion enforces tight bounds.
+      if (approachCount > 0 && idx >= approachCount) {
+        throw new Error(
+          `flow-state.selectedApproaches index ${idx} out of bounds for approaches.length=${approachCount}`
+        );
       }
     }
   }

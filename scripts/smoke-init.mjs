@@ -105,7 +105,8 @@ try {
     "research-product.md",
     "research-architecture.md",
     "research-history.md",
-    "research-skeptic.md"
+    "research-skeptic.md",
+    "research-design.md"
   ].sort();
   const lensesOnDisk = (await import("node:fs"))
     .readdirSync(join(tempDir, ".cclaw", "lib", "research-lenses"))

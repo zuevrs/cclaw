@@ -200,10 +200,11 @@ export type ResearchAgentId = (typeof RESEARCH_AGENT_IDS)[number];
  * orchestrator owns the cross-lens synthesis pass that writes the final
  * `## Synthesis` section of `research.md`.
  *
- * The five lenses cover the orthogonal dimensions reference projects
+ * The six lenses cover the orthogonal dimensions reference projects
  * (gstack `plan-*-review` quintet; obra-superpowers brainstorming →
  * subagent-driven-development chain; compound continuous-notebook +
- * adversarial-reviewer) settled on:
+ * adversarial-reviewer; everyinc-compound `ce-design-lens-reviewer`)
+ * settled on:
  *
  * - `research-engineer` — technical feasibility, stack fit,
  *   implementation paths, rough effort.
@@ -215,19 +216,31 @@ export type ResearchAgentId = (typeof RESEARCH_AGENT_IDS)[number];
  *   git log; lessons learned + outcome signals.
  * - `research-skeptic` — adversarial pass: failure modes, edge cases,
  *   abuse cases, hidden costs.
+ * - `research-design` (v8.76) — UI / UX / positioning / affordances
+ *   lens for topics that touch design surfaces. Walks the same
+ *   seven-dimension design-quality rubric (shared with the v8.75
+ *   plan-design specialist and the v8.70 reviewer's design-quality
+ *   axis) at the research framing stage — surfaces dimensions
+ *   implicated, existing patterns to study, anti-patterns to avoid
+ *   (including canonical AI-slop signals), and open design questions.
+ *   Dispatched on `standard+` depth when the topic signals UI / UX /
+ *   design / frontend / positioning / affordances; force-toggleable
+ *   via `/cc research --lens=design` / `--lens=-design`.
  *
  * Each lens may dispatch the existing `repo-research` helper for
  * codebase-specific context (engineer + architecture lenses do so by
  * default on brownfield projects); web search via MCP is optional
- * (lenses fall back to training knowledge when no MCP web-search tool
- * is available).
+ * for engineer / product / architecture / skeptic / design lenses
+ * (design lens is first-class on web search). The history lens is
+ * memory-only (reads `.cclaw/knowledge.jsonl` directly).
  */
 export const RESEARCH_LENSES = [
   "research-engineer",
   "research-product",
   "research-architecture",
   "research-history",
-  "research-skeptic"
+  "research-skeptic",
+  "research-design"
 ] as const;
 export type ResearchLensId = (typeof RESEARCH_LENSES)[number];
 
@@ -910,6 +923,67 @@ export interface ResearchRevision {
   area: string;
   lensesRedispatched: ResearchLensId[];
   change?: string;
+}
+
+/**
+ * One candidate framing surfaced at the v8.76 Approaches Gate (research
+ * mode Phase 1.5 — between the open-ended discovery dialogue and the
+ * parallel lens dispatch).
+ *
+ * The Approaches Gate is the research-mode analogue of the
+ * obra-superpowers brainstorming Phase 2-3 "2-3 approach options before
+ * committing" and the addyosmani idea-refine Phase 1.3 Cluster +
+ * Stress-test discipline. Without it, the lenses dispatch against a
+ * single implicit framing of the topic (whatever the orchestrator
+ * settled on during the dialogue distillation), and downstream
+ * findings inherit that framing's blind spots. Surfacing 2-3 distinct
+ * framings BEFORE the lenses fire lets the user pick the framing that
+ * matches their actual question — or accept the "all" default to have
+ * every lens dispatch carry every framing in its envelope.
+ *
+ * Each framing is a DIFFERENT framing of the same research question
+ * (not 2-3 conclusions, not 2-3 implementation candidates — those are
+ * scoped to the lenses themselves). Examples for the topic "add
+ * caching to the search endpoint":
+ *
+ *   - framing A: "treat caching as an infra primitive — Redis vs
+ *     in-memory vs HTTP cache; the question is which substrate";
+ *   - framing B: "treat caching as a search-quality lever — what we
+ *     cache, how invalidation works, when to bust; the question is
+ *     correctness";
+ *   - framing C: "treat caching as an organizational gate — who owns
+ *     the cache, who pages when it's stale; the question is governance".
+ *
+ * Each framing changes which dimensions every lens emphasises. The
+ * user picks one (or accepts "all" — the default; every framing flows
+ * to every lens in its envelope) and the orchestrator carries the
+ * selected framing(s) forward in every lens dispatch envelope as
+ * `framing: string[]`.
+ *
+ * Fields:
+ *
+ * - `id` — short stable identifier (e.g. `A` / `B` / `C` or
+ *   `infra-primitive` / `search-quality` / `governance`). The
+ *   orchestrator stamps single-letter IDs when no semantic shortname
+ *   is obvious; downstream readers MUST NOT assume the id matches a
+ *   specific pattern.
+ * - `title` — short title (4-8 words) the orchestrator surfaces to
+ *   the user at the Approaches Gate.
+ * - `summary` — one-paragraph description of the framing: what
+ *   question this framing makes load-bearing, what gets de-emphasised
+ *   if the user picks it, which downstream lens dispatches will see
+ *   the biggest shape change.
+ *
+ * Pre-v8.76 research-mode state files lack this field; readers MUST
+ * default to absent / empty. New writes stamp `approaches[]` at the
+ * end of Phase 1 (immediately before the Approaches Gate fires) and
+ * `selectedApproaches[]` immediately after the user picks (or accepts
+ * "all").
+ */
+export interface ResearchApproach {
+  id: string;
+  title: string;
+  summary: string;
 }
 
 /**

@@ -79,20 +79,15 @@ describe("v8.61 — triage as a specialist sub-agent", () => {
   });
 
   it("orchestrator body no longer carries the full triage prose (delegated to sub-agent)", () => {
-    // v8.65 raised the body budget from 72000 to 81000 chars to absorb
-    // the multi-lens research orchestrator's body prose (4-phase
-    // contract, lens dispatch envelope, lens-output schema, synthesis
-    // pass, handoff prompt). v8.69 raised the budget to 82000 to
-    // absorb the research-depth + synthesis self-review pointers
-    // (research_depth in fork stamp, depth-conditional Phase 2 dispatch,
-    // self-review step in Phase 3, depth-flag sub-case). v8.71 raised
-    // the budget to 84000 to absorb the research revision loop
-    // (Phase 3.5 awaiting-user-review gate, /cc research revise /
-    // push-back / accept sub-commands, and the Detect matrix row
-    // routing them to runbooks/research-revision.md). The triage
-    // delegation invariant (the body does not re-implement triage
-    // inline) is preserved.
-    expect(START_COMMAND_BODY.length).toBeLessThan(96000);
+    // ... v8.71 raised the budget to 84000 to absorb the research
+    // revision loop. v8.76 raised the budget to 108000 to absorb the
+    // Phase 1.5 Approaches Gate prose + the rewritten Phase 2 lens-
+    // dispatch prose (design-signal heuristic + `--lens=design` /
+    // `--lens=-design` flags + the new `research-design` lens row +
+    // the new `Framing:` envelope field). The triage delegation
+    // invariant (the body does not re-implement triage inline) is
+    // preserved.
+    expect(START_COMMAND_BODY.length).toBeLessThan(108000);
     expect(START_COMMAND_BODY).toMatch(/triage[\s\S]*sub-agent|dispatch[\s\S]*triage|triage[\s\S]*specialist/iu);
   });
 

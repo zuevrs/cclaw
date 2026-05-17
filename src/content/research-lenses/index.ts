@@ -3,6 +3,7 @@ import { RESEARCH_PRODUCT_PROMPT } from "./research-product.js";
 import { RESEARCH_ARCHITECTURE_PROMPT } from "./research-architecture.js";
 import { RESEARCH_HISTORY_PROMPT } from "./research-history.js";
 import { RESEARCH_SKEPTIC_PROMPT } from "./research-skeptic.js";
+import { RESEARCH_DESIGN_PROMPT } from "./research-design.js";
 import type { ResearchLensId } from "../../types.js";
 
 /**
@@ -23,7 +24,8 @@ export const RESEARCH_LENS_PROMPTS: Record<ResearchLensId, string> = {
   "research-product": RESEARCH_PRODUCT_PROMPT,
   "research-architecture": RESEARCH_ARCHITECTURE_PROMPT,
   "research-history": RESEARCH_HISTORY_PROMPT,
-  "research-skeptic": RESEARCH_SKEPTIC_PROMPT
+  "research-skeptic": RESEARCH_SKEPTIC_PROMPT,
+  "research-design": RESEARCH_DESIGN_PROMPT
 };
 
 /**
@@ -36,7 +38,8 @@ export const RESEARCH_LENS_TITLES: Record<ResearchLensId, string> = {
   "research-product": "Research — Product lens",
   "research-architecture": "Research — Architecture lens",
   "research-history": "Research — History lens",
-  "research-skeptic": "Research — Skeptic lens"
+  "research-skeptic": "Research — Skeptic lens",
+  "research-design": "Research — Design lens"
 };
 
 /**
@@ -54,7 +57,9 @@ export const RESEARCH_LENS_DESCRIPTIONS: Record<ResearchLensId, string> = {
   "research-history":
     "Memory lens — prior attempts via `.cclaw/knowledge.jsonl` (cclaw's append-only ship log) + git log; outcome signals (reverted / manual-fix / follow-up-bug counts); lessons learned; directional drift. Read-only on the project's memory.",
   "research-skeptic":
-    "Adversarial lens — failure modes (likelihood × impact); edge cases (accidental); abuse cases (intentional); hidden costs (post-ship); explicit don't-proceed triggers when severity is irreversible. May use a web-search MCP tool when available."
+    "Adversarial lens — failure modes (likelihood × impact); edge cases (accidental); abuse cases (intentional); hidden costs (post-ship); explicit don't-proceed triggers when severity is irreversible. May use a web-search MCP tool when available.",
+  "research-design":
+    "UI / UX / positioning / affordances lens (v8.76; standard+ depth only, gated on UI / design / frontend / UX topic signals). Walks the seven-dimension design-quality rubric (shared with the v8.75 plan-design specialist and the v8.70 reviewer's design-quality axis) at research framing time — grades each dimension for relevance (load-bearing / relevant / tangential / out-of-scope), surfaces existing patterns to study, anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect. Web search first-class via `user-exa` / `user-context7`. Force-toggle via `/cc research --lens=design` / `--lens=-design`."
 };
 
 export {
@@ -62,5 +67,6 @@ export {
   RESEARCH_PRODUCT_PROMPT,
   RESEARCH_ARCHITECTURE_PROMPT,
   RESEARCH_HISTORY_PROMPT,
-  RESEARCH_SKEPTIC_PROMPT
+  RESEARCH_SKEPTIC_PROMPT,
+  RESEARCH_DESIGN_PROMPT
 };

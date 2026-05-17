@@ -31,14 +31,15 @@ describe("types", () => {
     ]);
   });
 
-  it("v8.65 — RESEARCH_LENSES enumerates exactly five research-only sub-agents (engineer / product / architecture / history / skeptic) in the canonical order the orchestrator dispatches and the research.md template renders", () => {
-    expect(RESEARCH_LENSES).toHaveLength(5);
+  it("v8.65 (+v8.76) — RESEARCH_LENSES enumerates exactly six research-only sub-agents (engineer / product / architecture / history / skeptic / design) in the canonical order the orchestrator dispatches and the research.md template renders; v8.76 added `research-design` as the 6th lens, conditionally dispatched on standard+ depth when the topic touches UI / UX / design / frontend surfaces", () => {
+    expect(RESEARCH_LENSES).toHaveLength(6);
     expect(RESEARCH_LENSES).toEqual([
       "research-engineer",
       "research-product",
       "research-architecture",
       "research-history",
-      "research-skeptic"
+      "research-skeptic",
+      "research-design"
     ]);
   });
 

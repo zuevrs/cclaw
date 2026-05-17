@@ -206,31 +206,84 @@ The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides fo
 
 If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel"), the orchestrator runs the cancel runtime (move the empty research.md to \`cancelled/<slug>/\`, reset state) and ends the turn.
 
+#### Phase 1.5 — approaches gate (v8.76)
+
+Immediately after Phase 1 distillation completes and BEFORE Phase 2 dispatches any lens, the orchestrator runs the **Approaches Gate**: surface 2-3 candidate FRAMINGS of the research question to the user and ask which framing(s) the downstream lenses should carry in their dispatch envelopes. The gate is the research-mode analogue of the obra-superpowers brainstorming Phase 2-3 ("2-3 approach options before committing") and the addyosmani \`idea-refine\` Phase 1.3 Cluster + Stress-test discipline — without it, the lenses dispatch against an implicit single framing (whatever the orchestrator settled on during dialogue distillation), and downstream findings inherit that framing's blind spots.
+
+**What a framing is.** A framing is a DIFFERENT framing of the same research question — not 2-3 conclusions, not 2-3 implementation candidates (those are scoped to the engineer / product lens output). Each framing changes WHICH dimensions every lens emphasises. Worked example for the topic "add caching to the search endpoint":
+
+- **framing A** — *Caching as infra primitive.* The question is which substrate (Redis / in-memory / HTTP cache). Engineer lens leans hardest, architecture lens covers infrastructure coupling, product / skeptic / history lenses are secondary.
+- **framing B** — *Caching as search-quality lever.* The question is what we cache, how invalidation works, when to bust. Product + engineer split the load, skeptic centres on stale-data abuse cases.
+- **framing C** — *Caching as organizational gate.* The question is ownership / on-call / who pages when the cache goes stale. Product + history + skeptic lead, engineer / architecture are secondary.
+
+Each framing routes the lens dispatch differently even though the topic text is identical.
+
+**Procedure:**
+
+1. **Distil 2-3 framings** from the dialogue summary. Each framing carries an \`id\` (short stable identifier — single letter \`A\` / \`B\` / \`C\` when no semantic shortname is obvious; otherwise kebab-case slug like \`infra-primitive\` / \`search-quality\` / \`governance\`), a \`title\` (4-8 words), and a one-paragraph \`summary\` (what question this framing makes load-bearing, what gets de-emphasised, which downstream lens dispatches see the biggest shape change).
+2. **Stamp \`flow-state.json > approaches\`** as a {@link ResearchApproach}\`[]\` array (the type lives in \`src/types.ts\`). Stamp \`flow-state.json > researchState: "approaches-gate"\` (transient sub-state of Phase 1; the canonical \`lens-dispatch\` lifecycle marker fires after the gate clears).
+3. **Surface the framings to the user** in plain prose, in the user's language. Render each framing as a bulleted block with its id, title, and summary. End with the picker prompt: \`Pick one (e.g. "A" / "B") or accept "all" (every framing flows to every lens — the default).\`
+4. **Wait for the user's pick.** Accept any of:
+   - one or more single-letter ids (\`A\`, \`A B\`, \`A,B\`),
+   - a slug match against \`title\` (case-insensitive substring),
+   - \`all\` / \`every\` / \`every framing\` / \`default\` (selects every index — the canonical "all" surface) — also the default when the user says \`go\` / \`proceed\` without naming framings (the gate is non-coercive; the silent default is "all", not "stop").
+5. **Stamp \`flow-state.json > selectedApproaches\`** as the zero-based indices into \`approaches[]\` that the user selected (or every index, for "all").
+6. **Dispatch Phase 2** with the selected framings carried in every lens envelope under the new \`Framing:\` field (see Phase 2 envelope shape below).
+
+**Sub-cases:**
+
+- **Only one obvious framing emerges from the dialogue** — surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"). The user can pick the variant, accept "all" (both flow), or accept "A" (single). Never fewer than 2 framings; never more than 3.
+- **User picks a framing not on the list** — accept verbatim as a new ad-hoc framing (no validation against the surfaced set), append it as the next-index entry in \`approaches[]\`, stamp \`selectedApproaches\` to point at it, proceed.
+- **User explicitly cancels** ("stop", "never mind", "/cc-cancel") — run the cancel runtime (move the empty research.md to \`cancelled/<slug>/\`, reset state) and end the turn.
+- **User wants to revise framings mid-research** — use the existing v8.71 \`/cc research push-back <framing>\` machinery (push-back targets a claim; framings ARE claims about the research question). The push-back path treats the cited framing as the area to re-dispatch lenses against; the original \`approaches\` array is NEVER mutated (immutable for audit).
+
+**Output of the gate** flows into Phase 2 as the new \`Framing:\` field on every lens envelope (a string array — the \`title\` of every selected framing, with the \`summary\` appended on one line per framing). Lens prompts are pinned to accept a \`framing: string[]\` envelope field; the lenses grade their findings against the selected framings rather than the implicit "any framing".
+
 #### Phase 2 — parallel lens dispatch
 
-When Phase 1 completes, the orchestrator **dispatches research lenses in parallel**. The depth tier (\`triage.research_depth\`) controls the lens set: \`light\` → engineer + skeptic (2 lenses, parenthetical \`*(Skipped on light depth.)*\` marks the absent three below); \`standard\` (default) → all five; \`deep-product\` → all five plus extra probes (durability / thesis / adjacent-product) folded into product + skeptic prompts. Full depth → lens-set mapping in \`runbooks/research-depth-and-self-review.md\`.
+When Phase 1.5 (Approaches Gate) clears, the orchestrator **dispatches research lenses in parallel**. The depth tier (\`triage.research_depth\`) controls the base lens set, and a topic's design-signal status conditionally adds the v8.76 design lens:
+
+- **\`light\` → engineer + skeptic** (2 lenses). Design is NOT added even when the topic touches UI — light-depth dispatches are narrow clarifications ("which library does X?") that don't carry enough framing to ground a design pass. Parenthetical \`*(Skipped on light depth.)*\` marks the absent four below.
+- **\`standard\` (default) → engineer + product + architecture + history + skeptic** (5 lenses by default). When the orchestrator's design-signal heuristic fires (see "Design-signal detection" below), add \`research-design\` for a total of **6 lenses**.
+- **\`deep-product\` → engineer + product + architecture + history + skeptic + extra probes (durability / thesis / adjacent-product) folded into product + skeptic prompts**. When the design-signal heuristic fires, add \`research-design\` for a total of **6 lenses** + extra probes; the design lens itself folds its own deep-product subsection (Adjacent design surfaces).
+
+The **explicit user-toggle flags** override the heuristic in either direction:
+
+- \`/cc research --lens=design <topic>\` — **force-include** the design lens on \`standard\` / \`deep-product\` depth even when the heuristic missed (the user knows it's a UI topic; the orchestrator stamps the flag verbatim). Ignored on \`light\` depth with a one-line note (\`design lens not dispatched on light depth; downgraded to standard if you want it included\`).
+- \`/cc research --lens=-design <topic>\` — **force-exclude** the design lens on \`standard\` / \`deep-product\` depth even when the heuristic fired (the topic happens to mention "interface" but the user doesn't want a design pass; rare but valid).
+- Multiple lens-toggle flags are accepted (\`--lens=design --lens=-skeptic\` is a no-op on \`-skeptic\` for now — only \`design\` is force-toggleable; other lenses are gated by depth tier). Future widening (e.g. \`--lens=-product\` to skip the product lens) is v8.77+ scope.
+
+**Design-signal detection.** The orchestrator's heuristic on \`standard\` / \`deep-product\` depth fires when ANY of:
+
+- the topic text or dialogue summary names a UI / UX / design / frontend / accessibility / interface concept (e.g. \`UI\`, \`UX\`, \`design\`, \`frontend\`, \`accessibility\`, \`a11y\`, \`page\`, \`component\`, \`dialog\`, \`modal\`, \`form\`, \`button\`, \`navigation\`, \`onboarding\`, \`empty state\`, \`dashboard\`, \`landing\`, \`screen\`, \`affordance\`, \`positioning\`);
+- the topic names a known design system / UI library (\`shadcn\`, \`Radix\`, \`Material 3\`, \`Polaris\`, \`Tailwind UI\`, \`Linear\`, \`Notion\`);
+- the dialogue summary surfaces stakeholders described in user-facing terms (\`end users\`, \`customers\`, \`visitors\`, \`new signups\`) AND the topic is not a pure backend / infra / CLI / library refactor.
+
+The heuristic is **inclusive**: when in doubt, dispatch the design lens. The lens's own scope rules (gate everything against the seven design-quality dimensions; mark \`out-of-scope\` honestly) absorb false positives gracefully — a backend topic accidentally dispatched against design ends up with all seven dimensions graded \`out-of-scope\` and a one-line "Internal-scope topic; no design surface implicated." block. False negatives (UI topics that miss the heuristic and need the user to add \`--lens=design\`) are the costlier failure mode.
 
 - \`research-engineer\` — technical feasibility, stack fit, implementation paths, blockers, risks, rough effort.
 - \`research-product\` *(Skipped on light depth.)* — user / product value, who benefits, alternatives considered (always including "do nothing"), market / domain context, open product questions.
 - \`research-architecture\` *(Skipped on light depth.)* — surface impact, coupling points, boundaries crossed, scalability considerations, reusable in-repo patterns.
 - \`research-history\` *(Skipped on light depth.)* — prior attempts via \`.cclaw/knowledge.jsonl\` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift.
 - \`research-skeptic\` — failure modes, edge cases, abuse cases, hidden costs, explicit don't-proceed triggers.
+- \`research-design\` *(Skipped on light depth; conditionally added on standard / deep-product depth via the design-signal heuristic or the \`--lens=design\` / \`--lens=-design\` user-toggle flags.)* — UI / UX / positioning / affordances lens (v8.76). Walks the seven-dimension design-quality rubric (shared with the v8.75 plan-design specialist + v8.70 reviewer's design-quality axis) at research framing time — grades each dimension for relevance (\`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`), surfaces existing patterns to study (with first-class web search via \`user-exa\` / \`user-context7\`), anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect.
 
 Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\` but with the lens-specific shape):
 
 - \`Slug:\` — the research slug.
-- \`Topic:\` — the stripped task text (no \`research \` / \`--research\` prefix).
+- \`Topic:\` — the stripped task text (no \`research \` / \`--research\` prefix, no \`--lens=\` flag, no \`--light\` / \`--standard\` / \`--deep-product\` flag).
 - \`Dialogue summary:\` — the 5-15 bullets from Phase 1.
+- \`Framing:\` (v8.76) — the selected framing(s) from the Phase 1.5 Approaches Gate. A string array; each entry is \`<framing-title> — <framing-summary>\` for the framings the user picked (or every framing when the user accepted "all" / the default). Lenses grade their findings against this set rather than the implicit "any framing".
 - \`Project root:\` — absolute path.
 - \`Active flow state:\` — the sentinel triage block (lenses do not run heuristics on it).
-- \`Research depth:\` — \`triage.research_depth\` (v8.69; \`light\` / \`standard\` / \`deep-product\`); on \`deep-product\` product + skeptic fire extra probes, other lenses run identically.
+- \`Research depth:\` — \`triage.research_depth\` (v8.69; \`light\` / \`standard\` / \`deep-product\`); on \`deep-product\` product + skeptic + design fire extra probes, other lenses run identically.
 - \`Required first read:\` — the lens contract at \`.cclaw/lib/research-lenses/<lens-id>.md\`.
 
-Lenses run independently. The engineer + architecture lenses MAY dispatch \`repo-research\` on brownfield projects (the history lens reads \`.cclaw/knowledge.jsonl\` directly — that's the in-research mirror of \`learnings-research\`, and dispatching \`learnings-research\` from the history lens would be redundant). Lenses MAY use an MCP web-search tool (\`user-exa\`, \`user-context7\`, or comparable) when one is available; web search is **optional** — lenses fall back to training knowledge if no tool is wired, and stamp the fallback in their slim summary's \`Notes\` field. Research mode does NOT hard-require MCP web search.
+Lenses run independently. The engineer + architecture lenses MAY dispatch \`repo-research\` on brownfield projects (the history lens reads \`.cclaw/knowledge.jsonl\` directly — that's the in-research mirror of \`learnings-research\`, and dispatching \`learnings-research\` from the history lens would be redundant; the design lens does NOT dispatch \`repo-research\` — its surface is design patterns external to or layered atop the repo). Lenses MAY use an MCP web-search tool (\`user-exa\`, \`user-context7\`, or comparable) when one is available; web search is **optional** for engineer / product / architecture / skeptic, **first-class** for design (the design lens treats every pattern claim as needing a URL citation or \`(general pattern; training knowledge)\` tag) — lenses fall back to training knowledge if no tool is wired, and stamp the fallback in their slim summary's \`Notes\` field. Research mode does NOT hard-require MCP web search.
 
-Each lens returns a structured findings block (the markdown payload that becomes the \`## <Lens> lens\` section of \`research.md\`) and a slim summary (≤8 lines). The orchestrator collects all five before proceeding.
+Each lens returns a structured findings block (the markdown payload that becomes the \`## <Lens> lens\` section of \`research.md\`) and a slim summary (≤8 lines). The orchestrator collects all dispatched lenses before proceeding (5 default on standard; 6 when design is added; 2 on light; 5+ probes on deep-product without design; 6+ probes on deep-product with design).
 
-If any lens returns \`Confidence: low\` AND the dialogue summary was thin, the orchestrator MAY re-dispatch ONLY that lens once with a richer envelope (extra bullets from the dialogue). Cap: 1 re-dispatch per lens, total cap 2 re-dispatches across all five lenses. After the cap, proceed with partial findings — the synthesis section will surface the thin-coverage warning.
+If any lens returns \`Confidence: low\` AND the dialogue summary was thin, the orchestrator MAY re-dispatch ONLY that lens once with a richer envelope (extra bullets from the dialogue, the cited framing). Cap: 1 re-dispatch per lens, total cap 2 re-dispatches across the dispatched set. After the cap, proceed with partial findings — the synthesis section will surface the thin-coverage warning.
 
 #### Phase 3 — synthesis (main-context)
 
@@ -267,10 +320,13 @@ Sub-cases:
 - **Argument starts with \`research \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — flags are ignored (research's path is fixed at the multi-lens flow; ceremonyMode doesn't apply). One-line note: \`research mode ignores ceremonyMode flags\`, then proceed.
 - **Research-mode + \`--mode=auto\` / \`--mode=step\`** — toggle dropped with one-line note (research has no stages to chain; the run mode does not apply).
 - **Research-mode + multiple depth flags** (\`--light --deep-product\`) — last-wins with one-line note (\`mutually exclusive depth flags; using --deep-product\`), then proceed.
+- **Research-mode + \`--lens=design\` flag on \`light\` depth** — design lens is structurally not dispatched on light depth (narrow clarifications). Drop the flag with a one-line note (\`design lens not dispatched on light depth; rerun with --standard or --deep-product to include it\`), then proceed with the light-depth 2-lens set.
+- **Research-mode + \`--lens=design\` AND \`--lens=-design\` both present** — last-wins with a one-line note (\`mutually exclusive --lens=design / --lens=-design flags; using <last>\`), then proceed.
+- **Research-mode + unknown \`--lens=<name>\` flag** (e.g. \`--lens=experimental\`) — drop the flag with a one-line note (\`unknown --lens=<name> flag; only --lens=design / --lens=-design accepted in v8.76\`), then proceed with the heuristic-determined lens set.
 - **User cancels mid-dialogue** — run the cancel runtime, end the turn.
-- **All five lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
+- **All dispatched lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
 
-The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The eight flow specialists (triage, architect, builder, plan-critic, plan-design, qa-runner, reviewer, critic) are untouched.
+The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The v8.76 roster is **six** lenses (engineer / product / architecture / history / skeptic / design). The eight flow specialists (triage, architect, builder, plan-critic, plan-design, qa-runner, reviewer, critic) are untouched.
 
 ## Triage — dispatch the \`triage\` sub-agent (fresh task flows only — research-mode and extend-mode forks above bypass this hop)
 

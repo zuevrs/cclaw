@@ -253,9 +253,9 @@ describe("v8.69 — RESEARCH_TEMPLATE update (Sources / Self-review / depth)", (
     expect(RESEARCH_TEMPLATE_BODY).toMatch(/^research_depth: standard/mu);
   });
 
-  it("RESEARCH_TEMPLATE has `### Sources` subsections in EVERY per-lens section (5 lenses)", () => {
+  it("RESEARCH_TEMPLATE has `### Sources` subsections in EVERY per-lens section (5 default lenses + v8.76 design lens = 6 total when the design section ships in the template)", () => {
     const sources = RESEARCH_TEMPLATE_BODY.match(/^### Sources\b/gmu);
-    expect(sources, "expected one `### Sources` subsection per lens (5 total)").toBeTruthy();
+    expect(sources, "expected one `### Sources` subsection per lens (5+ total)").toBeTruthy();
     expect(sources!.length).toBeGreaterThanOrEqual(5);
   });
 

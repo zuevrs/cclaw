@@ -1,6 +1,78 @@
 # Changelog
 
 
+## 8.76.0 — Research-design-lens + approaches-gate
+
+### Why
+
+v8.65 stood up the multi-lens research orchestrator (engineer / product / architecture / history / skeptic — five lenses dispatched in parallel after the discovery dialogue). v8.69-v8.71 hardened it (depth tiers, self-review, push-back). v8.75 added the v8.70 reviewer's `design-quality` axis as a pre-implementation specialist (`plan-design`) and lifted the seven-dimension design-quality rubric into a shared TypeScript const so the two surfaces stay in lock-step. After v8.75, UI / UX / positioning / affordances coverage was airtight from plan-time forward — but the research phase still had no UI lens. A `/cc research <topic>` flow about a landing page, a settings screen, or a command-palette pattern dispatched against engineer / product / architecture / history / skeptic — none of which is calibrated for the design space. By the time the user reached plan-design + reviewer, the architect had already pinned design bets without dedicated research-time input.
+
+Two adjacent gaps surfaced in the same v8.65-v8.71 lineage:
+
+1. **No design lens at research time.** Engineer covers tech feasibility, product covers value, architecture covers system fit, history covers prior attempts, skeptic covers failure modes — but none of them grades the topic against the design-quality rubric. The post-build reviewer's `design-quality` axis and pre-implementation `plan-design` find UI gaps after they've been baked in; surfacing the dimensions implicated by the topic BEFORE the architect picks an approach unlocks the same multi-lens leverage for design that v8.65 unlocked for the other dimensions.
+2. **Single implicit framing dispatched all five lenses.** v8.65 distilled the discovery dialogue into a single summary and dispatched all five lenses against it. The lenses dutifully graded their dimensions, but every grade inherited the orchestrator's implicit framing of the question. Reference projects (obra-superpowers brainstorming Phase 2-3 "2-3 approach options before committing"; addyosmani `idea-refine` Phase 1.3 Cluster + Stress-test) converge on the same answer: surface multiple framings BEFORE the lenses fire so the user can pick which framing(s) the downstream dispatch carries. Same topic, different framings → different load-bearing dimensions per lens.
+
+The fix: fuse the two gaps into one release. Add a 6th research lens (`research-design`) for UI / UX / positioning / affordances topics, sharing the v8.75 seven-dimension rubric (single source of truth at `src/content/design-quality-rubric.ts`). Insert an Approaches Gate (Phase 1.5) between the discovery dialogue and lens dispatch — surface 2-3 candidate framings, let the user pick (or accept "all" — the default; every framing flows to every lens). The selected framings carry forward into every lens envelope as a new `Framing:` field; lenses grade their findings against the selected set rather than the implicit "any framing".
+
+The design lens dispatches conditionally on `standard+` depth when the orchestrator's design-signal heuristic fires (topic mentions UI / UX / design / frontend / accessibility / a11y / page / component / dialog / etc.; or a known design system / UI library; or user-facing stakeholders surfaced in the dialogue). User-toggle flags override the heuristic in either direction (`/cc research --lens=design <topic>` force-includes; `--lens=-design` force-excludes). Light-depth (2-lens clarification) never dispatches the design lens — narrow clarifications don't carry enough framing to ground a design pass.
+
+### What changed
+
+**Deliverable 1 — Research-design lens (`src/content/research-lenses/research-design.ts`, new file).**
+
+- New 6th research lens, sharing the v8.75 seven-dimension rubric (visual hierarchy / type system consistency / color system / spacing rhythm / interaction affordances / accessibility (WCAG AA) / responsive behavior) and the canonical AI-slop signal set. Single source of truth at `src/content/design-quality-rubric.ts`; the design lens, the v8.75 plan-design specialist, and the v8.70 reviewer's design-quality axis all render the rubric via the same `renderDesignQualityRubricTable()` + `renderDesignQualityAiSlopChecklist()` helpers.
+- Lens scope: four core sections — **Design dimensions implicated** (grade each of the seven dimensions for relevance, not quality: `load-bearing` / `relevant` / `tangential` / `out-of-scope`), **Existing patterns to study** (2-5 patterns / products / design systems with URL citations or `(general pattern; training knowledge)` tags), **Anti-patterns to avoid** (including canonical AI-slop signals from the shared const), **Open design questions** (2-5 questions the follow-up architect must answer before picking a plan). On `deep-product` depth, the lens additionally surfaces 1-3 **Adjacent design surfaces** — nearby products that solve a similar problem with a different design shape, surfaced to prevent the team from converging on the first pattern that maps.
+- **Web search is first-class** for this lens (the design space is one of the highest-churn surfaces — shadcn, Radix, Material 3 evolve constantly). Dispatch `user-exa` / `user-context7` by default for any topic touching real-world products / design systems; fall back to training knowledge with a `Notes:` tag when no tool is wired.
+- Skipped on `light` depth (narrow clarifications don't carry enough framing); dispatched on `standard+` depth when the design-signal heuristic fires or the user passes `--lens=design`; suppressed on `standard+` depth when the user passes `--lens=-design`.
+
+**Deliverable 2 — Approaches Gate (`src/content/start-command.ts` Phase 1.5).**
+
+- New phase inserted between Phase 1 (open-ended discovery dialogue) and Phase 2 (parallel lens dispatch). The orchestrator distils 2-3 candidate framings from the dialogue summary — each framing is a DIFFERENT framing of the same research question (NOT 2-3 implementation candidates or 2-3 conclusions; those are scoped to the engineer / product lens outputs). Each framing changes WHICH dimensions every lens emphasises.
+- Worked example for "add caching to the search endpoint": framing A (caching as infra primitive — which substrate); framing B (caching as search-quality lever — what we cache, how invalidation works); framing C (caching as organizational gate — ownership / on-call). Same topic text, three different lens-dispatch shapes.
+- User picker (free-form prose, in the user's language): single id (`A`), multiple ids (`A B` / `A,B`), substring match on framing title, or `all` / `every` / `every framing` / `default` (selects every index — the canonical "all" surface; also the silent default when the user says "go" / "proceed" without naming framings). Reframings mid-research route through the existing v8.71 `/cc research push-back` machinery; the original `approaches[]` array is immutable for audit.
+- Output flows into Phase 2 as a new `Framing:` envelope field carrying the title + summary of every selected framing (a string array). Every lens prompt accepts and grades against this set.
+
+**Deliverable 3 — RESEARCH_LENSES roster grows 5 → 6 (`src/types.ts`).**
+
+- `RESEARCH_LENSES` const adds `"research-design"` as the 6th lens, in canonical order. JSDoc updated; back-compat unchanged (lenses are NOT in `SPECIALISTS`, not in `RESEARCH_AGENT_IDS`, never become `lastSpecialist`).
+- `ResearchApproach` interface added — the shape of one Approaches Gate framing (`id` / `title` / `summary`). Mirrors the everyinc-compound `ce-brainstorm` Phase 1.2 + obra-superpowers brainstorming Phase 2-3 framing rosters.
+- `FlowStateV82.approaches?: ResearchApproach[]` and `FlowStateV82.selectedApproaches?: number[]` added — research-mode flows only; pre-v8.76 state files validate unchanged. Validators bounds-check `selectedApproaches[]` indices against `approaches.length` when both fields are present.
+
+**Deliverable 4 — Orchestrator Phase 2 dispatch (`src/content/start-command.ts`).**
+
+- Phase 2 prose rewritten to cover the depth → lens-set mapping (light = 2; standard = 5 by default, 6 when the design lens fires; deep-product = 5 + extra probes by default, 6 + extra probes when design fires) and the new `Framing:` envelope field. The design-signal detection heuristic is documented (UI / UX / design / frontend / accessibility / a11y vocabulary + known design systems + user-facing stakeholders).
+- `--lens=design` and `--lens=-design` user-toggle flags accepted on the `/cc research <topic>` argument. Mutual exclusion is last-wins with a one-line note; light-depth + `--lens=design` is a flag-drop with a one-line note ("design lens not dispatched on light depth"). Unknown `--lens=<name>` flags drop silently with a one-line note (future-proofs for v8.77+ widening).
+- Sub-cases enumerated: `--lens=design` + `--lens=-design` last-wins; light + `--lens=design` flag drop; unknown `--lens=<name>` flag drop.
+
+**Deliverable 5 — RESEARCH_TEMPLATE update (`src/content/artifact-templates.ts`).**
+
+- New `## Framings considered` section between `## Discovery dialogue summary` and the per-lens sections. Renders as a 4-column table (id / title / summary / selected) mirroring `flow-state.json > approaches` and `selectedApproaches` verbatim. Append-only / immutable for audit; the canonical "all" case ships every framing with `✅` in the selected column.
+- New `## research-design — Design dimensions` section between `## Skeptic lens` and `## Synthesis`. Renders the lens's findings block: seven graded dimensions, existing patterns, adjacent surfaces (deep-product depth only), anti-patterns, open design questions, sources. Section is OMITTED entirely from research.md when the design lens did not dispatch (light depth, or topic missed the design-signal heuristic and user did not pass `--lens=design`); the absence is auditable from the frontmatter `lenses` list.
+- Frontmatter `lenses: [engineer, product, architecture, history, skeptic, design]` (was 5-entry on v8.65-v8.75).
+
+**Deliverable 6 — README update (`README.md`).**
+
+- "What you get" block in the README lists the 6-lens roster + the v8.76 Approaches Gate. Quick-start example for `/cc research --lens=design <topic>` added.
+
+**Deliverable 7 — Tests (`tests/unit/v876-research-design-approaches.test.ts`, new file).**
+
+- 8 AC blocks pinning the v8.76 invariants: RESEARCH_LENSES roster shape (6 entries; `research-design` is 6th; existing lenses reference it as a sibling); research-design prompt body discipline (rubric integration, AI-slop checklist, four core sections, relevance grades, web-search first-class, light-depth skip); Approaches Gate orchestrator prose (`#### Phase 1.5 — approaches gate` section, 2-3 framings cap, user pick / "all" default, state-stamp fields, obra + addyosmani reference patterns, worked example, push-back wiring); Phase 2 lens dispatch (design lens named in enumeration, `--lens=design` / `--lens=-design` flags, design-signal heuristic, light-depth skip, `Framing:` envelope field, 5 → 6 lens count, mutex sub-cases); RESEARCH_TEMPLATE updates (Framings considered section, research-design section, 6-lens frontmatter, conditional section); flow-state validators (approaches[] + selectedApproaches[] accepted, bounds-checked, pre-v8.76 back-compat); research-design NOT in SPECIALISTS / RESEARCH_AGENT_IDS; version + CHANGELOG bump.
+- Existing tests touched: types.test.ts, research-lenses.test.ts, v865-powerful-research.test.ts, v858-router-research.test.ts, v869-research-powerful.test.ts (5-lens references updated to 6); v822-orchestrator-slim.test.ts, v831-path-aware-trimming.test.ts, v861-triage-subagent.test.ts (body budget caps raised to absorb the v8.76 prose — Approaches Gate + Phase 2 rewrite ~10k chars / ~50 lines body-only; no new runbook).
+
+### Compatibility
+
+- **Pre-v8.76 state files** (`approaches[]` and `selectedApproaches[]` absent) validate unchanged on read. New writes stamp the fields at the Approaches Gate; legacy resume paths are no-ops.
+- **Existing 5-lens research flows** continue to validate (the new `research-design` lens is additive). Pre-v8.76 flows on disk under `flows/shipped/` ship with their original 5-lens artifacts; the readers tolerate absence of the new sections (the conditional `## research-design — Design dimensions` section + the `## Framings considered` section are non-mandatory for readers).
+- **Test budget lifts**: body-only char budget raised from 96000 → 108000; line budget raised from 595 → 645; combined body+runbooks budget raised from 235000 → 245000. The v8.76 prose is fully in the body (no new runbook).
+
+### Reference patterns
+
+- `obra-superpowers/skills/brainstorming/SKILL.md` Phase 2-3 (2-3 approach options before committing) — the canonical reference for the Approaches Gate.
+- `addyosmani-skills/skills/idea-refine/SKILL.md` Phase 1.3 (Cluster + Stress-test) — the canonical reference for "stress-test variants" when the dialogue only surfaces one obvious framing.
+- `everyinc-compound/plugins/compound-engineering/agents/ce-design-lens-reviewer.agent.md` — the canonical reference for the dimension-graded design lens.
+- v8.75's `src/content/design-quality-rubric.ts` — single source of truth for the seven dimensions + AI-slop signals (the lens, plan-design, and reviewer all render via the same helpers).
+
+
 ## 8.75.0 — Plan-design-lens — front-loaded design audit
 
 ### Why
