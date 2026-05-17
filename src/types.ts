@@ -89,8 +89,28 @@ export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
  *   seven-dimension rubric shared with the reviewer's `design-quality`
  *   axis; below-6 grades become `PD-N` findings appended to plan.md.
  */
+/**
+ * v8.77: specialist count grows 8 → 9 with the addition of `investigator`,
+ * a read-only diagnostic specialist that runs on bug-shaped tasks
+ * (triage.taskShape == "debug") BEFORE the architect. The investigator
+ * dispatches three parallel hypothesis lanes (cause-code / cause-config
+ * / cause-measurement) and writes an `investigation.md` artifact with a
+ * synthesised root-cause hypothesis plus a next-step recommendation
+ * (direct-fix / needs-plan / more-investigation / not-a-bug). The
+ * orchestrator branches on the recommendation: `direct-fix` skips
+ * architect and goes straight to builder (with `priorInvestigation` on
+ * the envelope so the builder reads investigation.md as a plan
+ * substitute); `needs-plan` routes to architect with `priorInvestigation`
+ * so the architect frames the fix at design level around the cited root
+ * cause; `more-investigation` re-dispatches investigator with a sharper
+ * probe; `not-a-bug` surfaces a reframe to the user. The investigator is
+ * read-only — no code edits, no plan writing — so the SPECIALISTS roster
+ * grows only by one and downstream stage routing for `build` / `qa` /
+ * `review` / `critic` / `ship` is unchanged.
+ */
 export const SPECIALISTS = [
   "triage",
+  "investigator",
   "architect",
   "builder",
   "plan-critic",
@@ -100,6 +120,123 @@ export const SPECIALISTS = [
   "critic"
 ] as const;
 export type SpecialistId = (typeof SPECIALISTS)[number];
+
+/**
+ * v8.77: task shape dimension on `TriageDecision`. Distinguishes the
+ * three canonical task shapes the triage sub-agent classifies into:
+ *
+ * - `build` (default; pre-v8.77 behaviour) — the user wants to add /
+ *   change / refactor / extend production code. Triage routes through
+ *   the existing pipeline (plan → build → qa? → review → critic →
+ *   ship). All existing specialists fire under their existing gates.
+ * - `debug` (v8.77) — the user is investigating a regression, error,
+ *   crash, broken behaviour, or unexpected symptom on EXISTING shipped
+ *   code. Triage routes through the new investigator specialist BEFORE
+ *   architect; the investigator's `next-step recommendation` then drives
+ *   routing (direct-fix → builder; needs-plan → architect; more-
+ *   investigation → re-investigator; not-a-bug → user reframe).
+ *   Detection: bug-shape keywords (`regression` / `error` / `broken` /
+ *   `failing` / `wrong` / `incorrect` / `slow` / `crash` / `bug` /
+ *   `fix`) + repo-anchored evidence (file:line ref, commit SHA, log
+ *   excerpt, stack trace) BOTH present — single keyword alone without
+ *   repo-anchored evidence stays `build`.
+ * - `research` (v8.77; record-keeping only) — the user is exploring
+ *   BEFORE committing to a build. The `/cc research <topic>` entry
+ *   point bypasses triage (the orchestrator's Detect-hop research-mode
+ *   fork stamps the sentinel triage block), so triage itself never
+ *   emits `research` on a standard `/cc <task>` dispatch. The value is
+ *   reserved on the TaskShape enum so downstream readers can branch on
+ *   the shape verbatim from the sentinel block.
+ *
+ * `taskShape` is **orthogonal** to {@link RoutingClass} (`trivial` /
+ * `small-medium` / `large-risky`) — a `debug` task can be any
+ * complexity tier; a `build` task can be any complexity tier. The two
+ * fields combine on dispatch: triage's complexity field still drives
+ * `ceremonyMode` + `path` selection; `taskShape == "debug"` only
+ * inserts the investigator hop BEFORE the existing plan stage.
+ *
+ * Pre-v8.77 state files lack this field; readers MUST default to
+ * `"build"` on absent (the historical single-shape behaviour). Immutable
+ * for the flow's lifetime — to change shape, the user invokes
+ * `/cc-cancel` and starts a fresh `/cc`.
+ */
+export const TASK_SHAPES = ["build", "debug", "research"] as const;
+export type TaskShape = (typeof TASK_SHAPES)[number];
+
+export const DEFAULT_TASK_SHAPE: TaskShape = "build";
+
+/**
+ * v8.77: next-step recommendation the investigator emits in its slim
+ * summary. Drives the orchestrator's post-investigator routing:
+ *
+ * - `direct-fix` — the root cause is trivial (typo / null-guard /
+ *   off-by-one / obvious fix on a named file:line). Skip architect and
+ *   dispatch builder directly with `priorInvestigation` on the envelope
+ *   so the builder reads `investigation.md` as a plan substitute,
+ *   writes a `## Fix scope` block, and commits with a
+ *   `fix(<scope>): ...` prefix.
+ * - `needs-plan` — the root cause is non-trivial (architectural
+ *   smell, cross-cutting concern, design decision implied by the fix,
+ *   multiple affected files / surfaces). Dispatch architect with
+ *   `priorInvestigation` on the envelope so the architect's Frame
+ *   becomes "given root cause X from investigation, frame the fix at
+ *   design level" and the rest of the strict plan workflow continues
+ *   normally.
+ * - `more-investigation` — the three hypothesis lanes converged on
+ *   "insufficient evidence" / all returned `Confidence: low`. Re-
+ *   dispatch the investigator with the cited probe (the synthesis's
+ *   `Next step recommendation` carries the probe verbatim). Cap: 2
+ *   investigator dispatches per slug; the second dispatch with
+ *   `more-investigation` again triggers stop-and-report.
+ * - `not-a-bug` — the investigation concluded the reported symptom is
+ *   expected behaviour (working-as-designed, user misread the docs,
+ *   environment / config issue not in the project's scope, third-party
+ *   library quirk). Orchestrator surfaces the reframe to the user
+ *   (verbatim from `investigation.md > ## Next step recommendation`)
+ *   and ends the turn; user re-invokes `/cc` with a clarified task if
+ *   they disagree with the reframe.
+ */
+export const INVESTIGATOR_NEXT_STEPS = [
+  "direct-fix",
+  "needs-plan",
+  "more-investigation",
+  "not-a-bug"
+] as const;
+export type InvestigatorNextStep = (typeof INVESTIGATOR_NEXT_STEPS)[number];
+
+/**
+ * v8.77: identifiers for the three parallel hypothesis lanes the
+ * investigator dispatches on every bug-shaped slug. Each lane runs
+ * independently (read-only on the repo + the project's verification
+ * commands) and returns a structured findings block (hypothesis
+ * statement, evidence collected, confidence 0-10, recommended next
+ * probe). The orchestrator collects all three before composing the
+ * synthesis pass.
+ *
+ * - `cause-code` — code-path / regression-bisect / dependency-analysis
+ *   lane. Walks the touched files, runs `git log` / `git bisect` when
+ *   the symptom is "it worked before", inspects dependencies. Most-
+ *   common-cause lane on regression-style bugs.
+ * - `cause-config` — config / env / feature-flag / version-mismatch
+ *   lane. Walks `.env` / config files / feature-flag manifests / lock
+ *   files / runtime version markers. Most-common-cause lane on
+ *   "works locally but not in prod" / "works on my machine" bugs.
+ * - `cause-measurement` — observation-bias / instrumentation-gap /
+ *   test-flakiness lane. Walks the test runner output, instrumentation
+ *   coverage, error reporting wiring. Most-common-cause lane on
+ *   "intermittent failure" / "test passes locally, fails in CI" bugs.
+ *
+ * The three lanes are NOT in {@link SPECIALISTS} because they are
+ * structurally sub-dispatches of the investigator specialist — the
+ * investigator owns the lane fan-out + synthesis. Downstream code
+ * branches on `investigator` slim-summary fields, not on lane ids.
+ */
+export const INVESTIGATOR_LANES = [
+  "cause-code",
+  "cause-config",
+  "cause-measurement"
+] as const;
+export type InvestigatorLaneId = (typeof INVESTIGATOR_LANES)[number];
 
 /**
  * Pre-v8.62 specialist ids that no longer exist. Kept as a type-level
@@ -1415,6 +1552,36 @@ export interface TriageDecision {
    * change tier).
    */
   research_depth?: ResearchDepth;
+  /**
+   * v8.77 — task shape dimension. `"build"` (default; pre-v8.77 behaviour;
+   * the user wants to add / change / refactor / extend code), `"debug"`
+   * (the user is investigating a regression / error / broken behaviour
+   * on EXISTING shipped code — triggers the investigator hop BEFORE
+   * architect), or `"research"` (reserved sentinel for `/cc research`
+   * flows; triage itself never emits this value on a standard `/cc
+   * <task>` dispatch — the research-mode fork bypasses triage entirely).
+   *
+   * **Orthogonal to {@link RoutingClass}.** A `debug` task can be
+   * trivial / small-medium / large-risky; complexity drives
+   * `ceremonyMode` + `path`, while `taskShape` only inserts the
+   * investigator hop ahead of architect. The two fields combine on
+   * dispatch.
+   *
+   * **Detection** (triage sub-agent): bug-shape keywords (`regression`
+   * / `error` / `broken` / `failing` / `wrong` / `incorrect` / `slow`
+   * / `crash` / `bug` / `fix` / `hotfix`) PLUS repo-anchored evidence
+   * (file:line ref, commit SHA, log excerpt, stack trace) BOTH present
+   * → `debug`. Single keyword alone without anchored evidence stays
+   * `build` (refactor / "fix the README" / aspirational "make it
+   * better" prompts are NOT bug-shaped). Existing complexity heuristic
+   * is unchanged — taskShape is computed independently.
+   *
+   * Pre-v8.77 state files lack this field; readers MUST default to
+   * {@link DEFAULT_TASK_SHAPE} (`"build"`) on absent. Immutable for
+   * the flow's lifetime — to change the shape, the user invokes
+   * `/cc-cancel` and starts a fresh `/cc` with a clearer prompt.
+   */
+  taskShape?: TaskShape;
 }
 
 export interface CliContext {

@@ -9,6 +9,7 @@ import {
   RUN_MODES,
   SPECIALISTS,
   SURFACES,
+  TASK_SHAPES,
   type AcceptanceCriterionState,
   type BuildProfile,
   type CeremonyMode,
@@ -30,6 +31,7 @@ import {
   type SliceState,
   type SpecialistId,
   type Surface,
+  type TaskShape,
   type TriageDecision
 } from "./types.js";
 
@@ -82,6 +84,17 @@ function isResearchState(value: unknown): value is ResearchState {
 
 function isResearchLens(value: unknown): value is ResearchLensId {
   return typeof value === "string" && (RESEARCH_LENSES as readonly string[]).includes(value);
+}
+
+/**
+ * v8.77: narrow check for the {@link TaskShape} enum. Used by
+ * {@link assertTriageOrNull} to validate `triage.taskShape` on read.
+ * Pre-v8.77 state files lack the field; readers default to `"build"`
+ * via the optional type signature (the validator only runs when the
+ * field is present).
+ */
+function isTaskShape(value: unknown): value is TaskShape {
+  return typeof value === "string" && (TASK_SHAPES as readonly string[]).includes(value);
 }
 
 const RESEARCH_REVISION_KINDS = ["revise", "push-back", "accept"] as const;
@@ -862,6 +875,13 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
         throw new Error(`Invalid triage.surfaces entry: ${String(entry)}`);
       }
     }
+  }
+  // v8.77: orthogonal task shape. Pre-v8.77 state files lack the field;
+  // readers default to `"build"` (validator only runs when present).
+  if (triage.taskShape !== undefined && !isTaskShape(triage.taskShape)) {
+    throw new Error(
+      `Invalid triage.taskShape: ${String(triage.taskShape)} (expected "build" | "debug" | "research" | absent)`
+    );
   }
 }
 

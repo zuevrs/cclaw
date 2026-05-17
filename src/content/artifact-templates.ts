@@ -21,7 +21,21 @@ export interface ArtifactTemplate {
      * with research-specific frontmatter (mode / topic / generated_at)
      * and no AC table / topology / traceability.
      */
-    | "research";
+    | "research"
+    /**
+     * `investigation.md` template (v8.77 debug-branch). Written by
+     * the `investigator` specialist on every bug-shaped flow
+     * (`triage.taskShape == "debug"`) at the investigator hop —
+     * BEFORE the architect runs (and skipping the architect entirely
+     * when the synthesis recommends `direct-fix`). Three per-lane
+     * sections (cause-code / cause-config / cause-measurement) plus
+     * synthesis (Root cause / Convergence-divergence / Next step
+     * recommendation) and a conditional Fix scope section authored
+     * only on the direct-fix path (which the builder reads as a plan
+     * substitute). Single-shot per dispatch (re-runs on the
+     * `more-investigation` re-dispatch overwrite the file).
+     */
+    | "investigation";
   fileName: string;
   description: string;
   body: string;
@@ -1638,6 +1652,154 @@ _(v8.71 — append-only audit trail of \`/cc research revise <area>\` / \`/cc re
 | _<iso-8601>_ | _<revise \\| push-back \\| accept>_ | _<verbatim user arg, or \`—\` for accept>_ | _<comma-separated lens ids, or \`—\` for accept>_ | _<one-sentence description of what concretely changed in research.md, or \`User accepted research as final.\` on the accept row>_ |
 `;
 
+const INVESTIGATION_TEMPLATE = `---
+slug: SLUG-PLACEHOLDER
+stage: plan
+specialist: investigator
+task_shape: debug
+lane_count: 3
+dispatched_at: DISPATCHED-AT-PLACEHOLDER
+iteration: 0
+verdict: <direct-fix | needs-plan | more-investigation | not-a-bug>
+confidence: <high | medium | low>
+---
+
+# SLUG-PLACEHOLDER — investigation
+
+> v8.77 debug-branch artifact. Authored by the \`investigator\` specialist BEFORE the architect runs (and skipping the architect entirely when the synthesis recommends \`direct-fix\`). Three per-lane sections + synthesis + conditional Fix scope. Single-shot — re-dispatch on \`more-investigation\` overwrites this file.
+
+## Symptom
+
+_(Phase 0 step 5. The user's bug report verbatim + the investigator's one-sentence restatement of "what is observed today vs. what should be true". Cite the repo-anchored evidence the triage flagged (file:line, commit SHA, log excerpt, stack trace) verbatim.)_
+
+**User's bug report (verbatim):**
+
+> _<paste the user's original \`/cc\` argument here, in full, in their language>_
+
+**One-sentence restatement:**
+
+_<observed today vs. what should be true; one short sentence>_
+
+**Repo-anchored evidence cited by triage:**
+
+- _<evidence item 1 — file:line or commit SHA or log line; verbatim>_
+- _<evidence item 2 — same shape>_
+
+## Investigation lanes
+
+_(Phase 1. All three lanes always run; a lane that finds nothing returns "no signal" with confidence 0 and is NOT omitted. The discipline is the contract — see \`investigation-discipline.md\`.)_
+
+### Lane: cause-code
+
+**Hypothesis (one short sentence):**
+
+_<WHAT this lane suspects is wrong with the code path. Avoid hedging — "X is wrong because Y" or explicitly "no code-path signal pointing at the symptom".>_
+
+**Evidence collected:**
+
+- _<evidence item 1 with file:line / log excerpt / command output / commit SHA>_
+- _<evidence item 2>_
+- _<as many as the lane found; if 0, write the literal string "no evidence collected">_
+
+**Counter-evidence (against the hypothesis):**
+
+- _<things that would NOT be true if this hypothesis were the root cause; if none, write "no counter-evidence found">_
+
+**Confidence (0-10):** _<integer 0-10>_
+
+**Recommended next probe:** _<single next read / run / command that would maximally collapse the remaining uncertainty for this lane; if confidence == 10, write "none — root cause confirmed">_
+
+### Lane: cause-config
+
+**Hypothesis (one short sentence):**
+
+_<WHAT this lane suspects is wrong with config / env / feature-flag / version drift. Avoid hedging — "X is wrong because Y" or explicitly "no config signal pointing at the symptom".>_
+
+**Evidence collected:**
+
+- _<evidence item 1 with file:line / env-var value / lock-file snippet / feature-flag manifest>_
+- _<evidence item 2>_
+- _<as many as the lane found; if 0, write "no evidence collected">_
+
+**Counter-evidence (against the hypothesis):**
+
+- _<things that would NOT be true if this hypothesis were the root cause; if none, write "no counter-evidence found">_
+
+**Confidence (0-10):** _<integer 0-10>_
+
+**Recommended next probe:** _<single next read / run / command for this lane>_
+
+### Lane: cause-measurement
+
+**Hypothesis (one short sentence):**
+
+_<WHAT this lane suspects is wrong with observation / instrumentation / test framework / error reporting. Avoid hedging — "X is wrong because Y" or explicitly "no measurement signal pointing at the symptom".>_
+
+**Evidence collected:**
+
+- _<evidence item 1 with test runner output / log gap / instrumentation snippet>_
+- _<evidence item 2>_
+- _<as many as the lane found; if 0, write "no evidence collected">_
+
+**Counter-evidence (against the hypothesis):**
+
+- _<things that would NOT be true if this hypothesis were the root cause; if none, write "no counter-evidence found">_
+
+**Confidence (0-10):** _<integer 0-10>_
+
+**Recommended next probe:** _<single next read / run / command for this lane>_
+
+## Root cause (working hypothesis)
+
+_(Phase 2 step 1. A 2-5 sentence prose paragraph naming the single most-likely root cause. Cite the lane(s) whose evidence supports it. Cite the lane(s) whose evidence does NOT support it (and why the synthesis discounts those). When two lanes converged on the same mechanism, name the convergence explicitly. When the lanes diverged and the strongest lane's confidence is ≤5, this paragraph explicitly states "insufficient evidence for a single root cause; recommend \`more-investigation\`".)_
+
+_<2-5 sentence prose paragraph here>_
+
+## Convergence / divergence notes
+
+_(Phase 2 step 2. Where the three lanes pointed in the same direction (convergence is a strong signal) and where they pointed apart (divergence is a signal for a probe in the apart-direction). 2-5 bullets total.)_
+
+- _<convergence bullet — e.g. "cause-code + cause-measurement both flag the new commit \`abc1234\` as the inflection point; the new commit removed the log line that would have caught the regression in CI">_
+- _<divergence bullet — e.g. "cause-config returned no signal (env vars match staging); cause-code is the lane carrying the load">_
+
+## Next step recommendation
+
+_(Phase 2 step 3. EXACTLY ONE of the four canonical values below, plus a one-paragraph rationale. The orchestrator branches on this verbatim.)_
+
+**Recommendation:** _<direct-fix | needs-plan | more-investigation | not-a-bug>_
+
+**Rationale:**
+
+_<one-paragraph rationale that the next specialist (builder for direct-fix; architect for needs-plan) or the user (for not-a-bug) reads as the handoff context. On \`more-investigation\`, the paragraph ends with the verbatim probe the next investigator dispatch should run.>_
+
+## Fix scope
+
+_(ONLY authored when \`Recommended: direct-fix\`. The builder reads this section as a plan substitute — no \`plan.md\` is authored on the direct-fix path. The section is short — 4-8 bullets — naming the exact file:line(s) to edit, the one-sentence change description, the expected test that proves the fix, any non-functional constraint, and the suggested \`fix(<scope>): <one-line subject>\` commit message subject. Omit this section entirely on \`needs-plan\` / \`more-investigation\` / \`not-a-bug\`.)_
+
+- **File:line(s) to edit:** _<absolute or repo-relative path:line>_
+- **Change description (one sentence):** _<what to change; example: "replace \`if (user)\` with \`if (user !== null && user !== undefined)\` to guard the empty-object case">_
+- **Expected test (file path + test name):** _<path/to/test.ts — \`<test name>\`; if the test does not yet exist, write the literal "new test" so the builder knows to write RED first>_
+- **Non-functional constraints to preserve:** _<perf / a11y / wire-format constraints the fix must NOT break; "none" when the fix is purely defensive>_
+- **Suggested commit subject:** _<\`fix(<scope>): <one-line subject>\`>_
+
+## Summary
+
+_(Standard three-section block per \`summary-format.md\`.)_
+
+### Changes made
+
+- Wrote \`.cclaw/flows/<slug>/investigation.md\`.
+- _<no source / production / test changes — the investigator is read-only by contract>_
+
+### Things I noticed but didn't touch
+
+- _<observations the investigator surfaced but did not investigate, e.g. "the same file has a TODO comment from 2024 about migrating off the deprecated logger; out of scope for this bug, but worth a follow-up slug">_
+
+### Potential concerns
+
+- _<forward-looking risks the next specialist should know, e.g. "the cause-measurement lane's hypothesis assumes the CI runner's clock is in sync with prod; if not, the symptom could resurface intermittently">_
+`;
+
 export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "plan", fileName: "plan.md", description: "Strict-mode plan template — dual-table layout: ## Plan / Slices (work units with surface + dependencies) and ## Acceptance Criteria (verification, each row lists which slices it verifies). Slices are HOW we build; AC are HOW we verify.", body: PLAN_TEMPLATE },
   { id: "plan-soft", fileName: "plan-soft.md", description: "Soft-mode plan template (informal ## Plan paragraph + bullet-list ## Testable conditions; no slice / AC tables — those are strict-mode only).", body: PLAN_TEMPLATE_SOFT },
@@ -1661,7 +1823,18 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   // this artifact and `plan.md` — readers that walk `flows/shipped/`
   // branch on this field to decide which artifact shape the slug
   // shipped.
-  { id: "research", fileName: "research.md", description: "v8.65 multi-lens research-mode artifact — output of the main-context research orchestrator's parallel-lens flow for `/cc research <topic>` invocations. Five per-lens sections (Engineer / Product / Architecture / History / Skeptic) + cross-lens Synthesis + Recommended next step + Discovery dialogue summary, plus research-specific frontmatter (mode: research, topic, generated_at, lenses list). No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`.", body: RESEARCH_TEMPLATE }
+  { id: "research", fileName: "research.md", description: "v8.65 multi-lens research-mode artifact — output of the main-context research orchestrator's parallel-lens flow for `/cc research <topic>` invocations. Five per-lens sections (Engineer / Product / Architecture / History / Skeptic) + cross-lens Synthesis + Recommended next step + Discovery dialogue summary, plus research-specific frontmatter (mode: research, topic, generated_at, lenses list). No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`.", body: RESEARCH_TEMPLATE },
+  // v8.77 debug-branch artifact. Authored by the investigator
+  // specialist on every bug-shaped flow (triage.taskShape == "debug")
+  // BEFORE the architect runs (and skipping the architect entirely
+  // when the synthesis recommends `direct-fix`). Three per-lane
+  // sections (cause-code / cause-config / cause-measurement) + synthesis
+  // (Root cause / Convergence-divergence / Next step recommendation) +
+  // conditional Fix scope section authored only on the direct-fix path
+  // (which the builder reads as a plan substitute). Single-shot per
+  // dispatch (re-runs on the `more-investigation` re-dispatch overwrite
+  // the file).
+  { id: "investigation", fileName: "investigation.md", description: "v8.77 investigator template — debug-branch artifact authored before architect on bug-shaped flows (triage.taskShape == \"debug\"). Frontmatter (slug, stage=plan, specialist=investigator, task_shape=debug, lane_count=3, dispatched_at, iteration, verdict, confidence). Body: Symptom, three lane blocks (cause-code / cause-config / cause-measurement; each with Hypothesis / Evidence collected / Counter-evidence / Confidence 0-10 / Recommended next probe), Root cause (working hypothesis), Convergence / divergence notes, Next step recommendation (one of direct-fix / needs-plan / more-investigation / not-a-bug), conditional Fix scope (direct-fix only), Summary. Single-shot — re-runs on the 1 allowed more-investigation re-dispatch overwrite.", body: INVESTIGATION_TEMPLATE }
 ];
 
 export function templateBody(id: ArtifactTemplate["id"], replacements: Record<string, string> = {}): string {

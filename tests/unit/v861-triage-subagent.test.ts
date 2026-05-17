@@ -14,9 +14,9 @@ import { SPECIALISTS } from "../../src/types.js";
  * These tests are tripwires for the move's invariants.
  */
 describe("v8.61 — triage as a specialist sub-agent", () => {
-  it("SPECIALISTS includes triage; v8.61 expected length 9 (8 + triage); v8.62 unified flow collapsed `design` into `architect` and removed `security-reviewer` so the post-v8.62 length was 7; v8.75 added `plan-design` (pre-impl design-coherence pass) so the current length is 8", () => {
+  it("SPECIALISTS includes triage; v8.61 expected length 9 (8 + triage); v8.62 unified flow collapsed `design` into `architect` and removed `security-reviewer` so the post-v8.62 length was 7; v8.75 added `plan-design` (pre-impl design-coherence pass); v8.77 added `investigator` (read-only debug-branch diagnostic) so the current length is 9", () => {
     expect(SPECIALISTS).toContain("triage");
-    expect(SPECIALISTS).toHaveLength(8);
+    expect(SPECIALISTS).toHaveLength(9);
   });
 
   it("SPECIALIST_PROMPTS maps triage to TRIAGE_PROMPT", () => {
@@ -84,10 +84,15 @@ describe("v8.61 — triage as a specialist sub-agent", () => {
     // Phase 1.5 Approaches Gate prose + the rewritten Phase 2 lens-
     // dispatch prose (design-signal heuristic + `--lens=design` /
     // `--lens=-design` flags + the new `research-design` lens row +
+    // the new `Framing:` envelope field). v8.77 raised the budget to
+    // 125000 to absorb the Debug-branch routing section + the
+    // #### investigator stage details + the investigator stage-table
+    // row + the v8.77 footnote on plan. (Comment retained for historical context.)
+    // `--lens=-design` flags + the new `research-design` lens row +
     // the new `Framing:` envelope field). The triage delegation
     // invariant (the body does not re-implement triage inline) is
     // preserved.
-    expect(START_COMMAND_BODY.length).toBeLessThan(108000);
+    expect(START_COMMAND_BODY.length).toBeLessThan(125000);
     expect(START_COMMAND_BODY).toMatch(/triage[\s\S]*sub-agent|dispatch[\s\S]*triage|triage[\s\S]*specialist/iu);
   });
 

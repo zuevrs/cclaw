@@ -86,6 +86,16 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     prompt: SPECIALIST_PROMPTS.triage
   },
   {
+    id: "investigator",
+    kind: "specialist",
+    title: "Investigator",
+    activation: "on-demand",
+    modes: ["debug"],
+    description:
+      "v8.77 debug-branch specialist. Runs read-only diagnostic before architect on bug-shaped flows (triage.taskShape == \"debug\"). Dispatches three parallel hypothesis lanes (cause-code / cause-config / cause-measurement) — each lane returns hypothesis + evidence (file:line refs / log excerpts / command output) + confidence 0-10 + recommended next probe. Synthesises a working root-cause hypothesis and emits a next-step recommendation (direct-fix → builder skip-architect; needs-plan → architect with priorInvestigation; more-investigation → re-dispatch investigator with sharper probe; not-a-bug → reframe to user). Writes investigation.md. No code edits, no plan writing, no commits — strictly read-only. Capped at 2 investigator dispatches per slug (second more-investigation triggers stop-and-report).",
+    prompt: SPECIALIST_PROMPTS.investigator
+  },
+  {
     id: "architect",
     kind: "specialist",
     title: "Architect",

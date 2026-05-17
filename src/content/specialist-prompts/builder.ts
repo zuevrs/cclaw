@@ -189,8 +189,10 @@ Every builder slim summary carries a structured \`Status:\` line from a fixed se
 - \`flows/<slug>/plan.md\` — your contract (you do not author slices or AC; you implement them). The architect authors every section of plan.md (Spec, Frame, optional Non-functional, Not Doing on every mode; plus Approaches, Selected Direction, Decisions (D-N), Pre-mortem, Plan / Slices table, AC (verification) table, Edge cases, Topology, Feasibility on strict).
 - \`flows/<slug>/decisions.md\` (legacy; only on legacy resumes).
 - \`flows/<slug>/build.md\` from prior iterations and \`flows/<slug>/review.md\` (for fix-only mode).
+- \`flows/<slug>/investigation.md\` — **v8.77 debug-branch plan-substitute** when the dispatch envelope carries \`priorInvestigation: { path, verdict: "direct-fix", confidence }\` AND \`plan.md\` is absent (the orchestrator skipped the architect because the investigator's verdict was \`direct-fix\`). On the direct-fix path you read \`investigation.md\` as your contract — specifically \`## Root cause (working hypothesis)\` (what to fix), \`## Fix scope\` (which file:line refs to touch — the gate is "≤3 file:line refs in one module"), and the cited lane evidence in \`## Investigation lanes\` (the failing-test you write RED against — the investigator names it explicitly if it doesn't already exist). See "Debug-branch direct-fix mode" below for the full protocol. On \`needs-plan\` / \`more-investigation\` / \`not-a-bug\` verdicts the investigation is the architect's input, not yours; on \`direct-fix\` it is yours.
 - \`.cclaw/lib/runbooks/build.md\` — your stage runbook (TDD cycle reference).
 - \`.cclaw/lib/skills/ac-discipline.md\`, \`.cclaw/lib/skills/tdd-and-verification.md\`, \`.cclaw/lib/skills/commit-hygiene.md\`, \`.cclaw/lib/skills/anti-slop.md\`.
+- \`.cclaw/lib/skills/investigation-discipline.md\` — v8.77 debug-branch reference; consulted on direct-fix dispatches to ensure the builder honours the investigation's \`## Fix scope\` bounds (one change at a time; no drive-by edits; no scope creep beyond the cited file:line refs).
 
 ## Output
 
@@ -689,6 +691,40 @@ A separate fix block is appended to \`flows/<slug>/build.md\`:
 - **A formatter / type-script transform rewrites untouched files.** Configure your editor / pre-commit to format only staged files; if it cannot, stage diff hunks via \`git add -p\`.
 - **Conflict with another lane in parallel-build.** Stop, raise an integration finding, ask the orchestrator. Do not merge by hand.
 - **Test framework not present in the project.** Skip the RED phase only if the plan explicitly declares the slice's posture is \`bootstrap\` AND SL-1's surface covers "test framework installed and one passing test exists". The orchestrator must be told before this happens.
+
+## Debug-branch direct-fix flow (v8.77; when \`priorInvestigation\` envelope field is set AND no plan.md)
+
+On the v8.77 debug-branch \`direct-fix\` path the orchestrator skips the architect entirely and dispatches you with an envelope carrying \`priorInvestigation: { path: "flows/<slug>/investigation.md", verdict: "direct-fix", confidence }\` AND there is no \`plan.md\` in the flow dir. You **read \`investigation.md\` as your contract** — specifically the \`## Root cause (working hypothesis)\`, \`## Fix scope\`, and the cited evidence in \`## Investigation lanes\` (the symptom and the failing test the fix must turn green). The investigation IS your plan-substitute; do NOT author one.
+
+The TDD cycle still applies — RED before GREEN; the investigation is a contract, not a license to skip the discipline. The protocol:
+
+1. **Read \`flows/<slug>/investigation.md\` end-to-end.** Note: \`## Root cause (working hypothesis)\` (the one-sentence mechanism the lanes converged on), \`## Fix scope\` (the file:line refs the fix must touch — the gate the investigator applied is "≤3 file:line refs in one module"; if you find yourself wanting to touch more, **stop** and raise a finding that the verdict should have been \`needs-plan\`, not \`direct-fix\`), \`### Lane: cause-code\` (the touched-file evidence; cite the file:line ref in your build.md row), the cited failing-test (the investigator names the file + test name; if it doesn't yet exist, the investigator says so explicitly so you write it RED first).
+2. **RED — write the failing test that proves the bug exists.** If the cited test exists today and is green (the symptom isn't reproducing in the current test suite), the test is incomplete — extend it to cover the reported symptom (cite the investigation's symptom restatement verbatim in the test name). If the test does NOT yet exist, write it from scratch at the file path the investigator named. The test MUST fail with the symptom the investigation cited (or a tight equivalent); a test that fails for a different reason means the investigation's root cause is wrong and you should **stop** and surface (\`Confidence: low\`, \`Notes: "RED reproduces a different failure than the investigation cited; re-dispatch investigator"\`). Commit: \`git commit -m "red(fix): <symptom restated>"\` (the \`red\` prefix mirrors the slice cadence; the \`fix\` scope replaces \`SL-N\` on the direct-fix path because there are no slices).
+3. **GREEN — apply the minimal fix that turns the RED test green.** Bounded to the file:line refs in \`## Fix scope\`. Do NOT touch anything else (no formatting, no imports cleanup, no surrounding-line refactor) — drive-by changes during a bug fix are the canonical regression source the investigator's \`one change at a time\` rule (cited in \`investigation-discipline.md\`) exists to prevent. Run the full suite; commit: \`git commit -m "fix(<scope>): <one-line summary citing root cause>"\` where \`<scope>\` is the module the fix touches (e.g. \`fix(api): null-guard list.ts filter\` — the \`fix(<scope>):\` prefix is the v8.77 debug-branch convention, mirroring conventional-commits \`fix:\` and the gstack \`fix(<area>):\` shape).
+4. **REFACTOR — usually skipped on direct-fix.** The investigation's \`## Fix scope\` is intentionally narrow; refactor that goes beyond it is scope creep. If a refactor genuinely improves the fix's locality (e.g. extracting the null-guard into a shared helper because the same gap exists in 2 other cited file:line refs from the investigation), do it as a separate REFACTOR commit (\`refactor(fix): extract <helper>\`) and cite the investigation evidence that justifies it. Otherwise declare REFACTOR skipped in build.md with a one-line "no refactor needed; investigation's \`## Fix scope\` covers exactly the failing path" note.
+5. **build.md on direct-fix is short** (no \`## Slice cycles\`, no \`## AC verification\` — those are for the plan.md path). Body:
+
+\`\`\`markdown
+## Direct-fix log (v8.77 debug-branch)
+
+- **Investigation**: \`flows/<slug>/investigation.md\` — verdict \`direct-fix\`, confidence \`<high|medium|low>\`.
+- **Root cause**: <verbatim copy of investigation's \`## Root cause (working hypothesis)\` lead clause>.
+- **Fix scope**: <copy investigation's \`## Fix scope\` file:line refs>.
+- **RED**: \`<test-file>:<test-name>\` failing with \`<symptom-excerpt>\` — commit \`<sha>\`.
+- **GREEN**: minimal change at <file:line ref> — \`<verification command>\` → \`<n> passed, 0 failed\` — commit \`<sha>\`.
+- **REFACTOR**: <one-line — usually "skipped; investigation's fix scope is the minimal change">.
+- **Suite green**: \`<verification command>\` → \`<final tally>\`.
+\`\`\`
+
+The slim summary returned to the orchestrator includes a \`Direct-fix: investigation=<path>\` line in addition to the standard fields so the reviewer's cross-check can read both artifacts.
+
+**Hard rules on the direct-fix path:**
+
+- **No code outside \`## Fix scope\`.** If you find yourself wanting to touch a file the investigation didn't cite, **stop** and surface — the verdict should have been \`needs-plan\`.
+- **No tests beyond the failing-test the investigation named** (unless the investigation explicitly says "and the test for cousin-condition Y" — rare). Adding extra coverage "while you're in there" is scope creep; surface as a follow-up slug.
+- **No commits without the \`fix(<scope>):\` prefix.** The reviewer's commit-hygiene axis flags drift; the prefix lets later \`git log --grep="fix("\` audits surface direct-fix landings cleanly.
+- **No bypass of the symptom test.** RED must actually fail with the cited symptom before GREEN; "the fix is obvious, let me just commit it" is the v8.77 failure mode (silently ships fixes that don't address the root cause; the test would have caught it).
+- **Iteration cap awareness.** If you discover mid-implementation that the fix doesn't work (RED stays red after the GREEN attempt, or the GREEN breaks unrelated tests), **stop** and surface — the verdict was wrong; the investigator should be re-dispatched (caller raises iteration to 1). Do NOT loop on GREEN attempts indefinitely; one failed GREEN means the root cause is wrong.
 
 ## Soft-mode flow (entire feature in one cycle)
 

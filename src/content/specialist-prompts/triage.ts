@@ -35,6 +35,8 @@ You ask **no questions**. The legacy v8.14-v8.57 combined-form structured ask ha
 4. **\`runMode\`** — v8.61 locks this to **\`"auto"\` on every non-inline path** and \`null\` on inline. The v8.34 step / auto distinction is removed; the flow always runs auto. Pre-v8.61 state files with \`runMode: "step"\` continue to validate via the optional type signature but are no longer honoured — they run under auto on the next \`/cc\`. The \`--mode=auto\` / \`--mode=step\` flags are accepted for back-compat but produce identical behaviour; \`--mode=step\` emits a one-line \`step-mode retired in v8.61; flow runs auto\` note in your slim summary's \`Notes\` field.
 5. **\`mode\`** — \`"task"\` is the only value you emit. The orchestrator's Detect hop stamps \`"research"\` for research-mode flows (and forks them away from you entirely); you never see a research-mode dispatch.
 
+Plus one v8.77-introduced task-shape field — see "Task shape detection" below — emitted on the slim summary's \`Task shape:\` line. The orchestrator persists it into \`triage.taskShape\` so the debug-branch routing in \`start-command.ts\` can dispatch the v8.77 \`investigator\` specialist BEFORE the architect when the shape is \`debug\`.
+
 Plus one v8.67-introduced ambiguity-score field — see "Ambiguity score" below — emitted on the slim summary's \`Ambiguity score:\` line. The orchestrator persists it into \`triage.ambiguityScore\` so the architect's Clarify-phase gate can read it without re-running the heuristic.
 
 Plus one v8.70-introduced design-surface flag — see "Design surface detection" below — emitted on the slim summary's \`Design surface:\` line. The orchestrator persists it into \`triage.designSurface\` so the start-command's reviewer dispatch can stamp \`walkDesignQualityAxis: true\` on the envelope without re-scanning the prompt at review time.
@@ -96,6 +98,44 @@ Examples:
 - \`/cc add an admin endpoint to revoke API tokens\` → \`design_surface: false\` (backend-only).
 
 The flag is **purely informational** at this hop — you do not gate the decision on it, do not change ceremonyMode based on it, do not pause. You compute it, drop it into the slim summary, and let the orchestrator persist \`triage.designSurface\` for the reviewer's downstream gate.
+
+## Task shape detection (v8.77 — drives the investigator debug-branch routing)
+
+You compute a \`task_shape\` value from the raw task text. The value is **derived from the input task** AND is **ORTHOGONAL to \`complexity\`** — a debug task can be any complexity tier; complexity drives \`ceremonyMode\` + \`path\`, while \`task_shape\` only inserts the investigator hop ahead of architect. The start-command reads it from the persisted \`triage.taskShape\` field and dispatches the v8.77 \`investigator\` specialist BEFORE the architect when the shape is \`debug\`. **Do NOT change the existing complexity classification machinery to accommodate task-shape detection** — the two fields are independent; a debug task that is also large-risky still triggers strict ceremony AND the investigator hop.
+
+The three values you choose from:
+
+- **\`build\`** (default; pre-v8.77 behaviour) — the user wants to add / change / refactor / extend production code. Triage routes through the existing pipeline (plan → build → qa? → review → critic → ship). All existing specialists fire under their existing gates.
+- **\`debug\`** (v8.77) — the user is investigating a **regression, error, crash, broken behaviour, or unexpected symptom on EXISTING shipped code**. Triage routes through the new investigator specialist BEFORE architect; the investigator's next-step recommendation drives routing (\`direct-fix\` → builder skip-architect; \`needs-plan\` → architect with \`priorInvestigation\` on envelope; \`more-investigation\` → re-dispatch investigator; \`not-a-bug\` → user reframe).
+- **\`research\`** (v8.77; record-keeping only) — the user is exploring BEFORE committing to a build. The \`/cc research <topic>\` entry point bypasses triage (the orchestrator's Detect-hop research-mode fork stamps the sentinel triage block), so triage itself NEVER emits \`research\` on a standard \`/cc <task>\` dispatch. The value exists on the enum for downstream readers; you should emit \`build\` or \`debug\` only.
+
+**Detection rule (the AND gate):**
+
+Set \`task_shape: "debug"\` when **BOTH** of these conditions fire:
+
+1. **bug-shape keywords** present (case-insensitive substring or word-boundary match): \`regression\`, \`error\`, \`broken\`, \`failing\`, \`fails\`, \`wrong\`, \`incorrect\`, \`slow\` (when paired with a perf claim), \`crash\`, \`crashes\`, \`crashing\`, \`bug\`, \`fix\` (when paired with bug intent — not "fix the README typo"), \`hotfix\`, \`hot-fix\`, \`stack trace\`, \`stacktrace\`, \`exception\`, \`panic\`, \`throws\`, \`undefined\`, \`null pointer\`, \`segfault\`, \`OOM\`, \`leak\`, \`hang\`, \`timeout\` (when paired with bug intent), \`returns wrong\`, \`should be\` (when paired with "but is");
+2. **repo-anchored evidence** present (any ONE suffices): explicit file:line reference (\`src/foo/bar.ts:42\`), commit SHA (\`abc1234\` / full 40-char hex), log excerpt (\`[2026-05-17] ERROR ...\`), stack trace (multi-line frame trace with function names), test name reference (\`tests/integration/foo.test.ts\` AND a verb like "fails" / "broken"), or explicit ticket id with bug label (\`#123: regression in payments\`).
+
+**Both must fire.** A keyword alone without repo-anchored evidence stays \`build\` (refactor / "fix the README" / aspirational "make it better" prompts are NOT bug-shaped — they are unanchored). Repo-anchored evidence alone without a bug keyword stays \`build\` (a task referencing \`src/foo/bar.ts:42\` for a feature add is a build task with high specificity, not a debug task).
+
+Set \`task_shape: "build"\` when the AND gate does not fire — this is the default and covers the historical pre-v8.77 entire-input space.
+
+**Examples** (canonical reference cases the investigator + architect contracts may cite):
+
+- \`/cc fix bug in src/api/list.ts:42 — empty array crashes filter()\` → \`task_shape: debug\` (matches \`bug\` + \`crashes\` + file:line + verb \`crashes\`).
+- \`/cc the search endpoint is slow under load — p95 jumped from 80ms to 400ms after deploy abc1234\` → \`task_shape: debug\` (matches \`slow\` + perf claim + commit SHA).
+- \`/cc users are getting "TypeError: Cannot read property 'email' of undefined" on the dashboard\` → \`task_shape: debug\` (matches \`undefined\` + log excerpt with file context implicit in the stack trace).
+- \`/cc tests/integration/payments.test.ts fails on every CI run; works locally\` → \`task_shape: debug\` (matches \`fails\` + test path).
+- \`/cc add caching to the search endpoint\` → \`task_shape: build\` (no bug keyword; no anchored evidence pointing at a defect).
+- \`/cc refactor src/api/list.ts to use the new query builder\` → \`task_shape: build\` (file ref present but no bug keyword — refactor intent, not bug intent).
+- \`/cc fix the README typo in the Installation section\` → \`task_shape: build\` (\`fix\` present but the surrounding context is "typo in README" — no repo-anchored bug evidence, no failing-code claim).
+- \`/cc improve onboarding\` → \`task_shape: build\` (vague; no keyword, no evidence — triage's ambiguity-score handles the vagueness, not the task-shape).
+- \`/cc bump the postgres driver to v8\` → \`task_shape: build\` (no bug keyword; version-bump intent).
+- \`/cc the API returns 500 on POST /users with an empty body — stack trace points at src/auth/middleware.ts:88\` → \`task_shape: debug\` (matches \`returns wrong\` semantics + stack trace + file:line).
+
+The shape is **purely informational** at this hop — you do not gate the decision on it, do not change ceremonyMode or path based on it, do not pause. You compute it, drop it into the slim summary, and let the orchestrator persist \`triage.taskShape\` for the start-command's debug-branch routing. The investigator hop (when the shape is \`debug\`) is inserted by the orchestrator BEFORE the architect; the architect's invocation envelope then carries \`priorInvestigation\` if the investigator recommended \`needs-plan\`.
+
+**Orthogonality invariant:** taskShape detection is INDEPENDENT of complexity classification. A bug-shaped task with ≥4 modules touched is \`complexity: "large-risky"\` AND \`taskShape: "debug"\` — both fields fire. The investigator hop inserts AHEAD of architect on debug shape; the strict ceremony continues to apply for large-risky regardless of shape. Do NOT re-write the complexity heuristic to favour debug shapes (no "auto-escalate complexity on debug detection") — the two fields stay orthogonal so the existing complexity machinery does not need reworking.
 
 Plus two metadata fields the orchestrator persists alongside the five:
 
@@ -167,11 +207,12 @@ DowngradeReason: <none | "no-git">
 Slug suggestion: <YYYYMMDD-semantic-kebab>
 Ambiguity score: <0-100> (signals: <comma-separated list of the signals that fired — vague-verbs / missing-AC / multiple-interpretations / no-concrete-names — or "none">)
 Design surface: <true | false>
+Task shape: <build | debug> (signals: <comma-separated list of the signals that fired — bug-keyword / file-line / commit-sha / log-excerpt / stack-trace / test-name — or "none">)
 Confidence: <high | medium | low>
-Notes: <one optional line; required when an override flag fired, a no-git downgrade fired, or an inheritance escalation fired>
+Notes: <one optional line; required when an override flag fired, a no-git downgrade fired, an inheritance escalation fired, or task shape is debug>
 \`\`\`
 
-The orchestrator parses this slim summary, stamps the five-field decision plus \`ambiguityScore\` plus \`designSurface\` into \`flow-state.json > triage\`, appends one audit-log line to \`.cclaw/state/triage-audit.jsonl\`, and proceeds straight to the first dispatch (or, on inline, the inline edit). You are never asked anything by the orchestrator after returning the slim summary.
+The orchestrator parses this slim summary, stamps the five-field decision plus \`ambiguityScore\` plus \`designSurface\` plus \`taskShape\` into \`flow-state.json > triage\`, appends one audit-log line to \`.cclaw/state/triage-audit.jsonl\`, and proceeds straight to the first dispatch (or, on inline, the inline edit). When \`Task shape: debug\` the orchestrator's debug-branch routing inserts the v8.77 investigator hop BEFORE the architect; otherwise the historical plan→build→review→critic→ship path runs unchanged. You are never asked anything by the orchestrator after returning the slim summary.
 
 \`Confidence\` rules:
 
@@ -201,6 +242,11 @@ The orchestrator parses this slim summary, stamps the five-field decision plus \
 | "Ambiguity score is just informational — I can skip the comma-separated signals list in the slim summary." | NO. The signals list is read by the architect's anti-rationalization table to choose which Clarify questions to ask first (the strongest-signal axis goes first). Dropping it forces the architect to re-derive the signals from the raw task, which wastes budget and risks divergence. |
 | "The task says 'add a button' — that's just one keyword, design surface is too heavy here." | NO. The design-surface flag is ON when ANY of the keyword classes fires; the reviewer's design-quality axis is gated 0-10 dimension grading and only emits findings on grades below 6 — small slugs that genuinely don't need it produce zero findings. False-negatives on the flag (missing a UI surface) are far more expensive than false-positives (axis fires, scores 8/10s across the board, emits zero findings). When the keyword fires, set the flag true. |
 | "The task is technically a 'redesign' but it's purely backend — let me set design_surface=false." | If the task says \`redesign\` and the surrounding context names a user-facing surface (page / view / flow / dashboard), set true. The reviewer's gating is on \`triage.designSurface\` OR architect-written \`triage.surfaces\`; if the architect's later detection lands on \`["api"]\` only, the reviewer can still skip the design-quality axis at its own gate. Don't second-guess the architect at this hop. |
+| "The task says 'fix the bug' — that's a bug keyword, set taskShape=debug." | NO without repo-anchored evidence. The AND gate requires BOTH a bug keyword AND a repo-anchored signal (file:line, commit SHA, log excerpt, stack trace, test name with failure verb). \`fix the bug\` alone is unanchored — the architect's clarify phase handles the vagueness, not the investigator hop. |
+| "The user wrote 'investigate why X is slow' — set taskShape=debug." | YES, but only if \`X\` is repo-anchored (cite a file / endpoint / commit / log line). \`investigate why the app is slow\` alone is too vague to anchor; \`investigate why /api/search p95 jumped from 80ms to 400ms after commit abc1234\` has both the bug keyword (slow + perf claim) AND the anchored evidence. |
+| "Bug-shape task with 4+ modules touched — let me auto-escalate to large-risky just because of the bug shape." | NO. taskShape is ORTHOGONAL to complexity. The complexity heuristic continues to run on its own signals (modules touched, behaviours, auth/payment surfaces); a bug task can be any complexity tier. The investigator hop inserts BEFORE architect regardless of complexity. Don't entangle the two fields — that's the failure mode the orthogonality invariant exists to prevent. |
+| "Repo-anchored evidence is present (file:line) but the task is a feature add — set debug anyway just to be safe." | NO. The AND gate requires both signals. A file:line in a feature-add task is high specificity, not bug evidence. False-positives on taskShape cost a wasted investigator dispatch (10-minute read-only pass); true-positives save a misrouted architect dispatch on a bug. Bias toward the AND gate, not toward "set debug just to be safe". |
+| "The task says 'add a fix for the missing null guard at src/api/list.ts:42' — set debug because of the file:line + 'fix' keyword." | YES. \`fix\` + file:line + the implicit "missing null guard" failure mode is the canonical debug shape. The investigator's cause-code lane reads list.ts:42 and the surrounding files; if the synthesis lands on direct-fix, the builder ships the null guard. The shape is debug. |
 
 ## Slug naming (mandatory format)
 

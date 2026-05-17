@@ -34,9 +34,9 @@ import { SPECIALISTS } from "../../src/types.js";
  * un-wires plan-design from the orchestrator lights up immediately.
  */
 
-describe("v8.75 — SPECIALISTS roster includes plan-design (eight specialists, v8.62-roster + plan-design)", () => {
-  it("AC-1 — SPECIALISTS has exactly eight entries", () => {
-    expect(SPECIALISTS).toHaveLength(8);
+describe("v8.75 — SPECIALISTS roster includes plan-design (eight specialists at v8.75; nine at v8.77 after investigator joined)", () => {
+  it("AC-1 — SPECIALISTS has exactly nine entries (v8.77 added investigator after triage)", () => {
+    expect(SPECIALISTS).toHaveLength(9);
   });
 
   it("AC-1 — SPECIALISTS contains `plan-design` (immediately after `plan-critic`, before `qa-runner`)", () => {

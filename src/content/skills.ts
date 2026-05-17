@@ -378,6 +378,20 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     body: readSkill("structured-status.md")
   },
   {
+    id: "investigation-discipline",
+    fileName: "investigation-discipline.md",
+    description:
+      "v8.77 debug-branch discipline. Auto-triggers on every investigator dispatch (taskShape:debug). Codifies the three-lane fan-out (cause-code / cause-config / cause-measurement — MECE; all three always run), the five canonical evidence shapes (file:line citation / command output excerpt / log excerpt / commit SHA / config snippet), the 0-10 lane confidence ladder (and how the synthesis derives the artifact-level high|medium|low from it), the anti-shotgun-debugging rules (no fix proposals inline; one root cause per synthesis; hypothesis before probe), and the next-step-recommendation rubric (direct-fix | needs-plan | more-investigation | not-a-bug — each with a hard gate). Reuses pre-edit-investigation.md's three canonical probe shapes for the cause-code lane.",
+    triggers: [
+      "specialist:investigator",
+      "stage:plan",
+      "taskShape:debug",
+      "task_shape:debug"
+    ],
+    stages: ["triage", "plan"],
+    body: readSkill("investigation-discipline.md")
+  },
+  {
     id: "ambiguity-discipline",
     fileName: "ambiguity-discipline.md",
     description: "Pre-plan clarify mode + assumption surface (v8.67). Triage computes `ambiguity_score` (0-100) from four signals (vague-verbs / missing-AC / multiple-interpretations / no-concrete-names); when the score crosses the configurable threshold (`config.clarify.ambiguity_threshold`, default 60) AND `ceremonyMode != \"inline\"`, the architect runs a one-question-at-a-time Clarify phase (max 5, early-exit on user 'go'/'ready'/'proceed') BEFORE Bootstrap, then surfaces every assumption — both Clarify answers and architect-silent inferences (labelled) — in plan.md's mandatory `## Assumptions (correct me now)` section. Sourced from obra-superpowers brainstorming (HARD-GATE + one-q-at-a-time), Karpathy Think Before Coding, addyosmani SPECIFY (ASSUMPTIONS I'M MAKING block), everyinc-compound ce-brainstorm Phase 1.2 (evidence/specificity/counterfactual/attachment lenses).",

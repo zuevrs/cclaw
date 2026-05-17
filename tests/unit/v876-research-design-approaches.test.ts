@@ -421,10 +421,10 @@ describe("v8.76 — flow-state validators accept `approaches[]` + `selectedAppro
 });
 
 describe("v8.76 — RESEARCH_LENSES still NOT in SPECIALISTS / RESEARCH_AGENT_IDS (lenses are research-only)", () => {
-  it("AC-7 — research-design is NOT in SPECIALISTS (the lens is research-only; flow specialists are untouched at 8)", async () => {
+  it("AC-7 — research-design is NOT in SPECIALISTS (the lens is research-only; flow specialists are at 9 after v8.77 added investigator)", async () => {
     const { SPECIALISTS } = await import("../../src/types.js");
     expect(SPECIALISTS as readonly string[]).not.toContain("research-design");
-    expect(SPECIALISTS).toHaveLength(8);
+    expect(SPECIALISTS).toHaveLength(9);
   });
 
   it("AC-7 — research-design is NOT in RESEARCH_AGENT_IDS (those are read-only research helpers — repo-research / learnings-research)", async () => {
@@ -434,11 +434,13 @@ describe("v8.76 — RESEARCH_LENSES still NOT in SPECIALISTS / RESEARCH_AGENT_ID
 });
 
 describe("v8.76 — version bump + CHANGELOG", () => {
-  it("AC-8 — package.json bumps to 8.76.0", async () => {
+  it("AC-8 — package.json bumps to 8.76.0 (or later — v8.77 bumped to 8.77.0; this AC is satisfied by any v8.76+ version)", async () => {
     const pkg = JSON.parse(
       await fs.readFile(path.join(process.cwd(), "package.json"), "utf-8")
     );
-    expect(pkg.version).toBe("8.76.0");
+    const [major, minor] = pkg.version.split(".").map(Number);
+    expect(major).toBe(8);
+    expect(minor).toBeGreaterThanOrEqual(76);
   });
 
   it("AC-8 — CHANGELOG.md carries a v8.76 entry", async () => {
