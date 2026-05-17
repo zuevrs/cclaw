@@ -100,8 +100,21 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // 870 lines / 82000 chars (≈6% headroom over current 757 lines / 77k
     // chars). Growth justified in CHANGELOG.md (v8.64 — parallel-by-default
     // for multi-slice tasks).
-    maxLines: 870,
-    maxChars: 82000
+    //
+    // v8.68 — two-stage per-slice review (spec-compliance → code-quality) +
+    // structured implementer status protocol (DONE / DONE_WITH_CONCERNS /
+    // NEEDS_CONTEXT / BLOCKED): new "Per-slice review loop" section codifies
+    // the two-stage gate (mirrors obra-superpowers subagent-driven-development);
+    // new "Status protocol" section + per-slice JSON `status` field surface
+    // the structured status the orchestrator routes deterministically. Slim
+    // summary grew by one line (`Status:`); build.md slice table grew by one
+    // column (`Per-slice review`). Growth lands ~+10 lines / ~+9k chars
+    // over the v8.64 envelope; budget raised to 890 lines / 92000 chars
+    // (≈2% line headroom, ≈2% char headroom over current 868 lines / 90k
+    // chars). Growth justified in CHANGELOG.md (v8.68 — two-stage per-slice
+    // review + structured implementer status).
+    maxLines: 890,
+    maxChars: 92000
   }
 ];
 

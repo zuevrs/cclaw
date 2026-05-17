@@ -348,6 +348,20 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     body: readSkill("pre-edit-investigation.md")
   },
   {
+    id: "structured-status",
+    fileName: "structured-status.md",
+    description: "Builder status protocol (v8.68). Every builder slim summary (strict mode: one per slice + one dispatch-level; soft mode: one for the feature) carries one of four canonical statuses — DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED — that the orchestrator routes deterministically (DONE = proceed; DONE_WITH_CONCERNS = log to build.md `## Concerns` + proceed; NEEDS_CONTEXT = stop and report with specific missing input; BLOCKED = stop and report with recommended resolution). Aggregation across slices is monotone (any BLOCKED contaminates the dispatch). Mirrors the obra-superpowers subagent-driven-development implementer status protocol.",
+    triggers: [
+      "stage:build",
+      "specialist:builder",
+      "before:slim-summary",
+      "ceremony_mode:strict",
+      "ceremony_mode:soft"
+    ],
+    stages: ["build"],
+    body: readSkill("structured-status.md")
+  },
+  {
     id: "ambiguity-discipline",
     fileName: "ambiguity-discipline.md",
     description: "Pre-plan clarify mode + assumption surface (v8.67). Triage computes `ambiguity_score` (0-100) from four signals (vague-verbs / missing-AC / multiple-interpretations / no-concrete-names); when the score crosses the configurable threshold (`config.clarify.ambiguity_threshold`, default 60) AND `ceremonyMode != \"inline\"`, the architect runs a one-question-at-a-time Clarify phase (max 5, early-exit on user 'go'/'ready'/'proceed') BEFORE Bootstrap, then surfaces every assumption — both Clarify answers and architect-silent inferences (labelled) — in plan.md's mandatory `## Assumptions (correct me now)` section. Sourced from obra-superpowers brainstorming (HARD-GATE + one-q-at-a-time), Karpathy Think Before Coding, addyosmani SPECIFY (ASSUMPTIONS I'M MAKING block), everyinc-compound ce-brainstorm Phase 1.2 (evidence/specificity/counterfactual/attachment lenses).",

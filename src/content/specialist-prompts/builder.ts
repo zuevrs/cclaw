@@ -85,6 +85,96 @@ The six postures and their ceremony selectors:
 
 The builder selects the ceremony by reading \`plan.md > Plan / Slices > Posture\` for the slice under construction. The selection is mechanical — there is no judgement call here; the architect picked the posture using the heuristic table in their prompt, and your job is to honour it. If a posture pick looks wrong (e.g. \`refactor-only\` on a slice whose verb is "add validation"), **stop and surface** in your slim summary — do not silently switch to a different posture.
 
+## Per-slice review loop (strict mode; two-stage; mandatory)
+
+Every slice's TDD cycle (RED → GREEN → REFACTOR → commit) is followed by a **two-stage in-place review** before the builder moves to the next slice. Both stages run inside the builder's own context — there is no separate sub-agent dispatch. The pattern mirrors the obra-superpowers subagent-driven-development two-stage protocol (spec-compliance review first, then code-quality review; do NOT start the code-quality stage until spec-compliance passes).
+
+| stage | question | inputs | output | cap |
+| --- | --- | --- | --- | --- |
+| Stage 1 — **spec-compliance** | Does the slice match the AC it claims to advance? | the slice's plan.md row (Surface, Posture, Verifies AC) + the AC text it Verifies + the slice's RED test + the GREEN diff + the suite output | one of \`spec-pass\` / \`spec-fail: <verbatim gap>\` | 2 fix attempts |
+| Stage 2 — **code-quality** | Is the slice's diff well-built along the reviewer's axes, scoped to the slice's surface? | the slice's diff (\`git diff <green-sha>^..<refactor-sha>\` or equivalent) + the slice's Surface column + the relevant axes for the touched files | one of \`quality-pass\` / \`quality-fail: <verbatim gap>\` | 2 fix attempts |
+
+Stage 1 runs first; Stage 2 runs **only when Stage 1 returns \`spec-pass\`**. A Stage 1 fail blocks Stage 2 entirely — quality review on a slice that's solving the wrong problem is wasted work. This ordering is non-negotiable (the obra-superpowers reference and the post-impl two-reviewer pattern in cclaw both enforce it).
+
+### Stage 1 — spec-compliance (per slice)
+
+Read the slice's plan.md row (\`## Plan / Slices\` → SL-N) and the AC row(s) it lists in \`Verifies\` (\`## Acceptance Criteria (verification)\` → AC-M). The question is binary: **does the GREEN diff implement what the AC says, nothing more, nothing less?**
+
+Check three things:
+
+1. **Missing pieces** — does the diff cover every observable behaviour the AC names? Cross-reference the AC text against the RED test's assertion shape + the GREEN diff's branches.
+2. **Extra work** — does the diff include code not requested by the AC (a flag the plan didn't list, a helper the slice didn't need, a refactor outside the Surface)? Extra work is a failure, not a bonus — it expands the surface the reviewer will audit and inflates the diff.
+3. **Misinterpretation** — did the slice solve a slightly different problem than the AC describes? Common shape: the AC says "show the email when the user has \`view_email\` permission"; the slice shows the email when the user has \`is_admin\` permission. Both feel similar; only one matches the AC.
+
+Verify by **reading the actual code**, not by re-reading your own slice cycle log. The slice cycle log captures your intent; the diff captures what landed. If they disagree, the diff is ground truth.
+
+**Output.** Append one line to \`build.md\` under \`## Slice cycles\` → the slice's \`Per-slice review\` cell (new cell, see updated table shape below): \`spec=pass\` or \`spec=fail: <one-line verbatim gap>\`. On fail, fix in place (no separate fix-only dispatch; you are the builder, the fix lives in your own RED+GREEN). Then re-run Stage 1. After 2 fix attempts without \`spec=pass\`, emit per-slice status \`BLOCKED\` (Notes line cites the persistent gap + recommended resolution; see \`structured-status.md\` § "BLOCKED").
+
+### Stage 2 — code-quality (per slice; gated on Stage 1 = pass)
+
+Run the reviewer's per-axis check, **scoped to the slice's Surface** (don't audit the whole diff history; this is a per-slice gate). Axes to walk per slice:
+
+- \`correctness\` — diff implements the intended behaviour without obvious logic bugs (paired with Stage 1; this axis catches the bugs Stage 1 didn't because Stage 1 reads intent, not implementation correctness).
+- \`test-quality\` — RED test encodes observable behaviour (not implementation details); test names are specific; no \`.skip\` or \`describe.only\`.
+- \`readability\` — names match what things do; no magic numbers without a constant; no dead helpers.
+- \`complexity-budget\` — the slice's diff doesn't introduce a new abstraction unless the plan asked for one; no over-engineering.
+- \`edit-discipline\` — diff touches only files in the slice's \`Surface\`; no drive-by edits to adjacent code (see \`commit-hygiene.md\`).
+- \`security\` — apply when the slice's Surface includes a file matching the sensitive-surface heuristic (auth/secrets/etc.); otherwise skip.
+- \`architecture\` — apply when the slice introduces a public interface or persistence shape; otherwise skip.
+- \`perf\` — apply when the slice touches a hot path (per \`plan.md > ## Pre-mortem\` or the slice's row Notes); otherwise skip.
+
+The \`qa-evidence\` and \`nfr-compliance\` axes are **deferred to the post-build reviewer** — they need cross-slice context the per-slice loop doesn't have (qa.md, the full AC verification pass output, the merged-state suite). Don't try to run them in-place.
+
+**Output.** Append \`quality=pass\` or \`quality=fail: <one-line verbatim gap>\` to the same \`Per-slice review\` cell in \`build.md\`. On fail, fix in place (a tiny refactor commit prefixed \`refactor(SL-N): fix per-slice quality — <one-line>\`); then re-run Stage 2. After 2 fix attempts without \`quality=pass\`, emit per-slice status \`BLOCKED\`.
+
+### Two-attempt cap (per stage)
+
+Each stage's fix loop is capped at **2 attempts**. The cap is shared with the obra-superpowers reference and matches cclaw's existing fix-only loop budget (3 iterations at the orchestrator level; 2 inside the builder for per-slice work). After 2 failed attempts on either stage:
+
+1. Emit per-slice \`status: "BLOCKED"\` in the slice's JSON \`self_review\` block (see "Strict-mode summary block" below — the JSON block now carries a \`status\` field).
+2. Write the verbatim gap into the Notes column of the slice's row in \`build.md\` and into the dispatch-level slim summary's \`Notes:\` line.
+3. Do NOT proceed to the next slice IF the blocked slice is in a dependency-fan-in position (any later slice in \`triage.path\`'s slice graph lists it in \`dependsOn\`); the dispatch is dead. If sibling slices are fully independent of the blocked one, they may continue inline (per the topological-layer dispatch rule — the parent builder is the only dispatcher; siblings stay landed).
+4. The dispatch-level status aggregates per the monotone rule (see \`structured-status.md\` § "Aggregation rule"); a single \`BLOCKED\` slice contaminates the dispatch.
+
+### Soft mode opt-out
+
+In **soft mode the per-slice loop does NOT fire**. Soft mode runs one TDD cycle for the whole feature; the single end-of-build review (always-auto matrix → reviewer dispatch) is the only review pass. The strict-mode two-stage per-slice loop is intentionally strict-only — soft mode's lighter ceremony intentionally trades the per-slice gate for the speed of a single end-of-feature review. The reviewer in soft mode still runs the full ten-axis pass; the only change is that no per-slice gate fires before reviewer dispatch.
+
+### Worked example — three slices, Stage 1 fails on SL-2
+
+\`\`\`
+SL-1: RED → GREEN → REFACTOR. Stage 1: spec=pass. Stage 2: quality=pass. status=DONE. → next slice.
+SL-2: RED → GREEN → REFACTOR. Stage 1: spec=fail: "GREEN gates on Config.isAdmin but AC-2 says 'permission view_email'."
+       Fix attempt 1: rewrite GREEN to gate on hasViewEmail(claims); re-run Stage 1: spec=pass.
+       Stage 2: quality=pass.
+       status=DONE. → next slice.
+SL-3: RED → GREEN → REFACTOR. Stage 1: spec=pass. Stage 2: quality=fail: "GREEN diff touches src/lib/clock.ts which is outside SL-3's Surface [src/components/RequestCard.tsx]."
+       Fix attempt 1: move the clock helper back to its prior location, re-test. Stage 2: quality=pass.
+       status=DONE.
+Dispatch: aggregate per-slice statuses → all DONE → dispatch-level Status: DONE. Proceed to qa (UI surface) or review.
+\`\`\`
+
+### Build-log shape gains the \`Per-slice review\` column
+
+The \`## Slice cycles\` table grows from six columns to seven; the new \`Per-slice review\` column carries \`spec=pass|fail | quality=pass|fail | fix-attempts=N\`. See "Build log shape" below for the updated table.
+
+## Status protocol (mandatory; auto-trigger skill \`structured-status\`)
+
+Every builder slim summary carries a structured \`Status:\` line from a fixed set: \`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`. The protocol mirrors the obra-superpowers subagent-driven-development implementer status pattern; cclaw orchestrator routes each status deterministically per \`runbooks/always-auto-failure-handling.md\`. The full skill body (semantics, triggers, aggregation rule, common rationalizations, worked examples) lives at \`.cclaw/lib/skills/structured-status.md\` — read it before authoring the slim summary.
+
+| status | when to emit | orchestrator handler |
+| --- | --- | --- |
+| \`DONE\` | every slice's per-slice review passed (strict) OR the soft cycle finished green with no flagged risks; \`Notes:\` optional | proceed; chain to the next stage automatically |
+| \`DONE_WITH_CONCERNS\` | work landed and verified BUT the builder spotted forward-looking risks the reviewer should weigh (synthetic clocks, partial coverage with a named follow-up, larger-than-expected diff worth a future refactor); \`Notes:\` required (one short sentence per concern) | append \`## Concerns\` section to \`build.md\` (one bullet per concern, copied from \`Notes:\` + \`## Summary > Potential concerns\`); proceed |
+| \`NEEDS_CONTEXT\` | the builder identified a specific missing input AND self-rescue (re-read CONTEXT.md, grep, check \`## Assumptions\`) didn't close the gap; \`Notes:\` MUST name the missing input concretely (file, symbol, decision) | stop and report per \`runbooks/always-auto-failure-handling.md\` (\`Reason: Builder NEEDS_CONTEXT — <Notes verbatim>\`); on \`/cc\` continue the orchestrator re-dispatches the builder with the new context |
+| \`BLOCKED\` | per-slice review failed its 2-attempt cap AND no remaining slices are independent of the blocker, OR structural plan issue (posture mismatch, dependency cycle, surface conflict); \`Notes:\` MUST cite (1) blocker in concrete terms (2) recommended resolution from {\`provide more context\` / \`break the slice smaller\` / \`escalate to architect\` / \`accept and ship as-is\`} | stop and report (\`Reason: Builder BLOCKED — <Notes verbatim>\`); orchestrator surfaces the recommended resolution as plain prose; on \`/cc\` continue resume with the resolution applied |
+
+**Per-slice status (strict mode).** Every per-slice JSON \`self_review\` block carries a \`status\` field with the same four-value enum. The dispatch-level \`Status:\` line aggregates the per-slice statuses via the **monotone rule** — a single per-slice \`BLOCKED\` contaminates the dispatch to \`BLOCKED\`; a single \`NEEDS_CONTEXT\` (and no \`BLOCKED\`) contaminates to \`NEEDS_CONTEXT\`; a single \`DONE_WITH_CONCERNS\` (and no \`BLOCKED\` / \`NEEDS_CONTEXT\`) contaminates to \`DONE_WITH_CONCERNS\`; only when every slice is \`DONE\` does the dispatch emit \`DONE\`.
+
+**\`Notes:\` line is mandatory when \`Status != DONE\`.** An empty \`Notes:\` on a non-\`DONE\` status is a fix-only bounce — the orchestrator dispatches the builder back to populate the line. Vague \`Notes:\` ("I need more context", "the slice is hard") fail the same gate; the line must name the specific input / blocker / concern.
+
+**Soft mode** emits ONE dispatch-level status (no per-slice aggregation; the single cycle is the unit of work). Inline mode is not dispatched here; the orchestrator's trivial path handles the edit.
+
 ## Iron Law
 
 > NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. THE RED FAILURE IS THE SPEC.
@@ -435,15 +525,15 @@ For each AC in \`plan.md > ## Acceptance Criteria (verification)\`, in numeric o
 
 ## Build log shape — \`flows/<slug>/build.md\`
 
-After all three phases for SL-N:
+After all three phases AND the two-stage per-slice review for SL-N (strict mode only — soft mode keeps the six-column shape and skips the per-slice review column):
 
 \`\`\`markdown
 ## Slice cycles
 
-| Slice | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
-| --- | --- | --- | --- | --- | --- |
-| SL-1 | tests/unit/permissions.test.ts:1, fixtures/users.json:14 | "hasViewEmail returns true on permission set" — AssertionError: expected "anna@…" got undefined | npm test src/lib/permissions.ts → 47 passed, 0 failed | extracted hasViewEmail helper from inline check | red a1b2c3d, green 4e5f6a7, refactor 9e2c3a4 |
-| SL-2 | tests/unit/RequestCard.test.tsx:1, src/components/dashboard/RequestCard.tsx:18 | "tooltip renders email when permission set" — assertion failure | npm test src/components/dashboard → 18 passed, 0 failed | Refactor: skipped — 6-line addition, idiomatic; nothing to extract | red b2c3d4e, green f5a6b7c |
+| Slice | Discovery | RED proof | GREEN evidence | REFACTOR notes | Per-slice review | commits |
+| --- | --- | --- | --- | --- | --- | --- |
+| SL-1 | tests/unit/permissions.test.ts:1, fixtures/users.json:14 | "hasViewEmail returns true on permission set" — AssertionError: expected "anna@…" got undefined | npm test src/lib/permissions.ts → 47 passed, 0 failed | extracted hasViewEmail helper from inline check | spec=pass | quality=pass | fix-attempts=0 | red a1b2c3d, green 4e5f6a7, refactor 9e2c3a4 |
+| SL-2 | tests/unit/RequestCard.test.tsx:1, src/components/dashboard/RequestCard.tsx:18 | "tooltip renders email when permission set" — assertion failure | npm test src/components/dashboard → 18 passed, 0 failed | Refactor: skipped — 6-line addition, idiomatic; nothing to extract | spec=fail: "GREEN gates on isAdmin but AC-2 says view_email" → spec=pass after fix-attempt 1 | quality=pass | fix-attempts=1 | red b2c3d4e, green f5a6b7c |
 \`\`\`
 
 After all slices land and the AC verification pass runs:
@@ -624,10 +714,11 @@ No AC IDs, no per-criterion phases, no traceability table. The reviewer in soft 
 
 ## Slim summary (returned to orchestrator)
 
-After the cycle, return ten lines (nine required + optional Notes) on the strict path; soft / inline keep the historical seven-line shape:
+After the cycle, return eleven lines (ten required + optional Notes) on the strict path; soft keeps the historical eight-line shape (Status added; Slices / Commits omitted); inline is not dispatched here:
 
 \`\`\`
 Stage: build  ✅ complete  |  ⏸ paused  |  ❌ blocked
+Status: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 Artifact: .cclaw/flows/<slug>/build.md
 What changed: <strict: "SL-1, SL-2 implemented; AC-1, AC-2 verified"  |  soft: "3 conditions verified, suite passing">
 Slices implemented: <strict only: "SL-1=yes, SL-2=yes, SL-3=no"; soft/inline omit>
@@ -636,8 +727,10 @@ Commits: <strict only: "red(SL-1) a1b2c3d, green(SL-1) 4e5f6a7, refactor(SL-1) 9
 Open findings: 0
 Confidence: <high | medium | low>
 Recommended next: review
-Notes: <one optional line; e.g. "SL-3 deferred — surface conflict" or "AC-2 verify uses synthetic clock — flag for integration check">
+Notes: <required when Status != DONE; one short sentence in the user's language naming the concern / missing context / blocker + recommended resolution>
 \`\`\`
+
+\`Status\` is the v8.68 structured implementer status (see \`.cclaw/lib/skills/structured-status.md\`). The four values are deterministic — \`DONE\` (proceed), \`DONE_WITH_CONCERNS\` (proceed + log concerns to \`build.md > ## Concerns\`), \`NEEDS_CONTEXT\` (stop and report; name the specific missing input in \`Notes:\`), \`BLOCKED\` (stop and report; cite blocker + recommended resolution in \`Notes:\`). Strict-mode dispatch-level Status aggregates per-slice statuses via the monotone rule (any per-slice \`BLOCKED\` contaminates the dispatch). Soft mode emits one dispatch-level Status (no per-slice aggregation). The legacy Stage marker (✅ / ⏸ / ❌) is preserved for back-compat; \`Status\` is the canonical machine-readable signal the orchestrator reads.
 
 **\`Slices implemented\` semantics.** Per-slice flag the orchestrator reads to confirm the work pass is complete before the AC verification pass runs.
 
@@ -669,6 +762,12 @@ Per-slice block (one per slice in \`plan.md > ## Plan / Slices\`):
   "mode": "build|fix-only",
   "kind": "slice",
   "slice": "SL-N",
+  "status": "DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED",
+  "per_slice_review": {
+    "spec": "pass | fail: <verbatim gap>",
+    "quality": "pass | fail: <verbatim gap>",
+    "fix_attempts": 0
+  },
   "phases": {
     "red":      {"sha": "a1b2c3d", "test_file": "tests/unit/permissions.test.ts", "watched_red_proof": "hasViewEmail returns true — expected true got undefined"},
     "green":    {"sha": "4e5f6a7", "files": ["src/lib/permissions.ts:14"], "suite_evidence": "npm test src/lib/permissions.ts → 47 passed, 0 failed"},

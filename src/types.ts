@@ -234,6 +234,50 @@ export type CriticVerdict = "pass" | "iterate" | "block-ship";
 export type CriticEscalation = "none" | "light" | "full";
 
 /**
+ * Status the builder specialist emits at every slice boundary (strict
+ * mode) and at end-of-feature (soft mode). Drives the orchestrator's
+ * always-auto chain decision when the builder slim summary returns —
+ * each status has a deterministic handler in
+ * `.cclaw/lib/runbooks/always-auto-failure-handling.md`:
+ *
+ * - `DONE` — proceed to the next slice (strict) or to qa/review (soft).
+ *   The slice cleared both spec-compliance and code-quality reviews
+ *   (strict mode per-slice gates) with no open concerns. This is the
+ *   common path; no orchestrator surface action.
+ * - `DONE_WITH_CONCERNS` — work completed but the builder flagged
+ *   forward-looking risks the reviewer should see. Orchestrator appends
+ *   the concerns to `build.md > ## Concerns` and proceeds; the reviewer
+ *   reads the section as additional finding seeds.
+ * - `NEEDS_CONTEXT` — the builder cannot proceed without information
+ *   that wasn't in the dispatch envelope (missing file, unclear
+ *   requirement, unknown convention). Orchestrator stops, surfaces the
+ *   specific context need verbatim to the user, and awaits `/cc`
+ *   continue (with the new context provided in the next prompt) or
+ *   `/cc-cancel`.
+ * - `BLOCKED` — the builder hit an unresolvable obstacle (per-slice
+ *   review failed twice, posture mismatch, dependency missing,
+ *   architectural concern). Orchestrator stops, surfaces the blocker
+ *   plus the builder's recommended resolution (provide more context /
+ *   break the slice smaller / escalate to architect), and awaits `/cc`
+ *   continue or `/cc-cancel`.
+ *
+ * The slim summary's `Notes:` line carries the human-readable detail
+ * for `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED`; orchestrator
+ * surfaces it verbatim in the stop-and-report status block.
+ *
+ * Pre-v8.68 builder slim summaries lack the status line — back-compat
+ * readers default to `DONE` on absent (matches the existing always-auto
+ * chain behaviour).
+ */
+export const BUILDER_STATUSES = [
+  "DONE",
+  "DONE_WITH_CONCERNS",
+  "NEEDS_CONTEXT",
+  "BLOCKED"
+] as const;
+export type BuilderStatus = (typeof BUILDER_STATUSES)[number];
+
+/**
  * verdict the qa-runner specialist returns in its slim summary.
  * Drives the qa stage routing (between `build` and `review` on the tight
  * gate {triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"}):
