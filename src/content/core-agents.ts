@@ -106,6 +106,16 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     prompt: SPECIALIST_PROMPTS["plan-critic"]
   },
   {
+    id: "plan-design",
+    kind: "specialist",
+    title: "Plan design",
+    activation: "on-demand",
+    modes: ["pre-impl-design"],
+    description:
+      "pre-implementation plan-design specialist (added in the v8.75 release). Walks plan.md against the same seven-dimension design-quality rubric the reviewer applies post-build (rubric lifted into a shared const at src/content/design-quality-rubric.ts so both surfaces stay in lock-step). Dispatched after plan-critic (when plan-critic's strict gate fires) or directly after architect (when plan-critic is gated off but the design gate still fires) on the surface gate {triage.designSurface == true OR triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅; ceremonyMode ∈ {soft, strict}}. Below-6 dimension grades become PD-N findings appended to plan.md's ## Plan-design findings section; severity ≥ medium blocks ship in strict mode. Verdicts: pass (advance to builder), revise (bounce to architect once — max 1 revise loop), block (stop-and-report; high-severity row open or strict-mode block-ship floor engaged). Read-only on the codebase; appends to plan.md only.",
+    prompt: SPECIALIST_PROMPTS["plan-design"]
+  },
+  {
     id: "builder",
     kind: "specialist",
     title: "Builder",

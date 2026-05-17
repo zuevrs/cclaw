@@ -30,8 +30,8 @@ describe("v8.42 critic specialist — registry membership", () => {
     expect((SPECIALISTS as readonly string[]).includes("critic")).toBe(true);
   });
 
-  it("SPECIALISTS array carries exactly seven specialists (v8.62 unified flow drops `design` and `security-reviewer` and renames `ac-author` → `architect`, `slice-builder` → `builder`; the critic survives)", () => {
-    expect(SPECIALISTS).toHaveLength(7);
+  it("SPECIALISTS array carries exactly eight specialists (v8.62 unified flow dropped `design` and `security-reviewer` and renamed `ac-author` → `architect`, `slice-builder` → `builder`; the critic survives; v8.75 added the pre-impl design-coherence `plan-design` after plan-critic)", () => {
+    expect(SPECIALISTS).toHaveLength(8);
   });
 
   it("critic sits at the tail of SPECIALISTS, after reviewer (v8.62 — security-reviewer is gone, the critic is the last on-demand sub-agent before ship)", () => {

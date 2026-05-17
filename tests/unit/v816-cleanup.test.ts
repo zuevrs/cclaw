@@ -133,9 +133,9 @@ describe("v8.16 thematic skills merge", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
-    it("skill count stays in the [15, 24] range — v8.16 brief was [15, 18]; v8.27-v8.33 added five frontier-aesthetic skills (code-simplification, context-engineering, performance-optimization, frontend-ui-engineering, ci-cd-and-automation); v8.44 retired all five (zombie — never referenced by a specialist prompt), but the band is left wide so future additive skills don't need a count edit", () => {
+    it("skill count stays in the [15, 25] range — v8.16 brief was [15, 18]; v8.27-v8.33 added five frontier-aesthetic skills (code-simplification, context-engineering, performance-optimization, frontend-ui-engineering, ci-cd-and-automation); v8.44 retired all five (zombie — never referenced by a specialist prompt); v8.75 added one (design-quality-discipline — shared with both plan-design and reviewer's design-quality axis); the band is left wide so future additive skills don't need a count edit", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
-      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(24);
+      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(25);
     });
   });
 

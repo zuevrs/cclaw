@@ -9,6 +9,7 @@ import {
   BUILDER_PROMPT,
   CRITIC_PROMPT,
   PLAN_CRITIC_PROMPT,
+  PLAN_DESIGN_PROMPT,
   QA_RUNNER_PROMPT,
   REVIEWER_PROMPT,
   SPECIALIST_PROMPTS,
@@ -114,19 +115,20 @@ describe("v8.74 — ethos prepended to every specialist dispatch envelope", () =
     expect(body).toContain("cclaw-ethos.md");
   });
 
-  it("AC-2 — all 7 specialist prompts reference the ethos preamble (auto-prepended via dispatch envelope)", () => {
-    // The 7 specialists in the v8.62-collapsed roster.
+  it("AC-2 — all 8 specialist prompts reference the ethos preamble (auto-prepended via dispatch envelope) — v8.75 added plan-design", () => {
+    // The 8 specialists in the v8.62-collapsed-plus-v8.75-plan-design roster.
     const specialists = [
       ["triage", TRIAGE_PROMPT],
       ["architect", ARCHITECT_PROMPT],
       ["builder", BUILDER_PROMPT],
       ["plan-critic", PLAN_CRITIC_PROMPT],
+      ["plan-design", PLAN_DESIGN_PROMPT],
       ["qa-runner", QA_RUNNER_PROMPT],
       ["reviewer", REVIEWER_PROMPT],
       ["critic", CRITIC_PROMPT]
     ] as const;
-    expect(specialists).toHaveLength(7);
-    // The roster export should match the seven we test (sanity guard
+    expect(specialists).toHaveLength(8);
+    // The roster export should match the eight we test (sanity guard
     // against new specialist additions silently bypassing the ethos
     // wiring).
     const installedIds = Object.keys(SPECIALIST_PROMPTS).sort();
@@ -309,14 +311,7 @@ describe("v8.74 — types extend Decision shape with Reversibility", () => {
 });
 
 describe("v8.74 — version bump", () => {
-  it("AC-10 — package.json bumps to 8.74.0", async () => {
-    const pkg = JSON.parse(
-      await fs.readFile(path.join(process.cwd(), "package.json"), "utf-8")
-    );
-    expect(pkg.version).toBe("8.74.0");
-  });
-
-  it("AC-10 — CHANGELOG.md carries a v8.74 entry", async () => {
+  it("AC-10 — CHANGELOG.md carries a v8.74 entry (the v8.74 release shipped; later versions bump package.json — this test pins the changelog entry only)", async () => {
     const changelog = await fs.readFile(
       path.join(process.cwd(), "CHANGELOG.md"),
       "utf-8"

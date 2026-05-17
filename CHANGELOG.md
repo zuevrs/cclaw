@@ -1,6 +1,69 @@
 # Changelog
 
 
+## 8.75.0 — Plan-design-lens — front-loaded design audit
+
+### Why
+
+v8.70 added a gated `design-quality` axis to the post-build reviewer: when triage detects a UI / design / frontend / UX surface, the reviewer walks the rendered diff against a seven-dimension rubric (visual hierarchy / type system consistency / color system / spacing rhythm / interaction affordances / accessibility (WCAG AA) / responsive behavior). The axis caught real design slop on shipped diffs — generic AI layouts, missing interaction states, accessibility-as-afterthought, hardcoded typography — but every catch happened **after** the build burned a sub-builder context to materialize the broken design. The architect picked design tokens, the builder rendered them, the reviewer flagged them, the architect's revise loop rewrote them, the builder re-rendered them. Two sub-builder cycles when one would have done.
+
+cclaw already has the pre-implementation analogue for **structural** plan integrity: the v8.51 `plan-critic` walks `plan.md` for goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog before the builder runs. But plan-critic does NOT look at design coherence — design is structurally orthogonal to plan-critic's five dimensions and was deliberately out of scope when plan-critic shipped. The reference cohort (gstack `plan-design-review`, everyinc `ce-design-lens-reviewer`) explicitly separates the structural plan critique from the design-coherence plan critique because the failure modes are different (structural: "this plan can't be built as written"; design: "this plan does not commit to coherent design choices").
+
+The fix: a sister specialist, `plan-design`, that walks plan.md against the same seven-dimension rubric the v8.70 reviewer applies — but **before** the build runs. Below-6 dimension grades become `PD-N` (Plan-Design) findings appended to plan.md's `## Plan-design findings` section; severity ≥ medium blocks ship in strict mode (the v8.75 block-ship-on-strict floor). The architect's revise loop reads the open `PD-N` rows and addresses them in the same dispatch that addresses plan-critic's findings (when both gates fire). The reviewer's post-build `design-quality` axis still runs at review-time — plan-design existing does NOT skip it — and the reviewer escalates the severity of any post-build finding that maps to an `open` plan-design row that the build did not address.
+
+The seven-dimension rubric (anchors + AI-slop signal set) is lifted into a shared TypeScript const at `src/content/design-quality-rubric.ts` so both specialists pin the same canonical dimensions. Editing the rubric requires touching one file; the two consumers (reviewer.ts, plan-design.ts) render the same markdown via `renderDesignQualityRubricTable()` / `renderDesignQualityAiSlopChecklist()`.
+
+### What changed
+
+**Deliverable 1 — Shared design-quality rubric (`src/content/design-quality-rubric.ts`).**
+
+- New module exports `DESIGN_QUALITY_DIMENSIONS` (the seven dimensions, each with `key` / `name` / `summary` / `anchor10`), `DESIGN_QUALITY_AI_SLOP_SIGNALS` (eight canonical AI-slop patterns), `renderDesignQualityRubricTable()` (returns the 3-column markdown table embedded by both specialists), and `renderDesignQualityAiSlopChecklist()` (returns the bullet list embedded by both specialists). The rubric body is lifted verbatim from v8.70 reviewer.ts so the post-build axis behaviour is unchanged.
+
+**Deliverable 2 — Reviewer.ts consumes the shared rubric (`src/content/specialist-prompts/reviewer.ts`).**
+
+- The hardcoded `design-quality` axis table is replaced with `${renderDesignQualityRubricTable()}`; the hardcoded AI-slop checklist is replaced with `${renderDesignQualityAiSlopChecklist()}`. The reviewer's wrapping context (severity ladder, accessibility one-tier escalation, AI-slop umbrella finding, block-ship semantics) is unchanged — only the rubric source moved.
+
+**Deliverable 3 — New `plan-design` specialist (`src/content/specialist-prompts/plan-design.ts`).**
+
+- The specialist opens with the v8.74 force-stance clause (`Adversarial stance: Assume the design bets locked into this plan are wrong until evidence proves otherwise.`), reads plan.md + DESIGN.md + CONTEXT.md (the last two optional; missing-file is itself signal), and walks five output sections: (§1) Pre-commitment predictions (3-5, committed before §2 reads plan.md in detail); (§2) Seven-dimension grading with the rubric translated for plan.md evidence ("Is the design commitment in the plan strong enough to ship intentional UI?"); (§3) AI-slop cross-cut check; (§4) PD-N findings ledger; (§5) Verdict + slim summary.
+- Findings format: `| PD-N | Dimension | Severity | Anchor | Description | Suggested fix | Status |` appended to plan.md's `## Plan-design findings` section. Severity ladder: 5/10 → `low`; 4/10 → `medium`; ≤3/10 → `high`. Accessibility escalates one tier: below-6 → `medium` minimum; ≤2 → `high` regardless of mode.
+- Verdicts: `pass` → builder; `revise` → architect bounce (max 1 revise loop, shared with plan-critic's revise loop); `block` → stop-and-report (any `high` row OR strict-mode block-ship floor engaged). No `cancel` verdict — cancellation is the user's prerogative via `/cc-cancel`.
+
+**Deliverable 4 — Orchestrator integration (`src/content/start-command.ts`).**
+
+- New `#### plan-design (v8.75+, sub-step of plan)` section documents the design-surface gate (`triage.designSurface == true` OR `triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅`; `ceremonyMode ∈ {soft, strict}`; `plan.md` exists), the dispatch ordering (after plan-critic when plan-critic's gate fires; directly after architect otherwise), the verdict-routing matrix, the combined revise hand-off rules when both plan-critic and plan-design return non-pass verdicts in the same iteration (architect gets a single envelope with both §8 hand-offs concatenated, single rewrite, both specialists re-dispatch on iteration 1).
+- Stage→specialist mapping table grows a `plan` (sub-step, v8.75) row for `plan-design` gated on the design-surface gate.
+- `lastSpecialist` rotation roster updated to name `plan-design`; `flow-state.json` patches add `planDesignVerdict` / `planDesignIteration` / `planDesignFindingsCount` / `planDesignDispatchedAt`.
+
+**Deliverable 5 — Types + roster (`src/types.ts`, `src/content/specialist-prompts/index.ts`, `src/content/core-agents.ts`).**
+
+- `SPECIALISTS` array grows from 7 → 8 with `plan-design` inserted between `plan-critic` and `qa-runner` (the canonical pipeline order: triage → plan → build → qa → review → critic → ship; plan-design sits in the plan sub-step block).
+- `SPECIALIST_PROMPTS` registers the new prompt; `CORE_AGENTS` registers the new specialist with `modes: ["pre-impl-design"]` and the on-demand activation contract.
+- New types: `PlanDesignVerdict` (pass / revise / block) and `PlanDesignSeverity` (low / medium / high) — distinct from `PlanCriticVerdict` (no `cancel` tier) and from `CriticVerdict` (no `block-ship` tier; plan-design fires before the build, so `block-ship` would mislead).
+
+**Deliverable 6 — Skill (`src/content/skills/design-quality-discipline.md` + `src/content/skills.ts`).**
+
+- New auto-trigger skill `design-quality-discipline` shared by `plan-design` and the reviewer's `design-quality` axis. Stages: `plan` + `review` (triggers when either specialist dispatches on a design-surface flow). Body covers: when to apply, when NOT to apply, the seven canonical dimension names, grading discipline (pre-commitment, severity ladder with accessibility one-tier escalation, AI-slop umbrella), block-ship semantics across both consumers, hard rules (never silently downgrade accessibility / never skip pre-commitment / never relitigate the architect's design direction), common rationalizations + rebuttals, cross-reference to the shared rubric const + both agent contracts + the relevant runbook sections.
+
+**Deliverable 7 — Tests + smoke (`tests/unit/v875-plan-design-lens.test.ts`; updated: `tests/unit/types.test.ts`, `tests/unit/critic-specialist.test.ts`, `tests/unit/core-agents.test.ts`, `tests/unit/v861-triage-subagent.test.ts`, `tests/unit/v862-unified-flow.test.ts`, `tests/unit/v865-powerful-research.test.ts`, `tests/unit/v874-ethos-bundle.test.ts`, `tests/integration/critic-hop.test.ts`, `tests/unit/v816-cleanup.test.ts`, `tests/unit/v822-orchestrator-slim.test.ts`, `tests/unit/v831-path-aware-trimming.test.ts`; `scripts/smoke-init.mjs`).**
+
+- `v875-plan-design-lens.test.ts` (36 tests across 5 describes): SPECIALISTS roster + plan-design wiring; design-quality rubric is a single source of truth shared by reviewer + plan-design; plan-design prompt body discipline (force-stance / Modes / Output schema / Composition / PD-N findings / verdict surface / pre-commitment / gate / ethos preamble); orchestrator dispatch (#### plan-design block / design-surface gate / dispatch ordering / verdict routing / flow-state patches / stage table row); design-quality-discipline skill (stages + triggers + body cites shared rubric); version bump (package.json 8.75.0 + CHANGELOG.md entry).
+- Existing tests updated: every test asserting SPECIALISTS length 7 raised to 8; every test enumerating specialist ids carries `plan-design` between `plan-critic` and `qa-runner`; `v874-ethos-bundle.test.ts` AC-2 specialists array grows to include `plan-design`; `critic-hop.test.ts` agent-files list grows to include `plan-design.md`; body-budget tests (v8.22 / v8.31 / v8.61) raised for the new `#### plan-design` body section (~30 lines / ~8k chars); skill-count band raised from [15, 24] to [15, 25] for the new `design-quality-discipline` skill.
+- Smoke (`scripts/smoke-init.mjs`) asserts `.cclaw/lib/agents/plan-design.md` ships on a fresh install.
+
+### Migration
+
+- Pre-v8.75 state files (`flow-state.json` without `planDesignVerdict` / `planDesignIteration` / `planDesignFindingsCount` / `planDesignDispatchedAt` fields): handled transparently. Readers find no PD-N fields; orchestrator dispatches plan-design on the next `/cc` if the design-surface gate fires.
+- Pre-v8.75 plan.md artifacts (no `## Plan-design findings` section): handled transparently. The section is append-only; missing section means no plan-design dispatch has run yet. The architect's revise loop does not re-author the section.
+- Harness installs: `cclaw install` on the upgraded CLI writes `.cclaw/lib/agents/plan-design.md` and `.cclaw/lib/skills/design-quality-discipline.md` to each enabled harness's agent + skill directory. Existing `.cclaw/` state is untouched.
+
+### How to verify
+
+- `npx vitest run` — all tests pass.
+- `npm run smoke:runtime` — init → install → uninstall round-trip on a temp project; asserts `.cclaw/lib/agents/plan-design.md` ships and is swept on uninstall.
+- Manual: `/cc <task involving UI/design/frontend>` from a harness with cclaw installed. Verify triage flags `designSurface: true`; architect writes plan.md; plan-critic runs (if its strict gate fires); plan-design runs after plan-critic (or directly after architect when plan-critic is gated off); plan.md grows a `## Plan-design findings` section with PD-N rows; below-6 grades surface; severity ≥ medium blocks ship in strict mode.
+
+
 ## 8.74.0 — Ethos preamble + reversibility field + adversarial stance
 
 ### Why

@@ -1,3 +1,7 @@
+import {
+  renderDesignQualityAiSlopChecklist,
+  renderDesignQualityRubricTable
+} from "../design-quality-rubric.js";
 import { buildAutoTriggerBlock } from "../skills.js";
 
 export const REVIEWER_PROMPT = `# reviewer
@@ -263,17 +267,9 @@ The \`design-quality\` axis is the visual / interaction / accessibility pass on 
 
 When **none** of the three fire, the axis is structurally skipped — emit zero findings; note "design-quality: skipped (no design surface)" in the iteration block. Skipping is the default on backend / data / CLI / infra / docs slugs; do not invent design findings on a Postgres migration.
 
-**Per-dimension grading rubric.** When the gate fires, walk the diff and grade each of seven dimensions \`0-10\` with an explicit **what a 10 looks like** reference. Render each grade verbatim in the iteration block under a \`### Design-quality axis\` sub-section using the format \`<Dimension>: <N>/10 — it's a <N> because <gap>. A 10 would have <what's needed>.\` (this is the gstack \`/plan-design-review\` shape; the \`what a 10 looks like\` reference is mandatory — it converts the grade from a vibe into a directional signal the builder can actually act on).
+**Per-dimension grading rubric.** When the gate fires, walk the diff and grade each of seven dimensions \`0-10\` with an explicit **what a 10 looks like** reference. Render each grade verbatim in the iteration block under a \`### Design-quality axis\` sub-section using the format \`<Dimension>: <N>/10 — it's a <N> because <gap>. A 10 would have <what's needed>.\` (this is the gstack \`/plan-design-review\` shape; the \`what a 10 looks like\` reference is mandatory — it converts the grade from a vibe into a directional signal the builder can actually act on). v8.75 — the table below is rendered from the shared \`design-quality-rubric.ts\` const (\`DESIGN_QUALITY_DIMENSIONS\`); the v8.75 \`plan-design\` specialist consumes the same rubric against plan.md so the seven dimensions stay in lock-step pre- and post-build (single source of truth).
 
-| dimension | what it covers | what a 10 looks like |
-| --- | --- | --- |
-| **visual hierarchy** | content priority — what does the user see first / second / third? does the most important action stand out? are decorative elements suppressed below load-bearing ones? | clear primary action visually dominant (size, weight, color); secondary actions de-emphasised; non-essential metadata at the lowest visual weight; the page's purpose is legible from a 1-second glance |
-| **type system consistency** | typography reuses a small, deliberate set of sizes / weights / line-heights; headings cascade predictably; body / caption / label tiers are distinct and consistent across views | 3-5 type sizes total across the diff; explicit \`h1\` / \`h2\` / \`h3\` cascade; body and caption have a single canonical line-height each; no one-off font-size literals in the diff |
-| **color system** | palette is constrained and semantic; foreground / background pairs hold contrast; brand / neutral / state (success / warning / error / info) tiers are distinguishable from each other and from the background | a documented palette (CSS variables / design tokens) with neutral + brand + state tiers; every new color reuses an existing token; no hex literals embedded in component code; state colors (red / amber / green) reserved for state, not decoration |
-| **spacing rhythm** | padding / margin / gap follow a consistent scale (e.g. 4px / 8px / 16px / 24px / 32px); related elements cluster, unrelated elements separate; the layout breathes without being sparse | spacing reuses a single token scale; related controls grouped tighter than unrelated ones; section-level whitespace at least 2× control-level whitespace; no one-off pixel literals (\`margin: 13px\`) in the diff |
-| **interaction affordances** | interactive elements look interactive without hover; loading / empty / error / success / disabled states are explicit; click / tap targets visually distinct from passive text | every button / link clearly affords interaction at rest (border / background / underline); every async surface has explicit loading + empty + error + success states implemented (not deferred); disabled state is visually distinct from active without relying solely on color |
-| **accessibility (WCAG AA)** | contrast ratio ≥ 4.5:1 for body, ≥ 3:1 for large text and UI components; keyboard reachable in logical order; focus rings visible on every interactive element; semantic HTML / ARIA roles correct; alt text on meaningful images; no keyboard traps | every text / control / icon meets WCAG AA contrast; tab order matches reading order; focus ring visible on every focusable element; \`<button>\` / \`<a>\` / \`<input>\` used semantically (not \`<div onClick>\`); \`aria-label\` on icon-only buttons; \`aria-live\` on dynamic regions; alt text on every meaningful image |
-| **responsive behavior** | layout adapts at named breakpoints; touch targets ≥ 44×44 on mobile; no horizontal scrolling on common viewport widths; content reflows rather than truncating critical actions | explicit breakpoints (e.g. \`sm\` / \`md\` / \`lg\`); touch targets ≥ 44px on mobile; no horizontal scroll at 320px width; primary actions remain visible at every breakpoint; tested visually at ≥ 2 widths in qa-runner evidence when qa-runner ran |
+${renderDesignQualityRubricTable()}
 
 **Below-6 grades become findings.** A grade of \`5/10\` or lower on any dimension is a **design-quality finding (severity=consider)** by default. Cite the dimension name, the grade, the gap, the "what a 10 looks like" reference, and the file:line(s) where the gap is most visible. Severity escalates per the standard ladder:
 
@@ -284,16 +280,9 @@ When **none** of the three fire, the axis is structurally skipped — emit zero 
 
 **Above-7 grades are recorded but emit no findings.** Grades of \`6/10\` are borderline — record the grade in the iteration block but emit no finding (the dimension is acceptable, not exemplary). Grades of \`7/10\` and above record the dimension as a positive observation (folds into the \`What's done well\` section when load-bearing; e.g. "type system: 9/10 — diff reuses the existing 4-tier scale; no one-off font-sizes introduced").
 
-**AI-slop check (cross-cuts the seven dimensions).** Before scoring, scan the diff for the canonical AI-slop signals — they typically tank multiple dimensions at once and deserve an explicit callout:
+**AI-slop check (cross-cuts the seven dimensions).** Before scoring, scan the diff for the canonical AI-slop signals — they typically tank multiple dimensions at once and deserve an explicit callout. v8.75 — the bullet list below is rendered from the shared \`design-quality-rubric.ts\` const (\`DESIGN_QUALITY_AI_SLOP_SIGNALS\`); the v8.75 \`plan-design\` specialist consumes the same list against plan.md so signal coverage stays identical pre- and post-build.
 
-- 3-column feature grids with identical cards regardless of metric importance;
-- purple/blue gradients used decoratively without semantic intent;
-- icons in colored circles with no functional meaning;
-- uniform border-radius applied to every surface (cards, buttons, inputs, modals all 8px);
-- generic SaaS landing-page composition (hero + features grid + testimonials + CTA) without product-specific reasoning;
-- "modern and clean" or "sleek" as the entire design direction (no functional reasoning visible in the diff or plan.md);
-- stock-photo hero images;
-- dashboard with N identical metric cards regardless of metric importance.
+${renderDesignQualityAiSlopChecklist()}
 
 When the diff matches **two or more** AI-slop signals, raise an additional umbrella finding under the design-quality axis (severity=required, axis=design-quality) titled \`AI-slop pattern detected\` that names every signal that fired. The fix is product-specific functional design thinking, not a single dimension regrade — recommend the architect re-author the affected slice's plan.md \`## Frame\` section with explicit user-needs reasoning.
 

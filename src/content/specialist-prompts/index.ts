@@ -2,6 +2,7 @@ import { ARCHITECT_PROMPT } from "./architect.js";
 import { REVIEWER_PROMPT } from "./reviewer.js";
 import { CRITIC_PROMPT } from "./critic.js";
 import { PLAN_CRITIC_PROMPT } from "./plan-critic.js";
+import { PLAN_DESIGN_PROMPT } from "./plan-design.js";
 import { QA_RUNNER_PROMPT } from "./qa-runner.js";
 import { BUILDER_PROMPT } from "./builder.js";
 import { TRIAGE_PROMPT } from "./triage.js";
@@ -14,6 +15,7 @@ export const SPECIALIST_PROMPTS: Record<SpecialistId, string> = {
   reviewer: REVIEWER_PROMPT,
   critic: CRITIC_PROMPT,
   "plan-critic": PLAN_CRITIC_PROMPT,
+  "plan-design": PLAN_DESIGN_PROMPT,
   "qa-runner": QA_RUNNER_PROMPT,
   builder: BUILDER_PROMPT,
   triage: TRIAGE_PROMPT
@@ -24,6 +26,7 @@ export {
   REVIEWER_PROMPT,
   CRITIC_PROMPT,
   PLAN_CRITIC_PROMPT,
+  PLAN_DESIGN_PROMPT,
   QA_RUNNER_PROMPT,
   BUILDER_PROMPT,
   TRIAGE_PROMPT

@@ -82,9 +82,9 @@ describe("v8.62 — specialist-prompts directory: retired files removed, replace
   }
 });
 
-describe("v8.62 — SPECIALISTS roster is the exact 7-entry canonical pipeline", () => {
-  it("contains exactly seven specialists", () => {
-    expect(SPECIALISTS).toHaveLength(7);
+describe("v8.62 — SPECIALISTS roster is the exact 8-entry canonical pipeline (v8.75 added plan-design)", () => {
+  it("contains exactly eight specialists (v8.75 added plan-design after plan-critic)", () => {
+    expect(SPECIALISTS).toHaveLength(8);
   });
 
   it("contains `architect` and `builder`", () => {
@@ -103,19 +103,20 @@ describe("v8.62 — SPECIALISTS roster is the exact 7-entry canonical pipeline",
     });
   }
 
-  it("orders the seven specialists along the canonical pipeline (triage → plan → build → qa → review → critic → ship)", () => {
+  it("orders the eight specialists along the canonical pipeline (triage → plan → build → qa → review → critic → ship); plan-design (v8.75) inserts between plan-critic and qa-runner — it's a plan sub-step gated on triage.designSurface", () => {
     expect(SPECIALISTS).toEqual([
       "triage",
       "architect",
       "builder",
       "plan-critic",
+      "plan-design",
       "qa-runner",
       "reviewer",
       "critic"
     ]);
   });
 
-  it("CORE_AGENTS registers exactly the 7 specialists + the read-only research helpers (learnings-research, repo-research)", () => {
+  it("CORE_AGENTS registers exactly the 8 specialists + the read-only research helpers (learnings-research, repo-research)", () => {
     const specialistIds = CORE_AGENTS.filter((a) =>
       (SPECIALISTS as readonly string[]).includes(a.id)
     ).map((a) => a.id);
