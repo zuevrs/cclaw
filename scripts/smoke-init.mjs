@@ -214,6 +214,15 @@ try {
   if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "qa-runner.md"))) {
     throw new Error("smoke check failed: v8.52 qa-runner.md agent file missing after init");
   }
+  // v8.75 — `plan-design.md` agent file added alongside the new pre-impl
+  // plan-design specialist. Runs at the plan stage on the design-surface
+  // gate (triage.designSurface == true OR triage.surfaces ∩ {ui, design,
+  // frontend, ux} ≠ ∅, ceremonyMode ∈ {soft, strict}, plan.md exists).
+  // The agent file ships unconditionally; the orchestrator gates the
+  // dispatch on the three AND conditions.
+  if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "plan-design.md"))) {
+    throw new Error("smoke check failed: v8.75 plan-design.md agent file missing after init");
+  }
   // v8.62 — unified flow specialist roster. `architect` (renamed from
   // `ac-author`, absorbing the dead `design` specialist's Phase 0-6
   // responsibilities) and `builder` (renamed from `slice-builder`) are

@@ -14,9 +14,9 @@ import { SPECIALISTS } from "../../src/types.js";
  * These tests are tripwires for the move's invariants.
  */
 describe("v8.61 — triage as a specialist sub-agent", () => {
-  it("SPECIALISTS includes triage; v8.61 expected length 9 (8 + triage); v8.62 unified flow collapsed `design` into `architect` and removed `security-reviewer` so the post-v8.62 length is 7", () => {
+  it("SPECIALISTS includes triage; v8.61 expected length 9 (8 + triage); v8.62 unified flow collapsed `design` into `architect` and removed `security-reviewer` so the post-v8.62 length was 7; v8.75 added `plan-design` (pre-impl design-coherence pass) so the current length is 8", () => {
     expect(SPECIALISTS).toContain("triage");
-    expect(SPECIALISTS).toHaveLength(7);
+    expect(SPECIALISTS).toHaveLength(8);
   });
 
   it("SPECIALIST_PROMPTS maps triage to TRIAGE_PROMPT", () => {
@@ -92,7 +92,7 @@ describe("v8.61 — triage as a specialist sub-agent", () => {
     // routing them to runbooks/research-revision.md). The triage
     // delegation invariant (the body does not re-implement triage
     // inline) is preserved.
-    expect(START_COMMAND_BODY.length).toBeLessThan(87000);
+    expect(START_COMMAND_BODY.length).toBeLessThan(96000);
     expect(START_COMMAND_BODY).toMatch(/triage[\s\S]*sub-agent|dispatch[\s\S]*triage|triage[\s\S]*specialist/iu);
   });
 

@@ -61,6 +61,18 @@ export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
  * array traces the canonical pipeline (triage → plan → build → qa →
  * review → critic → ship).
  *
+ * v8.75: specialist count grows 7 → 8 with the addition of `plan-design`,
+ * a pre-implementation design-coherence pass that walks plan.md against
+ * the seven-dimension design-quality rubric (the same rubric the v8.70
+ * reviewer applies post-build; lifted into a shared const at
+ * `src/content/design-quality-rubric.ts` so both surfaces stay in
+ * lock-step). plan-design runs after plan-critic (or directly after
+ * architect when plan-critic's strict gate is off) and ONLY when the
+ * orchestrator detects a UI / design / frontend / UX surface in
+ * ceremonyMode ∈ {soft, strict}. plan-design appends `PD-N` findings to
+ * plan.md's `## Plan-design findings` section; below-6 grades become
+ * findings; severity ≥ medium blocks ship in strict mode.
+ *
  * Background on the joiners that remain:
  * - `critic` (v8.42) is an on-demand sub-agent that runs at the critic
  *   stage between `review` and `ship`. It walks what was built (gap
@@ -71,12 +83,18 @@ export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
  *   AC count>=2}. It walks the plan itself (goal coverage / granularity
  *   / dependencies / parallelism / risk catalog) before any code is
  *   written and writes `flows/<slug>/plan-critic.md`.
+ * - `plan-design` (v8.75) is a pre-implementation design-coherence pass
+ *   that runs at the plan stage when triage detects a design surface
+ *   and ceremonyMode is not inline. Walks plan.md against the
+ *   seven-dimension rubric shared with the reviewer's `design-quality`
+ *   axis; below-6 grades become `PD-N` findings appended to plan.md.
  */
 export const SPECIALISTS = [
   "triage",
   "architect",
   "builder",
   "plan-critic",
+  "plan-design",
   "qa-runner",
   "reviewer",
   "critic"
@@ -395,6 +413,67 @@ export type Surface = (typeof SURFACES)[number];
  * specialist is in flight, not on a merged verdict shape.
  */
 export type PlanCriticVerdict = "pass" | "revise" | "cancel";
+
+/**
+ * verdict the v8.75 pre-implementation plan-design specialist returns in
+ * its slim summary. Drives the plan-design step routing (between
+ * `plan-critic` (when its strict gate fires) or `architect` (when
+ * plan-critic is skipped) and `builder` on the design-surface gate
+ * {triage.designSurface == true OR triage.surfaces ∩ {ui, design,
+ * frontend, ux} ≠ ∅; ceremonyMode ∈ {soft, strict}}):
+ *
+ * - `pass` — zero open `medium` / `high` PD-N rows; advance to builder
+ *   dispatch (no ceremony).
+ * - `revise` (iteration 0) — at least one `medium` row open AND zero
+ *   `high` rows; bounce to architect with the open PD-N rows prepended
+ *   to the dispatch envelope, then re-dispatch plan-design (iteration
+ *   1). Max 1 revise loop.
+ * - `revise` (iteration 1) — second revise; orchestrator surfaces the
+ *   stop-and-report status block (no third dispatch).
+ * - `block` (any iteration) — at least one `high` row OR (strict mode)
+ *   at least one `medium` row AND the block-ship-on-strict floor
+ *   engaged; orchestrator surfaces the stop-and-report status block
+ *   immediately.
+ *
+ * Distinct from {@link PlanCriticVerdict} on purpose: plan-critic has a
+ * `cancel` verdict (structural plan problem requiring re-author); plan-
+ * design caps at `block` because the worst case at plan-time is "the
+ * plan does not commit to the design work" — a fix-by-architect amend,
+ * not a re-author. Distinct from {@link CriticVerdict} on purpose: the
+ * post-impl critic has a `block-ship` verdict that fires after build /
+ * review; plan-design fires BEFORE the build so the wording diverges
+ * (`block` not `block-ship` because the build hasn't run yet — calling
+ * it `block-ship` would mislead readers into thinking the diff exists).
+ */
+export type PlanDesignVerdict = "pass" | "revise" | "block";
+
+/**
+ * Severity of a single `PD-N` (plan-design finding) row appended to
+ * plan.md's `## Plan-design findings` section by the v8.75 plan-design
+ * specialist. The ladder mirrors the reviewer's `design-quality` axis
+ * severity progression with one tier capped off — there is no
+ * `critical` tier at plan-time because the worst case at plan-time is
+ * "the plan does not commit to the work" rather than "the rendered
+ * diff is shipping broken behaviour".
+ *
+ * - `low` — default for any dimension grading exactly 5/10. Carries to
+ *   learnings as advisory; does NOT block ship even in strict mode.
+ * - `medium` — dimension grading exactly 4/10; OR any accessibility
+ *   grade ≤ 5 (one-tier escalation, mirroring the reviewer's axis
+ *   accessibility prior); OR the AI-slop umbrella finding in strict
+ *   mode. Blocks ship in strict mode (the v8.75 block-ship-on-strict
+ *   floor); surfaces but does not block in soft mode.
+ * - `high` — dimension grading ≤ 3/10; OR any accessibility grade ≤ 2
+ *   (legal / inclusion baseline; blocks regardless of mode). Blocks
+ *   ship in strict; in soft mode the orchestrator surfaces the stop-
+ *   and-report status block when ≥ 2 `high` rows accumulate.
+ *
+ * Validators accept the string verbatim on read; new writes MUST use
+ * one of the three values. Pre-v8.75 state files cannot carry this
+ * field at all (the plan-design specialist did not exist), so back-
+ * compat is structural: readers simply find no `PD-N` rows.
+ */
+export type PlanDesignSeverity = "low" | "medium" | "high";
 
 /**
  * Reversibility classification per `D-N` decision in `plan.md > ##

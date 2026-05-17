@@ -161,6 +161,22 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     body: readSkill("parallel-build.md")
   },
   {
+    id: "design-quality-discipline",
+    fileName: "design-quality-discipline.md",
+    description:
+      "shared discipline for the seven-dimension design-quality rubric (added in the v8.75 release) (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) consumed by both the pre-build `plan-design` specialist (walks plan.md) and the post-build reviewer's gated `design-quality` axis (walks the rendered diff). Single source of truth for the rubric lives in `src/content/design-quality-rubric.ts`; this skill spells out HOW to grade (pre-commitment predictions, severity ladder with accessibility one-tier escalation, AI-slop umbrella, block-ship semantics) regardless of which specialist is reading. Auto-on at plan + review stages when triage detects a UI / design / frontend / UX surface.",
+    triggers: [
+      "design-surface:true",
+      "specialist:plan-design",
+      "specialist:reviewer",
+      "stage:plan",
+      "stage:review",
+      "diff:tsx|jsx|vue|svelte|astro|html|css|scss"
+    ],
+    stages: ["plan", "review"],
+    body: readSkill("design-quality-discipline.md")
+  },
+  {
     id: "review-discipline",
     fileName: "review-discipline.md",
     description: "merge of review-loop + security-review. v8.62 unified flow absorbed the former `security-reviewer` specialist into reviewer's `security` axis — the skill now wraps every reviewer invocation with the shared Findings table, ten-axis pass (incl. the absorbed full threat-model coverage on the security axis), Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
