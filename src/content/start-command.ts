@@ -397,6 +397,57 @@ The architect writes the final assumption list to \`flow-state.json > triage.ass
 
 Every dispatch envelope still includes \`Pre-flight assumptions: see triage.assumptions in flow-state.json\`. Wire format unchanged; only the capture surface moved.
 
+## Debug-branch routing (v8.77; triage.taskShape == "debug")
+
+When triage's slim summary returned \`Task shape: debug\` AND the orchestrator persisted \`triage.taskShape = "debug"\` into \`flow-state.json\`, the orchestrator **inserts an investigator hop BEFORE the architect dispatch** for the plan stage. The investigator is a read-only diagnostic specialist that fans out three parallel hypothesis lanes (\`cause-code\` / \`cause-config\` / \`cause-measurement\`), writes \`investigation.md\` to the flow dir, and returns a slim summary whose \`Next step:\` field drives the post-investigator routing. The investigator hop is **orthogonal to \`ceremonyMode\` and \`triage.complexity\`** — the v8.77 release locked taskShape as a separate dimension precisely so the existing complexity classifier did not need reworking.
+
+### Routing matrix (post-investigator)
+
+The orchestrator reads the investigator's slim summary's \`Next step:\` line (one of four canonical values) and branches as follows:
+
+| \`Next step:\` | Action | priorInvestigation envelope field |
+| --- | --- | --- |
+| \`direct-fix\` | Skip architect entirely. Dispatch \`builder\` directly with the investigation as plan-substitute. Builder reads \`investigation.md > ## Fix scope\` + \`## Root cause (working hypothesis)\` as contract; writes RED-before-GREEN with \`fix(<scope>):\` commit prefix. | \`{ path: "flows/<slug>/investigation.md", verdict: "direct-fix", confidence: <high\|medium\|low> }\` (set on the builder dispatch envelope; no architect dispatch happens). |
+| \`needs-plan\` | Dispatch \`architect\` with \`priorInvestigation\` on envelope. Architect's Bootstrap reads investigation.md as load-bearing context for Frame (Phase 1's first clause copies the root cause verbatim — see architect prompt's Phase 0 step 8 + Phase 1 debug-branch flavour). plan-critic / plan-design gates fire as normal afterwards; builder / qa / review / critic / ship paths unchanged. | \`{ path: "flows/<slug>/investigation.md", verdict: "needs-plan", confidence: <high\|medium\|low> }\` (set on the architect dispatch envelope AND on every downstream dispatch envelope in the same flow so the builder + reviewer + critic can cross-check against the cited root cause). |
+| \`more-investigation\` | Re-dispatch the **investigator** with iteration 1. The orchestrator increments \`flow-state.json > investigatorIteration\` from 0 to 1 BEFORE the second dispatch; the second dispatch must produce a verdict (the iteration cap is 1 — second \`more-investigation\` triggers stop-and-report). On iteration 1, the investigator carries the prior probe-recommendations forward in each lane's Hypothesis line so the second pass is a sharper probe, not a verbatim re-run. | none (re-dispatch is to investigator, not architect / builder; investigator reads its own prior \`investigation.md\` and the prior iteration's findings as carry-over context). |
+| \`not-a-bug\` | Stop-and-report. The orchestrator surfaces the investigator's \`## Next step recommendation\` paragraph verbatim to the user (cited spec / docs / test that proves the symptom is intended behaviour) and ends the turn. User re-invokes \`/cc\` with a clarified task if they disagree; no automated re-dispatch. | none (turn ends; no further dispatch). |
+
+### Cap and stop-and-report
+
+The orchestrator caps the investigator at **2 dispatches per slug** (iteration 0 + iteration 1 max). The second \`more-investigation\` recommendation triggers stop-and-report with this status block:
+
+\`\`\`text
+Investigator cap reached
+- Slug: <slug>
+- Iterations: 2 (max)
+- Last verdict: more-investigation
+- Last confidence: <high|medium|low>
+- Notes: <verbatim copy of the investigator's last slim-summary Notes line — names the next probe the investigator would have run, surfaced to the user>
+- Suggested next step: <verbatim copy of the investigator's last slim-summary Notes line OR "human-driven debug session" when the lanes converged on "needs runtime state the agent cannot stage">
+\`\`\`
+
+The slug stays in state \`debug-stalled\`; the user re-invokes \`/cc\` after manually probing, OR \`/cc-cancel\` to retire the slug.
+
+### Envelope mutations on debug-branch (v8.77)
+
+On every debug-shaped flow, the dispatch envelope carries the \`priorInvestigation\` field starting on the architect / builder dispatch (see runbooks/debug-branch.md for the full envelope shape). The field is required-when-set, absent-when-default; specialists default to "build shape" behaviour when the field is absent (back-compat with pre-v8.77 envelopes).
+
+### flow-state.json patches (v8.77)
+
+After every investigator dispatch the orchestrator patches:
+
+- \`investigatorVerdict\` — one of \`direct-fix\` / \`needs-plan\` / \`more-investigation\` / \`not-a-bug\` (mirrors the slim summary's \`Next step:\` line).
+- \`investigatorIteration\` — \`0\` on first dispatch; \`1\` on re-dispatch (capped at 1).
+- \`investigatorConfidence\` — \`high\` / \`medium\` / \`low\` (mirrors the slim summary's \`Confidence:\` line).
+- \`investigatorDispatchedAt\` — ISO timestamp.
+- \`lastSpecialist: "investigator"\` — stamped in the same write.
+
+### When the gate does NOT fire
+
+When \`triage.taskShape\` is absent (pre-v8.77 state files) OR \`triage.taskShape\` is \`"build"\` OR \`triage.taskShape\` is \`"research"\` (the latter is record-keeping only — research flows fork on the Detect hop and never see triage), the orchestrator runs the pre-v8.77 path verbatim: architect → plan-critic? → plan-design? → builder → qa? → reviewer → critic → ship. The investigator does NOT dispatch; no \`investigation.md\` is written; no \`priorInvestigation\` field is added to envelopes. The v8.77 wiring is purely additive on the debug branch.
+
+Full procedure — gating, dispatch envelope shape, verdict-handling routing, iteration-cap enforcement, flow-state.json patches, builder direct-fix protocol, architect priorInvestigation read protocol, reviewer cross-check on cited root cause, legacy pre-v8.77 migration (defaults to \`build\` shape) — lives in \`.cclaw/lib/runbooks/debug-branch.md\`. Open that runbook on every transition from \`triage\` slim-summary return WHEN \`triage.taskShape == "debug"\`.
+
 ## Dispatch
 
 For each stage in \`triage.path\` (after \`detect\` and starting from \`currentStage\`):
@@ -421,7 +472,8 @@ For each stage in \`triage.path\` (after \`detect\` and starting from \`currentS
 
 | Stage | Specialist | Mode | Wrapper skill | Inline allowed? |
 | --- | --- | --- | --- | --- |
-| \`plan\` | \`architect\` (single dispatch on every non-inline path; v8.62 collapsed the former \`design → ac-author\` chain) | \`task\` (intra-flow) or \`research\` (standalone) | plan-authoring (always) + source-driven (strict only) | yes for trivial; no for any path that includes plan |
+| \`plan\` *(sub-step, v8.77; debug-branch only)* | \`investigator\` *(gated: \`triage.taskShape == "debug"\`)* | \`three-lane-readonly\` | investigation-discipline (auto-triggers on every investigator dispatch) | no, never inline (the gate fires only on debug-shape flows; inline+debug runs investigator before the inline single-edit) |
+| \`plan\` | \`architect\` (single dispatch on every non-inline path; v8.62 collapsed the former \`design → ac-author\` chain; v8.77 SKIPPED entirely when investigator's \`Next step: direct-fix\` fires) | \`task\` (intra-flow) or \`research\` (standalone) | plan-authoring (always) + source-driven (strict only) | yes for trivial; no for any path that includes plan |
 | \`plan\` *(sub-step, v8.51; widened v8.54)* | \`plan-critic\` *(gated: ceremonyMode=strict + complexity≠trivial + problemType≠refines + AC count ≥ 2)* | \`pre-impl-review\` | — (plan-critic prompt body is self-contained; no wrapper) | no, never inline (gate forbids \`ceremonyMode: inline\`) |
 | \`plan\` *(sub-step, v8.75)* | \`plan-design\` *(gated: (triage.designSurface == true OR triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅) + ceremonyMode ∈ {soft, strict} + plan.md exists)* | \`pre-impl-design\` | — (plan-design prompt body is self-contained; no wrapper) | no, never inline (gate forbids \`ceremonyMode: inline\`) |
 | \`build\` | \`builder\` | \`build\` (or \`fix-only\` after a review with block findings) | tdd-and-verification | yes for trivial only |
@@ -447,6 +499,17 @@ ${SUMMARY_RETURN_EXAMPLE}
 The orchestrator reads only this; the full artifact stays in \`.cclaw/flows/<slug>/<stage>.md\` for the next stage's sub-agent.
 
 ### Stage details
+
+#### investigator (v8.77+, sub-step of \`plan\`; debug-branch only)
+
+- Specialist: \`investigator\`. On-demand sub-agent; runs at the **start of the plan stage** on the **debug-branch gate**: \`triage.taskShape == "debug"\`. Any other shape skips the investigator — the orchestrator goes straight to the architect dispatch (or, on inline+build, to the trivial inline path). The gate is independent of \`ceremonyMode\` and \`triage.complexity\` (the v8.77 task-shape dimension is orthogonal to the existing complexity classifier).
+- **Why a separate specialist from the architect.** The architect frames the fix at design level ("given root cause X, what's the design-level change?"). The investigator finds the cause ("what IS root cause X?"). Different problem class; different evidence base (the investigator reads logs, runs probes, bisects git history; the architect reads plan.md + the investigation's synthesis). The two ship as separate specialists because pre-v8.77 the architect's Frame phase was secretly doing both jobs on debug-shaped flows — which led to brittle Frames that mistook the symptom for the cause. The v8.77 split moves the diagnostic work into a dedicated read-only specialist; the architect's input becomes a cited root cause, not a vague symptom.
+- Inputs (read-only on the codebase): \`flow-state.json > triage\` (the \`taskShape == "debug"\` field gates), \`.cclaw/flows/<slug>/investigation.md\` (mandatory — the orchestrator stamps a skeleton on dispatch), \`CONTEXT.md\` at the project root if present, repo signals (file tree, README, manifest). The investigator reads the bug-report verbatim from the triage block in flow-state.json and the repo-anchored evidence the triage flagged (file:line refs, commit SHA, log excerpt, stack trace) as the symptom-restatement source. Output: \`.cclaw/flows/<slug>/investigation.md\` — single-shot per dispatch (re-runs on iteration 1 overwrite the file, not append).
+- The investigator dispatches **three parallel hypothesis lanes** in a single tool-call batch: \`cause-code\` (code path, regression bisect, dependency analysis), \`cause-config\` (config drift, env-var presence, feature-flag manifest, lock-file version mismatch), \`cause-measurement\` (observation bias, instrumentation gap, test flakiness, retry-mask). The three lanes are canonical, MECE, and **fixed** — the discipline (codified in \`investigation-discipline.md\`) forbids collapsing to one or two "to save time" or adding a fourth lane.
+- Each lane returns: one-sentence hypothesis, evidence-collected bullet list (file:line citations, command output excerpts, log excerpts, commit SHAs, config snippets — five canonical shapes, anything else is \`vibes-investigation\`), integer 0-10 confidence, recommended next probe. The investigator's synthesis ("## Root cause (working hypothesis)") names **ONE** mechanism — multi-cause synthesis is the failure mode the discipline exists to prevent; when the lanes diverge, the synthesis recommends \`more-investigation\` instead of enumerating candidates.
+- Slim summary: verdict (\`Next step:\` line — one of \`direct-fix\` / \`needs-plan\` / \`more-investigation\` / \`not-a-bug\`), per-lane confidence (\`Lanes:\` line — \`cause-code=N, cause-config=N, cause-measurement=N\`), iteration (0 or 1; 1 re-investigation max), artifact-level confidence (\`Confidence:\` line — \`high\` / \`medium\` / \`low\`), root cause lead clause (\`Root cause:\` line — verbatim copy from \`## Root cause (working hypothesis)\`), optional Notes line (required when \`Confidence != high\` OR \`Next step ∈ {more-investigation, not-a-bug}\`).
+- Verdict routing — see "Debug-branch routing" section above for the routing matrix (\`direct-fix\` → builder skip-architect with \`priorInvestigation\` envelope; \`needs-plan\` → architect with \`priorInvestigation\`; \`more-investigation\` → re-dispatch investigator iteration 1, capped; \`not-a-bug\` → stop-and-report user reframe).
+- Full procedure — gating, dispatch envelope, three-lane discipline, evidence-collection rubric, confidence ladder, verdict routing, iteration-cap enforcement, \`flow-state.json\` patches (\`investigatorVerdict\` / \`investigatorIteration\` / \`investigatorConfidence\` / \`investigatorDispatchedAt\`), architect / builder envelope inheritance, reviewer cross-check against the cited root cause, legacy pre-v8.77 migration (defaults to \`taskShape: "build"\`) — lives in \`.cclaw/lib/runbooks/debug-branch.md\`. Open that runbook on every transition from \`triage\` slim-summary return WHEN \`triage.taskShape == "debug"\`, AND on every transition from \`investigator\` slim-summary return to either architect / builder dispatch OR stop-and-report.
 
 #### plan
 

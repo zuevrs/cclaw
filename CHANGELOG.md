@@ -1,6 +1,125 @@
 # Changelog
 
 
+## 8.77.0 — Investigator (debug-branch)
+
+### Why
+
+v8.74 hardened the ethos preamble + Reversibility field + force-stance opening. v8.75 added the pre-implementation `plan-design` specialist so the seven-dimension design-quality rubric fires BEFORE code is written (paired with the v8.70 reviewer's `design-quality` axis as a single source of truth at `src/content/design-quality-rubric.ts`). v8.76 added a 6th research lens (`research-design`) for UI / UX / positioning / affordances topics + an Approaches Gate (Phase 1.5) so research-mode dispatches against an explicit picked framing instead of the orchestrator's implicit one. After v8.76 the plan-stage was tight for the **build** shape — but a meaningful slice of `/cc` invocations are **bug reports** (`regression`, `error`, `broken`, `failing`, `crash`, `slow` — all paired with repo-anchored evidence). The architect's Frame phase was secretly doing two jobs on those flows: finding the root cause AND framing the fix at design level. The two are different problem classes; conflating them led to brittle Frames that mistook the symptom for the cause.
+
+The fix: split the diagnostic work out into a dedicated read-only specialist (`investigator`) that runs BEFORE the architect on bug-shaped flows, and route the architect's input to a cited root cause instead of a vague symptom.
+
+The pattern lineage is well-established in adjacent agent stacks:
+
+- **obra-superpowers `deep-dive`** ([oh-my-claudecode `skills/deep-dive/SKILL.md`](references/oh-my-claudecode/skills/deep-dive/SKILL.md)) — three parallel trace lanes (`trace-code` / `trace-config` / `trace-measurement`) fan out on every deep-dive invocation, MECE across the common bug-cause taxonomy, all three always run.
+- **everyinc-compound `ce-debug`** ([everyinc-compound `plugins/compound-engineering/skills/ce-debug/SKILL.md`](references/everyinc-compound/plugins/compound-engineering/skills/ce-debug/SKILL.md)) — code-path / config / measurement partition with the same MECE discipline plus a synthesis "root-cause hypothesis" + "next-step recommendation".
+- **gstack `/investigate`** ([gstack `AGENTS.md`](references/gstack/AGENTS.md)) — codifies "hypothesis before probe", "evidence before fix", and a verdict vocabulary that drives downstream routing.
+
+v8.77 fuses all three into the cclaw flow: a new specialist (`investigator`), a new artifact (`investigation.md`), a new skill (`investigation-discipline.md`), and a new orchestrator routing block on a new orthogonal triage dimension (`taskShape`).
+
+### What changed
+
+**Deliverable 1 — Investigator specialist (`src/content/specialist-prompts/investigator.ts`, new file).**
+
+- New read-only diagnostic sub-agent. Single canonical mode (`three-lane-readonly`); no other mode is user-tunable. Dispatched by the orchestrator at the start of the plan stage on `triage.taskShape == "debug"`.
+- Three parallel hypothesis lanes (canonical, fixed, MECE):
+  - **`cause-code`** — code path, regression bisect (`git log --oneline -20 -- <touched files>`), dependency analysis, recent refactor side-effects.
+  - **`cause-config`** — config drift, env-var presence + value shape, feature-flag manifest, lock-file version mismatch, runtime version markers, build artifact staleness.
+  - **`cause-measurement`** — observation bias, instrumentation gap, test flakiness, retry-mask, error reporting wiring, log gap.
+- All three lanes always run. Each lane returns: one-sentence hypothesis, evidence-collected bullet list (file:line citations, command output excerpts, log excerpts, commit SHAs, config snippets — five canonical shapes, anything else is "vibes-investigation"), 0-10 confidence, recommended next probe. Lanes are independent (Lane A does not cite Lane B's evidence). Counter-evidence is mandatory on confidence ≥6 lanes.
+- Synthesis step distills the three lanes into ONE working root-cause hypothesis (multi-cause synthesis is the failure mode the discipline exists to prevent — when lanes diverge, the verdict is `more-investigation` instead of "try them all").
+- Slim summary's `Next step:` field carries one of four canonical verdicts driving downstream routing: `direct-fix` / `needs-plan` / `more-investigation` / `not-a-bug`. Iteration capped at 1 re-dispatch per slug (2 total dispatches max).
+
+**Deliverable 2 — Investigation artifact (`src/content/artifact-templates.ts`).**
+
+- New `investigation.md` template registered under id `"investigation"`. Lives in the same flow dir as `plan.md` (`.cclaw/flows/<slug>/investigation.md`).
+- Frontmatter: slug, stage, specialist, task_shape, lane_count, dispatched_at, iteration, verdict, confidence.
+- Body sections: `## Symptom` (verbatim user bug-report + repo-anchored evidence) → `## Investigation lanes` (three `### Lane:` sub-sections, one per lane, each with Hypothesis / Evidence collected / Confidence 0-10 / Recommended next probe) → `## Root cause (working hypothesis)` (one sentence naming ONE mechanism) → `## Convergence / divergence notes` (cross-lane synthesis context) → `## Next step recommendation` (`Verdict:` line + routing implication paragraph) → `## Fix scope` (conditional — present ONLY on `direct-fix` verdict; file:line refs the builder must touch — gate is ≤3 refs in one module) → `## Summary` (one-paragraph artifact-level summary).
+
+**Deliverable 3 — `taskShape` dimension on `TriageDecision` (`src/types.ts` + `src/flow-state.ts`).**
+
+- New `TASK_SHAPES` const with three values: `"build"` (default; pre-v8.77 behaviour preserved on absent field) / `"debug"` (new; routes through investigator before architect) / `"research"` (record-keeping only; `/cc research <topic>` bypasses triage entirely).
+- New `DEFAULT_TASK_SHAPE = "build"` so back-compat with pre-v8.77 state files is automatic. `TaskShape` type exported.
+- New `INVESTIGATOR_NEXT_STEPS` const with four values + `InvestigatorNextStep` type. `INVESTIGATOR_LANES` const with three canonical lane ids + `InvestigatorLaneId` type.
+- `TriageDecision` gains `taskShape?: TaskShape` (optional; defaults to `build` on absent).
+- `assertTriageOrNull` validator extended to reject invalid `taskShape` values with a clear error message; absent values pass.
+- **Orthogonality invariant.** `taskShape` is INDEPENDENT of `triage.complexity` — a debug task can be any complexity tier; the complexity heuristic continues to run on its own signals (modules touched, behaviours, auth/payment surfaces). The investigator hop inserts BEFORE architect regardless of complexity. The existing complexity classification machinery is NOT modified.
+
+**Deliverable 4 — Triage prompt detects task shape (`src/content/specialist-prompts/triage.ts`).**
+
+- New "Task shape detection" section codifies the AND gate: bug-shape keyword present (`regression` / `error` / `broken` / `failing` / `wrong` / `incorrect` / `slow` / `crash` / `bug` / `fix` paired with bug intent + ~15 other tokens) AND repo-anchored evidence present (file:line, commit SHA, log excerpt, stack trace, test name with failure verb). Both must fire; single-signal triggers stay `build`.
+- Slim summary gains a `Task shape:` line listing the value + the signals that fired (or `none`). Optional `Notes:` line is required when task shape is `debug`.
+- 10 worked examples (5 debug, 5 build) cover the spectrum: anchored crash reports (debug), perf regressions with deploy SHA (debug), TypeError reports with implicit stack trace (debug), test-failure-on-CI-only (debug), refactor with file ref but no bug keyword (build), README typo "fix" (build), vague "improve onboarding" (build), version-bump intent (build), feature-add with high specificity (build), and an API 500 + stack trace canonical debug case.
+- Anti-rationalization table grows by 6 rows naming the canonical false-positive / false-negative patterns and re-stating the orthogonality invariant.
+
+**Deliverable 5 — Investigation-discipline skill (`src/content/skills/investigation-discipline.md`, new file).**
+
+- Auto-triggers on every investigator dispatch (`specialist:investigator` / `stage:plan` / `taskShape:debug` / `task_shape:debug` trigger tokens).
+- Codifies the three-lane discipline (MECE; all three always run), the 5-shape evidence rubric (file:line citation / command output excerpt / log excerpt / commit SHA / config snippet — anything else is "vibes-investigation"), the 0-10 lane confidence ladder (and how the synthesis derives the artifact-level `high|medium|low` from it), the anti-shotgun-debugging rules (no fix proposals inline; one root cause per synthesis; hypothesis before probe), the seven canonical probe shapes (3 cause-code + 2 cause-config + 2 cause-measurement; reuses `pre-edit-investigation.md`'s three core probes), and the next-step-recommendation rubric (each of `direct-fix` / `needs-plan` / `more-investigation` / `not-a-bug` with a hard gate).
+- Includes Red Flags (catch these before submitting), Verification (the artifact is correct iff…), and a When NOT to apply section (v8.30 anatomy gate — the skill does NOT fire on `build` / `research` shapes; trivial typo fixes; inline-incident-response invocations; cap-reached iteration 1).
+
+**Deliverable 6 — Orchestrator debug-branch routing (`src/content/start-command.ts`).**
+
+- New "Debug-branch routing (v8.77; triage.taskShape == \"debug\")" section above the existing Dispatch section. Documents the gate (single field check), the verdict routing matrix (four rows — one per `Next step:` value), the cap (2 dispatches per slug; second `more-investigation` triggers stop-and-report), the dispatch envelope shape for the investigator, the `priorInvestigation` envelope field propagation, the `flow-state.json` patches (`investigatorVerdict` / `investigatorIteration` / `investigatorConfidence` / `investigatorDispatchedAt`), and the gate-does-not-fire fallback to pre-v8.77 routing.
+- New investigator stage-table row gated on `triage.taskShape == "debug"`. Architect's row updated with the v8.77 footnote ("SKIPPED entirely when investigator's `Next step: direct-fix` fires").
+- New `#### investigator` stage-details section between the existing pre-stage hops and `#### plan`.
+- Pointer to `runbooks/debug-branch.md` for the full procedure (canonical home for the routing matrix, dispatch envelope shape, verdict-handling, iteration cap, flow-state patches, builder direct-fix protocol, architect priorInvestigation read protocol, reviewer cross-check, legacy migration, anti-rationalization).
+
+**Deliverable 7 — Debug-branch runbook (`src/content/runbooks-on-demand.ts`).**
+
+- New `runbooks/debug-branch.md` registered in `ON_DEMAND_RUNBOOKS`. Body covers nine sections: §1 gate, §2 dispatch envelope for investigator (iteration 0), §3 slim summary shape, §4 verdict routing matrix, §5 stop-and-report status blocks (not-a-bug + cap-reached), §6 `priorInvestigation` envelope propagation (architect / plan-critic / plan-design / builder / reviewer / critic), §7 re-dispatch on `more-investigation` (iteration 0 → 1), §8 legacy pre-v8.77 state-file migration (no-op; additive), §9 anti-rationalization table.
+
+**Deliverable 8 — Architect prompt accepts `priorInvestigation` envelope (`src/content/specialist-prompts/architect.ts`).**
+
+- Bootstrap Phase 0 step 8 (new) — prior-investigation linkage. Reads investigation.md as load-bearing context for Frame; cites the root cause lead clause verbatim; reframes Approaches to reuse lane evidence rather than re-running probes; Decisions records design-level choices the fix implies, NOT the mechanical patch.
+- Bootstrap Phase 0 step 9 (renumbered from prior step 8) — posture escalation extends with a new trigger: `priorInvestigation` set with `verdict: "needs-plan"` AND `confidence: "low"` justifies a `deep` posture (low-confidence root cause hypotheses justify the deeper Pre-mortem pass).
+- Phase 1 Frame gains a "Debug-branch flavour" paragraph: when `priorInvestigation` is set, Frame's first clause copies the investigation's working root-cause hypothesis VERBATIM. The remainder of the Frame reframes "what success looks like" as "the symptom no longer reproduces" and "what is out of scope" as "anything the investigation's Convergence notes flagged as a separate concern". Citing the investigation inline lets the reviewer cross-check the Frame against the cited section verbatim.
+
+**Deliverable 9 — Builder prompt accepts `priorInvestigation` envelope (`src/content/specialist-prompts/builder.ts`).**
+
+- Inputs section grows by two entries: `investigation.md` as plan-substitute on the direct-fix path, and `investigation-discipline.md` skill reference.
+- New "Debug-branch direct-fix flow" section codifying the protocol on `priorInvestigation` envelope field set AND no plan.md. Five-step procedure: (1) read investigation.md end-to-end → (2) RED: write failing test that proves the bug exists (commit `red(fix): <symptom restated>`) → (3) GREEN: apply minimal fix bounded to `## Fix scope` file:line refs (commit `fix(<scope>): <one-line summary>`) → (4) REFACTOR: usually skipped (scope creep otherwise) → (5) short build.md body with `## Direct-fix log` section (no `## Slice cycles`, no `## AC verification`).
+- Hard rules: no code outside `## Fix scope` (5+ file fix means verdict should have been `needs-plan`); no tests beyond the cited failing-test; no commits without the `fix(<scope>):` prefix; no bypass of the symptom test (RED must actually fail with the cited symptom before GREEN); iteration cap awareness (one failed GREEN means root cause is wrong → re-dispatch investigator).
+- `fix(<scope>):` commit prefix mirrors conventional-commits `fix:` and the gstack `fix(<area>):` shape; later `git log --grep="fix("` audits surface direct-fix landings cleanly.
+
+**Deliverable 10 — SPECIALISTS roster grows 8 → 9 + downstream test updates.**
+
+- `SPECIALISTS` const in `src/types.ts` grows from 8 to 9 entries; `investigator` inserted between `triage` and `architect` so the array order traces the canonical pipeline triage → investigator? → plan → build → qa? → review → critic → ship.
+- `SPECIALIST_PROMPTS` map exports `investigator` → `INVESTIGATOR_PROMPT`; `INVESTIGATOR_PROMPT` re-exported from `src/content/specialist-prompts/index.ts`.
+- `SPECIALIST_AGENTS` (`src/content/core-agents.ts`) registers `investigator` with `kind: "specialist"`, `activation: "on-demand"`, `modes: ["debug"]`, and the canonical description naming the three-lane fan-out + verdict vocabulary + read-only contract + iteration cap.
+- All hardcoded `toHaveLength(8)` test assertions across the test suite updated to `toHaveLength(9)`; comments updated to name the v8.77 specialist addition. CORE_AGENTS test updated from `toHaveLength(8)` + 10 agent files → `toHaveLength(9)` + 11 agent files (architect / builder / critic / investigator / learnings-research / plan-critic / plan-design / qa-runner / repo-research / reviewer / triage).
+- Stage runbook test (v8.16) skill count band widened from 25 to 27 (v8.75 added design-quality-discipline; v8.77 added investigation-discipline; band left wide so future additive skills don't need a count edit). `v8.48-discipline-skills` upper bound similarly raised.
+- Orchestrator-slim line budget (v8.22 AC-1) raised from 645 → 720 lines; char budget raised from 108000 → 125000 chars; combined runbook ceiling raised from 245000 → 275000 chars; ratio cap raised from 0.70 → 0.80 of the v8.21 baseline. v8.22 AC-2 runbook list extended with `debug-branch.md` (16 files; v8.71 → 15; v8.77 → 16). v8.31 path-aware test budgets similarly bumped (body 108k → 125k; non-inline 160k → 180k; body line cap 645 → 720). v8.61 triage-subagent body budget raised from 108k → 125k.
+
+**Deliverable 11 — Test surface (`tests/unit/v877-investigator.test.ts`, new file).**
+
+- 65 new test cases organized into 14 describe blocks covering: SPECIALISTS roster + ordering (AC-1), `TASK_SHAPES` enum + default (AC-2), `INVESTIGATOR_LANES` canonical roster (AC-3), `INVESTIGATOR_NEXT_STEPS` verdict vocabulary (AC-4), investigator prompt declares 3-lane fan-out + read-only contract + slim summary (AC-5), investigation.md template covers 3 lanes + synthesis + verdict (AC-6), triage prompt detects task shape + restates orthogonality (AC-7), flow-state validator accepts taskShape + rejects invalid values + back-compat with absent (AC-8), architect prompt accepts priorInvestigation envelope (AC-9), builder prompt accepts priorInvestigation envelope with `fix(<scope>):` convention (AC-10), orchestrator routes debug-shape → investigator → verdict matrix (AC-11), runbooks/debug-branch.md ships in ON_DEMAND_RUNBOOKS (AC-12), investigation-discipline skill is registered + auto-triggers on investigator dispatches (AC-13), taskShape orthogonality with the complexity classifier is restated (AC-14).
+- Final test count: 1903 (up from 1838 on v8.76).
+
+### Migration
+
+Pre-v8.77 `flow-state.json` files lack the `triage.taskShape` field. The validator accepts absent `taskShape` and treats it as undefined; the orchestrator's gate check (`triage.taskShape === "debug"`) is false on absent values, so the investigator hop does NOT fire on legacy flows — they run the pre-v8.77 path verbatim (architect → plan-critic? → plan-design? → builder → qa? → reviewer → critic → ship). No state-file migration is required; the v8.77 wiring is purely additive on the debug branch.
+
+When a legacy flow that was originally a bug-shaped task resumes under v8.77, the orchestrator does NOT retroactively dispatch the investigator (the architect's plan.md already exists; rerunning the investigator would be a wasted dispatch). The legacy flow continues to ship under the pre-v8.77 routing; future debug-shaped flows benefit from the investigator hop.
+
+### Acceptance criteria
+
+- [x] AC-1 — SPECIALISTS grows 8 → 9; investigator inserted between triage and architect; SPECIALIST_PROMPTS + SPECIALIST_AGENTS register the new specialist; CORE_AGENTS has 11 entries (9 specialists + 2 research helpers).
+- [x] AC-2 — TASK_SHAPES enum has exactly three values (build / debug / research); DEFAULT_TASK_SHAPE is "build" for pre-v8.77 back-compat.
+- [x] AC-3 — INVESTIGATOR_LANES has the three canonical lanes in canonical order (cause-code / cause-config / cause-measurement); type-level safety.
+- [x] AC-4 — INVESTIGATOR_NEXT_STEPS has exactly four canonical verdicts (direct-fix / needs-plan / more-investigation / not-a-bug); type-level safety.
+- [x] AC-5 — investigator prompt declares 3-lane fan-out + PARALLEL dispatch + read-only contract + all four verdicts + the debug-branch gate + the iteration cap + the seven-line slim summary shape + the ## Composition sub-agent contract.
+- [x] AC-6 — investigation.md template covers all three lanes + synthesis + convergence + verdict + conditional ## Fix scope; frontmatter carries verdict / confidence / task_shape / specialist; lists all four verdict values inline.
+- [x] AC-7 — triage prompt names task_shape detection + the AND gate (keywords + repo-anchored evidence) + orthogonality with complexity + the Task shape: slim summary line + at least 3 worked debug examples.
+- [x] AC-8 — flow-state validator accepts taskShape values + rejects invalid + back-compat with absent.
+- [x] AC-9 — architect prompt names the v8.77 prior-investigation linkage in Bootstrap + the debug-branch Frame flavour + cites investigation.md path verbatim.
+- [x] AC-10 — builder prompt names the v8.77 direct-fix mode + investigation as plan-substitute + `fix(<scope>):` commit prefix + ## Fix scope as bounds gate + RED-before-GREEN on the direct-fix path + investigation-discipline.md skill reference.
+- [x] AC-11 — start-command body has a Debug-branch routing section + lists all four verdict values + the investigator stage-table row + the #### investigator stage-details section + priorInvestigation envelope propagation + iteration cap + additive/back-compat language + the runbooks/debug-branch.md pointer.
+- [x] AC-12 — runbooks/debug-branch.md ships in ON_DEMAND_RUNBOOKS + opens with the canonical header + covers all four verdicts + listed in the index + documents priorInvestigation envelope propagation + legacy migration.
+- [x] AC-13 — investigation-discipline skill is registered + auto-triggers on investigator dispatches + names the three canonical lanes + carries the 5-shape evidence rubric + declares the 0-10 confidence ladder + has a When NOT to apply section.
+- [x] AC-14 — taskShape orthogonality restated in triage prompt + debug-branch runbook (anti-rationalization).
+
+
 ## 8.76.0 — Research-design-lens + approaches-gate
 
 ### Why

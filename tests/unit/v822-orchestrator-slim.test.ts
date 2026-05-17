@@ -56,17 +56,17 @@ describe("v8.22 orchestrator-slim — `/cc` body line budget", () => {
     expect(
       lineCount,
       `start-command body is ${lineCount} lines (budget 565). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md and kept only a five-bullet pointer in the orchestrator body (one new stage entry, one new table row, one trimmed ceremonyMode-gating sentence under triage.path, one v8.42 footnote on the triage example). v8.51 added a parallel pointer for the pre-impl plan-critic sub-step (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section, gating + verdict-routing pointer to runbooks/plan-critic-stage.md); ~95% of the new content is in the runbook + the plan-critic.ts prompt. v8.52 lifted ~95% of the new qa stage content into runbooks/qa-stage.md and kept ~20 lines in the body (one Hop-2 surface-detection block listing the Surface vocabulary + detection heuristics, one stage-table row for qa-runner, one #### qa body section pointing into the runbook). v8.59 added ~10 lines: one new Detect-table row for the extend-mode fork, a one-paragraph Detect-hop pointer (full procedure in runbooks/extend-mode.md), and a one-paragraph "v8.59 prior-context consumption" pointer (full per-specialist patterns in design.ts / ac-author.ts / reviewer.ts / critic.ts). v8.69 added ~3 lines for the research_depth fork-stamp sub-bullet, the synthesis self-review step in Phase 3, and the depth-flag sub-case (~95% of v8.69 prose lives in runbooks/research-depth-and-self-review.md). v8.70 added ~2 lines for the design-quality envelope-activation bullet under #### review and the eleven-axis update on the existing axis-list line (~95% of v8.70 prose lives in reviewer.ts > Design-quality axis details). v8.71 added ~10 lines for the new Phase 3.5 awaiting-user-review pointer (lifecycle states + three new sub-commands inline) plus the invocation-matrix row routing /cc research revise|push-back|accept; ~95% of v8.71 prose lives in runbooks/research-revision.md. v8.74 added ~5 lines: the ethos-preamble paragraph under Dispatch envelope, the Skills-attached \`cclaw-ethos\` reference doc bullet, and the updated Always-ask rules line naming the Required ethos read (~95% of v8.74 prose lives in src/content/ethos.ts + runbooks/dispatch-envelope.md). If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
-    ).toBeLessThanOrEqual(645);
+    ).toBeLessThanOrEqual(720);
   });
 
-  it("AC-1 — the body is meaningfully smaller than the legacy v8.21 size (≥30% cut)", () => {
+  it("AC-1 — the body is meaningfully smaller than the legacy v8.21 size (≥20% cut after v8.77 debug-branch hop)", () => {
     const lineCount = renderStartCommand().split("\n").length;
     const v821Baseline = 901;
     const ratio = lineCount / v821Baseline;
     expect(
       ratio,
-      `start-command body is ${lineCount} lines, ratio ${ratio.toFixed(2)} of v8.21 baseline (${v821Baseline}). v8.22's win disappears if the body re-grows past 70% of pre-v8.22.`
-    ).toBeLessThanOrEqual(0.7);
+      `start-command body is ${lineCount} lines, ratio ${ratio.toFixed(2)} of v8.21 baseline (${v821Baseline}). v8.22's win disappears if the body re-grows past 80% of pre-v8.22 (v8.77 raised the ceiling from 0.70 to 0.80 to absorb the debug-branch routing section + investigator stage details + investigator stage-table row + investigator dispatch envelope pointer to runbooks/debug-branch.md + the v8.77 footnote on the triage example).`
+    ).toBeLessThanOrEqual(0.8);
   });
 });
 
@@ -119,9 +119,10 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
     "always-auto-failure-handling.md",
     "research-depth-and-self-review.md",
     "research-revision.md",
+    "debug-branch.md",
   ];
 
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files; v8.61: +1 always-auto-failure-handling → 13 files; v8.69: +1 research-depth-and-self-review → 14 files; v8.71: +1 research-revision → 15 files)", () => {
+  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files; v8.61: +1 always-auto-failure-handling → 13 files; v8.69: +1 research-depth-and-self-review → 14 files; v8.71: +1 research-revision → 15 files; v8.77: +1 debug-branch → 16 files)", () => {
     const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
     expect(fileNames).toEqual([...expectedRunbookFiles].sort());
   });
@@ -184,7 +185,7 @@ describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", 
     expect(
       charCount,
       `start-command body is ${charCount} chars (budget 87000). ... v8.74 added ~2k chars for the ethos preamble + v8.74-promoted cross-model trigger language under #### critic; v8.76 added ~10k chars for the Phase 1.5 Approaches Gate prose (framings worked-example + procedure + sub-cases), the rewritten Phase 2 lens-dispatch prose covering the new design-signal heuristic + \`--lens=design\` / \`--lens=-design\` user-toggle flags + the new \`research-design\` lens row, and the new \`Framing:\` envelope field documentation. Do not raise this further without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(108000);
+    ).toBeLessThanOrEqual(125000);
   });
 
   it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {
@@ -198,7 +199,7 @@ describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", 
     expect(
       combined,
       `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 225000). ... v8.74 added ~5k chars for the ethos-preamble + v8.74 cross-model trigger language pointers + dispatch-envelope.md runbook expansion; v8.76 added ~10k chars total — all in the body for the Phase 1.5 Approaches Gate prose, the rewritten Phase 2 lens-dispatch prose (design-signal heuristic + \`--lens=design\` / \`--lens=-design\` flags + new \`research-design\` row + new \`Framing:\` envelope field), and the v8.76 lens-set explainer (5 default → 6 when design fires); no new runbook in v8.76. Expanding past 245k means a block belongs on disk.`
-    ).toBeLessThanOrEqual(245000);
+    ).toBeLessThanOrEqual(275000);
   });
 });
 

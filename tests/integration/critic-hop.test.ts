@@ -118,15 +118,15 @@ describe("v8.42 — critic prompt covers known-bad scenarios", () => {
   });
 });
 
-describe("v8.62 — specialist count end-to-end (unified flow: 8 specialists + 2 research helpers after v8.75)", () => {
-  it("CORE_AGENTS contains 8 specialists + 2 research helpers (v8.62 unified flow dropped `design` (absorbed into `architect`) and `security-reviewer` (absorbed into `reviewer`'s `security` axis); renamed `ac-author` → `architect`, `slice-builder` → `builder`; v8.75 added pre-implementation `plan-design`)", () => {
+describe("v8.62 — specialist count end-to-end (unified flow: 9 specialists + 2 research helpers after v8.77)", () => {
+  it("CORE_AGENTS contains 9 specialists + 2 research helpers (v8.62 unified flow dropped `design` (absorbed into `architect`) and `security-reviewer` (absorbed into `reviewer`'s `security` axis); renamed `ac-author` → `architect`, `slice-builder` → `builder`; v8.75 added pre-implementation `plan-design`; v8.77 added read-only debug-branch `investigator`)", () => {
     const specialists = CORE_AGENTS.filter((a) => a.kind === "specialist");
     const research = CORE_AGENTS.filter((a) => a.kind === "research");
-    expect(specialists).toHaveLength(8);
+    expect(specialists).toHaveLength(9);
     expect(research).toHaveLength(2);
   });
 
-  it("init writes the 10 expected agent files (v8.75 unified flow roster — `architect`, `builder`, `plan-critic`, `plan-design`, `qa-runner`, `reviewer`, `critic`, `triage` plus the two research helpers)", async () => {
+  it("init writes the 11 expected agent files (v8.77 unified flow roster — `architect`, `builder`, `critic`, `investigator`, `plan-critic`, `plan-design`, `qa-runner`, `reviewer`, `triage` plus the two research helpers)", async () => {
     let project: string | null = null;
     try {
       project = await createTempProject();
@@ -137,6 +137,7 @@ describe("v8.62 — specialist count end-to-end (unified flow: 8 specialists + 2
         "architect.md",
         "builder.md",
         "critic.md",
+        "investigator.md",
         "learnings-research.md",
         "plan-critic.md",
         "plan-design.md",

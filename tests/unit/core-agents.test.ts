@@ -7,8 +7,8 @@ import {
 } from "../../src/content/core-agents.js";
 
 describe("core agents", () => {
-  it("ships eight specialists (all on-demand) and two research helpers — v8.62 unified flow dropped `design` (absorbed into `architect`, renamed from `ac-author`) and `security-reviewer` (absorbed into `reviewer`'s `security` axis), renamed `slice-builder` → `builder`, and demoted every specialist (including `architect`) to on-demand activation since v8.61 dropped the main-context dialogue protocol; v8.75 added the pre-implementation design-coherence specialist `plan-design`", () => {
-    expect(SPECIALIST_AGENTS).toHaveLength(8);
+  it("ships nine specialists (all on-demand) and two research helpers — v8.62 unified flow dropped `design` (absorbed into `architect`, renamed from `ac-author`) and `security-reviewer` (absorbed into `reviewer`'s `security` axis), renamed `slice-builder` → `builder`, and demoted every specialist (including `architect`) to on-demand activation since v8.61 dropped the main-context dialogue protocol; v8.75 added the pre-implementation design-coherence specialist `plan-design`; v8.77 added the read-only debug-branch diagnostic `investigator` between triage and architect", () => {
+    expect(SPECIALIST_AGENTS).toHaveLength(9);
     for (const agent of SPECIALIST_AGENTS) {
       expect(agent.kind).toBe("specialist");
       expect(agent.activation).toBe("on-demand");

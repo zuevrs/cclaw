@@ -138,8 +138,21 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // 100000 chars (≈4% line headroom, ≈5% char headroom over current
     // 886 lines / 95366 chars). Growth justified in CHANGELOG.md (v8.73 —
     // worktree-isolated parallel slices).
-    maxLines: 920,
-    maxChars: 100000
+    //
+    // v8.77 — debug-branch direct-fix mode: new "Debug-branch direct-fix
+    // flow" section codifying the protocol when the orchestrator dispatches
+    // builder with `priorInvestigation` envelope field set AND no plan.md
+    // (the direct-fix verdict path). Section covers: read investigation.md
+    // as plan-substitute, RED-before-GREEN against the cited symptom, fix
+    // bounded to `## Fix scope` file:line refs, `fix(<scope>):` commit
+    // prefix, short build.md body, hard rules against scope creep. Also
+    // adds an `investigation.md` entry to Inputs and an `investigation-
+    // discipline.md` skill reference. Growth lands ~+50 lines / ~+8k chars
+    // over the v8.73 envelope; budget raised to 970 lines / 110000 chars
+    // (≈6% line headroom, ≈6% char headroom over current size). Growth
+    // justified in CHANGELOG.md (v8.77 — investigator debug-branch).
+    maxLines: 970,
+    maxChars: 110000
   }
 ];
 

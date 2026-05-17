@@ -30,12 +30,12 @@ function bodyBudget(fileNames: string[]): number {
 }
 
 describe("v8.31 path-aware orchestrator — body-only budget", () => {
-  it("AC-1 — start-command body stays ≤ 108000 chars (... v8.74 raised by 2000 chars for the ethos preamble + cross-model trigger language; v8.76 raised by 12000 chars to absorb the Phase 1.5 Approaches Gate prose + the rewritten Phase 2 lens-dispatch prose (design-signal heuristic + `--lens=design` / `--lens=-design` flags + the new `research-design` lens row + the new `Framing:` envelope field))", () => {
-    expect(renderStartCommand().length).toBeLessThanOrEqual(108000);
+  it("AC-1 — start-command body stays ≤ 125000 chars (... v8.74 raised by 2000 chars for the ethos preamble + cross-model trigger language; v8.76 raised by 12000 chars to absorb the Phase 1.5 Approaches Gate prose + the rewritten Phase 2 lens-dispatch prose (design-signal heuristic + `--lens=design` / `--lens=-design` flags + the new `research-design` lens row + the new `Framing:` envelope field); v8.77 raised by 17000 chars to absorb the Debug-branch routing section + the #### investigator stage details + the investigator stage-table row + the v8.77 footnote on plan)", () => {
+    expect(renderStartCommand().length).toBeLessThanOrEqual(125000);
   });
 
-  it("AC-1 — start-command body stays ≤ 645 lines (... v8.74 raised by 5 lines for the ethos-preamble + Skills-attached bullet; v8.75 raised by 30 lines for the #### plan-design body section + SPECIALISTS roster + stage-table row; v8.76 raised by 50 lines for the new #### Phase 1.5 — approaches gate section (procedure + sub-cases + worked example) and the rewritten Phase 2 dispatch prose (design-signal heuristic + lens-toggle flags + new research-design row + `Framing:` envelope))", () => {
-    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(645);
+  it("AC-1 — start-command body stays ≤ 720 lines (... v8.74 raised by 5 lines for the ethos-preamble + Skills-attached bullet; v8.75 raised by 30 lines for the #### plan-design body section + SPECIALISTS roster + stage-table row; v8.76 raised by 50 lines for the new #### Phase 1.5 — approaches gate section (procedure + sub-cases + worked example) and the rewritten Phase 2 dispatch prose (design-signal heuristic + lens-toggle flags + new research-design row + `Framing:` envelope); v8.77 raised by 75 lines for the Debug-branch routing section + the #### investigator stage details + the investigator stage-table row + the v8.77 footnote on plan)", () => {
+    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(720);
   });
 });
 
@@ -55,12 +55,12 @@ describe("v8.31 path-aware orchestrator — per-path envelopes (v8.54: budgets u
     "critic-steps.md"
   ];
 
-  it("AC-2 — inline path budget = body alone, ≤ 108000 chars (... v8.74 raised by 2000 chars matching the body-only budget bump; v8.76 raised by 12000 chars matching the body-only budget bump for the Phase 1.5 Approaches Gate + Phase 2 dispatch rewrite + design lens row + `Framing:` envelope field)", () => {
-    expect(bodyBudget([])).toBeLessThanOrEqual(108000);
+  it("AC-2 — inline path budget = body alone, ≤ 125000 chars (... v8.74 raised by 2000 chars matching the body-only budget bump; v8.76 raised by 12000 chars matching the body-only budget bump for the Phase 1.5 Approaches Gate + Phase 2 dispatch rewrite + design lens row + `Framing:` envelope field; v8.77 raised by 17000 chars matching the body-only budget bump for the Debug-branch routing section + investigator stage details)", () => {
+    expect(bodyBudget([])).toBeLessThanOrEqual(125000);
   });
 
-  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 160000 chars (... v8.75 raised by 9000 chars matching the body bump for the new #### plan-design section; v8.76 raised by 12000 chars matching the body bump for the Phase 1.5 Approaches Gate + Phase 2 dispatch rewrite + design lens row; no v8.76 runbook expansion)", () => {
-    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(160000);
+  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 180000 chars (... v8.75 raised by 9000 chars matching the body bump for the new #### plan-design section; v8.76 raised by 12000 chars matching the body bump for the Phase 1.5 Approaches Gate + Phase 2 dispatch rewrite + design lens row; v8.77 raised by 20000 chars for the body bump + the new runbooks/debug-branch.md runbook being included in the non-inline budget set)", () => {
+    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(180000);
   });
 
   it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 205000 chars (... v8.75 raised by 9000 chars matching the non-inline path bump; v8.76 raised by 12000 chars matching the non-inline path bump for the body-only v8.76 deliverables)", () => {

@@ -82,9 +82,9 @@ describe("v8.62 — specialist-prompts directory: retired files removed, replace
   }
 });
 
-describe("v8.62 — SPECIALISTS roster is the exact 8-entry canonical pipeline (v8.75 added plan-design)", () => {
-  it("contains exactly eight specialists (v8.75 added plan-design after plan-critic)", () => {
-    expect(SPECIALISTS).toHaveLength(8);
+describe("v8.62 — SPECIALISTS roster is the canonical pipeline (v8.75 added plan-design, v8.77 added investigator → 9 entries)", () => {
+  it("contains exactly nine specialists (v8.75 added plan-design after plan-critic; v8.77 added investigator after triage)", () => {
+    expect(SPECIALISTS).toHaveLength(9);
   });
 
   it("contains `architect` and `builder`", () => {
@@ -103,9 +103,10 @@ describe("v8.62 — SPECIALISTS roster is the exact 8-entry canonical pipeline (
     });
   }
 
-  it("orders the eight specialists along the canonical pipeline (triage → plan → build → qa → review → critic → ship); plan-design (v8.75) inserts between plan-critic and qa-runner — it's a plan sub-step gated on triage.designSurface", () => {
+  it("orders the nine specialists along the canonical pipeline (triage → investigator? → plan → build → qa → review → critic → ship); plan-design (v8.75) inserts between plan-critic and qa-runner — it's a plan sub-step gated on triage.designSurface; investigator (v8.77) inserts between triage and architect — it's a debug-branch sub-step gated on triage.taskShape==\"debug\"", () => {
     expect(SPECIALISTS).toEqual([
       "triage",
+      "investigator",
       "architect",
       "builder",
       "plan-critic",
