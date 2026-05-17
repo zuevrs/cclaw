@@ -2,7 +2,9 @@ import {
   CEREMONY_MODES,
   FLOW_STAGES,
   POSTURES,
+  RESEARCH_LENSES,
   RESEARCH_MODES,
+  RESEARCH_STATES,
   ROUTING_CLASSES,
   RUN_MODES,
   SPECIALISTS,
@@ -17,7 +19,10 @@ import {
   type Posture,
   type QaEvidenceTier,
   type QaVerdict,
+  type ResearchLensId,
   type ResearchMode,
+  type ResearchRevision,
+  type ResearchState,
   type RoutingClass,
   type RunMode,
   type SliceState,
@@ -67,6 +72,20 @@ function isSurface(value: unknown): value is Surface {
 
 function isResearchMode(value: unknown): value is ResearchMode {
   return typeof value === "string" && (RESEARCH_MODES as readonly string[]).includes(value);
+}
+
+function isResearchState(value: unknown): value is ResearchState {
+  return typeof value === "string" && (RESEARCH_STATES as readonly string[]).includes(value);
+}
+
+function isResearchLens(value: unknown): value is ResearchLensId {
+  return typeof value === "string" && (RESEARCH_LENSES as readonly string[]).includes(value);
+}
+
+const RESEARCH_REVISION_KINDS = ["revise", "push-back", "accept"] as const;
+
+function isResearchRevisionKind(value: unknown): value is ResearchRevision["kind"] {
+  return typeof value === "string" && (RESEARCH_REVISION_KINDS as readonly string[]).includes(value);
 }
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
@@ -357,6 +376,43 @@ export interface FlowStateV82 {
    * Design rationale lives at `.cclaw/flows/v859-continuation/design.md`.
    */
   parentContext?: ParentContext | null;
+  /**
+   * Research orchestrator lifecycle state. Set ONLY on
+   * research-mode flows (`triage.mode == "research"`); absent on
+   * `task` mode. The orchestrator's research-mode fork stamps this
+   * field at every Phase boundary so a `/cc` continue after a
+   * stop-and-report can resume the research lifecycle without
+   * re-parsing `research.md`. See {@link ResearchState} for the
+   * full state vocabulary and transitions.
+   *
+   * Pre-v8.71 research-mode state files lack this field; readers
+   * MUST default to `null`/absent for back-compat. Pre-v8.71 research
+   * flows ran the four-phase straight-line shape (discovery →
+   * lens-dispatch → synthesis → finalize) without an explicit
+   * lifecycle marker — resume on a stopped pre-v8.71 research flow
+   * is a no-op (the orchestrator restarts from Phase 1 with the
+   * dialogue summary on disk).
+   */
+  researchState?: ResearchState | null;
+  /**
+   * Append-only revision history for `/cc research` iterations
+   * (introduced in v8.71; pre-v8.71 state files lack this field and
+   * readers must treat it as an empty array for back-compat). Each
+   * entry records one revise / push-back / accept invocation; the
+   * array is the persistent audit trail mirrored verbatim under
+   * `research.md > ## Revision history`. New writes append to the
+   * array; entries are NEVER mutated or removed
+   * (the orchestrator overwrites `change` on the next post-revision
+   * synthesis pass only when the entry's prior `change` was absent).
+   *
+   * Set ONLY on research-mode flows. Pre-v8.71 state files lack
+   * this field; readers MUST default to `[]` on absent. Cap: no
+   * structural cap (the user can iterate as many times as they
+   * want; the synthesis self-review pass surfaces a "high-iteration
+   * warning" in the recommended-next-step paragraph after the 5th
+   * revision).
+   */
+  revisions?: ResearchRevision[];
 }
 
 /**
@@ -936,6 +992,44 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
         throw new Error(
           `flow-state.parentContext.artifactPaths.${optional} must be a non-empty string when present`
         );
+      }
+    }
+  }
+  if (state.researchState !== undefined && state.researchState !== null && !isResearchState(state.researchState)) {
+    throw new Error(
+      `Invalid researchState: ${String(state.researchState)} (expected one of ${RESEARCH_STATES.join(" | ")} | null | absent)`
+    );
+  }
+  if (state.revisions !== undefined) {
+    if (!Array.isArray(state.revisions)) {
+      throw new Error("flow-state.revisions must be an array when present");
+    }
+    for (const rev of state.revisions) {
+      if (typeof rev !== "object" || rev === null) {
+        throw new Error("flow-state.revisions entries must be objects");
+      }
+      const r = rev as Partial<ResearchRevision>;
+      if (!isResearchRevisionKind(r.kind)) {
+        throw new Error(
+          `Invalid revision.kind: ${String(r.kind)} (expected revise | push-back | accept)`
+        );
+      }
+      if (typeof r.at !== "string" || r.at.length === 0) {
+        throw new Error("flow-state.revisions[].at must be a non-empty ISO timestamp string");
+      }
+      if (typeof r.area !== "string") {
+        throw new Error("flow-state.revisions[].area must be a string (empty for accept; verbatim user arg for revise / push-back)");
+      }
+      if (!Array.isArray(r.lensesRedispatched)) {
+        throw new Error("flow-state.revisions[].lensesRedispatched must be an array");
+      }
+      for (const lens of r.lensesRedispatched) {
+        if (!isResearchLens(lens)) {
+          throw new Error(`Invalid revision.lensesRedispatched entry: ${String(lens)}`);
+        }
+      }
+      if (r.change !== undefined && typeof r.change !== "string") {
+        throw new Error("flow-state.revisions[].change must be a string when present");
       }
     }
   }

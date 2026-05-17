@@ -153,6 +153,7 @@ Legacy "resume picker" prose retired. \`/cc\` invocations resolve through a dete
 | \`/cc <task>\` | yes | Error: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` End the turn. Do NOT auto-cancel or queue. |
 | \`/cc <task>\` | no | **Start a new flow.** Run the Detect git-check, extend-mode fork, research-mode fork in that order; if neither fires, dispatch the \`triage\` sub-agent. |
 | \`/cc research <topic>\` | yes / no | Error / start (same shape; see "Detect — research-mode fork"). |
+| \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (v8.71) | yes (research-mode + \`researchState == "awaiting-user-review"\`) | Route to the matching revision sub-command per \`runbooks/research-revision.md\` §2 / §3 / §4. Outside that state — error: \`research revision sub-commands only fire on a research flow at the awaiting-user-review gate.\` End the turn. |
 | \`/cc extend <slug> <task>\` | yes / no | Error / start (same shape; see "Detect — extend-mode fork"). |
 | \`/cc-cancel\` | yes | Run the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state). See \`commands/cc-cancel.md\`. |
 | \`/cc-cancel\` | no | Error: \`No active flow to cancel.\` End the turn. |
@@ -248,13 +249,17 @@ The orchestrator authors \`research.md\` by:
 5. Stamping frontmatter with \`lenses\` (the depth-determined subset; failed lenses marked \`failed\`), \`research_depth\`, \`generated_at\`.
 6. **Synthesis self-review pass (v8.69)** — BEFORE \`research.md\` lands, walk the draft through four scans (placeholder / contradiction / scope drift / ambiguity); fix inline; record fixes in \`## Synthesis > ### Self-review notes\` (\`No self-review issues found.\` when clean). Full procedure in \`runbooks/research-depth-and-self-review.md\`.
 
+#### Phase 3.5 — awaiting user review (v8.71)
+
+After Phase 3 lands \`research.md\` on disk, the orchestrator stamps \`flow-state.json > researchState: "awaiting-user-review"\` and surfaces the review prompt with three options: \`/cc research revise <area>\` (re-dispatch lens(es) covering \`<area>\` → \`engineer\` / \`product\` / \`architecture\` / \`history\` / \`skeptic\` / \`synthesis\` / \`all\`; cycles state back to \`awaiting-user-review\` after the rewrite); \`/cc research push-back <claim>\` (re-dispatch \`research-skeptic\` plus the authoring lens to challenge the cited claim; same cycle-back); \`/cc research accept\` (terminal — appends \`accept\` row to \`## Revision history\`, stamps \`researchState: "accepted"\`, runs Phase 4 finalize). Each revise / push-back appends a \`ResearchRevision\` entry to \`flow-state.json > revisions[]\` AND a row to \`research.md > ## Revision history\` (canonical audit trail; append-only). Lifecycle states: \`discovery\` → \`lens-dispatch\` → \`synthesis\` → \`awaiting-user-review\` ⇄ \`revising\` → \`accepted\`. Full procedure (parsing, lens-set mapping, fuzzy claim search, failure handling, anti-rationalization) lives in \`runbooks/research-revision.md\`. Reference patterns: obra-superpowers brainstorming User Review Gate, addyosmani idea-refine divergent-then-converge, everyinc-compound ce-brainstorm Phase 2.5 confirmation gate.
+
 #### Phase 4 — finalize
 
-The orchestrator finalises the flow: \`git mv\` the artifact into \`.cclaw/flows/shipped/<slug>/research.md\` (NO build / review / critic / ship stages — research mode has no implementation pipeline). Reset \`flow-state.json > currentSlug\` to \`null\`. After finalize, surface the **handoff prompt** in plain prose (no structured ask):
+The orchestrator finalises the flow only after the user invokes \`/cc research accept\` at the Phase 3.5 gate (v8.71+; pre-v8.71 flows finalised straight from Phase 3): \`git mv\` the artifact into \`.cclaw/flows/shipped/<slug>/research.md\` (NO build / review / critic / ship stages — research mode has no implementation pipeline). Reset \`flow-state.json > currentSlug\` to \`null\`. After finalize, surface the **handoff prompt** in plain prose (no structured ask):
 
 > "\`research.md\` is ready at \`.cclaw/flows/shipped/<slug>/research.md\`. Recommended next: <verbatim Phase 3 recommendation>. Ready to plan? Run \`/cc <task>\` and I'll carry the research as \`priorResearch\` context."
 
-The next \`/cc <task>\` invocation on the same project reads the most-recent shipped research slug under \`flows/shipped/\` and stamps it into \`flow-state.json > priorResearch: { slug, topic, path }\`; the architect's Bootstrap on that follow-up flow reads \`priorResearch.path\` and includes the research artifact as Frame / Approaches / Decisions context.
+The next \`/cc <task>\` invocation on the same project reads the most-recent shipped research slug under \`flows/shipped/\` and stamps it into \`flow-state.json > priorResearch: { slug, topic, path }\`; the architect's Bootstrap on that follow-up flow reads \`priorResearch.path\` and includes the research artifact (including the \`## Revision history\` block) as Frame / Approaches / Decisions context.
 
 Sub-cases:
 
