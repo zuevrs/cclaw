@@ -594,6 +594,16 @@ _(Skipped in gap mode unless escalation fires. Emitted in full in adversarial mo
 | --- | --- | --- | --- | --- |
 | F-4 | _e.g. "user submits same form rapidly"_ | _e.g. "no debounce, no idempotency key"_ | _e.g. "duplicate orders created"_ | _block-ship / iterate / fyi_ |
 
+## Cross-model second opinion
+
+_(v8.72 — fires when the dispatch envelope carries \`crossModelCritic: true\`. Triggered automatically on high-stakes slugs (\`triage.securityFlag\` or irreversible D-N) OR when the user invoked \`/cc --critic-cross-model\`. Re-runs §3a-§3d via a second model through an available MCP cross-model tool (Codex / Gemini / comparable). Each row is independent of §3 — the second model never sees the first model's findings. \`X-F-N\` numbering marks rows as second-opinion.)_
+
+_(Graceful fallback: when no cross-model MCP tool is wired, write exactly one line: \`Cross-model unavailable: skipped.\` — no findings, no error trail, no install-layer change required.)_
+
+| X-F-N | Technique | Trigger | Failure consequence | Severity |
+| --- | --- | --- | --- | --- |
+| X-F-1 | _assumption-violation / composition / cascade / abuse / human-perspective:<lens>_ | _e.g. "second model flagged that the cache key path silently truncates on Unicode boundary"_ | _e.g. "lookup miss for users whose query happens to land on a multi-byte boundary"_ | _block-ship / iterate / fyi_ |
+
 ## 4. Criterion check (are the verifiable plan criteria the right criteria, not are they met?)
 
 _(Goal-backward, per criterion. Re-read the user's original prompt and verify each verifiable plan criterion actually solves the user-stated problem. scope: every row in the AC table, every entry in \`## Edge cases\`, and every measurable row in \`## Non-functional\`.)_

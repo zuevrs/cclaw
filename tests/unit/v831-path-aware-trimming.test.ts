@@ -30,8 +30,8 @@ function bodyBudget(fileNames: string[]): number {
 }
 
 describe("v8.31 path-aware orchestrator — body-only budget", () => {
-  it("AC-1 — start-command body stays ≤ 84000 chars (v8.59 raised by 1500 chars for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.63 raised by 1000 chars for the slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default build-stage prose; v8.68 raised by 200 chars for the structured implementer status pointer in the Always-auto failure handling section; v8.69 raised by 1300 chars for the research-depth + self-review pointers; v8.70 raised by 500 chars for the design-quality envelope pointer + the eleven-axis update; v8.71 raised by 2000 chars for the new Phase 3.5 awaiting-user-review pointer + the invocation-matrix row for the three new research sub-commands (revise / push-back / accept) + the inline lifecycle-state vocabulary — ~95% of the v8.71 prose lives in `runbooks/research-revision.md`)", () => {
-    expect(renderStartCommand().length).toBeLessThanOrEqual(84000);
+  it("AC-1 — start-command body stays ≤ 85000 chars (v8.59 raised by 1500 chars for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.63 raised by 1000 chars for the slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default build-stage prose; v8.68 raised by 200 chars for the structured implementer status pointer in the Always-auto failure handling section; v8.69 raised by 1300 chars for the research-depth + self-review pointers; v8.70 raised by 500 chars for the design-quality envelope pointer + the eleven-axis update; v8.71 raised by 2000 chars for the new Phase 3.5 awaiting-user-review pointer + the invocation-matrix row for the three new research sub-commands (revise / push-back / accept) + the inline lifecycle-state vocabulary — ~95% of the v8.71 prose lives in `runbooks/research-revision.md`; v8.72 raised by 1000 chars for the cross-model second opinion pointer under #### critic — trigger set + envelope stamp + graceful-fallback line + gstack /codex reference — ~95% of v8.72 prose lives in `src/content/specialist-prompts/critic.ts §3.5`)", () => {
+    expect(renderStartCommand().length).toBeLessThanOrEqual(85000);
   });
 
   it("AC-1 — start-command body stays ≤ 560 lines (v8.59 raised by 10 lines to absorb the Detect-hop extend-mode pointer + the v8.59 prior-context consumption pointer; v8.69 raised by 3 lines for the research-depth dispatch-envelope sub-bullet + the synthesis self-review step 6 + the depth-flag sub-case; v8.70 raised by 2 lines for the design-quality envelope-activation bullet + the eleven-axis update; v8.71 raised by 10 lines for the new Phase 3.5 awaiting-user-review pointer + the invocation-matrix row for the three new research sub-commands; matches the v8.22 line-budget raise in v822-orchestrator-slim.test.ts)", () => {
@@ -55,22 +55,22 @@ describe("v8.31 path-aware orchestrator — per-path envelopes (v8.54: budgets u
     "critic-steps.md"
   ];
 
-  it("AC-2 — inline path budget = body alone, ≤ 84000 chars (v8.59 raised by 1500 chars; v8.63 raised by 1000 chars for slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default body bump; v8.68 raised by 200 chars for the structured implementer status pointer; v8.69 raised by 1300 chars for the research-depth + synthesis self-review pointers; v8.70 raised by 500 chars for the design-quality envelope pointer; v8.71 raised by 2000 chars for the Phase 3.5 awaiting-user-review pointer + invocation-matrix row + lifecycle vocabulary; see body-only budget above for rationale)", () => {
-    expect(bodyBudget([])).toBeLessThanOrEqual(84000);
+  it("AC-2 — inline path budget = body alone, ≤ 85000 chars (v8.59 raised by 1500 chars; v8.63 raised by 1000 chars for slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default body bump; v8.68 raised by 200 chars for the structured implementer status pointer; v8.69 raised by 1300 chars for the research-depth + synthesis self-review pointers; v8.70 raised by 500 chars for the design-quality envelope pointer; v8.71 raised by 2000 chars for the Phase 3.5 awaiting-user-review pointer + invocation-matrix row + lifecycle vocabulary; v8.72 raised by 1000 chars for the cross-model second opinion pointer under #### critic; see body-only budget above for rationale)", () => {
+    expect(bodyBudget([])).toBeLessThanOrEqual(85000);
   });
 
-  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 135000 chars (v8.59 raised by 2000 chars: ~1500 chars body + ~500 chars extend-mode pointer; v8.63 raised by 1000 chars for slice / AC separation body bump; v8.65 raised by 9000 chars for the multi-lens research orchestrator's body prose riding into every dispatch; v8.66 raised by 1000 chars for parallel-by-default body bump; v8.71 raised by 2000 chars matching the body bump)", () => {
-    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(135000);
+  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 136000 chars (v8.59 raised by 2000 chars: ~1500 chars body + ~500 chars extend-mode pointer; v8.63 raised by 1000 chars for slice / AC separation body bump; v8.65 raised by 9000 chars for the multi-lens research orchestrator's body prose riding into every dispatch; v8.66 raised by 1000 chars for parallel-by-default body bump; v8.71 raised by 2000 chars matching the body bump; v8.72 raised by 1000 chars matching the cross-model second opinion body bump)", () => {
+    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(136000);
   });
 
-  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 180000 chars (v8.59 raised by 2000 chars matching the non-inline path bump; v8.63 raised by 1000 chars matching the body bump; v8.65 raised by 9000 chars matching the multi-lens research orchestrator's body bump; v8.66 raised by 1000 chars matching the parallel-by-default body bump; v8.71 raised by 2000 chars matching the body bump)", () => {
+  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 181000 chars (v8.59 raised by 2000 chars matching the non-inline path bump; v8.63 raised by 1000 chars matching the body bump; v8.65 raised by 9000 chars matching the multi-lens research orchestrator's body bump; v8.66 raised by 1000 chars matching the parallel-by-default body bump; v8.71 raised by 2000 chars matching the body bump; v8.72 raised by 1000 chars matching the cross-model second opinion body bump)", () => {
     const largeRisky = [
       ...NON_INLINE_RUNBOOKS,
       "parallel-build.md",
       "cap-reached-recovery.md",
       "adversarial-rerun.md"
     ];
-    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(180000);
+    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(181000);
   });
 
   it("AC-2 — strict ordering: large-risky > non-inline > inline (per-path adds material)", () => {
