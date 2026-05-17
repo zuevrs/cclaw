@@ -92,7 +92,7 @@ describe("v8.61 — triage as a specialist sub-agent", () => {
     // routing them to runbooks/research-revision.md). The triage
     // delegation invariant (the body does not re-implement triage
     // inline) is preserved.
-    expect(START_COMMAND_BODY.length).toBeLessThan(84000);
+    expect(START_COMMAND_BODY.length).toBeLessThan(85000);
     expect(START_COMMAND_BODY).toMatch(/triage[\s\S]*sub-agent|dispatch[\s\S]*triage|triage[\s\S]*specialist/iu);
   });
 

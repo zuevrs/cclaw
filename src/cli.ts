@@ -104,7 +104,26 @@ v8.37 migration:
 
 Flow control (plan / build / review / ship) lives inside the harness
 via the /cc command, not in this CLI. There is no \`cclaw plan\`,
-\`cclaw status\`, \`cclaw ship\`, or \`cclaw migrate\` — by design.`;
+\`cclaw status\`, \`cclaw ship\`, or \`cclaw migrate\` — by design.
+
+Per-flow override flags (parsed by the /cc orchestrator inside the
+harness, NOT by this CLI):
+  --inline / --soft / --strict        force a ceremonyMode
+  --research / --light / --standard / --deep-product   research mode + depth
+  --critic-cross-model                 force a cross-model second
+                                       opinion in critic via MCP
+                                       (v8.72). Graceful fallback:
+                                       \`Cross-model unavailable: skipped\`
+                                       is written when no MCP tool is
+                                       wired (no install-layer change
+                                       needed to opt in later).
+                                       Default off; opt in
+                                       project-wide via
+                                       \`critic.cross_model: true\` in
+                                       \`.cclaw/config.yaml\`.
+  --capture-learnings                  force a compound-learnings
+                                       capture even when the heuristic
+                                       gate did not fire`;
 
 const HELP_COMMANDS: ReadonlyArray<readonly [string, string]> = [
   ["install", "Install / reapply cclaw assets (idempotent; runs orphan cleanup). The single installer."],

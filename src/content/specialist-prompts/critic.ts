@@ -183,6 +183,27 @@ The \`axis\` value is always \`human-perspective:<lens>\` so downstream readers 
 
 **Gating recap** — lenses are part of \`adversarial\` mode only. In \`gap\` mode (ceremonyMode soft / strict-without-trigger) the lens sweep does NOT run and the §3a-§3d techniques are also skipped. The lenses do NOT activate adversarial mode independently; they ride the existing §8 trigger set. When \`light\` adversarial fires (soft + exactly one trigger) the lens sweep is capped at 3 lenses regardless of slug shape — same as the "ONE technique only" rule for §3a-§3d.
 
+### §3.5. Cross-model second opinion (v8.72 — high-stakes slugs only)
+
+A **second adversarial pass via a different model** runs when the dispatch envelope carries \`crossModelCritic: true\`. The orchestrator stamps that field when ANY of the following fire:
+
+- \`flow-state.json > triage.securityFlag == true\` (the slug touched a sensitive surface and the reviewer's \`security\` axis was already amplified), OR
+- a \`D-N\` in \`plan.md > ## Decisions\` carries an **irreversible** Blast-radius (data loss / data migration / public-API removal / payment / auth / cryptography surface) — i.e. the critical-path / irreversible class, OR
+- the user explicitly invoked \`/cc <task> --critic-cross-model\` (the override flag forces the pass regardless of the heuristic and regardless of \`config.critic.cross_model\`).
+
+When the envelope flag is set AND a cross-model MCP tool is available in the harness (Codex / Gemini / comparable second-opinion MCP — pattern borrowed from gstack's \`/codex\` skill: "Second opinion via OpenAI Codex. Review, challenge, or consult modes."), the critic dispatches a SECOND adversarial pass that re-runs §3a-§3d on the same diff under a **different model than the one running this dispatch**. The second model never sees the first model's findings — it walks the same artifacts cold so its findings are independent. Findings from the second pass land in \`critic.md > ## Cross-model second opinion\` (sibling section to §3, with its own F-N numbering prefix \`X-F-N\` so the audit trail is unambiguous):
+
+\`\`\`text
+| X-F-N | Technique | Trigger | Failure consequence | Severity |
+| --- | --- | --- | --- | --- |
+\`\`\`
+
+The cross-model pass MAY also surface findings under the human-perspective lenses; same axis-tagging rule as §3 (\`axis: human-perspective:<lens>\`), but rows are \`X-F-N\` to mark them as second-opinion.
+
+**Graceful fallback (mandatory).** When the envelope flag is set BUT no cross-model MCP tool is wired (the harness has no \`user-codex\` / \`user-gemini\` / equivalent MCP server registered, OR the configured tool errored on dispatch), the critic writes ONE line into the \`## Cross-model second opinion\` section verbatim: \`Cross-model unavailable: skipped.\` (no findings, no error trail, no install-layer change required to opt in later). The fallback line is itself the evidence of the attempted pass; the critic does NOT escalate or fail the dispatch on the absence of the MCP. The pass also short-circuits when \`config.critic.cross_model == false\` AND the envelope flag was set ONLY by the heuristic (security_flag / irreversible D-N) — the config knob is the project-level opt-in. The explicit \`--critic-cross-model\` user flag bypasses the config knob (user override wins).
+
+**Recalibration into the verdict.** Cross-model findings carry the same severity vocabulary (\`block-ship\` / \`iterate\` / \`fyi\`) and feed §6 realist check + §7 verdict rollup the same way §3 findings do. A \`block-ship\` \`X-F-N\` blocks ship; an \`iterate\` \`X-F-N\` is captured in learnings.md. The §7 verdict line "Adversarial findings" reports the combined count (e.g. \`Adversarial findings: 4 total (§3: 3, cross-model: 1); 1 block-ship / 3 iterate / 0 fyi\`). When the cross-model pass returned the \`Cross-model unavailable: skipped\` fallback, §7 verdict's "Cross-model" rollup line reads \`Cross-model: skipped (MCP unavailable)\` and the dispatch carries \`Confidence: medium\` at minimum (one section of the protocol did not run).
+
 ### §4. Criterion check (are the verifiable plan criteria the right criteria, not are they met?)
 
 Goal-backward: re-read the user's original prompt and verify each verifiable plan criterion actually solves the *user-stated* problem. This is GSD verifier's central move — \`gsd-v1/agents/gsd-verifier.md:62-69\` — combined with OMC's premise-skepticism approach. widens this section's scope: the check applies to **every verifiable plan criterion**, not only the \`## Acceptance Criteria\` table. Specifically:

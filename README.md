@@ -10,7 +10,7 @@ cclaw installs `/cc` and `/cc-cancel` into each harness. Inside `/cc`, three ent
 
 - **One pipeline, depth scales.** Every task runs `triage → architect → builder → reviewer → critic → ship`. Plan-stage depth scales with `ceremonyMode` (lite for soft, rich for strict) instead of branching to a different specialist stack.
 - **Always-auto, hard stops on failure.** The flow runs end-to-end without approval pickers at plan / review / critic gates. Hard failures stop and report with a plain-prose status block; resume with `/cc`, discard with `/cc-cancel`.
-- **Two-model review.** A read-only reviewer walks ten axes; an adversarial critic falsifies what the reviewer cleared. They share no context and write to separate artifacts (`review.md`, `critic.md`).
+- **Two-model review.** A read-only reviewer walks ten axes; an adversarial critic falsifies what the reviewer cleared. They share no context and write to separate artifacts (`review.md`, `critic.md`). On high-stakes work (security_flag / irreversible D-N) or when invoked with `--critic-cross-model`, the critic optionally runs a **second adversarial pass via a different model** (Codex / Gemini via MCP) for an independent second opinion (v8.72).
 - **Right-sized ceremony.** Trivial edits run inline (one commit, no plan). Small/medium tasks get a soft-mode plan + a single TDD cycle. Large-risky tasks get a per-slice build with a pre-implementation plan-critic gate.
 - **Parallel by default.** Independent slices in a plan run in parallel — N independent slices finish in the time of the longest, not the sum.
 - **Research as a separate entry point.** `/cc research <topic>` runs an open-ended discovery dialogue and dispatches research lenses in parallel (engineer / product / architecture / history / skeptic). Depth tiers (`--light` / `--standard` / `--deep-product`) gate the lens set; lenses dispatch first-class web search via MCP (`user-exa`, `user-context7`); synthesis runs a four-scan self-review before `research.md` lands. Optional handoff into a follow-up `/cc <task>` that consumes it as context.
@@ -259,6 +259,13 @@ captureLearningsBypass: false       # true = silent skip on non-trivial slugs
 legacy-artifacts: false             # true brings back legacy extra artifacts
 architect:
   ambiguity_threshold: 0.2          # ambiguity soft-warning threshold
+critic:
+  cross_model: false                # opt-in (v8.72): second adversarial pass via a
+                                    # different model through MCP on high-stakes
+                                    # slugs. Always available on demand via the
+                                    # `/cc --critic-cross-model` flag regardless
+                                    # of this knob. Graceful fallback when no
+                                    # MCP cross-model tool is wired.
 ```
 
 ## Architecture deep dive

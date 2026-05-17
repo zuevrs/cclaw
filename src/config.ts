@@ -77,6 +77,33 @@ export interface ClarifyConfig {
   ambiguity_threshold?: number;
 }
 
+/**
+ * critic phase tunables (v8.72). Optional block in `.cclaw/config.yaml`;
+ * every field is independently optional and falls back to a documented
+ * default when absent. The block exists so the cross-model-critic knob
+ * has a typed home (we do NOT want orchestrator prompts reaching for
+ * free-form `unknown` keys).
+ */
+export interface CriticConfig {
+  /**
+   * Whether the critic specialist may run a **second adversarial pass via
+   * a different model** through an available MCP cross-model tool
+   * (Codex / Gemini / etc.) on high-stakes slugs. The orchestrator stamps
+   * `crossModelCritic: true` into the critic dispatch envelope when ANY
+   * of the following hold:
+   *   - this knob is `true` AND the slug is high-stakes (security_flag /
+   *     critical-path / irreversible D-N) OR
+   *   - the user explicitly invoked `/cc --critic-cross-model`.
+   *
+   * Default `false`. The critic gracefully falls back with a one-line
+   * "Cross-model unavailable: skipped" note when the MCP tool is not
+   * wired into the harness (no install-layer change required to opt in
+   * later — the default-off knob keeps the surface inert until the MCP
+   * is configured).
+   */
+  cross_model?: boolean;
+}
+
 export interface DesignConfig {
   /**
    * composite-ambiguity threshold for the Phase 7 warning prefix.
@@ -156,6 +183,13 @@ export interface CclawConfig {
    * can land here without churning the top-level schema.
    */
   clarify?: ClarifyConfig;
+  /**
+   * critic phase tunables (v8.72). The only field today is
+   * {@link CriticConfig.cross_model}; the block is shaped so future
+   * critic knobs (token-budget overrides, escalation-trigger tunables)
+   * can land here without churning the top-level schema.
+   */
+  critic?: CriticConfig;
 }
 
 /**
@@ -207,6 +241,30 @@ export function clarifyAmbiguityThresholdOf(
     return DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD;
   }
   if (raw < 0 || raw > 100) return DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD;
+  return raw;
+}
+
+/**
+ * Default for `critic.cross_model` when the knob is absent or not a
+ * boolean. Exposed as a const so tests + orchestrator readers share the
+ * canonical value. v8.72 ships the knob OFF — opt-in by design so a
+ * harness without an MCP cross-model tool wired doesn't surface the
+ * "Cross-model unavailable: skipped" fallback on every critic dispatch.
+ */
+export const DEFAULT_CRITIC_CROSS_MODEL = false;
+
+/**
+ * Read the configured `critic.cross_model` knob with the documented
+ * fallback. Returns {@link DEFAULT_CRITIC_CROSS_MODEL} (`false`) when
+ * the config is absent, the `critic` block is missing, the field is
+ * absent, or the value is not a boolean. The orchestrator combines
+ * this value with the high-stakes detection + the `--critic-cross-model`
+ * CLI flag to decide whether to stamp `crossModelCritic: true` in the
+ * critic dispatch envelope.
+ */
+export function criticCrossModelOf(config: CclawConfig | null | undefined): boolean {
+  const raw = config?.critic?.cross_model;
+  if (typeof raw !== "boolean") return DEFAULT_CRITIC_CROSS_MODEL;
   return raw;
 }
 

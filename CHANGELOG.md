@@ -1,6 +1,53 @@
 # Changelog
 
 
+## 8.72.0 — Cross-model second opinion in critic
+
+### Why
+
+The post-implementation critic (v8.42+) walks predictions / gaps / adversarial techniques / human-perspective lenses to falsify what the reviewer cleared. Every section runs under **the same model** that dispatched the rest of the flow — same training data, same blind spots, same prior-distribution. On high-stakes work (security-sensitive surfaces, irreversible D-N decisions like data migration / payment / auth / cryptography) a single-model adversarial pass is structurally limited: the failure modes the model is least likely to predict are precisely the failure modes outside its training distribution.
+
+Reference pattern: gstack's `/codex` skill ("Second opinion via OpenAI Codex. Review, challenge, or consult modes.") wires an explicit second-model surface for high-stakes review work. v8.72 ports the pattern into the cclaw critic — when the slug is high-stakes OR the user opts in via `/cc --critic-cross-model`, the critic dispatches a SECOND adversarial pass via a different model through an available MCP cross-model tool (Codex / Gemini / comparable second-opinion MCP) and writes findings into `critic.md > ## Cross-model second opinion` with `X-F-N` numbering.
+
+### What changed
+
+**Deliverable 1 — Cross-model second opinion section in critic prompt** (`src/content/specialist-prompts/critic.ts`).
+
+- New `§3.5. Cross-model second opinion` section in the critic prompt's investigation protocol. Declares the trigger set (envelope flag `crossModelCritic: true` set when `triage.securityFlag` OR irreversible D-N OR `--critic-cross-model` user flag), the second-model dispatch contract (independent re-run of §3a-§3d under a different model that never sees the first model's findings), the `X-F-N` row numbering convention, and the graceful fallback for harnesses without an MCP cross-model tool wired (`Cross-model unavailable: skipped.` one-liner; no findings, no error trail, no install-layer change). §7 verdict rollup updated to combine §3 + cross-model counts.
+- The `--critic-cross-model` user flag is the explicit override path; `config.critic.cross_model: true` is the project-level opt-in for the heuristic-only triggers (security_flag / irreversible D-N).
+
+**Deliverable 2 — Orchestrator envelope stamp** (`src/content/start-command.ts`).
+
+- Critic step description gains a single-bullet pointer ("Cross-model second opinion (v8.72)") covering envelope stamping, trigger set, gstack-`/codex` reference, and graceful fallback. The bullet sits alongside the existing critic block-ship routing pointer; full procedure stays in the critic prompt body (`src/content/specialist-prompts/critic.ts §3.5`) and the on-demand runbook (`critic-steps.md`).
+
+**Deliverable 3 — Config knob** (`src/config.ts`).
+
+- New `CriticConfig` interface with `cross_model?: boolean`, attached to `CclawConfig.critic`. Default `false` (`DEFAULT_CRITIC_CROSS_MODEL` const). New `criticCrossModelOf(config)` reader returns the documented default on missing / non-boolean inputs. The block is shaped so future critic knobs (token-budget overrides, escalation-trigger tunables) can land here without churning the top-level schema. Pre-v8.72 config files lack the field and continue to validate (the optional-field default keeps the round-trip).
+
+**Deliverable 4 — CLI flag documentation** (`src/cli.ts`).
+
+- HELP_NOTES grows a "Per-flow override flags" section documenting the `/cc` orchestrator's flag surface (parsed inside the harness, not the CLI installer): `--inline` / `--soft` / `--strict` / `--research` / `--light` / `--standard` / `--deep-product` / `--critic-cross-model` / `--capture-learnings`. The flag is documented in the CLI help screen so operators can `cclaw --help` to discover it; the actual parsing lives in the `/cc` orchestrator body.
+
+**Deliverable 5 — Artifact template update** (`src/content/artifact-templates.ts`).
+
+- `CRITIC_TEMPLATE` gains a `## Cross-model second opinion` section between `## 3. Adversarial findings` and `## 4. Criterion check`. The section carries the `X-F-N` table shape, the trigger documentation, and the graceful-fallback one-line convention. The heading ships in the template even when zero cross-model findings occurred (the gating is the envelope flag, not the heading's presence).
+
+**Deliverable 6 — Tests** (`tests/unit/v872-cross-model-critic.test.ts`).
+
+- New tripwire suite covers: critic prompt mentions cross-model dispatch on high-stakes (`securityFlag` / irreversible / `--critic-cross-model`); critic template carries the `## Cross-model second opinion` section + `X-F-N` row shape + graceful-fallback one-liner; config knob `critic.cross_model` defaults to `false` and the reader returns the documented default on missing inputs; the `--critic-cross-model` CLI flag is documented in the CLI help; start-command body declares the envelope stamp; package.json version bumped to 8.72.0; CHANGELOG carries the v8.72 entry.
+
+### Migration notes
+
+**No breaking changes.** The new `critic.cross_model` config knob is optional; pre-v8.72 `.cclaw/config.yaml` files lack the block and continue to validate (reader defaults to `false`). The critic's existing eight-section protocol (§1-§8) is preserved verbatim; §3.5 is additive and gated on the envelope flag (default OFF). Harnesses without an MCP cross-model tool wired see the graceful-fallback line and proceed; no install-layer change required to opt in later — wiring an MCP server (e.g. `user-codex`, `user-gemini`) and flipping `critic.cross_model: true` is the full opt-in path.
+
+The v8.42 ceremonyMode gating (`inline` skip / `soft` gap-light / `strict` gap-or-adversarial) is unchanged. The five §8 escalation triggers (architectural tier / test-first+zero-RED / large surface / security flag / reviewIterations≥4) are unchanged. The 20k hard token cap is unchanged — the cross-model pass shares the same envelope budget; on near-cap dispatches the critic SHOULD skip §3.5 with the "Cross-model unavailable: skipped" fallback line and `Confidence: medium`.
+
+### Budget bumps documented inline
+
+- **Start-command body char budget** ~200 char growth (single new pointer bullet under #### critic). Stays within the v8.71-set 84000 char ceiling.
+- **Critic prompt LOC** grows from ~392 to ~440 lines (well within the 200-700 LOC budget set by the v8.42 critic-specialist test).
+
+
 ## 8.71.0 — Research revision loop
 
 ### Why
