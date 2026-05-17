@@ -25,6 +25,7 @@ import {
   type ResearchState,
   type RoutingClass,
   type RunMode,
+  type SliceId,
   type SliceState,
   type SpecialistId,
   type Surface,
@@ -413,6 +414,27 @@ export interface FlowStateV82 {
    * revision).
    */
   revisions?: ResearchRevision[];
+  /**
+   * Slice ids whose sub-builder worktree branch failed to
+   * fast-forward merge back into the parent after the per-slice TDD
+   * cycle completed (see `src/slice-worktree.ts > mergeSliceWorktree`).
+   *
+   * The orchestrator stamps this field when {@link mergeSliceWorktree}
+   * returns `false` on any slice in a parallel layer. A non-empty
+   * array contaminates the dispatch-level builder Status to `BLOCKED`
+   * (v8.68 protocol) and triggers the stop-and-report surface in
+   * `runbooks/always-auto-failure-handling.md` with the failing
+   * slice ids verbatim. Recovery is via `/cc` continue (after the
+   * user resolves the merge by hand or accepts the partial landing)
+   * or `/cc-cancel`.
+   *
+   * Optional + back-compat: pre-v8.73 strict flows ran every layer
+   * in the shared working tree (no merge step), so readers MUST
+   * tolerate absent values and treat them as the empty array. Cleared
+   * at ship by the compound layer and at cancel by the cancel layer
+   * (alongside the per-slice worktree teardown).
+   */
+  slice_merge_failures?: SliceId[];
 }
 
 /**
@@ -678,6 +700,13 @@ function assertSliceArray(value: unknown): asserts value is SliceState[] {
         if (typeof acId !== "string" || acId.length === 0) {
           throw new Error("flow-state.slices.verifiesAcIds entries must be non-empty strings");
         }
+      }
+    }
+    if (slice.worktreePath !== undefined) {
+      if (typeof slice.worktreePath !== "string" || slice.worktreePath.length === 0) {
+        throw new Error(
+          "flow-state.slices.worktreePath must be a non-empty string when present"
+        );
       }
     }
   }
@@ -1030,6 +1059,18 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
       }
       if (r.change !== undefined && typeof r.change !== "string") {
         throw new Error("flow-state.revisions[].change must be a string when present");
+      }
+    }
+  }
+  if (state.slice_merge_failures !== undefined) {
+    if (!Array.isArray(state.slice_merge_failures)) {
+      throw new Error("flow-state.slice_merge_failures must be an array when present");
+    }
+    for (const sliceId of state.slice_merge_failures) {
+      if (typeof sliceId !== "string" || sliceId.length === 0) {
+        throw new Error(
+          "flow-state.slice_merge_failures entries must be non-empty slice id strings (SL-N)"
+        );
       }
     }
   }

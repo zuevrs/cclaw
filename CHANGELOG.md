@@ -1,6 +1,51 @@
 # Changelog
 
 
+## 8.73.0 — Worktree-isolated parallel slices
+
+### Why
+
+v8.64 turned independent-layer slices into parallel-by-default sub-builder dispatches, but those sub-builders all ran in the **shared** working tree. The plan-critic §4b independence-mismatch finding existed to prevent two parallel sub-builders from racing on the same file, but the check was prose-only — partial-path overlap (a slice's `Surface` containing a parent dir of another slice's file) slipped through and surfaced ex-post as a reviewer edit-discipline finding, after the build had already burned context. The legacy `topology: parallel-build` opt-in (worktree-per-slice; gated on ≥4 AC + ≥2 disjoint touchSurface clusters) was the only structurally-safe path; v8.73 promotes it into the default for every multi-slice independent layer and tightens the upstream gate so plan-critic blocks-ship any independence claim that fails literal zero-file-overlap.
+
+### What changed
+
+**Deliverable 1 — `src/slice-worktree.ts` lifecycle helpers.**
+
+- New module exports `createSliceWorktree(projectRoot, slug, sliceId): string`, `mergeSliceWorktree(parentPath, slug, sliceId): boolean`, `cleanupSliceWorktree(projectRoot, slug, sliceId): void` (plus an async sibling `cleanupSliceWorktreeAsync` for orchestrator hooks). Each shells out to the `git worktree` CLI via `execFileSync`. Sibling-directory shape is `../<projectName>-<slug>-<sliceId>` on disposable branch `cclaw/<slug>-<sliceId>` so a future `git branch --list 'cclaw/*'` sweep can identify orphan slice branches. Pure helpers (`sliceWorktreePath`, `sliceWorktreeBranch`) so callers can predict paths without touching the filesystem. `mergeSliceWorktree` is fast-forward-only on purpose (a true merge commit would defeat the per-slice audit chain the reviewer reads at handoff). Cleanup is idempotent: missing dir / missing branch / unknown worktree are all no-ops so ship + cancel hooks can blanket-invoke without first inspecting state.
+
+**Deliverable 2 — Builder prompt parallel dispatch (`src/content/specialist-prompts/builder.ts`).**
+
+- `### Dispatch shape` step 2 grows the new "Worktree-per-independent-slice (v8.73; mandatory on multi-slice layers)" instruction: parent calls `createSliceWorktree` per slice, stamps the returned path into `flow-state.json > slices[].worktreePath`, dispatches sub-builders with `worktreePath` in the envelope (each sub-builder `cd`s into its own worktree before issuing any `git` command). New step 6 ("Merge fast-forward + CI gate") fast-forward merges each slice's branch back into the parent in topological-layer order, runs typecheck + tests after each merge before merging the next slice, and routes a refused fast-forward through `flow-state.json > slice_merge_failures[]` + dispatch-level `BLOCKED` (v8.68 protocol). New "Worktree lifecycle helpers (v8.73)" table documents the three-function surface as canonical (no other prompt body shells out to `git worktree` directly). The "Interaction with existing `parallel-build` topology" section is rewritten — v8.73 converges the two paths so `topology: parallel-build` is no longer the only worktree-isolated path; the architect's `## Topology` declaration stays in plan.md as slice-graph documentation but the runtime dispatch is uniform.
+
+**Deliverable 3 — Plan-critic zero-file-overlap gate (`src/content/specialist-prompts/plan-critic.ts`).**
+
+- §4b independence-mismatch check tightened: zero-file-overlap is the **only** acceptable proof of an `independent: true` claim. The prompt explicitly instructs the critic to compute the literal set-intersection of every pair of `Surface` arrays; any non-empty intersection involving an independent slice is `block-ship` (class=`independence-mismatch`). Partial-path overlap (parent dir in slice A's `Surface` vs nested file in slice B's `Surface`) is the same `block-ship` finding — the architect must declare files (or non-overlapping subdirectories) at the granularity the reviewer's edit-discipline axis enforces ex-post. The finding body cites overlapping file(s) verbatim so the architect's revision is one edit.
+
+**Deliverable 4 — Types (`src/types.ts` + `src/flow-state.ts`).**
+
+- `SliceState` gains optional `worktreePath?: string` (stamped by the builder when `createSliceWorktree` returns; cleared by ship / cancel after `cleanupSliceWorktree`). `FlowStateV82` gains optional `slice_merge_failures?: SliceId[]` (slice ids whose `mergeSliceWorktree` returned `false`; a non-empty array contaminates the dispatch-level Status to `BLOCKED`). Both fields are back-compat optional — pre-v8.73 state files lack them and continue to validate; readers default to absent / empty. New validator arms in `assertFlowStateV82` reject malformed values (non-string `worktreePath`, non-array `slice_merge_failures`, non-string slice ids in the array).
+
+**Deliverable 5 — Cleanup wiring (`src/compound.ts` + `src/cancel.ts`).**
+
+- Ship path: `runCompoundAndShip` iterates `state.slices` after stamping `currentStage: "ship"` and before moving artifacts, calling `cleanupSliceWorktreeAsync` per slice whose `worktreePath` is set. Cancel path: `cancelActiveRun` does the same iteration at the top, before the artifact-move loop. Both calls are best-effort + sequential (concurrent `git worktree remove` against the same project root can race the worktree admin file).
+
+**Deliverable 6 — Tests.**
+
+- `tests/unit/v873-worktree-slices.test.ts` (24 assertions across 6 describe blocks): slice-worktree.ts exports the three helpers (plus async sibling, pure path computations, error class); builder prompt mentions worktree-per-independent-slice on multi-slice layers + fast-forward CI gate + slice_merge_failures contamination; plan-critic prompt mentions zero-file-overlap as independence proof + set-intersection of `Surface` columns + block-ship class=independence-mismatch + partial-path overlap; compound + cancel layers invoke `cleanupSliceWorktreeAsync` per stamped `worktreePath`; types carry `worktreePath?` + `slice_merge_failures?` with validator arms; package.json ≥ 8.73.0 + CHANGELOG entry.
+- `tests/integration/slice-worktree.test.ts` (8 tests, gated on `git` available on the executor): full lifecycle exercise against real git — fresh repo bootstrap, sibling worktree creation, disposable branch namespace, clobber refusal, fast-forward merge success (returns `true`), divergent-parent fast-forward refusal (returns `false`), idempotent cleanup (worktree + branch + repeat invocation), async cleanup sweeps stray on-disk debris, full two-slice parallel scenario with disjoint Surface + sequential fast-forward + cleanup, non-git directory rejection.
+
+### Migration notes
+
+- Pre-v8.73 strict-mode flows resumed on v8.73+ run identically until the builder hits a multi-slice independent layer — then it materialises worktrees per slice and fast-forward merges back per the new step 6 protocol. No state-file rewrites required; `worktreePath` and `slice_merge_failures` start absent and the orchestrator stamps them on first use.
+- The legacy `topology: parallel-build` opt-in is preserved verbatim in the plan-critic prompt body for back-compat with already-shipped slugs; its runtime semantics now match the v8.73 default (architect's `## Topology` declaration is documentation, not a runtime knob).
+- Single-slice layers and soft-mode flows are unchanged — no worktrees are materialised when the parent runs the cycle inline.
+
+### Reference patterns
+
+- gsd-v1 `tests/worktree-safety.test.cjs` + `tests/worktree-merge-protection.test.cjs` + `tests/worktree-cleanup.test.cjs` — cross-platform worktree-branch checks, pre-merge deletion detection, orchestrator-file backup/restore, post-execution cleanup discovery via `git worktree list`.
+- gsd-v1 `tests/parallel-dependent-plans.test.cjs` — `files_modified` overlap check forces a later wave when slices share files; v8.73's zero-file-overlap gate is the cclaw equivalent of the same `block-ship`-equivalent rule applied at plan-critic time (instead of orchestrator-time wave assignment).
+
+
 ## 8.72.0 — Cross-model second opinion in critic
 
 ### Why

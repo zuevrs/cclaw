@@ -32,7 +32,8 @@ import {
   type ManualFixMatch,
   type RevertedSlugMatch
 } from "./outcome-detection.js";
-import type { AcceptanceCriterionState } from "./types.js";
+import { cleanupSliceWorktreeAsync } from "./slice-worktree.js";
+import type { AcceptanceCriterionState, SliceId } from "./types.js";
 
 export interface CompoundQualitySignals {
   /**
@@ -436,6 +437,20 @@ export async function runCompoundAndShip(
   );
 
   await writeFlowState(projectRoot, { ...state, currentStage: "ship" });
+
+  // v8.73 worktree cleanup — drop sibling git worktrees the builder
+  // materialised for any parallel-layer slice. Runs BEFORE artifact
+  // moves so a failure here surfaces in the compound log while the
+  // slug is still active; the helper is best-effort + idempotent so
+  // missing worktrees / branches never fail ship. Cleared sequentially
+  // (not in parallel) because each call shells out to git in the same
+  // project root and concurrent `git worktree remove` calls can race
+  // on the worktrees admin file.
+  for (const slice of state.slices ?? []) {
+    if (typeof slice.worktreePath === "string" && slice.worktreePath.length > 0) {
+      await cleanupSliceWorktreeAsync(projectRoot, slug, slice.id as SliceId);
+    }
+  }
 
   const shippedDir = shippedArtifactDir(projectRoot, slug);
   await ensureDir(shippedDir);

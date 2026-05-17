@@ -126,8 +126,20 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // (≈2% line headroom, ≈2% char headroom over current 868 lines / 90k
     // chars). Growth justified in CHANGELOG.md (v8.68 — two-stage per-slice
     // review + structured implementer status).
-    maxLines: 890,
-    maxChars: 92000
+    //
+    // v8.73 — worktree-isolated parallel slices: new "Worktree-per-independent-
+    // slice" step in the parallel dispatch protocol, new "Merge fast-forward
+    // + CI gate" step, new "Worktree lifecycle helpers (v8.73)" table
+    // referencing src/slice-worktree.ts as canonical, and the rewritten
+    // "Interaction with existing parallel-build topology" section
+    // documenting the convergence. The worked-example block is rewritten
+    // to walk the worktree lifecycle end-to-end. Growth lands ~+18 lines /
+    // ~+5k chars over the v8.68 envelope; budget raised to 920 lines /
+    // 100000 chars (≈4% line headroom, ≈5% char headroom over current
+    // 886 lines / 95366 chars). Growth justified in CHANGELOG.md (v8.73 —
+    // worktree-isolated parallel slices).
+    maxLines: 920,
+    maxChars: 100000
   }
 ];
 
