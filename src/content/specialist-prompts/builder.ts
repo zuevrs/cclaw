@@ -246,14 +246,28 @@ A sub-builder is not allowed to dispatch further sub-builders. Recursive topolog
 For a layer of N≥2 slices:
 
 1. Compute the layer via \`topologicalLayers(flowState.slices)\` and pick the next unsettled layer.
-2. Dispatch N sub-builders concurrently in a SINGLE tool-call batch (one Task per slice). Each envelope carries: \`assigned_slices: ["SL-N"]\`, \`parent_mode: "topological-layer"\`, the slice's \`Surface\` (the files the sub-builder may touch), and the slice's \`Posture\` (drives the commit shape).
-3. Block until every sub-builder returns its slim summary + per-slice JSON \`self_review\` block.
-4. Inspect every sub-builder's \`self_review\`. Any \`verified: false\` (or empty \`evidence\`) routes that single slice back via a \`mode: "fix-only"\` sub-builder dispatch — sibling slices stay landed; only the failing slice loops. Cap: 3 fix-only rounds per slice (same as the inline path's failure budget).
-5. Advance to the next layer.
+2. **Worktree-per-independent-slice (v8.73; mandatory on multi-slice layers).** For every slice in the layer, call \`createSliceWorktree(projectRoot, slug, sliceId)\` from \`src/slice-worktree.ts\` to materialise a sibling git worktree at \`../<projectName>-<slug>-<sliceId>\` on a disposable branch \`cclaw/<slug>-<sliceId>\` derived from \`HEAD\`. Stamp the returned path into \`flow-state.json > slices[].worktreePath\` so the orchestrator's ship + cancel hooks can clean up later. Each sub-builder runs **entirely inside its own worktree** — its TDD cycle, its commits, and its self_review block are local to that working tree. The shared working tree (the parent's project root) sees no slice-level commits during the layer's lifetime.
+3. Dispatch N sub-builders concurrently in a SINGLE tool-call batch (one Task per slice). Each envelope carries: \`assigned_slices: ["SL-N"]\`, \`parent_mode: "topological-layer"\`, the slice's \`Surface\` (the files the sub-builder may touch), the slice's \`Posture\` (drives the commit shape), and \`worktreePath\` (the absolute sibling-directory path the sub-builder MUST \`cd\` into before issuing any \`git\` command). Sub-builders that ignore \`worktreePath\` and commit in the parent tree are a hard contract violation — surface as a finding (severity=\`required\`, axis=edit-discipline) and stop.
+4. Block until every sub-builder returns its slim summary + per-slice JSON \`self_review\` block from inside its worktree.
+5. Inspect every sub-builder's \`self_review\`. Any \`verified: false\` (or empty \`evidence\`) routes that single slice back via a \`mode: "fix-only"\` sub-builder dispatch on the **same** worktree (no fresh \`createSliceWorktree\` call — the disposable branch already has the prior cycle's commits). Sibling slices stay landed in their own worktrees; only the failing slice loops. Cap: 3 fix-only rounds per slice (same as the inline path's failure budget).
+6. **Merge fast-forward + CI gate (v8.73).** Once every slice in the layer returns \`DONE\` (or \`DONE_WITH_CONCERNS\`), the parent builder fast-forward merges each slice's worktree branch back into the parent's current branch via \`mergeSliceWorktree(projectRoot, slug, sliceId)\`. The merges run **sequentially in topological-layer order** so the parent's HEAD advances one slice at a time and the next slice's fast-forward sees the prior slice's commits already on disk. After each successful merge, run the project's typecheck + test suite against the parent tree (the CI gate) before merging the next slice; a failing suite stops the merge sequence and emits dispatch-level \`BLOCKED\` with the failing slice id in \`Notes:\`. A slice whose \`mergeSliceWorktree\` returned \`false\` (git refused the fast-forward — the parent advanced or the worktree branch diverged) lands in \`flow-state.json > slice_merge_failures[]\` and the dispatch-level Status contaminates to \`BLOCKED\` per the v8.68 protocol; recovery is via \`/cc\` continue (after the user resolves by hand) or \`/cc-cancel\`.
+7. Advance to the next layer. Worktree cleanup for the just-merged layer happens at slug ship / cancel (NOT after each layer) — the worktrees remain available for forensic inspection during the rest of the flow.
 
-After every layer settles (every slice has \`status: implemented\` and its commit chain is on disk), the parent runs the **per-AC verification pass sequentially** (see "AC verification pass" section). Verify commits are cheap (empty diff or test-files-only edit) and they read from the merged state every prior slice produced; sequential is the natural shape, not a missed parallelism opportunity.
+After every layer settles (every slice has \`status: implemented\` and its commit chain is on disk **in the parent tree** via the fast-forward merges), the parent runs the **per-AC verification pass sequentially** (see "AC verification pass" section) in the parent tree. Verify commits are cheap (empty diff or test-files-only edit) and they read from the merged state every prior slice produced; sequential is the natural shape, not a missed parallelism opportunity.
 
-### Worked example — three-slice flow with one parallel layer
+### Worktree lifecycle helpers (v8.73)
+
+The three helpers live at \`src/slice-worktree.ts\` and are the canonical surface — do NOT shell out to \`git worktree\` directly from anywhere else in the prompt body:
+
+| helper | signature | when |
+| --- | --- | --- |
+| \`createSliceWorktree(projectRoot, slug, sliceId)\` | returns absolute worktree path | step 2 above, once per slice on a multi-slice independent layer |
+| \`mergeSliceWorktree(parentPath, slug, sliceId)\` | returns \`true\` on clean fast-forward, \`false\` when git refused | step 6 above, once per slice in topological order |
+| \`cleanupSliceWorktree(projectRoot, slug, sliceId)\` | idempotent void | invoked by the orchestrator at slug ship (compound layer) and at \`/cc-cancel\` (cancel layer); the builder does NOT call this directly |
+
+Single-slice layers (N==1) skip worktrees entirely and run inline in the parent tree, exactly as in v8.64. Soft mode is unchanged (single feature-level cycle, no per-slice dispatch). The worktree shape is reserved for layers of ≥2 slices where the parallel dispatch needs isolation; this is the v8.73 default for the strict-mode common case.
+
+### Worked example — three-slice flow with one parallel layer (v8.73 worktree-isolated)
 
 Slice table (from \`plan.md > ## Plan / Slices\`):
 
@@ -265,11 +279,13 @@ Slice table (from \`plan.md > ## Plan / Slices\`):
 
 \`topologicalLayers()\` returns \`[[SL-1, SL-2], [SL-3]]\`.
 
-- Layer 1 (size 2 → parallel): dispatch sub-builders for SL-1 + SL-2 in a single Task batch. Both run RED → GREEN → REFACTOR in their own context, commit with \`(SL-1)\` / \`(SL-2)\` prefixes, and return their slim summaries. The parent inspects both \`self_review\` blocks.
-- Layer 2 (size 1 → inline): parent runs SL-3's TDD cycle directly (it depends on SL-1's auth helper and SL-2's clock, both already on disk in the merged state). Commit chain \`red(SL-3)\` → \`green(SL-3)\` → \`refactor(SL-3)\`.
-- AC pass (sequential): for each AC in \`## Acceptance Criteria (verification)\`, emit one \`verify(AC-N): passing\` commit per the existing AC pass procedure.
+- Layer 1 (size 2 → parallel, worktree-isolated): parent calls \`createSliceWorktree\` twice → \`../cclaw-myslug-SL-1\` (branch \`cclaw/myslug-SL-1\`) + \`../cclaw-myslug-SL-2\` (branch \`cclaw/myslug-SL-2\`). Dispatches sub-builders for SL-1 + SL-2 in a single Task batch, each with its \`worktreePath\` in the envelope. Both sub-builders \`cd\` into their own worktree, run RED → GREEN → REFACTOR, commit with \`(SL-1)\` / \`(SL-2)\` prefixes on the disposable branch, and return their slim summaries. The parent inspects both \`self_review\` blocks, then fast-forward merges \`cclaw/myslug-SL-1\` into \`HEAD\` (CI gate: typecheck + tests pass) → fast-forward merges \`cclaw/myslug-SL-2\` (CI gate: typecheck + tests pass).
+- Layer 2 (size 1 → inline): parent runs SL-3's TDD cycle directly in the parent tree (it depends on SL-1's auth helper and SL-2's clock, both already on disk after the layer 1 fast-forwards). Commit chain \`red(SL-3)\` → \`green(SL-3)\` → \`refactor(SL-3)\`.
+- AC pass (sequential, parent tree): for each AC in \`## Acceptance Criteria (verification)\`, emit one \`verify(AC-N): passing\` commit per the existing AC pass procedure.
 
-Wall-clock: \`max(time(SL-1), time(SL-2)) + time(SL-3) + time(AC pass)\`. Pre-v8.64: \`time(SL-1) + time(SL-2) + time(SL-3) + time(AC pass)\`.
+Wall-clock: \`max(time(SL-1), time(SL-2)) + time(CI gate ×2) + time(SL-3) + time(AC pass)\`. The two CI-gate runs are sequential because they share the parent tree, but they are short (typecheck + test suite, not a full rebuild) and the parallel RED→GREEN→REFACTOR wins still dominate the savings.
+
+Worktree cleanup runs at slug ship (compound layer calls \`cleanupSliceWorktreeAsync\` per stamped \`worktreePath\` before moving artifacts) or at \`/cc-cancel\` (cancel layer same hook). Neither path runs during the build itself; the worktrees stay on disk for inspection.
 
 ### Single-slice tasks (no parallelism overhead)
 
@@ -287,9 +303,11 @@ This is a silent degradation; the per-slice commit chain and the AC chain are un
 
 \`topologicalLayers()\` throws on a cycle (direct \`SL-A → SL-B → SL-A\` or transitive across N slices) and on an unknown \`dependsOn\` id. If the helper throws, **stop and surface** — the architect emitted a structurally broken slice graph and the plan-critic gate missed it. Do NOT attempt to merge / re-order / heal the cycle from inside the builder; the slug bounces back to architect for a plan revision. The slim summary's Stage line is \`❌ blocked\`, Notes cite the cycle's slice ids verbatim from the thrown error.
 
-### Interaction with the existing \`parallel-build\` topology
+### Interaction with the existing \`parallel-build\` topology (v8.73 — paths converge)
 
-The legacy \`parallel-build\` topology (worktree-per-slice; opt-in via architect's \`## Topology\` declaration with ≥4 AC + ≥2 disjoint touchSurface clusters) remains available for slugs that benefit from full worktree isolation. v8.64's parallel-by-default is the **in-process** dispatch shape for the common \`topology: inline\` slug — it composes with the worktree topology rather than replacing it. The two paths are mutually exclusive per slug: \`topology: parallel-build\` uses worktrees; everything else uses topological layers in the main working tree.
+Pre-v8.73 had two parallel-dispatch shapes: \`topology: parallel-build\` (worktree-per-slice; opt-in via architect's \`## Topology\` declaration with ≥4 AC + ≥2 disjoint touchSurface clusters) and the v8.64 \`topology: inline\` parallel-by-default (in-process, shared working tree). v8.73 unifies them — **every multi-slice independent layer now runs worktree-isolated** by default, so the \`topology: parallel-build\` opt-in is no longer the only way to get full worktree isolation. The architect's \`## Topology\` declaration stays in plan.md for documentation of the slug's slice graph shape, but the runtime dispatch path is identical: layers of ≥2 independent slices get worktrees, single-slice layers run inline in the parent tree.
+
+This convergence eliminates the v8.64-era foot-gun where two sub-builders racing on the same file in the shared working tree could only be caught ex-post by the reviewer's edit-discipline axis. The plan-critic §4b zero-file-overlap gate (v8.73) is the upstream guarantee; the worktree per slice is the runtime defence-in-depth.
 
 ## Hard rules
 

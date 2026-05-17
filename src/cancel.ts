@@ -11,7 +11,8 @@ import { readConfig } from "./config.js";
 import { ensureDir, exists, removePath, writeFileSafe } from "./fs-utils.js";
 import { syncFrontmatter } from "./artifact-frontmatter.js";
 import { readFlowState, resetFlowState } from "./run-persistence.js";
-import type { FlowStage } from "./types.js";
+import { cleanupSliceWorktreeAsync } from "./slice-worktree.js";
+import type { FlowStage, SliceId } from "./types.js";
 
 export interface CancelOptions {
   reason?: string;
@@ -51,6 +52,18 @@ export async function cancelActiveRun(
   const slug = state.currentSlug;
   const reason = options.reason?.trim() || "user cancelled";
   const cancelledAt = options.cancelledAt ?? new Date().toISOString();
+
+  // v8.73 worktree cleanup — drop sibling git worktrees the builder
+  // materialised for any parallel-layer slice. Idempotent + best-effort:
+  // missing worktrees / branches are no-ops so this fires safely on
+  // every cancel even when no parallel layer ran. We rely on the
+  // helper's swallow-and-continue contract so cancel never fails
+  // because a stale worktree resisted removal.
+  for (const slice of state.slices ?? []) {
+    if (typeof slice.worktreePath === "string" && slice.worktreePath.length > 0) {
+      await cleanupSliceWorktreeAsync(projectRoot, slug, slice.id as SliceId);
+    }
+  }
 
   for (const stage of ["plan", "build", "review", "ship"] as FlowStage[]) {
     const filePath = activeArtifactPath(projectRoot, stage, slug);

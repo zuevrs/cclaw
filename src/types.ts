@@ -582,6 +582,26 @@ export interface SliceState {
   posture?: Posture;
   commit?: string;
   verifiesAcIds?: AcceptanceCriterionId[];
+  /**
+   * Absolute path to the sibling git worktree the sub-builder
+   * worked in (when this slice landed in a parallel layer of ≥2
+   * independent slices). Stamped by the builder when
+   * {@link createSliceWorktree} returns; cleared by the orchestrator's
+   * ship / cancel cleanup hook after {@link cleanupSliceWorktree}.
+   *
+   * Optional + back-compat: pre-v8.73 strict flows ran every layer in
+   * the shared working tree, so readers MUST tolerate absent values
+   * and treat them as "this slice was implemented inline" (no
+   * worktree to clean up). Single-slice layers and soft-mode flows
+   * also leave the field absent — the worktree shape is reserved
+   * for layers of ≥2 independent slices where the parallel
+   * dispatch needs isolation.
+   *
+   * Validators on read only check that the value is a string when
+   * present; relative vs absolute is not enforced because Windows
+   * resume paths may carry either shape across drive remaps.
+   */
+  worktreePath?: string;
 }
 
 export type BuildProfile = "default" | "bootstrap";
