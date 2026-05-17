@@ -396,6 +396,56 @@ export type Surface = (typeof SURFACES)[number];
  */
 export type PlanCriticVerdict = "pass" | "revise" | "cancel";
 
+/**
+ * Reversibility classification per `D-N` decision in `plan.md > ##
+ * Decisions` (architect-authored, strict mode). Borrowed from Bezos's
+ * one-way/two-way door framing: the cost of getting it wrong scales
+ * with whether the decision can be cheaply undone.
+ *
+ * - `one-way` — irreversible (or expensive enough to be effectively
+ *   so): data migrations, public-API removals, schema rewrites,
+ *   destructive auth/cryptography changes, payment-side commits. Pays
+ *   off slow, deliberate review BEFORE the build lands. The v8.74
+ *   cross-model critic auto-fires on any `D-N` with this value.
+ * - `two-way` — easily reversible: feature flags, internal-API
+ *   changes behind compatibility shims, behaviour tweaks captured
+ *   behind a kill switch. Optimise for speed; revert is cheap.
+ * - `mostly-two-way` — reversible but with friction: schema columns
+ *   added (drop is cheap, but data written under the new shape is
+ *   not); new dependencies (removal is mechanical but spreads); UI
+ *   surfaces shipped to users (rollback is possible but visible).
+ *   The middle ground exists because the binary one-way/two-way split
+ *   under-served too many real decisions.
+ *
+ * The architect MUST stamp one of these three values on every D-N in
+ * strict mode; plan-critic §A flags a missing `Reversibility:` field
+ * as a `block-ship` finding (class `decision-missing-reversibility`).
+ */
+export type Reversibility = "one-way" | "two-way" | "mostly-two-way";
+
+/**
+ * Architect-authored D-N record from `plan.md > ## Decisions` (strict
+ * mode only). The markdown body is authoritative — this interface
+ * exists so parsers / readers (plan-critic, critic §3.5 cross-model
+ * trigger, learnings capture) can type-check the fields they consume.
+ *
+ * Fields mirror the D-N row template in
+ * {@link "src/content/artifact-templates.ts" | PLAN_TEMPLATE}:
+ * id (e.g. `D-1`), title, context, options (rendered as `A / B / C`),
+ * pick, rationale, blastRadius, reversibility (v8.74), adr status.
+ */
+export interface Decision {
+  id: string;
+  title: string;
+  context: string;
+  options: string;
+  pick: string;
+  rationale: string;
+  blastRadius: string;
+  reversibility: Reversibility;
+  adr?: string;
+}
+
 export type ArtifactStatus = "active" | "shipped";
 export type AcceptanceCriterionStatus = "pending" | "committed";
 

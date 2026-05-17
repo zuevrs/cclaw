@@ -44,6 +44,7 @@ import { ensureGitignorePatterns, removeGitignorePatterns } from "./gitignore.js
 import { isInteractive, runPicker } from "./harness-prompt.js";
 import { HARNESS_IDS, type HarnessId } from "./types.js";
 import { ironLawsMarkdown } from "./content/iron-laws.js";
+import { CCLAW_ETHOS_BODY } from "./content/ethos.js";
 import type { ProgressEvent, SummaryCounts } from "./ui.js";
 
 /**
@@ -444,6 +445,7 @@ async function writeTemplates(projectRoot: string, legacyArtifacts: boolean): Pr
     path.join(projectRoot, LIB_ROOT, "templates", "iron-laws.md"),
     ironLawsMarkdown()
   );
+  await writeFileSafe(path.join(projectRoot, LIB_ROOT, "cclaw-ethos.md"), CCLAW_ETHOS_BODY);
 }
 
 async function writeStageRunbooks(projectRoot: string): Promise<void> {

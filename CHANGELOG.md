@@ -1,6 +1,75 @@
 # Changelog
 
 
+## 8.74.0 — Ethos preamble + reversibility field + adversarial stance
+
+### Why
+
+Three small wins that sharpen existing gates without adding new specialists or stages. Each addresses a recurring drift surfaced across recent slugs:
+
+1. **Iron-Law restatements drifted across specialists.** Every specialist (triage, architect, builder, plan-critic, qa-runner, critic — six of seven) carried a per-specialist `## Iron Law (<edition>)` section that restated cross-cutting discipline in its own words. The restatements were not exact copies — each version reframed the discipline through the lens of its specialist — and the drift meant a contributor reading the architect's "Iron Law" and the builder's "Iron Law" got two non-identical statements of what was supposed to be the same cross-cutting rule. The fix: one single-source-of-truth ethos preamble (`.cclaw/lib/cclaw-ethos.md`), prepended to every dispatch envelope as the Required ethos read (one position above the agent contract); per-specialist restatements removed. The five principles are cclaw-flavoured (not a copy of gstack's ETHOS.md): Boil the Lake, Search Before Building, Surgical Edits, User Sovereignty, Three knowledge layers.
+
+2. **Decision `Blast-radius` prose mixed reversibility with surface size.** The architect's D-N block carried `Blast-radius:` as one field covering "what changes if D-N is reversed" — files touched, surface size, rollback cost, AND reversibility lumped together. The cross-model critic trigger (v8.72) tried to detect irreversibility by keyword-grepping the prose; the heuristic worked but was fragile (a plan that mentioned "data migration" as a non-decision context note tripped the trigger; a plan that genuinely shipped a one-way auth change without using the trigger keywords slipped past). The fix: a mandatory `Reversibility:` field per D-N with a three-value enum (`one-way` / `two-way` / `mostly-two-way`; Bezos's one-way/two-way door framing, with `mostly-two-way` as the middle ground for "reversible but with friction"). The cross-model critic now fires on any `Reversibility: one-way` decision as the primary signal; keyword detection is kept as a fallback for plans with no `## Decisions` section (bare bug-fix slugs).
+
+3. **Critic and plan-critic defaulted to balanced review, not adversarial stance.** Both prompts opened with "You are the cclaw <critic>" framing that set a balanced posture by default. The adversarial-mode escalation triggers in critic.ts §8 could flip the posture mid-dispatch, but the default starting hypothesis was "this work is fine until something proves otherwise". The reference cohort (gsd-v1's `gsd-plan-checker`) opens its prompt with the explicit force-stance clause `"Assume every plan set is flawed until evidence proves otherwise"` — the framing primes deliberate search for disqualifying evidence rather than passive verification. The fix: insert the verbatim force-stance clause at the very top of both critic and plan-critic prompt bodies (before the "You are the cclaw critic" framing), flipping the default cognitive posture.
+
+### What changed
+
+**Deliverable 1 — Ethos preamble (`src/content/ethos.ts` + `src/install.ts`).**
+
+- New `src/content/ethos.ts` exports `ETHOS_PRINCIPLES` (array of 5 named principles with title + description) and `CCLAW_ETHOS_BODY` (the rendered markdown). The five principles: **Boil the Lake** (gather evidence before deciding), **Search Before Building** (check existing patterns first), **Surgical Edits** (smallest diff that delivers), **User Sovereignty** (user decisions overrule defaults), **Three knowledge layers** (Layer 1 tried-and-true / Layer 2 popular / Layer 3 first-principles; question Layer 1/2 when stakes warrant). cclaw-flavoured, not a copy of gstack's ETHOS.md — each principle's body cites cclaw artifacts and gates.
+- `src/install.ts` writes the preamble to `.cclaw/lib/cclaw-ethos.md` at install time (alongside `templates/iron-laws.md`).
+
+**Deliverable 2 — Dispatch envelope prepends the ethos read (`src/content/runbooks-on-demand.ts` + `src/content/start-command.ts`).**
+
+- `DISPATCH_ENVELOPE` runbook shape adds `Required ethos read: .cclaw/lib/cclaw-ethos.md` as the **first** required-read line, one position above the agent contract. The rationale paragraph after the shape explains that the three reads (ethos + contract + wrapper) are non-negotiable and that the ethos is single-source-of-truth — specialists do NOT restate the principles in their own bodies (v8.74 dedup).
+- `start-command.ts` `### Dispatch envelope` section adds a paragraph explaining the v8.74 ethos preamble pattern; `## Always-ask rules` updates the "every dispatch envelope" line to name all three required reads (ethos + contract + wrapper); `## Skills attached` adds a `cclaw-ethos` reference-doc bullet.
+
+**Deliverable 3 — Per-specialist Iron-Law restatements removed (`src/content/specialist-prompts/{triage,architect,builder,plan-critic,qa-runner,critic}.ts`).**
+
+- Each of the six specialists that carried a `## Iron Law (<edition>)` section has the section removed. The discipline that was unique to the specialist (e.g., architect's slice/AC/decision integrity rules, builder's RED-before-GREEN, qa-runner's evidence-from-rendered-page-only) is reframed under a `## <specialist> core discipline` heading where the content was structurally specific; pure restatements of cross-cutting Iron Laws are dropped entirely. Each specialist's prose now points at `.cclaw/lib/cclaw-ethos.md` as the cross-cutting source of truth and clarifies that the per-specialist body does NOT restate it.
+- The architect's section retains the slice/AC/decision integrity rules (already restated under `## Hard rules` further down — the top-of-prompt summary is preserved for first-read visibility) but the content is no longer framed as "Iron Law".
+- Reviewer never carried an Iron-Law restatement; tests lock the negative-space invariant.
+
+**Deliverable 4 — Reversibility field per D-N (`src/content/artifact-templates.ts` + `src/content/specialist-prompts/architect.ts`).**
+
+- `PLAN_TEMPLATE` D-N row template grows the `Reversibility:` field positioned after `Blast radius:` and before `ADR:`. A parenthetical paragraph after the example row documents the mandatory contract: `Reversibility` is required on every D-N; values are `one-way` / `two-way` / `mostly-two-way`; plan-critic §A blocks ship on a missing field; critic §3.5 cross-model auto-fires on any `one-way`.
+- Architect prompt Phase 3 (Decisions) D-N block template grows the `Reversibility: <one-way | two-way | mostly-two-way>` field positioned between `Blast-radius:` and `Failure modes:`. A new paragraph after the block documents the three-value rubric with examples (one-way = data migration / public-API removal / schema rewrite / destructive auth / payment commit; two-way = feature flag / internal-API behind compat shim / behaviour tweak behind kill switch; mostly-two-way = schema column add / new dependency / UI surface shipped to users).
+
+**Deliverable 5 — Plan-critic §A Decision integrity audit (`src/content/specialist-prompts/plan-critic.ts`).**
+
+- New `### §A. Decision integrity audit (Reversibility field, v8.74)` section between §5 (Risk catalog) and §6 (Pre-commitment predictions). Walks every `D-N` in `plan.md > ## Decisions` for the `Reversibility:` field. Three finding classes: `decision-missing-reversibility` (block-ship — field absent), `decision-bad-reversibility` (block-ship — value outside the three-value enum), `decision-overstated-reversibility` (iterate — `one-way` stamped on a D-N with a plainly trivial Blast-radius; the mis-classification inflates critic cost via §3.5 cross-model auto-fire without adding signal). §A is skipped entirely when `plan.md` has no `## Decisions` section. The verdict block exposes a new `Decision integrity findings (§A — Reversibility audit)` line in plan-critic.md frontmatter.
+
+**Deliverable 6 — Cross-model critic trigger reads Reversibility (`src/content/specialist-prompts/critic.ts` + `src/content/start-command.ts`).**
+
+- Critic §3.5 trigger set rewritten: primary signal is now `any D-N in plan.md > ## Decisions is marked Reversibility: one-way` (single substring match on the rendered plan.md, since plan-critic §A guarantees the field is present in strict mode). The v8.72 keyword-detection heuristic is preserved as a **fallback** for plans with no `## Decisions` section (bare bug-fix slugs, soft plans, strict plans where Phase 3 was skipped). `triage.securityFlag` and the explicit `--critic-cross-model` user flag remain as the other two OR-triggers.
+- Start-command's `#### critic` block mirrors the same trigger rewrite verbatim so the orchestrator's pre-dispatch parse and the critic's in-prompt explanation stay in sync.
+
+**Deliverable 7 — Force-stance opening clause (`src/content/specialist-prompts/critic.ts` + `src/content/specialist-prompts/plan-critic.ts`).**
+
+- Both prompt bodies open with the verbatim clause `Adversarial stance: Assume the artifact under review is flawed until evidence proves otherwise. Your starting hypothesis: this work will not deliver the stated goal. Look for disqualifying evidence first, then balance with what works.` Inserted at the very top of each prompt body, before the `You are the cclaw <critic>` framing. The clause flips the default cognitive posture from balanced review to adversarial-first; the existing §8 escalation triggers continue to gate the additional `adversarial` mode techniques (§3a-§3d + human-perspective lenses). Reference pattern: gsd-v1's `gsd-plan-checker` opening clause ("Assume every plan set is flawed until evidence proves otherwise").
+
+**Deliverable 8 — Types (`src/types.ts`).**
+
+- New `Reversibility = "one-way" | "two-way" | "mostly-two-way"` type with JSDoc citing the Bezos one-way/two-way door framing and the cross-model critic auto-fire wire.
+- New `Decision` interface (id, title, context, options, pick, rationale, blastRadius, reversibility, optional adr) so future parsers (plan-critic §A, critic §3.5, learnings capture) can type-check D-N readers. The markdown body in `plan.md > ## Decisions` remains authoritative; the interface exists so TS readers can downcast safely.
+
+**Deliverable 9 — Tripwire test (`tests/unit/v874-ethos-bundle.test.ts`).**
+
+- Pins the v8.74 contract: ethos.ts exports the 5-principle preamble + canonical body; install layer writes `.cclaw/lib/cclaw-ethos.md`; start-command + dispatch-envelope runbook prepend the ethos read above the agent contract; 7 specialist prompts wired (roster check); Iron-Law restatements removed from the 6 specialists that had them (reviewer's negative-space invariant locked); PLAN_TEMPLATE D-N example has Reversibility with the three-value enum + mandatory + §A pointer; architect populates Reversibility on every D-N + cross-references the v8.74 critic auto-fire; plan-critic §A declared with all three finding classes + verdict line + skip rule; cross-model trigger names Reversibility:one-way (primary) + keyword fallback (Decisions-less plans) in both start-command and critic.ts; force-stance opening clause present verbatim in critic + plan-critic and positioned before the "You are the cclaw" framing; types.ts exports `Reversibility` + `Decision`; package.json bumped to 8.74.0; CHANGELOG entry exists.
+
+**Deliverable 10 — Budget bumps (`tests/unit/v822-orchestrator-slim.test.ts`, `tests/unit/v831-path-aware-trimming.test.ts`, `tests/unit/v861-triage-subagent.test.ts`).**
+
+- start-command body budget raised from 85000 → 87000 chars (~2k absorbed: ethos preamble paragraph under Dispatch envelope, v8.74-promoted cross-model trigger language under #### critic, Skills-attached `cclaw-ethos` bullet, Always-ask rules entry). Line budget raised from 560 → 565 lines (~5 new lines).
+- Combined body + on-demand runbook ceiling raised from 220000 → 225000 chars (~3k runbook absorbed in `dispatch-envelope.md` for the ethos preamble paragraph at the top of the envelope shape + rationale paragraph).
+- Non-inline path budget raised from 136000 → 139000 chars; large-risky path raised from 181000 → 184000 chars (matches the body + dispatch-envelope.md bumps).
+- Final size after bumps: 558 lines / 86256 chars body; 219534 chars combined. Headroom: ~7 lines / ~744 body chars / ~5466 combined chars.
+
+### Clean break
+
+No back-compat breaks. Pre-v8.74 shipped flows in `flows/shipped/` whose `plan.md > ## Decisions` lack the `Reversibility:` field continue to validate; plan-critic §A only audits *active* plans (the section is structurally absent in archived flows because architect didn't author it). Pre-v8.74 specialist contracts that may be cached in `.cclaw/lib/agents/<id>.md` on existing installs are rewritten on the next `cclaw install` / sync (the orchestrator's per-dispatch reads always pull from the installed file, not the source). The ethos file is added unconditionally at install time; idempotent on re-install.
+
+
 ## 8.73.0 — Worktree-isolated parallel slices
 
 ### Why

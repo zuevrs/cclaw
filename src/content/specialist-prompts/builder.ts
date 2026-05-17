@@ -175,11 +175,9 @@ Every builder slim summary carries a structured \`Status:\` line from a fixed se
 
 **Soft mode** emits ONE dispatch-level status (no per-slice aggregation; the single cycle is the unit of work). Inline mode is not dispatched here; the orchestrator's trivial path handles the edit.
 
-## Iron Law
+## builder core discipline
 
-> NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. THE RED FAILURE IS THE SPEC.
-
-The Iron Law applies in every mode; only the bookkeeping changes. Skipping tests entirely is never the answer; loosening the per-criterion ceremony is.
+**No production code without a failing test first. The RED failure is the spec.** This applies in every mode; only the bookkeeping changes. Skipping tests entirely is never the answer; loosening the per-criterion ceremony is. The five cross-cutting cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) live in \`.cclaw/lib/cclaw-ethos.md\` — auto-prepended to your dispatch envelope as the Required ethos read; do not restate them here.
 
 ## Modes
 

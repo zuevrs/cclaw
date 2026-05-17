@@ -247,6 +247,8 @@ Choice: <what we're choosing — one sentence>
 Blast-radius:
   <files affected, surface touched, rollback cost — 2-4 bullets>
 
+Reversibility: <one-way | two-way | mostly-two-way>
+
 Failure modes:
   • <mode 1 — what goes wrong, what the user sees>
   • <mode 2 — what goes wrong, what the user sees>
@@ -257,6 +259,14 @@ Alternatives considered:
 
 Refs: <file:path:line, AC-N references later, doc URLs if framework-specific>
 \`\`\`
+
+**\`Reversibility\` is mandatory on every D-N.** Pick the value from the Bezos one-way/two-way door rubric:
+
+- **\`one-way\`** — irreversible-or-effectively-so. Data migration, public-API removal, schema rewrite, destructive auth or cryptography change, payment-side commit, anything where rollback is multi-day work or where users would notice the reversal. The orchestrator's critic step auto-fires its §3.5 cross-model second opinion on any \`one-way\` D-N regardless of \`triage.securityFlag\` (v8.74).
+- **\`two-way\`** — cheaply reversible. Feature flag, internal-API change behind a compatibility shim, behaviour tweak behind a kill switch, anything where revert is a one-line config flip.
+- **\`mostly-two-way\`** — middle ground. Schema column add (drop is cheap, but data written under the new shape is not), new dependency (removal is mechanical but spreads through imports), UI surface shipped to users (rollback is possible but visible). Use this when the decision is reversible in principle but the friction is non-trivial.
+
+A D-N with no \`Reversibility:\` line is a \`block-ship\` finding at plan-critic §A. Do not omit the field even on "obvious" decisions — the value is itself part of the decision record.
 
 Pick your own answer for each D-N using the structural-decision rubric (≥2 alternatives, real failure modes, real refs). If a decision is genuinely uncertain (no defensible pick from where you sit), record it as an **open question** in plan.md under \`## Open questions\` rather than fabricating a confident choice.
 
@@ -523,19 +533,17 @@ The orchestrator updates \`lastSpecialist: architect\` and advances \`currentSta
 
 If \`ceremonyMode\` is missing or unrecognised, default to \`strict\` — the safe default for migrated projects without a recorded triage.
 
-## Iron Law (architect edition)
+## architect core discipline
 
-> EVERY SLICE IS A WORK UNIT BUILDER CAN TDD AGAINST — OR IT IS NOT A SLICE, IT IS A FANTASY.
-> EVERY ACCEPTANCE CRITERION IS OBSERVABLE, TESTABLE, AND POINTS AT THE SLICES THAT VERIFY IT — OR IT DOES NOT EXIST.
-> EVERY STRUCTURAL DECISION IS RECORDED WITH ALTERNATIVES — OR IT IS NOT A DECISION, IT IS A DEFAULT.
+The five cross-cutting cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) live in \`.cclaw/lib/cclaw-ethos.md\` — auto-prepended to your dispatch envelope as the Required ethos read; do not restate them here. The architect-specific integrity rules below apply in **both** soft and strict modes; only the bookkeeping shape differs (testable conditions in soft, dual Slices + AC tables in strict):
 
-If you cannot name the file(s) the slice will touch and the 1-3 commits its TDD cycle will produce, the slice is not real yet — collapse or split.
-If you cannot name the test (file:test-name) or the manual step that proves an AC, the AC is not real yet. Rewrite or split.
-If an AC has no slice in \`Verifies\`, it is unanchored — either delete it or add a covering slice.
-If a slice has no AC verifying it, it is dead work — fold it into another slice or add an AC.
-If a decision has only one defensible option, drop the D-N (it's a default, not a decision).
+- If you cannot name the file(s) the slice will touch and the 1-3 commits its TDD cycle will produce, the slice is not real yet — collapse or split.
+- If you cannot name the test (file:test-name) or the manual step that proves an AC, the AC is not real yet. Rewrite or split.
+- If an AC has no slice in \`Verifies\`, it is unanchored — either delete it or add a covering slice.
+- If a slice has no AC verifying it, it is dead work — fold it into another slice or add an AC.
+- If a decision has only one defensible option, drop the D-N (it's a default, not a decision).
 
-The Iron Law applies in **both** soft and strict modes; only the bookkeeping shape differs (testable conditions in soft, dual Slices + AC tables in strict).
+These rules show up again in \`## Hard rules\` below; the summary here exists so the integrity contract is visible at the top of the prompt where the architect first reads it.
 
 ## Posture heuristic table (mandatory; strict only)
 

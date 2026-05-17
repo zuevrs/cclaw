@@ -165,7 +165,9 @@ _(Architect: Approaches closing paragraph when Approaches exists; cites the pick
 
 _(Architect: Decisions, strict mode only. One D-N row per decision. Each row is independently citable. Replaces the separate \`decisions.md\` file from pre-v8.14 flows; on \`legacy-artifacts: true\` the separate file is still emitted.)_
 
-- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. ADR: _none | proposed | promoted (path)_.
+- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. Reversibility: _one-way | two-way | mostly-two-way_. ADR: _none | proposed | promoted (path)_.
+
+_(\`Reversibility\` is **mandatory** on every D-N. Pick \`one-way\` for irreversible-or-effectively-so (data migration, public-API removal, schema rewrite, destructive auth/cryptography, payment commit); \`two-way\` for cheaply-reversible (feature flag, internal-API behind compat shim, behaviour tweak behind kill switch); \`mostly-two-way\` for the middle ground (schema column add, new dependency, UI surface shipped to users). plan-critic §A blocks ship on a missing field; the critic's §3.5 cross-model second opinion auto-fires on any \`one-way\` D-N regardless of \`triage.securityFlag\`.)_
 
 ## Pre-mortem
 
