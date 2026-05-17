@@ -1,6 +1,74 @@
 # Changelog
 
 
+## 8.84.0 — Not-doing and key assumptions to validate (v8.80 work)
+
+### Why
+
+Every plan that ships excludes something — and every plan rests on bets. cclaw's pre-v8.80 plan.md had a `## Not Doing` section as a 3-5 bullet list of explicit non-commitments (authored in architect Phase 1 alongside Frame / Spec), but the section was load-bearing in name only: bullets named the exclusion without the rationale, so a senior reviewer or future archaeologist could see *what* was excluded but not *why*. cclaw also had `## Assumptions (correct me now)` (v8.67) which captured surface-area inferences (which library / storage / approach the architect picked when multiple were plausible) — but that section is **not** the place for bets-that-need-validation (latency budgets, user behaviour assumptions, market-state assumptions). The pre-v8.80 plan shape had no first-class home for either rationale-paired exclusions or validate-this-bet records.
+
+v8.80 promotes both surfaces to first-class status:
+
+- **`## Not Doing (and why)`** — 3-5 bullets, each pairing a scope exclusion with a one-sentence rationale. The `(and why)` is the contract: the exclusion is only auditable when the reason rides next to the item.
+- **`## Key assumptions to validate`** — 2-5 bullets, each pairing a bet (latency budget, user behaviour, market state, downstream-system behaviour) with a validation method (benchmark, log query, A/B test, user research) and a status (`unvalidated | validated | invalidated`). On first plan authoring every bullet's Status is `unvalidated`; the reviewer / critic / post-ship learnings.md rewrite the status as evidence lands without re-architect.
+
+The two new sections are distinct from `## Assumptions (correct me now)` (v8.67) by design: that section is surface-area inferences a senior reviewer would ratify (which library X over Y); the v8.80 sections are bets-that-need-validation (the assumed performance characteristic, the assumed user behaviour) and exclusions-with-rationale (what we're deliberately not addressing and why). All three sections coexist; the architect's Phase 7.5 (the new "Bets and exclusions" phase that runs after the v8.67 Phase 7.4 Assumptions phase) populates the two new ones.
+
+The pattern lineage is well-established:
+
+- **addyosmani `idea-refine`** (lines 113-135) — the "Not Doing" and "Key Assumptions to Validate" sections are treated as **the most valuable two sections** of an idea-refinement output. The reference skill calls them out by name as load-bearing context the team reads first, not as filler.
+- **everyinc-compound `ce-brainstorm`** (Phase 3) — the "Deferred for later / Outside this product's identity / Not Doing" structure is the same shape: explicit non-commitments with rationale, surfaced in a dedicated phase rather than scattered through Frame / Spec.
+
+### What changed
+
+**Deliverable 1 — PLAN_TEMPLATE (`src/content/artifact-templates.ts`).**
+
+- Renamed `## Not Doing` to `## Not Doing (and why)` in the strict-mode PLAN_TEMPLATE. The bullets now require a `**<scope item>** — <one-sentence reason>` format; the rename surfaces the rationale contract in the heading itself so readers can't miss it.
+- Added `## Key assumptions to validate` between `## Assumptions (correct me now)` and `## Spec`. The section sits adjacent to the v8.67 Assumptions section so readers see surface-area inferences and bets-to-validate side-by-side; both are "things to push back on" but at different lenses.
+
+**Deliverable 2 — RESEARCH_TEMPLATE (`src/content/artifact-templates.ts`).**
+
+- Added `## Key assumptions to validate` between `## Framings considered` and `## Engineer lens`. Research-mode bets (the synthesis pass's implicit beliefs the framings rely on) get first-class surfacing so the follow-up `/cc <task>` flow's architect can carry them forward as load-bearing context.
+- Added `## Not Doing (and why)` between `## Synthesis > ### Self-review notes` and `## Recommended next step`. Research-scope exclusions (adjacent topics deferred, framings dropped at the Approaches Gate, lens findings deliberately not synthesised) carry forward to the follow-up plan flow so the architect doesn't relitigate them.
+
+**Deliverable 3 — Architect Phase 7.5 (`src/content/specialist-prompts/architect.ts`).**
+
+- Renamed existing Phase 7.5 (Compose `## Assumptions (correct me now)`) to Phase 7.4 — same v8.67 contract, new number to make room for the v8.80 phase.
+- Added new Phase 7.5 — Bets and exclusions. The phase explicitly populates both `## Not Doing (and why)` and `## Key assumptions to validate` after Decisions land (Phase 3, strict) and after the Compose pass has wired Spec / Plan / Slices / AC. The phase carries the v8.80 contract verbatim: "every plan that ships excludes something — name it. Every plan rests on bets — surface them with validation methods." Authoring rules + format + distinct-from-v8.67 framing live in the phase body.
+- Updated Phase 1's Not Doing section description to reference the renamed `## Not Doing (and why)` heading and the new rationale contract.
+- Updated Phase 10 self-review checklist (rule #4 / new #4b) to gate on both v8.80 sections.
+
+**Deliverable 4 — Research synthesis (`src/content/start-command.ts`).**
+
+- Added Phase 3 sub-steps `3a` and `3b` to the research-mode synthesis instructions. The synthesis pass now explicitly populates both `## Key assumptions to validate` and `## Not Doing (and why)` alongside the Synthesis paragraphs and the Recommended next step. Same contract as the architect's Phase 7.5: every research excludes something + rests on bets; both must be named.
+
+**Deliverable 5 — Plan-critic §6.5 (`src/content/specialist-prompts/plan-critic.ts`).**
+
+- Added §6.5 Bets and exclusions audit. The check gates that both v8.80 sections are present and non-empty before build dispatches. Missing or empty sections emit `block-ship` findings; missing rationale (per-bullet) or missing validation method / status emit `iterate` findings. Finding class names (`missing-not-doing` / `empty-not-doing` / `not-doing-no-rationale` / `missing-key-assumptions` / `empty-key-assumptions` / `key-assumptions-no-method` / `key-assumptions-no-status` / `key-assumptions-bad-status`) make the audit easy to grep for in fix-only rounds.
+- Updated §7 Verdict block to include a `Bets and exclusions findings (§6.5 ...)` line so the slim summary surfaces the count alongside the other section-by-section totals.
+- §6.5 is strict + soft gating; inline ceremony has no plan.md, so the audit skips structurally. Legacy pre-v8.80 plans (detected via absence of both sections) silently pass to preserve shipped-state correctness.
+
+**Deliverable 6 — Tests (`tests/unit/v880-not-doing-and-bets.test.ts`).**
+
+- New test file covering the v8.80 contract: PLAN_TEMPLATE contains both new sections (header text exact match); RESEARCH_TEMPLATE contains both new sections; Architect Phase 7.5 mentioned in architect prompt with the "Bets and exclusions" name; plan-critic §6.5 mentions both section checks; CHANGELOG carries the v8.80 entry; package.json version is 8.80.x or later (the v8.75/v8.76 floor pattern — `major === 8 && minor >= 80` — since the version drift race may bump above 8.80).
+
+**Deliverable 7 — README + version bump.**
+
+- README's `cclaw v8.79` paragraph is followed by a `cclaw v8.80` paragraph naming the two new sections and the Phase 7.5 / §6.5 wiring.
+- package.json `8.83.0` → `8.84.0` (slug identity preserved: v8.80 work, version bumped by the v8.77 / v8.78 / v8.79 / v8.81 parallel-shipping drift that pushed the minor ahead of the slug number — same pattern as v8.75 / v8.76).
+- Git tag will be `v8.84.0`; PR title `v8.80: Not-doing and key assumptions to validate`; CHANGELOG header `## 8.84.0 — Not-doing and key assumptions to validate (v8.80 work)`. Branch `feat/v8.80-not-doing-and-bets`. The slug-identity discipline matches the v8.77 / v8.78 / v8.79 / v8.81 contract.
+
+### Migration / back-compat
+
+- **Existing shipped plans without the v8.80 sections** silently pass §6.5 (legacy detection via absence of both sections). The reviewer / critic do not retroactively block legacy artifacts; the audit only fires on freshly-authored plans.
+- **Existing shipped research artifacts** are unchanged; the new sections appear only on research authored on v8.80+.
+- **No type changes.** All v8.80 surfaces are prompt-only (PLAN_TEMPLATE + RESEARCH_TEMPLATE + architect prompt + start-command prompt + plan-critic prompt); the orchestrator state, flow-state schema, dispatch envelope, slim-summary shape are all unchanged. The contract is enforced via prompt + §6.5 audit, not via runtime validation.
+
+### Budget bumps
+
+- **Token-budget tripwire (`tests/unit/v822-orchestrator-slim.test.ts`)** — combined body + on-demand runbooks ceiling lifted 275k → 285k chars to absorb ~3k chars of new research-mode synthesis prose covering Phase 3 sub-steps `3a` / `3b` populating `## Key assumptions to validate` + `## Not Doing (and why)` in `research.md` per the v8.80 contract. No new on-demand runbook; the bump is body prose only.
+
+
 ## 8.83.0 — One-way door gate (v8.79 work)
 
 ### Why

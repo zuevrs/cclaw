@@ -212,7 +212,7 @@ The relative paths are computed from the new slug's active flow directory (\`.cc
 
 Phase 0.5 is silent (no user-facing output). After authoring the \`## Extends\` section and confirming frontmatter \`refines:\`, proceed to Phase 1 in the same turn.
 
-### Phase 1 — Frame + Spec + (optional) Non-functional + Not Doing + Surface detection (silent)
+### Phase 1 — Frame + Spec + (optional) Non-functional + Not Doing (and why) + Surface detection (silent)
 
 Compose the \`## Frame\` paragraph (2-5 sentences) covering:
 
@@ -251,9 +251,9 @@ After writing Frame and Spec, decide whether the slug needs an explicit \`## Non
 
 When neither trigger fires (typical internal refactor, dev-tool change, docs-only), skip the \`## Non-functional\` section entirely; the reviewer's gating rule treats an absent section as "no NFR review" and emits no findings on that axis. Persist the chosen NFR rows under a \`## Non-functional\` heading, between \`## Frame\`/\`## Spec\` and \`## Approaches\` (strict) or between \`## Frame\`/\`## Spec\` and \`## Plan\` (soft). Reviewer reads this section as the source of truth for the \`nfr-compliance\` axis.
 
-#### Not Doing section (mandatory, every mode)
+#### Not Doing section (mandatory, every mode — v8.80 promoted to \`## Not Doing (and why)\`)
 
-Compose \`## Not Doing\` — 3-5 concrete bullets naming what we explicitly will not address. Or one bullet with an explicit reason if scope is tight ("Not Doing: nothing this round — the slug is tightly scoped."). Vague "no scope creep" is not enough; bullets must be **specific** named exclusions the builder / reviewer can ratify.
+Compose \`## Not Doing (and why)\` — 3-5 concrete bullets naming what we explicitly will not address, **each paired with a one-sentence rationale**. Or one bullet with an explicit reason if scope is tight ("Not Doing: nothing this round — the slug is tightly scoped."). Vague "no scope creep" is not enough; bullets must be **specific** named exclusions the builder / reviewer can ratify. The \`(and why)\` rationale is the v8.80 contract — every plan that ships excludes something, and the exclusion is only auditable when the reason rides next to the item. Phase 7.5 (Bets and exclusions) revisits this section after Decisions land so the architect can append exclusions that surfaced during Approaches / Decisions enumeration.
 
 #### Surface detection (mandatory; writer ownership moved from triage)
 
@@ -401,7 +401,7 @@ Envelope for repo-research mirrors learnings-research: required first read of \`
 
 ### Phase 7 — Compose plan body (silent; intra-flow only)
 
-By Phase 7 the previous phases have appended Spec + Frame + (optional) NFR + (strict only) Approaches + Selected Direction + Decisions + (deep only) Pre-mortem + Not Doing to plan.md. Phase 7 composes the remaining sections: Plan / Slices and Acceptance Criteria (verification) (strict) or Plan + Testable conditions (soft), Edge cases (strict), Topology (strict), Feasibility stamp (strict).
+By Phase 7 the previous phases have appended Spec + Frame + (optional) NFR + (strict only) Approaches + Selected Direction + Decisions + (deep only) Pre-mortem + Not Doing (and why) to plan.md. Phase 7 composes the remaining sections: Plan / Slices and Acceptance Criteria (verification) (strict) or Plan + Testable conditions (soft), Edge cases (strict), Topology (strict), Feasibility stamp (strict). Phase 7.5 (Bets and exclusions, v8.80) then revisits Not Doing (and why) + Key assumptions to validate so both bet-and-exclusion sections carry the load-bearing context the user and the post-impl critic depend on.
 
 > **Slices are HOW we build; AC are HOW we verify. The two are distinct.** On strict-mode plans you author BOTH tables. Slices (\`## Plan / Slices\`) are work units the builder TDDs against — one TDD cycle per slice, commit prefix \`<type>(SL-N): ...\`. AC (\`## Acceptance Criteria (verification)\`) are observations — each lists which slices verify it, and the builder writes \`verify(AC-N): passing\` commits after all slices land. If a row reads like a task ("update Email.tsx to render the email"), it is a slice. If a row reads like an observation ("Component renders the email"), it is an AC. Never mix the two into one table.
 
@@ -467,7 +467,7 @@ In soft mode there is no AC table, no \`parallelSafe\`, no \`touchSurface\` per 
 
 The frontmatter stays minimal in soft mode — no \`ac\` array, just \`slug\`, \`stage\`, \`status\`, \`last_specialist: architect\`.
 
-### Phase 7.5 — Compose \`## Assumptions (correct me now)\` section (v8.67; mandatory on every non-inline plan)
+### Phase 7.4 — Compose \`## Assumptions (correct me now)\` section (v8.67; mandatory on every non-inline plan)
 
 The section is positioned at the **top of plan.md** — directly under the H1 title and the \`## Extends\` block (when present), and **before \`## Frame\`** on strict, **before \`## Plan\`** on soft. Compose the bullets at this phase (you have all the working context from Clarify + Bootstrap + Frame + Spec + Approaches + Decisions); then splice them into the top of the file before returning. The section codifies the v8.67 contract that the architect's silent inferences MUST be surfaced to the user before build starts; the ack-window after plan.md is written is the user's last cheap moment to push back.
 
@@ -494,6 +494,32 @@ Authoring rules:
 When Clarify ran, the bullets carry the user's chosen interpretation verbatim (preserves the user's framing, not the architect's paraphrase). When Clarify did NOT run (\`ambiguityScore < threshold\` or \`ceremonyMode == "inline"\`), the section still appears on every non-inline plan and is filled with the architect's own inferences (labelled). On \`ceremonyMode: "inline"\` the architect does not run at all — no plan.md, no assumptions section — so the inline path is naturally exempt.
 
 The orchestrator's post-plan ack-prose (see \`src/content/start-command.ts > "Ack window after plan.md write"\`) references this section by name; readers MUST be able to find it as the literal \`## Assumptions (correct me now)\` heading in plan.md.
+
+### Phase 7.5 — Bets and exclusions (v8.80; mandatory on every non-inline plan)
+
+After Decisions land (Phase 3, strict) and after the Compose pass has wired Spec / Plan / Slices / AC, explicitly populate two first-class sections that complement the architect's surface-area inferences: \`## Not Doing (and why)\` and \`## Key assumptions to validate\`. **Every plan that ships excludes something — name it. Every plan rests on bets — surface them with validation methods.** Phase 7.5 is the deliberate forcing function that captures both; without it the plan-critic §6.5 check blocks ship on missing or empty sections in strict mode.
+
+The two sections are **distinct from \`## Assumptions (correct me now)\`** (Phase 7.4, v8.67): that section is **surface-area inferences** — which library / storage / approach the architect picked when multiple were plausible, named so a senior reviewer can ratify them. Phase 7.5's sections are different shape:
+
+- **\`## Not Doing (and why)\`** captures **scope exclusions** — what this slug deliberately does not address, paired with a one-sentence rationale per item. Reference patterns: addyosmani \`idea-refine\` skill (Phase Not-Doing block) and everyinc-compound \`ce-brainstorm\` skill Phase 3 (Deferred for later / Outside this product's identity / Not Doing). Both reference skills treat the explicit non-commitment as a load-bearing section a senior reviewer reads first, not as filler.
+- **\`## Key assumptions to validate\`** captures **bets that need validation** — beliefs about latency budgets, user behaviour, market state, downstream system behaviour, performance under load. Each bullet pairs the bet with a validation method (benchmark, log query, user interview, A/B test, prod metric scan) and a status (\`unvalidated\` on first authoring; \`validated\` / \`invalidated\` once evidence lands). Reference: addyosmani \`idea-refine\` Phase Key-Assumptions-to-Validate (every roadmap rests on bets; surface them so the team knows what would invalidate the plan).
+
+**Authoring contract:**
+
+- **\`## Not Doing (and why)\`** — 3-5 bullets. Format: \`- **<scope item>** — <one-sentence reason>\`. Phase 1's initial Not Doing pass surfaces the obvious exclusions; Phase 7.5 revisits and appends the exclusions that surfaced during Approaches (rejected paths) / Decisions (D-N alternatives the user/architect ratified the rejection of) so the section reads as the *final* exclusion ledger by the time the build dispatches.
+- **\`## Key assumptions to validate\`** — 2-5 bullets. Format: \`- **<assumption>** — Validate by: <method>. Status: <unvalidated | validated | invalidated>\`. On first plan authoring every bullet's Status is \`unvalidated\`; the reviewer / critic / post-ship learnings.md can rewrite the status as evidence lands without re-architect.
+
+**Authoring rules:**
+
+- **Specific, not vague.** "We assume the search endpoint p95 stays under 200ms under realistic load (current bench: 140ms on cold cache)" is specific. "We assume the system is fast enough" is not.
+- **Validation method is concrete.** "Validate by: benchmark at 100 RPS against staging fixture \`tests/fixtures/search-load.json\`" is concrete. "Validate by: testing" is not.
+- **Exclude what the user explicitly out-of-scoped.** Bullets in \`## Not Doing (and why)\` MUST include any out-of-scope item the user named during Clarify or in the original prompt, with rationale "user-pinned out of scope during Clarify" (bare; not labelled \`(architect inference)\`).
+- **Distinct from \`## Assumptions (correct me now)\`.** If the bullet would read as "we used library X over Y" or "we picked storage Z over W" it belongs in 7.4's section, not here. If the bullet would read as "we BET that users will <verb> at rate Y" or "we BET that latency stays under Z" it belongs here.
+- **Distinct from \`## Pre-mortem\`.** Pre-mortem names failure paths the plan already mitigates (failure → symptom → mitigation in SL-N / AC-N / D-N). Key assumptions to validate names bets that, if wrong, would invalidate the plan — i.e. the assumption itself is the load-bearing thing, not a mitigation in the plan body.
+
+**Soft mode:** soft plans skip Phase 3 (Decisions) and have a thinner shape, but the v8.80 sections are mandatory regardless of ceremony — both bet-and-exclusion surfaces matter on small/medium plans too. Soft mode's authoring rule simplifies to: 2-3 bullets per section is acceptable on tight-scope soft slugs.
+
+**Inline mode:** Phase 7.5 does NOT run (inline has no architect dispatch, no plan.md). The orchestrator's inline edit path is naturally exempt from the v8.80 contract.
 
 ### Phase 8 — Append \`## Prior lessons applied\` section
 
@@ -547,7 +573,8 @@ Verify each holds before returning. If a check fails, fix it; do not surface a k
 1. **\`## Frame\` names a user and a verifiable success criterion.** Not "users want X"; "admins on the user-list page see a stale-invite indicator within 200ms of page load".
 2. **\`## Frame\` cites at least one piece of real evidence** (file:line, ticket, prior conversation). Not pure imagination.
 3. **\`## Spec\` section is present and filled** — all four bullets (Objective / Success / Out of scope / Boundaries) carry concrete content or an explicit "none" / "n/a".
-4. **\`## Not Doing\` is 3-5 concrete bullets**, not vague ("scope creep"). Or one bullet with explicit reason.
+4. **\`## Not Doing (and why)\` is 3-5 concrete bullets**, each paired with a one-sentence rationale (v8.80). Not vague ("scope creep"). Or one bullet with explicit reason if scope is tight.
+4b. **\`## Key assumptions to validate\` is 2-5 concrete bullets** (v8.80), each pairing a bet with a validation method and an explicit \`unvalidated | validated | invalidated\` status. Distinct from \`## Assumptions (correct me now)\` (surface-area inferences); this section is bets-that-need-validation.
 5. **No code, no AC, no pseudocode** appears anywhere in the design-portion sections.
 6. **\`## Summary — architect\` block is present** with all three subheadings (Changes made / Things I noticed but didn't touch / Potential concerns). Empty subsections write \`None.\` explicitly.
 7. **\`## Assumptions (correct me now)\` section is present** (v8.67; mandatory on every non-inline plan) with 3-7 short bullets covering surface-area decisions. Inferences carry the \`(architect inference)\` tag; user-pinned answers from Clarify are bare. The literal heading text must match verbatim so the orchestrator's post-plan ack-prose can reference it.
