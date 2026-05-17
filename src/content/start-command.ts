@@ -153,6 +153,7 @@ Legacy "resume picker" prose retired. \`/cc\` invocations resolve through a dete
 | \`/cc <task>\` | yes | Error: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` End the turn. Do NOT auto-cancel or queue. |
 | \`/cc <task>\` | no | **Start a new flow.** Run the Detect git-check, extend-mode fork, research-mode fork in that order; if neither fires, dispatch the \`triage\` sub-agent. |
 | \`/cc research <topic>\` | yes / no | Error / start (same shape; see "Detect — research-mode fork"). |
+| \`/cc research go\` (v8.78) | yes (research-mode + \`researchState == "discovery"\`) | Force-exit the Phase 1 discovery dialogue (iterative-clarify per-dimension scoring). Treated identically to the in-prose "ready" signal: stop asking questions, distil the dialogue summary, proceed to Phase 1.5 Approaches Gate. Outside research-mode discovery state — error: \`'/cc research go' only fires during research-mode Phase 1 discovery.\` End the turn. |
 | \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (v8.71) | yes (research-mode + \`researchState == "awaiting-user-review"\`) | Route to the matching revision sub-command per \`runbooks/research-revision.md\` §2 / §3 / §4. Outside that state — error: \`research revision sub-commands only fire on a research flow at the awaiting-user-review gate.\` End the turn. |
 | \`/cc extend <slug> <task>\` | yes / no | Error / start (same shape; see "Detect — extend-mode fork"). |
 | \`/cc-cancel\` | yes | Run the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state). See \`commands/cc-cancel.md\`. |
@@ -188,23 +189,68 @@ The orchestrator (NOT a sub-agent — research mode's discovery dialogue lives i
 3. Read \`README.md\` first paragraph + Architecture / Purpose section for high-level project framing.
 4. Initialise an empty \`.cclaw/flows/<slug>/research.md\` from the \`research\` template (\`.cclaw/lib/templates/research.md\`); the orchestrator will fill it in Phase 3.
 
-#### Phase 1 — open-ended discovery dialogue (main-context; no question cap)
+#### Phase 1 — iterative open-ended discovery dialogue with per-dimension scoring (main-context; v8.78)
 
 The orchestrator opens the dialogue with the user in plain prose, in the user's language:
 
 > "Hi. What are you researching? Tell me what you know and what you don't."
 
-The user replies. The orchestrator asks follow-up questions as long as they are productive — there is **NO fixed question cap** (gstack-style and obra-superpowers-style references converged on "as many questions as productive"; v8.65 follows that). Productive questions reduce ambiguity, surface constraints, or reveal stakeholders / users / prior attempts the lenses will need. Unproductive questions (repeating, padding for symmetry, re-asking what was already answered) are forbidden.
+The user replies. The orchestrator then runs the **same iterative per-dimension scoring machinery** as the architect Phase −1 Clarify protocol (see \`.cclaw/lib/agents/architect.md > Phase −1\`), with two adjustments:
 
-The dialogue runs UNTIL the user signals readiness with any of these phrases (case-insensitive; the orchestrator matches loosely on intent, not on a fixed token list):
+- **Round cap is higher: 8 rounds** (vs 5 for architect Clarify). Research discovery has more axes to pin (research is exploratory by definition; the budget allows deeper questioning).
+- **Math-gated exit threshold is the same: \`ambiguity < 0.25\`.** Both surfaces share the same exit math; only the round cap differs.
 
-- "ready" / "I'm ready" / "go ahead" / "let's go" / "go on" / "proceed" / "finalize" / "explore now" / "dispatch the lenses" / "run the research" / "do it" / "ship it" / a clear "I've said what I know — over to you" framing.
+**Per-dimension scoring (same four dimensions as architect Clarify):**
 
-When the user signals ready, the orchestrator distils the dialogue into a **dialogue summary** — 5-15 bullets capturing what the user told the orchestrator (topic refinement, known constraints, prior attempts, stakeholders, scope edges). The summary is the payload passed to each lens; the lenses do not see the raw dialogue.
+| Dimension | Weight | What it measures in research mode |
+| --- | --- | --- |
+| \`goal\` | 0.4 | What question is the research answering? Can you state it in one sentence? Is the topic phrased as a question (good) or as a conclusion the user has already reached (bad — surfaces in skeptic lens otherwise)? |
+| \`constraints\` | 0.3 | What's out of scope? What technical / organisational / time constraints bound the research? What's the user's risk tolerance? |
+| \`criteria\` | 0.3 | What would a satisfying research output look like? "I want to know whether X" (concrete) vs "research X" (open-ended). What decision will the research unblock? |
+| \`context\` | 0.0 | Repo / market / prior-art context. **Informational, not gating** — surfaced so the user can volunteer pointers (prior research, internal docs, competitor links), but the math-gated exit does NOT block on it. |
 
-The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides for follow-up turns (Cursor's structured-ask, Claude's TUI text input, etc.) but the questions are open-ended (no multiple-choice picker, no "[y/n]" gate) — research-mode discovery is the one cclaw surface where free-form dialogue is the contract.
+Compute the scalar:
+
+\`\`\`text
+ambiguity = 1 - (goal * 0.4 + constraints * 0.3 + criteria * 0.3 + context * 0.0)
+\`\`\`
+
+**Targeting + challenge-mode rotation:** the next question MUST target the weakest dimension. The same challenge-mode rotation applies (sourced from \`oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"\`):
+
+- **Round 4 — Contrarian mode.** Ask "what if the opposite were true?" against the weakest dimension. Tests whether the user's framing is correct or just habitual. (Architect's round 4 is the same stance; for research mode, round 4 may also probe "what if the user is researching the wrong question altogether?").
+- **Round 5 — Simplifier mode.** Ask "what's the simplest version of the question that would still be valuable to answer?". Finds the minimal viable research scope.
+- **Rounds 6-8 (research only).** Continue with open-ended targeting on the weakest dimension; no specific stance injection. The extra rounds exist because research topics genuinely benefit from deeper questioning more often than task-mode Clarify does — but the math-gated exit usually fires before round 6 on focused topics.
+
+**Surface a per-round table to the user** after every answer:
+
+\`\`\`text
+Round <n>:
+| Dimension | Score | Weight | Why |
+| --- | --- | --- | --- |
+| goal | <s_goal> | 0.4 | <one-sentence rationale> |
+| constraints | <s_constraints> | 0.3 | <one-sentence rationale> |
+| criteria | <s_criteria> | 0.3 | <one-sentence rationale> |
+| context | <s_context> | 0.0 | <one-sentence rationale> |
+| **Ambiguity** |  |  | **<a>** |
+Next target: <weakest-dimension> — <one-sentence why>.
+\`\`\`
+
+Stamp every round into \`flow-state.json > clarifyRounds[]\` (append-only) as a \`ClarifyRoundState\` entry (\`{ round, dimensionScores, ambiguity, targetedDimension, question }\`) — the SAME field used by architect Clarify; research-mode flows share the persistence surface.
+
+**Exit conditions (any of):**
+
+- Math-gated exit: \`ambiguity < 0.25\`.
+- Round cap: 8 rounds asked.
+- User signals readiness (any of "ready" / "I'm ready" / "go ahead" / "let's go" / "go on" / "proceed" / "finalize" / "explore now" / "dispatch the lenses" / "run the research" / "do it" / "ship it" / a clear "I've said what I know — over to you" framing).
+- **New v8.78 — user runs \`/cc research go\`** to force-exit the dialogue. The \`go\` sub-command is treated identically to the in-prose "ready" signal: stop asking, distil, proceed to Phase 1.5 Approaches Gate. \`go\` is the canonical "I trust the orchestrator to dispatch with what I've already said" force-exit; the orchestrator does NOT push back on the user even if \`ambiguity\` is still > 0.25.
+
+When the dialogue exits, the orchestrator distils the conversation into a **dialogue summary** — 5-15 bullets capturing what the user told the orchestrator (topic refinement, known constraints, prior attempts, stakeholders, scope edges). The summary is the payload passed to each lens; the lenses do not see the raw dialogue.
+
+The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides for follow-up turns (Cursor's structured-ask, Claude's TUI text input, etc.) but the questions are open-ended (no multiple-choice picker, no "[y/n]" gate) — research-mode discovery is the one cclaw surface where free-form dialogue is the contract. The per-round table is rendered as plain markdown BEFORE each question; the user sees what every answer is moving.
 
 If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel"), the orchestrator runs the cancel runtime (move the empty research.md to \`cancelled/<slug>/\`, reset state) and ends the turn.
+
+**Reference patterns:** \`oh-my-claudecode/skills/deep-interview/SKILL.md\` (mathematical scoring + challenge-mode rotation); \`everyinc-compound\` brainstorming Phase 1.2 gap lenses (specificity / evidence / counterfactual / attachment — the same lenses backing the four canonical dimensions); pre-v8.78 research-mode used "as many questions as productive" with no scoring — v8.78 replaces that with the math-gated discipline so research mode stops bleeding rounds when the user has already pinned the question.
 
 #### Phase 1.5 — approaches gate (v8.76)
 

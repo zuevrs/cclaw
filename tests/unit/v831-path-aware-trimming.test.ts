@@ -34,8 +34,8 @@ describe("v8.31 path-aware orchestrator — body-only budget", () => {
     expect(renderStartCommand().length).toBeLessThanOrEqual(125000);
   });
 
-  it("AC-1 — start-command body stays ≤ 720 lines (... v8.74 raised by 5 lines for the ethos-preamble + Skills-attached bullet; v8.75 raised by 30 lines for the #### plan-design body section + SPECIALISTS roster + stage-table row; v8.76 raised by 50 lines for the new #### Phase 1.5 — approaches gate section (procedure + sub-cases + worked example) and the rewritten Phase 2 dispatch prose (design-signal heuristic + lens-toggle flags + new research-design row + `Framing:` envelope); v8.77 raised by 75 lines for the Debug-branch routing section + the #### investigator stage details + the investigator stage-table row + the v8.77 footnote on plan)", () => {
-    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(720);
+  it("AC-1 — start-command body stays ≤ 800 lines (... v8.74 raised by 5 lines for the ethos-preamble + Skills-attached bullet; v8.75 raised by 30 lines for the #### plan-design body section + SPECIALISTS roster + stage-table row; v8.76 raised by 50 lines for the new #### Phase 1.5 — approaches gate section (procedure + sub-cases + worked example) and the rewritten Phase 2 dispatch prose (design-signal heuristic + lens-toggle flags + new research-design row + `Framing:` envelope); v8.77 raised by 75 lines for the Debug-branch routing section + the #### investigator stage details + the investigator stage-table row + the v8.77 footnote on plan; v8.78 raised by 80 lines for the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring — the four-dimension table (goal/constraints/criteria/context), the ambiguity formula, the weakest-dimension targeting rule, the challenge-mode rotation (Contrarian round 4 / Simplifier round 5), the per-round table, the math-gated exit threshold (ambiguity < 0.25), the `/cc research go` force-exit sub-command + invocation-matrix row)", () => {
+    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(800);
   });
 });
 

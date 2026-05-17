@@ -1,6 +1,74 @@
 # Changelog
 
 
+## 8.78.0 — Iterative-clarify (per-dimension ambiguity scoring)
+
+### Why
+
+v8.67 added the `Clarify` phase to architect Phase −1 (one-question-at-a-time, max 5, gated on `triage.ambiguityScore >= 60`) — but the question-ordering logic was "walk triage's signal list in order until the cap" and the exit logic was "user says ready OR cap reached". Two problems showed up across v8.67-v8.77:
+
+1. **No targeting feedback loop.** The architect picked the first signal verbatim, asked it, then picked the next signal in list order. If round 1 already pinned the goal but left the criteria wide open, the architect would still march to round 2 by signal-list order (e.g. asking the constraint question next, because that's what came next in the triage signal vocabulary). Wasted questions.
+2. **No math-gated early exit.** "User says ready" is generous but most users don't volunteer "ready"; the round cap (5) became the default exit even when round 2's answers already pinned the goal + criteria + constraints. The dialogue padded to 5 for symmetry.
+
+The same shape played out in research-mode Phase 1 ("as many questions as productive" — but "productive" was the orchestrator's vibe call, not a math gate). Research mode would happily roll 8-12 follow-up questions on a topic where the user had pinned everything by round 3.
+
+The pattern lineage is clear:
+
+- **oh-my-claudecode `deep-interview`** (`skills/deep-interview/SKILL.md`) — codifies mathematical scoring per dimension after every answer (`ambiguity = 1 - (goal*0.4 + constraints*0.3 + criteria*0.3)` for greenfield; brownfield adds context*0.15) plus challenge-mode rotation (Contrarian round 4, Simplifier round 6, Ontologist round 8) to prevent the late rounds from becoming incremental clarifications of the same framing.
+- **everyinc-compound `ce-brainstorm`** (`plugins/compound-engineering/skills/ce-brainstorm/SKILL.md`) — Phase 1.2 gap lenses (specificity / evidence / counterfactual / attachment) already drive cclaw's triage `ambiguityScore` signals (vague-verbs / missing-AC / multiple-interpretations / no-concrete-names) since v8.67.
+
+v8.78 fuses the deep-interview math with the existing gap lenses: per-dimension scoring after every answer; the weakest dimension targets the next question; the per-round table surfaces to the user; the math-gated exit fires at `ambiguity < 0.25` regardless of round count; challenge-mode rotation activates on the late rounds (Contrarian round 4, Simplifier round 5 in cclaw — earlier than deep-interview's 4/6/8 because cclaw's round caps are tighter).
+
+### What changed
+
+**Deliverable 1 — New types (`src/types.ts`).**
+
+- New `ClarifyDimension` union (`"goal" | "constraints" | "criteria" | "context"`) with four canonical values, exported as `CLARIFY_DIMENSIONS` for runtime narrow-check predicates.
+- New `ClarifyDimensionScore` interface (`{ dimension, score, rationale }`; score is a float in `[0.0, 1.0]`; rationale is a one-sentence explanation).
+- New `ClarifyRoundState` interface (`{ round, dimensionScores, ambiguity, targetedDimension, question }`) — the per-round audit-trail record stamped on `flow-state.json > clarifyRounds[]` after every Clarify answer.
+- New `CLARIFY_EXIT_AMBIGUITY_THRESHOLD` constant (`0.25`) — the math-gated exit threshold (`ambiguity < 0.25` ends the dialogue).
+- New `CLARIFY_ARCHITECT_ROUND_CAP` (`5`) + `CLARIFY_RESEARCH_ROUND_CAP` (`8`) constants — caps differ because research mode has more axes to pin.
+
+**Deliverable 2 — `clarifyRounds[]` on flow state (`src/flow-state.ts`).**
+
+- New optional `clarifyRounds?: ClarifyRoundState[]` field on `FlowStateV82`. Append-only audit trail set on BOTH architect Phase −1 Clarify (`triage.mode == "task"`) AND research-mode Phase 1 discovery dialogue (`triage.mode == "research"`).
+- Validator (`assertFlowStateV82`) checks shape on read: each entry must have a positive integer `round`, four dimension scores with values in `[0.0, 1.0]`, an `ambiguity` scalar in `[0.0, 1.0]`, a valid `targetedDimension`, and a string `question`. Pre-v8.78 state files lack the field; readers default to absent — backward-compat preserved.
+
+**Deliverable 3 — Architect Phase −1 prompt rewrite (`src/content/specialist-prompts/architect.ts`).**
+
+- Phase −1 protocol replaced "walk triage's signal list in order" with "re-score 4 dimensions after every answer; the weakest dimension targets the next question". The four-dimension table (goal/constraints/criteria/context) with weights (0.4/0.3/0.3/0.0) is rendered inline; the ambiguity formula is named verbatim; the per-round table the architect surfaces to the user is templated inline.
+- Math-gated exit fires at `ambiguity < 0.25` IN ADDITION to the existing exits (`go`/`ready`/`proceed` user signal AND round cap 5). The cap stays at 5 (v8.67 contract preserved).
+- Challenge-mode rotation: round 4 activates Contrarian framing ("what if the opposite were true?"); round 5 activates Simplifier framing ("what's the simplest version that would still be valuable?"). The stance rotation IS the v8.78 stagnation guard; rounds 1-3 stay in the four gap-lens style (specificity / evidence / counterfactual / attachment), rounds 4-5 layer the stance on top.
+- Two new anti-rationalization rows added ("incremental clarifications on round 4" → "Round 4 is Contrarian"; "always target goal because highest weight" → "target the weakest dimension; weight only breaks ties").
+
+**Deliverable 4 — Research-mode Phase 1 prompt rewrite (`src/content/start-command.ts`).**
+
+- Phase 1 ("iterative open-ended discovery dialogue with per-dimension scoring") replaced the pre-v8.78 "no question cap, ask as many questions as productive" prose with the same per-dimension scoring machinery the architect uses. The four-dimension table is identical (goal/constraints/criteria/context with weights 0.4/0.3/0.3/0.0); the ambiguity formula is identical; the per-round table the orchestrator surfaces is identical.
+- Round cap is HIGHER (8 vs 5) because research discovery has more axes to pin; math-gated exit threshold is identical (`ambiguity < 0.25`).
+- Challenge-mode rotation is identical (Contrarian round 4, Simplifier round 5); rounds 6-8 continue with open-ended weakest-dimension targeting (no specific stance — but the math-gated exit usually fires before round 6 on focused topics).
+- New `/cc research go` sub-command (force-exit from Phase 1 discovery). Treated identically to the in-prose "ready" signal: stop asking, distil dialogue summary, proceed to Phase 1.5 Approaches Gate. Outside Phase 1 discovery the sub-command errors out (consistent with the v8.71 revise/push-back/accept sub-command gating shape). Added to the invocation matrix table at the top of `start-command.ts`.
+- Persistence is shared: research-mode Phase 1 stamps the SAME `clarifyRounds[]` field as architect Phase −1. Downstream learnings capture reads one field regardless of which surface scored.
+
+**Deliverable 5 — Tests (`tests/unit/v878-iterative-clarify.test.ts`).**
+
+- 30+ assertions across 5 describe blocks: ClarifyDimension enum + canonical 4-value vocabulary; ClarifyDimensionScore + ClarifyRoundState type shape; FlowState.clarifyRounds[] persistence + validator (positive + negative cases for round/score/dimension/ambiguity bounds); architect prompt declares per-dimension scoring (formula + threshold + targeting + per-round table + challenge-mode rotation + clarifyRounds[] persistence); research-mode prompt declares same machinery with the higher cap + `/cc research go` sub-command. Final test count 1903 → 1932.
+
+### Budget bumps
+
+- `tests/unit/v822-orchestrator-slim.test.ts` — line cap 720 → 800 (+80 lines absorbed for the rewritten Phase 1 iterative discovery dialogue prose: four-dimension table, ambiguity formula, weakest-dimension targeting rule, challenge-mode rotation, per-round table, math-gated exit, `/cc research go` sub-command + invocation-matrix row).
+- `tests/unit/v822-orchestrator-slim.test.ts` — body/v8.21 ratio ceiling 0.80 → 0.90 (matches the line-budget bump; same prose absorbed).
+- `tests/unit/v831-path-aware-trimming.test.ts` — line cap 720 → 800 (matches the v8.22 budget bump).
+- Char budgets unchanged (existing 125k/180k/205k/275k all hold).
+- Specialist prompt budgets unchanged (architect stays under its 1200 line / 110k char ceiling).
+
+### Release notes draft
+
+- Architect Phase −1 Clarify and research-mode Phase 1 dialogue now re-score 4 dimensions (Goal/Constraints/Criteria/Context) after every answer; the weakest dimension targets the next question; per-round table is shown to the user; math-gated exit at `ambiguity < 0.25`.
+- Challenge-mode rotation: round 4 activates Contrarian framing ("what if the opposite were true?"), round 5 activates Simplifier framing ("what's the simplest version that would still be valuable?").
+- New `/cc research go` sub-command force-exits research-mode Phase 1 discovery (same shape as the in-prose "ready" signal; persists what the user has already said and proceeds to the Approaches Gate).
+- New types `ClarifyDimension` / `ClarifyDimensionScore` / `ClarifyRoundState`; flow state extended with `clarifyRounds[]` (optional + back-compat; pre-v8.78 state files validate unchanged).
+
+
 ## 8.77.0 — Investigator (debug-branch)
 
 ### Why

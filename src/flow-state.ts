@@ -20,6 +20,9 @@ import {
   type Posture,
   type QaEvidenceTier,
   type QaVerdict,
+  type ClarifyDimension,
+  type ClarifyRoundState,
+  CLARIFY_DIMENSIONS,
   type ResearchApproach,
   type ResearchLensId,
   type ResearchMode,
@@ -101,6 +104,10 @@ const RESEARCH_REVISION_KINDS = ["revise", "push-back", "accept"] as const;
 
 function isResearchRevisionKind(value: unknown): value is ResearchRevision["kind"] {
   return typeof value === "string" && (RESEARCH_REVISION_KINDS as readonly string[]).includes(value);
+}
+
+function isClarifyDimension(value: unknown): value is ClarifyDimension {
+  return typeof value === "string" && (CLARIFY_DIMENSIONS as readonly string[]).includes(value);
 }
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
@@ -495,6 +502,33 @@ export interface FlowStateV82 {
    * (alongside the per-slice worktree teardown).
    */
   slice_merge_failures?: SliceId[];
+  /**
+   * Append-only per-round audit trail for the v8.78 iterative Clarify
+   * protocol. Each entry records one round of dialogue (dimension
+   * scores after the user's answer, the resulting ambiguity scalar,
+   * the next-question target dimension, and the verbatim question
+   * the orchestrator asked). The array mirrors the per-round Clarify
+   * table the architect / research orchestrator surfaces to the user.
+   *
+   * Set on BOTH architect Phase −1 Clarify (`triage.mode == "task"`)
+   * AND research-mode Phase 1 discovery dialogue (`triage.mode ==
+   * "research"`). The architect path caps at 5 rounds; the research
+   * path caps at 8 rounds. Both surfaces share the math-gated exit
+   * threshold (`ambiguity < 0.25`) via
+   * {@link CLARIFY_EXIT_AMBIGUITY_THRESHOLD}.
+   *
+   * Pre-v8.78 state files lack this field; readers MUST default to
+   * absent / empty `[]`. Pre-v8.78 architect Clarify flows + pre-v8.78
+   * research discovery dialogues did NOT score per-dimension — the
+   * field's absence is the canonical "no per-dimension scoring ran"
+   * signal, not an error.
+   *
+   * Append-only: entries are never mutated or removed after they
+   * land. The orchestrator transitions out of Clarify on the
+   * math-gated exit, the user's "ready" signal, or the round cap;
+   * the array is preserved as the audit trail for compound learning.
+   */
+  clarifyRounds?: ClarifyRoundState[];
 }
 
 /**
@@ -1179,6 +1213,62 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
         throw new Error(
           "flow-state.slice_merge_failures entries must be non-empty slice id strings (SL-N)"
         );
+      }
+    }
+  }
+  if (state.clarifyRounds !== undefined) {
+    if (!Array.isArray(state.clarifyRounds)) {
+      throw new Error("flow-state.clarifyRounds must be an array when present");
+    }
+    for (const entry of state.clarifyRounds) {
+      if (typeof entry !== "object" || entry === null) {
+        throw new Error("flow-state.clarifyRounds entries must be objects");
+      }
+      const r = entry as Partial<ClarifyRoundState>;
+      if (typeof r.round !== "number" || !Number.isInteger(r.round) || r.round < 1) {
+        throw new Error(
+          "flow-state.clarifyRounds[].round must be a positive integer (1-indexed round number)"
+        );
+      }
+      if (!Array.isArray(r.dimensionScores)) {
+        throw new Error("flow-state.clarifyRounds[].dimensionScores must be an array");
+      }
+      for (const score of r.dimensionScores) {
+        if (typeof score !== "object" || score === null) {
+          throw new Error("flow-state.clarifyRounds[].dimensionScores entries must be objects");
+        }
+        const s = score as Partial<ClarifyRoundState["dimensionScores"][number]>;
+        if (!isClarifyDimension(s.dimension)) {
+          throw new Error(
+            `Invalid clarifyRounds dimension: ${String(s.dimension)} (expected one of ${CLARIFY_DIMENSIONS.join(" | ")})`
+          );
+        }
+        if (typeof s.score !== "number" || Number.isNaN(s.score) || s.score < 0 || s.score > 1) {
+          throw new Error(
+            `clarifyRounds dimensionScores.score must be a number in [0, 1]; got ${String(s.score)}`
+          );
+        }
+        if (typeof s.rationale !== "string") {
+          throw new Error("clarifyRounds dimensionScores.rationale must be a string");
+        }
+      }
+      if (
+        typeof r.ambiguity !== "number" ||
+        Number.isNaN(r.ambiguity) ||
+        r.ambiguity < 0 ||
+        r.ambiguity > 1
+      ) {
+        throw new Error(
+          `clarifyRounds.ambiguity must be a number in [0, 1]; got ${String(r.ambiguity)}`
+        );
+      }
+      if (!isClarifyDimension(r.targetedDimension)) {
+        throw new Error(
+          `Invalid clarifyRounds targetedDimension: ${String(r.targetedDimension)}`
+        );
+      }
+      if (typeof r.question !== "string") {
+        throw new Error("clarifyRounds.question must be a string");
       }
     }
   }
