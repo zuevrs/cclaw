@@ -30,12 +30,12 @@ function bodyBudget(fileNames: string[]): number {
 }
 
 describe("v8.31 path-aware orchestrator — body-only budget", () => {
-  it("AC-1 — start-command body stays ≤ 81500 chars (v8.59 raised by 1500 chars for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.63 raised by 1000 chars for the slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default build-stage prose; v8.68 raised by 200 chars for the structured implementer status pointer in the Always-auto failure handling section; v8.69 raised by 1300 chars for the research-depth + self-review pointers — research-mode fork stamps `research_depth` in the sentinel triage block, Phase 2 dispatch reads depth to gate the lens set (light = 2 lenses, standard = 5, deep-product = 5 + extra probes), Phase 3 adds a self-review step pointer, and the depth flag sub-case is added to the Sub-cases block; ~95% of the v8.69 prose lives in `runbooks/research-depth-and-self-review.md`)", () => {
-    expect(renderStartCommand().length).toBeLessThanOrEqual(81500);
+  it("AC-1 — start-command body stays ≤ 82000 chars (v8.59 raised by 1500 chars for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.63 raised by 1000 chars for the slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default build-stage prose; v8.68 raised by 200 chars for the structured implementer status pointer in the Always-auto failure handling section; v8.69 raised by 1300 chars for the research-depth + self-review pointers; v8.70 raised by 500 chars for the design-quality envelope pointer + the eleven-axis update — the new bullet sets `walkDesignQualityAxis: true` on reviewer dispatch when `triage.designSurface == true` OR `triage.surfaces` ∩ {`ui`, `design`, `frontend`, `ux`} ≠ ∅; ~95% of the v8.70 prose lives in `reviewer.ts > Design-quality axis details`)", () => {
+    expect(renderStartCommand().length).toBeLessThanOrEqual(82000);
   });
 
-  it("AC-1 — start-command body stays ≤ 548 lines (v8.59 raised by 10 lines to absorb the Detect-hop extend-mode pointer + the v8.59 prior-context consumption pointer; v8.69 raised by 3 lines for the research-depth dispatch-envelope sub-bullet + the synthesis self-review step 6 + the depth-flag sub-case; matches the v8.22 line-budget raise in v822-orchestrator-slim.test.ts)", () => {
-    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(548);
+  it("AC-1 — start-command body stays ≤ 550 lines (v8.59 raised by 10 lines to absorb the Detect-hop extend-mode pointer + the v8.59 prior-context consumption pointer; v8.69 raised by 3 lines for the research-depth dispatch-envelope sub-bullet + the synthesis self-review step 6 + the depth-flag sub-case; v8.70 raised by 2 lines for the design-quality envelope-activation bullet + the eleven-axis update; matches the v8.22 line-budget raise in v822-orchestrator-slim.test.ts)", () => {
+    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(550);
   });
 });
 
@@ -55,8 +55,8 @@ describe("v8.31 path-aware orchestrator — per-path envelopes (v8.54: budgets u
     "critic-steps.md"
   ];
 
-  it("AC-2 — inline path budget = body alone, ≤ 81500 chars (v8.59 raised by 1500 chars; v8.63 raised by 1000 chars for slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default body bump; v8.68 raised by 200 chars for the structured implementer status pointer; v8.69 raised by 1300 chars for the research-depth + synthesis self-review pointers; see body-only budget above for rationale)", () => {
-    expect(bodyBudget([])).toBeLessThanOrEqual(81500);
+  it("AC-2 — inline path budget = body alone, ≤ 82000 chars (v8.59 raised by 1500 chars; v8.63 raised by 1000 chars for slice / AC separation dispatch envelope clarifiers; v8.65 raised by 9000 chars for the multi-lens research orchestrator; v8.66 raised by 1000 chars for parallel-by-default body bump; v8.68 raised by 200 chars for the structured implementer status pointer; v8.69 raised by 1300 chars for the research-depth + synthesis self-review pointers; v8.70 raised by 500 chars for the design-quality envelope pointer; see body-only budget above for rationale)", () => {
+    expect(bodyBudget([])).toBeLessThanOrEqual(82000);
   });
 
   it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 133000 chars (v8.59 raised by 2000 chars: ~1500 chars body + ~500 chars extend-mode pointer; v8.63 raised by 1000 chars for slice / AC separation body bump; v8.65 raised by 9000 chars for the multi-lens research orchestrator's body prose riding into every dispatch; v8.66 raised by 1000 chars for parallel-by-default body bump)", () => {

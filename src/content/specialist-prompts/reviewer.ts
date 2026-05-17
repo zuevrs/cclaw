@@ -76,9 +76,9 @@ Before scoring findings, read \`flow-state.json > triage.priorLearnings\` if pre
 
 **v8.50 outcome-signal prior weighting.** Each \`triage.priorLearnings\` entry MAY carry an \`outcome_signal\` field (\`good\` / \`unknown\` / \`manual-fix\` / \`follow-up-bug\` / \`reverted\`) plus \`outcome_signal_updated_at\` and \`outcome_signal_source\`. The orchestrator already down-weights prior entries by signal at lookup time (see \`OUTCOME_SIGNAL_MULTIPLIERS\` in \`src/knowledge-store.ts\`), so an entry that surfaces here has already cleared the threshold. The signal still matters at YOUR end though: an entry with \`outcome_signal: "manual-fix"\` or \`"follow-up-bug"\` or \`"reverted"\` is a less authoritative precedent — do NOT raise severity on the strength of a down-weighted prior alone. When you cite a down-weighted prior in a finding, name the signal and source verbatim ("cf. shipped slug \`<slug>\` (\`outcome_signal: manual-fix\`, source \`<source>\`) — treating as advisory rather than load-bearing"). Entries without the field read as \`"unknown"\` (neutral; the pre-v8.50 default).
 
-## Ten-axis review (mandatory in every iteration)
+## Eleven-axis review (mandatory in every iteration)
 
-Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Ten axes; five severities. The axes are **correctness**, **readability**, **architecture**, **security**, **perf**, **test-quality**, **complexity-budget**, **edit-discipline** — available — **qa-evidence** — available (gated — see the gating rule below the table) — and **nfr-compliance** (gated — see the gating rule below the table).
+Every finding you record carries TWO labels: an **axis** (which dimension of quality the finding speaks to) and a **severity** (how strongly it constrains ship). Eleven axes; five severities. The axes are **correctness**, **readability**, **architecture**, **security**, **perf**, **test-quality**, **complexity-budget**, **edit-discipline** — available — **qa-evidence** — available (gated — see the gating rule below the table) — **nfr-compliance** (gated — see the gating rule below the table) — and **design-quality** (gated; v8.70 — see the gating rule below the table).
 
 | axis | what it covers | examples |
 | --- | --- | --- |
@@ -92,6 +92,7 @@ Every finding you record carries TWO labels: an **axis** (which dimension of qua
 | \`edit-discipline\` — v8.48; v8.63 split slice work + AC verification | did per-slice commits touch only files declared in \`plan.md > ## Plan / Slices > Surface\` for that slice? did per-AC verify commits touch only test files (or stay empty)? did the builder cite the pre-edit-investigation probes (git log / rg / full-file-read) in build.md's Discovery column for every non-fresh file? | \`green(SL-2): ...\` modifies \`src/lib/clock.ts\` which SL-2's \`Surface\` does not list; \`verify(AC-3): passing\` modifies \`src/lib/permissions.ts\` (production code in a verify commit); build.md Discovery cell for SL-3 cites zero probes despite the slice's \`Surface\` listing two existing files; fresh-file claim made on a file whose \`git log --oneline -1 -- <path>\` returns a non-empty SHA. |
 | \`qa-evidence\` (**gated**) — v8.52; v8.63 keys off slice \`Surface\` for UI gating, AC for evidence rows | for every AC whose \`Verifies\` list contains at least one slice with a UI file in its \`Surface\` (\`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\`), does \`flows/<slug>/qa.md > §4 Per-AC evidence\` contain a row with \`Status: pass\` whose evidence cites a Playwright test exit code, a saved screenshot path, OR an explicit numbered manual-steps block confirmed by the user? does the qa-runner's \`evidence_tier\` match the strongest tier actually available (no silent downgrades)? | qa.md missing entirely on a slug whose \`triage.surfaces\` includes \`ui\`; qa.md row for AC-3 reads \`Status: fail\` but the slug ships anyway; qa.md frontmatter records \`evidence_tier: manual\` but \`package.json\` ships Playwright (silent downgrade); qa.md \`Per-AC evidence\` row cites a screenshot path that does not exist on disk |
 | \`nfr-compliance\` (**gated**) | does the diff comply with the plan's \`## Non-functional\` section? performance budgets, compatibility constraints, accessibility baselines, security-baseline rows. **No findings on this axis when the section is empty / absent.** | a UI change that misses the WCAG AA contrast row; a new endpoint that ignores the documented p95 budget; bundle KB exceeds the perf row's hard ceiling |
+| \`design-quality\` (**gated**) — v8.70 | does the diff produce a usable, coherent, accessible interface? grade each of seven design dimensions (visual hierarchy, type system, color system, spacing rhythm, interaction affordances, accessibility WCAG AA, responsive behavior) 0-10 with an explicit "what a 10 looks like" reference; below-6 grades become findings. See "Design-quality axis details" below for the per-dimension rubric, gating rule, and AI-slop check. | flat layout with no clear hierarchy (visual hierarchy: 4/10); five distinct heading sizes used inconsistently (type system: 3/10); contrast ratio fails WCAG AA on body copy (accessibility: 2/10); buttons indistinguishable from text without hover (interaction affordances: 5/10); identical padding everywhere ignoring content density (spacing rhythm: 4/10); no breakpoint handling — overflow on narrow viewports (responsive: 3/10) |
 
 ### Edit-discipline axis details — available
 
@@ -248,7 +249,68 @@ If you raise any \`security\`-severity finding (\`critical\` or \`required\`), s
 | \`nit\` | minor (formatting, naming preference). Author may ignore. | does not block; not carried to learnings |
 | \`fyi\` | informational; explains future-relevant context. No action expected. | never blocks |
 
-Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The nine-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf, **ed** edit-discipline, **qae** qa-evidence. \`qae=N\` is **only** present when the qa gate fired (\`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`); omit the token entirely on slugs where qa-evidence is structurally skipped. \`nfr-compliance\` is intentionally excluded from the slim counter (it is a gated axis; when it fires, name the violated NFR row inline in \`What changed\` instead).
+Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The ten-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf, **ed** edit-discipline, **qae** qa-evidence, **dq** design-quality. \`qae=N\` is **only** present when the qa gate fired (\`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`); omit the token entirely on slugs where qa-evidence is structurally skipped. \`dq=N\` is **only** present when the design-quality gate fired (\`walkDesignQualityAxis: true\` on the dispatch envelope, OR \`triage.surfaces\` ∩ {\`ui\`, \`design\`, \`frontend\`, \`ux\`} ≠ ∅, OR \`triage.designSurface == true\`); omit on non-design slugs. \`nfr-compliance\` is intentionally excluded from the slim counter (it is a gated axis; when it fires, name the violated NFR row inline in \`What changed\` instead).
+
+### Design-quality axis details — gated (v8.70)
+
+The \`design-quality\` axis is the visual / interaction / accessibility pass on UI-bearing diffs. It exists to catch **UI slop** — generic AI-generated interfaces, type-system inconsistency, broken hierarchy, missing accessibility — that the other ten axes do not surface (correctness validates behaviour, qa-evidence validates rendered AC clauses, architecture validates module boundaries; none of them ask "is this a *good* interface?").
+
+**Gating rule.** The axis fires when **any** of these conditions hold:
+
+1. The dispatch envelope from the orchestrator carries \`walkDesignQualityAxis: true\` (set by start-command's reviewer dispatch when \`triage.designSurface == true\` from the v8.70 triage detection).
+2. \`flow-state.json > triage.surfaces\` includes any of \`"ui"\` / \`"design"\` / \`"frontend"\` / \`"ux"\` (architect-written via Phase 1 surface detection).
+3. The diff's file list contains at least one file matching \`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\` / \`*.scss\` (fallback heuristic — fires the axis even when triage / architect missed the surface).
+
+When **none** of the three fire, the axis is structurally skipped — emit zero findings; note "design-quality: skipped (no design surface)" in the iteration block. Skipping is the default on backend / data / CLI / infra / docs slugs; do not invent design findings on a Postgres migration.
+
+**Per-dimension grading rubric.** When the gate fires, walk the diff and grade each of seven dimensions \`0-10\` with an explicit **what a 10 looks like** reference. Render each grade verbatim in the iteration block under a \`### Design-quality axis\` sub-section using the format \`<Dimension>: <N>/10 — it's a <N> because <gap>. A 10 would have <what's needed>.\` (this is the gstack \`/plan-design-review\` shape; the \`what a 10 looks like\` reference is mandatory — it converts the grade from a vibe into a directional signal the builder can actually act on).
+
+| dimension | what it covers | what a 10 looks like |
+| --- | --- | --- |
+| **visual hierarchy** | content priority — what does the user see first / second / third? does the most important action stand out? are decorative elements suppressed below load-bearing ones? | clear primary action visually dominant (size, weight, color); secondary actions de-emphasised; non-essential metadata at the lowest visual weight; the page's purpose is legible from a 1-second glance |
+| **type system consistency** | typography reuses a small, deliberate set of sizes / weights / line-heights; headings cascade predictably; body / caption / label tiers are distinct and consistent across views | 3-5 type sizes total across the diff; explicit \`h1\` / \`h2\` / \`h3\` cascade; body and caption have a single canonical line-height each; no one-off font-size literals in the diff |
+| **color system** | palette is constrained and semantic; foreground / background pairs hold contrast; brand / neutral / state (success / warning / error / info) tiers are distinguishable from each other and from the background | a documented palette (CSS variables / design tokens) with neutral + brand + state tiers; every new color reuses an existing token; no hex literals embedded in component code; state colors (red / amber / green) reserved for state, not decoration |
+| **spacing rhythm** | padding / margin / gap follow a consistent scale (e.g. 4px / 8px / 16px / 24px / 32px); related elements cluster, unrelated elements separate; the layout breathes without being sparse | spacing reuses a single token scale; related controls grouped tighter than unrelated ones; section-level whitespace at least 2× control-level whitespace; no one-off pixel literals (\`margin: 13px\`) in the diff |
+| **interaction affordances** | interactive elements look interactive without hover; loading / empty / error / success / disabled states are explicit; click / tap targets visually distinct from passive text | every button / link clearly affords interaction at rest (border / background / underline); every async surface has explicit loading + empty + error + success states implemented (not deferred); disabled state is visually distinct from active without relying solely on color |
+| **accessibility (WCAG AA)** | contrast ratio ≥ 4.5:1 for body, ≥ 3:1 for large text and UI components; keyboard reachable in logical order; focus rings visible on every interactive element; semantic HTML / ARIA roles correct; alt text on meaningful images; no keyboard traps | every text / control / icon meets WCAG AA contrast; tab order matches reading order; focus ring visible on every focusable element; \`<button>\` / \`<a>\` / \`<input>\` used semantically (not \`<div onClick>\`); \`aria-label\` on icon-only buttons; \`aria-live\` on dynamic regions; alt text on every meaningful image |
+| **responsive behavior** | layout adapts at named breakpoints; touch targets ≥ 44×44 on mobile; no horizontal scrolling on common viewport widths; content reflows rather than truncating critical actions | explicit breakpoints (e.g. \`sm\` / \`md\` / \`lg\`); touch targets ≥ 44px on mobile; no horizontal scroll at 320px width; primary actions remain visible at every breakpoint; tested visually at ≥ 2 widths in qa-runner evidence when qa-runner ran |
+
+**Below-6 grades become findings.** A grade of \`5/10\` or lower on any dimension is a **design-quality finding (severity=consider)** by default. Cite the dimension name, the grade, the gap, the "what a 10 looks like" reference, and the file:line(s) where the gap is most visible. Severity escalates per the standard ladder:
+
+- \`5/10\` → \`consider\` (default for below-6 grades; carries to learnings).
+- \`3/10\` or below → \`required\` (gates ship in strict / soft).
+- accessibility (WCAG AA) grade \`5/10\` or below → \`required\` (legal / inclusion baseline; never \`consider\` for accessibility — escalate the standard ladder by one tier).
+- accessibility grade \`2/10\` or below → \`critical\` (blocks ship in every ceremonyMode; e.g. unlabelled buttons that are unreachable by screen reader).
+
+**Above-7 grades are recorded but emit no findings.** Grades of \`6/10\` are borderline — record the grade in the iteration block but emit no finding (the dimension is acceptable, not exemplary). Grades of \`7/10\` and above record the dimension as a positive observation (folds into the \`What's done well\` section when load-bearing; e.g. "type system: 9/10 — diff reuses the existing 4-tier scale; no one-off font-sizes introduced").
+
+**AI-slop check (cross-cuts the seven dimensions).** Before scoring, scan the diff for the canonical AI-slop signals — they typically tank multiple dimensions at once and deserve an explicit callout:
+
+- 3-column feature grids with identical cards regardless of metric importance;
+- purple/blue gradients used decoratively without semantic intent;
+- icons in colored circles with no functional meaning;
+- uniform border-radius applied to every surface (cards, buttons, inputs, modals all 8px);
+- generic SaaS landing-page composition (hero + features grid + testimonials + CTA) without product-specific reasoning;
+- "modern and clean" or "sleek" as the entire design direction (no functional reasoning visible in the diff or plan.md);
+- stock-photo hero images;
+- dashboard with N identical metric cards regardless of metric importance.
+
+When the diff matches **two or more** AI-slop signals, raise an additional umbrella finding under the design-quality axis (severity=required, axis=design-quality) titled \`AI-slop pattern detected\` that names every signal that fired. The fix is product-specific functional design thinking, not a single dimension regrade — recommend the architect re-author the affected slice's plan.md \`## Frame\` section with explicit user-needs reasoning.
+
+**Skip rules:**
+
+- All three gating conditions absent — emit zero findings; note "design-quality: skipped (no design surface)" in the iteration block (see Gating rule above).
+- The diff is purely backend even though triage flagged design surface (e.g. the user said "improve the API powering the dashboard" — triage matched \`dashboard\`, but the diff only touches \`*.ts\` API routes) — the axis fires the gate but emits zero findings because no UI files are in the diff. Note "design-quality: gate fired but zero UI files in diff; skipping per-dimension grading" in the iteration block. This honest-skip behavior keeps the gate forgiving on false-positive triage flags.
+- \`triage.downgradeReason == "no-git"\` does NOT skip the axis — design quality is independent of git history; run the rubric against the working-tree diff via \`git diff --no-index\` or direct file reads.
+
+**Common rationalizations** _(cross-cutting rows for completion / verification live in \`.cclaw/lib/anti-rationalizations.md\`; the four rows below are design-quality-axis-specific to this gate):_
+
+| rationalization | rebuttal |
+| --- | --- |
+| "It's a small diff — design quality doesn't matter at this scale." | The axis is gated on surface, not diff size. A 30-line CSS change can ship a WCAG AA contrast regression that affects every page using the token. The rubric is dimension-grading, not workload-grading; small diffs simply mean fewer dimensions are exercised — grade the ones that ARE exercised, skip the rest as N/A. |
+| "The user didn't ask for a design review — I'll skip the axis." | The axis is automatic when the gate fires; the user's task wording is the *trigger*, not the *gate*. \`/cc add a button to the dashboard\` IS a design surface; the design-quality axis fires whether or not the user said the word "design". |
+| "Accessibility is the user's responsibility — I just ship the visual design." | NO. WCAG AA is a baseline, not an opt-in. Below-6 accessibility grades escalate to \`required\` automatically (one tier above the standard \`consider\` ladder); below-2 grades are \`critical\`. The reviewer ships the gate, the builder ships the fix. |
+| "I'll grade everything 7/10 to avoid emitting findings — the diff is fine." | NO. Grades are **dimension-grounded**, not vibe-grounded — every grade carries an explicit \`what a 10 looks like\` reference that anchors the call. A reviewer who silently calibrates 7/10 to "no findings emitted" reintroduces the AI-slop failure mode the axis was designed to catch. Grade honestly; if every dimension genuinely lands 7+, the artifact section is short and that's correct. |
 
 ## Modes
 
@@ -336,6 +398,12 @@ You write to \`flows/<slug>/review.md\`. Append a new iteration block AND mainta
   - Fresh-file claims must be verifiable: \`git log --oneline -1 -- <path>\` returns empty for a fresh file; a non-empty SHA falsifies the claim.
   - For each AC, run \`git show --stat <verify(AC-N) SHA>\`; the verify commit's diff MUST be empty OR contain only test files. A production-code touch in a verify commit is severity=critical (axis=correctness).
   - Pre-v8.63 archived flows still use the \`(AC-[0-9]+)\` grouping with \`Touch surface\` declared per AC; auto-detect from plan.md shape.
+
+[design-quality]  (v8.70+; gated on walkDesignQualityAxis envelope flag OR triage.surfaces ∩ {ui, design, frontend, ux} OR UI files in diff; see "Design-quality axis details" above)
+  - Grade each of seven dimensions 0-10 with an explicit "what a 10 looks like" reference: visual hierarchy, type system consistency, color system, spacing rhythm, interaction affordances, accessibility (WCAG AA), responsive behavior.
+  - Below-6 grades become findings (severity=consider by default; ≤3 escalates to required; accessibility ≤5 escalates one tier; accessibility ≤2 is critical).
+  - Run the AI-slop check: 3-column feature grids, decorative gradients, icons in colored circles, uniform border-radius, generic SaaS landing composition, "modern and clean" as the entire design direction, identical metric cards. ≥2 signals firing → umbrella required finding.
+  - Skip silently when no design surface is present; when the gate fires but the diff has zero UI files, skip per-dimension grading and note the honest-skip reason.
 \`\`\`
 
 A \`yes\` on any item is a finding. Pick the axis and severity per the rules above; cite \`file:line\` and propose the fix.
@@ -705,7 +773,7 @@ Return:
 \`\`\`
 Stage: review  ✅ complete  |  ⏸ paused  |  ❌ blocked
 Artifact: .cclaw/flows/<slug>/review.md
-What changed: <iteration N — decision={clear|warn|block|cap-reached}; M findings (axes: c=N tq=N r=N a=N cb=N s=N p=N ed=N)>
+What changed: <iteration N — decision={clear|warn|block|cap-reached}; M findings (axes: c=N tq=N r=N a=N cb=N s=N p=N ed=N [qae=N] [dq=N])>
 AC verified: <strict: "AC-1=yes, AC-2=yes, AC-3=no"  |  soft: "feature=yes"  |  inline: "n/a">
 Open findings: <count of severity ∈ {critical, required} with status=open>
 Confidence: <high | medium | low>

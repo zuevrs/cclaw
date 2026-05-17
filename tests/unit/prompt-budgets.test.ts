@@ -75,8 +75,21 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // Z-N severity, security-axis bypass guardrails). Growth justified in
     // CHANGELOG.md (v8.62 — unified flow + kill design + remove
     // security-reviewer).
-    maxLines: 850,
-    maxChars: 85000
+    //
+    // v8.70 — design-quality reviewer axis (gated): the eleventh axis
+    // grades seven design dimensions 0-10 with explicit "what a 10 looks
+    // like" references; below-6 grades become findings. The new section
+    // adds the per-dimension rubric, gating rule, AI-slop check, severity
+    // ladder, skip rules, and anti-rationalization rows. Growth lands
+    // ~+65 lines / ~+10k chars over the v8.62 envelope; budget raised to
+    // 1100 lines / 100000 chars (≈26% line headroom + ≈5% char headroom
+    // over current ~811 lines / ~95k chars). The 1100-line ceiling matches
+    // the v8.70 slug spec's escalation trigger ("stop and report if
+    // design-quality axis prose pushes reviewer.ts past 1100 lines"), so
+    // this assertion fires alongside the implementation tripwire. Growth
+    // justified in CHANGELOG.md (v8.70 — design-quality reviewer axis).
+    maxLines: 1100,
+    maxChars: 100000
   },
   {
     id: "builder",
