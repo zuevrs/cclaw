@@ -1,6 +1,62 @@
 # Changelog
 
 
+## 8.83.0 — One-way door gate (v8.79 work)
+
+### Why
+
+v8.74 introduced the mandatory `Reversibility:` field on every D-N in plan.md (architect-authored, strict mode) and wired the cross-model critic to auto-fire on any `one-way` decision (data migrations, public-API removals, schema rewrites, destructive auth / cryptography changes, payment-side commits). The cross-model critic catches "did the build actually deliver on the irreversible commits?" — but it fires AFTER the build lands. The User Sovereignty principle in the v8.74 ethos preamble says irreversible decisions deserve explicit confirmation BEFORE the build burns context.
+
+v8.79 plugs that gap: after the architect's slim summary returns AND before plan-critic dispatch, the orchestrator scans the freshly-written plan.md for any `## Decisions` D-N marked `Reversibility: one-way`. When ≥1 hit is found, the orchestrator surfaces a structured ask with three options — `confirm` / `edit` / `cancel` — and pauses the flow. The pause is the human-in-the-loop counterpart to the v8.74 cross-model critic (which is the model-in-the-loop counterpart): both surfaces fire on the same condition, but at different points in the lifecycle and against different lenses.
+
+Two-way / mostly-two-way decisions are NOT user-pause-worthy. The cheap-revert affordance is the whole point of the Reversibility classification, and burning a user turn on every Decisions block would be the symmetry trap (every flow has decisions; only one-way decisions need explicit confirmation). Soft-ceremony plans without a Decisions section silently pass the scan (0 hits = no gate); inline (lite) ceremony skips the gate structurally — the path is just `["build"]` with no plan stage, no architect, no Decisions section to scan.
+
+The pattern lineage is well-established:
+
+- **gstack `ETHOS.md > User Sovereignty`** ("the agent earns trust by *checking with the user* on irreversible work, not by silently powering through") — the principle is already in cclaw's v8.74 ethos preamble; v8.79 wires the user-facing surface that puts the principle into practice.
+- **Bezos's one-way / two-way door framing** (already cited in `src/types.ts > Reversibility`) — the cost of getting it wrong scales with whether the decision can be cheaply undone. The pause is the slow-deliberate-review affordance the framing prescribes.
+- **v8.74 cross-model critic trigger** — same condition (`Reversibility: one-way` in plan.md), different point in the lifecycle. The two surfaces are complementary: the gate is "do you, the user, accept these irreversible commits?"; the cross-model critic is "does a second model agree the build delivers on what you accepted?".
+
+### What changed
+
+**Deliverable 1 — New types (`src/types.ts`).**
+
+- New `RECOMMENDED_NEXT` const array + `RecommendedNext` type union — lifts the canonical `Recommended next` slim-summary enum from prose into a typed const. Existing values preserved (`continue` / `review-pause` / `fix-only` / `cancel` / `accept-warns-and-ship`); new value `awaiting-one-way-confirmation` added for the architect's slim summary when its plan contains ≥1 one-way D-N.
+- New `ONE_WAY_DOOR_CHOICES` const + `OneWayDoorChoice` type union (`"confirm" | "edit" | "cancel"`) — the three options the structured ask surfaces.
+- New `OneWayDoorConfirmation` interface (`{ decisionIds: string[]; userChoice?: OneWayDoorChoice; confirmedAt?: string }`) — the persisted record of the gate's state. When the gate is in flight (architect returned, user hasn't picked yet), `userChoice` is absent; once the user picks, `userChoice` + `confirmedAt` are stamped.
+
+**Deliverable 2 — `oneWayDoorConfirmation` on flow state (`src/flow-state.ts`).**
+
+- New optional `oneWayDoorConfirmation?: OneWayDoorConfirmation | null` field on `FlowStateV82`. Validator (`assertFlowStateV82`) checks shape on read: object (or null) with array `decisionIds` of non-empty `D-N` strings, optional `userChoice` matching the three-value enum, optional string `confirmedAt`. Pre-v8.79 state files lack the field; readers default to absent — backward-compat preserved.
+
+**Deliverable 3 — Orchestrator gate prose (`src/content/start-command.ts`).**
+
+- New `#### One-way Door Gate (v8.79; user-facing pause between architect and plan-critic)` section under Dispatch. Names the trigger (≥1 `Reversibility: one-way` D-N in plan.md), the placement (AFTER architect, BEFORE plan-critic), the lite-ceremony exemption (inline skips structurally), the flow-state transitions (architect-complete → awaiting-one-way-confirmation → plan-critic | architect-revision | aborted), and the verbatim structured-ask payload (header + D-N bullet list + User Sovereignty rationale + `Choose: confirm | edit | cancel`).
+- `Recommended next` enum block in the slim-summary contract extended with the new `awaiting-one-way-confirmation` value + its per-value documentation.
+- Hard-gate logic block extended with a new bullet routing `Recommended next == "awaiting-one-way-confirmation"` through the gate.
+- Both inline references (the slim-summary enum, the hard-gate logic) cross-reference the section under Dispatch so the orchestrator's gate-firing logic is anchored to a single source of truth.
+
+**Deliverable 4 — Architect slim-summary update (`src/content/specialist-prompts/architect.ts`).**
+
+- Slim-summary `Recommended next` line extended to `<build | awaiting-one-way-confirmation>`; the optional `Notes:` line examples grew one entry naming the one-way D-N comma list.
+- New `**One-way Door Gate signal (v8.79; strict mode only).**` paragraph immediately after the slim summary template documents the new variant — when ≥1 D-N is `Reversibility: one-way`, emit `awaiting-one-way-confirmation` instead of `build`; the orchestrator surfaces the gate. The rationale cites User Sovereignty + the v8.74 cross-model critic as the post-build counterpart.
+
+**Deliverable 5 — Tests (`tests/unit/v879-one-way-door-gate.test.ts`).**
+
+- 46 assertions across 7 describe blocks: RecommendedNext + OneWayDoorChoice enum vocabularies; OneWayDoorConfirmation flow-state shape + validator (positive + negative cases for decisionIds / userChoice / confirmedAt bounds); architect slim-summary maps one-way D-N to the new variant; orchestrator gate is present in start-command; structured-ask payload shape; flow-state transitions documented (3 outcomes); lite ceremony skips the gate; types + flow-state cross-references; CHANGELOG + version bump.
+
+### Budget bumps
+
+- `tests/unit/v822-orchestrator-slim.test.ts` — start-command body char cap 125k → 135k (+10k for the new One-way Door Gate section, the new `awaiting-one-way-confirmation` enum value documented in the slim-summary contract + hard-gate logic). Line cap unchanged (800).
+- `tests/unit/v831-path-aware-trimming.test.ts` — body char cap 125k → 135k (matches the v8.22 bump); inline-path char cap 125k → 135k (same shape).
+
+### Release notes draft
+
+- New structured pause between architect slim-summary and plan-critic when any D-N is marked `Reversibility: one-way`; user chooses `confirm` / `edit` / `cancel` before build burns context.
+- Matches User Sovereignty principle in the ethos preamble; lite ceremony skips the gate (trivial work).
+- Architect slim-summary's `Recommended next` field returns `awaiting-one-way-confirmation` when plan contains one-way decisions.
+
+
 ## 8.82.0 — Iterative-clarify (per-dimension ambiguity scoring; v8.78 work)
 
 ### Why

@@ -1,6 +1,7 @@
 import {
   CEREMONY_MODES,
   FLOW_STAGES,
+  ONE_WAY_DOOR_CHOICES,
   POSTURES,
   RESEARCH_LENSES,
   RESEARCH_MODES,
@@ -16,6 +17,8 @@ import {
   type CriticEscalation,
   type CriticVerdict,
   type FlowStage,
+  type OneWayDoorChoice,
+  type OneWayDoorConfirmation,
   type PlanCriticVerdict,
   type Posture,
   type QaEvidenceTier,
@@ -108,6 +111,15 @@ function isResearchRevisionKind(value: unknown): value is ResearchRevision["kind
 
 function isClarifyDimension(value: unknown): value is ClarifyDimension {
   return typeof value === "string" && (CLARIFY_DIMENSIONS as readonly string[]).includes(value);
+}
+
+/**
+ * v8.79: narrow check for the {@link OneWayDoorChoice} enum. Used by
+ * {@link assertFlowStateV82} to validate
+ * `oneWayDoorConfirmation.userChoice` on read.
+ */
+function isOneWayDoorChoice(value: unknown): value is OneWayDoorChoice {
+  return typeof value === "string" && (ONE_WAY_DOOR_CHOICES as readonly string[]).includes(value);
 }
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
@@ -529,6 +541,43 @@ export interface FlowStateV82 {
    * the array is preserved as the audit trail for compound learning.
    */
   clarifyRounds?: ClarifyRoundState[];
+  /**
+   * One-way Door Gate confirmation — stamped when the architect's slim
+   * summary returns `Recommended next: awaiting-one-way-confirmation`
+   * (i.e. the plan contains at least one D-N with `Reversibility:
+   * one-way`). The orchestrator surfaces a structured pause to the
+   * user with three options:
+   *
+   * - `confirm` — proceed to plan-critic (or directly to builder when
+   *   plan-critic's strict gate is off); the irreversible commits are
+   *   user-accepted.
+   * - `edit` — orchestrator surfaces a stop-and-report status block
+   *   asking the user to edit plan.md (typically to soften reversibility
+   *   or split the decision into a two-way + one-way pair) and re-invoke
+   *   `/cc` once done.
+   * - `cancel` — orchestrator routes to `/cc-cancel`.
+   *
+   * The gate matches the User Sovereignty principle in the v8.74 ethos
+   * preamble: irreversible decisions deserve explicit confirmation
+   * before build burns context. The v8.74 cross-model critic auto-fires
+   * on the same condition (any `Reversibility: one-way` D-N) but does so
+   * AFTER the build — the v8.79 gate puts the human in the loop BEFORE
+   * the build burns context.
+   *
+   * **Lite-ceremony exemption.** On `triage.ceremonyMode == "inline"`
+   * the gate is structurally skipped (the path is just `["build"]`;
+   * there is no architect dispatch, no plan.md, no D-N table to scan).
+   * The Reversibility field machinery itself stays on the type for any
+   * future strict-mode flow that resumes from inline.
+   *
+   * Optional + back-compat: pre-v8.79 state files lack the field;
+   * readers MUST default to `null`/absent (the gate never fired). When
+   * the gate is in flight (architect returned but user hasn't picked
+   * yet), the field is present with `decisionIds` populated and
+   * `userChoice` absent — the orchestrator reads that combination as
+   * the canonical "awaiting one-way confirmation" signal.
+   */
+  oneWayDoorConfirmation?: OneWayDoorConfirmation | null;
 }
 
 /**
@@ -1270,6 +1319,37 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
       if (typeof r.question !== "string") {
         throw new Error("clarifyRounds.question must be a string");
       }
+    }
+  }
+  if (state.oneWayDoorConfirmation !== undefined && state.oneWayDoorConfirmation !== null) {
+    if (
+      typeof state.oneWayDoorConfirmation !== "object" ||
+      Array.isArray(state.oneWayDoorConfirmation)
+    ) {
+      throw new Error(
+        "flow-state.oneWayDoorConfirmation must be an object, null, or absent"
+      );
+    }
+    const conf = state.oneWayDoorConfirmation as Partial<OneWayDoorConfirmation>;
+    if (!Array.isArray(conf.decisionIds)) {
+      throw new Error("flow-state.oneWayDoorConfirmation.decisionIds must be an array");
+    }
+    for (const id of conf.decisionIds) {
+      if (typeof id !== "string" || id.length === 0) {
+        throw new Error(
+          "flow-state.oneWayDoorConfirmation.decisionIds entries must be non-empty D-N strings"
+        );
+      }
+    }
+    if (conf.userChoice !== undefined && !isOneWayDoorChoice(conf.userChoice)) {
+      throw new Error(
+        `Invalid oneWayDoorConfirmation.userChoice: ${String(conf.userChoice)} (expected one of ${ONE_WAY_DOOR_CHOICES.join(" | ")})`
+      );
+    }
+    if (conf.confirmedAt !== undefined && typeof conf.confirmedAt !== "string") {
+      throw new Error(
+        "flow-state.oneWayDoorConfirmation.confirmedAt must be a string or absent"
+      );
     }
   }
 }

@@ -838,11 +838,13 @@ Slices: <strict only: "<N> total, <X> independent, <Y> dependent"; omit on soft>
 Criteria count: <strict only: "<M> AC, all linked to slices via verifiedBy"; soft path emits "<M> testable conditions">
 Open findings: 0
 Confidence: <high | medium | low>
-Recommended next: build
-Notes: <one optional line; e.g. "needs_redesign: true" or "scope feels larger than triage; recommend re-triage" or "feasibility_stamp=red; blockers: <list>" or "coverage-gap: AC-2 has no verifying slice">
+Recommended next: <build | awaiting-one-way-confirmation>
+Notes: <one optional line; e.g. "needs_redesign: true" or "scope feels larger than triage; recommend re-triage" or "feasibility_stamp=red; blockers: <list>" or "coverage-gap: AC-2 has no verifying slice" or "one-way decisions: D-1, D-3 (v8.79 gate will fire)">
 \`\`\`
 
 The \`Slices:\` line is the at-a-glance work-unit count the orchestrator surfaces to the user (e.g. \`5 total, 3 independent, 2 dependent\` — the independent count tells the user how much parallelism is available, the dependent count how much is sequenced). The \`Criteria count:\` line is the verification count, kept separate from slices so the reader sees the work-vs-verification split.
+
+**One-way Door Gate signal (v8.79; strict mode only).** Set \`Recommended next: awaiting-one-way-confirmation\` (instead of the default \`build\`) when **at least one** D-N row in your plan.md \`## Decisions\` table is marked \`Reversibility: one-way\` (irreversible decisions: data migrations, public-API removals, schema rewrites, destructive auth / cryptography changes, payment-side commits — the same triggers the v8.74 cross-model critic fires on). When the recommendation is \`awaiting-one-way-confirmation\`, also stamp \`Notes:\` with a verbatim comma-separated list of the one-way D-N ids (e.g. \`Notes: one-way decisions: D-1, D-3\`) so the orchestrator's gate scan has a redundant signal to cross-check against the plan.md scan. The orchestrator will surface a structured ask to the user (\`confirm\` / \`edit\` / \`cancel\`) BEFORE dispatching plan-critic or plan-design — the User Sovereignty principle in the v8.74 ethos preamble (irreversible decisions deserve explicit confirmation before build burns context). When every D-N is \`two-way\` / \`mostly-two-way\` (the common case), continue to emit \`Recommended next: build\` verbatim — the gate is for one-way commits only. Soft / inline ceremonies have no Decisions section and therefore never set this value; you remain on \`build\` (soft) or skip authoring entirely (inline).
 
 \`Confidence\` reports how sure you are that this plan will hold up under the build. Drop to **medium** when one or more AC could be rewritten after the builder sees the real interface, or when topology hinges on a load assumption you have not measured, or when an architect decision was made on thin evidence. Drop to **low** when key inputs were missing (the prompt was vague, target files were unreadable, or you couldn't run the relevant probes). The orchestrator treats \`low\` as a hard gate.
 

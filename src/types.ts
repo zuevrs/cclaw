@@ -1706,6 +1706,90 @@ export const CLARIFY_EXIT_AMBIGUITY_THRESHOLD = 0.25;
 export const CLARIFY_ARCHITECT_ROUND_CAP = 5;
 export const CLARIFY_RESEARCH_ROUND_CAP = 8;
 
+/**
+ * Canonical `Recommended next` enum that every specialist's slim
+ * summary uses. Lifted out of prose into a typed const so the
+ * orchestrator + tests can refer to a single source of truth.
+ *
+ * Pre-v8.79 the field was free-text prose pinned by per-specialist
+ * documentation (`continue` / `review-pause` / `fix-only` / `cancel` /
+ * `accept-warns-and-ship` for the canonical surface; `build` / `review`
+ * / `iterate` / `block-ship` etc. for specialist-specific dialects).
+ * The v8.79 contract adds a new value, **`awaiting-one-way-confirmation`**,
+ * that the architect emits when its plan contains at least one D-N
+ * marked `Reversibility: one-way`; the orchestrator parses the value and
+ * surfaces a structured pause to the user BEFORE dispatching plan-critic
+ * or plan-design. The pause matches the User Sovereignty principle in
+ * the ethos preamble — irreversible decisions deserve explicit
+ * confirmation before build burns context.
+ *
+ * Existing values are preserved verbatim so v8.78 and earlier specialist
+ * prompts continue to type-check. Specialists that have their own dialect
+ * (critic emits `iterate` / `block-ship`; plan-critic emits `revise` /
+ * `cancel`; investigator emits `direct-fix` / `needs-plan` / etc.)
+ * still document their own values inline in their prompts — the canonical
+ * enum is the *orchestrator's* parse target, not a hard constraint on
+ * every specialist's slim summary.
+ */
+export const RECOMMENDED_NEXT = [
+  "continue",
+  "review-pause",
+  "fix-only",
+  "cancel",
+  "accept-warns-and-ship",
+  "awaiting-one-way-confirmation"
+] as const;
+export type RecommendedNext = (typeof RECOMMENDED_NEXT)[number];
+
+/**
+ * User choice at the One-way Door Gate — the structured pause the
+ * orchestrator surfaces between architect slim-summary and plan-critic
+ * dispatch when the plan contains any `Reversibility: one-way` D-N.
+ *
+ * - `confirm` — user accepts the irreversible commits; orchestrator
+ *   proceeds to plan-critic (or directly to builder when plan-critic's
+ *   strict gate is off).
+ * - `edit` — user wants to revise the plan; orchestrator surfaces a
+ *   stop-and-report status block asking the user to edit `plan.md`
+ *   (typically to soften reversibility or split the decision) and
+ *   re-invoke `/cc` once done.
+ * - `cancel` — user wants to abort the flow; orchestrator routes to
+ *   `/cc-cancel`.
+ */
+export const ONE_WAY_DOOR_CHOICES = ["confirm", "edit", "cancel"] as const;
+export type OneWayDoorChoice = (typeof ONE_WAY_DOOR_CHOICES)[number];
+
+/**
+ * Persisted state of the One-way Door Gate confirmation. Stamped on
+ * `flow-state.json > oneWayDoorConfirmation` when the architect's slim
+ * summary returns `Recommended next: awaiting-one-way-confirmation`.
+ * Cleared / reset on `/cc-cancel` and by the finalize step.
+ *
+ * - `decisionIds` — the `D-N` ids the architect flagged as
+ *   `Reversibility: one-way`. Mirrors the audit trail the user sees in
+ *   the structured ask payload; downstream specialists may read it as
+ *   "these are the decisions whose blast radius the user explicitly
+ *   confirmed".
+ * - `userChoice` — the user's pick at the gate (`confirm` / `edit` /
+ *   `cancel`). When the gate is in flight (architect returned but the
+ *   user hasn't picked yet), the field is absent — the orchestrator
+ *   reads `flow-state.json > currentStage == "plan"` AND
+ *   `lastSpecialist == "architect"` AND `oneWayDoorConfirmation` set
+ *   AND `userChoice` absent as the canonical "awaiting user" signal.
+ * - `confirmedAt` — ISO timestamp the user picked; pure telemetry.
+ *
+ * Optional + back-compat: pre-v8.79 state files lack the field; readers
+ * MUST default to `null`/absent (the gate never fired). Immutable for
+ * the flow's lifetime — re-architects after `edit` produce a fresh
+ * record on the next architect dispatch (the prior record is preserved
+ * in the audit trail under `plan.md > ## Decisions`).
+ */
+export interface OneWayDoorConfirmation {
+  decisionIds: string[];
+  userChoice?: OneWayDoorChoice;
+  confirmedAt?: string;
+}
+
 export interface CliContext {
   cwd: string;
   stdout: NodeJS.WriteStream;
