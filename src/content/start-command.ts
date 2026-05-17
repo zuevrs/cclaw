@@ -492,6 +492,17 @@ After every investigator dispatch the orchestrator patches:
 - \`investigatorDispatchedAt\` — ISO timestamp.
 - \`lastSpecialist: "investigator"\` — stamped in the same write.
 
+### Defense-in-depth envelope propagation (v8.81)
+
+When the investigator's slim summary carries a \`Defense-in-depth: <yes|no>\` line (the v8.81 conditional line that fires when investigator Phase 4's gate fired — see \`investigator.ts\`'s \`## Output — slim summary\` section), the orchestrator **copies the flag onto the builder dispatch envelope AND persists it on flow-state.json** before dispatching builder (on \`direct-fix\`) or architect→builder (on \`needs-plan\`). The protocol is mechanical, single-source:
+
+1. Read the investigator slim-summary line: \`Defense-in-depth: yes\` or \`Defense-in-depth: no\`. Absent line reads as \`no\` (the gate did not fire; back-compat with the seven-line pre-v8.81 slim summary).
+2. Stamp \`defense-in-depth: <yes|no>\` on the builder dispatch envelope (the dispatch payload the builder reads). On \`direct-fix\` the stamp lands on the immediate builder dispatch; on \`needs-plan\` the stamp travels through the architect envelope and rides on every downstream builder dispatch in the same flow (the same envelope-inheritance discipline as \`priorInvestigation\`).
+3. Persist the same value on \`flow-state.json > builderEnvelope.defenseInDepth\` (string \`"yes"\` / \`"no"\`) in the same write as the post-investigator \`lastSpecialist\` stamp. The persisted field is the resume + reviewer-audit + compound-learning surface; the dispatch envelope is what the builder actually reads.
+4. Pre-v8.81 state files lack \`builderEnvelope\` entirely; readers default to absent → \`no\` (the validator accepts absent or \`{ defenseInDepth: "yes" | "no" }\`; any other value is a hard schema error).
+
+When the envelope flag is \`yes\` the builder implements **all named (non-n/a) layers from \`investigation.md > ## Defense-in-depth (4 layers)\`** as part of the root-cause fix commit (NOT as a follow-up commit) — see \`builder.ts\`'s "Debug-branch defense-in-depth mode" section for the read-then-implement protocol the builder runs.
+
 ### When the gate does NOT fire
 
 When \`triage.taskShape\` is absent (pre-v8.77 state files) OR \`triage.taskShape\` is \`"build"\` OR \`triage.taskShape\` is \`"research"\` (the latter is record-keeping only — research flows fork on the Detect hop and never see triage), the orchestrator runs the pre-v8.77 path verbatim: architect → plan-critic? → plan-design? → builder → qa? → reviewer → critic → ship. The investigator does NOT dispatch; no \`investigation.md\` is written; no \`priorInvestigation\` field is added to envelopes. The v8.77 wiring is purely additive on the debug branch.

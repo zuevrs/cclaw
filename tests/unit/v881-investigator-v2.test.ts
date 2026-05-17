@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BUILDER_PROMPT,
   INVESTIGATOR_PROMPT
 } from "../../src/content/specialist-prompts/index.js";
+import { START_COMMAND_BODY } from "../../src/content/start-command.js";
+import {
+  FLOW_STATE_SCHEMA_VERSION,
+  LegacyFlowStateError,
+  assertFlowStateV82,
+  createInitialFlowState
+} from "../../src/flow-state.js";
+import type { BuilderEnvelope } from "../../src/types.js";
 
 /**
  * v8.81 — Investigator v2: assumption audit + defense-in-depth + post-mortem.
@@ -383,5 +392,134 @@ describe("v8.81 — anti-rationalization table grew to cover the three new disci
     const tableSection = INVESTIGATOR_PROMPT.slice(tableIdx, tableEnd);
     const rowCount = (tableSection.match(/\(v8\.81\)/g) ?? []).length;
     expect(rowCount).toBeGreaterThanOrEqual(8);
+  });
+});
+
+/**
+ * v8.81 — Defense-in-depth envelope propagation (fix; v8.85.1).
+ *
+ * v8.81 declared the `defense-in-depth: yes/no` contract on the
+ * investigator slim summary but never wired the downstream propagation:
+ *
+ *   - The orchestrator prompt (`start-command.ts`) never instructed the
+ *     orchestrator to copy the flag from the slim summary onto the
+ *     builder envelope or persist it on `flow-state.json`.
+ *   - The builder prompt (`builder.ts`) never named the envelope field,
+ *     so even if the orchestrator stamped it the builder wouldn't read
+ *     it (and the "implement all named layers as part of the root-cause
+ *     fix commit" rule lived only in the investigator's prompt).
+ *   - The flow-state validator (`flow-state.ts`) had no clause for the
+ *     persisted field, so a state file with the new field would either
+ *     round-trip silently (no enforcement) or fail with a generic error.
+ *
+ * The v8.81 AC test suite passed because AC-4 + AC-6 only greppped the
+ * investigator prompt for the contract strings; downstream propagation
+ * was never verified.
+ *
+ * The tripwires below pin the four downstream surfaces so the gap
+ * cannot reopen: the orchestrator paragraph that names the copy
+ * protocol, the builder paragraph that names the read-then-implement
+ * protocol, the validator's accept-yes-no / reject-bad-value behaviour,
+ * and the `BuilderEnvelope` type export.
+ */
+describe("v8.81 defense-in-depth envelope propagation (fix)", () => {
+  it("start-command.ts orchestrator prompt names the `defense-in-depth` envelope field", () => {
+    expect(START_COMMAND_BODY).toMatch(/defense-in-depth/);
+  });
+
+  it("start-command.ts orchestrator prompt names the persisted `builderEnvelope.defenseInDepth` flow-state path", () => {
+    expect(START_COMMAND_BODY).toMatch(/builderEnvelope\.defenseInDepth/);
+  });
+
+  it("start-command.ts orchestrator prompt instructs the orchestrator to COPY the flag from the investigator slim summary", () => {
+    expect(START_COMMAND_BODY).toMatch(/Defense-in-depth:\s*<?\s*yes/i);
+    expect(START_COMMAND_BODY).toMatch(/slim[-\s]summary/i);
+    expect(START_COMMAND_BODY).toMatch(
+      /(copies?|copy|stamp(s|ed)?|reads?) .*(Defense-in-depth|defense-in-depth|builderEnvelope)/i
+    );
+  });
+
+  it("start-command.ts orchestrator prompt declares the back-compat default (absent → no) for pre-v8.81 state files", () => {
+    const idx = START_COMMAND_BODY.indexOf("Defense-in-depth envelope propagation");
+    expect(idx).toBeGreaterThan(0);
+    const section = START_COMMAND_BODY.slice(idx, idx + 4000);
+    expect(section).toMatch(/pre-v8\.81/);
+    expect(section).toMatch(/default(s)? to (`?no`?|absent)/i);
+  });
+
+  it("builder.ts builder prompt names the `defense-in-depth` envelope field it reads", () => {
+    expect(BUILDER_PROMPT).toMatch(/defense-in-depth/);
+  });
+
+  it("builder.ts builder prompt declares the read-then-implement protocol against `## Defense-in-depth (4 layers)`", () => {
+    expect(BUILDER_PROMPT).toMatch(/## Defense-in-depth \(4 layers\)/);
+    expect(BUILDER_PROMPT).toMatch(/read[-\s].*investigation\.md|reads? .*investigation\.md/i);
+  });
+
+  it("builder.ts builder prompt declares the 'implement ALL named (non-n/a) layers' rule when the flag is `yes`", () => {
+    expect(BUILDER_PROMPT).toMatch(/all (named )?\(?non-n\/a\)? layers|every (named )?\(?non-n\/a\)? layer/i);
+  });
+
+  it("builder.ts builder prompt declares layers ship in the root-cause fix commit (NOT as a follow-up)", () => {
+    expect(BUILDER_PROMPT).toMatch(/root-cause fix commit/i);
+    expect(BUILDER_PROMPT).toMatch(/NOT as a follow-up|not a follow-up|part of (the )?root-cause fix/i);
+  });
+
+  it("types.ts exports a `BuilderEnvelope` interface with `defenseInDepth?: 'yes' | 'no'`", () => {
+    // Compile-time witness: if BuilderEnvelope or the field shape regresses,
+    // tsc --noEmit on this test file fails. Runtime check confirms the shape
+    // accepts both literal values + absent without losing type-narrowing.
+    const yes: BuilderEnvelope = { defenseInDepth: "yes" };
+    const no: BuilderEnvelope = { defenseInDepth: "no" };
+    const absent: BuilderEnvelope = {};
+    expect(yes.defenseInDepth).toBe("yes");
+    expect(no.defenseInDepth).toBe("no");
+    expect(absent.defenseInDepth).toBeUndefined();
+  });
+
+  it("flow-state.ts assertFlowStateV82 ACCEPTS builderEnvelope.defenseInDepth = 'yes'", () => {
+    const state = createInitialFlowState("2026-05-18T00:00:00Z");
+    const withYes = { ...state, builderEnvelope: { defenseInDepth: "yes" as const } };
+    expect(() => assertFlowStateV82(withYes)).not.toThrow();
+  });
+
+  it("flow-state.ts assertFlowStateV82 ACCEPTS builderEnvelope.defenseInDepth = 'no'", () => {
+    const state = createInitialFlowState("2026-05-18T00:00:00Z");
+    const withNo = { ...state, builderEnvelope: { defenseInDepth: "no" as const } };
+    expect(() => assertFlowStateV82(withNo)).not.toThrow();
+  });
+
+  it("flow-state.ts assertFlowStateV82 ACCEPTS absent builderEnvelope (back-compat with pre-v8.81 state)", () => {
+    const state = createInitialFlowState("2026-05-18T00:00:00Z");
+    expect(() => assertFlowStateV82(state)).not.toThrow();
+    expect((state as { builderEnvelope?: BuilderEnvelope }).builderEnvelope).toBeUndefined();
+  });
+
+  it("flow-state.ts assertFlowStateV82 ACCEPTS builderEnvelope = {} (field absent on the envelope itself)", () => {
+    const state = createInitialFlowState("2026-05-18T00:00:00Z");
+    const withEmpty = { ...state, builderEnvelope: {} };
+    expect(() => assertFlowStateV82(withEmpty)).not.toThrow();
+  });
+
+  it("flow-state.ts assertFlowStateV82 REJECTS invalid builderEnvelope.defenseInDepth ('maybe')", () => {
+    const state = createInitialFlowState("2026-05-18T00:00:00Z");
+    const bogus = { ...state, builderEnvelope: { defenseInDepth: "maybe" } };
+    expect(() => assertFlowStateV82(bogus)).toThrow(/builderEnvelope\.defenseInDepth/);
+  });
+
+  it("flow-state.ts assertFlowStateV82 REJECTS non-object builderEnvelope (string, array, null)", () => {
+    const state = createInitialFlowState("2026-05-18T00:00:00Z");
+    expect(() => assertFlowStateV82({ ...state, builderEnvelope: "yes" })).toThrow(/builderEnvelope/);
+    expect(() => assertFlowStateV82({ ...state, builderEnvelope: ["yes"] })).toThrow(/builderEnvelope/);
+    expect(() => assertFlowStateV82({ ...state, builderEnvelope: null })).toThrow(/builderEnvelope/);
+  });
+
+  it("flow-state.ts schema version is unchanged (the envelope addition is additive + back-compat)", () => {
+    // The fix lands without a schema bump because the new field is optional;
+    // pre-v8.81 state files validate untouched. A future schema rev should
+    // bump FLOW_STATE_SCHEMA_VERSION and surface a LegacyFlowStateError on
+    // older shapes, but THIS fix is additive only.
+    expect(FLOW_STATE_SCHEMA_VERSION).toBe(3);
+    expect(LegacyFlowStateError).toBeDefined();
   });
 });
