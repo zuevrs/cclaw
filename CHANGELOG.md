@@ -1,6 +1,59 @@
 # Changelog
 
 
+## 8.68.0 — Two-stage per-slice review + structured implementer status
+
+### Why
+
+Pre-v8.68 the builder ran the whole strict-mode slice chain (RED → GREEN → REFACTOR per slice, then `verify(AC-N): passing` per AC) before any review fired. If the architect's plan misread the user's intent on slice 2, slices 3-N built on the wrong foundation and the post-impl reviewer caught the mismatch only after the whole chain had landed. The fix was always the same — bounce builder in fix-only on every affected slice — but the cost grew with N because the per-slice work was already on disk.
+
+Reference patterns: obra-superpowers' subagent-driven-development encodes a two-stage per-task review (spec compliance first, then code quality) inside the implementer loop itself; the same source also pins a four-value implementer status protocol (`DONE` / `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED`) the dispatcher routes deterministically. cclaw had the seven-axis post-impl reviewer + the always-auto failure matrix; v8.68 wires the same patterns at slice boundaries so issues surface where the diff is one slice wide, not where the chain has compounded.
+
+### What changed
+
+**Deliverable 1 — Builder per-slice review loop (strict mode)** (`src/content/specialist-prompts/builder.ts`).
+
+- New `## Per-slice review loop (strict mode; two-stage; mandatory)` section runs after each slice's TDD cycle (RED → GREEN → REFACTOR → commit) and BEFORE the builder moves to the next slice. Stage 1 — **spec-compliance**: does the GREEN diff implement what the AC says, nothing more, nothing less? Stage 2 — **code-quality**: is the diff well-built along the reviewer's axes, scoped to the slice's Surface? Stage 2 runs ONLY when Stage 1 returns `spec-pass`; quality review on a slice that's solving the wrong problem is wasted work.
+- Per-stage cap: 2 fix attempts. After the 2nd failed attempt on either stage, emit per-slice status `BLOCKED` (Notes line cites the persistent gap + recommended resolution). The 2-attempt cap mirrors the obra-superpowers reference and matches cclaw's existing fix-only budget (3 at the orchestrator level; 2 inside the builder for per-slice work).
+- Soft mode opt-out: the per-slice loop is strict-only. Soft mode keeps the current single end-of-build reviewer dispatch (one TDD cycle for the whole feature; reviewer's ten-axis pass is the only review).
+- Quality stage walks the axes scoped to single-slice diffs (`correctness`, `test-quality`, `readability`, `complexity-budget`, `edit-discipline`, `security` when sensitive Surface, `architecture` when public interface, `perf` when hot path). `qa-evidence` and `nfr-compliance` are intentionally deferred to the post-build reviewer — they need cross-slice context the per-slice loop doesn't have.
+- Build log gains a `Per-slice review` column (`## Slice cycles` table grows from six columns to seven; soft mode keeps the six-column shape).
+
+**Deliverable 2 — Structured implementer status protocol** (`src/types.ts`, `src/content/specialist-prompts/builder.ts`, `src/content/skills/structured-status.md`).
+
+- New `BUILDER_STATUSES = ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED"]` constant + `BuilderStatus` type on `src/types.ts`. Pre-v8.68 builder slim summaries lack the status line; back-compat readers default to `DONE` on absent (matches the existing always-auto chain behaviour).
+- Builder slim summary gains a mandatory `Status:` line between `Stage:` and `Artifact:`. Per-slice JSON `self_review` blocks gain a `status` field with the same four-value enum + a `per_slice_review` sub-block (`spec`, `quality`, `fix_attempts`). The dispatch-level Status aggregates per-slice statuses via the **monotone rule** — any per-slice `BLOCKED` contaminates the dispatch; only when every slice is `DONE` does the dispatch emit `DONE`.
+- `Notes:` line is mandatory when `Status != DONE`. Empty `Notes:` on a non-`DONE` status is a fix-only bounce — the orchestrator dispatches the builder back to populate the line. Vague Notes ("I need more context", "the slice is hard") fail the same gate; the line must name the specific input / blocker / concern.
+- Soft mode emits ONE dispatch-level Status (no per-slice aggregation; the single cycle is the unit of work). Inline mode is not dispatched; no status.
+
+**Deliverable 3 — Orchestrator handlers (deterministic)** (`src/content/runbooks-on-demand.ts > ALWAYS_AUTO_FAILURE_HANDLING`).
+
+- Always-auto failure matrix gains four new rows (one per status). `DONE` proceeds. `DONE_WITH_CONCERNS` proceeds AND appends a `## Concerns` section to `build.md` (one bullet per concern, sourced from the slim summary's `Notes:` + the build.md `## Summary > Potential concerns` bullets) for the reviewer to read as additional finding seeds. `NEEDS_CONTEXT` stops and reports with the missing input surfaced verbatim; the orchestrator does NOT auto-retry — re-running on unchanged inputs produces the same status. `BLOCKED` stops and reports with the builder's recommended resolution surfaced as plain prose; recommended-resolution vocabulary is a fixed set (`provide more context` / `break the slice smaller` / `escalate to architect` / `accept and ship as-is`); the orchestrator surfaces it verbatim and lets the user pick the recovery action.
+- New `## Builder status protocol` section in the runbook codifies per-status orchestrator behaviour, the recommended-resolution vocabulary, and the per-slice vs dispatch-level status surface + monotone aggregation rule.
+- Anti-rationalization table gains three rows covering the new statuses ("let me try once more with the same envelope", "let me auto-retry to give it one more chance", "the reviewer will catch real bugs anyway, I'll skip the `## Concerns` log").
+
+**Deliverable 4 — `structured-status` skill** (`src/content/skills/structured-status.md`, `src/content/skills.ts`).
+
+- New auto-trigger skill scoped to the `build` stage. Codifies the four canonical statuses (semantics, triggering conditions, orchestrator handlers), when the status fires (per-slice review loop end, dispatch end, mid-dispatch hard stop, fix-only completion), when NOT to apply (non-builder specialists, inline path, resume re-render, sub-builder under topological-layer dispatch), the aggregation rule, the common rationalizations, and four worked examples (three slices all clean; SL-2 with a perf concern; SL-2 NEEDS_CONTEXT; SL-3 BLOCKED on posture mismatch).
+
+**Deliverable 5 — Minimal orchestrator pointer** (`src/content/start-command.ts`).
+
+- Always-auto failure handling paragraph gains a one-line pointer to the v8.68 structured statuses (`Status: NEEDS_CONTEXT` / `BLOCKED` join the stop-and-report list; `Status: DONE_WITH_CONCERNS` proceeds AND logs concerns). ~95% of the new content lives in `runbooks/always-auto-failure-handling.md` + `skills/structured-status.md`; the body carries the inline pointer only.
+
+**Deliverable 6 — Tripwire test** (`tests/unit/v868-per-slice-review.test.ts`).
+
+- 34 assertions across 7 describe blocks: `BuilderStatus` enum membership + type round-trip + types.ts doc coverage of each status; builder prompt two-stage review section + Stage 1 / Stage 2 ordering + gating + 2-attempt cap + soft-mode opt-out + `Per-slice review` column + axis scoping; builder prompt status protocol section + all four statuses + per-status handler + monotone aggregation + Notes mandatory + slim-summary `Status:` line + per-slice JSON `status` + `per_slice_review` sub-block; `structured-status` skill file existence + AUTO_TRIGGER_SKILLS wiring + skill anatomy + all four statuses + monotone aggregation + soft-mode behaviour; orchestrator deterministic handling — start-command body mentions the new statuses, runbook rows exist for each, NEEDS_CONTEXT is stop-and-report (no auto-retry), BLOCKED carries the recommended-resolution vocabulary, DONE_WITH_CONCERNS proceeds AND logs to `build.md > ## Concerns`, per-slice vs dispatch-level surface documented, three new anti-rationalization rows; version bump (package.json + CHANGELOG entry).
+
+### Clean break
+
+Pre-v8.68 state files / builder slim summaries lack the `Status:` line; readers treat absence as `DONE` (back-compat — behaviour is byte-for-byte identical to v8.67 for shipped flows). Pre-v8.68 builder JSON `self_review` blocks lack the `status` field and the `per_slice_review` sub-block; readers default to `verified=true` interpretation where the data is missing. Soft-mode and inline-path flows are unchanged — no per-slice loop, no per-slice JSON cascade, soft mode emits ONE dispatch-level status (defaults to `DONE` when not emitted).
+
+### Budget bumps
+
+- **Builder prompt char budget** `82000 → 92000` (lines `870 → 890`). Growth lands ~+10 lines / ~+9k chars from the new `## Per-slice review loop` and `## Status protocol` sections plus the per-slice JSON shape update. Budget documented inline in `tests/unit/prompt-budgets.test.ts`. ≈2% line headroom + ≈2% char headroom over current size (868 lines / 90k chars).
+- **Start-command body budget** `80000 → 80200` (deliberate small bump per the v8.67 ship-report recommendation of 50-200 char bumps). The new content is one structured-statuses pointer line in the Always-auto failure handling paragraph; ~95% of the v8.68 orchestrator-side content lives in `runbooks/always-auto-failure-handling.md` + `skills/structured-status.md`. Budget assertions raised together in `tests/unit/v831-path-aware-trimming.test.ts` + `tests/unit/v822-orchestrator-slim.test.ts`. Line budget `545 → 545` unchanged (the bump is char-only).
+- **Combined body + runbooks soft ceiling** `180000 → 190000`. The runbook `always-auto-failure-handling.md` grew ~5k chars to absorb the four new matrix rows + the per-status orchestrator behaviour section + the recommended-resolution vocabulary + the monotone aggregation rule + the three new anti-rationalization rows. Combined total post-v8.68 is ~185k; the 190k ceiling gives one slug of headroom.
+
 ## 8.67.0 — Pre-plan clarify mode + assumption surface
 
 ### Why

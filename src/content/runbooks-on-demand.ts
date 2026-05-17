@@ -528,6 +528,9 @@ The orchestrator opens this runbook on every chain decision after a specialist r
 | plan-critic \`verdict: cancel\` OR \`verdict: revise\` after iter 1 | Stop and report. The plan-critic believes the plan is structurally broken (cancel) or the revise loop hit the iteration cap (revise iter 1). |
 | qa-runner \`verdict: blocked\` OR \`verdict: iterate\` after iter 1 | Stop and report. Browser tooling unavailable / manual steps required (blocked) or qa iterate loop hit the iteration cap (iterate iter 1). |
 | reviewer \`status: cap-reached\` (5th review/fix iteration without convergence) | Stop and report. See \`runbooks/cap-reached-recovery.md\` for the split-plan procedure. |
+| builder \`Status: NEEDS_CONTEXT\` | **Stop and report.** The builder identified a specific missing input (file, symbol, decision the plan doesn't pin) and self-rescue didn't close the gap. Status block surfaces the \`Notes:\` line verbatim so the user can see exactly what is missing. On \`/cc\` continue, the orchestrator re-dispatches the builder with the new context (typically the user edited \`CONTEXT.md\` or \`plan.md > ## Assumptions\` between the stop and the resume). No auto-retry — re-running on unchanged inputs produces the same status. See \`.cclaw/lib/skills/structured-status.md\` for the per-slice loop + aggregation rule. |
+| builder \`Status: BLOCKED\` | **Stop and report.** The builder hit an unresolvable obstacle (per-slice review failed its 2-attempt cap, posture mismatch, dependency cycle, surface conflict). Status block surfaces the \`Notes:\` line verbatim PLUS the builder's recommended resolution from a fixed set: \`provide more context\` / \`break the slice smaller\` / \`escalate to architect\` / \`accept and ship as-is\`. Orchestrator does NOT auto-retry. On \`/cc\` continue, the orchestrator resumes with the resolution applied (typically a \`plan.md\` edit, an architect re-dispatch, or a context addition). See \`.cclaw/lib/skills/structured-status.md\` § "BLOCKED" for triggering conditions. |
+| builder \`Status: DONE_WITH_CONCERNS\` | **Proceed AND log.** The builder landed the work and the per-slice reviews passed, but the builder flagged forward-looking risks. Orchestrator appends a \`## Concerns\` section to \`build.md\` (one bullet per concern, copied verbatim from the slim summary's \`Notes:\` line + the build.md \`## Summary > Potential concerns\` bullets) and chains to the next stage. The reviewer reads \`## Concerns\` as additional finding seeds. No stop fires; the user sees the concerns in the slim summary. |
 
 ## Stop-and-report status block (uniform shape)
 
@@ -569,6 +572,39 @@ The counter increments on every fix-only dispatch and resets when the correspond
 
 Catastrophic failures (git ops fail, sub-agent dispatch fail, file I/O fail) are distinct from "the sub-agent's verdict failed" — they mean the orchestrator itself could not complete a step. Always-auto treats them identically to other stops: write the stop-and-report status block with the underlying error message in \`Reason:\`, end the turn. Do NOT auto-retry catastrophic failures; the user must decide whether the underlying issue (disk full, network down, git index corrupted) is recoverable.
 
+## Builder status protocol (v8.68 — structured status routing)
+
+The builder slim summary carries a structured \`Status:\` line from a fixed set: \`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`. The orchestrator routes each status deterministically per the matrix above; this section codifies the surface behaviour. The full skill body lives at \`.cclaw/lib/skills/structured-status.md\`.
+
+### Per-status orchestrator behaviour (deterministic)
+
+- **\`DONE\`** — chain to the next stage automatically. The slim summary surfaces verbatim to the user. No extra orchestrator action.
+- **\`DONE_WITH_CONCERNS\`** — append a \`## Concerns\` section to \`.cclaw/flows/<slug>/build.md\` (one bullet per concern, sourced from the slim summary's \`Notes:\` line + the build.md \`## Summary > Potential concerns\` bullets); chain to the next stage. The reviewer reads \`## Concerns\` as additional finding seeds. The aggregation invariant is monotone (see \`structured-status.md\` § "Aggregation rule"): if the dispatch-level Status is \`DONE_WITH_CONCERNS\`, at least one per-slice block flagged a concern.
+- **\`NEEDS_CONTEXT\`** — emit the canonical stop-and-report status block (per the "Stop-and-report status block" shape above) with \`Reason: Builder NEEDS_CONTEXT — <Notes line verbatim>\`. The block surfaces the specific missing input (file, symbol, decision) in plain prose for the user. End the turn. On \`/cc\` continue, the orchestrator re-dispatches the builder with the new context in the envelope (typically the user edited \`CONTEXT.md\` or \`plan.md > ## Assumptions\` between the stop and the resume). On \`/cc-cancel\`, the cancel runtime runs as usual.
+- **\`BLOCKED\`** — emit the canonical stop-and-report status block with \`Reason: Builder BLOCKED — <Notes line verbatim>\`. The block ALSO surfaces the builder's recommended resolution as plain prose. End the turn. The orchestrator does NOT auto-retry; re-running the builder on unchanged inputs produces the same \`BLOCKED\` verdict. Recovery is \`/cc\` continue (after the user applies the recommended resolution — typically a \`plan.md\` edit, an architect re-dispatch, or a context addition) or \`/cc-cancel\` (discard).
+
+### Recommended-resolution vocabulary (BLOCKED only)
+
+The builder's \`BLOCKED\` Notes line MUST cite a recommended resolution from this fixed set:
+
+- **\`provide more context\`** — the slice's input space was thinner than the work required; the user adds the missing context to \`CONTEXT.md\` / envelope and continues. Equivalent to a delayed \`NEEDS_CONTEXT\` discovered only after the per-slice review failed.
+- **\`break the slice smaller\`** — the slice was too large or too entangled; the architect splits it into 2+ smaller slices with tighter \`Surface\` columns. Re-dispatches plan-critic (if gate fires) then builder.
+- **\`escalate to architect\`** — the slice as written has a structural issue (posture mismatch, dependency cycle, surface conflict, missing AC coverage) that the builder cannot resolve in place. Architect re-dispatches to revise plan.md.
+- **\`accept and ship as-is\`** — the blocker is real but the user judges it acceptable for this slug (typical: "the perf regression on this slice is 7%; we'll fix in a follow-up"). User edits plan.md or accepts the warnings, then \`/cc\` continues.
+
+The orchestrator surfaces the recommended resolution verbatim — it does not paraphrase or interpret. The user picks the recovery action; the orchestrator does not auto-select.
+
+### Per-slice vs dispatch-level Status
+
+Strict mode emits TWO surfaces:
+
+- **Per-slice status** lives in each slice's JSON \`self_review\` block (the \`status\` field). It drives the in-builder per-slice review loop (whether to bounce the slice through fix-only or proceed to the next slice).
+- **Dispatch-level status** lives at the top of the slim summary's \`Status:\` line. It drives the orchestrator's chain decision. The aggregation rule is **monotone**: any per-slice \`BLOCKED\` → dispatch \`BLOCKED\`; any per-slice \`NEEDS_CONTEXT\` (no \`BLOCKED\`) → dispatch \`NEEDS_CONTEXT\`; any per-slice \`DONE_WITH_CONCERNS\` (no \`BLOCKED\` / \`NEEDS_CONTEXT\`) → dispatch \`DONE_WITH_CONCERNS\`; only when every slice is \`DONE\` → dispatch \`DONE\`.
+
+The monotone rule is intentional: the orchestrator's chain decision should be conservative; one slice that needs help should not be hidden behind sibling slices that finished cleanly. Sibling slices that committed cleanly stay landed; the dispatch-level stop tells the user to resolve the blocker on the one slice that's stuck.
+
+Soft mode emits ONE dispatch-level Status (the whole feature is one cycle; no per-slice aggregation).
+
 ## Anti-rationalization table
 
 | rationalization | truth |
@@ -578,6 +614,9 @@ Catastrophic failures (git ops fail, sub-agent dispatch fail, file I/O fail) are
 | "Catastrophic error — let me retry once before reporting." | No. Catastrophic = orchestrator-level failure (git, dispatch, I/O). Retry policy is the user's call; report immediately. |
 | "Confidence: low on the slim summary — maybe the specialist was being conservative." | No. The specialist set \`Confidence: low\` because it could not verify. Stop and surface the Notes; the user decides. |
 | "I'll auto-cancel and start fresh after the 3rd failed iteration." | No. Auto-cancel is never the right move — the user might have made progress they want to keep. Stop and let the user decide between \`/cc\` and \`/cc-cancel\`. |
+| "Builder NEEDS_CONTEXT — let me try once more with the same envelope; maybe it finds it this time." | No. The builder already attempted self-rescue (re-read CONTEXT.md, grep, check \`## Assumptions\`). Re-dispatching on the same envelope produces the same result. Stop and surface the specific missing input so the user can provide it. |
+| "Builder BLOCKED — let me auto-retry to give it one more chance." | No. \`BLOCKED\` is the post-cap status (per-slice review failed its 2-attempt cap). Re-running on unchanged inputs produces the same verdict. The recommended resolution names the recovery action; surface it and let the user apply it. |
+| "Builder DONE_WITH_CONCERNS — the reviewer will catch real bugs anyway, I'll skip the \`## Concerns\` log." | No. The reviewer reads \`## Concerns\` as finding seeds; skipping the log silently drops the builder's forward-looking signal. Append the section even when it feels routine. |
 `;
 
 const CRITIC_STEPS = `# On-demand runbook — critic steps (pre-implementation + post-implementation)
