@@ -1,6 +1,51 @@
 # Changelog
 
 
+## 8.85.1 — Fix: propagate v8.81 defense-in-depth envelope to orchestrator + builder + flow-state validator
+
+### Why
+
+v8.81 introduced the investigator-v2 defense-in-depth discipline: when Phase 4's gate fires (≥3 other files match the root-cause pattern OR catastrophic-if-prod), the investigator writes a `## Defense-in-depth (4 layers)` section in `investigation.md` and adds a `Defense-in-depth: yes` line to its slim summary. The investigator prompt (`src/content/specialist-prompts/investigator.ts`) declared the downstream contract verbatim: the orchestrator copies the flag onto the builder dispatch envelope as `defense-in-depth: <yes|no>`, persists it on `flow-state.json > builderEnvelope.defenseInDepth`, and the builder reads the flag and implements all named (non-n/a) layers as part of the root-cause fix commit.
+
+The downstream surfaces never saw the flag. `src/content/start-command.ts` had zero matches for `defense`, `defenseInDepth`, or `builderEnvelope` — the orchestrator prompt never instructed the orchestrator to read the slim-summary line or stamp the envelope. `src/content/specialist-prompts/builder.ts` had zero matches — the builder didn't know the envelope field existed. `src/flow-state.ts` had no validator clause — a state file with `builderEnvelope.defenseInDepth: "yes"` round-tripped without enforcement; an invalid value (`"maybe"`) was not rejected at parse time.
+
+The v8.81 test suite passed because AC-4 + AC-6 only grepped the investigator prompt for the contract strings — they did not check downstream propagation. The gap was high-severity: the entire defense-in-depth discipline was declared but inert.
+
+### What changed
+
+**Deliverable 1 — Orchestrator envelope copy + persistence prompt (`src/content/start-command.ts`).**
+
+- New `### Defense-in-depth envelope propagation (v8.81)` block under the post-investigator flow-state patches section. Names the four-step protocol the orchestrator runs on every investigator return: read the slim-summary `Defense-in-depth: <yes|no>` line; stamp `defense-in-depth: <yes|no>` on the builder dispatch envelope (on `direct-fix` the immediate builder dispatch; on `needs-plan` the architect envelope which then rides on every downstream builder dispatch, same as `priorInvestigation`); persist on `flow-state.json > builderEnvelope.defenseInDepth`; pre-v8.81 state files lack the field and readers default to absent → `no`.
+
+**Deliverable 2 — Builder read-then-implement prompt (`src/content/specialist-prompts/builder.ts`).**
+
+- New `## Debug-branch defense-in-depth mode (v8.81; when envelope carries defense-in-depth: yes)` section after the existing direct-fix flow. Names the envelope field; declares the read-then-implement protocol (read `## Defense-in-depth (4 layers)`; bundle every non-n/a layer into the GREEN commit; cite each layer in `build.md > ## Defense-in-depth layers shipped (v8.81)` on the direct-fix path; treat n/a layers as no-op); names the hard rule that silently dropping a non-n/a layer is the v8.81 failure mode and triggers stop-and-surface (the investigation is stale; re-dispatch).
+
+**Deliverable 3 — `BuilderEnvelope` interface (`src/types.ts`).**
+
+- New `BuilderEnvelope` interface with optional `defenseInDepth?: "yes" | "no"` field. JSDoc names the v8.81 contract and the back-compat default (`undefined`/absent reads as `no`). Open shape for future envelope fields that travel investigator → orchestrator → builder + persist to state.
+
+**Deliverable 4 — Flow-state validator (`src/flow-state.ts`).**
+
+- `FlowStateV82` gains an optional `builderEnvelope?: BuilderEnvelope` field. `assertFlowStateV82` accepts absent + `{}` + `{ defenseInDepth: "yes" | "no" }`; rejects non-object (string, array, null), unknown `defenseInDepth` values (`"maybe"`, `true`, `1`), and surfaces a hard schema error naming the offending field. No schema version bump — the addition is additive + back-compat.
+
+**Deliverable 5 — Tripwire tests (`tests/unit/v881-investigator-v2.test.ts`).**
+
+- New `v8.81 defense-in-depth envelope propagation (fix)` describe block (16 tests) pinning the four downstream surfaces so the gap cannot reopen: orchestrator-prompt mentions the field + the persisted path + the copy-from-slim-summary protocol + the absent-defaults-to-no back-compat rule; builder-prompt mentions the field + the read-then-implement protocol + the "all named (non-n/a) layers" rule + the "part of the root-cause fix commit, NOT a follow-up" rule; `BuilderEnvelope` type accepts the shape; validator ACCEPTS `"yes"` / `"no"` / absent / `{}` and REJECTS `"maybe"` / non-object types.
+
+### Compatibility
+
+- Pre-v8.81 state files (no `builderEnvelope` field): validate untouched; readers default to absent → no defense-in-depth implemented; behaviour matches v8.85.0 verbatim.
+- v8.81 investigator artifacts that already have `## Defense-in-depth (4 layers)` sections: the orchestrator now actually copies the flag forward; the builder now actually reads it. The downstream behaviour matches the v8.81 contract that has been declared since the v8.81 ship.
+- Schema version unchanged (`FLOW_STATE_SCHEMA_VERSION = 3`).
+
+### Test count delta
+
+Pre-fix: 2112 passing tests (107 files).
+Post-fix: 2128 passing tests (107 files).
+Delta: +16 tripwire tests in a new describe block; no existing tests modified or removed.
+
+
 ## 8.85.0 — DevEx lens (v8.82 work)
 
 ### Why

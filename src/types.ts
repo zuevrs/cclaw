@@ -263,6 +263,31 @@ export const INVESTIGATOR_LANES = [
 export type InvestigatorLaneId = (typeof INVESTIGATOR_LANES)[number];
 
 /**
+ * v8.81: builder dispatch envelope — orchestrator-side persistence of
+ * fields the orchestrator stamps onto the builder envelope and mirrors
+ * to `flow-state.json > builderEnvelope` for cross-dispatch readers
+ * (resume on `/cc`, reviewer audit, compound-learning extraction).
+ *
+ * Currently scoped to the v8.81 defense-in-depth flag — the only
+ * envelope field that travels from investigator (read-only) to builder
+ * (write) and back into state-as-history. The interface is left open
+ * for future fields with the same shape; new fields MUST be optional
+ * (pre-v8.81 state files lack the whole object).
+ *
+ * `defenseInDepth` mirrors the investigator's slim-summary `Defense-in-
+ * depth: <yes|no>` line (set ONLY when Phase 4's gate fired — see
+ * `investigator.ts`). When `"yes"`, the builder reads
+ * `investigation.md > ## Defense-in-depth (4 layers)` and implements
+ * every named (non-n/a) layer as part of the root-cause fix commit
+ * (NOT as a follow-up commit). When `"no"` (or absent — back-compat
+ * with pre-v8.81 state files), the builder ships the root-cause fix
+ * alone.
+ */
+export interface BuilderEnvelope {
+  defenseInDepth?: "yes" | "no";
+}
+
+/**
  * Pre-v8.62 specialist ids that no longer exist. Kept as a type-level
  * reminder for permissive validators that accept old `lastSpecialist`
  * strings on read without migrating. Do not add new entries.

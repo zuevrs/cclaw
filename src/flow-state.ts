@@ -12,6 +12,7 @@ import {
   SURFACES,
   TASK_SHAPES,
   type AcceptanceCriterionState,
+  type BuilderEnvelope,
   type BuildProfile,
   type CeremonyMode,
   type CriticEscalation,
@@ -578,6 +579,28 @@ export interface FlowStateV82 {
    * the canonical "awaiting one-way confirmation" signal.
    */
   oneWayDoorConfirmation?: OneWayDoorConfirmation | null;
+  /**
+   * v8.81: persisted builder dispatch envelope (cross-dispatch
+   * surface for resume / reviewer audit / compound learning). The
+   * orchestrator stamps this when it dispatches the builder on the
+   * debug-branch direct-fix path AND the investigator's slim summary
+   * carried a `Defense-in-depth: <yes|no>` line.
+   *
+   * Currently scoped to a single field (`defenseInDepth`); when the
+   * investigator emits `Defense-in-depth: yes`, the orchestrator
+   * copies that onto the builder envelope (the dispatch payload) AND
+   * persists it here as `builderEnvelope.defenseInDepth: "yes"` so a
+   * `/cc` resume or reviewer cross-check can read the same flag the
+   * builder did. `"no"` (or an absent field — back-compat with pre-
+   * v8.81 state files) reads as "ship the root-cause fix alone, no
+   * layer additions".
+   *
+   * Optional + back-compat: pre-v8.81 state files lack the field;
+   * readers MUST default to `undefined`/absent (the gate never fired).
+   * The validator accepts absent + an object whose `defenseInDepth`
+   * is `"yes"` / `"no"` / absent; any other value is a hard error.
+   */
+  builderEnvelope?: BuilderEnvelope;
 }
 
 /**
@@ -1349,6 +1372,31 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     if (conf.confirmedAt !== undefined && typeof conf.confirmedAt !== "string") {
       throw new Error(
         "flow-state.oneWayDoorConfirmation.confirmedAt must be a string or absent"
+      );
+    }
+  }
+  // Builder dispatch envelope, persisted for cross-dispatch readers
+  // (resume on `/cc`, reviewer audit, compound learning). Optional +
+  // back-compat: pre-v8.81 state files lack the field; readers default
+  // to absent. When present, must be an object whose `defenseInDepth`
+  // is either `"yes"` / `"no"` / absent. Any other value (`"maybe"`,
+  // `true`, `1`, an array) is a hard error.
+  if (state.builderEnvelope !== undefined) {
+    if (
+      typeof state.builderEnvelope !== "object" ||
+      state.builderEnvelope === null ||
+      Array.isArray(state.builderEnvelope)
+    ) {
+      throw new Error("flow-state.builderEnvelope must be an object or absent");
+    }
+    const env = state.builderEnvelope as Partial<BuilderEnvelope>;
+    if (
+      env.defenseInDepth !== undefined &&
+      env.defenseInDepth !== "yes" &&
+      env.defenseInDepth !== "no"
+    ) {
+      throw new Error(
+        `Invalid builderEnvelope.defenseInDepth: ${String(env.defenseInDepth)} (expected "yes" | "no" | absent)`
       );
     }
   }
