@@ -26,8 +26,12 @@ function runbookBody(id: string): string {
 describe("v8.12 cleanup", () => {
   describe("Tier 0 — enum normalisation across orchestrator + specialists", () => {
     it("orchestrator declares the canonical Recommended next enum", () => {
+      // v8.79 — the enum grew one tail value (`awaiting-one-way-confirmation`)
+      // for the One-way Door Gate. The canonical first-five vocabulary
+      // (`continue | review-pause | fix-only | cancel | accept-warns-and-ship`)
+      // is unchanged; the regex now allows the optional v8.79 tail value.
       expect(START_COMMAND_BODY).toMatch(
-        /Recommended next:\s*<continue \| review-pause \| fix-only \| cancel \| accept-warns-and-ship>/u
+        /Recommended next:\s*<continue \| review-pause \| fix-only \| cancel \| accept-warns-and-ship( \| awaiting-one-way-confirmation)?>/u
       );
     });
 

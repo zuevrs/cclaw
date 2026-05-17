@@ -48,7 +48,7 @@ What changed: <one sentence in the user's language; e.g. "5 testable conditions 
 AC verified: <strict: "AC-1=yes, AC-2=yes, AC-3=no"  |  soft: "feature=yes"  |  inline/non-build stages: "n/a">
 Open findings: <0 outside review; integer in review>
 Confidence: <high | medium | low>
-Recommended next: <continue | review-pause | fix-only | cancel | accept-warns-and-ship>
+Recommended next: <continue | review-pause | fix-only | cancel | accept-warns-and-ship | awaiting-one-way-confirmation>
 Notes: <optional; required when Confidence != high; one short sentence in the user's language>
 \`\`\`
 
@@ -59,6 +59,7 @@ Notes: <optional; required when Confidence != high; one short sentence in the us
 - **fix-only** — required findings ≥ 1; dispatch builder in fix-only mode for one cycle.
 - **cancel** — flow should stop here; user re-triages. NOT the same as \`/cc-cancel\` (which the user types explicitly to discard a flow). Specialists return \`cancel\` to **recommend** stopping; the orchestrator surfaces the stop-and-report status block (see "Always-auto failure handling" below) so the user can decide whether to \`/cc\` (continue under a follow-up) or \`/cc-cancel\` (discard).
 - **accept-warns-and-ship** — strict-mode-only escape hatch (reviewer-emitted); warns acknowledged, no required findings, ship anyway.
+- **awaiting-one-way-confirmation** (v8.79; architect-emitted only) — the plan contains at least one D-N marked \`Reversibility: one-way\`. The orchestrator surfaces the **One-way Door Gate** (\`confirm\` / \`edit\` / \`cancel\` structured ask) BEFORE dispatching plan-critic or plan-design — see the "One-way Door Gate" section under Dispatch below. Lite-ceremony (inline) skips the gate structurally (the path has no plan stage).
 
 \`AC verified\` is the per-criterion verification flag. builder emits the truthful per-criterion state (\`AC-N=yes\` only when RED+GREEN+REFACTOR + suite + Coverage + self_review all attest); reviewer restates and downgrades \`=yes\` to \`=no\` for any AC with an open \`required\`/\`critical\` finding; other specialists emit \`AC verified: n/a\`. Soft mode emits one \`feature=yes|no\` token; inline mode emits \`n/a\`. See \`runbooks/finalize.md > ## Per-criterion verified gate\` for the full gate procedure.
 
@@ -67,6 +68,7 @@ Hard-gate logic (v8.61 always-auto):
 - \`Recommended next == "cancel"\` → orchestrator surfaces the stop-and-report status block and ends the turn (user invokes \`/cc\` to continue under a follow-up specialist or \`/cc-cancel\` to discard).
 - \`Confidence == "low"\` → orchestrator surfaces the stop-and-report status block (with Notes verbatim) and ends the turn.
 - \`Recommended next == "review-pause"\` → routed through the reviewer auto-fix loop (capped at 3 iterations); no approval picker.
+- \`Recommended next == "awaiting-one-way-confirmation"\` (v8.79; architect-emitted only) → orchestrator runs the **One-way Door Gate**: scan plan.md for \`Reversibility: one-way\` D-Ns, render the structured ask payload, stamp \`oneWayDoorConfirmation\` on flow-state, end the turn. The user's pick on the next \`/cc\` (\`confirm\` / \`edit\` / \`cancel\`) drives the transition. See "One-way Door Gate" under Dispatch. Lite-ceremony (inline) skips this gate structurally.
 - any \`=no\` in \`AC verified\` outside \`ceremonyMode: inline\` blocks finalize; orchestrator routes through the reviewer / builder auto-fix loop per the matrix below.
 - everything else chains automatically to the next stage. There are no plan / review / critic approval pickers in v8.61 — every transition that the heuristic considers safe fires without a gate.`;
 
@@ -570,6 +572,42 @@ Depth scales with \`ceremonyMode\`, NOT with which specialist runs:
 Full procedure — pre-author research order, input list, output spec, slim-summary shape, soft/strict body split — lives in \`.cclaw/lib/runbooks/plan.md\`. Open that runbook when \`plan\` is in \`triage.path\`.
 
 **Post-plan ack-window prose (v8.67).** Immediately after the architect's slim summary returns and \`flow-state.json\` is patched, the orchestrator emits a single line of plain prose in the user's language pointing them at the new \`## Assumptions (correct me now)\` block: \`Plan written to .cclaw/flows/<slug>/plan.md. Read the \\\`## Assumptions (correct me now)\\\` section — if any are wrong, edit the plan or run \\\`/cc-cancel\\\` and restart. Continue with \\\`/cc\\\` to proceed to build.\` That line IS the natural pause: the always-auto chain continues on the next \`/cc\` (no args), which routes to plan-critic when its strict-gate fires (see "plan-critic" below) or straight to builder otherwise. The ack-window is a one-liner, not a stop-and-report block — the user can ignore it and \`/cc\` to continue, or edit the plan / \`/cc-cancel\` to restart.
+
+#### One-way Door Gate (v8.79; user-facing pause between architect and plan-critic)
+
+After the architect's slim summary returns AND before the orchestrator dispatches plan-critic (or, when plan-critic's strict gate is off, directly the builder), the orchestrator scans the freshly-written \`flows/<slug>/plan.md\` for any \`## Decisions\` D-N row marked \`Reversibility: one-way\`. The scan is a literal substring match against the rendered plan.md (plan-critic §A guarantees the field is present on every D-N in strict mode; the v8.74 architect prompt populates it on every Decisions write). When the scan returns ≥1 hit, the orchestrator **pauses the always-auto chain and surfaces a structured ask** with three options — \`confirm\` / \`edit\` / \`cancel\` — before any further dispatch fires.
+
+The pause is the user-facing analogue of the v8.74 cross-model critic (which also fires on the same \`Reversibility: one-way\` condition): the cross-model critic re-reads the plan + the build for a second adversarial opinion AFTER the build lands; v8.79's One-way Door Gate puts the human in the loop BEFORE the build burns context. The two surfaces are complementary, not redundant — the gate's job is "do you, the user, accept these irreversible commits as plan-level decisions?"; the cross-model critic's job is "given the user accepted, does a second model agree the build delivers on those decisions?".
+
+The gate matches the **User Sovereignty principle** in the v8.74 ethos preamble: irreversible decisions deserve explicit confirmation before build burns context. Two-way / mostly-two-way decisions are NOT user-pause-worthy — the cheap-revert affordance is the whole point of the Reversibility classification, and burning a user turn on every Decisions block would be the symmetry trap (every flow has decisions; only one-way decisions need explicit confirmation).
+
+**Lite-ceremony exemption.** On \`triage.ceremonyMode == "inline"\` (the trivial / lite-ceremony path) the gate is structurally skipped — the path is just \`["build"]\` with no plan stage, no architect, no \`## Decisions\` table to scan. The Reversibility field machinery itself stays on the type for any future strict-mode flow that resumes from a stopped inline flow; the gate just never fires for lite-ceremony work because there is no irreversible-commit signal to gate on. (Soft ceremony writes plan.md without a Decisions section by default; the gate's scan returns 0 hits and the always-auto chain continues without pausing — same shape as a strict plan with only two-way decisions.)
+
+**Flow-state transitions.** The orchestrator drives the gate through three transitions on \`flow-state.json > oneWayDoorConfirmation\` (\`{ decisionIds: string[]; userChoice?: "confirm" | "edit" | "cancel"; confirmedAt?: string }\`):
+
+1. \`architect-complete\` → \`awaiting-one-way-confirmation\`: when the architect's slim summary returns \`Recommended next: awaiting-one-way-confirmation\` (architect's signal that the plan contains ≥1 one-way D-N), the orchestrator stamps \`oneWayDoorConfirmation: { decisionIds: ["D-N", "D-M", ...] }\` (with \`userChoice\` absent — the canonical "awaiting user" signal) and surfaces the structured ask. The orchestrator's turn ends here; control returns to the user.
+2. \`awaiting-one-way-confirmation\` → \`plan-critic\` (or \`builder\` when plan-critic's gate is off): on \`confirm\`, the orchestrator stamps \`userChoice: "confirm"\` + \`confirmedAt: <iso-now>\`, then proceeds to plan-critic dispatch (or builder, per the existing v8.51 plan-critic gate). The user-confirmed flag persists for the rest of the flow's lifetime; downstream specialists may read it as "the user explicitly accepted the irreversible commits".
+3. \`awaiting-one-way-confirmation\` → \`architect-revision\` (on \`edit\`) OR \`aborted\` (on \`cancel\`): on \`edit\`, the orchestrator stamps \`userChoice: "edit"\` and surfaces a stop-and-report status block asking the user to edit \`plan.md\` (typically to soften a one-way classification to mostly-two-way or split the decision into two D-Ns) and re-invoke \`/cc\` once done — the next \`/cc\` re-reads plan.md and re-runs the gate scan. On \`cancel\`, the orchestrator stamps \`userChoice: "cancel"\` and routes to \`/cc-cancel\` (move artifacts to \`cancelled/<slug>/\`, reset state).
+
+**Structured ask payload.** When the gate fires, the orchestrator renders this verbatim shape (plain markdown, in the user's language for the surrounding prose; mechanical tokens — \`D-N\`, \`Reversibility:\`, \`/cc\`, the literal command tokens — stay English):
+
+\`\`\`text
+## One-way door detected
+The architect committed to <count> irreversible decision(s):
+- **D-N: <title>** — Reversibility: one-way
+  Rationale: <D-N rationale, one-sentence verbatim copy from plan.md>
+- **D-M: <title>** — Reversibility: one-way
+  Rationale: <D-M rationale>
+... (one bullet per one-way D-N)
+
+User Sovereignty principle: irreversible decisions deserve explicit confirmation before build burns context.
+
+Choose: confirm | edit | cancel
+\`\`\`
+
+The \`<count>\` is the integer count of one-way D-Ns the scan found. The bullet list iterates over EVERY one-way D-N in plan order (D-1, D-2, ...) — the orchestrator does not deduplicate, summarise, or drop entries; the user sees the full irreversible-commit set. The \`Rationale:\` line is a one-sentence verbatim copy of the \`Rationale:\` field from the same D-N in plan.md (per the v8.74 D-N template); when the architect wrote a multi-sentence rationale, the orchestrator truncates at the first sentence and appends \`...\` so the ask stays compact (the user can read the full rationale in plan.md if they want detail).
+
+The final \`Choose:\` line is the structured ask. Use the harness's \`AskUserQuestion\` surface (Cursor's structured ask / Claude's TUI input) when available; fall back to the prose ask shape when the harness has no structured-ask primitive. Three options only — no fourth "accept-warns-and-ship" / "skip-gate" arm. The cclaw discipline is "every irreversible commit deserves explicit confirmation"; adding a silent-accept escape hatch would defeat the gate's User Sovereignty contract.
 
 #### plan-critic (v8.51+, sub-step of \`plan\`)
 

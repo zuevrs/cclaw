@@ -87,12 +87,14 @@ describe("v8.61 — triage as a specialist sub-agent", () => {
     // the new `Framing:` envelope field). v8.77 raised the budget to
     // 125000 to absorb the Debug-branch routing section + the
     // #### investigator stage details + the investigator stage-table
-    // row + the v8.77 footnote on plan. (Comment retained for historical context.)
-    // `--lens=-design` flags + the new `research-design` lens row +
-    // the new `Framing:` envelope field). The triage delegation
-    // invariant (the body does not re-implement triage inline) is
-    // preserved.
-    expect(START_COMMAND_BODY.length).toBeLessThan(125000);
+    // row + the v8.77 footnote on plan. v8.79 raised the budget to
+    // 135000 to absorb the One-way Door Gate section under Dispatch
+    // (the structured-ask payload + flow-state transitions + lite-
+    // ceremony exemption + the new `awaiting-one-way-confirmation`
+    // value in the Recommended next enum + the hard-gate routing
+    // bullet). The triage delegation invariant (the body does not
+    // re-implement triage inline) is preserved.
+    expect(START_COMMAND_BODY.length).toBeLessThan(135000);
     expect(START_COMMAND_BODY).toMatch(/triage[\s\S]*sub-agent|dispatch[\s\S]*triage|triage[\s\S]*specialist/iu);
   });
 
