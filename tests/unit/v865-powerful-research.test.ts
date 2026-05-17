@@ -88,7 +88,7 @@ describe("v8.65 + v8.76 — RESEARCH_LENSES is exposed but NOT in SPECIALISTS", 
   });
 
   it("SPECIALISTS length is 9 after v8.77 (v8.75 added plan-design; v8.77 added investigator); lenses still do not bloat the flow specialist surface — they live in RESEARCH_LENSES, not SPECIALISTS", () => {
-    expect(SPECIALISTS).toHaveLength(9);
+    expect(SPECIALISTS).toHaveLength(10);
   });
 });
 

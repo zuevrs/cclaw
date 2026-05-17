@@ -82,9 +82,9 @@ describe("v8.62 — specialist-prompts directory: retired files removed, replace
   }
 });
 
-describe("v8.62 — SPECIALISTS roster is the canonical pipeline (v8.75 added plan-design, v8.77 added investigator → 9 entries)", () => {
-  it("contains exactly nine specialists (v8.75 added plan-design after plan-critic; v8.77 added investigator after triage)", () => {
-    expect(SPECIALISTS).toHaveLength(9);
+describe("v8.62 — SPECIALISTS roster is the canonical pipeline (v8.75 added plan-design, v8.77 added investigator, v8.82 added plan-devex → 10 entries)", () => {
+  it("contains exactly ten specialists (v8.75 added plan-design after plan-critic; v8.77 added investigator after triage; v8.82 added plan-devex after plan-design)", () => {
+    expect(SPECIALISTS).toHaveLength(10);
   });
 
   it("contains `architect` and `builder`", () => {
@@ -103,7 +103,7 @@ describe("v8.62 — SPECIALISTS roster is the canonical pipeline (v8.75 added pl
     });
   }
 
-  it("orders the nine specialists along the canonical pipeline (triage → investigator? → plan → build → qa → review → critic → ship); plan-design (v8.75) inserts between plan-critic and qa-runner — it's a plan sub-step gated on triage.designSurface; investigator (v8.77) inserts between triage and architect — it's a debug-branch sub-step gated on triage.taskShape==\"debug\"", () => {
+  it("orders the ten specialists along the canonical pipeline (triage → investigator? → plan → build → qa → review → critic → ship); plan-design (v8.75) inserts between plan-critic and qa-runner — it's a plan sub-step gated on triage.designSurface; plan-devex (v8.82) inserts between plan-design and qa-runner — it's a plan sub-step gated on triage.devexSurface; investigator (v8.77) inserts between triage and architect — it's a debug-branch sub-step gated on triage.taskShape==\"debug\"", () => {
     expect(SPECIALISTS).toEqual([
       "triage",
       "investigator",
@@ -111,6 +111,7 @@ describe("v8.62 — SPECIALISTS roster is the canonical pipeline (v8.75 added pl
       "builder",
       "plan-critic",
       "plan-design",
+      "plan-devex",
       "qa-runner",
       "reviewer",
       "critic"

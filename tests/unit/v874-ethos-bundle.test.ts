@@ -11,6 +11,7 @@ import {
   INVESTIGATOR_PROMPT,
   PLAN_CRITIC_PROMPT,
   PLAN_DESIGN_PROMPT,
+  PLAN_DEVEX_PROMPT,
   QA_RUNNER_PROMPT,
   REVIEWER_PROMPT,
   SPECIALIST_PROMPTS,
@@ -116,8 +117,8 @@ describe("v8.74 — ethos prepended to every specialist dispatch envelope", () =
     expect(body).toContain("cclaw-ethos.md");
   });
 
-  it("AC-2 — all 9 specialist prompts reference the ethos preamble (auto-prepended via dispatch envelope) — v8.75 added plan-design; v8.77 added investigator", () => {
-    // The 9 specialists in the v8.62-collapsed-plus-v8.75-plan-design-plus-v8.77-investigator roster.
+  it("AC-2 — all 10 specialist prompts reference the ethos preamble (auto-prepended via dispatch envelope) — v8.75 added plan-design; v8.77 added investigator; v8.82 added plan-devex", () => {
+    // The 10 specialists in the v8.62-collapsed-plus-v8.75-plan-design-plus-v8.77-investigator-plus-v8.82-plan-devex roster.
     const specialists = [
       ["triage", TRIAGE_PROMPT],
       ["investigator", INVESTIGATOR_PROMPT],
@@ -125,11 +126,12 @@ describe("v8.74 — ethos prepended to every specialist dispatch envelope", () =
       ["builder", BUILDER_PROMPT],
       ["plan-critic", PLAN_CRITIC_PROMPT],
       ["plan-design", PLAN_DESIGN_PROMPT],
+      ["plan-devex", PLAN_DEVEX_PROMPT],
       ["qa-runner", QA_RUNNER_PROMPT],
       ["reviewer", REVIEWER_PROMPT],
       ["critic", CRITIC_PROMPT]
     ] as const;
-    expect(specialists).toHaveLength(9);
+    expect(specialists).toHaveLength(10);
     // The roster export should match the nine we test (sanity guard
     // against new specialist additions silently bypassing the ethos
     // wiring). v8.77 added `investigator` to the debug-branch.

@@ -16,7 +16,7 @@ import { SPECIALISTS } from "../../src/types.js";
 describe("v8.61 — triage as a specialist sub-agent", () => {
   it("SPECIALISTS includes triage; v8.61 expected length 9 (8 + triage); v8.62 unified flow collapsed `design` into `architect` and removed `security-reviewer` so the post-v8.62 length was 7; v8.75 added `plan-design` (pre-impl design-coherence pass); v8.77 added `investigator` (read-only debug-branch diagnostic) so the current length is 9", () => {
     expect(SPECIALISTS).toContain("triage");
-    expect(SPECIALISTS).toHaveLength(9);
+    expect(SPECIALISTS).toHaveLength(10);
   });
 
   it("SPECIALIST_PROMPTS maps triage to TRIAGE_PROMPT", () => {
@@ -94,7 +94,10 @@ describe("v8.61 — triage as a specialist sub-agent", () => {
     // value in the Recommended next enum + the hard-gate routing
     // bullet). The triage delegation invariant (the body does not
     // re-implement triage inline) is preserved.
-    expect(START_COMMAND_BODY.length).toBeLessThan(135000);
+    // v8.82 raised the budget to 145000 to absorb the new
+    // #### plan-devex body section + stage-table row + the
+    // rotating-lastSpecialist update for plan-devex returns.
+    expect(START_COMMAND_BODY.length).toBeLessThan(145000);
     expect(START_COMMAND_BODY).toMatch(/triage[\s\S]*sub-agent|dispatch[\s\S]*triage|triage[\s\S]*specialist/iu);
   });
 

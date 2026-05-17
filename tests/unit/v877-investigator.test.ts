@@ -49,9 +49,9 @@ import { FLOW_STATE_SCHEMA_VERSION, assertFlowStateV82 } from "../../src/flow-st
  * complexity lights up immediately.
  */
 
-describe("v8.77 — SPECIALISTS roster includes `investigator` (9 entries; investigator between triage and architect)", () => {
-  it("AC-1 — SPECIALISTS has exactly nine entries (v8.77 added investigator)", () => {
-    expect(SPECIALISTS).toHaveLength(9);
+describe("v8.77 — SPECIALISTS roster includes `investigator` (10 entries at v8.82; investigator between triage and architect)", () => {
+  it("AC-1 — SPECIALISTS has exactly ten entries (v8.77 added investigator; v8.82 added plan-devex)", () => {
+    expect(SPECIALISTS).toHaveLength(10);
   });
 
   it("AC-1 — `investigator` is the 2nd entry, immediately after `triage` and before `architect`", () => {
@@ -62,6 +62,7 @@ describe("v8.77 — SPECIALISTS roster includes `investigator` (9 entries; inves
       "builder",
       "plan-critic",
       "plan-design",
+      "plan-devex",
       "qa-runner",
       "reviewer",
       "critic"
@@ -88,12 +89,12 @@ describe("v8.77 — SPECIALISTS roster includes `investigator` (9 entries; inves
     expect(agent?.prompt).toBe(INVESTIGATOR_PROMPT);
   });
 
-  it("AC-1 — CORE_AGENTS has 11 entries (9 specialists + 2 research helpers)", () => {
+  it("AC-1 — CORE_AGENTS has 12 entries (10 specialists + 2 research helpers)", () => {
     const specialists = CORE_AGENTS.filter((a) => a.kind === "specialist");
     const research = CORE_AGENTS.filter((a) => a.kind === "research");
-    expect(specialists).toHaveLength(9);
+    expect(specialists).toHaveLength(10);
     expect(research).toHaveLength(2);
-    expect(CORE_AGENTS).toHaveLength(11);
+    expect(CORE_AGENTS).toHaveLength(12);
   });
 });
 

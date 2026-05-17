@@ -90,6 +90,29 @@ export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
  *   axis; below-6 grades become `PD-N` findings appended to plan.md.
  */
 /**
+ * v8.82: specialist count grows 9 → 10 with the addition of `plan-devex`,
+ * a pre-implementation developer-experience pass that walks plan.md against
+ * a six-dimension DevEx rubric (Getting Started / API ergonomics / Error
+ * messages / Docs / Upgrade path / Measurement; rubric lifted into a shared
+ * const at `src/content/devex-quality-rubric.ts` so a future post-build
+ * reviewer `devex` axis or research-devex lens can consume the same
+ * dimensions). plan-devex runs after plan-critic AND after plan-design (when
+ * those gates fire) — sequential, not parallel, to keep prompt budget
+ * manageable; when neither gate fires and the devex-surface gate DOES fire,
+ * it runs directly after architect. The gate is `triage.devexSurface == true`
+ * OR `triage.surfaces` ∩ {cli, library, api} ≠ ∅ AND ceremonyMode ∈ {soft,
+ * strict}. Below-6 dimension grades become `DX-N` findings appended to
+ * plan.md's `## Plan-devex findings` section; severity ≥ medium blocks
+ * ship in strict mode.
+ *
+ * Mirrors the v8.75 plan-design joiner shape (same single-shot append-only
+ * contract; same verdict surface {pass, revise, block}; same 1-revise-loop
+ * cap shared with plan-critic + plan-design); different lens (DevEx, not
+ * visual design); different evidence base (the plan's commitments to the
+ * developer-facing surface, not the plan's commitments to the user-facing
+ * surface).
+ */
+/**
  * v8.77: specialist count grows 8 → 9 with the addition of `investigator`,
  * a read-only diagnostic specialist that runs on bug-shaped tasks
  * (triage.taskShape == "debug") BEFORE the architect. The investigator
@@ -115,6 +138,7 @@ export const SPECIALISTS = [
   "builder",
   "plan-critic",
   "plan-design",
+  "plan-devex",
   "qa-runner",
   "reviewer",
   "critic"
@@ -624,6 +648,66 @@ export type PlanDesignVerdict = "pass" | "revise" | "block";
  * compat is structural: readers simply find no `PD-N` rows.
  */
 export type PlanDesignSeverity = "low" | "medium" | "high";
+
+/**
+ * verdict the v8.82 pre-implementation plan-devex specialist returns in
+ * its slim summary. Drives the plan-devex step routing (between
+ * `plan-design` (when its design-surface gate fires) or `plan-critic`
+ * (when plan-critic fires and plan-design is skipped) or `architect`
+ * (when both are gated off) and `builder` on the devex-surface gate
+ * {triage.devexSurface == true OR triage.surfaces ∩ {cli, library, api}
+ * ≠ ∅; ceremonyMode ∈ {soft, strict}}):
+ *
+ * - `pass` — zero open `medium` / `high` DX-N rows; advance to builder
+ *   dispatch (no ceremony).
+ * - `revise` (iteration 0) — at least one `medium` row open AND zero
+ *   `high` rows; bounce to architect with the open DX-N rows prepended
+ *   to the dispatch envelope, then re-dispatch plan-devex (iteration
+ *   1). Max 1 revise loop.
+ * - `revise` (iteration 1) — second revise; orchestrator surfaces the
+ *   stop-and-report status block (no third dispatch).
+ * - `block` (any iteration) — at least one `high` row OR (strict mode)
+ *   at least one `medium` row AND the block-ship-on-strict floor
+ *   engaged; orchestrator surfaces the stop-and-report status block
+ *   immediately.
+ *
+ * Distinct from {@link PlanCriticVerdict} on purpose: plan-critic has a
+ * `cancel` verdict (structural plan problem requiring re-author); plan-
+ * devex caps at `block` because the worst case at plan-time is "the
+ * plan does not commit to the DevEx work" — a fix-by-architect amend,
+ * not a re-author. Mirrors {@link PlanDesignVerdict}'s surface shape
+ * (pass / revise / block) so the two pre-impl lenses route through the
+ * same combined-revise hand-off semantics in the orchestrator.
+ */
+export type PlanDevexVerdict = "pass" | "revise" | "block";
+
+/**
+ * Severity of a single `DX-N` (plan-devex finding) row appended to
+ * plan.md's `## Plan-devex findings` section by the v8.82 plan-devex
+ * specialist. The ladder mirrors {@link PlanDesignSeverity} with two
+ * dimension-specific escalation rules baked in (getting-started one
+ * tier sharper because TTHW is load-bearing for first impression;
+ * upgrade-path on breaking changes caps at `high` regardless of mode
+ * because the worst case is "ship a silent regression").
+ *
+ * - `low` — default for any dimension grading exactly 5/10. Carries to
+ *   learnings as advisory; does NOT block ship even in strict mode.
+ * - `medium` — dimension grading exactly 4/10; OR any getting-started
+ *   grade ≤ 5 (one-tier escalation per the rubric). Blocks ship in
+ *   strict mode (the v8.82 block-ship-on-strict floor); surfaces but
+ *   does not block in soft mode.
+ * - `high` — dimension grading ≤ 3/10; OR any upgrade-path grade ≤ 3
+ *   on a breaking change (ships-a-regression baseline; blocks
+ *   regardless of mode). Blocks ship in strict; in soft mode the
+ *   orchestrator surfaces the stop-and-report status block when ≥ 2
+ *   `high` rows accumulate.
+ *
+ * Validators accept the string verbatim on read; new writes MUST use
+ * one of the three values. Pre-v8.82 state files cannot carry this
+ * field at all (the plan-devex specialist did not exist), so back-
+ * compat is structural: readers simply find no `DX-N` rows.
+ */
+export type PlanDevexSeverity = "low" | "medium" | "high";
 
 /**
  * Reversibility classification per `D-N` decision in `plan.md > ##
@@ -1582,6 +1666,40 @@ export interface TriageDecision {
    * `/cc-cancel` and starts a fresh `/cc` with a clearer prompt.
    */
   taskShape?: TaskShape;
+  /**
+   * v8.82 — developer-experience surface flag (back-compat: pre-v8.82
+   * state files lack this field). Set by the triage sub-agent's
+   * "Devex surface detection" step at Hop 2; persisted by the
+   * orchestrator into `triage.devexSurface` so the start-command's
+   * plan-devex dispatch can stamp `walkPlanDevex: true` on the
+   * envelope without re-scanning the prompt at plan-stage time.
+   *
+   * Set `true` when the raw task text matches any of:
+   * - explicit SDK / API / CLI / library / public-interface keywords
+   *   (SDK, API, endpoint, route, CLI, command, bin, library,
+   *   package, module, export, public interface, breaking change,
+   *   migration, codemod, error message, error code, telemetry,
+   *   analytics event);
+   * - explicit method / signature vocabulary (method, function,
+   *   class, interface, type signature, generic, parameter, return
+   *   type, async, callback, promise, stream);
+   * - file-pattern hints (.d.ts, openapi, swagger, .proto files,
+   *   index.ts exports, bin/ scripts, cli.ts, api/ routes,
+   *   packages/.../src/index.ts, .pyi);
+   * - harness hints (SDK rewrite, CLI redesign, library refactor,
+   *   endpoint rename, npm publish, pypi release, crates release).
+   *
+   * Set `false` when the task touches only UI / data / infra / docs /
+   * config without developer-facing API surface. The flag is purely
+   * informational at triage — it gates the plan-devex specialist
+   * dispatch at the plan stage.
+   *
+   * Optional + back-compat: pre-v8.82 state files lack this field and
+   * the plan-devex gate treats absence as `false` (the historical
+   * pre-v8.82 behaviour where plan-devex did not exist). Immutable
+   * for the flow's lifetime.
+   */
+  devexSurface?: boolean;
 }
 
 /**

@@ -424,7 +424,7 @@ describe("v8.76 — RESEARCH_LENSES still NOT in SPECIALISTS / RESEARCH_AGENT_ID
   it("AC-7 — research-design is NOT in SPECIALISTS (the lens is research-only; flow specialists are at 9 after v8.77 added investigator)", async () => {
     const { SPECIALISTS } = await import("../../src/types.js");
     expect(SPECIALISTS as readonly string[]).not.toContain("research-design");
-    expect(SPECIALISTS).toHaveLength(9);
+    expect(SPECIALISTS).toHaveLength(10);
   });
 
   it("AC-7 — research-design is NOT in RESEARCH_AGENT_IDS (those are read-only research helpers — repo-research / learnings-research)", async () => {
