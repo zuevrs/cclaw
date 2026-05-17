@@ -50,13 +50,13 @@ async function seedRunbookOrphan(projectRoot: string, fileName: string): Promise
 }
 
 describe("v8.22 orchestrator-slim — `/cc` body line budget", () => {
-  it("AC-1 — `start-command.ts` body stays ≤545 lines (was 901 on v8.21; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer; v8.51 absorbed ~15 lines for the pre-implementation plan-critic sub-step pointer; v8.52 absorbed ~20 lines for the qa stage Hop-2 surface-detection block + the qa step body section + the qa-runner stage-table row; v8.59 absorbed ~10 lines for the Detect-hop extend-mode fork pointer + prior-context consumption pointer)", () => {
+  it("AC-1 — `start-command.ts` body stays ≤548 lines (was 901 on v8.21; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer; v8.51 absorbed ~15 lines for the pre-implementation plan-critic sub-step pointer; v8.52 absorbed ~20 lines for the qa stage Hop-2 surface-detection block + the qa step body section + the qa-runner stage-table row; v8.59 absorbed ~10 lines for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.69 absorbed ~3 lines for the research-depth fork-stamp sub-bullet + the synthesis self-review step + the depth-flag sub-case)", () => {
     const body = renderStartCommand();
     const lineCount = body.split("\n").length;
     expect(
       lineCount,
-      `start-command body is ${lineCount} lines (budget 545). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md and kept only a five-bullet pointer in the orchestrator body (one new stage entry, one new table row, one trimmed ceremonyMode-gating sentence under triage.path, one v8.42 footnote on the triage example). v8.51 added a parallel pointer for the pre-impl plan-critic sub-step (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section, gating + verdict-routing pointer to runbooks/plan-critic-stage.md); ~95% of the new content is in the runbook + the plan-critic.ts prompt. v8.52 lifted ~95% of the new qa stage content into runbooks/qa-stage.md and kept ~20 lines in the body (one Hop-2 surface-detection block listing the Surface vocabulary + detection heuristics, one stage-table row for qa-runner, one #### qa body section pointing into the runbook). v8.59 added ~10 lines: one new Detect-table row for the extend-mode fork, a one-paragraph Detect-hop pointer (full procedure in runbooks/extend-mode.md), and a one-paragraph "v8.59 prior-context consumption" pointer (full per-specialist patterns in design.ts / ac-author.ts / reviewer.ts / critic.ts). If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
-    ).toBeLessThanOrEqual(545);
+      `start-command body is ${lineCount} lines (budget 548). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md and kept only a five-bullet pointer in the orchestrator body (one new stage entry, one new table row, one trimmed ceremonyMode-gating sentence under triage.path, one v8.42 footnote on the triage example). v8.51 added a parallel pointer for the pre-impl plan-critic sub-step (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section, gating + verdict-routing pointer to runbooks/plan-critic-stage.md); ~95% of the new content is in the runbook + the plan-critic.ts prompt. v8.52 lifted ~95% of the new qa stage content into runbooks/qa-stage.md and kept ~20 lines in the body (one Hop-2 surface-detection block listing the Surface vocabulary + detection heuristics, one stage-table row for qa-runner, one #### qa body section pointing into the runbook). v8.59 added ~10 lines: one new Detect-table row for the extend-mode fork, a one-paragraph Detect-hop pointer (full procedure in runbooks/extend-mode.md), and a one-paragraph "v8.59 prior-context consumption" pointer (full per-specialist patterns in design.ts / ac-author.ts / reviewer.ts / critic.ts). v8.69 added ~3 lines for the research_depth fork-stamp sub-bullet, the synthesis self-review step in Phase 3, and the depth-flag sub-case (~95% of v8.69 prose lives in runbooks/research-depth-and-self-review.md). If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
+    ).toBeLessThanOrEqual(548);
   });
 
   it("AC-1 — the body is meaningfully smaller than the legacy v8.21 size (≥30% cut)", () => {
@@ -97,6 +97,12 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
   // ceremonyMode-flag / runMode-flag / research-suffix), multi-level
   // chaining policy (immediate-parent only), backwards compat, and worked
   // examples.
+  // v8.69 extends the set with `research-depth-and-self-review.md` — the
+  // on-demand runbook covering /cc research depth tiers (light /
+  // standard / deep-product), triage auto-classification heuristics, the
+  // depth-conditional Phase 2 lens dispatch table, and the synthesis
+  // self-review four-scan procedure (placeholder / contradiction /
+  // scope-drift / ambiguity).
   const expectedRunbookFiles = [
     "dispatch-envelope.md",
     "parallel-build.md",
@@ -111,9 +117,10 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
     "qa-stage.md",
     "extend-mode.md",
     "always-auto-failure-handling.md",
+    "research-depth-and-self-review.md",
   ];
 
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files; v8.61: +1 always-auto-failure-handling → 13 files)", () => {
+  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files; v8.61: +1 always-auto-failure-handling → 13 files; v8.69: +1 research-depth-and-self-review → 14 files)", () => {
     const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
     expect(fileNames).toEqual([...expectedRunbookFiles].sort());
   });
@@ -176,21 +183,21 @@ describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", 
     expect(
       charCount,
       `start-command body is ${charCount} chars (budget 80000). v8.22 cut ~14% off the body's char count by lifting on-demand runbooks; v8.23 + v8.24 added Hop 1 git-check + the two-pass default paragraph (deliberate ~1k char growth); v8.42 added ~2k chars for the new critic stage pointer; v8.47 added ~300 chars to the large-risky plan section to declare the new two-turn-max pacing (Phase 1 conditional + Phase 7 mandatory + revise-loop semantics; ~95% of the v8.47 content is in design.ts + discovery.md runbook); v8.48 added ~600 chars for the per-AC \`AC verified\` slim-summary line, its semantics paragraph, and the finalize-precondition pointer (the full Per-AC verified gate procedure lives in runbooks/finalize.md); v8.50 lifted ~1500 chars to absorb the knowledge outcome-loop pointers — three brief paragraphs describing the v8.50 follow-up-bug Hop 1 capture path, the outcome-signal down-weight applied to the prior-learnings lookup, and the revert + manual-fix capture paths inside \`runCompoundAndShip\`; v8.51 added ~4k chars for the pre-implementation plan-critic sub-step pointer (one new table row, one paragraph note above the dispatch table, one #### plan-critic body section under #### plan, gating + verdict-routing pointer to runbooks/plan-critic-stage.md); v8.52 added ~7k chars for the qa stage Hop-2 surface-detection block (Surface vocabulary + detection heuristics for each surface), the qa step's dispatch + verdict-routing pointer, and the qa-runner stage-table row (full procedure lives in runbooks/qa-stage.md); v8.59 added ~1k chars for the Detect-hop extend-mode fork pointer + the v8.59 prior-context consumption pointer (full procedures lift to runbooks/extend-mode.md + the per-specialist contracts); v8.65 added ~9k chars for the multi-lens research orchestrator (4-phase contract, lens dispatch envelope, lens-output schema, synthesis pass, handoff prompt); v8.66 added ~1k chars to the build-stage prose for the parallel-by-default contract pointer (topologicalLayers reference + parent / sub-builder dispatch shape + safety pre-condition + worktree-parallel coexistence). Do not raise this further without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(80200);
+    ).toBeLessThanOrEqual(81500);
   });
 
   it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {
     expect(renderStartCommand()).toBe(START_COMMAND_BODY);
   });
 
-  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 190k-char ceiling (v8.42 lifted to absorb the critic-stage runbook; v8.51 lifted to absorb the plan-critic-stage runbook; v8.52 lifted to absorb the qa-stage runbook + ~7k body chars; v8.59 lifted to absorb the extend-mode runbook + ~1k body chars; v8.65 + v8.66 lifted the combined ceiling to 180k for the multi-lens research orchestrator body + parallel-by-default build-stage prose; v8.68 lifted ceiling to 190k for the structured-status protocol extensions to always-auto-failure-handling.md — 4 new status-routing matrix rows + per-status orchestrator behaviour section + recommended-resolution vocabulary + monotone aggregation rule + 3 new anti-rationalization rows)", () => {
+  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 205k-char ceiling (v8.42 lifted to absorb the critic-stage runbook; v8.51 lifted to absorb the plan-critic-stage runbook; v8.52 lifted to absorb the qa-stage runbook + ~7k body chars; v8.59 lifted to absorb the extend-mode runbook + ~1k body chars; v8.65 + v8.66 lifted the combined ceiling to 180k for the multi-lens research orchestrator body + parallel-by-default build-stage prose; v8.68 lifted ceiling to 190k for the structured-status protocol extensions to always-auto-failure-handling.md; v8.69 lifted ceiling to 205k to absorb the new `research-depth-and-self-review.md` runbook (~13k chars; carries depth-tier dispatch table, synthesis self-review four-scan procedure, worked examples, anti-rationalization))", () => {
     const combined =
       renderStartCommand().length +
       ON_DEMAND_RUNBOOKS.reduce((acc, r) => acc + r.body.length, 0);
     expect(
       combined,
       `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 190000). The pre-v8.22 body alone was ~50k; the v8.42 critic-stage runbook adds ~7k chars for the dedicated Hop 4.5 dispatch contract; v8.48 added ~3.5k chars total (600 chars body + ~3k chars in finalize.md for the Per-AC verified gate procedure); v8.50 added ~1500 chars to the body for the knowledge-outcome-loop pointer paragraphs (full detection lives in src/outcome-detection.ts + src/compound.ts, NOT in a runbook); v8.51 added ~8k chars total (2k body + ~6k chars in runbooks/plan-critic-stage.md for the gating table, dispatch envelope, verdict routing, iteration cap, flow-state patches, and legacy migration); v8.52 added ~17k chars total (7k body for the qa-stage surface-detection + dispatch / verdict-routing pointer + qa-runner stage-table row, plus ~10k chars in runbooks/qa-stage.md for the gating, dispatch envelope, verdict-routing table, iteration cap, flow-state patches, reviewer cross-check, and legacy migration); v8.59 added ~10k chars total (~1k body for the Detect-hop extend-mode pointer + the v8.59 prior-context consumption pointer, plus ~9k chars in runbooks/extend-mode.md for the argument parsing, parent-validation error sub-cases, seven argument shapes, triage-inheritance precedence rules + worked examples, multi-level chaining policy, and backwards compat); v8.65 lifted the ceiling by ~9k chars in the body for the multi-lens research orchestrator (4-phase contract, lens dispatch envelope, lens-output schema, synthesis pass, handoff prompt); v8.66 lifted the ceiling by ~1k chars in the body for the parallel-by-default build-stage prose (topologicalLayers utility pointer + parent / sub-builder dispatch shape + plan-critic safety pre-condition + worktree-parallel coexistence note). Expanding past 180k means a block belongs on disk, not inlined and not in a runbook.`
-    ).toBeLessThanOrEqual(190000);
+    ).toBeLessThanOrEqual(205000);
   });
 });
 

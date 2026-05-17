@@ -1,6 +1,62 @@
 # Changelog
 
 
+## 8.69.0 — Powerful research: web search + multi-tier depth + synthesis self-review
+
+### Why
+
+Pre-v8.69 the v8.65 multi-lens research orchestrator dispatched five lenses in parallel from training knowledge alone. Lens prompts said web search was "optional" — in practice that meant lenses ran without it, and findings on libraries / frameworks / current best practices aged with the model. Two failure modes compounded: (1) recommendations cited library-version semantics that had shifted in the months since the model's cutoff (e.g. "fastify is the active choice" when hono had since overtaken it on the maintenance axis); (2) every research run was the same shape regardless of the question — a 30-second clarification ("is X still maintained?") got the same five-lens bill as a greenfield product probe ("should we replace our planning tool?"), and a greenfield probe got no extra prompting around the implicit product thesis.
+
+Reference patterns: everyinc-compound's `ce-web-researcher.agent.md`, `ce-framework-docs-researcher.agent.md`, and `ce-best-practices-researcher.agent.md` carry the canonical first-class web-search dispatch contract (when to dispatch, which tool to use, how to cite). The `ce-brainstorm/SKILL.md` Phase 0.3 splits research into Lightweight / Standard / Deep / Deep-product tiers with extra probes for the deep-product case (durability / thesis / adjacent-product). Obra-superpowers' brainstorming skill carries the canonical "Spec Self-Review" pattern (placeholder / contradiction / scope / ambiguity scan) we adapted for the synthesis self-review pass. v8.69 ports all three patterns into the cclaw research orchestrator surface.
+
+### What changed
+
+**Deliverable 1 — Web search integration in lenses** (`src/content/research-lenses/research-{engineer,product,architecture,history,skeptic}.ts`).
+
+- Each of the four web-using lenses (engineer / product / architecture / skeptic) gains a `## Knowledge sourcing` section that dispatches MCP web research as **first-class** input. The section names the canonical tools (`user-exa` for general web search; `user-context7` for library / framework / API docs), declares dispatch shape (the lens identifies the topic axes that need fresh evidence, dispatches one tool per axis, cites inline), and codifies graceful fallback to training knowledge when no MCP tool is wired (the slim-summary `Notes:` line stamps the fallback so the user / follow-up architect can audit the recency of each claim).
+- `research-history` declares web search is OUT of scope (the lens is project-local memory: `.cclaw/knowledge.jsonl` + git log); its `### Sources` block cites only `knowledge.jsonl:line`, `learnings.md:line`, and git refs.
+- Each lens's Findings block gains a `### Sources` subsection (citations the lens used) and the dispatch envelope description gains `Research depth:` (so the lens can branch on `light` / `standard` / `deep-product`).
+
+**Deliverable 2 — Multi-tier depth (`/cc research --light` / `--standard` / `--deep-product`)** (`src/types.ts`, `src/content/start-command.ts`, `src/content/runbooks-on-demand.ts`).
+
+- New `RESEARCH_DEPTHS = ["light", "standard", "deep-product"] as const` + `ResearchDepth` type + `DEFAULT_RESEARCH_DEPTH = "standard"` constant on `src/types.ts`. New optional `research_depth?: ResearchDepth` field on `TriageDecision` (back-compat: pre-v8.69 state files default to `"standard"` on read).
+- `light` depth dispatches `research-engineer` + `research-skeptic` only (2 lenses + synthesis + self-review). Cheaper / faster turn-around for narrowly-scoped clarifications ("is fastify still maintained?", "which library does X?", "what's the team's current approach?").
+- `standard` depth (default; pre-v8.69 behaviour) dispatches all 5 lenses.
+- `deep-product` depth dispatches all 5 lenses with extra probes folded into the product + skeptic envelopes — the everyinc-compound `ce-brainstorm` deep-product gap lenses become Thesis (product), Adjacent-product (product), and Durability (skeptic) probes that fire only on `deep-product` depth. The probes do NOT spawn additional lenses; they are extra prompt content the existing product + skeptic lenses fold into their structured findings.
+- The orchestrator's Detect-hop research-mode fork parses `--light` / `--standard` / `--deep-product` flags out of the argument string (mutually exclusive — last-wins with a one-line note); when no flag is present, the fork auto-classifies depth from topic wording (clarification → `light`; technical exploration → `standard`; greenfield / pivot wording → `deep-product`).
+
+**Deliverable 3 — Synthesis self-review pass** (`src/content/start-command.ts`, `src/content/runbooks-on-demand.ts`, `src/content/artifact-templates.ts`).
+
+- BEFORE `research.md` is written to disk, Phase 3 of the research orchestrator now walks the in-memory draft through four scans (placeholder / contradiction / scope drift / ambiguity) and fixes findings inline. The pass is a main-context step (NOT a sub-agent dispatch — the orchestrator owns `research.md` end-to-end).
+- Findings are captured in a new `### Self-review notes` subsection under `## Synthesis` in `research.md`. On a clean draft, the literal string `No self-review issues found.` is written verbatim — the absence of the subsection is a structural failure for the follow-up `/cc <task>` flow's architect (which reads `research.md` end-to-end as `priorResearch` context).
+- Detailed procedure (per-scan triggers + fix-inline rules + pass exits) lives in the new `runbooks/research-depth-and-self-review.md` runbook; the start-command body carries only a one-line pointer.
+
+**Deliverable 4 — `RESEARCH_TEMPLATE` update** (`src/content/artifact-templates.ts`).
+
+- Frontmatter gains `research_depth: standard` (default; the orchestrator overwrites with the resolved depth on finalize).
+- Per-lens sections (Engineer / Product / Architecture / History / Skeptic) gain a `### Sources` subsection — five total — that the lens fills with its inline citations (`user-exa` / `user-context7` / `path:line` / training-knowledge fallback).
+- Synthesis section gains a `### Self-review notes` subsection (output of the self-review pass).
+- Product lens template gains `### Product thesis` + `### Adjacent product` subsections tagged `_(deep-product depth only)_`. Skeptic lens template gains `### Durability probe` tagged the same way.
+
+**Deliverable 5 — On-demand runbook** (`src/content/runbooks-on-demand.ts > RESEARCH_DEPTH_AND_SELF_REVIEW`, registered as `research-depth-and-self-review.md`).
+
+- New ~13k-char runbook (`research-depth-and-self-review.md`) carries the full depth-tier dispatch table, the auto-classification heuristic for the no-flag path, the four-scan self-review procedure (with worked fix-inline examples), the Self-review notes capture format, the pass exits (clean / fixes-applied / fix-not-possible re-dispatch), two worked examples (light-depth clean self-review; deep-product scope drift), and a six-row anti-rationalization table.
+- The runbook is opened twice per research flow — once at the Detect-hop research-mode fork (depth selection) and once at Phase 3 synthesis (self-review pass). The orchestrator body carries only the one-paragraph pointer; the runbook is the canonical source.
+
+**Deliverable 6 — Tripwire test** (`tests/unit/v869-research-powerful.test.ts`).
+
+- 55 assertions across 8 describe blocks pinning every contract surface: `RESEARCH_DEPTHS` enum membership + `DEFAULT_RESEARCH_DEPTH` + `ResearchDepth` type round-trip + `TriageDecision.research_depth` compile-time check + types.ts source documentation; per-lens `## Knowledge sourcing` section + MCP tool names + graceful fallback + citation discipline + `Research depth` envelope + `### Sources` block (4 lenses × 6 invariants = 24 assertions); history-lens explicit web-search opt-out + memory-only `### Sources` block; deep-product probe declarations on product + skeptic prompts; orchestrator-body parsing of `--light` / `--standard` / `--deep-product` + research_depth stamping + runbook pointer + last-wins sub-case; Phase 2 lens-set gating by depth; Phase 3 self-review pass + four-scan listing + runbook pointer; runbook registration + canonical heading + depth-tier table + auto-classification heuristic + four-scan procedure + Self-review notes capture + clean-state literal; `RESEARCH_TEMPLATE` `research_depth:` frontmatter + 5× `### Sources` per-lens subsections + `### Self-review notes` synthesis subsection + 3× `_(deep-product depth only)_` probe tags + ≥4× `user-exa` / `user-context7` references; render-parity check.
+
+### Clean break
+
+Pre-v8.69 state files lack the `triage.research_depth` field; readers default to `"standard"` on absent (matches the pre-v8.69 5-lens behaviour byte-for-byte). Pre-v8.69 `research.md` artifacts on disk lack `### Sources` per-lens subsections, `### Self-review notes`, and the `research_depth:` frontmatter; readers walking shipped research artifacts treat the absences as "no extra metadata; render the v8.65 shape verbatim". Lens prompts pre-v8.69 had a single optional-web-search line; v8.69 lifts it into a structured `## Knowledge sourcing` section. The four web-using lenses still fall back to training knowledge when no MCP tool is wired — web search is first-class but not hard-required (matches the v8.65 "MCP graceful fallback" invariant).
+
+### Budget bumps
+
+- **Start-command body char budget** `80200 → 81500` (deliberate ~1300-char bump). The new content is the research-mode fork's `research_depth: <light | standard | deep-product>` stamp + the Phase 2 dispatch envelope's `Research depth:` field + the Phase 3 self-review step + the depth-flag last-wins sub-case + cross-references to `runbooks/research-depth-and-self-review.md`. ~95% of the v8.69 prose lives in the new runbook + the lens prompts; the orchestrator body carries inline pointers only. Budget assertions raised together in `tests/unit/v822-orchestrator-slim.test.ts` (AC-2 inline-path budget + AC-4 body-alone budget) + `tests/unit/v831-path-aware-trimming.test.ts` (AC-2 inline path) + `tests/unit/v861-triage-subagent.test.ts` (the `<82000` triage-delegation guard).
+- **Start-command body line budget** `545 → 548` (deliberate +3-line bump). The new content is one fork-stamp sub-bullet (`research_depth:` in the sentinel triage block stamp), one Phase 3 self-review step (`6. Synthesis self-review pass (v8.69)`), and one Sub-cases row (`multiple depth flags` last-wins). Budget assertion raised in `tests/unit/v822-orchestrator-slim.test.ts` (AC-1 line-count guard).
+- **Combined body + runbooks soft ceiling** `190000 → 205000` (deliberate ~15k bump). The new `research-depth-and-self-review.md` runbook adds ~13k chars (depth-tier dispatch table + auto-classification heuristic + four-scan self-review procedure + worked examples + anti-rationalization). Combined total post-v8.69 is ~200k; the 205k ceiling gives one slug of headroom. Budget assertion raised in `tests/unit/v822-orchestrator-slim.test.ts`.
+
 ## 8.68.0 — Two-stage per-slice review + structured implementer status
 
 ### Why

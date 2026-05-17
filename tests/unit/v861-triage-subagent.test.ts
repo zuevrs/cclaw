@@ -82,9 +82,13 @@ describe("v8.61 — triage as a specialist sub-agent", () => {
     // v8.65 raised the body budget from 72000 to 81000 chars to absorb
     // the multi-lens research orchestrator's body prose (4-phase
     // contract, lens dispatch envelope, lens-output schema, synthesis
-    // pass, handoff prompt). The triage delegation invariant (the body
-    // does not re-implement triage inline) is preserved.
-    expect(START_COMMAND_BODY.length).toBeLessThan(81000);
+    // pass, handoff prompt). v8.69 raised the budget to 82000 to
+    // absorb the research-depth + synthesis self-review pointers
+    // (research_depth in fork stamp, depth-conditional Phase 2 dispatch,
+    // self-review step in Phase 3, depth-flag sub-case). The triage
+    // delegation invariant (the body does not re-implement triage
+    // inline) is preserved.
+    expect(START_COMMAND_BODY.length).toBeLessThan(82000);
     expect(START_COMMAND_BODY).toMatch(/triage[\s\S]*sub-agent|dispatch[\s\S]*triage|triage[\s\S]*specialist/iu);
   });
 

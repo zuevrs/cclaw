@@ -174,7 +174,7 @@ Before triage dispatch, check the raw \`/cc\` argument for the **research-mode e
 - the task argument starts with the literal token \`research \` (case-insensitive, exactly one space), or
 - the task argument carries the explicit \`--research\` flag anywhere in the argument string.
 
-When the fork fires, the orchestrator strips the trigger from the task text (the topic that flows into the lenses is the argument WITHOUT \`research \` / \`--research\`), builds a research-mode slug (\`YYYYMMDD-research-<semantic-kebab>\` — the \`-research-\` infix is mandatory), and **skips triage dispatch entirely**. Stamp the triage block with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\`. Stamp \`flow-state.json > currentSlug\` with the new slug, \`currentStage: "plan"\` (used purely as a sentinel — research mode has no plan / build / review / critic / ship stages; the field is the only signal that distinguishes "research in flight" from "task in flight" for the v8.61 invocation matrix).
+When the fork fires, the orchestrator strips the trigger from the task text (the topic that flows into the lenses is the argument WITHOUT \`research \` / \`--research\`), builds a research-mode slug (\`YYYYMMDD-research-<semantic-kebab>\` — the \`-research-\` infix is mandatory), and **skips triage dispatch entirely**. Stamp the triage block with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\` + \`research_depth: <light | standard | deep-product>\` (v8.69; parsed from explicit \`--light\` / \`--standard\` / \`--deep-product\` flag, otherwise auto-classified from topic wording — full mapping in \`runbooks/research-depth-and-self-review.md\`). Stamp \`flow-state.json > currentSlug\` with the new slug, \`currentStage: "plan"\` (used purely as a sentinel — research mode has no plan / build / review / critic / ship stages; the field is the only signal that distinguishes "research in flight" from "task in flight" for the v8.61 invocation matrix).
 
 The orchestrator then enters the **v8.65 multi-lens research flow** — replacing the v8.58/v8.62 architect-standalone-research interim. The flow is four phases:
 
@@ -207,12 +207,12 @@ If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel")
 
 #### Phase 2 — parallel lens dispatch
 
-When Phase 1 completes, the orchestrator **dispatches all five research lenses in parallel**:
+When Phase 1 completes, the orchestrator **dispatches research lenses in parallel**. The depth tier (\`triage.research_depth\`) controls the lens set: \`light\` → engineer + skeptic (2 lenses, parenthetical \`*(Skipped on light depth.)*\` marks the absent three below); \`standard\` (default) → all five; \`deep-product\` → all five plus extra probes (durability / thesis / adjacent-product) folded into product + skeptic prompts. Full depth → lens-set mapping in \`runbooks/research-depth-and-self-review.md\`.
 
 - \`research-engineer\` — technical feasibility, stack fit, implementation paths, blockers, risks, rough effort.
-- \`research-product\` — user / product value, who benefits, alternatives considered (always including "do nothing"), market / domain context, open product questions.
-- \`research-architecture\` — surface impact, coupling points, boundaries crossed, scalability considerations, reusable in-repo patterns.
-- \`research-history\` — prior attempts via \`.cclaw/knowledge.jsonl\` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift.
+- \`research-product\` *(Skipped on light depth.)* — user / product value, who benefits, alternatives considered (always including "do nothing"), market / domain context, open product questions.
+- \`research-architecture\` *(Skipped on light depth.)* — surface impact, coupling points, boundaries crossed, scalability considerations, reusable in-repo patterns.
+- \`research-history\` *(Skipped on light depth.)* — prior attempts via \`.cclaw/knowledge.jsonl\` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift.
 - \`research-skeptic\` — failure modes, edge cases, abuse cases, hidden costs, explicit don't-proceed triggers.
 
 Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\` but with the lens-specific shape):
@@ -222,6 +222,7 @@ Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\
 - \`Dialogue summary:\` — the 5-15 bullets from Phase 1.
 - \`Project root:\` — absolute path.
 - \`Active flow state:\` — the sentinel triage block (lenses do not run heuristics on it).
+- \`Research depth:\` — \`triage.research_depth\` (v8.69; \`light\` / \`standard\` / \`deep-product\`); on \`deep-product\` product + skeptic fire extra probes, other lenses run identically.
 - \`Required first read:\` — the lens contract at \`.cclaw/lib/research-lenses/<lens-id>.md\`.
 
 Lenses run independently. The engineer + architecture lenses MAY dispatch \`repo-research\` on brownfield projects (the history lens reads \`.cclaw/knowledge.jsonl\` directly — that's the in-research mirror of \`learnings-research\`, and dispatching \`learnings-research\` from the history lens would be redundant). Lenses MAY use an MCP web-search tool (\`user-exa\`, \`user-context7\`, or comparable) when one is available; web search is **optional** — lenses fall back to training knowledge if no tool is wired, and stamp the fallback in their slim summary's \`Notes\` field. Research mode does NOT hard-require MCP web search.
@@ -244,7 +245,8 @@ The orchestrator authors \`research.md\` by:
    - **"plan with \`/cc <task>\`"** — research converges on a workable direction; risks are tracked but proceedable. Suggest a concrete kebab-case task description the user can type.
    - **"more research needed (specific area)"** — one or more lenses returned \`Confidence: low\` AND the user gap is concrete (e.g. "need to talk to the data team about the migration window first").
    - **"don't proceed (skeptic blocked: <reason>)"** — the skeptic lens set \`Don't-proceed: yes\` AND no obvious mitigation exists within the topic's scope. Cite the specific trigger.
-5. Stamping frontmatter with \`lenses: [engineer, product, architecture, history, skeptic]\` (or the subset that successfully returned; mark any failed lens as \`failed\` rather than dropping it from the list) and \`generated_at: <iso>\`.
+5. Stamping frontmatter with \`lenses\` (the depth-determined subset; failed lenses marked \`failed\`), \`research_depth\`, \`generated_at\`.
+6. **Synthesis self-review pass (v8.69)** — BEFORE \`research.md\` lands, walk the draft through four scans (placeholder / contradiction / scope drift / ambiguity); fix inline; record fixes in \`## Synthesis > ### Self-review notes\` (\`No self-review issues found.\` when clean). Full procedure in \`runbooks/research-depth-and-self-review.md\`.
 
 #### Phase 4 — finalize
 
@@ -259,6 +261,7 @@ Sub-cases:
 - **Argument is \`research\` alone (no topic)** — surface \`research mode needs a topic; try '/cc research <topic>'\`, end the turn.
 - **Argument starts with \`research \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — flags are ignored (research's path is fixed at the multi-lens flow; ceremonyMode doesn't apply). One-line note: \`research mode ignores ceremonyMode flags\`, then proceed.
 - **Research-mode + \`--mode=auto\` / \`--mode=step\`** — toggle dropped with one-line note (research has no stages to chain; the run mode does not apply).
+- **Research-mode + multiple depth flags** (\`--light --deep-product\`) — last-wins with one-line note (\`mutually exclusive depth flags; using --deep-product\`), then proceed.
 - **User cancels mid-dialogue** — run the cancel runtime, end the turn.
 - **All five lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
 

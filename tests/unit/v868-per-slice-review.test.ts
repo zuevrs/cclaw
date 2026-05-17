@@ -272,10 +272,12 @@ describe("v8.68 — orchestrator handles NEEDS_CONTEXT and BLOCKED deterministic
 });
 
 describe("v8.68 — version bump landed in package.json + CHANGELOG", () => {
-  it("package.json carries the 8.68.0 version", async () => {
+  it("package.json carries v8.68.0 or later (v8.68 features stay landed in subsequent releases)", async () => {
     const pkgRaw = await fs.readFile(path.join(SRC_ROOT, "..", "package.json"), "utf8");
     const pkg = JSON.parse(pkgRaw) as { version: string };
-    expect(pkg.version).toBe("8.68.0");
+    const [major, minor] = pkg.version.split(".").map((n) => Number.parseInt(n, 10));
+    expect(major).toBe(8);
+    expect(minor).toBeGreaterThanOrEqual(68);
   });
 
   it("CHANGELOG has a top-level entry for v8.68 mentioning per-slice review + structured status", async () => {

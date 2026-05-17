@@ -1283,6 +1283,15 @@ ship_commit: null
 # this list rather than dropped, so coverage gaps are auditable from
 # the artifact alone.
 lenses: [engineer, product, architecture, history, skeptic]
+# v8.69 multi-tier depth (light | standard | deep-product). Stamped by
+# the orchestrator's research-mode fork (parsed from \`--light\` /
+# \`--standard\` / \`--deep-product\` flag, otherwise auto-classified
+# from topic wording — see runbooks/research-depth-and-self-review.md).
+# Phase 2 lens dispatch reads this field to decide which lenses fire
+# (light = engineer + skeptic; standard = all 5; deep-product = all 5
+# with extra Thesis / Adjacent-product / Durability probes folded into
+# product + skeptic envelopes).
+research_depth: standard
 # Back-compat: the v8.53 ambiguity score frontmatter fields are kept
 # (null by default) so downstream readers that branch on these stay
 # compatible. The v8.65 multi-lens orchestrator does not author these
@@ -1364,6 +1373,12 @@ _(Pasted verbatim from \`research-engineer\` lens's findings block. Sections: Fe
 
 _<one-sentence size estimate, ranged not point>_
 
+### Sources
+
+_(v8.69 — first-class web search dispatch. Inline citations the engineer lens used to ground the findings: MCP web-search hits (\`user-exa\`), library-doc hits (\`user-context7\`), \`<path:line>\` references for in-repo evidence, plus the optional MCP fallback note when no web tool was available — fall-back to training knowledge is stamped here so the user / follow-up architect can audit the recency of each claim.)_
+
+- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
+
 ## Product lens
 
 _(Pasted verbatim from \`research-product\` lens's findings block. Sections: User value (overall + 3 sub-axes) / Who benefits (primary + secondary) / Alternatives (always including "do nothing") / Market / domain context / Open product questions.)_
@@ -1394,6 +1409,27 @@ _(Always include "do nothing / status quo" as one alternative.)_
 
 - _<question 1>_.
 
+### Product thesis _(deep-product depth only)_
+
+_(v8.69 — fired when \`research_depth: deep-product\`. The Thesis probe forces the lens to surface the implicit product hypothesis: what change in user behaviour / market position the proposed work assumes, what would have to be true for the change to land, and what evidence (real or sought) supports the thesis. Skip this subsection on \`light\` / \`standard\` depth.)_
+
+- **Implicit thesis:** _<one-sentence statement of the product hypothesis the work assumes>_.
+- **What must be true:** _<2-3 conditions the world / market / users must already satisfy for the work to deliver value>_.
+- **Evidence the lens found:** _<bullets citing market data, user research, internal usage signals>_.
+
+### Adjacent product _(deep-product depth only)_
+
+_(v8.69 — fired when \`research_depth: deep-product\`. The Adjacent-product probe forces the lens to scan adjacent product surfaces / categories the topic could absorb or fragment, plus the second-order product implications the surface-level findings missed.)_
+
+- **Adjacent surface:** _<product-or-feature-name>_ — _<one-line description; what already exists nearby>_. Implication: _<why this matters for the topic>_.
+- **Cannibalisation / synergy risk:** _<one bullet>_.
+
+### Sources
+
+_(v8.69 — first-class web search dispatch. Citations the product lens used: MCP web-search hits (\`user-exa\`), context7 library / framework docs, market-data references, plus the optional MCP fallback note when no web tool was available.)_
+
+- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
+
 ## Architecture lens
 
 _(Pasted verbatim from \`research-architecture\` lens's findings block. Sections: Surface impact / Coupling points / Boundaries affected / Scalability considerations / Reusable patterns.)_
@@ -1417,6 +1453,12 @@ _(Pasted verbatim from \`research-architecture\` lens's findings block. Sections
 ### Reusable patterns / precedents
 
 - _<pattern-name>_ — already used at \`<path:line>\`. _<one-line description>_.
+
+### Sources
+
+_(v8.69 — first-class web search dispatch. Citations the architecture lens used: \`<path:line>\` for in-repo evidence, MCP web-search hits (\`user-exa\`) for architectural patterns / postmortems / tradeoff write-ups, context7 framework docs, plus the optional MCP fallback note when no web tool was available.)_
+
+- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
 
 ## History lens
 
@@ -1446,6 +1488,12 @@ _(Pasted verbatim from \`research-history\` lens's findings block. Sections: Pri
 
 _<1-2 sentences naming the directional arc, OR "No directional drift observed in the history sample.">_
 
+### Sources
+
+_(v8.69 — citations the history lens used. Web search is OUT of scope for this lens (memory-only); the citations here are project-local: \`.cclaw/knowledge.jsonl\` line references, \`learnings.md\` paths, git refs.)_
+
+- _<source-name>_ — _<one-line description>_. _(\`knowledge.jsonl:line\` | \`learnings.md:line\` | \`<git-ref>\`)_
+
 ## Skeptic lens
 
 _(Pasted verbatim from \`research-skeptic\` lens's findings block. Sections: Failure modes (likelihood × impact) / Edge cases / Abuse cases / Hidden costs / Don't-proceed triggers.)_
@@ -1470,6 +1518,19 @@ _(Pasted verbatim from \`research-skeptic\` lens's findings block. Sections: Fai
 
 - _<trigger-name>_ — _<one-line description; what was found, why it should block proceeding>_.
 
+### Durability probe _(deep-product depth only)_
+
+_(v8.69 — fired when \`research_depth: deep-product\`. The Durability probe forces the skeptic lens to project the topic 6-18 months out: which assumptions decay first, which adversarial scenarios become more likely as the product matures, and which signals would tell the team early. Skip this subsection on \`light\` / \`standard\` depth.)_
+
+- **Decay vector:** _<assumption-or-component>_ — _<one-line description; what specifically erodes in 6-18 months>_. Earliest signal: _<one short clause>_.
+- **Maturing adversarial scenario:** _<one bullet; an abuse case that is unlikely on day 1 but probable as user / data / surface scale>_.
+
+### Sources
+
+_(v8.69 — first-class web search dispatch. Citations the skeptic lens used: postmortem writeups via \`user-exa\`, vulnerability databases / advisories, abuse-case literature, durability case studies, plus the optional MCP fallback note when no web tool was available.)_
+
+- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
+
 ## Synthesis
 
 _(Research orchestrator: Phase 3 cross-lens distillation. 3-7 paragraphs covering:_
@@ -1480,6 +1541,12 @@ _(Research orchestrator: Phase 3 cross-lens distillation. 3-7 paragraphs coverin
 - _**Confidence and coverage** — note any lens that returned \`Confidence: low\` or was marked \`failed\` in the lenses frontmatter; the synthesis pass should be honest about coverage gaps._
 
 _The synthesis is the orchestrator's own work — NOT a verbatim paste from any lens. The five per-lens sections above carry the lens-authored content; this section is where the orchestrator does the cross-lens reasoning the user came to research for.)_
+
+### Self-review notes
+
+_(v8.69 — output of the synthesis self-review pass. Before \`research.md\` is written to disk, the orchestrator walks the draft through four scans (placeholder / contradiction / scope drift / ambiguity — see \`runbooks/research-depth-and-self-review.md\`) and fixes findings inline. This subsection records what got cleaned up. On a clean draft, write \`No self-review issues found.\` verbatim — the absence of this subsection is a structural failure for the follow-up \`/cc <task>\` flow's architect, which reads \`research.md\` end-to-end as \`priorResearch\` context.)_
+
+- _<one bullet per fix the self-review applied; example: "Filled \`<TBD>\` in Engineer > Implementation paths > path 2 con (lifted from lens slim-summary Notes line)."; example: "Reframed Synthesis paragraph 2 — original drifted toward 'how to migrate' but topic was 'should we migrate'."; example: "Removed contradiction: synthesis claimed convergence on Redis but product lens listed Redis as a 'do nothing' alternative pro; restated as divergence."; OR the literal string "No self-review issues found." when all four scans returned clean.>_
 
 ## Recommended next step
 

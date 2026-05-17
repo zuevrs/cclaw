@@ -1122,6 +1122,164 @@ When \`userOverrode: true\` is recorded, the entry also includes a \`overrideFie
 - **Auto-detection deferral.** If a future release ships auto-detection, the entry point in this runbook stays unchanged — auto-detection becomes a second path into the same init code (the explicit \`/cc extend\` slug stays as the primary, unambiguous entry).
 `;
 
+const RESEARCH_DEPTH_AND_SELF_REVIEW = `# On-demand runbook — research depth tiers + synthesis self-review (v8.69+)
+
+The orchestrator opens this runbook on every \`/cc research <topic>\` flow — once at the Detect-hop research-mode fork (to parse the depth flag / classify the depth) and once at Phase 3 synthesis (to run the self-review pass before \`research.md\` is written). The body of \`/cc\` carries only the one-paragraph pointer; this runbook is the canonical source.
+
+## §1 — Research depth tiers
+
+Research mode (\`/cc research <topic>\`) supports three depth tiers; the orchestrator picks one at the Detect-hop research-mode fork and stamps it into \`flow-state.json > triage.research_depth\`. The depth is immutable for the flow's lifetime.
+
+| Depth | Lenses dispatched | Extra probes | When to use |
+| --- | --- | --- | --- |
+| \`light\` | \`research-engineer\` + \`research-skeptic\` (2 lenses) | none | Clarification questions: "which library does X?", "is Y still the best practice?", "does our team already use Z?". Fast / cheap turn-around when the user wants a focused technical signal + adversarial check, NOT a full product / market / history scan. |
+| \`standard\` (default) | engineer + product + architecture + history + skeptic (5 lenses) | none | Technical exploration: "evaluate Redis vs in-memory cache for the search endpoint", "should we move auth to JWT?", "what's our story on observability?". The pre-v8.69 default; same 4-phase flow, full coverage of the orthogonal lens dimensions. |
+| \`deep-product\` | 5 lenses | product lens fires Thesis + Adjacent-product probes; skeptic lens fires Durability probe | Greenfield / pivot / shape questions: "should we build a new product around X?", "what if we replace our planning tool with Y?", "evaluate switching from SaaS A to SaaS B". The deep-product probes (sourced from everyinc-compound \`ce-brainstorm\` Phase 1.2) force the lenses to interrogate the implicit product thesis + near-term durability that surface-level lens prose otherwise glosses. |
+
+### Selection — explicit flag (highest priority)
+
+The user passes one of \`--light\` / \`--standard\` / \`--deep-product\` anywhere in the \`/cc research <topic>\` argument. The flag is parsed out of the argument string before the topic is built. Mutually exclusive flags collapse last-wins with a one-line announcement (\`mutually exclusive depth flags; using --deep-product\`). The flag value is canonical; no auto-classification runs when a flag is present.
+
+Examples:
+
+\`\`\`text
+/cc research --light is fastify still maintained
+/cc research --standard add caching to the search endpoint
+/cc research --deep-product should we replace our calendar with our own
+/cc --research --deep-product evaluate switching from datadog to grafana
+\`\`\`
+
+### Selection — auto-classification (when no flag)
+
+When no \`--light\` / \`--standard\` / \`--deep-product\` flag is present, the orchestrator's research-mode fork auto-classifies the depth from the topic wording. The triage sub-agent's \`research_depth\` heuristic — surfaced in the slim summary's \`Research depth:\` line when triage runs — is NOT consulted directly here (research mode bypasses triage); the orchestrator runs the same wording-based heuristic inline.
+
+| Topic wording signal | Default depth |
+| --- | --- |
+| Pure clarification / single technical question (\`is X still maintained?\`, \`which library?\`, \`what does the team use?\`) | \`light\` |
+| Technical exploration with named surface (\`evaluate Redis caching\`, \`add OAuth\`, \`refactor our auth wrapper\`) | \`standard\` |
+| Greenfield / pivot / replacement wording (\`should we build...\`, \`what if we replace...\`, \`evaluate switching from...\`, \`we need a new <product-shape>\`) | \`deep-product\` |
+| Topic explicitly mentions a competitor / market category / persona without a code surface | \`deep-product\` |
+
+When the wording is ambiguous (e.g. \`add caching\` could be light OR standard), default to \`standard\` — the safer middle. The synthesis self-review pass surfaces under-coverage if the depth was too thin.
+
+### Stamping behaviour
+
+The Detect-hop research-mode fork writes the depth into \`flow-state.json > triage.research_depth\` immediately after stamping the sentinel triage block. Phase 2 dispatch reads this field to decide which lenses to dispatch:
+
+- \`light\` → dispatch \`research-engineer\` + \`research-skeptic\` only (2 envelopes; the other three lenses are not dispatched and not marked failed; the \`lenses\` frontmatter array carries only \`[engineer, skeptic]\`).
+- \`standard\` → dispatch all 5 lenses (pre-v8.69 behaviour).
+- \`deep-product\` → dispatch all 5 lenses; the dispatch envelope carries \`Research depth: deep-product\` so product + skeptic lenses fire their extra probes.
+
+## §2 — Synthesis self-review pass (v8.69; Phase 3)
+
+After authoring the per-lens sections + cross-lens \`## Synthesis\` + \`## Recommended next step\` (Phase 3 steps 1-4 in the start-command body), the orchestrator runs a **self-review pass** against the in-memory draft of \`research.md\` BEFORE writing it to disk. The self-review is one main-context pass (NOT a sub-agent dispatch — the orchestrator owns \`research.md\` end-to-end). Source: obra-superpowers brainstorming \"Spec Self-Review\" section.
+
+The pass walks four scans, in order, and fixes findings inline:
+
+### 2.1 — Placeholder scan
+
+Search the draft for any of:
+
+- literal \`<TBD>\` / \`TBD\` / \`TODO\` / \`tbd\` / \`todo\` / \`???\` / \`...\` (when used as a placeholder, not as ellipsis prose).
+- empty per-lens sub-sections (e.g. \`### Implementation paths\` followed immediately by another \`###\`).
+- the literal placeholder strings from the template (\`<path-name>\`, \`<one-line description>\`, \`<bullet 1>\`, \`<actor / role>\`, etc.) — these are template scaffolds that should have been filled by the lens; their presence means a lens returned a thin findings block.
+- the \`SLUG-PLACEHOLDER\` / \`TOPIC-PLACEHOLDER\` / \`GENERATED-AT-PLACEHOLDER\` strings (these MUST be replaced before finalize).
+
+For each placeholder found, fix inline:
+
+- a missing template scaffold → either drop the bullet or fill with a "(no <noun> identified)" sentinel sentence.
+- a \`<TBD>\` in a lens section → re-read the lens's slim summary; if the lens had real content it didn't surface, lift it; otherwise convert to a "Not assessed in this lens" sentinel.
+- the SLUG / TOPIC / GENERATED-AT placeholders → fill verbatim from the flow state.
+
+### 2.2 — Internal contradiction scan
+
+Walk the synthesis convergence + divergence paragraphs and check against the per-lens sections they cite:
+
+- a "convergence" claim that two lenses agree → spot-check both lens sections to confirm the agreement is real (not a paraphrase that drifted).
+- a "divergence" claim → the cited sections should genuinely disagree.
+- a "Recommended next: plan" → no skeptic \`Don't-proceed: yes\` should be in the Skeptic lens section.
+- a "Recommended next: don't proceed" → the cited skeptic trigger should appear verbatim in the Skeptic section's \`### Don't-proceed triggers\` subsection.
+
+For each contradiction found, fix inline: re-quote the lens, restate the convergence / divergence accurately, or flip the recommendation.
+
+### 2.3 — Scope drift scan
+
+Compare the cross-lens synthesis against the user's original topic + the discovery dialogue summary:
+
+- does the synthesis stay anchored to the topic the user named? Or has it drifted to an adjacent question?
+- does the recommended next step propose a task scope the dialogue summary supports? Or is it a bigger / different scope?
+
+For each drift finding, fix inline: rewrite the synthesis paragraph to anchor back to the topic, or narrow the recommended next-step task to match the dialogue.
+
+### 2.4 — Ambiguity scan
+
+Re-read the recommended next step + each Open product question (when present):
+
+- could the recommendation be interpreted two different ways? If yes, pick one and make it explicit.
+- could the suggested kebab-case task description match two unrelated tasks?
+- does any "Confidence: low" marker name a SPECIFIC area that needs more research, or is it vague?
+
+For each ambiguity, fix inline: tighten the wording, name the specific area, or add a one-line clarification.
+
+## §3 — Self-review notes capture
+
+After all four scans, the orchestrator captures what got cleaned up in \`research.md\`'s \`## Synthesis > ### Self-review notes\` subsection. The notes are 0-N short bullets; on a clean draft, write \"No self-review issues found.\" One bullet per fix the self-review applied:
+
+\`\`\`markdown
+### Self-review notes
+
+- Filled \`<TBD>\` in Engineer > Implementation paths > path 2 con (lifted from lens slim-summary Notes line: "Path 2 trade-off: requires migration").
+- Reframed Synthesis paragraph 2 — original drifted toward \"how to migrate\" but topic was \"should we migrate\".
+- Tightened Recommended next: kebab-case task was \`add-caching\`; now \`add-redis-cache-to-search-endpoint\` to match dialogue scope.
+- Removed contradiction: synthesis claimed engineer + product converged on Redis but product lens listed Redis as a "do nothing" alternative pro; restated as divergence.
+\`\`\`
+
+The self-review notes are part of \`research.md\` (visible to the user / follow-up flow); they are NOT separately persisted. The follow-up \`/cc <task>\` flow's architect reads \`research.md\` end-to-end as \`priorResearch\` context — including the Self-review notes block, which signals which areas had to be tightened during synthesis.
+
+## §4 — Pass exits
+
+The pass exits when one of:
+
+- All four scans returned no findings → write \"No self-review issues found.\" in the Self-review notes subsection and proceed to Phase 4 finalize.
+- All findings were fixed inline → write the fix bullets into Self-review notes and proceed.
+- A finding cannot be fixed inline (e.g. a lens returned a structurally invalid findings block that the orchestrator can't repair from the slim summary alone) → re-dispatch ONLY that lens once with a richer envelope (Phase 2 already permits one re-dispatch per lens, total cap 2). After the re-dispatch returns, restart the self-review pass on the updated draft. If the re-dispatch budget is already exhausted, write the finding into Self-review notes as \"Could not fix inline: <description>; surface to user as coverage gap\" and proceed (the synthesis pass's confidence-and-coverage paragraph picks it up).
+
+## §5 — Worked examples
+
+### 5.1 — Light depth, clean self-review
+
+\`\`\`text
+/cc research --light is hono still actively maintained vs fastify
+\`\`\`
+
+Detect-hop fork stamps \`research_depth: light\`. Phase 2 dispatches engineer + skeptic only. Both return \`Confidence: high\` findings citing context7 hits for both libraries' v5 / v11 release dates. Phase 3 synthesis converges on "hono is more actively shipped; fastify still has the bigger plugin ecosystem". Self-review:
+
+- Placeholder scan: clean.
+- Contradiction scan: clean.
+- Scope drift scan: clean.
+- Ambiguity scan: recommended-next was \"plan with /cc add-hono-experiment\" which could mean two things — tightened to \"plan with /cc add-hono-side-by-side-prototype\".
+
+Self-review notes records the one ambiguity fix and the flow finalises.
+
+### 5.2 — Deep-product depth, scope drift
+
+\`\`\`text
+/cc --research --deep-product should we build a new internal calendar instead of using google calendar
+\`\`\`
+
+Detect-hop fork stamps \`research_depth: deep-product\`. Phase 2 dispatches all 5 lenses; product + skeptic envelopes carry \`Research depth: deep-product\` so the Thesis / Adjacent-product / Durability probes fire. Phase 3 synthesis drafts a recommendation but drifts into "how to build it" specifics. Self-review's scope-drift scan catches this and rewrites the synthesis to stay on "should we?". Self-review notes records the rewrite.
+
+## §6 — Anti-rationalization
+
+| rationalization | truth |
+| --- | --- |
+| "Self-review found one placeholder — I'll just leave it; the user will probably fill it in." | NO. Placeholders are structural failures. The self-review pass exists to fix them BEFORE \`research.md\` lands; passing them through means the next flow's architect reads a degraded artifact. Fix inline or escalate via re-dispatch. |
+| "Light depth means I can skip the self-review pass too." | NO. Light depth dispatches fewer lenses, but the synthesis self-review still runs. A 2-lens synthesis can drift, contradict, or carry placeholders just like a 5-lens synthesis. |
+| "Deep-product depth fired all the probes — surely the synthesis is comprehensive." | The probes give MORE material to surface (durability, thesis, adjacent product); they do NOT replace the self-review pass. More material = more surface for contradictions or scope drift. Run the self-review the same way. |
+| "I'll skip writing Self-review notes when it's clean — saves a few lines." | NO. The notes section is part of the research.md contract (the template carries it); writing \"No self-review issues found.\" verbatim is the canonical empty state. The follow-up architect reads the absence of the section as a structural failure. |
+| "The recommendation contradicts the skeptic — but it's a really cool plan, I'll keep it." | NO. The contradiction scan exists exactly to catch this. If the skeptic flagged a don't-proceed AND the recommendation says proceed, fix the recommendation. Resolving the contradiction is more important than \"saving the cool plan\". |
+`;
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -1200,6 +1358,12 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "extend-mode.md",
     title: "Extend-mode entry point (v8.59+)",
     body: EXTEND_MODE
+  },
+  {
+    id: "research-depth-and-self-review",
+    fileName: "research-depth-and-self-review.md",
+    title: "Research depth tiers + synthesis self-review (v8.69+)",
+    body: RESEARCH_DEPTH_AND_SELF_REVIEW
   }
 ];
 
