@@ -116,6 +116,14 @@ _- [learnings](../shipped/<parent-slug>/learnings.md) — when present_
 
 _The relative paths use \`../shipped/<parent-slug>/\` to walk from the active \`flows/<new-slug>/\` directory to the parent's shipped directory. The reviewer's parent-contradictions cross-check reads this section to validate the new flow does not silently undo a parent decision.)_
 
+## Assumptions (correct me now)
+
+_(Architect — v8.67. Mandatory on every non-inline plan. 3-7 short bullets covering the surface-area decisions a senior reviewer would ratify (which interpretation was chosen, which library / storage / approach picked when multiple were plausible, which scope edge was assumed). Bullets pinned by a Clarify user-answer are bare; bullets from architect-silent inferences carry the literal \`(architect inference)\` tag so the user can spot what to push back on. After plan.md is written the orchestrator emits an ack-window prose pointing the user at THIS section by name — read it before continuing, edit in place to correct, or \`/cc-cancel\` and restart with a clearer task. This is the user's last cheap moment to steer; the build dispatches as soon as \`/cc\` continues.)_
+
+- _Assumption 1 — one short clause naming the decision (e.g. "Use session storage, not JWT"). Bare when the user answered in Clarify._
+- _Assumption 2 — \`(architect inference)\` tag when not user-pinned (e.g. "Cache TTL = 60s for the search endpoint (architect inference)")._
+- _Assumption 3..N — additional surface-area decisions; 3-7 total._
+
 ## Spec
 
 _(mandatory on every plan.md (strict and soft). Four bullets capture the requirement-side contract that AC alone do not carry: intent + scope + non-goals + per-slug constraints. Always authored by the architect; on strict-mode plans the Frame phase adds NFR rows alongside this section. Each bullet MUST be filled — write "none" or "n/a" when genuinely nothing applies; \`<TBD>\` or empty values are not acceptable. Existing legacy plans without this section continue to work; the section appears only on plans authored on v8.46+.)_
@@ -266,6 +274,14 @@ security_flag: false
 ## Extends
 
 _(present only when this flow was initialised via \`/cc extend <slug> <task>\`. The architect (Bootstrap) authors this section verbatim from \`flowState.parentContext\` on soft flows. Drop the entire section on cold-start \`/cc <task>\` flows. Format is identical to the strict PLAN_TEMPLATE — \`refines: <parent-slug>\` line + parent decision summary + bulleted artifact links. See PLAN_TEMPLATE comment for the exact shape.)_
+
+## Assumptions (correct me now)
+
+_(Architect — v8.67. Mandatory on every non-inline plan, including soft mode. 3-7 short bullets covering the surface-area decisions a senior reviewer would ratify. Bullets pinned by a Clarify user-answer are bare; bullets from architect-silent inferences carry the literal \`(architect inference)\` tag. After plan.md is written the orchestrator emits an ack-window prose pointing the user at THIS section by name — read it before continuing, edit in place to correct, or \`/cc-cancel\` and restart with a clearer task.)_
+
+- _Assumption 1 — one short clause naming the decision. Bare when user-pinned in Clarify._
+- _Assumption 2 — \`(architect inference)\` tag when architect-silent._
+- _Assumption 3..N — 3-7 total._
 
 ## Plan
 

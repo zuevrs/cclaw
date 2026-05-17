@@ -954,6 +954,30 @@ export interface TriageDecision {
    * state files without this field validate unchanged.
    */
   surfaces?: Surface[];
+  /**
+   * Ambiguity score (v8.67) the triage sub-agent computes from the raw
+   * task input. Integer in `[0, 100]`; higher = more ambiguous. Drives
+   * the architect's Clarify-phase entry gate: when
+   * `ambiguityScore >= config.clarify.ambiguity_threshold` (default 60)
+   * AND `ceremonyMode != "inline"`, the architect runs a Clarify phase
+   * BEFORE writing `plan.md` (one question per turn, max 5, until the
+   * user signals "go" / "ready" / "proceed" or ambiguity resolves).
+   *
+   * Heuristic sources the triage prompt names verbatim:
+   * - vague verbs without targets ("improve", "make better", "fix
+   *   bugs"),
+   * - missing acceptance criteria (no concrete pass/fail signal in the
+   *   prompt),
+   * - multiple plausible interpretations (the same task wording could
+   *   land 2+ different implementations),
+   * - no concrete file/function names in the prompt.
+   *
+   * Optional + back-compat: pre-v8.67 state files lack this field and
+   * the architect treats absence as `0` (no clarify). Triage writers
+   * MUST clamp values outside `[0, 100]` to the nearest bound rather
+   * than throwing.
+   */
+  ambiguityScore?: number;
 }
 
 export interface CliContext {
