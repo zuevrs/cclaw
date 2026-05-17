@@ -4,6 +4,7 @@ import { CRITIC_PROMPT } from "./critic.js";
 import { INVESTIGATOR_PROMPT } from "./investigator.js";
 import { PLAN_CRITIC_PROMPT } from "./plan-critic.js";
 import { PLAN_DESIGN_PROMPT } from "./plan-design.js";
+import { PLAN_DEVEX_PROMPT } from "./plan-devex.js";
 import { QA_RUNNER_PROMPT } from "./qa-runner.js";
 import { BUILDER_PROMPT } from "./builder.js";
 import { TRIAGE_PROMPT } from "./triage.js";
@@ -18,6 +19,7 @@ export const SPECIALIST_PROMPTS: Record<SpecialistId, string> = {
   investigator: INVESTIGATOR_PROMPT,
   "plan-critic": PLAN_CRITIC_PROMPT,
   "plan-design": PLAN_DESIGN_PROMPT,
+  "plan-devex": PLAN_DEVEX_PROMPT,
   "qa-runner": QA_RUNNER_PROMPT,
   builder: BUILDER_PROMPT,
   triage: TRIAGE_PROMPT
@@ -30,6 +32,7 @@ export {
   INVESTIGATOR_PROMPT,
   PLAN_CRITIC_PROMPT,
   PLAN_DESIGN_PROMPT,
+  PLAN_DEVEX_PROMPT,
   QA_RUNNER_PROMPT,
   BUILDER_PROMPT,
   TRIAGE_PROMPT

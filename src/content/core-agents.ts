@@ -126,6 +126,16 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     prompt: SPECIALIST_PROMPTS["plan-design"]
   },
   {
+    id: "plan-devex",
+    kind: "specialist",
+    title: "Plan devex",
+    activation: "on-demand",
+    modes: ["pre-impl-devex"],
+    description:
+      "v8.82 pre-implementation developer-experience specialist. Walks plan.md against a six-dimension DevEx rubric (Getting Started / API ergonomics / Error messages / Docs / Upgrade path / Measurement; rubric lifted into a shared const at src/content/devex-quality-rubric.ts so a future post-build reviewer `devex` axis or research-devex lens can consume the same dimensions). Dispatched after plan-critic AND after plan-design when their gates fire — sequential, not parallel — on the devex-surface gate {triage.devexSurface == true OR triage.surfaces ∩ {cli, library, api} ≠ ∅; ceremonyMode ∈ {soft, strict}}. Below-6 dimension grades become DX-N findings appended to plan.md's ## Plan-devex findings section; severity ≥ medium blocks ship in strict mode. Getting-started severity escalates one tier (TTHW is load-bearing); upgrade-path on breaking changes caps at high regardless of mode. Verdicts: pass (advance to builder), revise (bounce to architect once — max 1 revise loop shared with plan-critic + plan-design), block (stop-and-report). Read-only on the codebase; appends to plan.md only.",
+    prompt: SPECIALIST_PROMPTS["plan-devex"]
+  },
+  {
     id: "builder",
     kind: "specialist",
     title: "Builder",

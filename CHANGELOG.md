@@ -1,6 +1,78 @@
 # Changelog
 
 
+## 8.85.0 — DevEx lens (v8.82 work)
+
+### Why
+
+Every cclaw slug that touches a developer-facing surface (SDK / API / CLI / library / public-interface) ships a contract integrating developers will live inside. The pre-v8.82 cclaw pipeline had pre-implementation gates for plan **structure** (`plan-critic`, v8.51) and pre-implementation gates for plan **visual design** (`plan-design`, v8.75), but no pre-implementation gate for the plan's **developer-experience** commitments — the load-bearing surfaces an SDK / API / CLI / library is judged by: time-to-Hello-World, API ergonomics, error UX, doc deliverables, migration path on breaking changes, telemetry hooks for measuring usage.
+
+A reviewer that catches docs-debt at review time has already burned the build context. A plan-design pass that walks the rendered UI cannot speak to method names, error formats, or codemod availability — those are orthogonal failure modes on a fundamentally different surface (developer reading at 2am, not user pixel-aligned at the homepage). The v8.75 plan-design lift demonstrated the pattern: extract the rubric to a shared const, run the audit pre-build, surface gaps as findings the architect addresses in a single revise loop, block ship in strict on severity ≥ medium. v8.82 applies the same playbook to the developer-experience surface.
+
+The pattern lineage:
+
+- **gstack `plan-devex-review`** (lines 1019-1129) — eight scored passes against developer-experience dimensions with persona archetypes, competitive benchmarks, and "magical moment" capture. cclaw bakes a tighter six-dimension rubric directly into the prompt body (no AskUserQuestion pauses — v8.61 always-auto contract).
+- **v8.75 plan-design** — same shape (pre-build, single-shot append-only specialist, shared rubric const, below-6 → finding, block-ship-on-strict). plan-devex is the DevEx-flavoured sibling.
+
+### What changed
+
+**Deliverable 1 — Shared rubric const (`src/content/devex-quality-rubric.ts`).**
+
+- New module exports `DEVEX_QUALITY_DIMENSIONS` (six dimensions: `getting-started` / `api-ergonomics` / `error-messages` / `docs` / `upgrade-path` / `measurement`), each with `key` / `name` / `summary` / `anchor10` ("what a 10 looks like"). Mirrors the v8.75 `DESIGN_QUALITY_DIMENSIONS` shape so future consumers (post-build reviewer `devex` axis, research-devex lens) can share the same source of truth without drift.
+- Also exports `DEVEX_QUALITY_AI_SLOP_SIGNALS` (six canonical DevEx clichés — method names that read like marketing, error messages that wrap exceptions without translation, docs that list params but never show a working call, breaking changes with `BREAKING:` and no migration, telemetry stubs named `event_42`, first-run flows that implicitly measure TTHW in days). Two or more signals firing on the same plan trigger an umbrella `DX-N` finding.
+- `renderDevexQualityRubricTable()` and `renderDevexQualityAiSlopChecklist()` emit the verbatim markdown that the plan-devex prompt embeds.
+
+**Deliverable 2 — plan-devex specialist (`src/content/specialist-prompts/plan-devex.ts`).**
+
+- New ~9k-char prompt body for the pre-implementation `plan-devex` specialist. Walks plan.md against the six-dimension rubric when triage detects an SDK / API / CLI / library / public-interface surface; below-6 grades become `DX-N` findings appended to plan.md's `## Plan-devex findings` section.
+- Mirrors plan-design's structure: §0 envelope read, §1 pre-commitment predictions (3-5 BEFORE detailed reading), §2 six-dimension rubric grading, §3 AI-slop check, §4 DX-N findings ledger, §5 findings table format, §6 slim summary verdict.
+- Severity ladder: `5/10` → `low`, `4/10` → `medium` (blocks ship in strict — the v8.82 block-ship-on-strict floor), `≤3/10` → `high`. Getting-started escalates one tier (TTHW is load-bearing for first impression). Upgrade-path on breaking changes caps at `high` regardless of mode (ships-a-regression baseline).
+- Verdict surface: `pass` / `revise` / `block`; iteration cap 1 revise loop max (shared with plan-critic + plan-design when multiple fire).
+
+**Deliverable 3 — Triage `devexSurface` detection (`src/content/specialist-prompts/triage.ts` + `src/types.ts`).**
+
+- `TriageDecision` gains an optional `devexSurface: boolean` field with explicit JSDoc detection rules (SDK / API / CLI / library / public-interface keywords; method / signature vocabulary; file-pattern hints `.d.ts` / `openapi` / `swagger` / `.proto files` / `index.ts exports`; harness hints SDK rewrite / CLI redesign / library refactor).
+- Triage prompt gains a "Devex surface detection" section after the existing "Design surface detection" step and emits the flag on the slim summary's `Devex surface:` line. The orchestrator parses + persists `triage.devexSurface` for the plan-devex dispatch gate. The flag is **independent of `designSurface`** — a slug can touch both an SDK and a UI component (both flags true; both lenses run sequentially).
+
+**Deliverable 4 — Orchestrator dispatch (`src/content/start-command.ts`).**
+
+- Stage→specialist mapping table gains a `plan-devex` row gated on `(triage.devexSurface == true OR triage.surfaces ∩ {cli, library, api} ≠ ∅) AND ceremonyMode ∈ {soft, strict} AND plan.md exists`.
+- New `#### plan-devex` section under Hop 3 Phase 2 documents the dispatch ordering (after plan-critic AND after plan-design — sequential, NOT parallel — to keep prompt budget manageable), the verdict-routing semantics (`pass` → builder; `revise` → architect with §8 hand-off; `block` → stop-and-report), the flow-state.json patches (`planDevexVerdict` / `planDevexIteration` / `planDevexFindingsCount` / `planDevexDispatchedAt`), and the combined revise hand-off shape when 2+ pre-impl lenses return non-`pass` in the same iteration.
+
+**Deliverable 5 — Specialist roster (`src/types.ts` + `src/content/core-agents.ts` + `src/content/specialist-prompts/index.ts`).**
+
+- `SPECIALISTS` grows 9 → 10 with the addition of `plan-devex` between `plan-design` and `qa-runner`. `PlanDevexVerdict = "pass" | "revise" | "block"` and `PlanDevexSeverity = "low" | "medium" | "high"` types added alongside the existing plan-design counterparts.
+- `SPECIALIST_AGENTS` registers `plan-devex` as an on-demand specialist with `modes: ["pre-impl-devex"]`. `SPECIALIST_PROMPTS["plan-devex"]` points at the new `PLAN_DEVEX_PROMPT` export.
+
+**Deliverable 6 — devex-quality-discipline skill (`src/content/skills/devex-quality-discipline.md` + `src/content/skills.ts`).**
+
+- New auto-trigger skill registered with `stages: ["plan"]` and triggers `devex-surface:true`, `specialist:plan-devex`, `stage:plan`, `diff:index.ts|cli.ts|openapi|swagger|.proto|.d.ts|.pyi`. The skill body documents the six dimensions, the severity ladder + getting-started escalation, the upgrade-path cap on breaking changes, the AI-slop umbrella rule, and the block-ship semantics.
+
+**Deliverable 7 — Tripwire tests (`tests/unit/v882-devex-lens.test.ts`).**
+
+- 30 assertions across seven `describe` blocks pin the v8.82 contract: SPECIALISTS roster (`plan-devex` inserted between `plan-design` and `qa-runner`); shared rubric const exports six dimensions + at least six AI-slop signals; rendered table + checklist embedded verbatim in plan-devex.ts; prompt-body discipline (force-stance opening / Modes / Output schema / Composition / DX-N format / block-ship floor / pre-commitment predictions / cclaw-ethos cross-reference / getting-started escalation / upgrade-path cap); triage `devex_surface` keyword set + slim summary line + independence-from-`designSurface` clause; orchestrator `#### plan-devex` body section + gate + dispatch ordering + verdict routing + flow-state.json patches; devex-quality-discipline skill registration + triggers + rubric source-of-truth citation; package.json `8.85.0` + CHANGELOG `8.85.0` entry.
+
+**Deliverable 8 — Budget bumps (`tests/unit/v822-orchestrator-slim.test.ts`, `tests/unit/v831-path-aware-trimming.test.ts`, `tests/unit/v861-triage-subagent.test.ts`).**
+
+- start-command body char budget raised from 135000 → 145000 to absorb the new `#### plan-devex` body section (~5500 chars across one stage-table row + the dispatch-ordering / verdict-routing / flow-state-patches paragraphs + the rotating-lastSpecialist update for plan-devex returns).
+- start-command line budget raised from 800 → 830.
+- Combined body + on-demand runbook ceiling raised from 285000 → 295000 chars.
+- v831 path-aware-trimming budgets raised in lock-step: inline path 135000 → 145000; non-inline path 180000 → 190000; large-risky path 205000 → 215000.
+
+**Deliverable 9 — Hardcoded count migration (9 → 10 specialists).**
+
+- `SPECIALISTS.length` references and `toHaveLength(9)` / `toHaveLength(11)` assertions across `tests/unit/{types,critic-specialist,core-agents,v852-qa-and-browser,v861-triage-subagent,v862-unified-flow,v865-powerful-research,v874-ethos-bundle,v875-plan-design-lens,v876-research-design-approaches,v877-investigator}.test.ts` and `tests/integration/critic-hop.test.ts` updated to 10 / 12. Init-writes-11-agent-files assertion grows to 12 (the new `plan-devex.md` agent file ships unconditionally).
+
+**Deliverable 10 — Smoke (`scripts/smoke-init.mjs`).**
+
+- New assertion after the v8.75 `plan-design.md` agent-file check pins that `plan-devex.md` ships on every `cclaw init` (gated at dispatch, not at install — the agent file is always present).
+
+### Clean break
+
+No back-compat breaks. Pre-v8.82 shipped flows in `flows/shipped/` whose `flow-state.json > triage` lacks `devexSurface` continue to validate; the plan-devex dispatch gate treats absence as `false` (the historical pre-v8.82 behaviour where plan-devex did not exist). Existing plan.md files without a `## Plan-devex findings` section are unchanged; the section is only authored when plan-devex dispatches on a re-run.
+
+The slug shipped as `8.85.0` (not `8.82.0`) due to a parallel-shipping race that bumped versions ahead of slug identity for v8.77 + v8.78 + v8.79 + v8.80 + v8.81. Branch identity, test filename, PR title, and CHANGELOG heading preserve the `v8.82` slug; the git tag and package.json version are `8.85.0`. See v8.75 / v8.76 for the same recovery pattern.
+
 ## 8.84.0 — Not-doing and key assumptions to validate (v8.80 work)
 
 ### Why

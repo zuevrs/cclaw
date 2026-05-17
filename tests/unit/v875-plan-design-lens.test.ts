@@ -34,19 +34,19 @@ import { SPECIALISTS } from "../../src/types.js";
  * un-wires plan-design from the orchestrator lights up immediately.
  */
 
-describe("v8.75 — SPECIALISTS roster includes plan-design (eight specialists at v8.75; nine at v8.77 after investigator joined)", () => {
-  it("AC-1 — SPECIALISTS has exactly nine entries (v8.77 added investigator after triage)", () => {
-    expect(SPECIALISTS).toHaveLength(9);
+describe("v8.75 — SPECIALISTS roster includes plan-design (eight specialists at v8.75; ten at v8.82 after investigator + plan-devex joined)", () => {
+  it("AC-1 — SPECIALISTS has exactly ten entries (v8.77 added investigator after triage; v8.82 added plan-devex after plan-design)", () => {
+    expect(SPECIALISTS).toHaveLength(10);
   });
 
-  it("AC-1 — SPECIALISTS contains `plan-design` (immediately after `plan-critic`, before `qa-runner`)", () => {
+  it("AC-1 — SPECIALISTS contains `plan-design` (immediately after `plan-critic`, before `plan-devex`)", () => {
     expect(SPECIALISTS).toContain("plan-design");
     const planCriticIdx = (SPECIALISTS as readonly string[]).indexOf("plan-critic");
     const planDesignIdx = (SPECIALISTS as readonly string[]).indexOf("plan-design");
-    const qaRunnerIdx = (SPECIALISTS as readonly string[]).indexOf("qa-runner");
+    const planDevexIdx = (SPECIALISTS as readonly string[]).indexOf("plan-devex");
     expect(planCriticIdx).toBeGreaterThan(-1);
     expect(planDesignIdx).toBe(planCriticIdx + 1);
-    expect(qaRunnerIdx).toBe(planDesignIdx + 1);
+    expect(planDevexIdx).toBe(planDesignIdx + 1);
   });
 
   it("AC-1 — SPECIALIST_PROMPTS exports a non-empty `plan-design` prompt", () => {

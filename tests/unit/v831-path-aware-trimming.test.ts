@@ -30,12 +30,12 @@ function bodyBudget(fileNames: string[]): number {
 }
 
 describe("v8.31 path-aware orchestrator — body-only budget", () => {
-  it("AC-1 — start-command body stays ≤ 135000 chars (... v8.74 raised by 2000 chars for the ethos preamble + cross-model trigger language; v8.76 raised by 12000 chars to absorb the Phase 1.5 Approaches Gate prose + the rewritten Phase 2 lens-dispatch prose (design-signal heuristic + `--lens=design` / `--lens=-design` flags + the new `research-design` lens row + the new `Framing:` envelope field); v8.77 raised by 17000 chars to absorb the Debug-branch routing section + the #### investigator stage details + the investigator stage-table row + the v8.77 footnote on plan; v8.79 raised by 10000 chars to absorb the new One-way Door Gate section under Dispatch — structured-ask payload, three-option picker, flow-state transitions, lite-ceremony exemption + the new `awaiting-one-way-confirmation` enum value documented in the slim-summary contract and hard-gate logic)", () => {
-    expect(renderStartCommand().length).toBeLessThanOrEqual(135000);
+  it("AC-1 — start-command body stays ≤ 145000 chars (... v8.79 raised by 10000 chars to absorb the new One-way Door Gate section + the new `awaiting-one-way-confirmation` enum value; v8.82 raised by 10000 chars (135000 → 145000) to absorb the new #### plan-devex body section + stage-table row + the rotating-lastSpecialist update for plan-devex returns)", () => {
+    expect(renderStartCommand().length).toBeLessThanOrEqual(145000);
   });
 
-  it("AC-1 — start-command body stays ≤ 800 lines (... v8.74 raised by 5 lines for the ethos-preamble + Skills-attached bullet; v8.75 raised by 30 lines for the #### plan-design body section + SPECIALISTS roster + stage-table row; v8.76 raised by 50 lines for the new #### Phase 1.5 — approaches gate section (procedure + sub-cases + worked example) and the rewritten Phase 2 dispatch prose (design-signal heuristic + lens-toggle flags + new research-design row + `Framing:` envelope); v8.77 raised by 75 lines for the Debug-branch routing section + the #### investigator stage details + the investigator stage-table row + the v8.77 footnote on plan; v8.78 raised by 80 lines for the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring — the four-dimension table (goal/constraints/criteria/context), the ambiguity formula, the weakest-dimension targeting rule, the challenge-mode rotation (Contrarian round 4 / Simplifier round 5), the per-round table, the math-gated exit threshold (ambiguity < 0.25), the `/cc research go` force-exit sub-command + invocation-matrix row)", () => {
-    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(800);
+  it("AC-1 — start-command body stays ≤ 830 lines (... v8.78 raised by 80 lines for the rewritten Phase 1 iterative discovery dialogue; v8.82 raised by 30 lines (800 → 830) for the new #### plan-devex body section + stage-table row)", () => {
+    expect(renderStartCommand().split("\n").length).toBeLessThanOrEqual(830);
   });
 });
 
@@ -55,22 +55,22 @@ describe("v8.31 path-aware orchestrator — per-path envelopes (v8.54: budgets u
     "critic-steps.md"
   ];
 
-  it("AC-2 — inline path budget = body alone, ≤ 135000 chars (... v8.74 raised by 2000 chars matching the body-only budget bump; v8.76 raised by 12000 chars matching the body-only budget bump for the Phase 1.5 Approaches Gate + Phase 2 dispatch rewrite + design lens row + `Framing:` envelope field; v8.77 raised by 17000 chars matching the body-only budget bump for the Debug-branch routing section + investigator stage details; v8.79 raised by 10000 chars matching the body-only budget bump for the One-way Door Gate section + the new `awaiting-one-way-confirmation` enum value)", () => {
-    expect(bodyBudget([])).toBeLessThanOrEqual(135000);
+  it("AC-2 — inline path budget = body alone, ≤ 145000 chars (... v8.82 raised by 10000 chars matching the body-only budget bump for the new #### plan-devex section + stage-table row)", () => {
+    expect(bodyBudget([])).toBeLessThanOrEqual(145000);
   });
 
-  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 180000 chars (... v8.75 raised by 9000 chars matching the body bump for the new #### plan-design section; v8.76 raised by 12000 chars matching the body bump for the Phase 1.5 Approaches Gate + Phase 2 dispatch rewrite + design lens row; v8.77 raised by 20000 chars for the body bump + the new runbooks/debug-branch.md runbook being included in the non-inline budget set)", () => {
-    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(180000);
+  it("AC-2 — non-inline path budget = body + 6 runbooks, ≤ 190000 chars (... v8.82 raised by 10000 chars matching the body bump for the new #### plan-devex section)", () => {
+    expect(bodyBudget(NON_INLINE_RUNBOOKS)).toBeLessThanOrEqual(190000);
   });
 
-  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 205000 chars (... v8.75 raised by 9000 chars matching the non-inline path bump; v8.76 raised by 12000 chars matching the non-inline path bump for the body-only v8.76 deliverables)", () => {
+  it("AC-2 — large-risky path adds parallel-build / cap-reached / adversarial-rerun, ≤ 215000 chars (... v8.82 raised by 10000 chars matching the non-inline path bump)", () => {
     const largeRisky = [
       ...NON_INLINE_RUNBOOKS,
       "parallel-build.md",
       "cap-reached-recovery.md",
       "adversarial-rerun.md"
     ];
-    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(205000);
+    expect(bodyBudget(largeRisky)).toBeLessThanOrEqual(215000);
   });
 
   it("AC-2 — strict ordering: large-risky > non-inline > inline (per-path adds material)", () => {

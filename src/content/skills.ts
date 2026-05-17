@@ -177,6 +177,20 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     body: readSkill("design-quality-discipline.md")
   },
   {
+    id: "devex-quality-discipline",
+    fileName: "devex-quality-discipline.md",
+    description:
+      "shared discipline for the six-dimension developer-experience (DevEx) rubric (added in the v8.82 release) (getting started / API ergonomics / error messages / docs / upgrade path / measurement) consumed by the pre-build `plan-devex` specialist (walks plan.md). Single source of truth for the rubric lives in `src/content/devex-quality-rubric.ts`; this skill spells out HOW to grade (pre-commitment predictions, severity ladder with getting-started one-tier escalation, upgrade-path cap on breaking changes, AI-slop umbrella, block-ship semantics). Auto-on at plan stage when triage detects an SDK / API / CLI / library / public-interface surface.",
+    triggers: [
+      "devex-surface:true",
+      "specialist:plan-devex",
+      "stage:plan",
+      "diff:index.ts|cli.ts|openapi|swagger|.proto|.d.ts|.pyi"
+    ],
+    stages: ["plan"],
+    body: readSkill("devex-quality-discipline.md")
+  },
+  {
     id: "review-discipline",
     fileName: "review-discipline.md",
     description: "merge of review-loop + security-review. v8.62 unified flow absorbed the former `security-reviewer` specialist into reviewer's `security` axis — the skill now wraps every reviewer invocation with the shared Findings table, ten-axis pass (incl. the absorbed full threat-model coverage on the security axis), Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",

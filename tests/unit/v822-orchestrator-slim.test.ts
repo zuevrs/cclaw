@@ -50,23 +50,23 @@ async function seedRunbookOrphan(projectRoot: string, fileName: string): Promise
 }
 
 describe("v8.22 orchestrator-slim — `/cc` body line budget", () => {
-  it("AC-1 — `start-command.ts` body stays ≤565 lines (was 901 on v8.21; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer; v8.51 absorbed ~15 lines for the pre-implementation plan-critic sub-step pointer; v8.52 absorbed ~20 lines for the qa stage Hop-2 surface-detection block + the qa step body section + the qa-runner stage-table row; v8.59 absorbed ~10 lines for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.69 absorbed ~3 lines for the research-depth fork-stamp sub-bullet + the synthesis self-review step + the depth-flag sub-case; v8.70 absorbed ~2 lines for the design-quality envelope-activation bullet + the eleven-axis update; v8.71 absorbed ~10 lines for the Phase 3.5 awaiting-user-review pointer + the invocation-matrix row for the three new research sub-commands — full procedure lives in runbooks/research-revision.md; v8.74 absorbed ~5 lines for the ethos-preamble paragraph under Dispatch envelope + the Skills-attached `cclaw-ethos` reference doc bullet + the updated Always-ask rules line naming the Required ethos read; v8.78 raised by 80 lines for the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring (4 dimensions table + ambiguity formula + targeting + challenge-mode rotation + per-round table + math-gated exit + `/cc research go` force-exit + the invocation-matrix row for `/cc research go`))", () => {
+  it("AC-1 — `start-command.ts` body stays ≤830 lines (was 901 on v8.21; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer; v8.51 absorbed ~15 lines for the pre-implementation plan-critic sub-step pointer; v8.52 absorbed ~20 lines for the qa stage Hop-2 surface-detection block + the qa step body section + the qa-runner stage-table row; v8.59 absorbed ~10 lines for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.69 absorbed ~3 lines for the research-depth fork-stamp sub-bullet + the synthesis self-review step + the depth-flag sub-case; v8.70 absorbed ~2 lines for the design-quality envelope-activation bullet + the eleven-axis update; v8.71 absorbed ~10 lines for the Phase 3.5 awaiting-user-review pointer + the invocation-matrix row for the three new research sub-commands — full procedure lives in runbooks/research-revision.md; v8.74 absorbed ~5 lines for the ethos-preamble paragraph under Dispatch envelope + the Skills-attached `cclaw-ethos` reference doc bullet + the updated Always-ask rules line naming the Required ethos read; v8.78 raised by 80 lines for the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring (4 dimensions table + ambiguity formula + targeting + challenge-mode rotation + per-round table + math-gated exit + `/cc research go` force-exit + the invocation-matrix row for `/cc research go`); v8.82 raised by 30 lines (800 → 830) for the new #### plan-devex body section + stage-table row)", () => {
     const body = renderStartCommand();
     const lineCount = body.split("\n").length;
     expect(
       lineCount,
-      `start-command body is ${lineCount} lines (budget 800). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md. v8.51 added a parallel pointer for the pre-impl plan-critic sub-step. v8.52 lifted ~95% of the new qa stage content. v8.59 added ~10 lines for extend-mode fork + prior-context. v8.69 added ~3 lines for research_depth. v8.70 added ~2 lines for design-quality. v8.71 added ~10 lines for Phase 3.5. v8.74 added ~5 lines for the ethos-preamble + cclaw-ethos bullet. v8.78 added ~80 lines (lifted ceiling 720 → 800) for the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring — the four-dimension table (goal/constraints/criteria/context), the ambiguity formula, the weakest-dimension targeting rule, the challenge-mode rotation (Contrarian round 4 / Simplifier round 5), the per-round table the orchestrator surfaces to the user, the math-gated exit threshold (ambiguity < 0.25), the \`/cc research go\` force-exit sub-command + its invocation-matrix row. If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
-    ).toBeLessThanOrEqual(800);
+      `start-command body is ${lineCount} lines (budget 830). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md. v8.51 added a parallel pointer for the pre-impl plan-critic sub-step. v8.52 lifted ~95% of the new qa stage content. v8.59 added ~10 lines for extend-mode fork + prior-context. v8.69 added ~3 lines for research_depth. v8.70 added ~2 lines for design-quality. v8.71 added ~10 lines for Phase 3.5. v8.74 added ~5 lines for the ethos-preamble + cclaw-ethos bullet. v8.78 added ~80 lines (lifted ceiling 720 → 800) for the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring. v8.82 lifted ceiling 800 → 830 (~15 lines under) to absorb the new #### plan-devex body section + stage-table row + the rotating-lastSpecialist update for plan-devex returns. If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
+    ).toBeLessThanOrEqual(830);
   });
 
-  it("AC-1 — the body is meaningfully smaller than the legacy v8.21 size (≥10% cut after v8.78 iterative-clarify Phase 1 rewrite)", () => {
+  it("AC-1 — the body is meaningfully smaller than the legacy v8.21 size (≥5% cut after v8.82 plan-devex addition)", () => {
     const lineCount = renderStartCommand().split("\n").length;
     const v821Baseline = 901;
     const ratio = lineCount / v821Baseline;
     expect(
       ratio,
-      `start-command body is ${lineCount} lines, ratio ${ratio.toFixed(2)} of v8.21 baseline (${v821Baseline}). v8.22's win disappears if the body re-grows past 90% of pre-v8.22 (v8.77 raised the ceiling from 0.70 to 0.80 to absorb the debug-branch routing section; v8.78 raised the ceiling from 0.80 to 0.90 to absorb the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring — the 4-dimension table, ambiguity formula, targeting + challenge-mode rotation, per-round table, math-gated exit, and \`/cc research go\` force-exit prose).`
-    ).toBeLessThanOrEqual(0.9);
+      `start-command body is ${lineCount} lines, ratio ${ratio.toFixed(2)} of v8.21 baseline (${v821Baseline}). v8.22's win disappears if the body re-grows past 95% of pre-v8.22 (v8.77 raised the ceiling from 0.70 to 0.80; v8.78 from 0.80 to 0.90 for the rewritten Phase 1 iterative discovery dialogue; v8.82 from 0.90 to 0.95 to absorb the new #### plan-devex body section + stage-table row).`
+    ).toBeLessThanOrEqual(0.95);
   });
 });
 
@@ -180,26 +180,26 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
 });
 
 describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", () => {
-  it("AC-4 — body alone is ≤87000 chars (... v8.74 lifted ~2k chars for the ethos preamble paragraph under Dispatch envelope, the v8.74-promoted cross-model trigger language under #### critic, the Skills-attached `cclaw-ethos` reference doc bullet, and the v8.74 Required ethos read reminder in Always-ask rules; v8.76 lifted ~10k chars for the Phase 1.5 Approaches Gate prose (framings worked-example + procedure + sub-cases), the rewritten Phase 2 lens-dispatch prose covering the new design-signal heuristic + `--lens=design` / `--lens=-design` user-toggle flags + the new `research-design` lens row, and the new `Framing:` envelope field documentation; v8.79 lifted ~4k chars for the new One-way Door Gate section under Dispatch — structured-ask payload, three-option picker, flow-state transitions, lite-ceremony exemption, plus the new `awaiting-one-way-confirmation` enum value documented in the slim-summary `Recommended next` enum block + the hard-gate logic block)", () => {
+  it("AC-4 — body alone is ≤145000 chars (... v8.79 lifted ceiling 125k → 135k for the One-way Door Gate section + the new `awaiting-one-way-confirmation` enum value; v8.82 lifted ceiling 135k → 145k for the new #### plan-devex body section + stage-table row + the rotating-lastSpecialist update for plan-devex returns)", () => {
     const charCount = renderStartCommand().length;
     expect(
       charCount,
-      `start-command body is ${charCount} chars (budget 87000). ... v8.74 added ~2k chars for the ethos preamble + v8.74-promoted cross-model trigger language under #### critic; v8.76 added ~10k chars for the Phase 1.5 Approaches Gate prose (framings worked-example + procedure + sub-cases), the rewritten Phase 2 lens-dispatch prose covering the new design-signal heuristic + \`--lens=design\` / \`--lens=-design\` user-toggle flags + the new \`research-design\` lens row, and the new \`Framing:\` envelope field documentation; v8.79 added ~4k chars (lifted ceiling 125k → 135k) for the One-way Door Gate section + the new \`awaiting-one-way-confirmation\` enum value. Do not raise this further without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(135000);
+      `start-command body is ${charCount} chars (budget 145000). v8.79 added ~4k chars (lifted 125k → 135k) for the One-way Door Gate section + the new \`awaiting-one-way-confirmation\` enum value. v8.82 added ~5k chars (lifted 135k → 145k) for the new #### plan-devex body section + stage-table row. Do not raise this further without a CHANGELOG note.`
+    ).toBeLessThanOrEqual(145000);
   });
 
   it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {
     expect(renderStartCommand()).toBe(START_COMMAND_BODY);
   });
 
-  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 285k-char ceiling (... v8.74 lifted ceiling to 225k to absorb the v8.74 ethos preamble + cross-model trigger language + dispatch-envelope.md expansion; v8.76 lifted ceiling to 245k to absorb ~10k chars of new body prose for the Phase 1.5 Approaches Gate + the rewritten Phase 2 lens-dispatch prose covering the new design-signal heuristic + `--lens=design` / `--lens=-design` flags + the `research-design` lens row + the new `Framing:` envelope field — no v8.76 runbook expansion; the design lens contract lives at `.cclaw/lib/research-lenses/research-design.md`; v8.80 lifted ceiling 275k → 285k to absorb ~3k chars of new research-mode synthesis prose covering Phase 3 sub-steps `3a` / `3b` populating `## Key assumptions to validate` + `## Not Doing (and why)` in `research.md` per the v8.80 contract)", () => {
+  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 295k-char ceiling (... v8.80 lifted ceiling 275k → 285k for the research-mode synthesis Phase 3 sub-steps; v8.82 lifted ceiling 285k → 295k to absorb ~5k chars of new body prose for the #### plan-devex section + stage-table row — no new runbook in v8.82; the plan-devex full procedure pointer lives inline in critic-steps.md)", () => {
     const combined =
       renderStartCommand().length +
       ON_DEMAND_RUNBOOKS.reduce((acc, r) => acc + r.body.length, 0);
     expect(
       combined,
-      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 285000). ... v8.74 added ~5k chars for the ethos-preamble + v8.74 cross-model trigger language pointers + dispatch-envelope.md runbook expansion; v8.76 added ~10k chars total — all in the body for the Phase 1.5 Approaches Gate prose, the rewritten Phase 2 lens-dispatch prose (design-signal heuristic + \`--lens=design\` / \`--lens=-design\` flags + new \`research-design\` row + new \`Framing:\` envelope field), and the v8.76 lens-set explainer (5 default → 6 when design fires); no new runbook in v8.76. v8.80 added ~3k chars for the research-mode synthesis Phase 3 sub-steps \`3a\` / \`3b\` covering \`## Key assumptions to validate\` + \`## Not Doing (and why)\` populated during synthesis; ceiling lifted 275k → 285k. Expanding past 285k means a block belongs on disk.`
-    ).toBeLessThanOrEqual(285000);
+      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 295000). v8.80 added ~3k chars (lifted 275k → 285k). v8.82 added ~5k chars (lifted 285k → 295k) for the new #### plan-devex body section + stage-table row. Expanding past 295k means a block belongs on disk.`
+    ).toBeLessThanOrEqual(295000);
   });
 });
 

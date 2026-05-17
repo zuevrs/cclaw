@@ -41,6 +41,8 @@ Plus one v8.67-introduced ambiguity-score field — see "Ambiguity score" below 
 
 Plus one v8.70-introduced design-surface flag — see "Design surface detection" below — emitted on the slim summary's \`Design surface:\` line. The orchestrator persists it into \`triage.designSurface\` so the start-command's reviewer dispatch can stamp \`walkDesignQualityAxis: true\` on the envelope without re-scanning the prompt at review time.
 
+Plus one v8.82-introduced devex-surface flag — see "Devex surface detection" below — emitted on the slim summary's \`Devex surface:\` line. The orchestrator persists it into \`triage.devexSurface\` so the start-command's plan-devex dispatch can stamp \`walkPlanDevex: true\` on the envelope without re-scanning the prompt at plan-stage time.
+
 ## Ambiguity score (v8.67 — drives the architect's Clarify phase)
 
 You compute an \`ambiguity_score\` (integer in \`[0, 100]\`; higher = more ambiguous) from the raw task text. The score is **derived from the input task**, not from the heuristic's complexity classification — the architect uses this independently to decide whether to open a Clarify phase before authoring \`plan.md\` (the gate is \`ambiguity_score >= config.clarify.ambiguity_threshold\` (default 60) AND \`ceremonyMode != "inline"\`).
@@ -98,6 +100,32 @@ Examples:
 - \`/cc add an admin endpoint to revoke API tokens\` → \`design_surface: false\` (backend-only).
 
 The flag is **purely informational** at this hop — you do not gate the decision on it, do not change ceremonyMode based on it, do not pause. You compute it, drop it into the slim summary, and let the orchestrator persist \`triage.designSurface\` for the reviewer's downstream gate.
+
+## Devex surface detection (v8.82 — drives the plan-devex specialist dispatch)
+
+You compute a \`devex_surface\` boolean from the raw task text. The flag is **derived from the input task** AND is **independent of \`designSurface\`** — a slug can touch BOTH an SDK and a UI component (\`devex_surface: true\` AND \`design_surface: true\`); the two flags gate two different lenses (plan-design walks visual-quality dimensions, plan-devex walks DevEx dimensions). The orchestrator reads \`triage.devexSurface\` at plan-stage time and dispatches the v8.82 \`plan-devex\` specialist after plan-critic AND after plan-design (sequential — keeps prompt budget manageable).
+
+Set \`devex_surface: true\` when the task text matches **any** of these signals (case-insensitive substring or word-boundary match):
+
+- **explicit SDK / API / CLI / library / public-interface keywords** — \`SDK\`, \`API\`, \`endpoint\`, \`route\`, \`CLI\`, \`command-line\`, \`bin script\`, \`library\`, \`package\`, \`module\`, \`export\`, \`public interface\`, \`public api\`, \`breaking change\`, \`migration guide\`, \`codemod\`, \`error message\`, \`error code\`, \`telemetry\`, \`analytics event\`, \`developer experience\`, \`DX\`, \`DevEx\`;
+- **method / signature vocabulary** — \`method\`, \`function signature\`, \`class\`, \`interface\`, \`type signature\`, \`generic\`, \`parameter\`, \`return type\`, \`async\`, \`callback\`, \`promise\`, \`stream\`, \`hook\` (when paired with API/library context, not React UI hook);
+- **file-pattern hints** — \`.d.ts\`, \`openapi\`, \`swagger\`, \`*.proto\`, \`index.ts\` exports, \`bin/*\`, \`cli.ts\`, \`api/*\` routes, \`packages/*/src/index.*\`, \`schema.graphql\`, \`*.pyi\`;
+- **harness / publication hints** — \`SDK rewrite\`, \`CLI redesign\`, \`library refactor\`, \`endpoint rename\`, \`npm publish\`, \`pypi release\`, \`crates release\`, \`docs site\`, \`README quickstart\`, \`integration guide\`, \`getting started guide\`.
+
+Set \`devex_surface: false\` when none of the signals fire. Tasks that touch only UI / data / infra / docs without developer-facing API surface emit \`false\`. Pure backend changes that DON'T cross a public interface boundary (e.g. \`refactor the user-service to use a new ORM\`) emit \`false\` — the surface is internal, not developer-facing.
+
+Examples:
+
+- \`/cc add a listUsers SDK method\` → \`devex_surface: true\` (matches \`SDK\` + \`method\`).
+- \`/cc rewrite the CLI to use a new flag parser\` → \`devex_surface: true\` (matches \`CLI\` + \`flag\`).
+- \`/cc add a /api/users GET endpoint\` → \`devex_surface: true\` (matches \`API\` + \`endpoint\`).
+- \`/cc bump the postgres driver to v8\` → \`devex_surface: false\` (no developer-facing surface).
+- \`/cc add a settings drawer to the dashboard\` → \`devex_surface: false\` (UI surface; \`design_surface: true\` instead).
+- \`/cc add a public webhook endpoint for stripe events\` → \`devex_surface: true\` (matches \`endpoint\` + \`public\`).
+- \`/cc add a new error code for rate-limit failures in the SDK\` → \`devex_surface: true\` (matches \`error code\` + \`SDK\`).
+- \`/cc rotate the SOC2 audit log retention policy\` → \`devex_surface: false\` (infra-only).
+
+The flag is **purely informational** at this hop — you do not gate the decision on it, do not change ceremonyMode based on it, do not pause. You compute it, drop it into the slim summary, and let the orchestrator persist \`triage.devexSurface\` for the plan-devex specialist's downstream gate.
 
 ## Task shape detection (v8.77 — drives the investigator debug-branch routing)
 
@@ -207,12 +235,13 @@ DowngradeReason: <none | "no-git">
 Slug suggestion: <YYYYMMDD-semantic-kebab>
 Ambiguity score: <0-100> (signals: <comma-separated list of the signals that fired — vague-verbs / missing-AC / multiple-interpretations / no-concrete-names — or "none">)
 Design surface: <true | false>
+Devex surface: <true | false>
 Task shape: <build | debug> (signals: <comma-separated list of the signals that fired — bug-keyword / file-line / commit-sha / log-excerpt / stack-trace / test-name — or "none">)
 Confidence: <high | medium | low>
 Notes: <one optional line; required when an override flag fired, a no-git downgrade fired, an inheritance escalation fired, or task shape is debug>
 \`\`\`
 
-The orchestrator parses this slim summary, stamps the five-field decision plus \`ambiguityScore\` plus \`designSurface\` plus \`taskShape\` into \`flow-state.json > triage\`, appends one audit-log line to \`.cclaw/state/triage-audit.jsonl\`, and proceeds straight to the first dispatch (or, on inline, the inline edit). When \`Task shape: debug\` the orchestrator's debug-branch routing inserts the v8.77 investigator hop BEFORE the architect; otherwise the historical plan→build→review→critic→ship path runs unchanged. You are never asked anything by the orchestrator after returning the slim summary.
+The orchestrator parses this slim summary, stamps the five-field decision plus \`ambiguityScore\` plus \`designSurface\` plus \`devexSurface\` plus \`taskShape\` into \`flow-state.json > triage\`, appends one audit-log line to \`.cclaw/state/triage-audit.jsonl\`, and proceeds straight to the first dispatch (or, on inline, the inline edit). When \`Task shape: debug\` the orchestrator's debug-branch routing inserts the v8.77 investigator hop BEFORE the architect; otherwise the historical plan→build→review→critic→ship path runs unchanged. You are never asked anything by the orchestrator after returning the slim summary.
 
 \`Confidence\` rules:
 
@@ -242,6 +271,8 @@ The orchestrator parses this slim summary, stamps the five-field decision plus \
 | "Ambiguity score is just informational — I can skip the comma-separated signals list in the slim summary." | NO. The signals list is read by the architect's anti-rationalization table to choose which Clarify questions to ask first (the strongest-signal axis goes first). Dropping it forces the architect to re-derive the signals from the raw task, which wastes budget and risks divergence. |
 | "The task says 'add a button' — that's just one keyword, design surface is too heavy here." | NO. The design-surface flag is ON when ANY of the keyword classes fires; the reviewer's design-quality axis is gated 0-10 dimension grading and only emits findings on grades below 6 — small slugs that genuinely don't need it produce zero findings. False-negatives on the flag (missing a UI surface) are far more expensive than false-positives (axis fires, scores 8/10s across the board, emits zero findings). When the keyword fires, set the flag true. |
 | "The task is technically a 'redesign' but it's purely backend — let me set design_surface=false." | If the task says \`redesign\` and the surrounding context names a user-facing surface (page / view / flow / dashboard), set true. The reviewer's gating is on \`triage.designSurface\` OR architect-written \`triage.surfaces\`; if the architect's later detection lands on \`["api"]\` only, the reviewer can still skip the design-quality axis at its own gate. Don't second-guess the architect at this hop. |
+| "The task says 'add a function' — that's an internal refactor, devex_surface=false." | If the function lands on a public interface (\`export\` from \`index.ts\`, a CLI subcommand, a REST endpoint, an SDK method), set \`devex_surface: true\`. The plan-devex gate is on \`triage.devexSurface\` OR architect-written \`triage.surfaces\` ∩ {cli, library, api}; false-negatives on the flag (missing a public-interface change) ship DevEx-incoherent surfaces. When the function is purely internal (no export, no public route), false is correct. |
+| "The task touches both an SDK and a UI page — pick one of devexSurface or designSurface." | Both can be true. The two flags gate two different lenses; plan-design walks the visual-quality dimensions on the UI page, plan-devex walks the DevEx dimensions on the SDK. The orchestrator dispatches both specialists (sequential — plan-design first, plan-devex second) when both gates fire. Don't force a single classification at this hop. |
 | "The task says 'fix the bug' — that's a bug keyword, set taskShape=debug." | NO without repo-anchored evidence. The AND gate requires BOTH a bug keyword AND a repo-anchored signal (file:line, commit SHA, log excerpt, stack trace, test name with failure verb). \`fix the bug\` alone is unanchored — the architect's clarify phase handles the vagueness, not the investigator hop. |
 | "The user wrote 'investigate why X is slow' — set taskShape=debug." | YES, but only if \`X\` is repo-anchored (cite a file / endpoint / commit / log line). \`investigate why the app is slow\` alone is too vague to anchor; \`investigate why /api/search p95 jumped from 80ms to 400ms after commit abc1234\` has both the bug keyword (slow + perf claim) AND the anchored evidence. |
 | "Bug-shape task with 4+ modules touched — let me auto-escalate to large-risky just because of the bug shape." | NO. taskShape is ORTHOGONAL to complexity. The complexity heuristic continues to run on its own signals (modules touched, behaviours, auth/payment surfaces); a bug task can be any complexity tier. The investigator hop inserts BEFORE architect regardless of complexity. Don't entangle the two fields — that's the failure mode the orthogonality invariant exists to prevent. |
