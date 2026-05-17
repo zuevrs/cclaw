@@ -191,6 +191,27 @@ Skip §A entirely when \`plan.md\` has no \`## Decisions\` section (e.g. small s
 
 §A's findings ride the same plan-critic.md findings table; class names (\`decision-missing-reversibility\` / \`decision-bad-reversibility\` / \`decision-overstated-reversibility\`) make the integrity findings easy to grep for in fix-only rounds. Section header in plan-critic.md is literally \`## §A. Decision integrity (Reversibility)\`.
 
+### §6.5. Bets and exclusions audit (v8.80 — \`## Not Doing (and why)\` + \`## Key assumptions to validate\`)
+
+v8.80 promoted two first-class sections in plan.md: \`## Not Doing (and why)\` (3-5 bullets naming scope explicitly excluded, each paired with a one-sentence rationale) and \`## Key assumptions to validate\` (2-5 bullets naming bets the plan rests on, each paired with a validation method + \`unvalidated | validated | invalidated\` status). The architect's Phase 7.5 (Bets and exclusions) authors both; the plan-critic §6.5 audit gates that both are present and non-empty before build dispatches.
+
+**Distinct from \`## Assumptions (correct me now)\`** (v8.67; surface-area inferences — which library / storage / approach the architect picked when multiple were plausible). §6.5 audits the two NEW v8.80 sections — bets that need validation and scope exclusions with rationale — NOT the surface-area inferences section.
+
+Findings rules:
+
+- **Missing \`## Not Doing (and why)\` section** — emit a \`block-ship\` finding (class=\`missing-not-doing\`). Cite the contract: every plan that ships excludes something — name it. The architect's revision adds the section per the PLAN_TEMPLATE format.
+- **Empty \`## Not Doing (and why)\` section** — present in plan.md but with zero bullets, or only the literal template placeholder bullets (\`- **<scope item>** — <one-sentence reason for excluding it from this slug>.\` or similar) — emit a \`block-ship\` finding (class=\`empty-not-doing\`). The placeholder is structural; bullets must name **specific** named exclusions with concrete rationale (or the explicit "nothing this round" single-bullet form for tight-scope slugs).
+- **Bullet without rationale** (e.g. \`- **caching layer**\` with no \`— <reason>\` clause) — emit an \`iterate\` finding (class=\`not-doing-no-rationale\`). The \`(and why)\` contract requires the rationale alongside the item; bullets without it are a partial promotion of the section.
+- **Missing \`## Key assumptions to validate\` section** — emit a \`block-ship\` finding (class=\`missing-key-assumptions\`). Cite the contract: every plan rests on bets — surface them with validation methods. The architect's revision adds the section per the PLAN_TEMPLATE format.
+- **Empty \`## Key assumptions to validate\` section** — present but with zero bullets, or only the literal template placeholder bullets — emit a \`block-ship\` finding (class=\`empty-key-assumptions\`). Bullets must name **specific** bets with concrete validation methods.
+- **Bullet without validation method** (e.g. \`- **p95 stays under 200ms**\` with no \`Validate by: <method>\` clause) — emit an \`iterate\` finding (class=\`key-assumptions-no-method\`). The contract requires a concrete validation method per bullet.
+- **Bullet without status** (e.g. \`- **p95 stays under 200ms** — Validate by: bench at 100 RPS.\` with no \`Status: <unvalidated | validated | invalidated>\` clause) — emit an \`iterate\` finding (class=\`key-assumptions-no-status\`). On first plan authoring every bullet's Status is \`unvalidated\`; the field is mandatory so downstream readers can scan the section for outstanding bets.
+- **Bullet whose status is outside the three-value enum** (e.g. \`Status: tbd\` / \`Status: maybe\`) — emit an \`iterate\` finding (class=\`key-assumptions-bad-status\`). Cite the offending value verbatim.
+
+§6.5 is **strict-mode + soft-mode gating** — both sections are mandatory on any plan that runs through the architect (every \`ceremonyMode\` except \`inline\`). Inline ceremony has no plan.md, so §6.5 does not fire. Skip §6.5 entirely when \`plan.md\` is structurally absent (inline path) or when the plan is a legacy artifact authored pre-v8.80 (detect via frontmatter \`ceremony_mode\` + the absence of both sections — emit no findings on legacy artifacts; the back-compat rule preserves shipped-state correctness).
+
+§6.5's findings ride the same plan-critic.md findings table; class names (\`missing-not-doing\` / \`empty-not-doing\` / \`not-doing-no-rationale\` / \`missing-key-assumptions\` / \`empty-key-assumptions\` / \`key-assumptions-no-method\` / \`key-assumptions-no-status\` / \`key-assumptions-bad-status\`) make the bets-and-exclusions findings easy to grep for in fix-only rounds. Section header in plan-critic.md is literally \`## §6.5. Bets and exclusions audit\`.
+
 ### §6. Pre-commitment predictions
 
 This section is authored **BEFORE** you read §1-§5 in detail. Same pattern as the post-impl critic's §1: predicting forces deliberate search rather than passive reading.
@@ -217,6 +238,7 @@ Dependency findings: <N total; same breakdown>
 Parallelism findings: <N total; same breakdown — n/a if topology=inline>
 Risk catalog findings: <N total; same breakdown>
 Decision integrity findings (§A — Reversibility audit): <N total; same breakdown — n/a if plan has no \`## Decisions\` section>
+Bets and exclusions findings (§6.5 — v8.80 Not Doing + Key assumptions): <N total; same breakdown — n/a on inline / legacy pre-v8.80 plans>
 Slice-AC separation findings (v8.63 — strict mode): <N total; same breakdown — n/a if soft mode or archived-shape plan>
 Iteration: <N>/1
 Confidence: <high | medium | low>

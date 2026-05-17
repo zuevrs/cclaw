@@ -192,14 +192,14 @@ describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", 
     expect(renderStartCommand()).toBe(START_COMMAND_BODY);
   });
 
-  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 245k-char ceiling (... v8.74 lifted ceiling to 225k to absorb the v8.74 ethos preamble + cross-model trigger language + dispatch-envelope.md expansion; v8.76 lifted ceiling to 245k to absorb ~10k chars of new body prose for the Phase 1.5 Approaches Gate + the rewritten Phase 2 lens-dispatch prose covering the new design-signal heuristic + `--lens=design` / `--lens=-design` flags + the `research-design` lens row + the new `Framing:` envelope field — no v8.76 runbook expansion; the design lens contract lives at `.cclaw/lib/research-lenses/research-design.md`)", () => {
+  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 285k-char ceiling (... v8.74 lifted ceiling to 225k to absorb the v8.74 ethos preamble + cross-model trigger language + dispatch-envelope.md expansion; v8.76 lifted ceiling to 245k to absorb ~10k chars of new body prose for the Phase 1.5 Approaches Gate + the rewritten Phase 2 lens-dispatch prose covering the new design-signal heuristic + `--lens=design` / `--lens=-design` flags + the `research-design` lens row + the new `Framing:` envelope field — no v8.76 runbook expansion; the design lens contract lives at `.cclaw/lib/research-lenses/research-design.md`; v8.80 lifted ceiling 275k → 285k to absorb ~3k chars of new research-mode synthesis prose covering Phase 3 sub-steps `3a` / `3b` populating `## Key assumptions to validate` + `## Not Doing (and why)` in `research.md` per the v8.80 contract)", () => {
     const combined =
       renderStartCommand().length +
       ON_DEMAND_RUNBOOKS.reduce((acc, r) => acc + r.body.length, 0);
     expect(
       combined,
-      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 225000). ... v8.74 added ~5k chars for the ethos-preamble + v8.74 cross-model trigger language pointers + dispatch-envelope.md runbook expansion; v8.76 added ~10k chars total — all in the body for the Phase 1.5 Approaches Gate prose, the rewritten Phase 2 lens-dispatch prose (design-signal heuristic + \`--lens=design\` / \`--lens=-design\` flags + new \`research-design\` row + new \`Framing:\` envelope field), and the v8.76 lens-set explainer (5 default → 6 when design fires); no new runbook in v8.76. Expanding past 245k means a block belongs on disk.`
-    ).toBeLessThanOrEqual(275000);
+      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 285000). ... v8.74 added ~5k chars for the ethos-preamble + v8.74 cross-model trigger language pointers + dispatch-envelope.md runbook expansion; v8.76 added ~10k chars total — all in the body for the Phase 1.5 Approaches Gate prose, the rewritten Phase 2 lens-dispatch prose (design-signal heuristic + \`--lens=design\` / \`--lens=-design\` flags + new \`research-design\` row + new \`Framing:\` envelope field), and the v8.76 lens-set explainer (5 default → 6 when design fires); no new runbook in v8.76. v8.80 added ~3k chars for the research-mode synthesis Phase 3 sub-steps \`3a\` / \`3b\` covering \`## Key assumptions to validate\` + \`## Not Doing (and why)\` populated during synthesis; ceiling lifted 275k → 285k. Expanding past 285k means a block belongs on disk.`
+    ).toBeLessThanOrEqual(285000);
   });
 });
 

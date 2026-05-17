@@ -138,6 +138,13 @@ _(Architect — v8.67. Mandatory on every non-inline plan. 3-7 short bullets cov
 - _Assumption 2 — \`(architect inference)\` tag when not user-pinned (e.g. "Cache TTL = 60s for the search endpoint (architect inference)")._
 - _Assumption 3..N — additional surface-area decisions; 3-7 total._
 
+## Key assumptions to validate
+
+_(Architect: Phase 7.5 — Bets and exclusions. 2-5 bullets naming **bets** the plan rests on — beliefs about latency budgets, user behaviour, market state, downstream system behaviour, performance under load, etc. — that would invalidate the plan if wrong. **Distinct from \`## Assumptions (correct me now)\`** (v8.67): that section is surface-area inferences (which library / storage / approach the architect picked when multiple were plausible); this section is bets-that-need-validation (the latency budget assumption, the user-behaviour assumption, the market-state assumption). Each bullet pairs the bet with a validation method and an explicit status — \`unvalidated\` on first authoring, \`validated\` / \`invalidated\` once evidence lands.)_
+
+- **\`<assumption>\`** — Validate by: _\`<method — benchmark, log query, user interview, A/B test, prod metric scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
+- **\`<assumption>\`** — Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
+
 ## Spec
 
 _(mandatory on every plan.md (strict and soft). Four bullets capture the requirement-side contract that AC alone do not carry: intent + scope + non-goals + per-slug constraints. Always authored by the architect; on strict-mode plans the Frame phase adds NFR rows alongside this section. Each bullet MUST be filled — write "none" or "n/a" when genuinely nothing applies; \`<TBD>\` or empty values are not acceptable. Existing legacy plans without this section continue to work; the section appears only on plans authored on v8.46+.)_
@@ -189,12 +196,12 @@ _(Architect: Pre-mortem, strict mode only. 2-4 ways this plan could fail; each l
 
 - _failure_ → _symptom_ → _mitigation in SL-N / AC-N / D-N_.
 
-## Not Doing
+## Not Doing (and why)
 
-_(Architect: Frame / Compose — 3-5 bullets explicitly out of scope. Protects against silent enlargement.)_
+_(Architect: Phase 7.5 — Bets and exclusions. 3-5 bullets naming scope explicitly excluded from this slug, each paired with a one-sentence rationale. Every plan that ships excludes something — name it. v8.80 promotes the pre-existing \`## Not Doing\` section to first-class status by demanding the \`(and why)\` rationale alongside each non-commitment so the user / reviewer / future-archaeologist can audit the choice rather than guess it.)_
 
-- _explicit non-commitment_
-- _explicit non-commitment_
+- **\`<scope item>\`** — _\`<one-sentence reason for excluding it from this slug>\`._
+- **\`<scope item>\`** — _\`<one-sentence reason — separate slug, out of triage scope, deferred, deliberate non-goal, ...>\`._
 
 ## Plan / Slices
 
@@ -1392,6 +1399,13 @@ _The downstream lenses receive the selected framings in their dispatch envelope 
 
 _(2-3 framings stamped at the Approaches Gate. "All selected" is the canonical default — every framing carries forward into every lens envelope. A single-framing pick is the deliberate-narrowing case: the user accepted one framing and dropped the others.)_
 
+## Key assumptions to validate
+
+_(Research orchestrator: Phase 3 synthesis. 2-5 bullets naming **bets** the research rests on — beliefs about user demand, market state, technology behaviour, performance characteristics, or downstream system capability that the lenses absorbed as load-bearing premises rather than as findings. Distinct from \`## Framings considered\` (those are alternative shapes of the question itself, picked by the user); this section is the implicit beliefs the framings rely on. The follow-up \`/cc <task>\` flow's architect Bootstrap reads this section verbatim into the \`## Key assumptions to validate\` block of \`plan.md\` so the bets carry forward as load-bearing context.)_
+
+- **\`<assumption>\`** — Validate by: _\`<method — benchmark, user research, log query, A/B test, prior-art scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
+- **\`<assumption>\`** — Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
+
 ## Engineer lens
 
 _(Pasted verbatim from \`research-engineer\` lens's findings block. Sections: Feasibility (overall + 5 sub-axes) / Implementation paths (2-3 candidates with effort + trade-offs) / Blockers (with severity) / Risks during implementation / Rough effort.)_
@@ -1632,6 +1646,13 @@ _The synthesis is the orchestrator's own work — NOT a verbatim paste from any 
 _(v8.69 — output of the synthesis self-review pass. Before \`research.md\` is written to disk, the orchestrator walks the draft through four scans (placeholder / contradiction / scope drift / ambiguity — see \`runbooks/research-depth-and-self-review.md\`) and fixes findings inline. This subsection records what got cleaned up. On a clean draft, write \`No self-review issues found.\` verbatim — the absence of this subsection is a structural failure for the follow-up \`/cc <task>\` flow's architect, which reads \`research.md\` end-to-end as \`priorResearch\` context.)_
 
 - _<one bullet per fix the self-review applied; example: "Filled \`<TBD>\` in Engineer > Implementation paths > path 2 con (lifted from lens slim-summary Notes line)."; example: "Reframed Synthesis paragraph 2 — original drifted toward 'how to migrate' but topic was 'should we migrate'."; example: "Removed contradiction: synthesis claimed convergence on Redis but product lens listed Redis as a 'do nothing' alternative pro; restated as divergence."; OR the literal string "No self-review issues found." when all four scans returned clean.>_
+
+## Not Doing (and why)
+
+_(Research orchestrator: Phase 3 synthesis. 3-5 bullets naming scope explicitly excluded from this research's framing, each paired with a one-sentence rationale. Surfaces deliberate non-commitments the lens dispatch and synthesis already implied — adjacent topics deferred to a future research flow, framings dropped at the Approaches Gate, lens findings deliberately not synthesised. The follow-up \`/cc <task>\` flow's architect reads this section as load-bearing scope context: "the research already excluded X for reason Y — do not relitigate it in the plan's \`## Not Doing (and why)\` section".)_
+
+- **\`<scope item>\`** — _\`<one-sentence reason — separate research topic, framing dropped at Approaches Gate, lens-level out-of-scope, adjacent surface deferred, ...>\`._
+- **\`<scope item>\`** — _\`<one-sentence reason>\`._
 
 ## Recommended next step
 
