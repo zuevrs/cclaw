@@ -148,10 +148,12 @@ describe("v8.85 — buildAutoTriggerBlock(\"review\", env) gate-filters assumpti
 });
 
 describe("v8.85 — reviewer.ts mentions the assumption-coverage axis + rubric stub", () => {
-  it("AC-4 — reviewer.ts intro updated from `Twelve-axis` to `Thirteen-axis`", () => {
-    expect(REVIEWER_PROMPT).toMatch(/Thirteen-axis review/);
+  it("AC-4 — reviewer.ts intro does NOT regress to `Twelve-axis` (v8.85 introduced `Thirteen-axis`; v8.86 bumped to `Fourteen-axis`)", () => {
+    // Relaxed at v8.86: the exact axis-count word lives in the
+    // current-release tripwire. v8.85's invariant is the
+    // non-regression to the v8.84 wording.
     expect(REVIEWER_PROMPT).not.toMatch(/Twelve-axis review/);
-    expect(REVIEWER_PROMPT).toMatch(/Thirteen axes; five severities/);
+    expect(REVIEWER_PROMPT).not.toMatch(/Twelve axes; five severities/);
   });
 
   it("AC-4 — reviewer.ts axis-table row names `assumption-coverage` as gated with the v8.85 marker", () => {
@@ -197,7 +199,11 @@ describe("v8.85 — reviewer.ts mentions the assumption-coverage axis + rubric s
   });
 
   it("AC-4 — finding-dedup axis enum lists `assumption-coverage` so findings dedupe correctly inside an iteration", () => {
-    expect(REVIEWER_PROMPT).toMatch(/\/\s*`assumption-coverage`\s*\)\./);
+    // v8.85's tripwire pinned `assumption-coverage` as the last item
+    // in the enum (\s*\)\. matched close-paren + period). v8.86
+    // appended `anti-slop`, so the close-paren no longer sits
+    // directly after `assumption-coverage`. Relax to membership.
+    expect(REVIEWER_PROMPT).toMatch(/\/\s*`assumption-coverage`\s*(?:\/|\))/u);
   });
 });
 
@@ -524,12 +530,14 @@ describe("v8.85 — GateEnvelope type carries the `walkAssumptionCoverageAxis` f
 describe("v8.85 — README updates", () => {
   let readme: string;
 
-  it("AC-12 — README references `13 axes` (up from the v8.84 `12 axes`)", async () => {
+  it("AC-12 — README references an axis count >= 13 (live tripwire defers exact integer to v8.86+; v8.85 baseline = 13)", async () => {
     readme = await fs.readFile(
       path.join(PROJECT_ROOT, "README.md"),
       "utf-8"
     );
-    expect(readme).toContain("13 axes");
+    // v8.85 introduced "13 axes"; v8.86 bumped to "14 axes". This
+    // tripwire was relaxed to "not stale at v8.84 baseline" — the
+    // exact current count lives in the v8.86 test file.
     expect(readme).not.toContain("12 axes");
   });
 
@@ -541,8 +549,10 @@ describe("v8.85 — README updates", () => {
     expect(readme).toMatch(/`scope-drift`/);
   });
 
-  it("AC-12 — README references `34 skills` (up from the v8.84 `33 skills`)", () => {
-    expect(readme).toContain("34 skills");
+  it("AC-12 — README references a skills count ≥34 (live tripwire defers exact integer to v8.86+; v8.85 baseline = 34)", () => {
+    // v8.85 introduced "34 skills"; v8.86 bumped to "35 skills".
+    // Relaxed to "not stale at v8.84 baseline".
+    expect(readme).not.toContain("33 skills");
   });
 
   it("AC-12 — README's reviewer-axis cohort line names `reviewer-axis-assumption-coverage`", () => {
@@ -576,24 +586,24 @@ describe("v8.85 — version bump + CHANGELOG entry", () => {
   });
 });
 
-describe("v8.85 — reviewer-axis skill cohort grew from 6 to 7 (companion-skill pattern preserved)", () => {
-  it("AC-14 — exactly seven reviewer-axis-* skills are registered", () => {
+describe("v8.85 — reviewer-axis skill cohort grew from 6 to 7 (companion-skill pattern preserved; v8.86 grows the cohort to 8)", () => {
+  it("AC-14 — reviewer-axis cohort includes the v8.83 five + v8.84 scope-drift + v8.85 assumption-coverage (exact-length pin relaxed; current count lives in v8.86+ tripwire)", () => {
     const reviewerAxisSkills = AUTO_TRIGGER_SKILLS.filter((s) =>
       s.id.startsWith("reviewer-axis-")
     );
-    expect(reviewerAxisSkills).toHaveLength(7);
-    const ids = reviewerAxisSkills.map((s) => s.id).sort();
-    expect(ids).toEqual(
-      [
-        "reviewer-axis-assumption-coverage",
-        "reviewer-axis-design-quality",
-        "reviewer-axis-edit-discipline",
-        "reviewer-axis-nfr-compliance",
-        "reviewer-axis-qa-evidence",
-        "reviewer-axis-scope-drift",
-        "reviewer-axis-security"
-      ].sort()
-    );
+    expect(reviewerAxisSkills.length).toBeGreaterThanOrEqual(7);
+    const ids = reviewerAxisSkills.map((s) => s.id);
+    for (const required of [
+      "reviewer-axis-assumption-coverage",
+      "reviewer-axis-design-quality",
+      "reviewer-axis-edit-discipline",
+      "reviewer-axis-nfr-compliance",
+      "reviewer-axis-qa-evidence",
+      "reviewer-axis-scope-drift",
+      "reviewer-axis-security"
+    ]) {
+      expect(ids, `reviewer-axis cohort missing ${required}`).toContain(required);
+    }
   });
 
   it("AC-14 — every reviewer-axis skill follows the v8.83 contract: stages = [\"review\"], gate predicate defined, body ≥3k chars, fileName matches id", () => {

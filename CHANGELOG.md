@@ -1,6 +1,57 @@
 # Changelog
 
 
+## 8.91.0 — Anti-slop graded reviewer axis (v8.86 work)
+
+### Why
+
+cclaw inherits Karpathy's diagnosis of LLM coding pitfalls verbatim from `forrestchang/andrej-karpathy-skills > CLAUDE.md > Simplicity First`: "Models really like to overcomplicate code and APIs, bloat abstractions, don't clean up dead code... implement a bloated construction over 1000 lines when 100 would do." The pre-v8.86 reviewer had partial coverage on this surface — `complexity-budget` asks "is this change pulling its weight?" (per-AC ROI), `edit-discipline` asks "did the diff stay inside the slice's Surface?" — but neither axis captures the per-diff *aesthetic* the Karpathy litmus test names: *"Would a senior engineer say this is overcomplicated? If yes, simplify."* v8.86 fills the gap by adding a fourteenth reviewer axis, `anti-slop`, dedicated to the Karpathy "Simplicity First" principle and gradable on every diff.
+
+The axis sits alongside `complexity-budget` but is **distinct**: complexity-budget asks the ROI question (does this change deserve the LOC?); anti-slop asks the shape question (is the implementation Karpathy-simple, regardless of whether the change deserves to ship?). A clean diff that earns full marks on complexity-budget (the AC justifies the change) can still fail anti-slop (the implementation overshoots — extension points, single-use abstractions, leftover scaffolding). The two axes catch different failure modes and the orchestrator never collapses them.
+
+### What changed
+
+**Deliverable 1 — New shared rubric `src/content/anti-slop-rubric.ts`.** Mirrors the v8.75 `design-quality-rubric.ts` / v8.82 `devex-quality-rubric.ts` shape: an exported `ANTI_SLOP_DIMENSIONS` const with four immutable dimensions plus a `renderAntiSlopRubricTable()` helper. One consumer today (the reviewer's anti-slop axis), one shape ready for two tomorrow (a future builder-side `simplicity` check or `research-anti-slop` lens can share the helpers and never drift). The four dimensions decompose Karpathy's prose into observable, gradable axes:
+
+1. **`senior-test`** — would a senior engineer say this is overcomplicated? does the diff size match the change's conceptual size? (Karpathy's litmus test, first-class.)
+2. **`speculative-flexibility`** — extension points, callback signatures, config layers, "pluggable" interfaces without a concrete current consumer.
+3. **`single-use-abstraction`** — helpers used exactly once but parameterized as if they had ≥2 callers; `XManager` / `XService` / `XProvider` whose body is a thin wrapper around a single function.
+4. **`orphan-cleanup-discipline`** — orphans the diff created (imports / variables / functions) not removed; leftover scaffolding from an earlier iteration of THIS slug; pre-existing dead code drive-by-deleted unrelated to the AC (Karpathy "Surgical Changes": remove only your own mess).
+
+Each dimension carries `key` / `name` / `summary` ("what it covers" cell) / `anchor10` ("what a 10 looks like" reference cell) — the same shape as the design-quality and devex-quality rubrics so consumers compose the rendered table identically.
+
+**Deliverable 2 — New reviewer axis `anti-slop` (gated; default-on; v8.86).** The fourteenth reviewer axis. Fires on every reviewer iteration unless the dispatch envelope explicitly turns it off (`walkAntiSlopAxis: false`). Unlike the surface-driven gated axes (qa-evidence / design-quality / scope-drift / assumption-coverage), `anti-slop` is **default-on**: the orchestrator stamps `walkAntiSlopAxis: true` on every reviewer dispatch unless the user / project config explicitly disables it — the Karpathy simplicity check fires once per slug regardless of triage surface. Structurally skipped only on `ceremonyMode: inline` (no reviewer at all) and on structurally-empty diffs (single-character typo fix).
+
+The axis grades each of the four dimensions 0-10 in the iteration block with an explicit "what a 10 looks like" reference and the file:line of the worst gap. Below-6 grades become findings:
+
+- **5/10** — severity = `consider`. Author may push back with reason; carries to learnings.md if unaddressed.
+- **3-4/10** — severity = `required`. Blocks ship on strict; carries over with note in soft.
+- **0-2/10** — severity = `required` with one-tier escalation on `triage.complexity == "critical"` slugs → `critical` (blocks ship in every ceremonyMode).
+
+Findings carry the shape `AS-N: <dimension> at <grade>: <description>`, mirroring the SD-N / KA-N namespace convention from v8.84 / v8.85.
+
+**Deliverable 3 — New companion skill `src/content/skills/reviewer-axis-anti-slop.md`.** Full rubric, evidence-collection guidance, four sub-checks, severity matrix, anti-rationalizations, edge cases (refactor-only / docs-only postures, intentionally-over-engineered ACs, first-of-multi-slug-sequence diffs), and worked examples (~13k chars). The reviewer's prompt body retains only a 5-line stub naming the skill — same v8.83 companion-skill pattern as the other gated reviewer axes (qa-evidence / design-quality / security / nfr-compliance / edit-discipline / scope-drift / assumption-coverage).
+
+**Deliverable 4 — Dispatch-envelope wiring.** `GateEnvelope` (in `src/content/skills.ts`) gained an eighth flag `walkAntiSlopAxis?: boolean`. The new skill is registered with `stages: ["review"]` + gate predicate `(env) => env.walkAntiSlopAxis !== false` — the predicate honors the default-on contract (true and undefined both open the gate; only an explicit `false` closes it). This mirrors how the pre-v8.86 gated axes phrase their predicates as `env.<flag> === true` but flipped so the default state is always-fires rather than never-fires. Skill total: 34 → 35.
+
+**Deliverable 5 — Slim-counter wiring.** The reviewer's slim-summary `What changed` axes counter grew from `c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N sd=N av=N` to `c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N sd=N av=N as=N`. `as=N` is **only** present when the anti-slop gate fired (default-on; omitted only on inline-ceremony slugs and structurally-empty diffs, or when explicitly disabled). Same gating-aware optional-token pattern as `qae=N` / `dq=N` / `sd=N` / `av=N`.
+
+**Deliverable 6 — README + tests.**
+
+- README: 13 axes → 14 axes; auto-trigger skill list grew by one (35 total); reviewer cohort row names the v8.86 anti-slop companion alongside the seven pre-v8.86 axes; new v8.86 explainer paragraph above the v8.85 explainer; `Thirteen-axis` prose updated to `Fourteen-axis` (in `reviewer.ts`).
+- `tests/unit/v886-anti-slop-axis.test.ts` — new tripwire suite. Pins the rubric module's existence + four dimensions + 0-10 anchors; the companion skill's presence + body shape + frontmatter; the skill registration with `stages: ["review"]` + gate predicate honoring the default-on contract; `buildAutoTriggerBlock("review", { walkAntiSlopAxis: false })` filters the pointer; the reviewer.ts fourteen-axis intro + stub heading + AS-N finding shape + Karpathy "Simplicity First" reference; README references 14 axes + 35 skills + anti-slop gating; CHANGELOG names the v8.86 slug.
+- v8.85 + v883-docs-fix tripwires forward-ported (same approach as v8.85 took for v8.83 / v8.84): the exact "13 axes" / "34 skills" literals are softened to "not stale" assertions, with the new exact literals living in the v8.86 tripwire.
+
+### Path taken — new `anti-slop` axis (NOT a `complexity-budget` extension)
+
+The work could in principle extend `complexity-budget` instead of adding a new axis. We picked the new-axis path because:
+
+1. **Different question, different rubric.** Complexity-budget asks "is this change pulling its weight?" (per-AC ROI; would the AC's behavioural test pass on 30% less code?). Anti-slop asks "is the shape Karpathy-simple?" (per-diff aesthetic; senior-test, speculative-flexibility, single-use-abstraction, orphan-cleanup-discipline). Conflating them would lose the per-dimension grading vocabulary the rubric needs.
+2. **Default-on gate is a different posture.** Complexity-budget always fires (it's a base axis). Anti-slop fires by default but is **explicitly** opt-out-able via `walkAntiSlopAxis: false` — the user / project config has a structured surface for disabling the Karpathy lens when it would only add noise (a tightly-scoped slug where every line is mandatory). The default-on opt-out shape is the cclaw projection of "checked once per slug regardless of triage surface, but the user retains the override".
+3. **Rubric sharing across surfaces.** The shared rubric const (`src/content/anti-slop-rubric.ts`) follows the v8.75 design-quality and v8.82 devex-quality precedent — one rubric file, multiple potential consumers (reviewer today; pre-build `plan-simplicity` lens or research-anti-slop probe tomorrow). Extending `complexity-budget` inline would lock the rubric to the reviewer and re-introduce the drift v8.75 / v8.82 lifted away from.
+4. **AS-N namespace is grep-able.** Findings file as `AS-N: <dimension> at <grade>: <description>` (mirroring SD-N / KA-N). A future learnings.md grep across slugs for "AS-N speculative-flexibility" picks up every Karpathy-simplicity flag without false positives from complexity-budget rows that happen to mention "flexibility".
+
+
 ## 8.90.0 — Assumption-validation lite (v8.85 work)
 
 ### Why
