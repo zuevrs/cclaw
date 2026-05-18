@@ -19,6 +19,7 @@ Dispatch <specialist>
 ─ Stage: <plan | build | review | ship>
 ─ Slug: <slug>
 ─ Ceremony mode: <inline | soft | strict>
+─ Model tier: <fast | balanced | powerful>  (v8.87; harness hint — the orchestrator stamps the specialist's tier from \`config.modelPreferences\` merged onto the v8.87 defaults; harnesses that route on the hint pick the model, others ignore it and fall back to the harness default)
 ─ Pre-flight assumptions: see triage.assumptions in flow-state.json
 ─ Inputs the sub-agent reads after the ethos + contract + wrapper:
     - .cclaw/state/flow-state.json
@@ -34,6 +35,21 @@ Dispatch <specialist>
     - run git commands other than \`git add\` / \`git commit -m "<prefix>(AC-N): ..."\` (no \`git push\`, no \`git rebase\`, no \`git reset\`)
     - read or modify files outside the slug's touch surface
 \`\`\`
+
+## Model-tier hint (v8.87)
+
+Every envelope carries a \`Model tier:\` line. The orchestrator computes the tier by merging \`.cclaw/config.yaml > modelPreferences\` onto the v8.87 default policy (see \`src/config.ts > DEFAULT_MODEL_PREFERENCES\`):
+
+| Specialist | Default tier |
+| --- | --- |
+| \`builder\` (formerly \`slice-builder\` pre-v8.62) | \`fast\` |
+| \`learnings-research\` / \`repo-research\` | \`fast\` |
+| \`triage\` / \`investigator\` / \`architect\` | \`balanced\` |
+| \`plan-critic\` / \`plan-design\` / \`plan-devex\` | \`balanced\` |
+| \`qa-runner\` / \`reviewer\` | \`balanced\` |
+| \`critic\` | \`powerful\` |
+
+Harnesses that support tier-based routing (custom OpenCode profiles, Claude Code agent.toml, etc.) honour the hint; harnesses that don't ignore the line and fall back to their own default model. Tier values are constrained to the literal union \`fast | balanced | powerful\` — anything else is dropped at resolve time and the default tier survives.
 
 The first three reads are non-negotiable. The **ethos read** (v8.74) is prepended one position above the agent contract because the five cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) shape HOW every specialist interprets its own contract — a specialist that reads its agent file without the ethos will silently default to Layer 2 "popular" patterns where the codebase already has a Layer 1 "tried-and-true" answer. The ethos lives at \`.cclaw/lib/cclaw-ethos.md\` (single file, written at install time from \`src/content/ethos.ts\`); specialists do NOT restate the ethos in their own prompt body (v8.74 dedup — the per-specialist Iron-Law restatements that pre-dated this preamble were removed because they drifted across specialists). A sub-agent that skips its contract file will hallucinate its own role definition (we observed this in production — early discovery specialists ran with a 30-line summary instead of their full contract). If the harness has a sub-agent system message, the orchestrator places those three reads as the sub-agent's first instructions; if the harness dispatches via plain "spawn a fresh context", the orchestrator puts them at the top of the inline prompt. Either way, the sub-agent opens \`.cclaw/lib/cclaw-ethos.md\` before \`.cclaw/lib/agents/<specialist>.md\` before doing anything else.
 

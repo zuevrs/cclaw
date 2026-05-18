@@ -313,6 +313,32 @@ critic:
                                     # MCP cross-model tool is wired.
 ```
 
+## Model-tier policy
+
+Every specialist dispatch carries a `Model tier:` hint (v8.87) so harnesses that route on tier (custom OpenCode profiles, Claude Code `agent.toml`, etc.) can pick the right model per stage. Harnesses that don't route on the hint ignore the line and fall back to their own default model. Tier values are the literal union `fast | balanced | powerful` — anything else is dropped at resolve time and the default tier survives.
+
+Defaults shipped with v8.87 (reference: obra's `subagent-driven-development` model-selection block):
+
+| Specialist | Default tier |
+| --- | --- |
+| `builder` (formerly `slice-builder` pre-v8.62) | `fast` |
+| `learnings-research` / `repo-research` | `fast` |
+| `triage` / `investigator` / `architect` | `balanced` |
+| `plan-critic` / `plan-design` / `plan-devex` | `balanced` |
+| `qa-runner` / `reviewer` | `balanced` |
+| `critic` | `powerful` |
+
+Override any of them per project via `.cclaw/config.yaml > modelPreferences`. User entries are merged onto the defaults field-by-field:
+
+```yaml
+modelPreferences:
+  critic: balanced      # downgrade from powerful for cheaper iterations
+  builder: balanced     # bump builder from fast on a perf-sensitive codebase
+  reviewer: powerful    # bump reviewer for adversarial codebases
+```
+
+The defaults map lives in [`src/config.ts > DEFAULT_MODEL_PREFERENCES`](src/config.ts); the merge helper is `resolveModelPreferences(config)`.
+
 ## Architecture deep dive
 
 The runtime is under 1 KLOC. The prompt content is where the work lives. To understand how `/cc` actually works, read the source under `src/content/`:

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
-import { HARNESS_IDS, type HarnessId } from "./types.js";
+import { HARNESS_IDS, type HarnessId, type SpecialistId } from "./types.js";
 
 /**
  * Per-specialist model preference (T3-2, v8.13). Maps each cclaw specialist
@@ -23,30 +23,181 @@ import { HARNESS_IDS, type HarnessId } from "./types.js";
  */
 export type ModelTier = "fast" | "balanced" | "powerful";
 
+/**
+ * Canonical immutable list of model-tier literal values. Exposed as a
+ * `const` array so tests can sweep the union without restating the
+ * literal triple. Mirrors the {@link ModelTier} union exactly.
+ */
+export const MODEL_TIERS = ["fast", "balanced", "powerful"] as const;
+
+/**
+ * Per-specialist model-tier preferences. v8.87 ships defaults for every
+ * live specialist id in {@link SPECIALISTS} plus the two read-only
+ * research helpers (`learnings-research` / `repo-research`); a handful
+ * of legacy keys (pre-v8.62 ids) are kept so existing user
+ * `.cclaw/config.yaml` files don't fail validation after upgrade.
+ *
+ * Every field is optional; absent fields fall back to
+ * {@link DEFAULT_MODEL_PREFERENCES} via {@link resolveModelPreferences}.
+ */
 export interface ModelPreferences {
-  design?: ModelTier;
-  "ac-author"?: ModelTier;
-  "slice-builder"?: ModelTier;
+  // --- v8.62+ live specialists (from `SPECIALISTS` in `types.ts`). ---
+  triage?: ModelTier;
+  investigator?: ModelTier;
+  architect?: ModelTier;
+  builder?: ModelTier;
+  "plan-critic"?: ModelTier;
+  "plan-design"?: ModelTier;
+  "plan-devex"?: ModelTier;
+  "qa-runner"?: ModelTier;
   reviewer?: ModelTier;
-  "security-reviewer"?: ModelTier;
+  critic?: ModelTier;
+
+  // --- Read-only research helpers (not in `SPECIALISTS`, but dispatched). ---
   "learnings-research"?: ModelTier;
   "repo-research"?: ModelTier;
+
   /**
-   * Legacy aliases (pre-v8.14). Retained so users with existing
+   * Legacy specialist ids retired by v8.62 — kept so users with existing
    * `.cclaw/config.yaml` files don't see schema-validation errors after
-   * upgrading. The orchestrator collapses both onto the `design` tier at
-   * dispatch time (highest of the two wins when both are set).
+   * upgrading.
+   *
+   * - `slice-builder` → renamed to {@link ModelPreferences.builder} (v8.62).
+   * - `design` / `ac-author` → absorbed into {@link ModelPreferences.architect}
+   *   (v8.62 unified flow retired the discovery sub-phase).
+   * - `security-reviewer` → absorbed into {@link ModelPreferences.reviewer}'s
+   *   `security` axis (v8.62; full threat-model + sensitive-change protocol
+   *   moved into the reviewer prompt).
+   * - `brainstormer` → removed v8.14.
+   * - `planner` → renamed to `ac-author` v8.14–v8.27, then absorbed into
+   *   `architect` v8.62.
+   *
+   * The resolver does NOT collapse legacy keys onto live keys — if a user
+   * config carries `slice-builder: powerful` and the upgrade renamed the
+   * specialist to `builder`, the live-key default wins. To migrate, the
+   * user re-types the value under the live key. The legacy fields exist
+   * only so the YAML still parses.
    */
+  "slice-builder"?: ModelTier;
+  design?: ModelTier;
+  "ac-author"?: ModelTier;
+  "security-reviewer"?: ModelTier;
   brainstormer?: ModelTier;
-  architect?: ModelTier;
-  /**
-   * Legacy alias from pre-v8.28 (`planner` was the v8.14–v8.27 spelling).
-   * Retained so users with existing `.cclaw/config.yaml` files don't see
-   * schema-validation errors after upgrading. Equivalent to `"ac-author"`
-   * — the orchestrator reads either at dispatch time. Slated for removal
-   * in v8.29+.
-   */
   planner?: ModelTier;
+}
+
+/**
+ * Specialist ids (live + research helpers) that {@link DEFAULT_MODEL_PREFERENCES}
+ * carries an explicit tier for. Tighter than `keyof ModelPreferences` because
+ * the legacy keys are not part of the default mapping.
+ */
+export type ModelPreferenceKey =
+  | SpecialistId
+  | "learnings-research"
+  | "repo-research";
+
+/**
+ * Default model-tier policy shipped with v8.87. Reference: obra's
+ * `subagent-driven-development` model-selection block — fast tiers run
+ * the cheap, fast, high-throughput cycles (slice-builder cycles,
+ * research helpers); powerful runs the deep adversarial work; everything
+ * else runs at the balanced mid-tier.
+ *
+ * Specialists are identified by their v8.62 live ids (the v8.13-era
+ * `slice-builder` alias is back-compat only — its tier intent is
+ * inherited by `builder`).
+ *
+ * The mapping is FROZEN at construction so test mutations can't
+ * silently corrupt the default at the module level.
+ */
+export const DEFAULT_MODEL_PREFERENCES: Readonly<
+  Record<ModelPreferenceKey, ModelTier>
+> = Object.freeze({
+  // fast — short-context, high-throughput cycles.
+  builder: "fast",
+  "learnings-research": "fast",
+  "repo-research": "fast",
+
+  // balanced — routine mid-tier specialists.
+  triage: "balanced",
+  investigator: "balanced",
+  architect: "balanced",
+  "plan-critic": "balanced",
+  "plan-design": "balanced",
+  "plan-devex": "balanced",
+  "qa-runner": "balanced",
+  reviewer: "balanced",
+
+  // powerful — adversarial / high-stakes review.
+  critic: "powerful"
+});
+
+/**
+ * Merge user-supplied {@link ModelPreferences} (from `.cclaw/config.yaml`)
+ * onto {@link DEFAULT_MODEL_PREFERENCES}. User entries override defaults
+ * field-by-field; absent fields keep their default. Values that don't
+ * match {@link MODEL_TIERS} (typos, wrong types) are silently dropped so
+ * the default tier survives — out-of-range tiers are a config error, not
+ * a runtime crash.
+ *
+ * The result is always a `Required<Record<ModelPreferenceKey, ModelTier>>`
+ * so downstream readers never have to handle the absent case.
+ */
+export function resolveModelPreferences(
+  config: CclawConfig | null | undefined
+): Record<ModelPreferenceKey, ModelTier> {
+  const merged: Record<ModelPreferenceKey, ModelTier> = {
+    ...DEFAULT_MODEL_PREFERENCES
+  };
+  const user = config?.modelPreferences;
+  if (!user || typeof user !== "object") return merged;
+  for (const key of Object.keys(DEFAULT_MODEL_PREFERENCES) as ModelPreferenceKey[]) {
+    const raw = (user as Record<string, unknown>)[key];
+    if (typeof raw === "string" && (MODEL_TIERS as readonly string[]).includes(raw)) {
+      merged[key] = raw as ModelTier;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Resolve the tier for one specialist id, applying the v8.62 legacy-alias
+ * collapse for `slice-builder` → `builder`. Returns `undefined` if the
+ * specialist isn't covered by the default policy AND the user hasn't
+ * overridden it (so dispatchers can omit the hint and fall back to the
+ * harness default).
+ *
+ * The collapse rule: a user config that still uses the v8.13-era
+ * `slice-builder` key is read as a `builder` override ONLY when no
+ * explicit `builder` key is set. An explicit `builder` value always
+ * wins, even when both are present.
+ */
+export function modelTierFor(
+  specialist: ModelPreferenceKey | "slice-builder",
+  config: CclawConfig | null | undefined
+): ModelTier | undefined {
+  const resolved = resolveModelPreferences(config);
+  if (specialist === "slice-builder") {
+    const user = config?.modelPreferences as
+      | Record<string, unknown>
+      | undefined;
+    const explicitBuilder = user?.["builder"];
+    if (
+      typeof explicitBuilder === "string" &&
+      (MODEL_TIERS as readonly string[]).includes(explicitBuilder)
+    ) {
+      return explicitBuilder as ModelTier;
+    }
+    const legacy = user?.["slice-builder"];
+    if (
+      typeof legacy === "string" &&
+      (MODEL_TIERS as readonly string[]).includes(legacy)
+    ) {
+      return legacy as ModelTier;
+    }
+    return resolved.builder;
+  }
+  return resolved[specialist as ModelPreferenceKey];
 }
 
 /**
