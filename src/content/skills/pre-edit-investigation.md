@@ -101,7 +101,7 @@ The Discovery column in `build.md` is the **durable record** of investigation ev
 
 ## Verification
 
-The reviewer's `edit-discipline` axis — axis #8 in the eight-axis review, available — enforces the rule ex-post. The check: for every file the builder edited (per `git show --stat <commits>`), the build log's Discovery column must cite Probe 1 + Probe 2 + Probe 3 outputs. A file with edits but no Discovery entries is `severity=required (axis=edit-discipline)`. A file with partial Discovery (one or two probes, not all three) is `severity=consider (axis=edit-discipline)` with a recommended fix-only run for the missing probes.
+The reviewer's `edit-discipline` axis — axis #8 of the eight base axes in the fourteen-axis review, available — enforces the rule ex-post. The check: for every file the builder edited (per `git show --stat <commits>`), the build log's Discovery column must cite Probe 1 + Probe 2 + Probe 3 outputs. A file with edits but no Discovery entries is `severity=required (axis=edit-discipline)`. A file with partial Discovery (one or two probes, not all three) is `severity=consider (axis=edit-discipline)` with a recommended fix-only run for the missing probes.
 
 When the builder declares an exception (fresh file with no history, test file in RED phase, post-format pass), the build log MUST cite the exception with one line ("Pre-edit investigation skipped: fresh file with no history"); the reviewer accepts the skip when the cited reason matches one of the "When NOT to apply" cases above.
 

@@ -274,8 +274,12 @@ describe("v8.81 — Phase 5 Post-mortem (conditional; fires on prod-discovered s
     const phase5Idx = INVESTIGATOR_PROMPT.indexOf("Phase 5 — Post-mortem");
     const section = INVESTIGATOR_PROMPT.slice(phase5Idx, phase5Idx + 8000);
     expect(section).toMatch(/exactly one axis|Name the \*\*one\*\* axis|the .one. axis/i);
-    // Cite the 11-axis reviewer surface
-    expect(section).toMatch(/11-axis|eleven-axis/);
+    // Cite the canonical reviewer-axis surface (the count grew across
+    // v8.84 / v8.85 / v8.86 — the v8.94 docs-drift sweep updated the
+    // investigator's post-mortem to cite the 14-axis surface; the
+    // tripwire accepts any of the historical labels so future axis
+    // additions don't constantly tickle this assertion).
+    expect(section).toMatch(/11-axis|eleven-axis|12-axis|twelve-axis|13-axis|thirteen-axis|14-axis|fourteen-axis/);
     expect(section).toMatch(/security|error-discipline|design-quality/);
   });
 

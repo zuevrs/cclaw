@@ -5,11 +5,11 @@ trigger: when reviewer is invoked; when the diff touches authn / authz / secrets
 
 # Skill: review-discipline
 
-The reviewer is the single ten-axis quality gate. v8.62 absorbed the former `security-reviewer` specialist into the reviewer's `security` axis, so this skill covers the full reviewer contract — generic ten-axis pass plus security threat-modelling — with a shared Findings, axis-walk, and Five Failure Modes contract.
+The reviewer is the single fourteen-axis quality gate. v8.62 absorbed the former `security-reviewer` specialist into the reviewer's `security` axis, so this skill covers the full reviewer contract — generic fourteen-axis pass plus security threat-modelling — with a shared Findings, axis-walk, and Five Failure Modes contract.
 
 ## When to use
 
-Invoked at the start of every `reviewer` dispatch. Auto-applies the deeper threat-model checklist when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (the reviewer escalates the `security` axis depth regardless of `security_flag`). The Findings and ten-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security threat-model checklist sits inline in the `security` axis when triggered.
+Invoked at the start of every `reviewer` dispatch. Auto-applies the deeper threat-model checklist when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (the reviewer escalates the `security` axis depth regardless of `security_flag`). The Findings and fourteen-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security threat-model checklist sits inline in the `security` axis when triggered.
 
 ## When NOT to apply
 
@@ -59,7 +59,7 @@ When iteration N+1 runs, the reviewer reads the ledger first, re-validates each 
 
 ## Five axes (mandatory walk per iteration)
 
-Walk every diff with the five axes in mind. Per-axis checklist:
+Walk every diff with the eight base axes in mind (plus any gated axes — qa-evidence / nfr-compliance / design-quality / scope-drift / assumption-coverage / anti-slop — whose gate fires this iteration; see reviewer.md for the canonical fourteen-axis surface). Per-axis checklist:
 
 | axis | what to check | typical findings |
 | --- | --- | --- |
@@ -69,7 +69,7 @@ Walk every diff with the five axes in mind. Per-axis checklist:
 | `security` | full threat-model coverage (absorbed from former `security-reviewer`): authn / authz, secrets / credentials, supply chain, data exposure, encoding / sanitisation, taint flow | unsanitised input, secrets in logs, missing authn/authz, encoding mismatch, supply-chain provenance gaps |
 | `perf` | hot-path quality | N+1, unbounded loop, sync-where-async, missing pagination |
 
-A reviewer that records zero findings on every axis must explicitly say so in the iteration block ("Five-axis pass: no findings on any axis"); silence is not the same as a clean review.
+A reviewer that records zero findings on every axis must explicitly say so in the iteration block ("Axes pass: no findings on any axis"); silence is not the same as a clean review.
 
 ## Severity ↔ ceremonyMode → ship gate
 
@@ -108,12 +108,15 @@ Tie-breaker: if iteration 5 closes the last blocking row, return `clear` (signal
 ```markdown
 ## Iteration 1 — code — 2026-04-18T10:14Z
 
-Five-axis pass:
+Axes pass (eight base + any fired gated axes):
 - correctness: F-1 (missing pagination cursor).
 - readability: no findings.
 - architecture: no findings.
 - security: no findings.
 - perf: F-2 (no negative test for empty page; potential N+1 if cursor regressed).
+- test-quality: no findings.
+- complexity-budget: no findings.
+- edit-discipline: no findings.
 
 Findings:
 - F-1 correctness/required — `src/api/list.ts:14` — missing pagination cursor.
@@ -127,7 +130,7 @@ Ledger reread:
 - F-1: closed — fix at `src/api/list.ts:18` (commit 7a91ab2). Citation matches.
 - F-2: open — no fix attempted (consider carry-over).
 
-Five-axis pass: no new findings on any axis.
+Axes pass: no new findings on any axis.
 
 Decision: warn. Convergence signal #2 needs another zero-blocking iteration.
 
@@ -137,21 +140,21 @@ Ledger reread:
 - F-1: closed (sticky).
 - F-2: open (consider carry-over).
 
-Five-axis pass: no findings. Two consecutive zero-blocking iterations recorded.
+Axes pass: no findings. Two consecutive zero-blocking iterations recorded.
 
 Decision: clear (signal #2). F-2 carries to ships/<slug>.md and learnings/<slug>.md.
 ```
 
 ## Common rationalizations
 
-**Cross-cutting rationalizations:** the canonical completion / verification rows (sycophancy, "should pass", "the full suite is slow") live in `.cclaw/lib/anti-rationalizations.md` under categories `completion` and `verification`. The rows below stay here because they cover reviewer-discipline-specific framings (convergence signal #2, five-axis silence, severity padding, soft-mode architecture bypass).
+**Cross-cutting rationalizations:** the canonical completion / verification rows (sycophancy, "should pass", "the full suite is slow") live in `.cclaw/lib/anti-rationalizations.md` under categories `completion` and `verification`. The rows below stay here because they cover reviewer-discipline-specific framings (convergence signal #2, axis-silence, severity padding, soft-mode architecture bypass).
 
 The reviewer's discipline is the first thing the slug shape pressures an agent to skip when iterations get long. Catch yourself thinking the left column; do the right column instead. Surface the rationalization verbatim in the iteration's slim-summary `Notes:` when you obey the right column anyway, so the audit trail records the discipline.
 
 | rationalization | truth |
 | --- | --- |
 | "Two iterations with no new findings is enough — let's ship." | Convergence signal #2 requires **two consecutive** zero-blocking iterations. One zero-finding pass is not convergence; it is one data point. The cap-recovery picker exists for this exact mistake. |
-| "The five axes don't all apply here, I'll just walk the relevant ones." | The Five-axis pass is mandatory every iteration. Record "no findings on `<axis>`" explicitly; silence is not the same as a clean walk. |
+| "The axes don't all apply here, I'll just walk the relevant ones." | The Axes pass is mandatory every iteration. Record "no findings on `<axis>`" explicitly; silence is not the same as a clean walk. The eight base axes always fire; gated axes (qa-evidence / nfr-compliance / design-quality / scope-drift / assumption-coverage / anti-slop) fire when their gate is on. |
 | "F-2 is fixed by F-1's commit, I'll close it without re-checking." | Closing a row is itself a claim. Cite the fix SHA / test name / file:line that proves the close. A close without evidence is the next iteration's reopen. |
 | "Severity `required` everywhere makes it look serious." | Padding severity makes the gradient useless. `nit` / `consider` / `required` / `critical` are a routing signal; collapse them and the orchestrator can't decide what blocks ship. |
 | "I'll skip the Findings this iteration; the findings are short." | The ledger is the resume contract. Iteration N+1 reads it before walking the diff; skipping breaks fix-only dispatch and supersession tracking. |
@@ -169,11 +172,11 @@ The reviewer's discipline is the first thing the slug shape pressures an agent t
 - Mixing `code` and `text-review` modes within one iteration. Each iteration declares one mode in its header.
 - Recording a finding without an axis. Every row carries an axis (one of `correctness` / `readability` / `architecture` / `security` / `perf`). Pick the dimension the finding speaks to; never blank.
 - Marking everything as `required` because "it might matter". Severity is graduated: `critical` for ship-breaking, `required` for must-fix-before-ship, `consider` for suggestion, `nit` for minor, `fyi` for context only. Padding severity makes it useless.
-- Walking only one or two axes when the diff touches all five. The Five-axis pass is mandatory every iteration; record "no findings" for axes you walked but found clean. Silence is a smell — say what you walked.
+- Walking only one or two axes when the diff touches all base axes. The Axes pass is mandatory every iteration; record "no findings" for axes you walked but found clean. Silence is a smell — say what you walked.
 
 ## security-axis depth (absorbed from security-reviewer)
 
-v8.62 collapsed the former `security-reviewer` specialist into the reviewer's `security` axis. The reviewer always walks the `security` axis as part of its ten-axis pass; the depth scales with detected surfaces.
+v8.62 collapsed the former `security-reviewer` specialist into the reviewer's `security` axis. The reviewer always walks the `security` axis as part of its fourteen-axis pass; the depth scales with detected surfaces.
 
 ## Rules
 

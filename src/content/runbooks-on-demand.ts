@@ -586,7 +586,7 @@ The adversarial reviewer treats every "not covered" as a finding (axis varies; s
 | block | any | block → fix-only loop |
 | clear | warn | warn → render adversarial findings, ask user |
 
-The \`security\` axis is one of the reviewer's ten axes (v8.62 absorbed the former \`security-reviewer\` specialist). A \`block\`-severity finding on \`security\` is handled the same as a \`block\` on any other axis — block → fix-only loop. \`security_flag: true\` in plan frontmatter forces the reviewer to walk the security axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) regardless of which surfaces the diff touched.
+The \`security\` axis is one of the reviewer's fourteen axes (v8.62 absorbed the former \`security-reviewer\` specialist). A \`block\`-severity finding on \`security\` is handled the same as a \`block\` on any other axis — block → fix-only loop. \`security_flag: true\` in plan frontmatter forces the reviewer to walk the security axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) regardless of which surfaces the diff touched.
 
 The adversarial pass runs **once per ship attempt**, not iteratively. If it produces \`block\`-level findings, the orchestrator dispatches \`builder\` mode=\`fix-only\` and re-runs the **regular** reviewer (mode=\`code\`) to confirm the fix; the adversarial pass does not re-run unless the user explicitly requests it (the marginal value drops fast on second run). For the conditional rerun rule on fix-only hot-path commits, see \`adversarial-rerun.md\`.
 
@@ -970,7 +970,7 @@ The migration is one-pass and idempotent — a slug whose plan-critic has alread
 
 ## Post-implementation pass (critic, v8.42)
 
-The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's eight axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's fourteen axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
 
 ### critic ceremonyMode gating (Q1, no flag exposed)
 
@@ -1057,7 +1057,7 @@ The migration is one-pass and idempotent — a slug whose critic has already run
 - Commit, push, rebase, or merge. The critic owns no git operations.
 - Dispatch other specialists. Composition is the orchestrator's job.
 - Exceed 20k input+output tokens. Approaching the cap is itself a finding (\`Confidence: low\`, recommend split).
-- Re-walk the reviewer's eight axes. The critic reads \`review.md > ## Findings\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
+- Re-walk the reviewer's fourteen axes. The critic reads \`review.md > ## Findings\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
 
 The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see Q2).
 `;
@@ -1066,7 +1066,7 @@ const QA_STAGE = `# On-demand runbook — qa step (v8.52+)
 
 The orchestrator opens this runbook **on every builder GREEN slim-summary return** when the qa gate evaluates to true. \`qa-runner\` is the behavioural-acceptance specialist that runs between \`build\` and \`review\` on UI-touching slugs in non-inline mode. It walks the **rendered page** (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. The contract that drives the dispatch lives in \`.cclaw/lib/agents/qa-runner.md\`; this runbook covers what the orchestrator does *around* the dispatch.
 
-Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires on stop-the-line) and from \`reviewer.md > qa-evidence axis\` (post-qa cross-check that qa.md rows match the diff). The three together close the behavioural-QA gap that pre-v8.52 cclaw only handled implicitly through the reviewer's nine-axis pass.
+Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires on stop-the-line) and from \`reviewer.md > qa-evidence axis\` (post-qa cross-check that qa.md rows match the diff). The three together close the behavioural-QA gap that pre-v8.52 cclaw only handled implicitly through the reviewer's fourteen-axis pass.
 
 ## Gating (the three AND conditions — orchestrator enforces deterministically)
 
@@ -1190,7 +1190,7 @@ The axis is the 9th explicit axis (10th with the gated \`nfr-compliance\` axis).
 - Exceed 10k input+output tokens. Approaching the cap is itself a finding (\`confidence: low\`, recommend split).
 - Pretend qa ran when it could not. \`blocked\` is the right verdict when browser tools are unavailable; never write \`pass\` against an AC you could not actually verify.
 - Silently install Playwright. If the project does not ship Playwright, downgrade to Tier 2 / 3 and surface a \`fyi\` finding recommending a follow-up "add Playwright" slug — do not grow the dependency footprint as a qa side effect.
-- Write findings about code quality. Quality belongs to the reviewer's nine-axis pass; qa-runner findings are strictly about behavioural verification of UI rendering.
+- Write findings about code quality. Quality belongs to the reviewer's fourteen-axis pass; qa-runner findings are strictly about behavioural verification of UI rendering.
 
 ## Legacy migration (pre-v8.52 \`flow-state.json\`)
 

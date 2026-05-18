@@ -179,14 +179,14 @@ Dispatched by builder during stop-the-line. Reviewer cites the skill when a buil
 
 ## browser-verification
 
-The reviewer's five-axis pass walks the diff. **Browser verification** walks the rendered page. They are different reviews — a diff can be flawless and the page can ship with a runtime error, a layout regression, or a console flood that the diff did not predict.
+The reviewer's fourteen-axis pass walks the diff. **Browser verification** walks the rendered page. They are different reviews — a diff can be flawless and the page can ship with a runtime error, a layout regression, or a console flood that the diff did not predict.
 
 > "Tests green" is not "page renders". This skill closes that gap.
 
 ## When to apply
 
 - Slice-builder dispatches this skill in Phase 4 (verification) when the AC's `touchSurface` includes UI files AND the project ships a browser app (detect: `package.json` references `react` / `vue` / `svelte` / `next` / `vite` / `webpack` / `astro`, OR the repo has `public/` / `pages/` / `app/`).
-- Reviewer dispatches this skill in iteration 1 when the diff touches UI files. The browser-verification artifact is read in addition to (not instead of) the five-axis pass.
+- Reviewer dispatches this skill in iteration 1 when the diff touches UI files. The browser-verification artifact is read in addition to (not instead of) the fourteen-axis pass.
 - Triggered automatically in `ceremony_mode: strict`; opt-in for `ceremony_mode: soft` (the builder may decide it is overkill for a small UI tweak).
 
 ## Phase 1 — DevTools wiring

@@ -7,7 +7,7 @@ trigger: gated reviewer axis (v8.70). Loads when ANY of three gating conditions 
 
 Full per-dimension grading rubric, AI-slop check, severity ladder, and anti-rationalizations for the reviewer's `design-quality` axis (v8.70+). Lifted out of `reviewer.ts` in the v8.83 release — the prompt now carries only a 5-line stub pointing here.
 
-The `design-quality` axis is the visual / interaction / accessibility pass on UI-bearing diffs. It exists to catch **UI slop** — generic AI-generated interfaces, type-system inconsistency, broken hierarchy, missing accessibility — that the other ten axes do not surface (correctness validates behaviour, qa-evidence validates rendered AC clauses, architecture validates module boundaries; none of them ask "is this a *good* interface?").
+The `design-quality` axis is the visual / interaction / accessibility pass on UI-bearing diffs. It exists to catch **UI slop** — generic AI-generated interfaces, type-system inconsistency, broken hierarchy, missing accessibility — that the other thirteen axes do not surface (correctness validates behaviour, qa-evidence validates rendered AC clauses, architecture validates module boundaries; none of them ask "is this a *good* interface?").
 
 ## When to use
 

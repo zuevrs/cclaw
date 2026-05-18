@@ -1,6 +1,73 @@
 # Changelog
 
 
+## 8.97.0 — Sweep stale axis/lens/field-count strings; add regex tripwire (Phase C G-6 fix)
+
+### Why
+
+The v8.83-docs-fix work pinned a specific list of stale phrases ("8 sub-agents", "5 research-only lens", "ten-axis", "five-field", ...) but did NOT regex-sweep the broader axis-count / lens-count / specialist-count surface. v8.84 / v8.85 / v8.86 each added a reviewer axis (scope-drift / assumption-coverage / anti-slop) and v8.76 had earlier added a sixth research lens (design) — so user-facing prompts, skill bodies, runbooks, and the README accumulated stale "eleven-axis" / "twelve-axis" / "five-axis pass" / "ten-axis" / "5 research-only lens" / "8 sub-agents" claims that the v8.83 fixed-phrase tripwire could not catch. Phase C audit gap G-6 flagged ~14 files still carrying stale count strings.
+
+### What changed
+
+**Deliverable 1 — sweep ALL stale current-reality count strings.** Updated 16 source files + 1 README + 2 historicizing tests to reflect the canonical counts (14 reviewer axes, 6 research lenses, 8-field orchestrator-stamped triage decision, 10 specialists). Touched surfaces:
+
+- `src/content/start-command.ts` — reviewer-stage axis label (`eleven-axis` → `fourteen-axis`, with the canonical 8 base + 6 gated breakdown), `review-discipline` skill pointer, plan-critic / qa-runner separation prose, and the critic re-walk prohibition.
+- `src/content/specialist-prompts/reviewer.ts` — every `Five-axis pass` / `five-axis` iteration-block header renamed to `Axes pass` (preserves the contract that the iteration block enumerates the eight base axes plus any fired gated axes; the canonical `Fourteen-axis review` opening is unchanged). Adversarial-mode finding-shape note now reads `same axis + severity rules as code mode — eight base axes plus gated axes when their gate fires`. The Worked-example iteration block lists all eight base axes (vs. the legacy five). Parent-contradictions cross-check (`twelve-axis review` → `fourteen-axis review`).
+- `src/content/specialist-prompts/critic.ts` — three `reviewer's eleven axes` references updated to `fourteen axes` (escalation rationale, adversarial-budget prose, and the "do NOT re-walk" rule).
+- `src/content/specialist-prompts/investigator.ts` — Phase 5 post-mortem `## What review axis would have caught it? (specific 11-axis finding)` updated to `(specific 14-axis finding)`, and the axis enumeration extended from 11 to the full 14 canonical axes (eight base plus six gated: `scope-drift` / `assumption-coverage` / `anti-slop` added).
+- `src/content/specialist-prompts/builder.ts` — soft-mode reviewer description (`eleven-axis pass` → `fourteen-axis pass`) plus the Potential-concerns reviewer note (`five-axis pass` → `fourteen-axis pass`).
+- `src/content/stage-playbooks.ts` — `single ten-axis specialist` → `single fourteen-axis specialist`.
+- `src/content/artifact-templates.ts` — review.md template description (`eleven-axis reviewer` → `fourteen-axis reviewer`).
+- `src/content/runbooks-on-demand.ts` — four spots: critic post-implementation pass (`reviewer's eight axes` → `fourteen axes`), critic "What you do NOT do" (`reviewer's eight axes` → `fourteen axes`), qa-stage runbook (`reviewer's nine-axis pass` → `fourteen-axis pass`), qa-runner "What you do NOT do" (`reviewer's nine-axis pass` → `fourteen-axis pass`), and `## §1 Security axis` runbook intro (`reviewer's ten axes` → `reviewer's fourteen axes`).
+- `src/content/skills.ts` — review-discipline description (`ten-axis pass` → `fourteen-axis pass`).
+- `src/content/skills/review-discipline.md` — body intro (`single ten-axis quality gate` → `single fourteen-axis quality gate`), When-to-use section (`ten-axis / Five Failure Modes contract` → `fourteen-axis / Five Failure Modes contract`), security-axis depth note (`its ten-axis pass` → `its fourteen-axis pass`), the per-axis checklist intro (`Walk every diff with the five axes in mind` → walk eight base + gated when fired), worked-example iteration blocks (`Five-axis pass` → `Axes pass`), and the common-rationalizations row about axis silence.
+- `src/content/skills/reviewer-axis-security.md` — security threat-model intro (`standard ten-axis pass` → `standard fourteen-axis pass`).
+- `src/content/skills/reviewer-axis-design-quality.md` — design-quality axis intro (`other ten axes` → `other thirteen axes`; the design-quality axis is one of the 14, so the "other" count is 13).
+- `src/content/skills/pre-edit-investigation.md` — `edit-discipline` axis description (`axis #8 in the eight-axis review` → `axis #8 of the eight base axes in the fourteen-axis review`).
+- `src/content/skills/triage-gate.md` — small/medium path-semantics row (`reviewer for review (ten-axis)` → `reviewer for review (fourteen-axis)`).
+- `src/content/skills/structured-status.md` — common-rationalizations row (`reviewer's job is the ten-axis pass` → `fourteen-axis pass`).
+- `src/content/skills/debug-and-browser.md` — browser-verification distinction (`five-axis pass walks the diff` → `fourteen-axis pass walks the diff`), and the "Reviewer dispatches this skill" bullet.
+- `src/content/skills/parallel-build.md` — 5-slice cap rationale rephrased from `past 5 sub-agents` to `past 5 parallel builder dispatches` (the cap refers to parallel dispatches / worktrees, not the 10-specialist roster).
+- `README.md` — three spots: Phase 5 post-mortem `12-axis surface` → `14-axis surface`; the `## Walk-through` Review row `Twelve-axis reviewer` → `Fourteen-axis reviewer`; the Specialists count-row description for the reviewer (`eleven-axis review` → `fourteen-axis review`).
+
+**Deliverable 2 — regex tripwire (`tests/unit/v894-docs-drift-sweep.test.ts`).** New tripwire suite that catches future drift via regex rather than fixed phrases. The pattern set walks every `.ts` / `.md` / `.mjs` file under `src/content/specialist-prompts/`, `src/content/skills/`, `src/content/research-lenses/`, plus `src/content/start-command.ts`, `stage-playbooks.ts`, `runbooks-on-demand.ts`, `artifact-templates.ts`, `skills.ts`, `core-agents.ts`, and `README.md`, looking for:
+
+- `<N>-axis (review|pass|check|checklist|surface|specialist|rubric|reviewer)` — qualified reviewer-axis count claims.
+- `<N> reviewer (axis|axes)` and `reviewer's <N>-(axis|axes)` — explicit reviewer-axis surface claims.
+- `<N> research(-only)? (lens|lenses)` — explicit research-lens count claims.
+- `<N> sub-agents` and `<N>-specialist roster|contracts?` — specialist-roster count claims.
+
+`<N>` is matched as either a `\d{1,3}` digit or one of the `one`-through-`twenty` English number words. After word→digit canonicalization, each match is compared against the current canonical count (axes = 14, lenses = 6, specialists = 10). A mismatch is reported UNLESS a ~220-char context window around the match carries a historical marker — `v8.X` / `pre-v8.X` / `pre-cclaw` / `previously` / `was` / `former` / `formerly` / `bumped (from|to)` / `grew (from|to)` / `moved (from|to)` / `up from` / `down from` / `legacy` / `deprecated` / `retired` / `absorbed` / `collapsed` / `added` / `introduced` / `removed`. The marker list is the v8.83-docs-fix "phrase blacklist done right": a generic historical-context exclusion replaces the rigid fixed-phrase list so future axis additions don't constantly require tripwire updates.
+
+The suite carries 18 assertions:
+
+- 1 generic regex sweep (the main tripwire) that walks every target file and reports every stale match with `file @position`, the matched phrase, the wanted-vs-got counts, and a ±220-char context excerpt.
+- 8 explicit canonical-count pinning assertions: README `14 axes` row, README `10 sub-agents` row, README `8-field` triage row, README `six lenses` OR `6 research-only` anchor, `reviewer.ts` `Fourteen-axis review` opening, `reviewer.ts` regression-guard (no `Eleven-axis review` / `Twelve-axis review` / `Thirteen-axis review`), `investigator.ts` post-mortem cites `14-axis` (and not `11-axis finding` / `12-axis finding` / `13-axis finding`).
+- 3 triage field-count coherence assertions: `triage.ts` pins `exactly five fields` (sub-agent core decision), `start-command.ts` pins `eight-field` (orchestrator-stamped aggregate), and `start-command.ts` carries no mid-band `6-field` / `7-field` / `9-field` / `10-field` claim outside historical context.
+- 6 meta-tests pinning the regex's robustness — confirms it does NOT flag a historical-narrative line (`v8.85 bumped to 13 axes; v8.86 lifted to 14`), a `previously eleven-axis pass` line, or a legit `four axes triage's ambiguity score signals` (a count claim about a DIFFERENT subject, not reviewer axes); confirms it DOES flag synthetic current-reality stale strings (`the reviewer applies the eleven-axis check`, `the reviewer's twelve-axis pass`, `5 research-only lens contracts`, `9 sub-agents`).
+
+The phrase-blacklist → regex move means the next time the reviewer-axis count grows (a 15th axis ships post-v8.97), the canonical count constants at the top of the test file (`AXES_CANONICAL`, `LENSES_CANONICAL`, `SPECIALISTS_CANONICAL`) bump in one place and the entire tripwire surface picks up the new canonical without per-phrase enumeration.
+
+**Historical references KEPT (intentionally; future maintainers please leave alone unless the historical claim itself is wrong):**
+
+- Every `## 8.X.Y` heading in this CHANGELOG that names a smaller axis count (`Twelve-axis prose updated to Thirteen-axis`, `11 axes → 12 axes`, `10 reviewer axes`, etc.) — these are the historical narrative of how the count grew. The tripwire's historical-context exclusion (the `v8.X` marker) catches all of them.
+- `src/content/specialist-prompts/triage.ts` — the triage sub-agent's contract still says "decides exactly five fields". This is canonical at the SUB-AGENT contract level: the heuristic decides 5 core routing fields (`complexity` / `ceremonyMode` / `path` / `runMode` / `mode`); the additive `taskShape` / `designSurface` / `devexSurface` flags are derived signals emitted alongside the core decision. The orchestrator stamps the aggregate 8-field state. Both narratives are coherent and the tripwire pins both (`exactly five fields` in `triage.ts`, `eight-field` in `start-command.ts`).
+- `src/content/start-command.ts` — `5 lenses by default` for `--standard` depth — describes the baseline 5 lenses (engineer / product / architecture / history / skeptic); the design lens (v8.76) is conditional on UI/UX topic detection, so the sentence continues with "add `research-design` for a total of **6 lenses**". The narrative pair is canonical.
+- `src/content/runbooks-on-demand.ts` — research depth-tier table and worked examples that say `5 lenses` for the standard / deep-product baseline (before the v8.76 design-lens overlay). The table cells are explicit historical anchors (`pre-v8.69 behaviour`, `pre-v8.69 default`) and the tripwire's `pre-v8.X` marker excludes them.
+- `src/content/specialist-prompts/critic.ts` — `at least 3 lenses` and `≥3 lenses of output` are subset claims (the critic's adversarial mode requires findings from at least 3 of the 6 lenses), not canonical-count claims. The tightened regex requires the noun be qualified by `research(-only)?` to fire, which excludes these subset-count phrases.
+- `src/content/specialist-prompts/plan-devex.ts` — `two lenses cover orthogonal failure modes` describes the plan-design + plan-devex pre-build duo, not the 6 research lenses. Different lens namespace.
+- Every test file under `tests/unit/v8XX-*.test.ts` that pins a historical baseline count (`expect(README).not.toContain("11 axes")`, `expect(README).not.toContain("33 skills")`, etc.) — these are intentionally narrow regression guards for prior arcs; they stay as-is.
+- The v8.83-docs-fix test (`tests/unit/v883-docs-fix.test.ts`) still pins the 11 canonical axes list. After v8.97, `investigator.ts` cites all 14 axes; the original 11 are still all present in the text, so the test still passes. The new v8.97 tripwire is the broader regex-based catch; the v8.83 phrase-blacklist suite is the narrow guard for the original 11 + the historical `eleven-axis` literal.
+
+### How
+
+This was a docs-drift sweep, not a contract change — every edit was a string-only update in `src/content/` (.ts and .md) plus README.md plus two historicizing tests. The new tripwire test is read-only over the file system; it does not exercise the runtime. Build, smoke (`scripts/smoke-init.mjs`), and the full vitest suite all pass at HEAD; test count grew by +18 new tripwire assertions.
+
+The escalation rule from the spec ("stop if more than 30 files have stale strings — that's a deeper systemic issue") was honoured: ~21 files were touched in the end, well under the threshold. The "Five-axis pass" header drift inside `reviewer.ts` and `review-discipline.md` (a deeper pre-v8.67 inconsistency the audit hadn't flagged) was caught by the new tripwire and folded into this fix — renaming the per-iteration header to `Axes pass` decouples the section name from the count and removes the drift root cause without rewriting the per-axis enumeration prose.
+
+The v8.83-docs-fix's fixed phrase blacklist remains as-is — the v8.97 regex tripwire layers on top and is the recommended pattern for future docs-drift sweeps.
+
+
 ## 8.96.1 — Wire buildAutoTriggerBlock gateEnvelope path into production (Phase C G-2 fix)
 
 ### Why
