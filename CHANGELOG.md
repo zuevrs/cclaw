@@ -1,6 +1,59 @@
 # Changelog
 
 
+## 8.93.0 — Synthesis confidence + priorResearch cite-back (v8.88 work)
+
+### Why
+
+The v8.65 multi-lens research mode (`/cc research <topic>`) shipped the six-lens parallel dispatch and the cross-lens `## Synthesis` section, but it left two correctness gates open at the research-→-plan boundary:
+
+1. **No numeric confidence per finding.** Each lens returned a single overall `Confidence: high | medium | low` qualitative tag in its slim summary. The synthesis pass distinguished `Confidence: low` lenses from `high` ones but had no machinery to surface DISAGREEMENT between two `high`-confidence lenses on the same underlying claim. The same finding could be rated 0.9 in spirit by the engineer lens ("clean fit; Redis is the right choice") and 0.2 in spirit by the architecture lens ("this couples the cache to a domain it shouldn't own"); the synthesis blurred the disagreement into prose paragraphs the follow-up architect was free to ignore. Reference: obra's `gsd-research-synthesizer` agent surfaces per-finding numeric confidence as the canonical aggregation signal.
+
+2. **No cite-back contract between research and plan.** The v8.65 / v8.76 / v8.78 / v8.81 work wired `flowState.priorResearch` so the follow-up `/cc <task>` flow's architect Bootstrap could read the shipped `research.md` as Frame / Approaches / Decisions context — but nothing required the architect to ACTUALLY use the research at decision time. Plans authored downstream of a research handoff could silently drift from the research findings; reviewers had no auditable signal to grep for. The closure mechanism for the research-→-plan loop existed in spirit (the architect's Phase 0 step 6 read research.md) but had no enforcement at plan-critic time.
+
+v8.88 closes both gates.
+
+### What changed
+
+**Deliverable 1 — per-finding numeric confidence at every lens.** All six research lens prompts (engineer, product, architecture, history, skeptic, design) now ship a `### Findings (with confidence)` section as the first sub-section of their findings block. Each lens enumerates 3-7 top-level findings, each tagged `#### F-N (confidence: 0.0-1.0)` with a one-sentence finding statement. Under-rating when evidence is thin is the discipline; bottom-stuffing confidence to compensate for shallow scope is the anti-pattern. The pre-existing lens-level qualitative `Confidence` tag in the slim summary stays — the new per-finding numeric grades are additive, not a replacement.
+
+**Deliverable 2 — Confidence summary aggregation in synthesis.** The research orchestrator's Phase 3 synthesis pass (in `src/content/start-command.ts`) now authors a mandatory `### Confidence summary` subsection of `## Synthesis` in `research.md`, with three parts:
+
+- **Weighted averages per finding-equivalent.** When 2+ lenses produce findings the orchestrator judges to cover the same underlying claim, the synthesis computes a weighted average (weight = 1/lens-count contributing) and cites the contributing F-N ids inline.
+- **Confidence cliffs.** Every finding-equivalent where two lenses disagree by ≥0.5 (e.g. engineer 0.9 vs. skeptic 0.2 on the same claim) is surfaced as a dedicated `**Cliff:**` bullet. Cliffs are the highest-signal divergence the synthesis can surface.
+- **Per-lens rollup.** Mean confidence per dispatched lens, rounded to two decimals, so lenses whose top-line tag misrepresents the per-finding distribution become visible.
+
+The Confidence summary is mandatory — absence is a structural failure for the follow-up architect Bootstrap, which reads `research.md` end-to-end as `priorResearch` context. When no cliffs are detected and aggregation is not meaningful, the orchestrator writes `No cross-lens confidence cliffs detected; per-lens means within ±0.15 of each other.` verbatim.
+
+**Deliverable 3 — `Cites: research.md §<section>` on every D-N when priorResearch was loaded.** PLAN_TEMPLATE's `## Decisions` row template gains a `Cites:` field; the architect's Phase 3 D-N composition instructions name it as mandatory when `flowState.priorResearch` is non-null. Each D-N must cite 1-3 sections of `research.md` (e.g. `Cites: research.md §Engineer lens > Implementation paths, research.md §Synthesis > Confidence summary`). The `§` is the section-anchor separator. On cold-start flows where no research was loaded, the field is OMITTED entirely.
+
+**Deliverable 4 — plan-critic §A cite-back enforcement.** The §A audit (formerly Reversibility-only, v8.74) now also walks every D-N for the `Cites:` field. Three new finding classes ride the existing plan-critic.md findings table:
+
+- `decision-missing-research-cite` (block-ship) — D-N has no `Cites:` field when `priorResearch` is non-null.
+- `decision-bad-research-cite` (iterate) — `Cites:` value is present but does not start with `research.md §` (the `§` anchor is the contract).
+- `decision-orphan-research-cite` (iterate) — `Cites:` field present on a flow where `priorResearch` was null (cold-start mis-authoring; field should be omitted entirely).
+
+The section header in plan-critic.md is updated to `## §A. Decision integrity (Reversibility + Cites)`. plan-critic §A reads `.cclaw/state/flow-state.json > priorResearch` once at entry to decide which rules apply.
+
+### Tripwire tests
+
+`tests/unit/v888-synthesis-confidence-citeback.test.ts` pins:
+
+- All six research lens prompts contain the `### Findings (with confidence)` section, the `confidence: 0.0-1.0` per-finding format, and the canonical `F-1` / `F-2` / `F-3` ids.
+- start-command.ts Phase 3 synthesis names weighted averaging, the 0.5 cliff threshold, and the `### Confidence summary` section.
+- RESEARCH_TEMPLATE includes both the per-lens `### Findings (with confidence)` subsections and the synthesis `### Confidence summary` subsection.
+- PLAN_TEMPLATE D-N row includes the `Cites: research.md §<section>` field, scoped to `priorResearch != null`.
+- architect.ts continues to read `priorResearch` and now mandates the `Cites:` field on every D-N when the Bootstrap loaded it.
+- plan-critic.ts §A carries the three new finding classes (`decision-missing-research-cite`, `decision-bad-research-cite`, `decision-orphan-research-cite`).
+- README documents the v8.88 work under `## Synthesis confidence + priorResearch cite-back`.
+- package.json + CHANGELOG carry the v8.88 / 8.93.x bump.
+
+### Cross-cutting
+
+- All 2395 pre-existing tests continue to pass; the v8.83 `start-command` body-size tripwire (≥3% reduction vs the v8.82 baseline) was respected by keeping the Phase 3c synthesis instruction concise (the full Confidence-summary contract lives in RESEARCH_TEMPLATE, not start-command).
+- No reviewer axis, skill, or runbook count changed.
+
+
 ## 8.92.0 — Model-tier policy defaults (v8.87 work)
 
 ### Why

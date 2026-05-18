@@ -88,6 +88,24 @@ Return the structured findings block below to the orchestrator (in your slim sum
 ### Findings block (markdown — paste-ready for the orchestrator)
 
 \`\`\`markdown
+### Findings (with confidence)
+
+*(v8.88 — distilled top-level findings from this lens, each carrying a numeric confidence in the range \`0.0\` (no signal / pure speculation) to \`1.0\` (fully grounded in cited evidence). 3-7 findings is typical; under-rate when evidence is thin, never bottom-stuff confidence to compensate for shallow scope. The orchestrator's synthesis pass aggregates confidence across lenses with weighted averaging and surfaces **confidence cliffs** — findings where two lenses on the same finding-equivalent disagree by ≥0.5 (e.g. history rates 0.9 on "prior attempt failed for reason X", engineer rates 0.2 on the same claim because new evidence). Cliffs are flagged in the synthesis \`### Confidence summary\` section so the user / follow-up architect sees the disagreement explicitly. Pair each finding with one short sentence; the lens-specific sub-sections below carry the detail.)*
+
+#### F-1 (confidence: 0.0-1.0)
+
+<one-sentence finding statement — what this lens concluded as a top-level takeaway>
+
+#### F-2 (confidence: 0.0-1.0)
+
+<one-sentence finding statement>
+
+#### F-3 (confidence: 0.0-1.0)
+
+<one-sentence finding statement>
+
+*(Continue F-4..F-N up to 7 findings as needed. Drop unused entries — do not pad to a fixed count.)*
+
 ### Prior attempts
 
 - **\`<slug-or-sha>\`** (date: <date>, outcome: <shipped | reverted | manual-fix | follow-up-bug | abandoned | unknown>) — <one-line description>. Cite: \`<knowledge.jsonl:line>\` | \`<git-ref>\`.

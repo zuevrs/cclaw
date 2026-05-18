@@ -177,19 +177,27 @@ Surface risks the plan does not name. The architect wrote \`## Pre-mortem\` on s
 
 §5 carries the largest fan-out potential; cap at **5 findings** total. If you have more than 5, the plan has structural problems best escalated via \`block-ship\` on the most severe one.
 
-### §A. Decision integrity audit (Reversibility field, v8.74)
+### §A. Decision integrity audit (Reversibility + Cites fields, v8.74 + v8.88)
 
-Walk \`plan.md > ## Decisions\` and audit every \`D-N\` for the **\`Reversibility:\` field**. The architect MUST stamp one of \`one-way\` / \`two-way\` / \`mostly-two-way\` on every D-N (see PLAN_TEMPLATE D-N row + architect Phase 3); the field is mandatory in strict mode.
+Walk \`plan.md > ## Decisions\` and audit every \`D-N\` for two fields:
+
+1. **\`Reversibility:\`** (v8.74) — mandatory on every D-N regardless of flow shape. Architect must stamp one of \`one-way\` / \`two-way\` / \`mostly-two-way\`.
+2. **\`Cites: research.md §<section>\`** (v8.88) — mandatory on every D-N **when \`flowState.priorResearch\` is non-null** (the architect Bootstrap loaded a prior \`/cc research <topic>\` flow's research.md as context). Omitted entirely when priorResearch is null. Read \`.cclaw/state/flow-state.json > priorResearch\` once at §A entry to decide which rules apply.
+
+The architect MUST stamp these per the PLAN_TEMPLATE D-N row + architect Phase 3 rubric.
 
 Findings rules:
 
 - **Missing \`Reversibility:\` field on any \`D-N\`** — emit a \`block-ship\` finding (class=\`decision-missing-reversibility\`). The architect's revision adds the missing line per the rubric (one-way for irreversible, two-way for cheaply-reversible, mostly-two-way for the middle ground). Cite the exact \`D-N\` id.
 - **\`Reversibility:\` value outside the three-value enum** (e.g. \`Reversibility: maybe\`, \`Reversibility: tbd\`) — emit a \`block-ship\` finding (class=\`decision-bad-reversibility\`). Cite the offending value verbatim.
 - **\`Reversibility: one-way\` on a D-N whose Blast-radius is plainly trivial** (e.g. one-line config change, internal-helper rename) — emit an \`iterate\` finding (class=\`decision-overstated-reversibility\`). The mis-classification is consequential because the v8.74 orchestrator auto-fires the critic's §3.5 cross-model second opinion on any \`one-way\` D-N; over-stamping inflates critic cost without adding signal. Suggest a downgrade to \`mostly-two-way\` or \`two-way\` with rationale.
+- **Missing \`Cites: research.md §<section>\` field on any \`D-N\` when \`flowState.priorResearch\` is non-null (v8.88 research-→-plan cite-back)** — emit a \`block-ship\` finding (class=\`decision-missing-research-cite\`). Read \`flowState.priorResearch\` at the start of §A: when the field is non-null (the architect Bootstrap loaded a prior \`/cc research <topic>\` flow's research.md as Frame / Approaches / Decisions context — v8.65 research mode + v8.76/v8.78/v8.81 priorResearch wiring), every D-N MUST carry a \`Cites:\` line naming at least one \`research.md §<section>\` that grounded the choice. The check forces the research-→-plan loop to close — without it, plans authored downstream of a research handoff drift silently from the research findings. Suggested architect revision: add a \`Cites: research.md §<section>\` line to the offending D-N, citing the lens / synthesis / recommended-next-step section that grounded the choice (e.g. \`Cites: research.md §Engineer lens > Implementation paths, research.md §Synthesis > Confidence summary\`). Cite the exact \`D-N\` id in the finding. **Skip this check entirely when \`flowState.priorResearch\` is null** (cold-start \`/cc <task>\` with no research handoff — the \`Cites:\` field is OMITTED by contract on those plans; emitting a finding here would be a false positive).
+- **\`Cites:\` field present but malformed** when \`flowState.priorResearch\` is non-null — value does not start with \`research.md §\` (e.g. \`Cites: my notes\`, \`Cites: see ticket\`, \`Cites: research.md - Engineer\` without the \`§\` anchor) — emit an \`iterate\` finding (class=\`decision-bad-research-cite\`). The \`§\` anchor is the contract; \`Cites:\` without it cannot be cross-checked against \`research.md\`'s section headings. Cite the offending value verbatim.
+- **\`Cites:\` field present when \`flowState.priorResearch\` is null** (cold-start flow where no research was loaded; the field should be omitted entirely) — emit an \`iterate\` finding (class=\`decision-orphan-research-cite\`). Authoring \`Cites: research.md §...\` on a flow with no priorResearch is a v8.88 anti-pattern: the citation cannot resolve because there is no \`research.md\` to read; suggest removing the field. Cite the \`D-N\` id.
 
 Skip §A entirely when \`plan.md\` has no \`## Decisions\` section (e.g. small strict slugs where Phase 3 was skipped with the "No structural decisions" note; or soft-mode plans which structurally have no Decisions section). The check is decision-record integrity, not a forcing function to author decisions where none exist.
 
-§A's findings ride the same plan-critic.md findings table; class names (\`decision-missing-reversibility\` / \`decision-bad-reversibility\` / \`decision-overstated-reversibility\`) make the integrity findings easy to grep for in fix-only rounds. Section header in plan-critic.md is literally \`## §A. Decision integrity (Reversibility)\`.
+§A's findings ride the same plan-critic.md findings table; class names (\`decision-missing-reversibility\` / \`decision-bad-reversibility\` / \`decision-overstated-reversibility\` / \`decision-missing-research-cite\` / \`decision-bad-research-cite\` / \`decision-orphan-research-cite\`) make the integrity findings easy to grep for in fix-only rounds. Section header in plan-critic.md is literally \`## §A. Decision integrity (Reversibility + Cites)\`.
 
 ### §6.5. Bets and exclusions audit (v8.80 — \`## Not Doing (and why)\` + \`## Key assumptions to validate\`)
 
@@ -238,7 +246,7 @@ Granularity findings: <N total; same breakdown>
 Dependency findings: <N total; same breakdown>
 Parallelism findings: <N total; same breakdown — n/a if topology=inline>
 Risk catalog findings: <N total; same breakdown>
-Decision integrity findings (§A — Reversibility audit): <N total; same breakdown — n/a if plan has no \`## Decisions\` section>
+Decision integrity findings (§A — Reversibility + Cites audit): <N total; same breakdown — n/a if plan has no \`## Decisions\` section; \`Cites:\` half is also n/a when \`flowState.priorResearch\` is null (cold-start, no research handoff)>
 Bets and exclusions findings (§6.5 — v8.80 Not Doing + Key assumptions): <N total; same breakdown — n/a on inline / legacy pre-v8.80 plans>
 Slice-AC separation findings (v8.63 — strict mode): <N total; same breakdown — n/a if soft mode or archived-shape plan>
 Iteration: <N>/1
