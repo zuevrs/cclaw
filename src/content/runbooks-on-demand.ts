@@ -1,9 +1,211 @@
+import {
+  renderDispatchSkillsIndex,
+  type DispatchSkillsIndexEntry,
+  type GateEnvelope
+} from "./skills.js";
+
 export interface OnDemandRunbook {
   id: string;
   fileName: string;
   title: string;
   body: string;
 }
+
+/**
+ * Canonical reviewer-dispatch envelope shapes the orchestrator
+ * encounters (introduced in v8.96.1; Phase C audit G-2 fix).
+ * The install pipeline pre-renders the gate-resolved skills
+ * slice for each shape (via {@link renderDispatchSkillsIndex}) so the
+ * dispatch-skills-index runbook is a static index of every per-envelope
+ * skills-pointer block the orchestrator might need to paste into a live
+ * reviewer dispatch envelope.
+ *
+ * The shapes here cover the high-traffic combinations (no flags, every
+ * individual gate, common multi-gate combinations that fire together on
+ * post-v8.80 strict-mode plans). For envelope shapes outside the table
+ * the orchestrator falls back to {@link buildAutoTriggerBlock} reasoning
+ * (the on-disk reviewer.md remains the superset hint); the table is a
+ * fast-path for the common cases, not a closed enum.
+ *
+ * Phase C audit G-2 fix — production-path caller of
+ * `buildAutoTriggerBlock(stage, gateEnvelope)` so the runtime path the
+ * v8.83-token-axes work introduced is no longer reachable only from
+ * tests.
+ */
+const REVIEWER_DISPATCH_ENVELOPES: ReadonlyArray<{
+  label: string;
+  envelope: GateEnvelope;
+  notes: string;
+}> = [
+  {
+    label: "no flags — empty envelope",
+    envelope: {},
+    notes:
+      "Every surface-driven gated axis filtered out (qa-evidence / design-quality / security / nfr-compliance / edit-discipline / scope-drift / assumption-coverage). Anti-slop still fires per the default-on contract (`walkAntiSlopAxis !== false` — `undefined` opens the gate). Reviewer renders correctness / test-quality / readability / architecture / complexity-budget / perf / always-on stage skills plus the anti-slop axis. Only fires in practice on doc-only ceremony=soft slugs or as the structural baseline when the orchestrator has not yet stamped surface-driven flags."
+  },
+  {
+    label: "default-on anti-slop only (no surface-driven gates)",
+    envelope: { walkAntiSlopAxis: true },
+    notes:
+      "Most common shape on non-design / non-UI / non-NFR-bearing soft-mode slugs. anti-slop fires by default per v8.86; the other gated axes (qa-evidence / design-quality / nfr-compliance / scope-drift / assumption-coverage / security / edit-discipline) skip silently."
+  },
+  {
+    label: "strict-mode baseline — anti-slop + edit-discipline + scope-drift + assumption-coverage",
+    envelope: {
+      walkAntiSlopAxis: true,
+      editDisciplineActive: true,
+      walkScopeDriftAxis: true,
+      walkAssumptionCoverageAxis: true
+    },
+    notes:
+      "Canonical strict-mode reviewer dispatch envelope on a post-v8.80 plan that respects plan-critic §6.5 (Not-Doing section non-empty) and v8.85 (Key assumptions to validate section non-empty). edit-discipline always fires in strict / soft per v8.48."
+  },
+  {
+    label: "UI / design slug — qa-evidence + design-quality stacked on the strict baseline",
+    envelope: {
+      walkAntiSlopAxis: true,
+      editDisciplineActive: true,
+      walkScopeDriftAxis: true,
+      walkAssumptionCoverageAxis: true,
+      walkQaEvidenceAxis: true,
+      walkDesignQualityAxis: true
+    },
+    notes:
+      "Strict-mode UI slug — `triage.surfaces` ∩ {ui, web} ≠ ∅ AND `triage.designSurface == true`. The two surface-driven gates ride on top of the strict-mode baseline."
+  },
+  {
+    label: "security-sensitive slug — security flag on top of the strict baseline",
+    envelope: {
+      walkAntiSlopAxis: true,
+      editDisciplineActive: true,
+      walkScopeDriftAxis: true,
+      walkAssumptionCoverageAxis: true,
+      securityFlag: true
+    },
+    notes:
+      "Strict-mode slug whose touched files matched the sensitive-surface heuristic (auth / oauth / saml / session / secret / migration / route file / dependency manifest / `@security-sensitive` marker). v8.62 absorbed `security-reviewer` into the reviewer's security axis; `securityFlag: true` pins the reviewer-axis-security companion skill."
+  },
+  {
+    label: "NFR-bearing slug — planHasNonFunctional stacked on the strict baseline",
+    envelope: {
+      walkAntiSlopAxis: true,
+      editDisciplineActive: true,
+      walkScopeDriftAxis: true,
+      walkAssumptionCoverageAxis: true,
+      planHasNonFunctional: true
+    },
+    notes:
+      "Strict-mode slug whose architect-authored `plan.md > ## Non-functional` section is non-empty. The reviewer-axis-nfr-compliance companion skill is pinned so per-row cross-checks fire."
+  },
+  {
+    label: "every gate flag set",
+    envelope: {
+      walkAntiSlopAxis: true,
+      editDisciplineActive: true,
+      walkScopeDriftAxis: true,
+      walkAssumptionCoverageAxis: true,
+      walkQaEvidenceAxis: true,
+      walkDesignQualityAxis: true,
+      securityFlag: true,
+      planHasNonFunctional: true
+    },
+    notes:
+      "All eight reviewer-stage gated axes active. Sanity-check shape — the rendered block here is the upper bound and matches the static superset embedded in reviewer.md."
+  },
+  {
+    label: "anti-slop explicitly disabled (default-on opt-out)",
+    envelope: {
+      walkAntiSlopAxis: false,
+      editDisciplineActive: true,
+      walkScopeDriftAxis: true,
+      walkAssumptionCoverageAxis: true
+    },
+    notes:
+      "User / project config set `walkAntiSlopAxis: false` on this slug (tightly-scoped change where the axis would only add noise). Every other strict-baseline gate continues to fire."
+  }
+];
+
+/**
+ * Pre-rendered dispatch-skills-index entries. Computed once at
+ * module-import time so `dispatch-skills-index.md`'s body composer is a
+ * pure string concatenation; the install pipeline writes the runbook
+ * verbatim. Exported so the v8.96.1 tripwire suite
+ * (`tests/unit/v894-auto-trigger-gate-wiring.test.ts`) can assert
+ * per-envelope skill membership without re-deriving the gate filter.
+ */
+export const REVIEWER_DISPATCH_SKILLS_INDEX: ReadonlyArray<DispatchSkillsIndexEntry> =
+  REVIEWER_DISPATCH_ENVELOPES.map(({ label, envelope, notes }) => {
+    const entry = renderDispatchSkillsIndex("review", envelope, label);
+    return Object.assign(entry, { notes });
+  });
+
+function renderDispatchSkillsIndexRunbook(): string {
+  const sections = REVIEWER_DISPATCH_SKILLS_INDEX.map((entry) => {
+    const envJson = JSON.stringify(entry.envelope, null, 2);
+    const idsLine =
+      entry.activeSkillIds.length > 0
+        ? entry.activeSkillIds.map((id) => `\`${id}\``).join(", ")
+        : "_(none active)_";
+    const notes =
+      (entry as DispatchSkillsIndexEntry & { notes?: string }).notes ?? "";
+    return [
+      `### ${entry.label}`,
+      "",
+      `**Envelope flags**`,
+      "",
+      "```json",
+      envJson,
+      "```",
+      "",
+      `**Active skill ids** (${entry.activeSkillIds.length} pin${entry.activeSkillIds.length === 1 ? "" : "s"}): ${idsLine}`,
+      "",
+      `**Notes.** ${notes}`,
+      "",
+      "**Rendered block** — paste into the reviewer dispatch envelope's `Active skills:` field to override the static superset from `agents/reviewer.md`:",
+      "",
+      "```markdown",
+      entry.block,
+      "```"
+    ].join("\n");
+  }).join("\n\n");
+
+  return `# On-demand runbook — dispatch-skills-index (Phase C G-2 fix)
+
+The orchestrator opens this runbook when authoring any reviewer dispatch envelope (and, by extension, any specialist dispatch whose target stage carries gated axis skills).
+
+## Why this runbook exists
+
+The on-disk \`.cclaw/lib/agents/<specialist>.md\` files embed a STATIC skills-pointer block produced at install time by \`buildAutoTriggerBlock(stage)\` (single-arg). That block is the SUPERSET of every stage-scoped skill — including all eight reviewer-stage gated axes (\`qa-evidence\` / \`design-quality\` / \`security\` / \`nfr-compliance\` / \`edit-discipline\` / \`scope-drift\` / \`assumption-coverage\` / \`anti-slop\`). The static block does NOT know about the per-dispatch envelope flags the orchestrator computes from triage / plan state — so a reviewer sub-agent reading only \`agents/reviewer.md\` would treat every gated axis as in-scope, regardless of whether the gate actually fires for THIS slug.
+
+The orchestrator's dispatch envelope, NOT the on-disk static prompt, is the source of truth for which gated axes fire on THIS dispatch. The envelope carries the live \`walkXAxis: true | false\` flags; this runbook is the pre-rendered table of which skill pointers belong on the reviewer for each canonical envelope shape.
+
+## How to use this runbook
+
+1. **Construct the reviewer dispatch envelope normally** — \`Stage: review\`, \`Slug: <slug>\`, \`Ceremony mode: <inline | soft | strict>\`, plus the gate flags the orchestrator already stamps per \`start-command.md > Review hop\` (\`securityFlag\`, \`walkDesignQualityAxis\`, \`walkScopeDriftAxis\`, \`walkAssumptionCoverageAxis\`, \`walkAntiSlopAxis\`, \`walkQaEvidenceAxis\`, \`planHasNonFunctional\`, \`editDisciplineActive\`).
+2. **Look up the matching shape below** by comparing the envelope's flag set against the **Envelope flags** JSON in each section. When the envelope is a strict subset of one of the tabulated shapes' flags, use that shape's **Rendered block** verbatim. When the envelope flags don't match any tabulated shape (a rare combination), fall back to: (a) the on-disk \`agents/reviewer.md\` static superset (correct but token-wasteful), OR (b) regenerate the block at orchestrator time by walking the \`AUTO_TRIGGER_SKILLS\` table in \`src/content/skills.ts\` and applying each skill's gate predicate against the envelope.
+3. **Paste the **Rendered block** into the reviewer dispatch envelope** as an \`Active skills (per envelope):\` field, positioned IMMEDIATELY after the required-reads block and BEFORE the inputs/output-contract block (so the sub-agent reads the gate-resolved slice before it interprets \`agents/reviewer.md\`'s superset). The sub-agent treats this field as authoritative; the on-disk \`agents/reviewer.md\` superset is a fall-back hint when the dispatch envelope omits the field entirely (legacy / pre-v8.96.1 envelopes).
+4. **The skill-body claims in \`reviewer-axis-*.md\` are accurate.** v8.96.1 corrected the per-skill \`## When to use\` paragraphs to name "the orchestrator's dispatch envelope carries the \`walkXAxis\` flag" instead of the pre-v8.96.1 fiction "the orchestrator calls \`buildAutoTriggerBlock("review", env)\` at dispatch time". The function is called at INSTALL time, not at dispatch time, and the call happens here (the dispatch-skills-index runbook composer in \`src/content/runbooks-on-demand.ts\`), not from any runtime orchestrator code.
+
+## Canonical envelope shapes
+
+${sections}
+
+## Fall-back rules
+
+| envelope condition | what to do |
+| --- | --- |
+| matches one of the canonical shapes above | use that shape's **Rendered block** verbatim |
+| every gate flag is \`true\` (all eight) | use the **every gate flag set** section's block; this is the upper bound and matches the static superset in \`agents/reviewer.md\` |
+| every gate flag is unset / \`false\` AND \`walkAntiSlopAxis\` is not explicitly \`true\` | use the **no flags — empty envelope** section; expect zero gated-axis pointers in the rendered block |
+| envelope carries a combination not tabulated | the runbook is a fast-path index, not a closed enum — fall back to the on-disk \`agents/reviewer.md\` static superset (token-wasteful but correct); OR derive the block manually by walking \`AUTO_TRIGGER_SKILLS\` in \`src/content/skills.ts\` and applying each skill's gate predicate |
+
+## Symmetry note for non-reviewer stages
+
+The non-reviewer stages (\`plan\` / \`build\` / \`qa\` / \`triage\` / \`ship\` / \`compound\`) currently have NO stage-scoped skills with a gate predicate — every \`AUTO_TRIGGER_SKILLS\` entry tagged for those stages either rides every dispatch (no gate) or rides via \`stages: ["always"]\` (no stage filter). So the dispatch envelope flags don't affect their rendered block, and the on-disk \`agents/<specialist>.md\` static block is already the precise per-dispatch list for those specialists. This runbook covers the reviewer stage only because the reviewer is the only specialist with gated skills as of v8.96.1. If a future specialist adds gated skills (e.g. a \`plan-design\` axis gated on UI-density flags), add a per-stage table here mirroring the reviewer one.
+`;
+}
+
+const DISPATCH_SKILLS_INDEX = renderDispatchSkillsIndexRunbook();
 
 const DISPATCH_ENVELOPE = `# On-demand runbook — dispatch envelope shape
 
@@ -1920,6 +2122,13 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "one-way-door-gate.md",
     title: "One-way Door Gate (v8.79+)",
     body: ONE_WAY_DOOR_GATE
+  },
+  {
+    id: "dispatch-skills-index",
+    fileName: "dispatch-skills-index.md",
+    title:
+      "Dispatch skills index (Phase C G-2 fix; v8.96.1) — per-envelope reviewer skill pointers",
+    body: DISPATCH_SKILLS_INDEX
   }
 ];
 

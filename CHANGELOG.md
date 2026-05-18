@@ -1,6 +1,62 @@
 # Changelog
 
 
+## 8.96.1 — Wire buildAutoTriggerBlock gateEnvelope path into production (Phase C G-2 fix)
+
+### Why
+
+The v8.83-token-axes work extended `buildAutoTriggerBlock(stage, gateEnvelope?)` with an optional second parameter so a runtime call-site (orchestrator dispatch envelope construction) could filter the rendered skills block down to only the gated axes whose flags are set. Tests on the two-arg shape were comprehensive — but the parameter was never reached from any production caller. Every specialist-prompt template literal in `src/content/specialist-prompts/*.ts` called the single-arg form at module-import time, baking a STATIC SUPERSET of every gated axis into the on-disk `.cclaw/lib/agents/<id>.md`. The orchestrator's dispatch envelope flags (`walkScopeDriftAxis`, `walkQaEvidenceAxis`, `walkDesignQualityAxis`, `walkAssumptionCoverageAxis`, `walkAntiSlopAxis`, `securityFlag`, `planHasNonFunctional`, `editDisciplineActive`) were stamped at dispatch time but had no path back into the rendered skills-pointer block — the reviewer sub-agent saw every gated axis on every dispatch regardless of which gates actually fired.
+
+The Phase C audit surfaced this as gap **G-2 (MED)**: "`buildAutoTriggerBlock`'s gateEnvelope runtime path is unreachable from production; specialist prompts call the legacy single-arg form at module load." Skill-body claims in `reviewer-axis-scope-drift.md` / `reviewer-axis-qa-evidence.md` / `reviewer-axis-nfr-compliance.md` / `reviewer-axis-assumption-coverage.md` about "the orchestrator pins the skill via `buildAutoTriggerBlock(\"review\", env)`" were tests-only fiction — the function was never called at dispatch time.
+
+### Path chosen: B (documentation + dispatch-envelope-driven skills-index hint)
+
+The audit listed two viable paths:
+
+- **Path A — refactor every specialist prompt into a dispatch-time function.** Invasive: 9 specialist prompts call `buildAutoTriggerBlock(stage)` at module load; each is consumed via the `prompt: string` field on `CoreAgent` and written to `.cclaw/lib/agents/<id>.md` by `install.ts > writeAgentFiles`. The harness sub-agents read those static files at dispatch time — there is no live JS runtime that re-renders the prompt per dispatch. Path A would require teaching the install pipeline to re-render `agents/<id>.md` per dispatch (one re-render per envelope shape, every time the orchestrator hits the reviewer hop), OR refactoring 9 specialist surfaces into dispatch-time functions the orchestrator instructions cannot directly call. Architecture-incompatible with cclaw's instruction-driven dispatch model.
+
+- **Path B — keep the static superset; add a dispatch-envelope-driven SKILLS_INDEX hint that overrides the stale embedded list when the gate doesn't fire.** Documented as the "alternative simpler fix" in the audit. This release ships Path B.
+
+### What changed
+
+**Deliverable 1 — `renderDispatchSkillsIndex(stage, envelope, label)` exported from `src/content/skills.ts`.** The canonical production-path API for runtime callers (orchestrator-side helpers + the install-time runbook composer). Wraps `buildAutoTriggerBlock(stage, gateEnvelope)` and returns a structured payload (stage / envelope / rendered block / active skill ids / label) so consumers can render whichever surface shape they need (markdown table, prose paragraph, JSON fixture) without re-deriving the gate filtering. The TS type `DispatchSkillsIndexEntry` is also exported for downstream consumers.
+
+**Deliverable 2 — new on-demand runbook `runbooks/dispatch-skills-index.md`.** Composed at install time by `renderDispatchSkillsIndexRunbook()` in `src/content/runbooks-on-demand.ts` from a fixed table of canonical reviewer-dispatch envelope shapes (`no flags` / `default-on anti-slop only` / `strict-mode baseline` / `UI / design slug` / `security-sensitive slug` / `NFR-bearing slug` / `every gate flag set` / `anti-slop explicitly disabled`). Each shape calls `renderDispatchSkillsIndex(\"review\", envelope, label)` — every entry exercises the two-arg form of `buildAutoTriggerBlock`. The runbook documents how the orchestrator picks the matching shape per dispatch and pastes the pre-rendered block into the dispatch envelope's `Active skills (per envelope):` field.
+
+**Deliverable 3 — `reviewer.ts` superset note.** A short paragraph below the embedded `buildAutoTriggerBlock(\"review\")` block names the block as the static SUPERSET, points sub-agents at the dispatch envelope's `Active skills (per envelope):` field as the authoritative per-dispatch slice (when present), and falls back to the superset only when the field is omitted (legacy / pre-v8.96.1 dispatches).
+
+**Deliverable 4 — `start-command.ts` orchestrator wiring.** New trigger-table row `| building a reviewer dispatch envelope | dispatch-skills-index.md |` plus a new bullet under \"Review hop\" instructing the orchestrator to resolve the per-envelope skills slice from the runbook after stamping all gate flags. The dispatch-skills-index runbook is now opened on every reviewer dispatch.
+
+**Deliverable 5 — skill-body corrections.** The four reviewer-axis skill bodies (`reviewer-axis-scope-drift.md` / `reviewer-axis-qa-evidence.md` / `reviewer-axis-nfr-compliance.md` / `reviewer-axis-assumption-coverage.md`) had their fictional \"the orchestrator calls `buildAutoTriggerBlock(\"review\", env)` at dispatch time\" claim replaced with the accurate \"the orchestrator's dispatch envelope carries the `walkXAxis` flag; the orchestrator resolves the envelope shape against `runbooks/dispatch-skills-index.md` and pastes the gate-resolved skills-pointer slice into the envelope's `Active skills (per envelope):` field\". Each correction carries a historical \"(v8.96.1 — pre-v8.96.1 this paragraph claimed ...; that was tests-only fiction)\" note so reviewers debugging archived flows can map the old claim to the corrected contract.
+
+### Tripwire tests
+
+`tests/unit/v894-auto-trigger-gate-wiring.test.ts` pins:
+
+- AC-1 — at least ONE production-path (non-test) caller of `buildAutoTriggerBlock(stage, gateEnvelope)` or its `renderDispatchSkillsIndex` wrapper. The audit gap is closed only when the runtime path is reached from outside `tests/`.
+- AC-2 — the `dispatch-skills-index` runbook is registered in `ON_DEMAND_RUNBOOKS`, composed from `REVIEWER_DISPATCH_SKILLS_INDEX`, and referenced by `start-command.ts`.
+- AC-3 — behaviour: envelope without `walkScopeDriftAxis` omits the scope-drift pointer; envelope with every flag set pins every gated axis; anti-slop default-on contract (omit = on; `false` = off) holds; non-gated review-stage skills (`review-discipline`) ride every envelope.
+- AC-4 — the four reviewer-axis skill bodies no longer present-tense-claim the orchestrator calls `buildAutoTriggerBlock` at runtime (historical notes are allowed).
+- AC-5 — reviewer.ts carries the superset-note paragraph + names the dispatch-skills-index runbook + the `Active skills (per envelope):` runtime override field.
+- AC-6 — start-command body wires the runbook into the reviewer dispatch step.
+- AC-7 — regression: every v8.83-token-axes invariant on `buildAutoTriggerBlock` still holds (single-arg = superset; empty-envelope two-arg = anti-slop only; every reviewer-axis skill still has a gate predicate).
+- AC-8 — package.json + CHANGELOG carry the v8.96.1 bump.
+- AC-9 — `DispatchSkillsIndexEntry` type contract is enforced at runtime.
+
+### Budget bumps
+
+- `tests/unit/v822-orchestrator-slim.test.ts` — expected on-demand runbook count 19 → 20 (`dispatch-skills-index.md` added).
+- `tests/unit/v822-orchestrator-slim.test.ts` — combined body + on-demand runbook char ceiling 320k → 340k (the new dispatch-skills-index runbook body is ~14k chars).
+- `tests/unit/v883-token-axes.test.ts` — reviewer.ts source-file ceiling 82k → 83k (absorbed the ~600-char superset-note paragraph that points sub-agents at the runtime-resolved per-envelope skills slice).
+- `tests/unit/v883-token-runbooks.test.ts` — AC-7 reduction threshold 3% → 2.5% to absorb Phase C audit closure prose (v8.94 G-3/4/5 stamping bullets + v8.96.1 G-2 resolve bullet). 2.5% still cleanly catches re-inlining of any v8.83 lift runbook (each is 2-4k chars / ~1.5-3% of base).
+
+### Release notes draft
+
+- `buildAutoTriggerBlock(stage, envelope)` is now invoked from production code at install time via the new dispatch-skills-index runbook composer (not just from the test suite); reviewer's skill-pointer block reflects the live gate envelope per dispatch via the new `Active skills (per envelope):` field on the dispatch envelope.
+- Resolves the v8.83-token-axes audit gap where the extended signature was tested but never reached from runtime.
+- Path B chosen: kept the static superset in `agents/reviewer.md`, added the dispatch-envelope-driven SKILLS_INDEX hint via `runbooks/dispatch-skills-index.md`; the skill-body fictional claims about runtime function calls were corrected to name the dispatch envelope as the actual source of truth.
+
+
 ## 8.96.0 — Wire v8.85 assumption-validation into orchestrator (Phase C G-1 fix)
 
 ### Why

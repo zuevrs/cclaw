@@ -905,3 +905,75 @@ export function buildAutoTriggerBlockForStage(
 ): string {
   return buildAutoTriggerBlock(stage, gateEnvelope);
 }
+
+/**
+ * Wires the {@link buildAutoTriggerBlock} `gateEnvelope` runtime
+ * path into production (Phase C audit G-2 fix; introduced in v8.96.1).
+ *
+ * The specialist-prompt template literals (reviewer.ts / qa-runner.ts /
+ * plan-design.ts / etc.) all call `buildAutoTriggerBlock(stage)` at
+ * module-import time with NO gate envelope — that renders the static
+ * SUPERSET of every gate-tagged skill for the stage. The
+ * `gateEnvelope` parameter that v8.83-token-axes added to
+ * {@link buildAutoTriggerBlock} was tested but never reached from any
+ * production caller; the resulting on-disk
+ * `.cclaw/lib/agents/reviewer.md` always lists every gated axis pointer
+ * regardless of the per-dispatch envelope flags.
+ *
+ * This helper is the production-path caller. The install pipeline
+ * (`src/install.ts`) iterates a fixed table of canonical envelope
+ * shapes (no flags / scope-drift only / qa-evidence only / all flags /
+ * anti-slop opt-out / …) and renders the gate-resolved skills slice
+ * for each one. The output is concatenated into the
+ * `dispatch-skills-index.md` on-demand runbook the orchestrator opens
+ * before authoring any reviewer dispatch envelope (see
+ * `runbooks/dispatch-envelope.md`). The runbook is the SOURCE OF TRUTH
+ * for the actual per-dispatch skills list; the embedded
+ * `buildAutoTriggerBlock("review")` block in `reviewer.md` is a
+ * SUPERSET hint the sub-agent reads on dispatch, then refines down to
+ * the runbook's resolved slice using the envelope's `walkXAxis` flags.
+ *
+ * Returns a structured payload (stage, envelope, rendered block,
+ * active-skill ids) so the runbook composer can render whichever
+ * surface shape it needs (markdown table, prose paragraph, JSON
+ * fixture) without re-deriving the gate filtering itself.
+ */
+export interface DispatchSkillsIndexEntry {
+  /** Dispatch stage this entry was rendered for. */
+  stage: Exclude<AutoTriggerStage, "always">;
+  /** Gate envelope flags applied during the render. */
+  envelope: GateEnvelope;
+  /** Rendered {@link buildAutoTriggerBlock} block, gate-filtered. */
+  block: string;
+  /**
+   * Skill ids that survived the gate filter, in render order. Useful
+   * for the tripwire suite ("envelope X must omit skill Y") and for
+   * the runbook's per-envelope summary line.
+   */
+  activeSkillIds: string[];
+  /**
+   * Short human-readable label for the envelope ("no flags" /
+   * "scope-drift only" / "anti-slop disabled" / …). The runbook uses
+   * the label as the per-section heading.
+   */
+  label: string;
+}
+
+export function renderDispatchSkillsIndex(
+  stage: Exclude<AutoTriggerStage, "always">,
+  envelope: GateEnvelope,
+  label: string
+): DispatchSkillsIndexEntry {
+  const block = buildAutoTriggerBlock(stage, envelope);
+  const stageFiltered = AUTO_TRIGGER_SKILLS.filter((skill) => {
+    const declared = skill.stages ?? (["always"] as const);
+    return declared.includes(stage) || declared.includes("always");
+  });
+  const activeSkillIds = stageFiltered
+    .filter((skill) => {
+      if (typeof skill.gate !== "function") return true;
+      return skill.gate(envelope) === true;
+    })
+    .map((skill) => skill.id);
+  return { stage, envelope, block, activeSkillIds, label };
+}
