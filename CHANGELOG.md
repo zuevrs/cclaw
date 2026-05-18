@@ -1,6 +1,54 @@
 # Changelog
 
 
+## 8.96.0 — Wire v8.85 assumption-validation into orchestrator (Phase C G-1 fix)
+
+### Why
+
+v8.85 shipped `src/assumption-validation.ts` with three pure exports (`parseValidatesPayload`, `parseAssumptionRows`, `flipAssumptionRows`) and the prompt surfaces — builder (`src/content/specialist-prompts/builder.ts:534`), reviewer (`src/content/specialist-prompts/reviewer.ts:165`), skills (`src/content/skills.ts:641`), the `reviewer-axis-assumption-coverage` companion skill, and the ship template's `## Unvalidated assumptions` section in `src/content/artifact-templates.ts` — all advertised the v8.85 "post-build flow-state validator" as if it fired automatically. But the Phase-C audit caught the gap: **no orchestrator entry point (CLI, compound, or flow-state) ever imported the module.** The documented closure loop (`verify(AC-N): passing\n\nvalidates: KA-N` → row flips to `Status: validated by <sha>` → ship.md surfaces remaining unmeasured bets) was prose-only. v8.96 wires the module end-to-end so the advertised behaviour matches the runtime.
+
+### What changed
+
+**Deliverable 1 — `runCompoundAndShip` invokes `src/assumption-validation.ts` BEFORE artifact moves.** A new `captureAssumptionValidations` helper in `src/compound.ts` runs after the outcome-signal pass and before the artefact-move loop. The helper:
+
+1. Reads `flows/<slug>/plan.md` (skips silently when absent).
+2. Harvests `verify(AC-*): passing` commits + full message bodies from the build range via a new `runAssumptionValidatesGitProbe` (`git log --grep="^verify(AC-" --pretty=format:"%H%n%B%n---END---"`).
+3. Calls `collectValidations` → `{ kaId, sha }[]` and `flipAssumptionRows` → rewritten plan.md, then writes plan.md back.
+4. Reads `flows/<slug>/ship.md` (skips silently when absent), calls the new `replaceUnvalidatedAssumptionsSection` to rewrite the `## Unvalidated assumptions` body from the post-flip row list, and writes ship.md back.
+
+The pass is best-effort: missing `.git/`, missing artefacts, or any IO failure degrades to a no-op. Compound's primary contract (move artefacts, reset flow-state) is sacrosanct — the validator never throws into the ship loop.
+
+**Deliverable 2 — `CompoundRunResult.assumptionValidation` audit surface.** A new `AssumptionValidationOutcome` shape carries the pass's results (`validations: AssumptionValidation[]`, `unvalidatedKaIds: string[]`, `unvalidatedHighStakesKaIds: string[]`, `planUpdated: boolean`, `shipUpdated: boolean`) so downstream callers (tests, audit tooling, future telemetry) can confirm the wiring fired.
+
+**Deliverable 3 — New synthetic probe `CompoundAssumptionProbe`.** Mirrors the v8.50 `CompoundOutcomeProbes` shape: tests can pass either a pre-parsed `commits: { sha, message }[]` list OR a raw `gitLog: string` payload (parsed via the new `parseVerifyCommitLog` helper in `src/assumption-validation.ts`). The `disable: true` shortcut skips the entire pass for tests that exercise unrelated behaviour.
+
+**Deliverable 4 — Three new pure exports in `src/assumption-validation.ts`.**
+
+- `unvalidatedHighStakesKaIds(planMd)` — filters `unvalidatedKaIds` to rows carrying the `(high-stakes)` label. Used by the orchestrator to stamp the reviewer dispatch envelope's `unvalidatedHighStakesKas` field.
+- `renderUnvalidatedAssumptionsBody(rows)` — renders the ship.md section body (bullets when ≥1 row is unvalidated, the literal `All key assumptions validated.` line otherwise).
+- `replaceUnvalidatedAssumptionsSection(shipMd, rows)` — pure section rewriter; appends the section at EOF when missing, replaces the body when present, idempotent on re-application.
+- `parseVerifyCommitLog(raw)` — parses the `git log --pretty=format:"%H%n%B%n---END---"` payload shape into `{ sha, message }[]` ready for `collectValidations`.
+
+**Deliverable 5 — `GateEnvelope.unvalidatedHighStakesKas?: string[]`.** New field on `src/content/skills.ts > GateEnvelope` so the orchestrator can pass the high-stakes list directly to the `reviewer-axis-assumption-coverage` companion skill via the dispatch envelope. Pre-v8.96 envelopes lack the field (back-compat preserved); the skill's existing legacy "parse plan.md yourself" path is the fallback. `src/content/skills/reviewer-axis-assumption-coverage.md` was extended with a `v8.96 — pre-filtered high-stakes list` paragraph naming the field and explaining the fast-path / legacy-path semantics.
+
+### Tripwire tests
+
+`tests/unit/v894-assumption-validation-wiring.test.ts` pins:
+
+- **Tripwire** — `src/compound.ts` carries an `import { ... } from "./assumption-validation.js"` and references the four core entry points (`collectValidations`, `flipAssumptionRows`, `parseAssumptionRows`, `replaceUnvalidatedAssumptionsSection`).
+- **Pure helpers** — `parseVerifyCommitLog`, `renderUnvalidatedAssumptionsBody`, `replaceUnvalidatedAssumptionsSection`, and `unvalidatedHighStakesKaIds` round-trip the documented contracts (single-block / multi-block / CRLF / empty input / no-section / idempotent).
+- **End-to-end behaviour** — `runCompoundAndShip` with a synthetic `assumptionProbe` flips plan.md rows from `Status: unvalidated` to `Status: validated by <sha>`, populates ship.md's `## Unvalidated assumptions` section with the residual rows, collapses to the `All key assumptions validated.` line when no rows remain, and respects `assumptionProbe.disable: true` as a complete bypass. A raw `gitLog` payload also flows through `parseVerifyCommitLog` and ends up flipping rows.
+- **Envelope shape** — `GateEnvelope.unvalidatedHighStakesKas: string[]` is accepted as an optional field; absent on legacy envelopes; the `reviewer-axis-assumption-coverage` skill body cites the new field name and the `v8.96` marker.
+- **Version + CHANGELOG** — package.json carries `8.96.0`; CHANGELOG names the Phase C G-1 fix.
+
+### Cross-cutting
+
+- All 2493 tests pass across 117 files (the new test file adds 41 assertions over the 2452-baseline parallel-wave intake).
+- No reviewer axis, skill, runbook, or template count changed. The wiring is internal to compound.ts + assumption-validation.ts; no new specialist agents, no new gates, no new templates.
+- README is unchanged: the v8.85 paragraph already describes the closure loop as automatic; with v8.96 the behaviour matches the prose for the first time.
+- Slug name (`fix/v8.94-assumption-validation-wiring`) and test-file name (`tests/unit/v894-assumption-validation-wiring.test.ts`) preserve the original tracking labels even though the parallel wave pushed the actual release slot to `8.96.0` (v8.94.0 + v8.95.0 were claimed by G-3/4/5 + G-7 in flight).
+
+
 ## 8.95.0 — Sync v8.87 model-tier TS helpers with runbook table via tripwire (Phase C G-7 fix)
 
 ### Why

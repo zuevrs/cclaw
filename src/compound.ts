@@ -33,6 +33,16 @@ import {
   type RevertedSlugMatch
 } from "./outcome-detection.js";
 import { cleanupSliceWorktreeAsync } from "./slice-worktree.js";
+import {
+  collectValidations,
+  flipAssumptionRows,
+  parseAssumptionRows,
+  parseVerifyCommitLog,
+  replaceUnvalidatedAssumptionsSection,
+  unvalidatedHighStakesKaIds,
+  unvalidatedKaIds,
+  type AssumptionValidation
+} from "./assumption-validation.js";
 import type { AcceptanceCriterionState, SliceId } from "./types.js";
 
 export interface CompoundQualitySignals {
@@ -82,6 +92,39 @@ export interface CompoundOutcomeProbes {
   disable?: true;
 }
 
+/**
+ * Synthetic probe + override surface for the assumption-validation
+ * wiring (`src/assumption-validation.ts`). Pass on
+ * {@link CompoundRunOptions.assumptionProbe} to inject either a
+ * pre-parsed commit list (the `commits` shape) OR a raw git-log
+ * payload (the `gitLog` shape, parsed via
+ * {@link parseVerifyCommitLog}). Production callers leave the field
+ * absent and let `runCompoundAndShip` shell out to the real `git`
+ * binary; tests pass synthetic strings or commit lists.
+ *
+ * Field semantics:
+ *
+ * - `commits` — explicit list of `{ sha, message }` records. When
+ *   present, OVERRIDES the live git probe AND any `gitLog` field
+ *   (the explicit list wins). Empty array short-circuits to "no
+ *   validations".
+ * - `gitLog` — raw `git log --grep="^verify(AC-"
+ *   --pretty=format:"%H%n%B%n---END---"` payload. Parsed via
+ *   {@link parseVerifyCommitLog}. When present AND `commits` is
+ *   absent, this string is the input. Empty string short-circuits
+ *   to "no validations" (different from absent, which falls through
+ *   to the live `git` call).
+ * - `disable` — shortcut to disable the entire assumption-validation
+ *   pass. plan.md is NOT mutated and ship.md's `## Unvalidated
+ *   assumptions` section is NOT touched. Use in tests that exercise
+ *   non-assumption behaviour.
+ */
+export interface CompoundAssumptionProbe {
+  commits?: ReadonlyArray<{ sha: string; message: string }>;
+  gitLog?: string;
+  disable?: true;
+}
+
 export interface CompoundRunOptions {
   shipCommit: string;
   signals: CompoundQualitySignals;
@@ -106,6 +149,15 @@ export interface CompoundRunOptions {
    * project root.
    */
   outcomeProbes?: CompoundOutcomeProbes;
+  /**
+   * Synthetic probe / disable for the assumption-validation wiring.
+   * Production callers leave the field absent and let
+   * `runCompoundAndShip` invoke `git log --grep="^verify(AC-"
+   * --pretty=format:"%H%n%B%n---END---"` itself; tests pass either a
+   * pre-parsed commit list or a raw git-log payload. See
+   * {@link CompoundAssumptionProbe} for full field semantics.
+   */
+  assumptionProbe?: CompoundAssumptionProbe;
 }
 
 export interface CompoundRunResult {
@@ -129,6 +181,49 @@ export interface CompoundRunResult {
    * array is surfaced for audit / test visibility.
    */
   manualFixMatches?: ManualFixMatch[];
+  /**
+   * Outcome of the assumption-validation pass that fires BEFORE
+   * artifact moves. Pure audit surface; downstream callers
+   * inspect this to assert plan.md row flips and ship.md section
+   * updates landed as expected.
+   *
+   * Field semantics:
+   *
+   * - `validations` — deduplicated `{ kaId, sha }` records collected
+   *   from the build-range `verify(AC-*): passing` commits' optional
+   *   `validates: KA-N` payloads. Empty array when no commits carry
+   *   a payload OR when the probe is disabled.
+   * - `unvalidatedKaIds` — KA-N ids whose status remained
+   *   `unvalidated` AFTER the flip pass. The full list (high-stakes
+   *   AND non-high-stakes) the ship.md `## Unvalidated assumptions`
+   *   section was populated from.
+   * - `unvalidatedHighStakesKaIds` — subset of the above filtered to
+   *   high-stakes rows. The orchestrator surfaces this as the
+   *   reviewer dispatch envelope's `unvalidatedHighStakesKas` field
+   *   so the `assumption-coverage` axis skill can directly grade
+   *   `required`-severity findings.
+   * - `planUpdated` — `true` when at least one row in plan.md was
+   *   rewritten by `flipAssumptionRows`. `false` when no validations
+   *   matched a row OR when plan.md did not carry the assumption
+   *   section.
+   * - `shipUpdated` — `true` when ship.md's `## Unvalidated
+   *   assumptions` section was rewritten with the post-flip body.
+   *   `false` when ship.md is absent OR the section body already
+   *   matched the rendered output.
+   */
+  assumptionValidation?: AssumptionValidationOutcome;
+}
+
+/**
+ * Audit shape returned alongside {@link CompoundRunResult}. See
+ * {@link CompoundRunResult.assumptionValidation} for field semantics.
+ */
+export interface AssumptionValidationOutcome {
+  validations: AssumptionValidation[];
+  unvalidatedKaIds: string[];
+  unvalidatedHighStakesKaIds: string[];
+  planUpdated: boolean;
+  shipUpdated: boolean;
 }
 
 export class CompoundError extends Error {}
@@ -235,6 +330,139 @@ function parseNameOnlyLog(raw: string): Map<string, string[]> {
     if (bucket) bucket.push(trimmed);
   }
   return out;
+}
+
+/**
+ * Shell out to `git log --grep="^verify(AC-"
+ * --pretty=format:"%H%n%B%n---END---"` to harvest verify commit
+ * SHAs + full message bodies from the build range. Best-effort:
+ * missing `.git/`, missing `git` binary, or non-zero exit code
+ * degrades to `[]` (no validations detected). We never throw — the
+ * assumption-validation pass is additive over the canonical ship
+ * pipeline; compound's primary contract MUST NOT regress because
+ * the validator's git probe couldn't run.
+ *
+ * Returns the parsed `{ sha, message }[]` ready to feed into
+ * {@link collectValidations}. The grep filters to `verify(AC-`
+ * subjects so we don't pay the cost of streaming the entire
+ * repo history; the per-commit parser further filters payloads via
+ * the {@link parseValidatesPayload} subject + body checks.
+ */
+function runAssumptionValidatesGitProbe(
+  projectRoot: string
+): { sha: string; message: string }[] {
+  if (!gitAvailable(projectRoot)) return [];
+  let raw: string;
+  try {
+    raw = execFileSync(
+      "git",
+      [
+        "log",
+        "--grep=^verify(AC-",
+        "--pretty=format:%H%n%B%n---END---"
+      ],
+      { cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+  } catch {
+    return [];
+  }
+  return parseVerifyCommitLog(raw);
+}
+
+/**
+ * Wire `src/assumption-validation.ts` into the ship-time
+ * orchestrator. Runs BEFORE artifact moves so the post-flip plan.md
+ * and patched ship.md land in `shipped/<slug>/` rather than the
+ * pre-flip text. Failures degrade silently (empty audit, no
+ * mutations); compound's primary contract (move artifacts, reset
+ * flow-state) is sacrosanct.
+ *
+ * Three steps:
+ *
+ *  1. Read plan.md (active artifact). Skip when absent.
+ *  2. Harvest `verify(AC-*): passing` commit SHAs + bodies via
+ *     {@link runAssumptionValidatesGitProbe} (or the synthetic
+ *     probe), collect `{ kaId, sha }` records via
+ *     {@link collectValidations}, and rewrite matching plan.md rows
+ *     via {@link flipAssumptionRows}.
+ *  3. Read ship.md (active artifact). When present, replace the
+ *     `## Unvalidated assumptions` section's body with the post-flip
+ *     row list via {@link replaceUnvalidatedAssumptionsSection}.
+ *
+ * Returns the {@link AssumptionValidationOutcome} surface
+ * `runCompoundAndShip` stamps onto its result for audit visibility.
+ */
+async function captureAssumptionValidations(
+  projectRoot: string,
+  slug: string,
+  probe: CompoundAssumptionProbe | undefined
+): Promise<AssumptionValidationOutcome> {
+  const empty: AssumptionValidationOutcome = {
+    validations: [],
+    unvalidatedKaIds: [],
+    unvalidatedHighStakesKaIds: [],
+    planUpdated: false,
+    shipUpdated: false
+  };
+  if (probe?.disable === true) return empty;
+  const planPath = activeArtifactPath(projectRoot, "plan", slug);
+  let planMd: string;
+  try {
+    planMd = await fs.readFile(planPath, "utf8");
+  } catch {
+    return empty;
+  }
+  let commits: ReadonlyArray<{ sha: string; message: string }>;
+  if (probe?.commits !== undefined) {
+    commits = probe.commits;
+  } else if (probe?.gitLog !== undefined) {
+    commits = parseVerifyCommitLog(probe.gitLog);
+  } else {
+    commits = runAssumptionValidatesGitProbe(projectRoot);
+  }
+  const validations = collectValidations(commits);
+  let planUpdated = false;
+  if (validations.length > 0) {
+    const flipped = flipAssumptionRows(planMd, validations);
+    if (flipped !== planMd) {
+      try {
+        await writeFileSafe(planPath, flipped);
+        planMd = flipped;
+        planUpdated = true;
+      } catch {
+        // best-effort; swallow IO failures so compound keeps moving.
+      }
+    }
+  }
+  const unvIds = unvalidatedKaIds(planMd);
+  const unvHsIds = unvalidatedHighStakesKaIds(planMd);
+  const shipPath = activeArtifactPath(projectRoot, "ship", slug);
+  let shipUpdated = false;
+  let shipMd: string | null = null;
+  try {
+    shipMd = await fs.readFile(shipPath, "utf8");
+  } catch {
+    shipMd = null;
+  }
+  if (shipMd !== null) {
+    const rows = parseAssumptionRows(planMd);
+    const nextShip = replaceUnvalidatedAssumptionsSection(shipMd, rows);
+    if (nextShip !== shipMd) {
+      try {
+        await writeFileSafe(shipPath, nextShip);
+        shipUpdated = true;
+      } catch {
+        // best-effort.
+      }
+    }
+  }
+  return {
+    validations,
+    unvalidatedKaIds: unvIds,
+    unvalidatedHighStakesKaIds: unvHsIds,
+    planUpdated,
+    shipUpdated
+  };
 }
 
 /**
@@ -436,6 +664,19 @@ export async function runCompoundAndShip(
     shippedAt
   );
 
+  // Assumption-validation wiring (Phase C G-1 fix). Runs BEFORE
+  // artifact moves so the post-flip plan.md and patched ship.md
+  // `## Unvalidated assumptions` section land in the shipped
+  // artefact directory. Best-effort: a missing plan.md / ship.md,
+  // missing git binary, or non-zero exit code on the verify-commit
+  // probe degrades to a no-op; compound never throws because the
+  // v8.85 validator (`src/assumption-validation.ts`) couldn't run.
+  const assumptionValidation = await captureAssumptionValidations(
+    projectRoot,
+    slug,
+    options.assumptionProbe
+  );
+
   await writeFlowState(projectRoot, { ...state, currentStage: "ship" });
 
   // v8.73 worktree cleanup — drop sibling git worktrees the builder
@@ -530,7 +771,8 @@ export async function runCompoundAndShip(
     knowledgeEntry,
     dedupeMatch,
     revertedSlugMatches,
-    manualFixMatches
+    manualFixMatches,
+    assumptionValidation
   };
 }
 
