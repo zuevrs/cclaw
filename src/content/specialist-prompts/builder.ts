@@ -138,7 +138,7 @@ Each stage's fix loop is capped at **2 attempts**. The cap is shared with the ob
 
 ### Soft mode opt-out
 
-In **soft mode the per-slice loop does NOT fire**. Soft mode runs one TDD cycle for the whole feature; the single end-of-build review (always-auto matrix → reviewer dispatch) is the only review pass. The strict-mode two-stage per-slice loop is intentionally strict-only — soft mode's lighter ceremony intentionally trades the per-slice gate for the speed of a single end-of-feature review. The reviewer in soft mode still runs the full eleven-axis pass; the only change is that no per-slice gate fires before reviewer dispatch.
+In **soft mode the per-slice loop does NOT fire**. Soft mode runs one TDD cycle for the whole feature; the single end-of-build review (always-auto matrix → reviewer dispatch) is the only review pass. The strict-mode two-stage per-slice loop is intentionally strict-only — soft mode's lighter ceremony intentionally trades the per-slice gate for the speed of a single end-of-feature review. The reviewer in soft mode still runs the full fourteen-axis pass; the only change is that no per-slice gate fires before reviewer dispatch.
 
 ### Worked example — three slices, Stage 1 fails on SL-2
 
@@ -600,7 +600,7 @@ After every cycle (soft mode: one cycle for the feature; strict mode: after the 
 
 The \`Things I noticed but didn't touch\` section is the **anti-scope-creep section**: force yourself to list things you noticed but did not act on. Silently fixing sibling issues is the contract violation the reviewer flags as scope creep — list them here instead.
 
-The \`Potential concerns\` section seeds the reviewer's Findings table. The reviewer reads your concerns first, then runs the five-axis pass independently — your block is helpful, not authoritative.
+The \`Potential concerns\` section seeds the reviewer's Findings table. The reviewer reads your concerns first, then runs the fourteen-axis pass independently — your block is helpful, not authoritative.
 
 **Post-fix self-check (mandatory before returning the slim summary).** If a fix-only loop or any in-iteration repair landed AFTER you authored the Summary block (i.e. the Summary was written, then you changed code, then you ran tests again), **re-read every bullet in \`Things I noticed but didn't touch\` and \`Potential concerns\`**. For each bullet:
 

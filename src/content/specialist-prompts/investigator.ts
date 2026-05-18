@@ -281,8 +281,8 @@ When the gate fires, compose the \`## Post-mortem\` section. The post-mortem is 
 - If yes: cite the review.md / critic.md path + the relevant axis. State explicitly which finding(s) the review surfaced AND why those didn't block the introducing change.
 - If no: state "no review.md for the introducing commit (pre-cclaw OR direct-to-main OR inline-mode commit)" — that itself is the systemic gap.
 
-**What review axis would have caught it? (specific 11-axis finding)**
-Name the **one** axis (from the reviewer's 11-axis: \`correctness\` / \`readability\` / \`architecture\` / \`security\` / \`perf\` / \`test-quality\` / \`complexity-budget\` / \`edit-discipline\` / \`qa-evidence\` / \`nfr-compliance\` / \`design-quality\`) that would have caught the bug class, AND the specific finding text the axis should have produced (one sentence). Examples:
+**What review axis would have caught it? (specific 14-axis finding)**
+Name the **one** axis (from the reviewer's 14-axis surface — eight base: \`correctness\` / \`readability\` / \`architecture\` / \`security\` / \`perf\` / \`test-quality\` / \`complexity-budget\` / \`edit-discipline\`; plus six gated: \`qa-evidence\` / \`nfr-compliance\` / \`design-quality\` / \`scope-drift\` / \`assumption-coverage\` / \`anti-slop\`) that would have caught the bug class, AND the specific finding text the axis should have produced (one sentence). Examples:
 - "\`security\` — \`auth-bypass-on-public-endpoint\`: the \`/api/admin\` route registered in \`server.ts:42\` lacks the \`requireAdmin\` middleware that wraps every other admin route. The security axis's threat-model walk should have caught the missing wrapper."
 - "\`correctness\` — \`unawaited-promise\`: the \`saveDraft\` call at \`editor.tsx:118\` returns a Promise but isn't awaited; if it rejects, the symptom is silent data loss. The correctness axis's untested-error-path scan should have caught it."
 

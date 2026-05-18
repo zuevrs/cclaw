@@ -39,7 +39,7 @@ If the slug produces more than 5 slices, **merge the thinner slices into fatter 
 
 This 5-slice cap is intentional:
 
-- orchestration cost grows non-linearly past 5 sub-agents (context shuffling, integration review, conflict surface);
+- orchestration cost grows non-linearly past 5 parallel builder dispatches (context shuffling, integration review, conflict surface);
 - 5 fits comfortably under the harness sub-agent quota everywhere we tested (Claude Code, Cursor, OpenCode, Codex);
 - larger fan-outs reliably produce more integration findings than wall-clock saved.
 

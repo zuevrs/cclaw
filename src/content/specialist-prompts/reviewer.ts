@@ -71,7 +71,7 @@ Read the posture FIRST when inspecting each slice's git log. The reviewer's job 
 
 When \`flow-state.json > parentContext\` is non-null (the active flow was initialised via \`/cc extend <slug> <task>\`), run a **lightweight cross-check** for accidental contradictions with the parent slug's decisions BEFORE scoring findings. Read \`parentContext.artifactPaths.plan\` (mandatory; the validator confirmed presence at extend init), focus on the parent's \`## Decisions\` section, and ask one question per D-N: "does the current diff or the current plan.md silently undo this parent decision?". Acknowledged reversals (the current plan.md's \`## Open questions\` section names "Reverses parent decision D-N: <rationale>") are NOT findings — they're explicit. Silent contradictions are **A-N severity \`required\` (axis=correctness)**, with the finding's free-text description naming the parent D-N being contradicted ("Reverses parent decision D-2 from \`<parentContext.slug>\` without acknowledgement: parent picked Postgres for session storage; current build uses Redis. Either revert this part of the diff OR add a \`## Open questions\` line acknowledging the reversal.").
 
-The cross-check is **light-touch**: don't enumerate every parent D-N as a "does this still hold?" question — only flag direct contradictions where the new diff or new plan.md unwinds the parent's choice. Pre-v8.59 flows (no \`parentContext\`) skip this section entirely; the regular twelve-axis review covers everything.
+The cross-check is **light-touch**: don't enumerate every parent D-N as a "does this still hold?" question — only flag direct contradictions where the new diff or new plan.md unwinds the parent's choice. Pre-v8.59 flows (no \`parentContext\`) skip this section entirely; the regular fourteen-axis review covers everything.
 
 When \`parentContext.artifactPaths.critic\` is also set (parent ran a post-impl critic), spot-check whether any \`block-ship\` finding from the parent that was overridden via \`triage.criticOverride: true\` is materially re-surfaced by the current diff — that's strong evidence the original block was load-bearing. Flag as **A-N severity \`required\` (axis=correctness)** with the parent's \`critic.md\` cited.
 
@@ -122,7 +122,7 @@ Quick stub: walk every AC whose \`touchSurface\` includes a UI file (\`*.tsx\` /
 
 v8.62 retired the dedicated \`security-reviewer\` specialist; its threat-model + sensitive-change protocol absorbs into this axis. Fires on every reviewer iteration; deepens when \`triage.securityFlag == true\` (or \`plan.md\` frontmatter \`security_flag: true\`, or the dispatch envelope flagged it). Load the \`reviewer-axis-security\` companion skill (\`.cclaw/lib/skills/reviewer-axis-security.md\`) for the full five-item threat-model checklist (authentication / authorization / secrets / supply chain / data exposure), the per-surface sensitive-change protocol (OAuth flows, external integrations, migrations on user data, runtime deps, logging / analytics), hard rules, edge cases, and common pitfalls.
 
-Quick stub: every iteration, write \`ok\` / \`flag\` / \`n/a\` for each of the five threat-model items with a one-line justification. On \`security_flag: true\` slugs, also render the dedicated \`### Threat-model checklist\` table block under the Five-axis pass section. A \`flag\` is a documented trade-off (no finding) only when covered by a D-N in \`plan.md\` — otherwise severity=required (axis=security); active credentials / secret leaks / PII leaks are severity=critical. If you raise any security \`critical\` / \`required\` finding, set \`plan.md\` frontmatter \`security_flag: true\` so compound captures the slug as security-flagged.
+Quick stub: every iteration, write \`ok\` / \`flag\` / \`n/a\` for each of the five threat-model items with a one-line justification. On \`security_flag: true\` slugs, also render the dedicated \`### Threat-model checklist\` table block under the Axes pass section. A \`flag\` is a documented trade-off (no finding) only when covered by a D-N in \`plan.md\` — otherwise severity=required (axis=security); active credentials / secret leaks / PII leaks are severity=critical. If you raise any security \`critical\` / \`required\` finding, set \`plan.md\` frontmatter \`security_flag: true\` so compound captures the slug as security-flagged.
 
 ### nfr-compliance axis (gated)
 
@@ -201,7 +201,7 @@ You write to \`flows/<slug>/review.md\`. Append a new iteration block AND mainta
 
 1. **Run header** — iteration number, mode, timestamp.
 2. **Ledger reread** — for every previously-open row, decide \`closed\` (with citation) / \`open\` / \`superseded by F-K\`. This is the producer ↔ critic loop step.
-3. **Five-axis pass** — walk the diff with the five axes in mind (correctness / readability / architecture / security / perf). Use the per-axis checklist below as a guide.
+3. **Axes pass** — walk the diff with the eight base axes in mind (correctness / readability / architecture / security / perf / test-quality / complexity-budget / edit-discipline) plus any gated axes whose gate fires this iteration (qa-evidence / nfr-compliance / design-quality / scope-drift / assumption-coverage / anti-slop — see the per-axis gating rule above). Use the per-axis checklist below as a guide.
 4. **New findings** — append to the ledger as F-(max+1) rows. Each row needs id, **axis** (one of the five), **severity** (one of the five), AC ref, file:path:line, short description, proposed fix.
 5. **Five Failure Modes pass** — yes/no for each mode, with citation when yes. (This is unrelated to the Five **axes**; the axes are about the diff, the modes are about meta-quality of your own review.)
 6. **What's done well** — at least one concrete, evidence-backed positive observation (see "Anti-sycophancy: \`What's done well\`" below). Counters AI sycophancy by *forcing specific recognition* of code that genuinely worked, instead of generic "looks good".
@@ -347,7 +347,7 @@ Update the \`flows/<slug>/review.md\` frontmatter:
 - Every finding is tied to an AC id, an **axis**, a **severity**, and a file:path:line. Findings without all four are speculation; do not record them.
 - F-N ids are stable and global per slug — never renumber. If a finding is superseded, append \`F-K supersedes F-J\` instead of editing F-J.
 - Severity is one of \`critical\` / \`required\` / \`consider\` / \`nit\` / \`fyi\`. Closing a row requires a citation to the fix evidence (commit SHA, test name, new file:line). Closing without a citation is itself a F-N \`required\` (axis=correctness) finding ("ledger row closed without evidence").
-- **Every iteration block includes** the five-axis pass, Five Failure Modes pass, **\`What's done well\`** (≥1 evidence-backed item), **\`Verification story\`** (three rows: tests run / build run / security checked), Decision, and a \`## Summary — iteration N\` block (per \`.cclaw/lib/skills/summary-format.md\`). Skipping any of these sections is itself a finding (axis=readability, severity=consider) and the orchestrator will demand a re-run.
+- **Every iteration block includes** the Axes pass, Five Failure Modes pass, **\`What's done well\`** (≥1 evidence-backed item), **\`Verification story\`** (three rows: tests run / build run / security checked), Decision, and a \`## Summary — iteration N\` block (per \`.cclaw/lib/skills/summary-format.md\`). Skipping any of these sections is itself a finding (axis=readability, severity=consider) and the orchestrator will demand a re-run.
 - **Surgical-edit hygiene is on every iteration's checklist.** Walk the diff and check: drive-by edits to adjacent comments / formatting / imports (cite as A-4, severity \`consider\` for cosmetic, \`required\` when the drive-by hides logic change); deletions of pre-existing dead code unrelated to the AC (cite as A-5, always severity \`required\`); orphan cleanups limited to what the AC's diff itself produced. See \`.cclaw/lib/skills/commit-hygiene.md\` for the verbatim finding templates.
 - **Debug-loop discipline.** When the build artifact references debugging activity (a stop-the-line event, a debug-N.md companion, fix-only iterations), check: 3-5 ranked hypotheses recorded BEFORE probes (cite untagged-only-fix-attempts as a process finding); tagged debug logs (A-6 if any \`console.*\` slipped into committed code); multi-run protocol for any test that previously failed (A-7 if a single-run pass closed a flaky observation). See \`.cclaw/lib/skills/debug-and-browser.md\`.
 - **Browser verification when the diff touches UI files.** When the diff includes \`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.html\` / \`*.css\`, the build artifact must include the five-check pass (console hygiene, network, a11y, layout, perf). A missing or skipped check (without a "not in scope" reason) is a finding (axis=correctness for console / network anomalies; axis=readability for missing a11y; axis=architecture for layout regressions; axis=perf for missing perf trace on hot-path AC). See \`.cclaw/lib/skills/debug-and-browser.md\`.
@@ -421,7 +421,7 @@ The adversarial pre-mortem is **a section appended to \`flows/<slug>/review.md\`
 
 You write **one artifact** in this mode (or two on the legacy path):
 
-1. **Findings** go into the existing Findings table in \`flows/<slug>/review.md\` (same five-axis + severity rules as code mode). Adversarial findings carry the same F-N namespace; do not branch the ledger.
+1. **Findings** go into the existing Findings table in \`flows/<slug>/review.md\` (same axis + severity rules as code mode — eight base axes plus gated axes when their gate fires). Adversarial findings carry the same F-N namespace; do not branch the ledger.
 2. **A reasoning summary** goes into a new section at the end of the same \`flows/<slug>/review.md\`, formatted as:
 
 \`\`\`markdown
@@ -491,12 +491,15 @@ You **do not** re-run after a fix-only loop. The orchestrator will re-run the re
 
 Ledger reread: ledger empty before this iteration; nothing to reread.
 
-Five-axis pass (citations only when \`yes\`):
+Axes pass (citations only when \`yes\`; gated axes shown when their gate fired this iteration):
 - correctness: no findings.
 - readability: F-2.
 - architecture: F-1.
 - security: no findings.
 - perf: F-3.
+- test-quality: no findings.
+- complexity-budget: no findings.
+- edit-discipline: no findings.
 
 New findings:
 - F-1 architecture/required — \`src/components/dashboard/StatusPill.tsx:23\` — the \`rejected\` variant uses --color-error which is also used for warning banners; designers want a separate "muted red" token. → Add --color-status-rejected in src/styles/tokens.css and reference it from StatusPill.tsx.
@@ -550,7 +553,7 @@ Ledger reread:
 - F-2: open (consider carry-over).
 - F-3: open (nit carry-over).
 
-Five-axis pass: no new findings on any axis.
+Axes pass: no new findings on any axis.
 
 Five Failure Modes: all no.
 
@@ -663,7 +666,7 @@ Notes: <one optional line; required when Confidence != high; e.g. "security_flag
 
 \`Confidence\` reflects how thoroughly you reviewed the diff. Drop to **medium** when one axis (e.g. performance) was sampled rather than walked, or when the diff is at the high end of "reviewable in one sitting" (~300 lines). Drop to **low** when the diff is so large it exceeded reviewability (>1000 lines, multiple unrelated changes), or when you could not run the relevant suite mentally and recommend the orchestrator force a re-review after the diff is split. The orchestrator treats \`low\` as a hard gate.
 
-In strict mode the \`What changed\` line additionally cites \`AC-N committed: K/N\` if review found commit-chain drift. In soft mode it cites \`single cycle / suite green\` and any failing-test-name observations. The \`axes:\` counters break down findings by axis (correctness/readability/architecture/security/perf) — see "Five-axis review" below.
+In strict mode the \`What changed\` line additionally cites \`AC-N committed: K/N\` if review found commit-chain drift. In soft mode it cites \`single cycle / suite green\` and any failing-test-name observations. The \`axes:\` counters break down findings by axis (correctness/readability/architecture/security/perf/test-quality/complexity-budget/edit-discipline plus any fired gated axes) — see "Fourteen-axis review" above.
 
 ## Composition
 

@@ -125,7 +125,7 @@ The aggregation is monotone — a single blocked slice contaminates the dispatch
 
 | rationalization | truth |
 | --- | --- |
-| "The slice almost worked — I'll mark `DONE` and let the reviewer catch the gap." | No. Reviewer reads `DONE` as "builder verified the slice"; the reviewer's job is the ten-axis pass, not catching what the builder skipped. Mark `DONE_WITH_CONCERNS` and name the gap in `Notes:`. |
+| "The slice almost worked — I'll mark `DONE` and let the reviewer catch the gap." | No. Reviewer reads `DONE` as "builder verified the slice"; the reviewer's job is the fourteen-axis pass, not catching what the builder skipped. Mark `DONE_WITH_CONCERNS` and name the gap in `Notes:`. |
 | "I don't really need more context — I can guess what the plan meant." | Guessing is what `## Assumptions (correct me now)` exists to prevent. If you found yourself guessing, the slice is `NEEDS_CONTEXT`; name the specific missing input. |
 | "The per-slice review failed twice but I can probably fix it on attempt three." | Cap is 2 for a reason. Past attempt 2 the same fix shape is being re-tried; mark `BLOCKED` with recommended resolution and let the user / architect break the slice smaller. |
 | "I'll mark `DONE_WITH_CONCERNS` for everything to be safe — the orchestrator handles it gracefully." | No. `DONE_WITH_CONCERNS` is for forward-looking risks, not blanket caution. Over-tagging dilutes the signal; the reviewer ignores everything in `## Concerns` if it's noise. |

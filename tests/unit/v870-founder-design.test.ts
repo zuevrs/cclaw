@@ -132,13 +132,15 @@ describe("v8.70 — reviewer design-quality axis (gated)", () => {
     expect(REVIEWER_PROMPT).toMatch(/walkDesignQualityAxis/);
   });
 
-  it("reviewer prompt mentions a multi-axis review count framing (eleven-axis pre-v8.84; twelve-axis v8.84+)", () => {
-    // v8.84 added scope-drift; the count moved from eleven to twelve.
-    // We accept either framing so the v8.70 tripwire doesn't relight
-    // every time an axis is added or retired — the intent is to pin
-    // that the reviewer carries an explicit count framing, not the
-    // literal value.
-    expect(REVIEWER_PROMPT).toMatch(/[Ee]leven-axis|11.axis|[Tt]welve-axis|12.axis/);
+  it("reviewer prompt mentions a multi-axis review count framing (eleven-axis pre-v8.84; v8.94+ → fourteen-axis)", () => {
+    // v8.84 added scope-drift; v8.85 added assumption-coverage;
+    // v8.86 added anti-slop; v8.94 swept stale labels so the
+    // reviewer-axis count framing reflects current reality (14).
+    // We accept any of the historical labels so this v8.70 tripwire
+    // doesn't relight every time an axis is added or retired — the
+    // intent is to pin that the reviewer carries an explicit count
+    // framing, not the literal value.
+    expect(REVIEWER_PROMPT).toMatch(/[Ee]leven-axis|11.axis|[Tt]welve-axis|12.axis|[Tt]hirteen-axis|13.axis|[Ff]ourteen-axis|14.axis/);
   });
 
   it("reviewer's design-quality axis activation reads triage.surfaces ∪ {ui, design, frontend, ux}", () => {
@@ -205,7 +207,11 @@ describe("v8.70 — orchestrator dispatch envelope (start-command)", () => {
   });
 
   it("orchestrator's reviewer-stage axis-list mentions design-quality", () => {
-    expect(START_COMMAND_BODY).toMatch(/eleven-axis/);
+    // v8.94 docs-drift sweep updated start-command's reviewer-stage
+    // axis label from "eleven-axis" → "fourteen-axis"; the tripwire
+    // accepts any of the historical labels so future axis additions
+    // don't constantly tickle this assertion.
+    expect(START_COMMAND_BODY).toMatch(/eleven-axis|twelve-axis|thirteen-axis|fourteen-axis/);
     expect(START_COMMAND_BODY).toMatch(/design-quality/);
   });
 });
