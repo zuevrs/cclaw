@@ -1,6 +1,64 @@
 # Changelog
 
 
+## 8.89.0 — Not-Doing gate (v8.84 work)
+
+### Why
+
+v8.80 promoted `## Not Doing (and why)` to a first-class plan-template section and plan-critic §6.5 gates ship on the section being non-empty (3-5 bullets naming explicit scope exclusions with one-sentence rationale). That closed the author-time half of the contract — every plan that reaches review must declare its exclusions. The build-time half was missing: nothing in the post-build pipeline was cross-checking the shipped diff against the `## Not Doing (and why)` bullets. A builder could silently re-introduce excluded scope and the only gate firing would be a human reading the diff. v8.84 closes the loop on the reviewer side.
+
+Sourced from `ce-scope-guardian-reviewer` in the everyinc-compound playbook ("Does this scope item serve a stated goal?" / "Did the diff quietly re-introduce work the plan placed in 'Deferred for later'?"); cclaw's pre-v8.84 equivalent was scattered across the architect's `## Not Doing` author-time discipline and the plan-critic §6.5 presence gate. The scope-drift axis pins the post-build half on the reviewer, where the diff actually exists to inspect.
+
+### What changed
+
+**Deliverable 1 — New reviewer axis `scope-drift` (gated).** Added the twelfth reviewer axis. Fires when `walkScopeDriftAxis: true` is set on the dispatch envelope — the orchestrator stamps the flag when `flows/<slug>/plan.md` carries a non-empty `## Not Doing (and why)` section (always true post-v8.80 since plan-critic §6.5 blocks ship on empty; legacy pre-v8.80 plans and inline ceremonies skip the gate). For each bullet in the section, the axis parses the bold-token `<scope item>` and scans the shipped diff for any of four signals: (1) file-path match (`caching layer` → `src/cache/**`), (2) symbol / identifier match (`webhook retries` → `WebhookRetryQueue` export), (3) AC-or-slice text match (`pagination` → AC titled "List view supports paginated fetch"), (4) commit-message match (`git log --grep="<scope-item>"`). A match files `SD-N: <not-doing item> appears to be implemented despite exclusion`.
+
+**Severity grading (0-10 scale):**
+
+- **0-3 weak signal** (single category match, weak mapping) → severity=`consider`.
+- **4-6 medium signal** (two categories match, unambiguous mapping) → severity=`required`; blocks ship in strict.
+- **7-10 strong signal** (three+ categories match, obvious implementation) → severity=`required`; blocks ship in strict AND soft (one tier above the default "required blocks soft only when soft has a required open" rule because scope-drift findings are load-bearing on the plan's contract). On `triage.complexity == "critical"`, severity escalates one tier to `critical`.
+
+**Acknowledged-reversal exception.** A scope-drift signal is NOT a finding when the plan explicitly acknowledges the reversal — either the bullet itself rewrites the rationale to acknowledge inclusion (`- **caching layer** — was originally excluded; re-included after the hot-endpoint benchmark in SL-2 showed p95 > 500ms; see D-4.`) OR `## Open questions` / `## Decisions` cites the reversal verbatim. Acknowledged reversals downgrade to `fyi` (surfaced for compound's learnings.md capture; no action). Silent reversals stay `required`.
+
+**Plan-amendment alternative.** When the diff legitimately needs to touch the excluded scope (the architect's Not-Doing call was wrong), the canonical fix is a plan amendment — architect bounces with `task: plan-amend`, edits the Not-Doing bullet to acknowledge the reversal, and the architect's plan-amend commit closes the SD-N finding with a citation to the plan.md edit. Silently shipping the drift is exactly the rationalization the axis exists to catch.
+
+**Deliverable 2 — Companion-skill pattern (follows the v8.83-token-axes playbook).** The full rubric, four-signal match protocol, severity ladder, acknowledged-reversal exception, plan-amendment alternative, and anti-rationalizations live in a new companion skill `src/content/skills/reviewer-axis-scope-drift.md` (~12k chars). `reviewer.ts` retains only a 5-line stub naming the skill — same pattern as the five v8.83-token-axes axes. The stub plus axis-table row add ~3k chars to `reviewer.ts`; the heavy prose loads lazily when the gate fires.
+
+**Deliverable 3 — Dispatch-envelope wiring.** `GateEnvelope` (in `src/content/skills.ts`) gained a sixth flag `walkScopeDriftAxis?: boolean`. The orchestrator's start-command stamps the flag when the plan has a non-empty `## Not Doing (and why)` section (post-v8.80, this is the always-true path). `buildAutoTriggerBlock("review", env)` pins the `reviewer-axis-scope-drift` skill only when the gate fires.
+
+**Deliverable 4 — Slim-counter wiring.** The reviewer's slim-summary `What changed` axes counter grew from `c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N` to `c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N sd=N`. `sd=N` is **only** present when the scope-drift gate fired; omitted on legacy pre-v8.80 plans and inline-ceremony slugs (same gating-aware optional-token pattern as `qae=N` / `dq=N`).
+
+**Deliverable 5 — AUTO_TRIGGER_SKILLS registration.** The new skill is registered with `stages: ["review"]` and `gate: (env) => env.walkScopeDriftAxis === true` — identical mechanical shape to the five v8.83 reviewer-axis skills. Skill total: 32 → 33.
+
+**Deliverable 6 — README + tests.**
+
+- README: 11 axes → 12 axes; auto-trigger skill list grew by one (33 total); reviewer cohort row names the v8.84 scope-drift companion alongside the five v8.83 axes; "Eleven-axis" prose updated to "Twelve-axis".
+- `tests/unit/v884-not-doing-gate.test.ts` — new tripwire suite. Pins the companion skill's presence + body shape + frontmatter; registers the skill with `stages: ["review"]` + gate predicate; gate fires on `walkScopeDriftAxis: true` and stays closed on the empty envelope; `buildAutoTriggerBlock("review", { walkScopeDriftAxis: true })` emits the pointer; reviewer.ts carries the twelve-axis intro + stub heading + Not-Doing cross-reference language + four-signal rubric language; README references 12 axes + 33 skills + scope-drift gating; CHANGELOG names the v8.84 slug.
+- `tests/unit/v883-docs-fix.test.ts` — README-count tripwire bumped from `32 skills` to `33 skills`; the eleven-axis assertion bumped to twelve-axis.
+- `tests/unit/v883-token-axes.test.ts > AC-9` — the README skills-count assertion now reads `AUTO_TRIGGER_SKILLS.length` live instead of pinning a frozen `32` literal, so future additive reviewer-axis skills don't re-light the v8.83 tripwire.
+
+### Behavioral
+
+Strict-mode reviewer dispatch on any post-v8.80 plan now walks the scope-drift axis with `walkScopeDriftAxis: true`. The orchestrator's start-command sets the flag when the plan has a non-empty `## Not Doing (and why)` section (the only path that reaches the reviewer post-v8.80 since plan-critic §6.5 gates ship on empty). Legacy pre-v8.80 plans and inline ceremonies skip the gate silently.
+
+Soft-mode behavior unchanged on the existing axes; the new scope-drift findings at severity=`required` carry over with note (the standard soft-mode rule) UNLESS the finding's signal grade is 7-10 strong, in which case the axis's elevated severity rule (one tier above default) blocks ship in soft too. Critical-complexity slugs see one-tier escalation (medium signal → `critical`).
+
+Reviewer iteration on the scope-drift axis is **per-iteration re-walking** (same as edit-discipline) — fix-only iterations re-render the axis to catch new scope drift introduced by the fix-only commits. Findings closed in iteration N stay closed unless iteration N+1's fix-only commits re-introduced the excluded surface.
+
+### Migration
+
+No migration required for shipped slugs. Pre-v8.80 plans (no `## Not Doing (and why)` section) skip the gate silently and emit zero scope-drift findings — the back-compat rule preserves shipped-state correctness on flows authored before the v8.80 promotion.
+
+The companion-skill pattern is identical to v8.83-token-axes (five gated axes lifted to companion skills in v8.83). Future reviewer axes should follow the same shape: add a `walkXAxis: boolean` field to `GateEnvelope`, write the heavy prose to `src/content/skills/reviewer-axis-<axis>.md`, register with `stages: ["review"]` + gate predicate in `AUTO_TRIGGER_SKILLS`, leave a 5-line stub in `reviewer.ts`, wire the slim-counter token (`xq=N` / `sd=N` shape) optional on gate-fire.
+
+### Token cost
+
+- New companion skill: ~12k chars (~3.3k tok) of lazily-loaded body.
+- `reviewer.ts` stub + axis-table row: ~3k chars added; remains under the 75k-char ceiling pinned by the v8.83 tripwire.
+- Net: ~0.8k tokens added to every reviewer dispatch (the stub) and ~3.3k tokens loaded when the gate fires (always-true on post-v8.80 strict-mode plans). The token cost is well within the reviewer's budget; the gate prevents the body from pinning on legacy / inline paths where the axis is structurally skipped.
+
+
 ## 8.88.0 — Token compression: orchestrator runbook duplicates (v8.83-token-runbooks work)
 
 ### Why

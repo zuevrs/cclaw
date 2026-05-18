@@ -70,6 +70,19 @@ export interface GateEnvelope {
    * skipped on inline / no-git).
    */
   editDisciplineActive?: boolean;
+  /**
+   * `flows/<slug>/plan.md` carries a non-empty `## Not Doing (and why)`
+   * section. Drives whether the `reviewer-axis-scope-drift` skill is
+   * pinned to the reviewer dispatch envelope. Always true post-v8.80
+   * on non-inline ceremonies (plan-critic §6.5 already gates ship on
+   * the section being non-empty), but pre-v8.80 archived plans and the
+   * inline path skip the gate. v8.84 introduced this when the
+   * scope-drift axis was added as the post-build half of v8.80's
+   * Not-Doing enforcement (plan-critic gates the section's presence;
+   * the reviewer's scope-drift axis gates the build's compliance with
+   * its exclusions).
+   */
+  walkScopeDriftAxis?: boolean;
 }
 
 export interface AutoTriggerSkill {
@@ -565,6 +578,22 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     stages: ["review"],
     gate: (env) => env.walkDesignQualityAxis === true,
     body: readSkill("reviewer-axis-design-quality.md")
+  },
+  {
+    id: "reviewer-axis-scope-drift",
+    fileName: "reviewer-axis-scope-drift.md",
+    description:
+      "Gated reviewer axis (v8.84 — Not-Doing gate). Full Not-Doing cross-reference protocol, four-signal match rubric (file path / symbol / AC-or-slice text / commit message), severity grading (0-3 weak/consider; 4-6 medium/required; 7-10 strong/required; +1 tier on critical-complexity slugs), acknowledged-reversal exception, plan-amendment alternative, and anti-rationalizations for the `scope-drift` axis. Loads only when the gate fires (`walkScopeDriftAxis: true` on the dispatch envelope, set when `plan.md > ## Not Doing (and why)` is non-empty — always true post-v8.80 since plan-critic §6.5 blocks ship on empty). Closes the v8.80 enforcement loop: plan-critic ensures the section is authored; the reviewer's scope-drift axis ensures the build respects its exclusions. reviewer.ts retains a 5-line stub pointing here.",
+    triggers: [
+      "specialist:reviewer",
+      "stage:review",
+      "axis:scope-drift",
+      "walkScopeDriftAxis:true",
+      "plan.notDoing:non-empty"
+    ],
+    stages: ["review"],
+    gate: (env) => env.walkScopeDriftAxis === true,
+    body: readSkill("reviewer-axis-scope-drift.md")
   }
 ];
 

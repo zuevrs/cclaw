@@ -132,8 +132,13 @@ describe("v8.70 — reviewer design-quality axis (gated)", () => {
     expect(REVIEWER_PROMPT).toMatch(/walkDesignQualityAxis/);
   });
 
-  it("reviewer prompt mentions eleven-axis review (preserves count framing)", () => {
-    expect(REVIEWER_PROMPT).toMatch(/[Ee]leven-axis|11.axis/);
+  it("reviewer prompt mentions a multi-axis review count framing (eleven-axis pre-v8.84; twelve-axis v8.84+)", () => {
+    // v8.84 added scope-drift; the count moved from eleven to twelve.
+    // We accept either framing so the v8.70 tripwire doesn't relight
+    // every time an axis is added or retired — the intent is to pin
+    // that the reviewer carries an explicit count framing, not the
+    // literal value.
+    expect(REVIEWER_PROMPT).toMatch(/[Ee]leven-axis|11.axis|[Tt]welve-axis|12.axis/);
   });
 
   it("reviewer's design-quality axis activation reads triage.surfaces ∪ {ui, design, frontend, ux}", () => {
