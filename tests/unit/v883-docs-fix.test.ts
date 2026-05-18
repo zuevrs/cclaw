@@ -126,14 +126,17 @@ describe("v8.83 docs drift cleanup + investigator axis fix", () => {
       expect(hasLens || hasSix).toBe(true);
     });
 
-    it("README.md contains `13 axes` OR `thirteen-axis` (v8.85 — added the assumption-coverage axis as the post-build half of v8.80's Key-assumptions-to-validate enforcement)", () => {
-      const hasThirteen = README.includes("13 axes");
-      const hasThirteenAxis = README.includes("thirteen-axis");
-      expect(hasThirteen || hasThirteenAxis).toBe(true);
+    it("README.md does NOT regress below `13 axes` (v8.85 baseline; v8.86 bumped to 14 axes; exact integer pinned in v8.86+ tripwire)", () => {
+      // v8.85 introduced "13 axes"; v8.86 bumped to "14 axes". The
+      // v883-docs-fix tripwire is relaxed to "doesn't regress" so
+      // future axis-count bumps don't constantly tickle this file.
+      expect(README).not.toContain("12 axes");
+      expect(README).not.toContain("twelve-axis");
     });
 
-    it("README.md contains `34 skills` (v8.85 bumped 33 → 34 after adding the assumption-coverage reviewer-axis companion skill)", () => {
-      expect(README).toContain("34 skills");
+    it("README.md does NOT regress below `34 skills` (v8.85 baseline; v8.86 bumped to 35 skills; exact integer pinned in v8.86+ tripwire)", () => {
+      // Relaxed to "doesn't regress to v8.84 baseline (33)".
+      expect(README).not.toContain("33 skills");
     });
 
     it("README.md contains `16 runbooks`", () => {

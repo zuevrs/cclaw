@@ -101,6 +101,27 @@ export interface GateEnvelope {
    * carrying a `validates: KA-N` payload before ship.
    */
   walkAssumptionCoverageAxis?: boolean;
+  /**
+   * v8.86 anti-slop gate. The fourteenth reviewer axis (`anti-slop`)
+   * is **default-on**: the orchestrator stamps the flag as `true` on
+   * every reviewer dispatch unless the user or a project config
+   * explicitly disables it via `walkAntiSlopAxis: false`. Unlike the
+   * five pre-v8.86 surface-driven gates (qa-evidence / design-quality
+   * / security / nfr-compliance / scope-drift / assumption-coverage),
+   * this gate is NOT keyed on plan content or triage surface — the
+   * Karpathy "Simplicity First" principle is checked once per slug
+   * regardless of what the slug touches. Structurally skipped only on
+   * `ceremonyMode: inline` (no review.md at all) and on
+   * structurally-empty diffs (single-character typo fixes).
+   *
+   * The gate predicate honours the default-on contract:
+   * `env.walkAntiSlopAxis !== false` (i.e. `true` and `undefined`
+   * both open the gate; only an explicit `false` closes it). This
+   * mirrors how the pre-v8.86 gated axes phrase their predicates as
+   * `env.<flag> === true` but flipped so the default state is
+   * always-fires rather than never-fires.
+   */
+  walkAntiSlopAxis?: boolean;
 }
 
 export interface AutoTriggerSkill {
@@ -628,6 +649,21 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     stages: ["review"],
     gate: (env) => env.walkAssumptionCoverageAxis === true,
     body: readSkill("reviewer-axis-assumption-coverage.md")
+  },
+  {
+    id: "reviewer-axis-anti-slop",
+    fileName: "reviewer-axis-anti-slop.md",
+    description:
+      "Gated reviewer axis (v8.86 — anti-slop graded axis). Full four-dimension 0-10 grading protocol (senior-test / speculative-flexibility / single-use-abstraction / orphan-cleanup-discipline), severity ladder (5/10 → consider; ≤3/10 → required; ≤2/10 → critical on critical-complexity slugs), AS-N finding shape, and anti-rationalizations for the `anti-slop` axis. The cclaw projection of Andrej Karpathy's \"Simplicity First\" principle (forrestchang/andrej-karpathy-skills > CLAUDE.md): minimum code that solves the problem; nothing speculative; no abstractions for single-use code; no flexibility that wasn't requested. Default-on gate — fires on every reviewer iteration unless explicitly disabled via `walkAntiSlopAxis: false` on the dispatch envelope. Structurally skipped only on `ceremonyMode: inline` and structurally-empty diffs. reviewer.ts retains a 5-line stub pointing here.",
+    triggers: [
+      "specialist:reviewer",
+      "stage:review",
+      "axis:anti-slop",
+      "walkAntiSlopAxis:default-on"
+    ],
+    stages: ["review"],
+    gate: (env) => env.walkAntiSlopAxis !== false,
+    body: readSkill("reviewer-axis-anti-slop.md")
   }
 ];
 
