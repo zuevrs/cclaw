@@ -109,6 +109,28 @@ export type ModelPreferenceKey =
  *
  * The mapping is FROZEN at construction so test mutations can't
  * silently corrupt the default at the module level.
+ *
+ * ## Two-source-of-truth pattern (v8.87 + v8.94)
+ *
+ * The cclaw orchestrator's LLM consumer reads this policy via a mirrored
+ * markdown table in the on-demand `dispatch-envelope` runbook (see
+ * `## Model-tier hint (v8.87)` in
+ * {@link ../content/runbooks-on-demand.ts}). That runbook table is the
+ * LLM-facing canonical source — when the orchestrator stamps the
+ * `Model tier:` line on a dispatch envelope, it looks at the runbook
+ * table, not at this TypeScript constant.
+ *
+ * This TS constant exists for FUTURE programmatic callers that need to
+ * resolve a tier without going through the LLM — e.g. a CI harness that
+ * pre-validates `.cclaw/config.yaml > modelPreferences`, or a future
+ * non-LLM dispatcher. As of v8.94 no production module imports
+ * {@link resolveModelPreferences} or {@link modelTierFor}; the helpers
+ * are intentionally kept available so the next caller doesn't re-derive
+ * the policy from scratch.
+ *
+ * The two surfaces (this constant + the runbook table) are pinned to
+ * identical values by the `tests/unit/v894-model-tier-sync.test.ts`
+ * tripwire. Editing one without the other fails the build.
  */
 export const DEFAULT_MODEL_PREFERENCES: Readonly<
   Record<ModelPreferenceKey, ModelTier>
@@ -142,6 +164,16 @@ export const DEFAULT_MODEL_PREFERENCES: Readonly<
  *
  * The result is always a `Required<Record<ModelPreferenceKey, ModelTier>>`
  * so downstream readers never have to handle the absent case.
+ *
+ * Audience: programmatic callers that need to resolve the merged tier
+ * policy without prompting the LLM. The production orchestrator does NOT
+ * call this — it reads the policy via the mirrored runbook table in
+ * `runbooks-on-demand.ts` (see {@link DEFAULT_MODEL_PREFERENCES} for the
+ * two-source-of-truth rationale). The two surfaces are pinned to
+ * identical values by `tests/unit/v894-model-tier-sync.test.ts`, so this
+ * helper stays usable for future callers (e.g. a CI validator that
+ * pre-checks `.cclaw/config.yaml > modelPreferences` against the policy)
+ * without diverging from what the LLM reads.
  */
 export function resolveModelPreferences(
   config: CclawConfig | null | undefined
@@ -171,6 +203,14 @@ export function resolveModelPreferences(
  * `slice-builder` key is read as a `builder` override ONLY when no
  * explicit `builder` key is set. An explicit `builder` value always
  * wins, even when both are present.
+ *
+ * Audience: same as {@link resolveModelPreferences} — programmatic
+ * callers that need a single specialist's tier without round-tripping
+ * through the LLM. As of v8.94 the production orchestrator stamps the
+ * tier via the runbook-table mirror in `runbooks-on-demand.ts`, not by
+ * calling this helper. The TS surface and the runbook table are pinned
+ * by `tests/unit/v894-model-tier-sync.test.ts`, so adopting this helper
+ * later (e.g. for a non-LLM dispatcher) needs no policy re-derivation.
  */
 export function modelTierFor(
   specialist: ModelPreferenceKey | "slice-builder",

@@ -1,6 +1,82 @@
 # Changelog
 
 
+## 8.95.0 — Sync v8.87 model-tier TS helpers with runbook table via tripwire (Phase C G-7 fix)
+
+### Why
+
+v8.87 shipped a TypeScript model-tier policy in `src/config.ts` —
+`DEFAULT_MODEL_PREFERENCES` plus the `resolveModelPreferences()` /
+`modelTierFor()` helpers — designed to give programmatic callers a typed
+way to resolve a specialist's tier without hardcoding the policy. The
+Phase-C audit flagged the same release as G-7 (LOW): the LLM-facing
+dispatch flow actually consumes the policy by reading a mirrored markdown
+table inside the `dispatch-envelope` on-demand runbook (`## Model-tier
+hint (v8.87)`), not by importing the TS helpers. The runbook-table path
+is the canonical LLM source of truth and it works; the TS helpers are
+exported but no production module calls them.
+
+The audit gap is borderline cosmetic — both surfaces describe the same
+policy, just for different consumers (LLM vs. programmatic). The risk is
+silent drift: a future tier-policy change could land in the TS constant
+without updating the runbook table (or vice versa) and the two sources
+would diverge without anyone noticing.
+
+### What changed
+
+v8.95 keeps both surfaces and locks them together by test, instead of
+removing the unused TS helpers or rewiring the orchestrator to read from
+TS. The runbook table stays the LLM-facing source of truth; the TS
+helpers stay available for future programmatic callers (e.g. a CI
+validator for `.cclaw/config.yaml > modelPreferences`, or a future
+non-LLM dispatcher).
+
+- **Tripwire test** at `tests/unit/v894-model-tier-sync.test.ts` parses
+  the `## Model-tier hint` markdown table inside the dispatch-envelope
+  runbook body (extracts backticked specialist ids from each row,
+  strips parenthetical qualifier text so the legacy `slice-builder`
+  alias documented in the `builder` row does NOT leak into the parsed
+  set, reads the tier from the right-hand column) and asserts:
+    - every key in `DEFAULT_MODEL_PREFERENCES` has a matching row in the
+      runbook table with the same tier value;
+    - every row in the runbook table has a matching key in
+      `DEFAULT_MODEL_PREFERENCES` with the same tier value;
+    - the parsed table covers exactly the same key set as
+      `DEFAULT_MODEL_PREFERENCES` (no silent additions / removals on
+      either side);
+    - the legacy `slice-builder` alias stays in the runbook qualifier
+      text and never enters the parsed default map.
+
+- **JSDoc** on `DEFAULT_MODEL_PREFERENCES`, `resolveModelPreferences`,
+  and `modelTierFor` now spells out the two-source-of-truth-but-locked-
+  by-test pattern: the runbook table is what the LLM reads, the TS
+  helpers are reserved for future programmatic callers, and the v8.95
+  tripwire keeps the two in sync.
+
+### Tripwires
+
+`tests/unit/v894-model-tier-sync.test.ts` is the new tripwire. Six
+assertions; drift either direction (table edit not mirrored in the TS
+constant, or vice versa) flips one or more of them red.
+
+### Path not taken
+
+Two alternative resolutions were considered:
+
+- **Wire the helpers** into the orchestrator's dispatch path so they're
+  used at runtime. Cleaner on paper, but the LLM already reads the
+  runbook table reliably, and rerouting through TS would shift the
+  consumer relationship without adding correctness — the table mirror
+  would still need to exist (the LLM can't import TS).
+- **Remove the helpers** as unused. Cheapest, but throws away typed
+  programmatic surface that future non-LLM callers (CI validators,
+  IDE-side prefill, harness adapters) plausibly want. The audit gap is
+  cosmetic; deletion is a one-way door.
+
+The chosen path (test-locked dual sources) preserves both surfaces with
+zero runtime cost and one new tripwire test.
+
+
 ## 8.94.0 — Orchestrator-side stamping prose for new envelope flags (Phase C G-3/4/5 fix)
 
 ### Why
