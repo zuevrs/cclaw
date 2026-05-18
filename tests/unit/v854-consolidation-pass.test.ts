@@ -81,8 +81,11 @@ describe("v8.54 — content consolidation: 4 runbook merges → 15 on-demand run
     // `self-review-gate`, `ship-gate`, `discovery`, `plan-small-medium`
     // (6 retired) and added `critic-steps`, `handoff-gates` (2 added).
     // Discovery + plan-small-medium were lifted to PLAN_PLAYBOOK. Net: -4.
+    // v8.83 token-compression added 3 net new runbooks (detect-matrix /
+    // approaches-gate / one-way-door-gate) lifting duplicated procedures
+    // off start-command.ts; ceiling lifted 18 → 21 to absorb the lifts.
     expect(ON_DEMAND_RUNBOOKS.length).toBeGreaterThanOrEqual(8);
-    expect(ON_DEMAND_RUNBOOKS.length).toBeLessThanOrEqual(18);
+    expect(ON_DEMAND_RUNBOOKS.length).toBeLessThanOrEqual(21);
   });
 });
 

@@ -120,9 +120,12 @@ describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", (
     "research-depth-and-self-review.md",
     "research-revision.md",
     "debug-branch.md",
+    "detect-matrix.md",
+    "approaches-gate.md",
+    "one-way-door-gate.md",
   ];
 
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files; v8.61: +1 always-auto-failure-handling → 13 files; v8.69: +1 research-depth-and-self-review → 14 files; v8.71: +1 research-revision → 15 files; v8.77: +1 debug-branch → 16 files)", () => {
+  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files; v8.61: +1 always-auto-failure-handling → 13 files; v8.69: +1 research-depth-and-self-review → 14 files; v8.71: +1 research-revision → 15 files; v8.77: +1 debug-branch → 16 files; v8.83: +3 token-compression lifts (detect-matrix, approaches-gate, one-way-door-gate) → 19 files)", () => {
     const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
     expect(fileNames).toEqual([...expectedRunbookFiles].sort());
   });
@@ -192,14 +195,14 @@ describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", 
     expect(renderStartCommand()).toBe(START_COMMAND_BODY);
   });
 
-  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 295k-char ceiling (... v8.80 lifted ceiling 275k → 285k for the research-mode synthesis Phase 3 sub-steps; v8.82 lifted ceiling 285k → 295k to absorb ~5k chars of new body prose for the #### plan-devex section + stage-table row — no new runbook in v8.82; the plan-devex full procedure pointer lives inline in critic-steps.md)", () => {
+  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 320k-char ceiling (... v8.80 lifted ceiling 275k → 285k for the research-mode synthesis Phase 3 sub-steps; v8.82 lifted ceiling 285k → 295k to absorb ~5k chars of new body prose for the #### plan-devex section + stage-table row — no new runbook in v8.82; v8.83 lifted ceiling 295k → 320k for the three new lift runbooks (detect-matrix / approaches-gate / one-way-door-gate) that absorb ~25k chars of body prose lifted off start-command.ts while their canonical procedures + worked examples land on disk for harness reads)", () => {
     const combined =
       renderStartCommand().length +
       ON_DEMAND_RUNBOOKS.reduce((acc, r) => acc + r.body.length, 0);
     expect(
       combined,
-      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 295000). v8.80 added ~3k chars (lifted 275k → 285k). v8.82 added ~5k chars (lifted 285k → 295k) for the new #### plan-devex body section + stage-table row. Expanding past 295k means a block belongs on disk.`
-    ).toBeLessThanOrEqual(295000);
+      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 320000). v8.80 added ~3k chars (lifted 275k → 285k). v8.82 added ~5k chars (lifted 285k → 295k) for the new #### plan-devex body section + stage-table row. v8.83 added ~10k chars net (lifted 295k → 320k) for three new lift runbooks (detect-matrix / approaches-gate / one-way-door-gate) that absorb lifted-off body prose for harness reads. Expanding past 320k means a block belongs on disk.`
+    ).toBeLessThanOrEqual(320000);
   });
 });
 
