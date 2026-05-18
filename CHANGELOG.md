@@ -1,17 +1,94 @@
 # Changelog
 
 
-## 8.85.1 — Fix: propagate v8.81 defense-in-depth envelope to orchestrator + builder + flow-state validator
+## 8.86.0 — Docs drift cleanup + investigator axis fix (v8.83-docs-fix work)
 
 ### Why
 
-v8.81 introduced the investigator-v2 defense-in-depth discipline: when Phase 4's gate fires (≥3 other files match the root-cause pattern OR catastrophic-if-prod), the investigator writes a `## Defense-in-depth (4 layers)` section in `investigation.md` and adds a `Defense-in-depth: yes` line to its slim summary. The investigator prompt (`src/content/specialist-prompts/investigator.ts`) declared the downstream contract verbatim: the orchestrator copies the flag onto the builder dispatch envelope as `defense-in-depth: <yes|no>`, persists it on `flow-state.json > builderEnvelope.defenseInDepth`, and the builder reads the flag and implements all named (non-n/a) layers as part of the root-cause fix commit.
+The v8.67-v8.82 arc shipped 10 specialists, 11 reviewer axes, 6 research lenses, 27 skills, 16 runbooks, and a 17-section strict plan template, but the user-facing surfaces (`README.md`, `CHANGELOG.md`, six specialist prompts) still carried pre-v8.67 count rows: "8 sub-agents", "ten-axis reviewer", "5 research-only lens contracts", "25 skills", "13 runbooks", "15-section plan template". Worse, `investigator.ts` lines 284-285 listed a fabricated 11-axis vocabulary (`code-quality / tests / risk / acceptance / coupling / performance / error-discipline / <11th>` with an unfilled placeholder) that did NOT match `reviewer.ts`'s canonical axis surface — a high-severity bug because the investigator's Phase 5 post-mortem instructs the user / next agent to wire a reviewer-axis check, and a wrong axis vocabulary makes that prevention loop unhittable.
 
-The downstream surfaces never saw the flag. `src/content/start-command.ts` had zero matches for `defense`, `defenseInDepth`, or `builderEnvelope` — the orchestrator prompt never instructed the orchestrator to read the slim-summary line or stamp the envelope. `src/content/specialist-prompts/builder.ts` had zero matches — the builder didn't know the envelope field existed. `src/flow-state.ts` had no validator clause — a state file with `builderEnvelope.defenseInDepth: "yes"` round-tripped without enforcement; an invalid value (`"maybe"`) was not rejected at parse time.
-
-The v8.81 test suite passed because AC-4 + AC-6 only grepped the investigator prompt for the contract strings — they did not check downstream propagation. The gap was high-severity: the entire defense-in-depth discipline was declared but inert.
+This release is a narrative-only cleanup pass plus the investigator axis bug fix. No runtime behaviour changes; no schema changes; no specialist envelope changes.
 
 ### What changed
+
+**1. `README.md` count rows updated to v8.85.1 reality.**
+
+- Specialists row: `8 sub-agents` → `10 sub-agents` (added `investigator` (v8.77) + `plan-devex` (v8.82) bullets).
+- Triage slim summary: `5-field` → `8-field` (added `taskShape`, `designSurface`, `devexSurface`).
+- Reviewer axes: `ten axes` / `10 reviewer axes` / `8 base + 2 gated` → `eleven-axis` / `11 axes` / `8 base + 3 gated` (added `design-quality` (v8.70) to the gated set).
+- Skills: `25 skills` → `27 skills` (added `devex-quality-discipline` (v8.82) + `investigation-discipline` (v8.77)).
+- Runbooks: `13 runbooks` → `16 runbooks` (added `research-depth-and-self-review` (v8.69) + `research-revision` (v8.71) + `debug-branch` (v8.77)).
+- Research lenses: `5 research-only lens contracts` → `6 research-only lens contracts` (added `research-design` (v8.76)).
+- Plan template row: rewritten — `15-section strict` → `17-section strict` (+ 2 conditionally-appended sections → up to 19); added `Assumptions (correct me now)` (v8.67), renamed `Not Doing` → `Not Doing (and why)` (v8.80), added `Key assumptions to validate` (v8.80), added the conditional `Plan-design findings` (v8.75) + `Plan-devex findings` (v8.82) and the extend-mode `Extends` section; soft template `6 sections` → `8 sections`.
+- `/cc` invocation matrix gained a `/cc research go` row (v8.78 force-exit research dialogue).
+- Failure handling matrix gained a v8.79 One-way Door Gate row (`confirm` / `edit` / `cancel`).
+- New `### Debug-shape routing (v8.77 + v8.81)` subheading inserted to break up the wall at lines 87-104.
+- `One pipeline, depth scales.` bullet expanded to mention the five gated specialists (`investigator` / `plan-critic` / `plan-design` / `plan-devex` / `qa-runner`) as additions to the canonical spine.
+
+**2. `CHANGELOG.md` v8.85.1 entry condensed.**
+
+- 7-paragraph "Why" + 5-deliverable "What changed" body collapsed to a one-sentence summary plus a single `### Technical breakdown` sub-section that keeps every deliverable row verbatim (no information loss; just a tighter top-of-file lead-in).
+
+**3. `src/content/specialist-prompts/investigator.ts` — CRITICAL axis bug fix.**
+
+- Lines 284-285 axis vocabulary rewritten from the fabricated `code-quality / tests / risk / acceptance / coupling / security / performance / error-discipline / <11th>` to reviewer.ts's actual 11 axes: `correctness / readability / architecture / security / perf / test-quality / complexity-budget / edit-discipline / qa-evidence / nfr-compliance / design-quality`.
+- Three downstream illustrative examples (the `unawaited-promise` example, the "missing null guard is `error-discipline`" line, and the v8.81 anti-rationalization row's "is `error-discipline`" line) reworded to use `correctness` — the axis closest to root-cause-mechanism for that bug class on the canonical surface.
+
+**4. `src/content/specialist-prompts/reviewer.ts` — stale axis count strings.**
+
+- "the regular ten-axis review covers everything" → "the regular eleven-axis review covers everything".
+- "the standard five-axis (now ten-axis) pass" → "the standard eleven-axis pass".
+
+**5. `src/content/specialist-prompts/critic.ts` — stale axis count strings.**
+
+- "the reviewer's ten-axis pass could not see" → "the reviewer's eleven-axis pass could not see".
+- "the reviewer's eight axes" (two instances — adversarial budget rule + "What you do NOT do") → "the reviewer's eleven axes".
+
+**6. `src/content/specialist-prompts/architect.ts` — stale lens count.**
+
+- v8.65 historical note: "five lenses (research-engineer / research-product / research-architecture / research-history / research-skeptic)" → "six lenses (research-engineer / research-product / research-architecture / research-history / research-skeptic / research-design)" (the design lens added in v8.76).
+
+**7. `src/content/core-agents.ts` — three specialist descriptions corrected.**
+
+- `architect.description`: "five parallel lenses: engineer / product / architecture / history / skeptic" → "six parallel lenses: engineer / product / architecture / history / skeptic / design".
+- `plan-critic.description`: "complexity=large-risky" gate description → "complexity != trivial" (the v8.54 gate widening).
+- `builder.description`: commit-prefix vocabulary updated from the pre-v8.63 `red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):` shape to the v8.63 shape `red(SL-N): / green(SL-N): / refactor(SL-N):` for per-slice work commits plus `verify(AC-N): passing` for the post-slice per-AC verify commits.
+
+**8. `src/content/artifact-templates.ts` — research template description.**
+
+- "Five per-lens sections (Engineer / Product / Architecture / History / Skeptic)" → "Six per-lens sections (Engineer / Product / Architecture / History / Skeptic / Design)" with the v8.76 gating note (`standard+` depth on UI/UX topics).
+- The pre-existing "ten-axis reviewer" string in the review.md template description → "eleven-axis reviewer".
+
+**9. `src/content/start-command.ts` — four orchestrator-body count strings.**
+
+- Detect step: "five-field routing decision" → "eight-field routing decision".
+- Research-mode summary: "eight flow specialists (triage, architect, builder, plan-critic, plan-design, qa-runner, reviewer, critic)" → "ten flow specialists (triage, architect, builder, plan-critic, plan-design, plan-devex, qa-runner, reviewer, critic, investigator)".
+- Triage stamp protocol: "five-field decision" → "eight-field decision" (and the `lastSpecialist` JSDoc-style note "the five-field triage decision on triage returns" → "the eight-field triage decision on triage returns").
+- Skills index: "ten-axis pass" → "eleven-axis pass" (review-discipline skill description).
+- Two stale "ten axes" prose references in the qa-runner / critic explanation bullets → "eleven axes".
+- Builder.ts: "the reviewer in soft mode still runs the full ten-axis pass" → "eleven-axis pass" (caught while sweeping for stale strings).
+
+**10. Tripwire tests (`tests/unit/v883-docs-fix.test.ts`).**
+
+- New test file with 17 assertions across 5 describe blocks. Tripwire 1 (3 tests) pins `investigator.ts` against the 11 canonical axes + asserts no fabricated axis name slips back in + cross-checks `reviewer.ts` carries the same vocabulary. Tripwires 2-5 (14 tests) pin the corrected README + start-command + critic count rows so the same drift cannot silently reopen. The suite is intentionally narrow — each test is one expectation; failures map to specific stale strings the v8.83 cleanup removed.
+
+### Compatibility
+
+- No runtime behaviour change. No schema change. No specialist envelope change. Every specialist contract still ships the same gate behaviour, the same dispatch shape, the same slim-summary surface. The investigator's Phase 5 post-mortem block now points at the right reviewer axes — same section, same purpose, corrected vocabulary.
+- Schema version unchanged (`FLOW_STATE_SCHEMA_VERSION = 3`).
+
+### Test count delta
+
+Pre-fix: 2128 passing tests (107 files).
+Post-fix: 2145 passing tests (108 files).
+Delta: +17 tripwire tests in a new file; no existing tests modified or removed.
+
+
+## 8.85.1 — Fix: propagate v8.81 defense-in-depth envelope to orchestrator + builder + flow-state validator
+
+Wired the v8.81 defense-in-depth envelope through orchestrator → builder → flow-state validator that was declared in v8.81 but never propagated. +16 tripwire tests.
+
+### Technical breakdown
 
 **Deliverable 1 — Orchestrator envelope copy + persistence prompt (`src/content/start-command.ts`).**
 

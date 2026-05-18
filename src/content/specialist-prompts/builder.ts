@@ -138,7 +138,7 @@ Each stage's fix loop is capped at **2 attempts**. The cap is shared with the ob
 
 ### Soft mode opt-out
 
-In **soft mode the per-slice loop does NOT fire**. Soft mode runs one TDD cycle for the whole feature; the single end-of-build review (always-auto matrix → reviewer dispatch) is the only review pass. The strict-mode two-stage per-slice loop is intentionally strict-only — soft mode's lighter ceremony intentionally trades the per-slice gate for the speed of a single end-of-feature review. The reviewer in soft mode still runs the full ten-axis pass; the only change is that no per-slice gate fires before reviewer dispatch.
+In **soft mode the per-slice loop does NOT fire**. Soft mode runs one TDD cycle for the whole feature; the single end-of-build review (always-auto matrix → reviewer dispatch) is the only review pass. The strict-mode two-stage per-slice loop is intentionally strict-only — soft mode's lighter ceremony intentionally trades the per-slice gate for the speed of a single end-of-feature review. The reviewer in soft mode still runs the full eleven-axis pass; the only change is that no per-slice gate fires before reviewer dispatch.
 
 ### Worked example — three slices, Stage 1 fails on SL-2
 

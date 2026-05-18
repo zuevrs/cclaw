@@ -478,7 +478,7 @@ zero_block_streak: 0
 
 # Review — SLUG-PLACEHOLDER
 
-This is the review log. \`reviewer\` (the ten-axis reviewer, with security threat-modelling absorbed from the former \`security-reviewer\`) appends findings here. The loop is producer ↔ critic: iteration N proposes findings, \`builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-discipline skill).
+This is the review log. \`reviewer\` (the eleven-axis reviewer, with security threat-modelling absorbed from the former \`security-reviewer\`) appends findings here. The loop is producer ↔ critic: iteration N proposes findings, \`builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-discipline skill).
 
 ## Run summary
 
@@ -1844,7 +1844,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   // this artifact and `plan.md` — readers that walk `flows/shipped/`
   // branch on this field to decide which artifact shape the slug
   // shipped.
-  { id: "research", fileName: "research.md", description: "v8.65 multi-lens research-mode artifact — output of the main-context research orchestrator's parallel-lens flow for `/cc research <topic>` invocations. Five per-lens sections (Engineer / Product / Architecture / History / Skeptic) + cross-lens Synthesis + Recommended next step + Discovery dialogue summary, plus research-specific frontmatter (mode: research, topic, generated_at, lenses list). No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`.", body: RESEARCH_TEMPLATE },
+  { id: "research", fileName: "research.md", description: "v8.65 multi-lens research-mode artifact — output of the main-context research orchestrator's parallel-lens flow for `/cc research <topic>` invocations. Six per-lens sections (Engineer / Product / Architecture / History / Skeptic / Design) + cross-lens Synthesis + Recommended next step + Discovery dialogue summary, plus research-specific frontmatter (mode: research, topic, generated_at, lenses list). The Design lens (v8.76) is gated — fires on `standard+` depth when the topic touches UI/UX, force-toggled via `--lens=design` / `--lens=-design`. No AC table, no Topology, no Traceability — those belong to the follow-up `/cc <task>` flow that consumes this research via `flowState.priorResearch`.", body: RESEARCH_TEMPLATE },
   // v8.77 debug-branch artifact. Authored by the investigator
   // specialist on every bug-shaped flow (triage.taskShape == "debug")
   // BEFORE the architect runs (and skipping the architect entirely
