@@ -524,6 +524,14 @@ For each AC in \`plan.md > ## Acceptance Criteria (verification)\`, in numeric o
 4. **Decide one of two paths:**
    - **Path V1 — no test edit needed.** The slice tests already cover the AC's observable behaviour. Land an empty commit: \`git commit --allow-empty -m "verify(AC-N): passing"\`. The commit body MAY include a one-line citation (\`covered by <test-file>:<test-name> committed under SL-K\`).
    - **Path V2 — test edit needed.** The AC requires a verification target the slice tests do not yet cover (perf budget, integration scenario, contract assertion). Write or update the test file. Run the relevant suite — it MUST pass. Stage only the test file, then \`git commit -m "verify(AC-N): passing"\`. Do NOT touch production code in a verify commit.
+
+   **v8.85 — optional \`validates: KA-N\` payload.** When the AC's verification ALSO closes the loop on a \`KA-N\` row in \`plan.md > ## Key assumptions to validate\` (the bet the bullet captures is the SAME bet the AC's evidence proves — e.g. KA-2 reads "search p95 stays under 200ms" and AC-3's verification target is a \`vitest bench\` that asserts the same budget), append a \`validates: KA-N\` line to the commit message body. Multiple KA-N ids are space- or comma-separated on the same line (\`validates: KA-2 KA-4\` or \`validates: KA-2, KA-4\`). Example commit:
+
+   \`\`\`bash
+   $ git commit -m "verify(AC-3): passing" -m "validates: KA-2" -m "vitest bench: search p95 = 142ms (budget 200ms)"
+   \`\`\`
+
+   The post-build flow-state validator (\`src/assumption-validation.ts > parseValidatesPayload\` + \`flipAssumptionRows\`) scans every \`verify(AC-*): passing\` commit in the build range, extracts the \`validates:\` payload, and rewrites the matching KA-N row in \`plan.md\` to \`Status: validated\` with the commit SHA appended (\`Status: validated by <sha>\`). The payload is **optional** — most AC do not validate KA rows, and silence is fine. ONLY emit the line when the AC's evidence actually demonstrates the KA bullet's bet (not "this code uses caching" → KA bullet about cache-hit ratio; the AC's verification target MUST be the same observable the KA bullet's validation method names). False-positive \`validates:\` claims are an A-1 finding for the reviewer's \`assumption-coverage\` axis (severity=\`required\`).
 5. **Append a row** to \`build.md\` under \`## AC verification\`:
 
 \`\`\`markdown

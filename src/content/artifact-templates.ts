@@ -142,8 +142,10 @@ _(Architect — v8.67. Mandatory on every non-inline plan. 3-7 short bullets cov
 
 _(Architect: Phase 7.5 — Bets and exclusions. 2-5 bullets naming **bets** the plan rests on — beliefs about latency budgets, user behaviour, market state, downstream system behaviour, performance under load, etc. — that would invalidate the plan if wrong. **Distinct from \`## Assumptions (correct me now)\`** (v8.67): that section is surface-area inferences (which library / storage / approach the architect picked when multiple were plausible); this section is bets-that-need-validation (the latency budget assumption, the user-behaviour assumption, the market-state assumption). Each bullet pairs the bet with a validation method and an explicit status — \`unvalidated\` on first authoring, \`validated\` / \`invalidated\` once evidence lands.)_
 
-- **\`<assumption>\`** — Validate by: _\`<method — benchmark, log query, user interview, A/B test, prod metric scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
-- **\`<assumption>\`** — Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
+_(v8.85: each bullet carries a stable \`KA-N\` id (Key Assumption N) as the leading bold token so the builder, reviewer, and ship template can cross-reference rows by id. The builder's \`verify(AC-N): passing\` commits MAY carry a \`validates: KA-N\` payload in the commit message body — when present, the flow-state validator flips the matching KA-N row's status to \`validated\` and stamps the commit SHA, closing the loop on the assumption. \`KA-1\` is mandatory on the first bullet; numbering is monotonic. The reviewer's \`assumption-coverage\` axis (gated when this section is non-empty) cross-checks that every high-stakes KA-N row has at least one validating commit before ship.)_
+
+- **KA-1** — _\`<assumption>\`_. Validate by: _\`<method — benchmark, log query, user interview, A/B test, prod metric scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
+- **KA-2** — _\`<assumption>\`_. Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
 
 ## Spec
 
@@ -1099,6 +1101,16 @@ _(List any \`warn\`-severity ledger rows from \`flows/SLUG-PLACEHOLDER/review.md
 
 - _e.g._ F-2 (warn) — \`tests/integration/list.test.ts:31\` — no negative test for empty page; tracked in \`flows/SLUG-PLACEHOLDER/learnings.md\`.
 
+## Unvalidated assumptions
+
+_(v8.85 — assumption-validation lite. List every \`KA-N\` row from \`plan.md > ## Key assumptions to validate\` whose status is still \`unvalidated\` at ship time. The reviewer's \`assumption-coverage\` axis already gated \`required\`-severity findings on high-stakes rows; this section surfaces the **remaining** unmeasured bets so the user signs off on shipping with them open. A row reaches this section when no \`verify(AC-N): passing\` commit in the build range carried a \`validates: KA-N\` payload AND the row's status was never manually flipped to \`validated\` / \`invalidated\` in plan.md. Format mirrors the plan-template row shape so the user can scan plan.md and ship.md side-by-side. When every KA-N row was validated, write the literal "All key assumptions validated." line and drop the bulleted list.)_
+
+- **KA-N** — _\`<assumption>\`_. Validate by: _\`<method>\`_. Status: \`unvalidated\` at ship time.
+
+_(or, when no rows remain unvalidated:)_
+
+All key assumptions validated.
+
 ## Victory Detector
 
 Ship is allowed only when ALL of these are true:
@@ -1401,10 +1413,10 @@ _(2-3 framings stamped at the Approaches Gate. "All selected" is the canonical d
 
 ## Key assumptions to validate
 
-_(Research orchestrator: Phase 3 synthesis. 2-5 bullets naming **bets** the research rests on — beliefs about user demand, market state, technology behaviour, performance characteristics, or downstream system capability that the lenses absorbed as load-bearing premises rather than as findings. Distinct from \`## Framings considered\` (those are alternative shapes of the question itself, picked by the user); this section is the implicit beliefs the framings rely on. The follow-up \`/cc <task>\` flow's architect Bootstrap reads this section verbatim into the \`## Key assumptions to validate\` block of \`plan.md\` so the bets carry forward as load-bearing context.)_
+_(Research orchestrator: Phase 3 synthesis. 2-5 bullets naming **bets** the research rests on — beliefs about user demand, market state, technology behaviour, performance characteristics, or downstream system capability that the lenses absorbed as load-bearing premises rather than as findings. Distinct from \`## Framings considered\` (those are alternative shapes of the question itself, picked by the user); this section is the implicit beliefs the framings rely on. The follow-up \`/cc <task>\` flow's architect Bootstrap reads this section verbatim into the \`## Key assumptions to validate\` block of \`plan.md\` so the bets carry forward as load-bearing context. v8.85: each bullet carries a stable \`KA-N\` id as the leading bold token; the follow-up plan.md preserves the ids so a \`validates: KA-N\` builder commit can later flip the matching row to \`validated\`.)_
 
-- **\`<assumption>\`** — Validate by: _\`<method — benchmark, user research, log query, A/B test, prior-art scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
-- **\`<assumption>\`** — Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
+- **KA-1** — _\`<assumption>\`_. Validate by: _\`<method — benchmark, user research, log query, A/B test, prior-art scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
+- **KA-2** — _\`<assumption>\`_. Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
 
 ## Engineer lens
 
