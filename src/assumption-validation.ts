@@ -428,3 +428,136 @@ export function unvalidatedKaIds(planMd: string): string[] {
     .filter((row) => row.id !== null && row.status === "unvalidated")
     .map((row) => row.id as string);
 }
+
+/**
+ * Subset of {@link unvalidatedKaIds} restricted to rows carrying the
+ * `(high-stakes)` label. The orchestrator passes this list on the
+ * reviewer dispatch envelope as `unvalidatedHighStakesKas` so the
+ * `assumption-coverage` axis skill can directly surface the bets
+ * that crossed the ship line without a closing `validates: KA-N`
+ * payload. Non-high-stakes rows continue to surface in the ship.md
+ * `## Unvalidated assumptions` section but don't escalate to
+ * `required` severity at review time.
+ */
+export function unvalidatedHighStakesKaIds(planMd: string): string[] {
+  const rows = parseAssumptionRows(planMd);
+  return rows
+    .filter(
+      (row) =>
+        row.id !== null && row.status === "unvalidated" && row.highStakes
+    )
+    .map((row) => row.id as string);
+}
+
+/**
+ * Render the body (no heading) of the ship template's
+ * `## Unvalidated assumptions` section from a parsed assumption-row
+ * list. Pure / total: returns the literal `All key assumptions
+ * validated.` line when no row remains unvalidated, OR one bullet
+ * per unvalidated row otherwise. Bullets mirror the plan-template
+ * row shape (`- **KA-N** — <assumption>. Validate by: <method>.
+ * Status: \`unvalidated\` at ship time.`) so the user can scan
+ * plan.md and ship.md side-by-side. Legacy bullets without a KA-N
+ * id are filtered out — the section keys off ids; missing-id rows
+ * are surfaced separately by the plan-critic's `key-assumptions-no-id`
+ * finding class.
+ */
+export function renderUnvalidatedAssumptionsBody(
+  rows: ReadonlyArray<AssumptionRow>
+): string {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return "All key assumptions validated.";
+  }
+  const unvalidated = rows.filter(
+    (row) => row.id !== null && row.status === "unvalidated"
+  );
+  if (unvalidated.length === 0) {
+    return "All key assumptions validated.";
+  }
+  return unvalidated
+    .map((row) => {
+      const method =
+        row.validateMethod.length > 0
+          ? row.validateMethod
+          : "_no method recorded_";
+      return `- **${row.id}** — ${row.assumption}. Validate by: ${method}. Status: \`unvalidated\` at ship time.`;
+    })
+    .join("\n");
+}
+
+/**
+ * Rewrite the `## Unvalidated assumptions` section of `ship.md` so
+ * its body reflects the current assumption-row list.
+ *
+ * Behaviour:
+ *
+ *  - When `ship.md` carries the section, the body between the
+ *    heading and the next `## ` heading (or EOF) is replaced with
+ *    the rendered body from {@link renderUnvalidatedAssumptionsBody}.
+ *  - When the section is missing, it is appended at the end of the
+ *    document with two leading newlines (so the section sits flush
+ *    against whatever preceded it without a gap).
+ *  - Inputs are treated as immutable; the function is pure (no I/O).
+ *
+ * Idempotence: re-running the function with the same row list
+ * produces the same output. Distinct row lists rewrite the section
+ * deterministically — first-call wins is not a concept here because
+ * the section's body is always derived from the supplied rows.
+ */
+export function replaceUnvalidatedAssumptionsSection(
+  shipMd: string,
+  rows: ReadonlyArray<AssumptionRow>
+): string {
+  if (typeof shipMd !== "string") return shipMd;
+  const body = renderUnvalidatedAssumptionsBody(rows);
+  const newSection = `## Unvalidated assumptions\n\n${body}\n`;
+  const SECTION_HEAD_RE = /^##\s+Unvalidated assumptions\s*$/mu;
+  const head = SECTION_HEAD_RE.exec(shipMd);
+  if (head === null) {
+    const trimmed = shipMd.replace(/\n+$/u, "");
+    return `${trimmed}\n\n${newSection}`;
+  }
+  const sectionStart = head.index;
+  const afterHeading = sectionStart + head[0].length;
+  const tail = shipMd.slice(afterHeading);
+  const nextHeading = /\n##\s+/u.exec(tail);
+  if (nextHeading === null) {
+    return `${shipMd.slice(0, sectionStart)}${newSection}`;
+  }
+  const sectionEnd = afterHeading + nextHeading.index;
+  const remainder = shipMd.slice(sectionEnd).replace(/^\n+/u, "\n");
+  return `${shipMd.slice(0, sectionStart)}${newSection}${remainder}`;
+}
+
+/**
+ * Parse a `git log --grep="^verify(AC-"
+ * --pretty=format:"%H%n%B%n---END---"` payload into the
+ * `{ sha, message }[]` shape that {@link collectValidations} expects.
+ *
+ * Pure / total: returns `[]` on empty or non-string input. Tolerant of
+ * CRLF line endings, trailing whitespace inside the per-commit block,
+ * and missing trailing sentinel (the final block lacks the closing
+ * `---END---` when `git log` terminates without a trailing newline —
+ * the parser accepts both shapes).
+ *
+ * The orchestrator wires this on the live path via
+ * `runAssumptionValidatesGitProbe` (see `src/compound.ts`); tests pass
+ * a synthetic payload through {@link CompoundRunOptions.assumptionProbe}.
+ */
+export function parseVerifyCommitLog(
+  raw: string
+): { sha: string; message: string }[] {
+  if (typeof raw !== "string" || raw.length === 0) return [];
+  const normalised = raw.replace(/\r\n/gu, "\n");
+  const out: { sha: string; message: string }[] = [];
+  for (const block of normalised.split(/\n---END---\n?|^---END---\n?/u)) {
+    const trimmed = block.replace(/\n+$/u, "").trim();
+    if (trimmed.length === 0) continue;
+    const lines = trimmed.split("\n");
+    const sha = (lines.shift() ?? "").trim();
+    if (sha.length === 0) continue;
+    const message = lines.join("\n").trim();
+    out.push({ sha, message });
+  }
+  return out;
+}

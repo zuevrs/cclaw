@@ -102,6 +102,36 @@ export interface GateEnvelope {
    */
   walkAssumptionCoverageAxis?: boolean;
   /**
+   * List of high-stakes `KA-N` ids that crossed the ship line
+   * without a closing `validates: KA-N` payload. Stamped by the
+   * orchestrator alongside {@link walkAssumptionCoverageAxis} when
+   * the assumption-coverage gate fires; computed via
+   * {@link unvalidatedHighStakesKaIds} against the post-flip
+   * plan.md (the orchestrator runs the v8.85 flow-state validator
+   * BEFORE composing the reviewer dispatch envelope so the field
+   * reflects the latest row statuses, including any flips landed by
+   * `verify(AC-*): passing` commits in the current build range).
+   *
+   * The list lets the `reviewer-axis-assumption-coverage` companion
+   * skill directly cross-check each id against the build range
+   * without re-parsing plan.md — the skill walks the supplied list
+   * and emits one `KA-N: not validated by any commit despite
+   * high-stakes label` finding per id (severity=`required`,
+   * class=`assumption-unvalidated-high-stakes`). Non-high-stakes
+   * unvalidated rows continue to surface in the ship.md
+   * `## Unvalidated assumptions` section but don't escalate beyond
+   * `consider` severity.
+   *
+   * Optional + back-compat: pre-v8.96 dispatch envelopes lack the
+   * field; readers MUST default to `[]` / absent. An absent field
+   * forces the skill to re-parse plan.md itself (legacy behaviour;
+   * still correct, just slower); a present field is the fast path.
+   * Empty array means "the gate fired but no high-stakes row
+   * remained unvalidated" — the skill then runs Sub-check 4
+   * (ship-handoff structural check) only.
+   */
+  unvalidatedHighStakesKas?: ReadonlyArray<string>;
+  /**
    * v8.86 anti-slop gate. The fourteenth reviewer axis (`anti-slop`)
    * is **default-on**: the orchestrator stamps the flag as `true` on
    * every reviewer dispatch unless the user or a project config
