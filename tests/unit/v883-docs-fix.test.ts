@@ -132,8 +132,8 @@ describe("v8.83 docs drift cleanup + investigator axis fix", () => {
       expect(hasEleven || hasElevenAxis).toBe(true);
     });
 
-    it("README.md contains `27 skills`", () => {
-      expect(README).toContain("27 skills");
+    it("README.md contains `32 skills` (v8.83-token-axes bumped 27 → 32 after lifting the five gated reviewer axes into companion skills)", () => {
+      expect(README).toContain("32 skills");
     });
 
     it("README.md contains `16 runbooks`", () => {

@@ -34,10 +34,10 @@ describe("v8.48 — three new discipline skills registered", () => {
     expect(preEdit!.stages).toEqual(["build"]);
   });
 
-  it("total skill count is governed by COUNTS.skills and stays in the v8.16 cleanup band (widened to 27 at v8.77 to absorb the new investigation-discipline skill)", () => {
+  it("total skill count is governed by COUNTS.skills and stays in the v8.16 cleanup band (widened to 35 in the v8.83-token-axes release to absorb the five new reviewer-axis companion skills)", () => {
     expect(AUTO_TRIGGER_SKILLS.length).toBe(COUNTS.skills);
     expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
-    expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(27);
+    expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(35);
   });
 });
 

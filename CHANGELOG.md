@@ -1,6 +1,19 @@
 # Changelog
 
 
+## 8.87.0 — Token compression: gated reviewer axes (v8.83-token-axes work)
+
+Lift the heavy prose of the five gated reviewer axes out of `reviewer.ts` into per-axis companion skills under `src/content/skills/reviewer-axis-*.md`. The reviewer's prompt retains short 5-line stubs that point at each companion skill; the full rubric + sub-checks + severity matrix + anti-rationalizations only load when the axis's gate fires for the active slug.
+
+- Five new skills registered: `reviewer-axis-qa-evidence`, `reviewer-axis-design-quality`, `reviewer-axis-security`, `reviewer-axis-nfr-compliance`, `reviewer-axis-edit-discipline`. Each carries the full grading rubric + evidence-collection guidance + severity ladder + axis-specific anti-rationalizations lifted from `reviewer.ts` verbatim (anatomy regrouped to satisfy the v8.26 / v8.30 skill anatomy rubric).
+- `buildAutoTriggerBlock(stage, gateEnvelope?)` extended with an optional second parameter (`GateEnvelope`) so a runtime call-site (typically the orchestrator constructing the reviewer dispatch envelope) can filter the rendered block down to only the gated axes whose flags are set. The legacy single-argument call shape is preserved verbatim — module-import-time call-sites (such as the reviewer-prompt template literal) bypass the predicate and continue to see every stage-tagged skill, so an agent reading the un-gated prompt still sees the full reviewer-stage skills index.
+- Reviewer.ts source dropped from ~93k → ~69k chars (~6k tokens reduction, roughly 25% of the prompt). No capability loss: every rubric / sub-check / severity rule still exists, just lazily-loaded from the companion skill when the axis's gate fires.
+- AUTO_TRIGGER_SKILLS grows 27 → 32; tests' skill-count band widened to [15, 35] to absorb the additive skills.
+- README's "Auto-trigger skills" row + `src/content/skills/` count updated to 32. CHANGELOG carries this entry.
+
+Slug: `feat/v8.83-token-axes`. Rebased on the v8.86.0 docs-fix slug; ships at 8.87.0 to follow the Wave 1 patch lane.
+
+
 ## 8.86.0 — Docs drift cleanup + investigator axis fix (v8.83-docs-fix work)
 
 ### Why
