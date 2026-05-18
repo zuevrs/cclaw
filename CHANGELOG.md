@@ -1,6 +1,56 @@
 # Changelog
 
 
+## 8.88.0 — Token compression: orchestrator runbook duplicates (v8.83-token-runbooks work)
+
+### Why
+
+`src/content/start-command.ts` was inlining the BODIES of several runbooks even though `src/content/runbooks-on-demand.ts` could carry them as canonical on-demand procedures. The orchestrator prompt is the most context-expensive surface in the harness — every \`/cc\` invocation pays the start-command body in full — so duplicating runbook prose inside it is the most leveraged source of avoidable token spend. Pre-v8.83 the rendered body was 141,769 chars (~39.4k tokens on chars/3.6). Four sections in particular carried ≥5-10 paragraphs of procedure that ALSO appeared (or should have appeared) verbatim in a runbook the orchestrator already loads on demand: the Detect /cc-invocation matrix (10-row markdown table), the Phase 1.5 Approaches Gate procedure (six numbered steps + four sub-cases + worked example), the v8.79 One-way Door Gate state machine + structured-ask payload, and the v8.77 Debug-branch routing matrix table + cap-stop status block + flow-state-patches list.
+
+### What changed
+
+**Deliverable 1 — Three new on-demand runbooks (`src/content/runbooks-on-demand.ts`).**
+
+- `runbooks/detect-matrix.md` (7,168 chars / ~1,991 tok) — the full /cc invocation matrix (every invocation × every active-flow shape), the research-state-gated sub-commands (`/cc research go` v8.78; `/cc research revise` / `push-back` / `accept` v8.71), plain-prose error templates, worked examples, the immutable-triage / restored-last-specialist-context resume rules, the v8.61 `runMode` retirement note, and an anti-rationalization table. Mirrors the matrix lived previously in `skills/flow-resume.md`; the runbook is the canonical-contract surface that the orchestrator now points to from a short summary in start-command.
+- `runbooks/approaches-gate.md` (6,718 chars / ~1,866 tok) — the canonical Phase 1.5 procedure: why the gate exists, what a framing IS (vs conclusions / implementation candidates), worked example for "add caching to the search endpoint" (three framings), the six-step procedure (distil → stamp `flow-state.json > approaches` as `ResearchApproach[]` → surface → wait for pick → stamp `selectedApproaches` → dispatch Phase 2 with `Framing:` field), the four sub-cases (single-obvious-framing + stress-test variant, ad-hoc pick, cancel, mid-research re-framing via v8.71 push-back), the Phase 2 envelope shape, and an anti-rationalization table (silent-pick / collapse / orchestrator-knows-best traps).
+- `runbooks/one-way-door-gate.md` (9,500 chars / ~2,639 tok) — the canonical v8.79 state machine: why the gate exists (User Sovereignty principle from the v8.74 ethos preamble; complementary to the v8.74 cross-model critic), the lite-ceremony exemption, all three `oneWayDoorConfirmation` flow-state transitions (architect-complete → awaiting-one-way-confirmation; awaiting-one-way-confirmation → plan-critic on `confirm`; awaiting-one-way-confirmation → architect-revision on `edit` / aborted on `cancel`), the structured-ask payload (verbatim text + `<count>` / `Rationale:` semantics), user-pick handling (typo / free-text fallback to `edit`), downstream persistence semantics, and an anti-rationalization table.
+
+**Deliverable 2 — Trimmed sections in `src/content/start-command.ts`.**
+
+- **Detect — `/cc` invocation matrix (v8.61)** — the inlined 10-row markdown table + ~200 lines of error-template prose + worked examples retired in favour of a four-bullet summary of the canonical command shapes + a pointer to `.cclaw/lib/runbooks/detect-matrix.md` (mirrored in `skills/flow-resume.md`).
+- **Phase 1.5 — approaches gate (v8.76)** — the inlined six-step procedure, four sub-cases, and worked example collapsed to a single-paragraph summary + a pointer to `.cclaw/lib/runbooks/approaches-gate.md`. The orchestrator body still carries the worked-example anchor (caching as infra / search-quality / governance) so the upstream `v876-research-design-approaches.test.ts` keyword pins still hold.
+- **Debug-branch routing (v8.77; triage.taskShape == "debug")** — the routing-matrix table (`| direct-fix | needs-plan | more-investigation | not-a-bug |`), the verbatim "Investigator cap reached" code-fenced status block, the dedicated `### flow-state.json patches (v8.77)` heading, and the envelope-mutations table all collapsed to bullet-list summaries + a §5 pointer back to `.cclaw/lib/runbooks/debug-branch.md`.
+- **One-way Door Gate (v8.79)** — the gate-purpose / cross-model-critic comparison prose trimmed; the structured-ask payload kept verbatim (regression-pinned by `v879-one-way-door-gate.test.ts`); closing prose collapsed to a one-line pointer to `.cclaw/lib/runbooks/one-way-door-gate.md`.
+
+**Deliverable 3 — Tests (`tests/unit/v883-token-runbooks.test.ts`).**
+
+- AC-1 — each of the three new runbooks is registered with the expected `id` / `fileName` and a ≥2k-char body; the runbook index section surfaces each `fileName`.
+- AC-2 — start-command body references each lifted runbook by file name (`detect-matrix.md`, `approaches-gate.md`, `one-way-door-gate.md`, `debug-branch.md`).
+- AC-3 / AC-4 / AC-5 — each new runbook covers its canonical surface (detect-matrix: full dispatch matrix + v8.78/v8.71 sub-commands + v8.61 retirement; approaches-gate: 2-3 framing cap + picker grammar + `flow-state.json` stamping + obra-superpowers / addyosmani anchors; one-way-door-gate: three structured-ask options + scan trigger + three flow-state transitions + User Sovereignty + lite-ceremony exemption).
+- AC-6 — start-command body NO LONGER inlines the long lifted phrases (numbered Approaches Gate procedure, four sub-cases lead, Debug-branch routing-matrix table row, Debug-branch cap-stop code fence, `### flow-state.json patches (v8.77)` heading, 10-row /cc invocation matrix table row).
+- AC-7 — start-command body char count reduced from the v8.82 baseline (141,769) by ≥3% (concrete threshold pinned to the measured saving). The slug originally proposed ≥30% but allowed "set a concrete threshold based on measurement"; the four lifted sections are surrounded by canonical-contract test pins (v8.61 / v8.76 / v8.77 / v8.79 / v8.81) that cap how much further the bodies can shrink without breaking unrelated tests.
+
+**Deliverable 4 — Updated soft ceilings (`tests/unit/v822-orchestrator-slim.test.ts`, `tests/unit/v854-consolidation-pass.test.ts`).**
+
+- `v822-orchestrator-slim.test.ts` — expected runbook files list grows by three (`detect-matrix.md`, `approaches-gate.md`, `one-way-door-gate.md`); combined body + on-demand runbooks soft ceiling raised from 295k → 320k to absorb the extracted bodies (net rendered body shrinks; net codebase grows since the runbooks load lazily but live in source).
+- `v854-consolidation-pass.test.ts` — `ON_DEMAND_RUNBOOKS.length` upper ceiling raised from 18 → 21 (three new runbooks).
+
+### Token savings
+
+- `start-command` rendered body: 141,769 → 134,844 chars (saved 6,925 chars, ~1.93k tok; 4.89%).
+- `start-command` source file: 135,621 → 128,923 chars.
+- New runbooks contribute 23,386 chars / ~6,496 tok of lazy-loaded content (loaded only when the orchestrator references them, never on every \`/cc\` invocation).
+- Net effect: ~1.9k tokens off every \`/cc\` invocation; ~6.5k tokens of runbook prose now lazy. The gap from the ambitious 8-10k target reflects the canonical-contract test pins around the surrounding prose; further compression requires reconciling those pins, which is a separate task.
+
+### Behavioral
+
+No behavioral change. Every lifted procedure runs through the SAME state machine + slim-summary contract + structured-ask payload it ran through before. The orchestrator body continues to mention every contract anchor by keyword; the bulk of the procedural prose now lives in the on-demand runbook surface that loads lazily when the orchestrator references it.
+
+### Migration
+
+None. v8.83 is purely a prompt-internals refactor; consumers (other specialists, the harness, `flow-state.json`) are untouched.
+
+
 ## 8.87.0 — Token compression: gated reviewer axes (v8.83-token-axes work)
 
 Lift the heavy prose of the five gated reviewer axes out of `reviewer.ts` into per-axis companion skills under `src/content/skills/reviewer-axis-*.md`. The reviewer's prompt retains short 5-line stubs that point at each companion skill; the full rubric + sub-checks + severity matrix + anti-rationalizations only load when the axis's gate fires for the active slug.

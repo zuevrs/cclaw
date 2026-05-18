@@ -1544,6 +1544,252 @@ When a legacy flow that was originally a bug-shaped task resumes under v8.77, th
 | "Investigator's verdict was \`not-a-bug\` but the user clearly thinks it IS a bug — let me dispatch architect anyway." | NO. \`not-a-bug\` requires cited spec / docs / test evidence in the investigator's recommendation paragraph. Surface that evidence to the user verbatim; if the user disagrees, they re-invoke \`/cc\` with a clarified task and the new flow's triage re-classifies. Don't ovoverride the investigator's evidence-backed verdict from the orchestrator. |
 `;
 
+const DETECT_MATRIX = `# On-demand runbook — Detect \`/cc\` invocation matrix (v8.61+)
+
+The orchestrator opens this runbook on every \`/cc\` / \`/cc <task>\` / \`/cc-cancel\` invocation BEFORE deciding to dispatch. The matrix is the canonical contract; the orchestrator body keeps a short summary pointer (see \`Detect — \`/cc\` invocation matrix (v8.61)\` section in start-command). The matrix is also mirrored verbatim in \`.cclaw/lib/skills/flow-resume.md\` so harness-level resume tooling and the orchestrator's prompt share one source of truth.
+
+## §1 — Active flow detection
+
+Read \`.cclaw/state/flow-state.json\`. A flow is **active** when \`currentSlug != null\`. The finalize step resets \`currentSlug\` to \`null\` after moving artifacts to \`flows/shipped/<slug>/\`; a project that just shipped is back to no-active-flow. Missing / unparseable state initialises empty (treat as fresh / no active flow). Pre-v8 schema versions hard-stop with the migration prompt (see start-command's \`## Detect\` table).
+
+## §2 — Full dispatch matrix (every invocation × every active-flow shape)
+
+| Invocation | Active flow? | Behaviour |
+| --- | --- | --- |
+| \`/cc\` (no args) | yes | **Continue silently.** Jump back into the saved \`currentStage\`, dispatch the next specialist (or chain the next auto-step). No picker, no resume summary. The user sees the next slim summary directly. |
+| \`/cc\` (no args) | no | Error in plain prose, in the user's language: \`No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug> <task>.\` End the turn. |
+| \`/cc <task>\` | yes | Error in plain prose, in the user's language: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` End the turn. Do NOT auto-cancel or queue the new task. |
+| \`/cc <task>\` | no | **Start a new flow.** Run the Detect git-check, extend-mode fork, research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent. |
+| \`/cc research <topic>\` | yes | Error (same shape as \`/cc <task>\` + active flow). End the turn. |
+| \`/cc research <topic>\` | no | Start a research-mode flow (see \`runbooks/research-depth-and-self-review.md\`). |
+| \`/cc research go\` (v8.78) | yes (research-mode + \`researchState == "discovery"\`) | Force-exit Phase 1 discovery dialogue (identical to in-prose "ready" signal). Outside that state — error: \`'/cc research go' only fires during research-mode Phase 1 discovery.\` End the turn. |
+| \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (v8.71) | yes (research-mode + \`researchState == "awaiting-user-review"\`) | Route to the matching sub-handler per \`runbooks/research-revision.md\` §2 / §3 / §4. Outside that state — error: \`research revision sub-commands only fire on a research flow at the awaiting-user-review gate.\` End the turn. |
+| \`/cc extend <slug> <task>\` | yes | Error (same shape). End the turn. |
+| \`/cc extend <slug> <task>\` | no | Start an extend-mode flow (see \`runbooks/extend-mode.md\`). |
+| \`/cc-cancel\` | yes | Run the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state). See \`commands/cc-cancel.md\`. |
+| \`/cc-cancel\` | no | Error: \`No active flow to cancel.\` End the turn. |
+
+## §3 — Plain-prose errors
+
+Every error row above is **plain prose, in the user's language**. NOT a structured ask; NO option list; NO \`[y/n]\` picker. The user re-invokes \`/cc\` or \`/cc-cancel\` from their command palette to recover. \`<slug>\`, \`<stage>\`, and command tokens (e.g. \`/cc\`, \`/cc-cancel\`) stay English (wire protocol); the surrounding sentence renders in the user's language. Resume picker prose (\`[r] resume / [s] save / [n] new\`) is gone — v8.61 retired it.
+
+## §4 — The \`/cc\` continue path is silent
+
+When \`/cc\` (no args) lands on an active flow, the orchestrator continues silently — no announcement, no slim-summary regen, no "Resuming \`<slug>\`…" line. The user sees the next specialist's slim summary (or the chained stage's output) directly. If they want context they can read \`.cclaw/flows/<slug>/.continue-here.md\` directly, or read the most recent stage's artifact under \`.cclaw/flows/<slug>/\`.
+
+## §5 — Worked examples (render in user's language; tokens stay English)
+
+**Bare-resume on active flow:**
+
+\`\`\`text
+> /cc
+
+[orchestrator silently continues the active flow; next slim summary appears here]
+\`\`\`
+
+**Active-flow conflict on a new \`/cc <task>\`:**
+
+\`\`\`text
+> /cc add a new feature
+
+Active flow: 20260515-auth-cleanup (stage: review). Continue with /cc. Cancel with /cc-cancel.
+\`\`\`
+
+**No-active-flow start prompt:**
+
+\`\`\`text
+> /cc
+
+No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug> <task>.
+\`\`\`
+
+## §6 — Resume rules (immutable triage, restored last-specialist context)
+
+1. **Triage is fully immutable.** A resumed flow keeps its \`ceremonyMode\`, \`complexity\`, \`path\`, \`runMode\`, and \`mode\`. The user does not re-pick. To change any, the answer is \`/cc-cancel\` and start fresh.
+2. **Last-specialist context restored** by reading \`flows/<slug>/<stage>.md\`. The orchestrator does not summarise from memory.
+3. **Time gate.** If \`flow-state.json > startedAt\` is >7 days ago, surface a one-line warning ("flow is stale — verify scope still applies") on the next chained stage's slim summary; never block resume.
+4. **Sub-agent dispatch resumes from the same stage.** A build paused mid-RED for AC-3 resumes by dispatching builder for AC-3, not by restarting AC-1.
+5. **Resume after stop-and-report.** \`/cc\` continues from saved \`currentStage\`. For build-failure / reviewer-fix stops, the auto-fix iteration counter is **preserved**.
+
+## §7 — \`runMode\` mid-flight toggle (v8.61 retirement)
+
+The v8.34 \`/cc --mode=auto\` / \`--mode=step\` toggle is preserved on the parser surface for back-compat (so harness namespace routers that forward the flag don't error), but v8.61 collapsed both values to \`auto\`. \`--mode=step\` emits a one-line \`step-mode retired in v8.61; flow runs auto\` note and otherwise behaves as if the flag were absent. The toggle does not consume task text — \`/cc --mode=auto refactor the auth module\` is still parsed as \`/cc refactor the auth module\`.
+
+## §8 — Anti-rationalization
+
+| excuse | reality |
+| --- | --- |
+| "User typed \`/cc <task>\` mid-flight — auto-cancel the active flow and start fresh." | NO. Matrix Row 3 errors and ends the turn; \`/cc-cancel\` is a separate explicit user-typed command. Never pick for them. |
+| "User typed a bare \`/cc\` on a fresh project — surface the start options as a structured picker." | NO. Matrix Row 2 errors in plain prose. The user types \`/cc <task>\` / \`/cc research <topic>\` / \`/cc extend <slug> <task>\` from their command palette. |
+| "Active flow has a stop-and-report block from the last turn — surface a \`Continue or cancel?\` picker on the next \`/cc\`." | NO. \`/cc\` continues silently per Row 1. The stop-and-report block already named \`/cc\` (continue) and \`/cc-cancel\` (discard) in plain prose; the user typed \`/cc\` because they chose continue. |
+| "Schema version is one behind — auto-migrate and continue." | YES if \`schemaVersion >= 2\` (the validator does the migrate on read; matrix Row "\`schemaVersion\` < 3" applies). NO if \`schemaVersion < 2\` (pre-v8) — hard-stop with the migration prompt; do not auto-delete state. |
+`;
+
+const APPROACHES_GATE = `# On-demand runbook — Approaches Gate (research Phase 1.5; v8.76+)
+
+The orchestrator opens this runbook on every transition from Phase 1 distillation exit to Phase 2 lens dispatch. The Approaches Gate is the canonical procedure; the orchestrator body keeps a short summary pointer (see \`#### Phase 1.5 — approaches gate\` section in start-command).
+
+## §1 — Why the gate exists
+
+Without the gate, lenses dispatch against an implicit single framing — whatever the orchestrator settled on during Phase 1 dialogue distillation — and downstream findings inherit that framing's blind spots. The Approaches Gate forces 2-3 candidate framings up front so the user can pick the framing(s) the lenses should carry in their dispatch envelopes.
+
+Reference patterns:
+
+- **obra-superpowers brainstorming Phase 2-3** ("2-3 approach options before committing").
+- **addyosmani \`idea-refine\` Phase 1.3** Cluster + Stress-test discipline.
+- **everyinc-compound ce-brainstorm Phase 2.5** confirmation gate.
+
+## §2 — What a framing is
+
+A framing is a DIFFERENT framing of the same research question — NOT 2-3 conclusions, NOT 2-3 implementation candidates (those are scoped to the engineer / product lens output). Each framing changes WHICH dimensions every lens emphasises.
+
+Worked example for the topic **"add caching to the search endpoint"**:
+
+- **framing A — Caching as infra primitive.** The question is which substrate (Redis / in-memory / HTTP cache). Engineer lens leans hardest, architecture lens covers infrastructure coupling, product / skeptic / history lenses are secondary.
+- **framing B — Caching as search-quality lever.** The question is what we cache, how invalidation works, when to bust. Product + engineer split the load, skeptic centres on stale-data abuse cases.
+- **framing C — Caching as organizational gate.** The question is ownership / on-call / who pages when the cache goes stale. Product + history + skeptic lead, engineer / architecture are secondary.
+
+Each framing routes the lens dispatch differently even though the topic text is identical.
+
+## §3 — Procedure
+
+1. **Distil 2-3 framings** from the dialogue summary. Each framing carries:
+   - \`id\` — short stable identifier (single letter \`A\` / \`B\` / \`C\` when no semantic shortname is obvious; otherwise kebab-case slug like \`infra-primitive\` / \`search-quality\` / \`governance\`).
+   - \`title\` — 4-8 words.
+   - \`summary\` — one paragraph (what question this framing makes load-bearing, what gets de-emphasised, which downstream lens dispatches see the biggest shape change).
+2. **Stamp \`flow-state.json > approaches\`** as a \`ResearchApproach[]\` array (type lives in \`src/types.ts\`). Stamp \`flow-state.json > researchState: "approaches-gate"\` (transient sub-state of Phase 1; the canonical \`lens-dispatch\` lifecycle marker fires after the gate clears).
+3. **Surface the framings** to the user in plain prose, in the user's language. Render each as a bulleted block with its id, title, and summary. End with the picker prompt:
+   \`Pick one (e.g. "A" / "B") or accept "all" (every framing flows to every lens — the default).\`
+4. **Wait for the user's pick.** Accept any of:
+   - one or more single-letter ids (\`A\`, \`A B\`, \`A,B\`);
+   - a slug match against \`title\` (case-insensitive substring);
+   - \`all\` / \`every\` / \`every framing\` / \`default\` (selects every index — the canonical "all" surface) — also the default when the user says \`go\` / \`proceed\` without naming framings (the gate is non-coercive; the silent default is "all", not "stop").
+5. **Stamp \`flow-state.json > selectedApproaches\`** as the zero-based indices into \`approaches[]\` that the user selected (or every index, for "all").
+6. **Dispatch Phase 2** with the selected framings carried in every lens envelope under the new \`Framing:\` field (string array; one entry per selected framing as \`<framing-title> — <framing-summary>\`). Lens prompts are pinned to accept a \`framing: string[]\` envelope field; the lenses grade their findings against the selected framings rather than the implicit "any framing".
+
+## §4 — Sub-cases
+
+- **Only one obvious framing emerges from the dialogue** — surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"). The user can pick the variant, accept "all" (both flow), or accept "A" (single). Never fewer than 2 framings; never more than 3.
+- **User picks a framing not on the list** — accept verbatim as a new ad-hoc framing (no validation against the surfaced set), append it as the next-index entry in \`approaches[]\`, stamp \`selectedApproaches\` to point at it, proceed.
+- **User explicitly cancels** ("stop", "never mind", "/cc-cancel") — run the cancel runtime (move the empty \`research.md\` to \`cancelled/<slug>/\`, reset state) and end the turn.
+- **User wants to revise framings mid-research** — use the existing v8.71 \`/cc research push-back <framing>\` machinery (push-back targets a claim; framings ARE claims about the research question). The push-back path treats the cited framing as the area to re-dispatch lenses against; the original \`approaches\` array is NEVER mutated (immutable for audit).
+
+## §5 — Phase 2 envelope shape
+
+The selected framings flow into Phase 2 as the \`Framing:\` field on every lens envelope:
+
+\`\`\`text
+Dispatch <lens-id>
+─ Slug: <research-slug>
+─ Topic: <stripped task text>
+─ Dialogue summary: <5-15 bullets from Phase 1>
+─ Framing: ["<title-A> — <summary-A>", "<title-C> — <summary-C>"]  # the selected framings
+─ ...
+\`\`\`
+
+Lens prompts read \`Framing:\` as authoritative scope guidance. Findings are graded against the selected framings rather than the implicit "any framing".
+
+## §6 — Anti-rationalization
+
+| excuse | reality |
+| --- | --- |
+| "Topic is narrow — the orchestrator can pick one framing silently and skip the gate." | NO. The gate is non-coercive but mandatory. Narrow topics typically yield 2 framings + a stress-test variant; the variant exists precisely so narrow framings don't blind-spot. |
+| "User said 'proceed' without picking — assume framing A (the first one)." | NO. The silent default is "all", not "first". \`go\` / \`proceed\` / \`run\` without a named pick selects every index. |
+| "User picked an ad-hoc framing that contradicts the surfaced set — push back and ask for a refined pick." | NO. Accept verbatim and append as the next-index entry. User Sovereignty — the gate is the user's surface, not the orchestrator's. |
+| "All three framings look the same — collapse to one and proceed." | NO. If 2-3 framings really collapse to one, the dialogue summary is too thin; loop one more Phase 1 round to surface the implicit dimensions, OR surface 2 framings + a stress-test variant ("framing B: what would be true if framing A were wrong?"). |
+`;
+
+const ONE_WAY_DOOR_GATE = `# On-demand runbook — One-way Door Gate (v8.79+)
+
+The orchestrator opens this runbook on every architect slim-summary return when \`Recommended next: awaiting-one-way-confirmation\` fires, AND on every \`/cc\` invocation that lands on \`flow-state.json > oneWayDoorConfirmation\` with \`userChoice\` absent. The runbook is the canonical procedure; the orchestrator body keeps a short summary pointer (see \`#### One-way Door Gate\` section in start-command).
+
+## §1 — Why the gate exists
+
+The v8.74 ethos preamble names **User Sovereignty** as one of the five cross-cutting cclaw principles: irreversible decisions deserve explicit confirmation before build burns context. The architect's \`## Decisions\` table (strict mode) records each D-N's \`Reversibility:\` field — \`two-way\` (cheap to revert), \`mostly-two-way\` (revertible with effort), or \`one-way\` (irreversible at production scale). \`one-way\` D-Ns are the only kind that warrant a user-pause; two-way / mostly-two-way decisions trust the cheap-revert affordance.
+
+The pause is the user-facing analogue of the v8.74 cross-model critic, which ALSO fires on the same \`Reversibility: one-way\` signal — but the cross-model critic runs AFTER the build to give a second adversarial opinion on whether the build delivered on the irreversible commits. The two surfaces are complementary:
+
+- v8.79 One-way Door Gate fires BEFORE the build → "do you, the user, accept these irreversible commits as plan-level decisions?"
+- v8.74 cross-model critic fires AFTER the build → "given the user accepted, does a second model agree the build delivers on those decisions?"
+
+Neither replaces the other; both run when both gates fire.
+
+## §2 — Gate scan
+
+After the architect's slim summary returns (with \`Recommended next: awaiting-one-way-confirmation\` if the gate fires, or any other value otherwise) AND before plan-critic / plan-design / plan-devex / builder dispatch:
+
+1. Read \`.cclaw/flows/<slug>/plan.md\`.
+2. Scan for any \`## Decisions\` D-N row marked \`Reversibility: one-way\` (literal substring match against the rendered plan.md).
+3. On ≥1 hit, the gate fires. On 0 hits, the always-auto chain continues to plan-critic (or builder when plan-critic's gate is off) — same shape as a strict plan with only two-way decisions. The gate is non-coercive: 0 hits = silent pass-through.
+
+## §3 — Structural skip on lite-ceremony
+
+On \`triage.ceremonyMode == "inline"\` the gate is structurally skipped — the path is just \`["build"]\`, no plan stage runs, no \`## Decisions\` table to scan. The \`Reversibility\` field machinery itself stays on the type for any future strict-mode flow that resumes from a stopped inline flow; the gate just never fires for lite-ceremony work because there is no irreversible-commit signal to gate on.
+
+Soft ceremony writes \`plan.md\` without a Decisions section by default; the gate's scan returns 0 hits and the always-auto chain continues without pausing (same shape as strict-with-only-two-way-decisions).
+
+## §4 — Flow-state transitions
+
+The gate drives three transitions on \`flow-state.json > oneWayDoorConfirmation\` (\`{ decisionIds: string[]; userChoice?: "confirm" | "edit" | "cancel"; confirmedAt?: string }\`):
+
+1. **\`architect-complete\` → \`awaiting-one-way-confirmation\`.** When the architect's slim summary returns \`Recommended next: awaiting-one-way-confirmation\` (architect's signal that the plan contains ≥1 one-way D-N), the orchestrator stamps \`oneWayDoorConfirmation: { decisionIds: ["D-N", "D-M", ...] }\` (with \`userChoice\` absent — the canonical "awaiting user" signal) and surfaces the structured ask. The orchestrator's turn ends here; control returns to the user.
+2. **\`awaiting-one-way-confirmation\` → \`plan-critic\` (or \`builder\` when plan-critic's gate is off).** On \`confirm\`, the orchestrator stamps \`userChoice: "confirm"\` + \`confirmedAt: <iso-now>\`, then proceeds to plan-critic dispatch (or builder, per the existing v8.51 plan-critic gate). The user-confirmed flag persists for the rest of the flow's lifetime; downstream specialists may read it as "the user explicitly accepted the irreversible commits".
+3. **\`awaiting-one-way-confirmation\` → \`architect-revision\` (on \`edit\`) OR \`aborted\` (on \`cancel\`).** On \`edit\`, the orchestrator stamps \`userChoice: "edit"\` and surfaces a stop-and-report status block asking the user to edit \`plan.md\` (typically to soften a one-way classification to mostly-two-way or split the decision into two D-Ns) and re-invoke \`/cc\` once done — the next \`/cc\` re-reads plan.md and re-runs the gate scan. On \`cancel\`, the orchestrator stamps \`userChoice: "cancel"\` and routes to \`/cc-cancel\` (move artifacts to \`cancelled/<slug>/\`, reset state).
+
+## §5 — Structured ask payload
+
+Render verbatim (mechanical tokens English; surrounding prose in the user's language):
+
+\`\`\`text
+## One-way door detected
+The architect committed to <count> irreversible decision(s):
+- **D-N: <title>** — Reversibility: one-way
+  Rationale: <D-N rationale, one-sentence verbatim copy from plan.md>
+- **D-M: <title>** — Reversibility: one-way
+  Rationale: <D-M rationale>
+... (one bullet per one-way D-N)
+
+User Sovereignty principle: irreversible decisions deserve explicit confirmation before build burns context.
+
+Choose: confirm | edit | cancel
+\`\`\`
+
+- \`<count>\` is the integer count of one-way D-Ns the scan found.
+- The bullet list iterates over EVERY one-way D-N in plan order (D-1, D-2, ...) — the orchestrator does not deduplicate, summarise, or drop entries; the user sees the full irreversible-commit set.
+- The \`Rationale:\` line is a one-sentence verbatim copy of the \`Rationale:\` field from the same D-N in \`plan.md\` (per the v8.74 D-N template). When the architect wrote a multi-sentence rationale, truncate at the first sentence and append \`...\` so the ask stays compact (the user can read the full rationale in plan.md if they want detail).
+
+The final \`Choose:\` line is the structured ask. Use the harness's \`AskUserQuestion\` surface (Cursor's structured ask / Claude's TUI input) when available; fall back to the prose ask shape when the harness has no structured-ask primitive.
+
+**Three options only — no fourth "accept-warns-and-ship" / "skip-gate" arm.** The cclaw discipline is "every irreversible commit deserves explicit confirmation"; adding a silent-accept escape hatch would defeat the gate's User Sovereignty contract.
+
+## §6 — User pick handling
+
+| User pick | Behaviour |
+| --- | --- |
+| \`confirm\` (or harness-equivalent click) | Stamp \`userChoice: "confirm"\` + \`confirmedAt: <iso-now>\`. Proceed to plan-critic (or builder when plan-critic's gate is off). |
+| \`edit\` | Stamp \`userChoice: "edit"\`. Surface stop-and-report status block: \`Stopped at plan. Reason: User chose to edit plan.md before confirming one-way decisions. To continue: edit plan.md and run /cc. To discard: /cc-cancel.\` End the turn. Next \`/cc\` re-reads plan.md, re-runs the gate scan (typically fewer one-way D-Ns now — or none, if the user softened the classification). |
+| \`cancel\` | Stamp \`userChoice: "cancel"\`. Route to \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state). |
+| anything else (typo / free-text) | Treat as \`edit\` — stop-and-report with a one-line note ("Did not recognise your pick. Treating as edit; the gate re-fires on the next /cc."). The fallback is intentional User Sovereignty: ambiguous picks default to "user wants to think". |
+
+## §7 — Downstream persistence
+
+The \`oneWayDoorConfirmation\` field persists for the rest of the flow's lifetime once \`userChoice\` is set. Downstream specialists MAY read it:
+
+- **plan-critic / plan-design / plan-devex** — no-op; the gate fires BEFORE these specialists dispatch.
+- **builder** — may surface a one-line note in \`build.md\` frontmatter (\`oneWayConfirmedAt: <iso>\`) for the v8.74 cross-model critic to cross-reference.
+- **reviewer / critic** — cross-check builder's \`build.md\` against the cited one-way D-Ns; flag findings if the build silently deviated from a confirmed irreversible commit.
+- **v8.74 cross-model critic** — explicitly reads \`oneWayDoorConfirmation\` as input ("the user accepted these decisions on <confirmedAt>; do they still hold?").
+
+## §8 — Anti-rationalization
+
+| excuse | reality |
+| --- | --- |
+| "Soft mode plan has no Decisions section — the gate must fire anyway because the user might have implicit irreversible commits." | NO. Soft mode doesn't write \`## Decisions\`; the scan returns 0 hits; the gate is silently bypassed. Implicit irreversible commits are the architect's job to surface during Frame / Spec, not the orchestrator's to infer. |
+| "User explicitly typed \`/cc skip-gate\` — they obviously want to skip the gate." | NO. There is no \`skip-gate\` sub-command. The matrix has three picks (\`confirm\` / \`edit\` / \`cancel\`); any other input falls back to \`edit\`. User Sovereignty does not include a silent-accept hatch. |
+| "All one-way D-Ns are clearly the right call — the orchestrator can pre-confirm and skip the ask to save a turn." | NO. The architect's \`Reversibility: one-way\` tag IS the signal that the user must acknowledge before build burns context. Pre-confirming defeats the gate. |
+| "Architect's slim summary said \`Recommended next: continue\` but the scan found a one-way D-N — trust the slim summary and skip the gate." | NO. The scan is the source of truth (plan-critic §A guarantees the field is present on every D-N in strict mode). When the slim summary and the scan disagree, the scan wins — and surface the inconsistency as an architect finding for the next iteration. |
+`;
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -1640,6 +1886,24 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "debug-branch.md",
     title: "Debug-branch routing (v8.77+ — investigator hop + verdict matrix)",
     body: DEBUG_BRANCH
+  },
+  {
+    id: "detect-matrix",
+    fileName: "detect-matrix.md",
+    title: "Detect /cc invocation matrix (v8.61+)",
+    body: DETECT_MATRIX
+  },
+  {
+    id: "approaches-gate",
+    fileName: "approaches-gate.md",
+    title: "Approaches Gate (research Phase 1.5; v8.76+)",
+    body: APPROACHES_GATE
+  },
+  {
+    id: "one-way-door-gate",
+    fileName: "one-way-door-gate.md",
+    title: "One-way Door Gate (v8.79+)",
+    body: ONE_WAY_DOOR_GATE
   }
 ];
 

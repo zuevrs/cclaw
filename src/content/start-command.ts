@@ -146,22 +146,16 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 ### Detect — \`/cc\` invocation matrix (v8.61)
 
-Legacy "resume picker" prose retired. \`/cc\` invocations resolve through a deterministic dispatch matrix; the orchestrator never asks "resume or start?".
+Legacy "resume picker" prose retired. \`/cc\` invocations resolve through a **deterministic dispatch matrix**; the orchestrator never asks "resume or start?". The four canonical shapes:
 
-| Invocation | Active flow? | Behaviour |
-| --- | --- | --- |
-| \`/cc\` (no args) | yes | **Continue silently.** Jump back into the saved \`currentStage\`, dispatch the next specialist (or chain the next auto-step). No picker, no resume summary. |
-| \`/cc\` (no args) | no | Error: \`No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug> <task>.\` End the turn. |
-| \`/cc <task>\` | yes | Error: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` End the turn. Do NOT auto-cancel or queue. |
-| \`/cc <task>\` | no | **Start a new flow.** Run the Detect git-check, extend-mode fork, research-mode fork in that order; if neither fires, dispatch the \`triage\` sub-agent. |
-| \`/cc research <topic>\` | yes / no | Error / start (same shape; see "Detect — research-mode fork"). |
-| \`/cc research go\` (v8.78) | yes (research-mode + \`researchState == "discovery"\`) | Force-exit the Phase 1 discovery dialogue (iterative-clarify per-dimension scoring). Treated identically to the in-prose "ready" signal: stop asking questions, distil the dialogue summary, proceed to Phase 1.5 Approaches Gate. Outside research-mode discovery state — error: \`'/cc research go' only fires during research-mode Phase 1 discovery.\` End the turn. |
-| \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (v8.71) | yes (research-mode + \`researchState == "awaiting-user-review"\`) | Route to the matching revision sub-command per \`runbooks/research-revision.md\` §2 / §3 / §4. Outside that state — error: \`research revision sub-commands only fire on a research flow at the awaiting-user-review gate.\` End the turn. |
-| \`/cc extend <slug> <task>\` | yes / no | Error / start (same shape; see "Detect — extend-mode fork"). |
-| \`/cc-cancel\` | yes | Run the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state). See \`commands/cc-cancel.md\`. |
-| \`/cc-cancel\` | no | Error: \`No active flow to cancel.\` End the turn. |
+- \`/cc\` (no args) + active flow → **Continue silently** from the saved \`currentStage\`; no picker, no resume summary. The user sees the next specialist's slim summary directly.
+- \`/cc\` (no args) + no active flow → Error: \`No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug> <task>.\` End the turn.
+- \`/cc <task>\` + active flow → Error: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` Do NOT auto-cancel or queue. \`/cc research <topic>\` and \`/cc extend <slug> <task>\` follow the same active-flow / no-active-flow shape — error on active flow, start the respective forked flow otherwise.
+- \`/cc <task>\` + no active flow → **Start a new flow** (run Detect git-check, extend-mode fork, research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent). \`/cc-cancel\` errors symmetrically when there is no active flow (\`No active flow to cancel.\`); on an active flow it runs the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state).
 
-Errors are **plain prose, in the user's language**. Not structured asks; no option list, no "[y/n]" picker. User re-invokes \`/cc\` or \`/cc-cancel\` to recover. \`<slug>\`, \`<stage>\`, and command tokens stay English (wire protocol); the surrounding sentence renders in the user's language. The \`/cc\` continue path is **silent** — the user sees the next specialist's slim summary directly. Full matrix mechanics + worked examples in \`skills/flow-resume.md\`.
+The research-mode sub-commands route through their state-gated sub-handlers — \`/cc research go\` (v8.78 force-exit Phase 1 discovery; identical to the in-prose "ready" signal), \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (v8.71; routed per \`runbooks/research-revision.md\` §2 / §3 / §4). Out-of-state invocations error in plain prose and end the turn.
+
+Errors are **plain prose, in the user's language** (not structured asks; no option list, no \`[y/n]\` picker). User re-invokes \`/cc\` or \`/cc-cancel\` to recover. \`<slug>\`, \`<stage>\`, and command tokens stay English (wire protocol); the surrounding sentence renders in the user's language. The \`/cc\` continue path is **silent** — the user sees the next specialist's slim summary directly. Full matrix (every invocation × active-flow shape, the research-state-gated sub-commands, plain-prose error templates, worked examples, anti-rationalization) lives in \`.cclaw/lib/runbooks/detect-matrix.md\` (also mirrored in \`.cclaw/lib/skills/flow-resume.md\`).
 
 ### Detect — git-check sub-step (v8.23)
 
@@ -256,36 +250,15 @@ If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel")
 
 #### Phase 1.5 — approaches gate (v8.76)
 
-Immediately after Phase 1 distillation completes and BEFORE Phase 2 dispatches any lens, the orchestrator runs the **Approaches Gate**: surface 2-3 candidate FRAMINGS of the research question to the user and ask which framing(s) the downstream lenses should carry in their dispatch envelopes. The gate is the research-mode analogue of the obra-superpowers brainstorming Phase 2-3 ("2-3 approach options before committing") and the addyosmani \`idea-refine\` Phase 1.3 Cluster + Stress-test discipline — without it, the lenses dispatch against an implicit single framing (whatever the orchestrator settled on during dialogue distillation), and downstream findings inherit that framing's blind spots.
+Immediately after Phase 1 distillation completes and BEFORE Phase 2 dispatches any lens, the orchestrator runs the **Approaches Gate**: distil 2-3 candidate FRAMINGS of the research question and ask which framing(s) the downstream lenses should carry in their dispatch envelopes. Without the gate, lenses dispatch against an implicit single framing (whatever the orchestrator settled on during dialogue distillation), and downstream findings inherit that framing's blind spots. The gate is the research-mode analogue of the obra-superpowers brainstorming Phase 2-3 ("2-3 approach options before committing") and the addyosmani \`idea-refine\` Phase 1.3 Cluster + Stress-test discipline.
 
-**What a framing is.** A framing is a DIFFERENT framing of the same research question — not 2-3 conclusions, not 2-3 implementation candidates (those are scoped to the engineer / product lens output). Each framing changes WHICH dimensions every lens emphasises. Worked example for the topic "add caching to the search endpoint":
+A framing is a DIFFERENT framing of the same research question (NOT 2-3 conclusions, NOT 2-3 implementation candidates). Worked example for "add caching to the search endpoint" — **framing A: caching as infra primitive** (Redis / in-memory / HTTP cache; engineer lens leans hardest), **framing B: caching as search-quality lever** (what we cache, invalidation, when to bust; product + engineer split the load, skeptic centres on stale-data abuse cases), **framing C: caching as organizational gate** (ownership / on-call; product + history + skeptic lead). Each framing routes the lens dispatch differently even though the topic text is identical.
 
-- **framing A** — *Caching as infra primitive.* The question is which substrate (Redis / in-memory / HTTP cache). Engineer lens leans hardest, architecture lens covers infrastructure coupling, product / skeptic / history lenses are secondary.
-- **framing B** — *Caching as search-quality lever.* The question is what we cache, how invalidation works, when to bust. Product + engineer split the load, skeptic centres on stale-data abuse cases.
-- **framing C** — *Caching as organizational gate.* The question is ownership / on-call / who pages when the cache goes stale. Product + history + skeptic lead, engineer / architecture are secondary.
+**Procedure.** Distil 2-3 framings (\`id\` + 4-8-word \`title\` + one-paragraph \`summary\`); stamp \`flow-state.json > approaches\` (\`ResearchApproach[]\`; type in \`src/types.ts\`) and \`researchState: "approaches-gate"\`; surface the framings as a bulleted block + picker prompt \`Pick one (e.g. "A" / "B") or accept "all" (every framing flows to every lens — the default).\`; wait for the user's pick (single-letter ids \`A\` / \`A B\` / \`A,B\`, or case-insensitive title substring match, or \`all\` / \`every\` / \`default\` — the silent default is "all", NOT "stop" — the gate is non-coercive); stamp \`flow-state.json > selectedApproaches\` (zero-based indices into \`approaches[]\`); dispatch Phase 2 with the selected framings carried in every lens envelope under the new \`Framing:\` field (string array; one entry per selected framing as \`<title> — <summary>\`).
 
-Each framing routes the lens dispatch differently even though the topic text is identical.
+**Sub-cases.** When only one obvious framing emerges, surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"); never fewer than 2 framings, never more than 3. When the user picks a framing not on the list, accept verbatim and append as the next-index entry in \`approaches[]\`. When the user cancels mid-gate ("stop" / "never mind" / "/cc-cancel"), run the cancel runtime and end the turn. Mid-research re-framings route through the existing v8.71 \`/cc research push-back <framing>\` machinery (framings ARE claims about the research question); the original \`approaches[]\` is NEVER mutated (immutable for audit).
 
-**Procedure:**
-
-1. **Distil 2-3 framings** from the dialogue summary. Each framing carries an \`id\` (short stable identifier — single letter \`A\` / \`B\` / \`C\` when no semantic shortname is obvious; otherwise kebab-case slug like \`infra-primitive\` / \`search-quality\` / \`governance\`), a \`title\` (4-8 words), and a one-paragraph \`summary\` (what question this framing makes load-bearing, what gets de-emphasised, which downstream lens dispatches see the biggest shape change).
-2. **Stamp \`flow-state.json > approaches\`** as a {@link ResearchApproach}\`[]\` array (the type lives in \`src/types.ts\`). Stamp \`flow-state.json > researchState: "approaches-gate"\` (transient sub-state of Phase 1; the canonical \`lens-dispatch\` lifecycle marker fires after the gate clears).
-3. **Surface the framings to the user** in plain prose, in the user's language. Render each framing as a bulleted block with its id, title, and summary. End with the picker prompt: \`Pick one (e.g. "A" / "B") or accept "all" (every framing flows to every lens — the default).\`
-4. **Wait for the user's pick.** Accept any of:
-   - one or more single-letter ids (\`A\`, \`A B\`, \`A,B\`),
-   - a slug match against \`title\` (case-insensitive substring),
-   - \`all\` / \`every\` / \`every framing\` / \`default\` (selects every index — the canonical "all" surface) — also the default when the user says \`go\` / \`proceed\` without naming framings (the gate is non-coercive; the silent default is "all", not "stop").
-5. **Stamp \`flow-state.json > selectedApproaches\`** as the zero-based indices into \`approaches[]\` that the user selected (or every index, for "all").
-6. **Dispatch Phase 2** with the selected framings carried in every lens envelope under the new \`Framing:\` field (see Phase 2 envelope shape below).
-
-**Sub-cases:**
-
-- **Only one obvious framing emerges from the dialogue** — surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"). The user can pick the variant, accept "all" (both flow), or accept "A" (single). Never fewer than 2 framings; never more than 3.
-- **User picks a framing not on the list** — accept verbatim as a new ad-hoc framing (no validation against the surfaced set), append it as the next-index entry in \`approaches[]\`, stamp \`selectedApproaches\` to point at it, proceed.
-- **User explicitly cancels** ("stop", "never mind", "/cc-cancel") — run the cancel runtime (move the empty research.md to \`cancelled/<slug>/\`, reset state) and end the turn.
-- **User wants to revise framings mid-research** — use the existing v8.71 \`/cc research push-back <framing>\` machinery (push-back targets a claim; framings ARE claims about the research question). The push-back path treats the cited framing as the area to re-dispatch lenses against; the original \`approaches\` array is NEVER mutated (immutable for audit).
-
-**Output of the gate** flows into Phase 2 as the new \`Framing:\` field on every lens envelope (a string array — the \`title\` of every selected framing, with the \`summary\` appended on one line per framing). Lens prompts are pinned to accept a \`framing: string[]\` envelope field; the lenses grade their findings against the selected framings rather than the implicit "any framing".
+Full procedure — picker grammar, sub-cases, the Phase 2 envelope shape, anti-rationalization (silent-pick / collapse / orchestrator-knows-best traps) — lives in \`.cclaw/lib/runbooks/approaches-gate.md\`. Open that runbook on every transition from Phase 1 distillation exit to Phase 2 lens dispatch.
 
 #### Phase 2 — parallel lens dispatch
 
@@ -449,65 +422,34 @@ Every dispatch envelope still includes \`Pre-flight assumptions: see triage.assu
 
 ## Debug-branch routing (v8.77; triage.taskShape == "debug")
 
-When triage's slim summary returned \`Task shape: debug\` AND the orchestrator persisted \`triage.taskShape = "debug"\` into \`flow-state.json\`, the orchestrator **inserts an investigator hop BEFORE the architect dispatch** for the plan stage. The investigator is a read-only diagnostic specialist that fans out three parallel hypothesis lanes (\`cause-code\` / \`cause-config\` / \`cause-measurement\`), writes \`investigation.md\` to the flow dir, and returns a slim summary whose \`Next step:\` field drives the post-investigator routing. The investigator hop is **orthogonal to \`ceremonyMode\` and \`triage.complexity\`** — the v8.77 release locked taskShape as a separate dimension precisely so the existing complexity classifier did not need reworking.
+When triage's slim summary returned \`Task shape: debug\` AND the orchestrator persisted \`triage.taskShape = "debug"\` into \`flow-state.json\`, the orchestrator **inserts an investigator hop BEFORE the architect dispatch** for the plan stage. The investigator is a read-only diagnostic specialist that fans out three parallel hypothesis lanes (\`cause-code\` / \`cause-config\` / \`cause-measurement\`), writes \`investigation.md\`, and returns a slim summary whose \`Next step:\` line drives the post-investigator routing. The investigator hop is **orthogonal to \`ceremonyMode\` and \`triage.complexity\`** — taskShape is a separate dimension; the existing complexity classifier is unchanged.
 
 ### Routing matrix (post-investigator)
 
-The orchestrator reads the investigator's slim summary's \`Next step:\` line (one of four canonical values) and branches as follows:
+Branch on the investigator slim summary's \`Next step:\` line (one of four canonical values):
 
-| \`Next step:\` | Action | priorInvestigation envelope field |
-| --- | --- | --- |
-| \`direct-fix\` | Skip architect entirely. Dispatch \`builder\` directly with the investigation as plan-substitute. Builder reads \`investigation.md > ## Fix scope\` + \`## Root cause (working hypothesis)\` as contract; writes RED-before-GREEN with \`fix(<scope>):\` commit prefix. | \`{ path: "flows/<slug>/investigation.md", verdict: "direct-fix", confidence: <high\|medium\|low> }\` (set on the builder dispatch envelope; no architect dispatch happens). |
-| \`needs-plan\` | Dispatch \`architect\` with \`priorInvestigation\` on envelope. Architect's Bootstrap reads investigation.md as load-bearing context for Frame (Phase 1's first clause copies the root cause verbatim — see architect prompt's Phase 0 step 8 + Phase 1 debug-branch flavour). plan-critic / plan-design gates fire as normal afterwards; builder / qa / review / critic / ship paths unchanged. | \`{ path: "flows/<slug>/investigation.md", verdict: "needs-plan", confidence: <high\|medium\|low> }\` (set on the architect dispatch envelope AND on every downstream dispatch envelope in the same flow so the builder + reviewer + critic can cross-check against the cited root cause). |
-| \`more-investigation\` | Re-dispatch the **investigator** with iteration 1. The orchestrator increments \`flow-state.json > investigatorIteration\` from 0 to 1 BEFORE the second dispatch; the second dispatch must produce a verdict (the iteration cap is 1 — second \`more-investigation\` triggers stop-and-report). On iteration 1, the investigator carries the prior probe-recommendations forward in each lane's Hypothesis line so the second pass is a sharper probe, not a verbatim re-run. | none (re-dispatch is to investigator, not architect / builder; investigator reads its own prior \`investigation.md\` and the prior iteration's findings as carry-over context). |
-| \`not-a-bug\` | Stop-and-report. The orchestrator surfaces the investigator's \`## Next step recommendation\` paragraph verbatim to the user (cited spec / docs / test that proves the symptom is intended behaviour) and ends the turn. User re-invokes \`/cc\` with a clarified task if they disagree; no automated re-dispatch. | none (turn ends; no further dispatch). |
+- \`direct-fix\` → skip architect entirely; dispatch \`builder\` directly with the investigation as plan-substitute. Envelope carries \`priorInvestigation: { path: "flows/<slug>/investigation.md", verdict: "direct-fix", confidence: <high|medium|low> }\`. Builder reads \`investigation.md > ## Fix scope\` + \`## Root cause (working hypothesis)\` as contract; writes RED-before-GREEN with \`fix(<scope>):\` commit prefix.
+- \`needs-plan\` → dispatch \`architect\` with \`priorInvestigation\` on envelope (Frame Phase 1's first clause copies the root cause verbatim — see architect prompt's Phase 0 step 8 + Phase 1 debug-branch flavour). The \`priorInvestigation\` field rides on every downstream dispatch envelope (builder + reviewer + critic cross-check against the cited root cause); plan-critic / plan-design / plan-devex gates fire as normal afterwards.
+- \`more-investigation\` → re-dispatch the **investigator** with iteration 1 (cap = 1; second \`more-investigation\` triggers stop-and-report). Increment \`flow-state.json > investigatorIteration\` from 0 to 1 BEFORE the second dispatch; iteration 1 carries prior probe-recommendations forward in each lane's Hypothesis line so the second pass is a sharper probe, not a verbatim re-run.
+- \`not-a-bug\` → stop-and-report. Surface investigator's \`## Next step recommendation\` paragraph verbatim (cited spec / docs / test that proves the symptom is intended behaviour); end the turn. User re-invokes \`/cc\` with a clarified task if they disagree.
 
-### Cap and stop-and-report
+### Cap, flow-state patches, envelope inheritance
 
-The orchestrator caps the investigator at **2 dispatches per slug** (iteration 0 + iteration 1 max). The second \`more-investigation\` recommendation triggers stop-and-report with this status block:
+Investigator is capped at **2 dispatches per slug** (iteration 0 + 1 max). After every investigator return, patch \`flow-state.json\` in the same write: \`investigatorVerdict\` (mirrors \`Next step:\`), \`investigatorIteration\` (0 or 1), \`investigatorConfidence\` (\`high\` / \`medium\` / \`low\`), \`investigatorDispatchedAt\` (ISO), \`lastSpecialist: "investigator"\`. The \`priorInvestigation\` envelope field is required-when-set, absent-when-default; specialists default to "build shape" behaviour when the field is absent (back-compat with pre-v8.77 envelopes).
 
-\`\`\`text
-Investigator cap reached
-- Slug: <slug>
-- Iterations: 2 (max)
-- Last verdict: more-investigation
-- Last confidence: <high|medium|low>
-- Notes: <verbatim copy of the investigator's last slim-summary Notes line — names the next probe the investigator would have run, surfaced to the user>
-- Suggested next step: <verbatim copy of the investigator's last slim-summary Notes line OR "human-driven debug session" when the lanes converged on "needs runtime state the agent cannot stage">
-\`\`\`
-
-The slug stays in state \`debug-stalled\`; the user re-invokes \`/cc\` after manually probing, OR \`/cc-cancel\` to retire the slug.
-
-### Envelope mutations on debug-branch (v8.77)
-
-On every debug-shaped flow, the dispatch envelope carries the \`priorInvestigation\` field starting on the architect / builder dispatch (see runbooks/debug-branch.md for the full envelope shape). The field is required-when-set, absent-when-default; specialists default to "build shape" behaviour when the field is absent (back-compat with pre-v8.77 envelopes).
-
-### flow-state.json patches (v8.77)
-
-After every investigator dispatch the orchestrator patches:
-
-- \`investigatorVerdict\` — one of \`direct-fix\` / \`needs-plan\` / \`more-investigation\` / \`not-a-bug\` (mirrors the slim summary's \`Next step:\` line).
-- \`investigatorIteration\` — \`0\` on first dispatch; \`1\` on re-dispatch (capped at 1).
-- \`investigatorConfidence\` — \`high\` / \`medium\` / \`low\` (mirrors the slim summary's \`Confidence:\` line).
-- \`investigatorDispatchedAt\` — ISO timestamp.
-- \`lastSpecialist: "investigator"\` — stamped in the same write.
+On second \`more-investigation\` (cap reached), surface the stop-and-report status block (slug stays in \`debug-stalled\`; user re-invokes \`/cc\` after manually probing OR \`/cc-cancel\` to retire). Full status-block shape lives in \`.cclaw/lib/runbooks/debug-branch.md\` §5.
 
 ### Defense-in-depth envelope propagation (v8.81)
 
-When the investigator's slim summary carries a \`Defense-in-depth: <yes|no>\` line (the v8.81 conditional line that fires when investigator Phase 4's gate fired — see \`investigator.ts\`'s \`## Output — slim summary\` section), the orchestrator **copies the flag onto the builder dispatch envelope AND persists it on flow-state.json** before dispatching builder (on \`direct-fix\`) or architect→builder (on \`needs-plan\`). The protocol is mechanical, single-source:
+When the investigator's slim summary carries a \`Defense-in-depth: <yes|no>\` line (the v8.81 conditional that fires when investigator Phase 4's gate fired), the orchestrator **copies** the flag onto the builder dispatch envelope as \`defense-in-depth: <yes|no>\` AND persists it on \`flow-state.json > builderEnvelope.defenseInDepth\` (in the same write as the post-investigator \`lastSpecialist\` stamp). On \`direct-fix\` the stamp lands on the immediate builder dispatch; on \`needs-plan\` it travels through the architect envelope and rides on every downstream builder dispatch in the same flow (same envelope-inheritance discipline as \`priorInvestigation\`). An absent slim-summary line reads as \`no\` (back-compat with the seven-line pre-v8.81 slim summary); pre-v8.81 state files lack \`builderEnvelope\` entirely and readers default to absent → \`no\` (the validator accepts absent or \`{ defenseInDepth: "yes" | "no" }\`; any other value is a hard schema error).
 
-1. Read the investigator slim-summary line: \`Defense-in-depth: yes\` or \`Defense-in-depth: no\`. Absent line reads as \`no\` (the gate did not fire; back-compat with the seven-line pre-v8.81 slim summary).
-2. Stamp \`defense-in-depth: <yes|no>\` on the builder dispatch envelope (the dispatch payload the builder reads). On \`direct-fix\` the stamp lands on the immediate builder dispatch; on \`needs-plan\` the stamp travels through the architect envelope and rides on every downstream builder dispatch in the same flow (the same envelope-inheritance discipline as \`priorInvestigation\`).
-3. Persist the same value on \`flow-state.json > builderEnvelope.defenseInDepth\` (string \`"yes"\` / \`"no"\`) in the same write as the post-investigator \`lastSpecialist\` stamp. The persisted field is the resume + reviewer-audit + compound-learning surface; the dispatch envelope is what the builder actually reads.
-4. Pre-v8.81 state files lack \`builderEnvelope\` entirely; readers default to absent → \`no\` (the validator accepts absent or \`{ defenseInDepth: "yes" | "no" }\`; any other value is a hard schema error).
-
-When the envelope flag is \`yes\` the builder implements **all named (non-n/a) layers from \`investigation.md > ## Defense-in-depth (4 layers)\`** as part of the root-cause fix commit (NOT as a follow-up commit) — see \`builder.ts\`'s "Debug-branch defense-in-depth mode" section for the read-then-implement protocol the builder runs.
+When the envelope flag is \`yes\` the builder implements **all named (non-n/a) layers from \`investigation.md > ## Defense-in-depth (4 layers)\`** as part of the root-cause fix commit (NOT as a follow-up commit) — see \`builder.ts\`'s "Debug-branch defense-in-depth mode" section for the read-then-implement protocol.
 
 ### When the gate does NOT fire
 
-When \`triage.taskShape\` is absent (pre-v8.77 state files) OR \`triage.taskShape\` is \`"build"\` OR \`triage.taskShape\` is \`"research"\` (the latter is record-keeping only — research flows fork on the Detect hop and never see triage), the orchestrator runs the pre-v8.77 path verbatim: architect → plan-critic? → plan-design? → builder → qa? → reviewer → critic → ship. The investigator does NOT dispatch; no \`investigation.md\` is written; no \`priorInvestigation\` field is added to envelopes. The v8.77 wiring is purely additive on the debug branch.
+When \`triage.taskShape\` is absent (pre-v8.77 state files) OR \`"build"\` OR \`"research"\` (the latter is record-keeping only — research flows fork on the Detect hop and never see triage), the orchestrator runs the pre-v8.77 path verbatim (architect → plan-critic? → plan-design? → plan-devex? → builder → qa? → reviewer → critic → ship). The investigator does NOT dispatch; no \`investigation.md\` is written; no \`priorInvestigation\` field is added to envelopes. The v8.77 wiring is purely additive on the debug branch.
 
-Full procedure — gating, dispatch envelope shape, verdict-handling routing, iteration-cap enforcement, flow-state.json patches, builder direct-fix protocol, architect priorInvestigation read protocol, reviewer cross-check on cited root cause, legacy pre-v8.77 migration (defaults to \`build\` shape) — lives in \`.cclaw/lib/runbooks/debug-branch.md\`. Open that runbook on every transition from \`triage\` slim-summary return WHEN \`triage.taskShape == "debug"\`.
+Full procedure — gating, dispatch envelope shape, three-lane discipline, verdict-routing matrix, iteration-cap enforcement, \`flow-state.json\` patches, builder direct-fix protocol, architect \`priorInvestigation\` read protocol, reviewer cross-check on cited root cause, legacy pre-v8.77 migration (defaults to \`build\` shape) — lives in \`.cclaw/lib/runbooks/debug-branch.md\`. Open that runbook on every transition from \`triage\` slim-summary return WHEN \`triage.taskShape == "debug"\`, and on every transition from \`investigator\` slim-summary return.
 
 ## Dispatch
 
@@ -589,21 +531,17 @@ Full procedure — pre-author research order, input list, output spec, slim-summ
 
 #### One-way Door Gate (v8.79; user-facing pause between architect and plan-critic)
 
-After the architect's slim summary returns AND before the orchestrator dispatches plan-critic (or, when plan-critic's strict gate is off, directly the builder), the orchestrator scans the freshly-written \`flows/<slug>/plan.md\` for any \`## Decisions\` D-N row marked \`Reversibility: one-way\`. The scan is a literal substring match against the rendered plan.md (plan-critic §A guarantees the field is present on every D-N in strict mode; the v8.74 architect prompt populates it on every Decisions write). When the scan returns ≥1 hit, the orchestrator **pauses the always-auto chain and surfaces a structured ask** with three options — \`confirm\` / \`edit\` / \`cancel\` — before any further dispatch fires.
+After the architect's slim summary returns AND before plan-critic / plan-design / plan-devex / builder dispatch, the orchestrator scans \`flows/<slug>/plan.md\` for any \`## Decisions\` D-N row marked \`Reversibility: one-way\` (literal substring match; plan-critic §A guarantees the field is present on every D-N in strict mode). On ≥1 hit, the orchestrator **pauses the always-auto chain and surfaces a structured ask** (\`confirm\` / \`edit\` / \`cancel\`) before any further dispatch fires. The gate matches the **User Sovereignty principle** in the v8.74 ethos preamble (irreversible decisions deserve explicit confirmation before build burns context) and is the user-facing analogue of the v8.74 cross-model critic (which also gates on \`Reversibility: one-way\` but fires AFTER the build); the two surfaces are complementary, not redundant.
 
-The pause is the user-facing analogue of the v8.74 cross-model critic (which also fires on the same \`Reversibility: one-way\` condition): the cross-model critic re-reads the plan + the build for a second adversarial opinion AFTER the build lands; v8.79's One-way Door Gate puts the human in the loop BEFORE the build burns context. The two surfaces are complementary, not redundant — the gate's job is "do you, the user, accept these irreversible commits as plan-level decisions?"; the cross-model critic's job is "given the user accepted, does a second model agree the build delivers on those decisions?".
+**Lite-ceremony exemption.** On \`triage.ceremonyMode == "inline"\` the gate is structurally skipped (path is just \`["build"]\`, no plan stage, no \`## Decisions\` table to scan). Soft ceremony writes \`plan.md\` without a Decisions section by default; 0 hits = silent pass-through (the gate is non-coercive — it fires only on ≥1 hit, so soft / inline plans without one-way D-Ns silently pass through).
 
-The gate matches the **User Sovereignty principle** in the v8.74 ethos preamble: irreversible decisions deserve explicit confirmation before build burns context. Two-way / mostly-two-way decisions are NOT user-pause-worthy — the cheap-revert affordance is the whole point of the Reversibility classification, and burning a user turn on every Decisions block would be the symmetry trap (every flow has decisions; only one-way decisions need explicit confirmation).
+**Flow-state transitions** on \`flow-state.json > oneWayDoorConfirmation\` (\`{ decisionIds: string[]; userChoice?: "confirm" | "edit" | "cancel"; confirmedAt?: string }\`):
 
-**Lite-ceremony exemption.** On \`triage.ceremonyMode == "inline"\` (the trivial / lite-ceremony path) the gate is structurally skipped — the path is just \`["build"]\` with no plan stage, no architect, no \`## Decisions\` table to scan. The Reversibility field machinery itself stays on the type for any future strict-mode flow that resumes from a stopped inline flow; the gate just never fires for lite-ceremony work because there is no irreversible-commit signal to gate on. (Soft ceremony writes plan.md without a Decisions section by default; the gate's scan returns 0 hits and the always-auto chain continues without pausing — same shape as a strict plan with only two-way decisions.)
+1. \`architect-complete\` → \`awaiting-one-way-confirmation\` — when the architect's slim summary returns \`Recommended next: awaiting-one-way-confirmation\` (architect's signal that the plan contains ≥1 one-way D-N), stamp \`decisionIds: ["D-N", ...]\` (userChoice absent — the canonical "awaiting user" signal); surface the structured ask; end the turn.
+2. \`awaiting-one-way-confirmation\` → \`plan-critic\` (or \`builder\` when plan-critic's gate is off) on \`confirm\` — stamp \`userChoice: "confirm"\` + \`confirmedAt: <iso-now>\`; proceed to plan-critic dispatch (or builder per the existing v8.51 gate). The user-confirmed flag persists for the rest of the flow's lifetime; downstream specialists may read it as "the user explicitly accepted the irreversible commits".
+3. \`awaiting-one-way-confirmation\` → \`architect-revision\` (on \`edit\`) OR \`aborted\` (on \`cancel\`) — on \`edit\`, stamp \`userChoice: "edit"\` and surface a stop-and-report asking the user to edit \`plan.md\` (typically to soften a one-way classification to mostly-two-way or split the decision into two D-Ns) and re-invoke \`/cc\` once done (the next \`/cc\` re-reads plan.md and re-runs the scan). On \`cancel\`, stamp \`userChoice: "cancel"\` and route to \`/cc-cancel\` (move artifacts to \`cancelled/<slug>/\`, reset state).
 
-**Flow-state transitions.** The orchestrator drives the gate through three transitions on \`flow-state.json > oneWayDoorConfirmation\` (\`{ decisionIds: string[]; userChoice?: "confirm" | "edit" | "cancel"; confirmedAt?: string }\`):
-
-1. \`architect-complete\` → \`awaiting-one-way-confirmation\`: when the architect's slim summary returns \`Recommended next: awaiting-one-way-confirmation\` (architect's signal that the plan contains ≥1 one-way D-N), the orchestrator stamps \`oneWayDoorConfirmation: { decisionIds: ["D-N", "D-M", ...] }\` (with \`userChoice\` absent — the canonical "awaiting user" signal) and surfaces the structured ask. The orchestrator's turn ends here; control returns to the user.
-2. \`awaiting-one-way-confirmation\` → \`plan-critic\` (or \`builder\` when plan-critic's gate is off): on \`confirm\`, the orchestrator stamps \`userChoice: "confirm"\` + \`confirmedAt: <iso-now>\`, then proceeds to plan-critic dispatch (or builder, per the existing v8.51 plan-critic gate). The user-confirmed flag persists for the rest of the flow's lifetime; downstream specialists may read it as "the user explicitly accepted the irreversible commits".
-3. \`awaiting-one-way-confirmation\` → \`architect-revision\` (on \`edit\`) OR \`aborted\` (on \`cancel\`): on \`edit\`, the orchestrator stamps \`userChoice: "edit"\` and surfaces a stop-and-report status block asking the user to edit \`plan.md\` (typically to soften a one-way classification to mostly-two-way or split the decision into two D-Ns) and re-invoke \`/cc\` once done — the next \`/cc\` re-reads plan.md and re-runs the gate scan. On \`cancel\`, the orchestrator stamps \`userChoice: "cancel"\` and routes to \`/cc-cancel\` (move artifacts to \`cancelled/<slug>/\`, reset state).
-
-**Structured ask payload.** When the gate fires, the orchestrator renders this verbatim shape (plain markdown, in the user's language for the surrounding prose; mechanical tokens — \`D-N\`, \`Reversibility:\`, \`/cc\`, the literal command tokens — stay English):
+**Structured ask payload** — render verbatim (mechanical tokens English; surrounding prose in the user's language):
 
 \`\`\`text
 ## One-way door detected
@@ -619,9 +557,9 @@ User Sovereignty principle: irreversible decisions deserve explicit confirmation
 Choose: confirm | edit | cancel
 \`\`\`
 
-The \`<count>\` is the integer count of one-way D-Ns the scan found. The bullet list iterates over EVERY one-way D-N in plan order (D-1, D-2, ...) — the orchestrator does not deduplicate, summarise, or drop entries; the user sees the full irreversible-commit set. The \`Rationale:\` line is a one-sentence verbatim copy of the \`Rationale:\` field from the same D-N in plan.md (per the v8.74 D-N template); when the architect wrote a multi-sentence rationale, the orchestrator truncates at the first sentence and appends \`...\` so the ask stays compact (the user can read the full rationale in plan.md if they want detail).
+\`<count>\` is the integer count of one-way D-Ns; the bullet list iterates every one-way D-N in plan order (no dedup, no summary, no drops). \`Rationale:\` is a one-sentence verbatim copy from plan.md (multi-sentence rationales truncate at the first sentence + \`...\`). Use the harness's \`AskUserQuestion\` surface when available; fall back to the prose ask otherwise. Three options only — no fourth "accept-warns-and-ship" / "skip-gate" arm; a silent-accept escape hatch would defeat the gate's User Sovereignty contract.
 
-The final \`Choose:\` line is the structured ask. Use the harness's \`AskUserQuestion\` surface (Cursor's structured ask / Claude's TUI input) when available; fall back to the prose ask shape when the harness has no structured-ask primitive. Three options only — no fourth "accept-warns-and-ship" / "skip-gate" arm. The cclaw discipline is "every irreversible commit deserves explicit confirmation"; adding a silent-accept escape hatch would defeat the gate's User Sovereignty contract.
+Full procedure — gate scan, user pick handling (typo / free-text fallback to \`edit\`), downstream persistence semantics, anti-rationalization — lives in \`.cclaw/lib/runbooks/one-way-door-gate.md\`.
 
 #### plan-critic (v8.51+, sub-step of \`plan\`)
 
