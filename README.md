@@ -313,6 +313,22 @@ critic:
                                     # MCP cross-model tool is wired.
 ```
 
+## Synthesis confidence + priorResearch cite-back
+
+`v8.88` makes the research-→-plan handoff load-bearing in two new ways:
+
+**Per-finding numeric confidence at the lens layer.** Each of the six research lenses (engineer, product, architecture, history, skeptic, design) now ships a top-level `### Findings (with confidence)` block: 3-7 distilled findings, each tagged `#### F-N (confidence: 0.0-1.0)`. Reference: obra-style numeric confidence per finding from `gsd-research-synthesizer`.
+
+**Confidence summary in synthesis.** Phase 3 of the research orchestrator aggregates the per-lens findings into a mandatory `### Confidence summary` subsection of `## Synthesis`:
+
+- **Weighted averages** per finding-equivalent — when 2+ lenses cover the same underlying claim, weighted average of their confidences (weight = 1/lens-count contributing); contributing `F-N` ids cited inline.
+- **Confidence cliffs** — every finding-equivalent where two lenses disagree by ≥0.5 (e.g. engineer 0.9 vs. skeptic 0.2) is surfaced as a dedicated `**Cliff:**` bullet so the follow-up architect can see lens disagreement at a glance.
+- **Per-lens rollup** — mean confidence per dispatched lens (rounded to two decimals) so lenses whose top-line confidence is misleading vs. the per-finding distribution become visible.
+
+**`Cites: research.md §<section>` on every D-N when priorResearch was loaded.** The architect's Phase 0 Bootstrap reads `flowState.priorResearch` (the pointer wired in v8.65 / v8.76 / v8.78 / v8.81 when a prior `/cc research <topic>` shipped). When that pointer is non-null, every plan-stage Decision (`D-N`) in `plan.md > ## Decisions` MUST carry a `Cites: research.md §<section>` field naming 1-3 sections of the loaded `research.md` that grounded the choice. Examples: `Cites: research.md §Engineer lens > Implementation paths`, `Cites: research.md §Synthesis > Confidence summary`, `Cites: research.md §Recommended next step`.
+
+`plan-critic §A` blocks ship on missing citations in that mode (finding class `decision-missing-research-cite`), flags malformed cites without the `§` anchor (`decision-bad-research-cite`), and flags orphan cites authored on cold-start flows where no research was loaded (`decision-orphan-research-cite`). On cold-start `/cc <task>` flows (priorResearch null), the `Cites:` field is omitted entirely — its absence is the expected shape and plan-critic emits no finding.
+
 ## Model-tier policy
 
 Every specialist dispatch carries a `Model tier:` hint (v8.87) so harnesses that route on tier (custom OpenCode profiles, Claude Code `agent.toml`, etc.) can pick the right model per stage. Harnesses that don't route on the hint ignore the line and fall back to their own default model. Tier values are the literal union `fast | balanced | powerful` — anything else is dropped at resolve time and the default tier survives.

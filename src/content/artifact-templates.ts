@@ -188,9 +188,11 @@ _(Architect: Approaches closing paragraph when Approaches exists; cites the pick
 
 _(Architect: Decisions, strict mode only. One D-N row per decision. Each row is independently citable. Replaces the separate \`decisions.md\` file from pre-v8.14 flows; on \`legacy-artifacts: true\` the separate file is still emitted.)_
 
-- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. Reversibility: _one-way | two-way | mostly-two-way_. ADR: _none | proposed | promoted (path)_.
+- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. Reversibility: _one-way | two-way | mostly-two-way_. ADR: _none | proposed | promoted (path)_. Cites: _research.md §<section> — name the lens / synthesis section that grounds this D-N (e.g. \`research.md §Engineer lens > Implementation paths\`, \`research.md §Synthesis > Confidence summary\`); 1-3 \`§\` citations per D-N. Field is **mandatory when \`flowState.priorResearch\` is non-null** (the architect Bootstrap loaded a prior \`/cc research <topic>\` flow's research.md as context); OMIT the entire \`Cites:\` field when no priorResearch is loaded (cold-start \`/cc <task>\` with no research handoff). v8.88._
 
 _(\`Reversibility\` is **mandatory** on every D-N. Pick \`one-way\` for irreversible-or-effectively-so (data migration, public-API removal, schema rewrite, destructive auth/cryptography, payment commit); \`two-way\` for cheaply-reversible (feature flag, internal-API behind compat shim, behaviour tweak behind kill switch); \`mostly-two-way\` for the middle ground (schema column add, new dependency, UI surface shipped to users). plan-critic §A blocks ship on a missing field; the critic's §3.5 cross-model second opinion auto-fires on any \`one-way\` D-N regardless of \`triage.securityFlag\`.)_
+
+_(\`Cites: research.md §<section>\` is **mandatory on every D-N when the architect Bootstrap loaded \`flowState.priorResearch\`** — i.e. the follow-up \`/cc <task>\` flow that consumed a prior research handoff. Each D-N must cite at least one section of \`research.md\` that grounded the choice; this is the cite-back that closes the research-→-plan loop introduced in v8.88 (research mode shipped in v8.65, priorResearch wiring in v8.65/v8.76/v8.78/v8.81, the cite-back contract in v8.88). plan-critic §A emits a \`block-ship\` finding (class=\`decision-missing-research-cite\`) on any D-N missing the field when priorResearch was loaded. On cold-start flows (priorResearch null) the field is OMITTED entirely — plan-critic §A treats the absence as expected and emits no finding.)_
 
 ## Pre-mortem
 
@@ -1420,7 +1422,23 @@ _(Research orchestrator: Phase 3 synthesis. 2-5 bullets naming **bets** the rese
 
 ## Engineer lens
 
-_(Pasted verbatim from \`research-engineer\` lens's findings block. Sections: Feasibility (overall + 5 sub-axes) / Implementation paths (2-3 candidates with effort + trade-offs) / Blockers (with severity) / Risks during implementation / Rough effort.)_
+_(Pasted verbatim from \`research-engineer\` lens's findings block. Sections: Findings (with confidence) (v8.88; 3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Feasibility (overall + 5 sub-axes) / Implementation paths (2-3 candidates with effort + trade-offs) / Blockers (with severity) / Risks during implementation / Rough effort.)_
+
+### Findings (with confidence)
+
+_(v8.88 — distilled top-level findings from the engineer lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. The orchestrator's Confidence-summary subsection of the Synthesis block below aggregates these across lenses with weighted averaging and surfaces cross-lens spread (≥0.5 between two lenses on the same finding-equivalent).)_
+
+#### F-1 (confidence: _0.0-1.0_)
+
+_<one-sentence engineer-lens finding>_
+
+#### F-2 (confidence: _0.0-1.0_)
+
+_<one-sentence engineer-lens finding>_
+
+#### F-3 (confidence: _0.0-1.0_)
+
+_<one-sentence engineer-lens finding>_
 
 ### Feasibility
 
@@ -1456,7 +1474,23 @@ _(v8.69 — first-class web search dispatch. Inline citations the engineer lens 
 
 ## Product lens
 
-_(Pasted verbatim from \`research-product\` lens's findings block. Sections: User value (overall + 3 sub-axes) / Who benefits (primary + secondary) / Alternatives (always including "do nothing") / Market / domain context / Open product questions.)_
+_(Pasted verbatim from \`research-product\` lens's findings block. Sections: Findings (with confidence) (v8.88; 3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / User value (overall + 3 sub-axes) / Who benefits (primary + secondary) / Alternatives (always including "do nothing") / Market / domain context / Open product questions.)_
+
+### Findings (with confidence)
+
+_(v8.88 — distilled top-level findings from the product lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
+
+#### F-1 (confidence: _0.0-1.0_)
+
+_<one-sentence product-lens finding>_
+
+#### F-2 (confidence: _0.0-1.0_)
+
+_<one-sentence product-lens finding>_
+
+#### F-3 (confidence: _0.0-1.0_)
+
+_<one-sentence product-lens finding>_
 
 ### User value
 
@@ -1507,7 +1541,23 @@ _(v8.69 — first-class web search dispatch. Citations the product lens used: MC
 
 ## Architecture lens
 
-_(Pasted verbatim from \`research-architecture\` lens's findings block. Sections: Surface impact / Coupling points / Boundaries affected / Scalability considerations / Reusable patterns.)_
+_(Pasted verbatim from \`research-architecture\` lens's findings block. Sections: Findings (with confidence) (v8.88; 3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Surface impact / Coupling points / Boundaries affected / Scalability considerations / Reusable patterns.)_
+
+### Findings (with confidence)
+
+_(v8.88 — distilled top-level findings from the architecture lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
+
+#### F-1 (confidence: _0.0-1.0_)
+
+_<one-sentence architecture-lens finding>_
+
+#### F-2 (confidence: _0.0-1.0_)
+
+_<one-sentence architecture-lens finding>_
+
+#### F-3 (confidence: _0.0-1.0_)
+
+_<one-sentence architecture-lens finding>_
 
 ### Surface impact
 
@@ -1537,7 +1587,23 @@ _(v8.69 — first-class web search dispatch. Citations the architecture lens use
 
 ## History lens
 
-_(Pasted verbatim from \`research-history\` lens's findings block. Sections: Prior attempts / Lessons learned / Outcome signals from .cclaw/knowledge.jsonl / Git-archaeology highlights / Continuity / drift.)_
+_(Pasted verbatim from \`research-history\` lens's findings block. Sections: Findings (with confidence) (v8.88; 3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Prior attempts / Lessons learned / Outcome signals from .cclaw/knowledge.jsonl / Git-archaeology highlights / Continuity / drift.)_
+
+### Findings (with confidence)
+
+_(v8.88 — distilled top-level findings from the history lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
+
+#### F-1 (confidence: _0.0-1.0_)
+
+_<one-sentence history-lens finding>_
+
+#### F-2 (confidence: _0.0-1.0_)
+
+_<one-sentence history-lens finding>_
+
+#### F-3 (confidence: _0.0-1.0_)
+
+_<one-sentence history-lens finding>_
 
 ### Prior attempts
 
@@ -1571,7 +1637,23 @@ _(v8.69 — citations the history lens used. Web search is OUT of scope for this
 
 ## Skeptic lens
 
-_(Pasted verbatim from \`research-skeptic\` lens's findings block. Sections: Failure modes (likelihood × impact) / Edge cases / Abuse cases / Hidden costs / Don't-proceed triggers.)_
+_(Pasted verbatim from \`research-skeptic\` lens's findings block. Sections: Findings (with confidence) (v8.88; 3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Failure modes (likelihood × impact) / Edge cases / Abuse cases / Hidden costs / Don't-proceed triggers.)_
+
+### Findings (with confidence)
+
+_(v8.88 — distilled top-level findings from the skeptic lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
+
+#### F-1 (confidence: _0.0-1.0_)
+
+_<one-sentence skeptic-lens finding>_
+
+#### F-2 (confidence: _0.0-1.0_)
+
+_<one-sentence skeptic-lens finding>_
+
+#### F-3 (confidence: _0.0-1.0_)
+
+_<one-sentence skeptic-lens finding>_
 
 ### Failure modes
 
@@ -1608,7 +1690,23 @@ _(v8.69 — first-class web search dispatch. Citations the skeptic lens used: po
 
 ## research-design — Design dimensions
 
-_(v8.76 — added by the new \`research-design\` lens. Dispatched on \`standard\` / \`deep-product\` depth when the topic touches UI / UX / positioning / affordances (orchestrator heuristic + the \`--lens=design\` / \`--lens=-design\` user-toggle flags). Pasted verbatim from \`research-design\` lens's findings block. Sections: Design dimensions implicated (all seven dimensions, each graded \`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`) / Existing patterns to study (2-5 entries with citations) / Adjacent design surfaces (deep-product depth only) / Anti-patterns to avoid (including canonical AI-slop signals) / Open design questions. The rubric is the SAME seven-dimension rubric the v8.75 plan-design specialist and the v8.70 reviewer's design-quality axis use — single source of truth at \`src/content/design-quality-rubric.ts\`. When the lens was NOT dispatched (light depth, or the topic missed the design-signal heuristic and the user did not force-include via \`--lens=design\`), this section is omitted from research.md entirely; the absence is auditable from the frontmatter \`lenses\` list._
+_(v8.76 — added by the new \`research-design\` lens. Dispatched on \`standard\` / \`deep-product\` depth when the topic touches UI / UX / positioning / affordances (orchestrator heuristic + the \`--lens=design\` / \`--lens=-design\` user-toggle flags). Pasted verbatim from \`research-design\` lens's findings block. Sections: Findings (with confidence) (v8.88; 3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Design dimensions implicated (all seven dimensions, each graded \`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`) / Existing patterns to study (2-5 entries with citations) / Adjacent design surfaces (deep-product depth only) / Anti-patterns to avoid (including canonical AI-slop signals) / Open design questions. The rubric is the SAME seven-dimension rubric the v8.75 plan-design specialist and the v8.70 reviewer's design-quality axis use — single source of truth at \`src/content/design-quality-rubric.ts\`. When the lens was NOT dispatched (light depth, or the topic missed the design-signal heuristic and the user did not force-include via \`--lens=design\`), this section is omitted from research.md entirely; the absence is auditable from the frontmatter \`lenses\` list._
+
+### Findings (with confidence)
+
+_(v8.88 — distilled top-level findings from the design lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
+
+#### F-1 (confidence: _0.0-1.0_)
+
+_<one-sentence design-lens finding>_
+
+#### F-2 (confidence: _0.0-1.0_)
+
+_<one-sentence design-lens finding>_
+
+#### F-3 (confidence: _0.0-1.0_)
+
+_<one-sentence design-lens finding>_
 
 ### Design dimensions implicated
 
@@ -1652,6 +1750,29 @@ _(Research orchestrator: Phase 3 cross-lens distillation. 3-7 paragraphs coverin
 - _**Confidence and coverage** — note any lens that returned \`Confidence: low\` or was marked \`failed\` in the lenses frontmatter; the synthesis pass should be honest about coverage gaps._
 
 _The synthesis is the orchestrator's own work — NOT a verbatim paste from any lens. The five per-lens sections above carry the lens-authored content; this section is where the orchestrator does the cross-lens reasoning the user came to research for.)_
+
+### Confidence summary
+
+_(v8.88 — orchestrator-authored aggregation of the per-lens \`### Findings (with confidence)\` blocks. Every dispatched lens now stamps each finding with a numeric \`#### F-N (confidence: 0.0-1.0)\` rating; the synthesis pass walks all per-lens findings and folds them into three subsections below. Mandatory section — when no cliffs are detected and aggregation is not meaningful, write the literal string \`No cross-lens confidence cliffs detected; per-lens means within ±0.15 of each other.\` verbatim. Absence of this section is a structural failure for the follow-up \`/cc <task>\` flow's architect, which reads \`research.md\` end-to-end as \`priorResearch\` context.)_
+
+**Weighted averages** _(per finding-equivalent — claims the orchestrator judged similar across 2+ lenses; weight = 1/lens-count contributing; cite contributing F-N ids inline)_:
+
+- _\`<one-line claim>\` — weighted avg \`0.65\` across engineer F-2 (0.9) + skeptic F-1 (0.4); 2 lenses, weight 0.5 each._
+- _\`<one-line claim>\` — ..._
+
+**Confidence cliffs** _(≥0.5 spread between any two lenses on the same finding-equivalent — the highest-signal divergence; surfaces here, not under the prose Divergence paragraph above)_:
+
+- **Cliff:** _\`<one-line claim>\` — engineer F-2 (0.9) vs. skeptic F-1 (0.2); spread 0.7. \`<one-line note on what the disagreement implies for the follow-up architect>\`._
+- _(0-N cliffs. Write "None detected." verbatim when no pair crosses the 0.5 threshold.)_
+
+**Per-lens rollup** _(mean confidence across each lens's findings, rounded to two decimals)_:
+
+- **engineer:** mean _0.65_ across _N_ findings _(F-1..F-N)_.
+- **product:** mean _0.70_ across _N_ findings _(F-1..F-N)_.
+- **architecture:** mean _0.55_ across _N_ findings _(F-1..F-N)_.
+- **history:** mean _0.80_ across _N_ findings _(F-1..F-N)_.
+- **skeptic:** mean _0.45_ across _N_ findings _(F-1..F-N)_.
+- **design:** mean _0.60_ across _N_ findings _(F-1..F-N)_. _(Omit this row when design lens did not dispatch — light depth, or design-signal heuristic did not fire and user did not pass \`--lens=design\`.)_
 
 ### Self-review notes
 
