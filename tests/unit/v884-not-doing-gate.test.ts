@@ -158,13 +158,14 @@ describe("v8.84 — buildAutoTriggerBlock(\"review\", env) gate-filters scope-dr
 });
 
 describe("v8.84 — reviewer.ts mentions the scope-drift axis + rubric stub + Not-Doing cross-reference logic", () => {
-  it("AC-4 — reviewer.ts intro updated from `Eleven-axis` to `Twelve-axis`", () => {
-    // The intro heading + naming sentence both move to the new
-    // twelve-axis framing; the v8.83 release pinned "Eleven-axis"
-    // and the v8.84 release moves it forward.
-    expect(REVIEWER_PROMPT).toMatch(/Twelve-axis review/);
+  it("AC-4 — reviewer.ts intro carries scope-drift axis name (heading-string assertion deferred to current-release tripwire)", () => {
+    // The v8.84 release introduced "Twelve-axis" wording; v8.85 moved
+    // it forward to "Thirteen-axis" as it added the assumption-coverage
+    // axis. We pin the scope-drift axis presence here rather than the
+    // exact heading literal, which lives in the v8.85+ tripwires.
+    expect(REVIEWER_PROMPT).toMatch(/scope-drift/);
     expect(REVIEWER_PROMPT).not.toMatch(/Eleven-axis review/);
-    expect(REVIEWER_PROMPT).toMatch(/Twelve axes; five severities/);
+    expect(REVIEWER_PROMPT).not.toMatch(/Twelve-axis review/);
   });
 
   it("AC-4 — reviewer.ts axis-table row names `scope-drift` as gated with the v8.84 marker", () => {
@@ -254,7 +255,10 @@ describe("v8.84 — reviewer.ts mentions the scope-drift axis + rubric stub + No
     // on (axis, surface, normalized_one_liner) — and the axis
     // value must match one of the enumerated axes. Without
     // scope-drift in the enum, SD-N findings would never dedupe.
-    expect(REVIEWER_PROMPT).toMatch(/\/\s*`scope-drift`\s*\)\./);
+    // v8.85 appended `assumption-coverage` after scope-drift, so
+    // the close-paren no longer sits directly after `scope-drift`;
+    // pin the membership in the enum but tolerate trailing axes.
+    expect(REVIEWER_PROMPT).toMatch(/\/\s*`scope-drift`\s*(?:\/|\))/u);
   });
 });
 
@@ -322,13 +326,15 @@ describe("v8.84 — GateEnvelope type carries the `walkScopeDriftAxis` field wit
 describe("v8.84 — README updates", () => {
   let readme: string;
 
-  it("AC-7 — README references `12 axes` (up from the v8.83 `11 axes`)", async () => {
+  it("AC-7 — README references an axis count (live tripwire defers exact integer to v8.85+)", async () => {
     readme = await fs.readFile(
       path.join(PROJECT_ROOT, "README.md"),
       "utf-8"
     );
-    expect(readme).toContain("12 axes");
-    // No stale "11 axes" string left over from the v8.83 baseline.
+    // v8.84 introduced "12 axes"; v8.85 bumped to "13 axes". This
+    // tripwire only asserts the v8.83 baseline (11 axes) does not
+    // regress back into the README; the exact current count lives
+    // in the v8.85 test file.
     expect(readme).not.toContain("11 axes");
   });
 
@@ -341,8 +347,12 @@ describe("v8.84 — README updates", () => {
     expect(readme).toMatch(/`design-quality`/);
   });
 
-  it("AC-7 — README references `33 skills` (up from the v8.83 `32 skills`)", () => {
-    expect(readme).toContain("33 skills");
+  it("AC-7 — README references a skills count ≥33 (live tripwire defers exact integer to v8.85+)", () => {
+    // v8.84 introduced "33 skills"; v8.85 bumped to "34 skills".
+    // This tripwire only asserts the v8.83 baseline (32 skills) does
+    // not regress; the exact current count lives in the v8.85 test
+    // file.
+    expect(readme).not.toContain("32 skills");
   });
 
   it("AC-7 — README's reviewer-axis cohort line names `reviewer-axis-scope-drift`", () => {
@@ -381,23 +391,23 @@ describe("v8.84 — version bump + CHANGELOG entry", () => {
   });
 });
 
-describe("v8.84 — reviewer-axis skill cohort grew from 5 to 6 (companion-skill pattern preserved)", () => {
-  it("AC-9 — exactly six reviewer-axis-* skills are registered (the v8.83 five + the v8.84 scope-drift)", () => {
+describe("v8.84 — reviewer-axis skill cohort grew from 5 to 6 (companion-skill pattern preserved; v8.85 grows the cohort to 7)", () => {
+  it("AC-9 — reviewer-axis cohort includes the v8.83 five + the v8.84 scope-drift (cohort total may grow via v8.85+ additions; exact-length pin moved to current-release tripwire)", () => {
     const reviewerAxisSkills = AUTO_TRIGGER_SKILLS.filter((s) =>
       s.id.startsWith("reviewer-axis-")
     );
-    expect(reviewerAxisSkills).toHaveLength(6);
-    const ids = reviewerAxisSkills.map((s) => s.id).sort();
-    expect(ids).toEqual(
-      [
-        "reviewer-axis-design-quality",
-        "reviewer-axis-edit-discipline",
-        "reviewer-axis-nfr-compliance",
-        "reviewer-axis-qa-evidence",
-        "reviewer-axis-scope-drift",
-        "reviewer-axis-security"
-      ].sort()
-    );
+    expect(reviewerAxisSkills.length).toBeGreaterThanOrEqual(6);
+    const ids = reviewerAxisSkills.map((s) => s.id);
+    for (const required of [
+      "reviewer-axis-design-quality",
+      "reviewer-axis-edit-discipline",
+      "reviewer-axis-nfr-compliance",
+      "reviewer-axis-qa-evidence",
+      "reviewer-axis-scope-drift",
+      "reviewer-axis-security"
+    ]) {
+      expect(ids, `reviewer-axis cohort missing ${required}`).toContain(required);
+    }
   });
 
   it("AC-9 — every reviewer-axis skill follows the v8.83 contract: stages = [\"review\"], gate predicate defined, body ≥3k chars, fileName matches id", () => {

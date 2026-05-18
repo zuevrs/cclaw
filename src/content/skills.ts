@@ -83,6 +83,24 @@ export interface GateEnvelope {
    * its exclusions).
    */
   walkScopeDriftAxis?: boolean;
+  /**
+   * `flows/<slug>/plan.md > ## Key assumptions to validate` carries
+   * ≥1 bullet with a `KA-N` id (v8.85 stable assumption-row id).
+   * Drives whether the `reviewer-axis-assumption-coverage` skill is
+   * pinned to the reviewer dispatch envelope. The orchestrator sets
+   * the flag when it detects the v8.85-shaped section at dispatch
+   * time; legacy pre-v8.80 plans with no section at all, legacy
+   * pre-v8.85 plans whose bullets lack the `KA-N` id, and inline
+   * ceremonies skip the gate.
+   *
+   * v8.85 introduced this when the assumption-coverage axis was added
+   * as the post-build half of v8.80's Key-assumptions-to-validate
+   * enforcement loop: plan-critic §6.5 gates the section's presence;
+   * the reviewer's assumption-coverage axis gates that every
+   * high-stakes KA-N row has a closing `verify(AC-*): passing` commit
+   * carrying a `validates: KA-N` payload before ship.
+   */
+  walkAssumptionCoverageAxis?: boolean;
 }
 
 export interface AutoTriggerSkill {
@@ -594,6 +612,22 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     stages: ["review"],
     gate: (env) => env.walkScopeDriftAxis === true,
     body: readSkill("reviewer-axis-scope-drift.md")
+  },
+  {
+    id: "reviewer-axis-assumption-coverage",
+    fileName: "reviewer-axis-assumption-coverage.md",
+    description:
+      "Gated reviewer axis (v8.85 — assumption-validation lite). Full per-KA-N row cross-check protocol (validates: payload scan + false-positive guard + unknown-id payload + ship-handoff sub-check), severity grading (required on high-stakes rows with zero validating commits; consider on non-high-stakes rows), and anti-rationalizations for the `assumption-coverage` axis. Loads only when the gate fires (`walkAssumptionCoverageAxis: true` on the dispatch envelope, set when `plan.md > ## Key assumptions to validate` carries ≥1 bullet with a `KA-N` id). Closes the v8.85 assumption-validation lite loop: the architect's Phase 7.5 surfaces the bets with `KA-N` ids; plan-critic §6.5 audits the section's presence; the builder's optional `validates: KA-N` payload on `verify(AC-*): passing` commits flips matching rows to `validated` via the flow-state validator (`src/assumption-validation.ts`); the assumption-coverage axis gates that every high-stakes bet has a closing commit before ship. reviewer.ts retains a 5-line stub pointing here.",
+    triggers: [
+      "specialist:reviewer",
+      "stage:review",
+      "axis:assumption-coverage",
+      "walkAssumptionCoverageAxis:true",
+      "plan.keyAssumptions:KA-N-ids-present"
+    ],
+    stages: ["review"],
+    gate: (env) => env.walkAssumptionCoverageAxis === true,
+    body: readSkill("reviewer-axis-assumption-coverage.md")
   }
 ];
 

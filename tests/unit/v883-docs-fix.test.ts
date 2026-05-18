@@ -126,14 +126,14 @@ describe("v8.83 docs drift cleanup + investigator axis fix", () => {
       expect(hasLens || hasSix).toBe(true);
     });
 
-    it("README.md contains `12 axes` OR `twelve-axis` (v8.84 — added the scope-drift axis as the post-build half of v8.80's Not-Doing enforcement)", () => {
-      const hasTwelve = README.includes("12 axes");
-      const hasTwelveAxis = README.includes("twelve-axis");
-      expect(hasTwelve || hasTwelveAxis).toBe(true);
+    it("README.md contains `13 axes` OR `thirteen-axis` (v8.85 — added the assumption-coverage axis as the post-build half of v8.80's Key-assumptions-to-validate enforcement)", () => {
+      const hasThirteen = README.includes("13 axes");
+      const hasThirteenAxis = README.includes("thirteen-axis");
+      expect(hasThirteen || hasThirteenAxis).toBe(true);
     });
 
-    it("README.md contains `33 skills` (v8.84 bumped 32 → 33 after adding the scope-drift reviewer-axis companion skill)", () => {
-      expect(README).toContain("33 skills");
+    it("README.md contains `34 skills` (v8.85 bumped 33 → 34 after adding the assumption-coverage reviewer-axis companion skill)", () => {
+      expect(README).toContain("34 skills");
     });
 
     it("README.md contains `16 runbooks`", () => {

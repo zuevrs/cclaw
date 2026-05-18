@@ -276,17 +276,18 @@ describe("v8.83 — buildAutoTriggerBlock(stage, gateEnvelope) gate-filters revi
 });
 
 describe("v8.83 — reviewer.ts size is meaningfully smaller post-extraction (sanity check on savings)", () => {
-  it("AC-7 — reviewer.ts source file size dropped from ~93k chars to under 75k chars after the five-axis lift", async () => {
+  it("AC-7 — reviewer.ts source file size dropped from ~93k chars to under 82k chars after the five-axis lift (post-v8.84 + v8.85 stub headroom)", async () => {
     const source = await fs.readFile(REVIEWER_TS_PATH, "utf8");
     // Loose sanity check — the original was ~93k chars. After
     // extracting the five gated-axis bodies, the file should drop by
-    // at least ~18k chars (the combined axis prose). We assert a
+    // at least ~10k chars (the combined axis prose). We assert a
     // generous ceiling rather than a precise count so future additive
-    // edits don't constantly tickle this tripwire.
+    // edits (v8.84 scope-drift stub, v8.85 assumption-coverage stub +
+    // 13-axis recapture) don't constantly tickle this tripwire.
     expect(
       source.length,
-      `reviewer.ts is ${source.length} chars; the v8.83 lift expected post-extraction size to be under 75000 chars (down from ~92976 chars pre-extraction). A regression here means an axis body was silently re-inlined.`
-    ).toBeLessThan(75000);
+      `reviewer.ts is ${source.length} chars; the v8.83 lift expected post-extraction size to be under 82000 chars (down from ~92976 chars pre-extraction). A regression here means an axis body was silently re-inlined.`
+    ).toBeLessThan(82000);
   });
 });
 

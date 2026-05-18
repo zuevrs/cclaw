@@ -1,6 +1,51 @@
 # Changelog
 
 
+## 8.90.0 — Assumption-validation lite (v8.85 work)
+
+### Why
+
+v8.80 promoted `## Key assumptions to validate` to a first-class plan-template section and plan-critic §6.5 gates ship on the section being non-empty (2-5 bullets naming bets the plan rests on, each pairing a validation method with an `unvalidated | validated | invalidated` status). That closed the author-time half of the contract — every plan that reaches review must declare its bets. The build-time half was missing: nothing in the post-build pipeline was closing the loop. Rows landed at `Status: unvalidated` and stayed there silently regardless of whether the build's evidence actually proved the bet. v8.85 closes the loop with three additive moves, mirroring the v8.84 shape that closed the Not-Doing half of the same v8.80 promotion.
+
+Sourced from the gstack `/devex-review` boomerang pattern — a verify commit can "validate" an earlier assumption row, flipping status atomically — and the addyosmani `idea-refine` Phase Key-Assumptions-to-Validate discipline (every roadmap rests on bets; surface what would invalidate them).
+
+### What changed
+
+**Deliverable 1 — Stable `KA-N` ids on every `## Key assumptions to validate` bullet.** Each bullet now leads with a `KA-N` id (Key Assumption N — `KA-1`, `KA-2`, ..., monotonically numbered). The id is the cross-reference handle the builder cites in `verify(AC-N): passing` commit messages, the reviewer's new `assumption-coverage` axis uses to cross-check rows, and the ship template's new `## Unvalidated assumptions` section uses to surface still-open bets to the user. The plan template (`src/content/artifact-templates.ts > PLAN_TEMPLATE`) and the research-mode synthesis template (`RESEARCH_TEMPLATE > ## Key assumptions to validate`) both carry the new format; the architect's Phase 7.5 (`src/content/specialist-prompts/architect.ts`) and the research orchestrator's authoring instructions (`src/content/start-command.ts`) both name the format verbatim; the plan-critic's §6.5 audit (`src/content/specialist-prompts/plan-critic.ts`) gains a new `key-assumptions-no-id` finding class for bullets that lack the leading `KA-N` bold token.
+
+**Deliverable 2 — Optional `validates: KA-N` payload on `verify(AC-N): passing` commits.** Builder may append a `validates: KA-N [KA-M ...]` line to the commit message body when the AC's verification evidence ALSO proves the matching KA bullet's bet. Multiple KA-N ids are space- or comma-separated on the same line. The post-build flow-state validator (a new pure module `src/assumption-validation.ts` — `parseValidatesPayload`, `parseAssumptionRows`, `flipAssumptionRows`, `collectValidations`, `unvalidatedKaIds`) scans the build range's verify-commit log, extracts payloads, and rewrites matching KA-N rows to `Status: validated by <sha>`. Idempotent (re-running on its own output is a no-op); first validation wins on duplicates; unknown ids silently dropped; manual flips to `validated` / `invalidated` are never overridden. The builder.ts prompt body gains a worked-example block at the verify pass section.
+
+**Deliverable 3 — New reviewer axis `assumption-coverage` (gated; v8.85).** The thirteenth reviewer axis. Fires when `walkAssumptionCoverageAxis: true` is set on the dispatch envelope — the orchestrator stamps the flag when `flows/<slug>/plan.md > ## Key assumptions to validate` carries ≥1 bullet with a `KA-N` id (legacy pre-v8.80 plans with no section, legacy pre-v8.85 plans whose bullets lack ids, and inline ceremonies skip the gate). Four sub-checks:
+
+- **Sub-check 1 — Per-KA-N validation cross-check.** For each high-stakes row (assumption clause carrying the `(high-stakes)` label) whose status is still `unvalidated`, scan the build range's verify commits for a matching `validates: KA-N` payload. Zero matches → `KA-N: not validated by any commit despite high-stakes label` (severity=`required`). Non-high-stakes rows ride through as severity=`consider`.
+- **Sub-check 2 — False-positive payload guard.** When `validates: KA-N` claims a closure but the verify commit's diff doesn't touch the validation method's anchor (empty marker commit; test file unrelated to the KA bullet's `Validate by:` clause), file `validates-payload-false-positive` (severity=`required`). Asymmetric guard against payload abuse — without it the builder could silently flip rows by stapling `validates: KA-N` onto every verify commit.
+- **Sub-check 3 — Unknown-id payload.** `validates: KA-99` against a 3-row section files `validates-payload-unknown-ka-id` (severity=`consider`). The flow-state validator already silently drops unknown ids; this finding surfaces the typo for fix-up.
+- **Sub-check 4 — Ship-handoff structural check.** Confirms the ship template's `## Unvalidated assumptions` section is populated when ≥1 row remains unvalidated at ship time; missing section → `ship-missing-unvalidated-assumptions` (severity=`consider`).
+
+The full rubric + four sub-checks + severity ladder + anti-rationalizations live in a new companion skill `src/content/skills/reviewer-axis-assumption-coverage.md` (~13k chars). `reviewer.ts` retains only a 5-line stub naming the skill — same v8.83 companion-skill pattern.
+
+**Deliverable 4 — New `## Unvalidated assumptions` section on `ship.md`.** The ship template (`SHIP_TEMPLATE`) grows a new section listing every KA-N row whose status is still `unvalidated` at ship time. Surfaces known-unmeasured bets to the user so they sign off knowingly rather than silently. When every row was validated, the section reads the literal "All key assumptions validated." line and drops the bulleted list.
+
+**Deliverable 5 — Dispatch-envelope wiring.** `GateEnvelope` (in `src/content/skills.ts`) gained a seventh flag `walkAssumptionCoverageAxis?: boolean`. The new skill is registered with `stages: ["review"]` + `gate: (env) => env.walkAssumptionCoverageAxis === true` — identical mechanical shape to the six pre-v8.85 reviewer-axis skills. Skill total: 33 → 34.
+
+**Deliverable 6 — Slim-counter wiring.** The reviewer's slim-summary `What changed` axes counter grew from `c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N sd=N` to `c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N sd=N av=N`. `av=N` is **only** present when the assumption-coverage gate fired (same gating-aware optional-token pattern as `qae=N` / `dq=N` / `sd=N`).
+
+**Deliverable 7 — README + tests.**
+
+- README: 12 axes → 13 axes; auto-trigger skill list grew by one (34 total); reviewer cohort row names the v8.85 assumption-coverage companion alongside the six pre-v8.85 axes; new v8.85 explainer paragraph above the v8.80 explainer; `Twelve-axis` prose updated to `Thirteen-axis` (in `reviewer.ts`).
+- `tests/unit/v885-assumption-validation.test.ts` — new tripwire suite. Pins the companion skill's presence + body shape + frontmatter; registers the skill with `stages: ["review"]` + gate predicate; gate fires on `walkAssumptionCoverageAxis: true` and stays closed on the empty envelope; `buildAutoTriggerBlock("review", { walkAssumptionCoverageAxis: true })` emits the pointer; reviewer.ts carries the thirteen-axis intro + stub heading + KA-N cross-reference language + `validates:`-payload language; README references 13 axes + 34 skills + assumption-coverage gating; CHANGELOG names the v8.85 slug; plan template + ship template + architect prompt + builder prompt + plan-critic prompt + start-command research instructions all carry the new KA-N + `validates:` language; `parseValidatesPayload` extracts ids from canonical and tolerant shapes; `parseAssumptionRows` reads canonical v8.85 + legacy rows; `flipAssumptionRows` is idempotent and respects already-validated / invalidated rows.
+
+### Path taken — new `assumption-coverage` axis (NOT a `nfr-compliance` extension)
+
+The work could in principle extend `nfr-compliance` instead of adding a new axis. We picked the new-axis path because:
+
+- The gating predicates are different: `nfr-compliance` fires on `## Non-functional` non-empty; `assumption-coverage` fires on `## Key assumptions to validate` carrying ≥1 KA-N id. Sharing a single companion-skill body across two different gates would entangle the rubrics and force the reader to skim past the irrelevant half.
+- The cross-check shapes are different: `nfr-compliance` matches NFR rows against perf-budget / a11y / compat / security evidence in the diff; `assumption-coverage` matches KA-N rows against `validates:` payloads in verify-commit messages. The evidence surfaces don't overlap.
+- The pattern is established: v8.84 added `scope-drift` as a separate axis closing the Not-Doing half of the v8.80 promotion. v8.85 mirrors that exactly for the Key-assumptions half, keeping the two halves of v8.80 symmetric in the codebase.
+
+The v8.85 axis is the smallest viable addition; the new-axis path is cleaner than the nfr-extension path. Both directions were acceptable per the slug spec; the codebase pattern made the call.
+
+
 ## 8.89.0 — Not-Doing gate (v8.84 work)
 
 ### Why
