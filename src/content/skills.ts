@@ -27,6 +27,51 @@ export type AutoTriggerStage =
   | "compound"
   | "always";
 
+/**
+ * Gate envelope passed to {@link buildAutoTriggerBlock} so a runtime
+ * dispatch site (typically the orchestrator constructing the reviewer
+ * dispatch envelope) can filter the per-stage block down to **only the
+ * skills whose gates are currently active**. v8.83 introduced this when
+ * the reviewer's five gated axes (qa-evidence / design-quality /
+ * security / nfr-compliance / edit-discipline) were lifted out of
+ * `reviewer.ts` into per-axis companion skills — the orchestrator now
+ * passes the gate envelope alongside the stage so the rendered block
+ * lists only the reviewer-axis skills that will actually load.
+ *
+ * Every field is optional; an absent flag is read as `false` (gate did
+ * not fire). Skills without a {@link AutoTriggerSkill.gate} predicate
+ * are unaffected and ride every stage block they're tagged for.
+ */
+export interface GateEnvelope {
+  /** Reviewer dispatch envelope flag — design-quality axis active. */
+  walkDesignQualityAxis?: boolean;
+  /** Reviewer dispatch envelope flag — qa-evidence axis active. */
+  walkQaEvidenceAxis?: boolean;
+  /**
+   * `triage.securityFlag == true` OR `plan.md` frontmatter
+   * `security_flag: true`. Surfaced as a gate signal so the
+   * `reviewer-axis-security` skill can be conditionally pinned to the
+   * dispatch envelope when the slug actually touches a sensitive
+   * surface. (The reviewer still walks the lightweight five-item
+   * threat-model on every iteration; this flag controls whether the
+   * deep skill body is pinned.)
+   */
+  securityFlag?: boolean;
+  /**
+   * `plan.md` carries a non-empty `## Non-functional` section. Drives
+   * whether the `reviewer-axis-nfr-compliance` skill is pinned to the
+   * dispatch envelope.
+   */
+  planHasNonFunctional?: boolean;
+  /**
+   * `ceremonyMode != "inline"` AND `triage.downgradeReason != "no-git"`.
+   * Drives whether the `reviewer-axis-edit-discipline` skill is pinned
+   * (the axis always fires in strict / soft modes, but is structurally
+   * skipped on inline / no-git).
+   */
+  editDisciplineActive?: boolean;
+}
+
 export interface AutoTriggerSkill {
   id: string;
   fileName: string;
@@ -46,6 +91,27 @@ export interface AutoTriggerSkill {
    * specialist prompt composition.
    */
   stages?: ReadonlyArray<AutoTriggerStage>;
+  /**
+   * Optional gate predicate — when present, {@link buildAutoTriggerBlock}
+   * only emits the skill's pointer when the caller supplies a
+   * {@link GateEnvelope} that the predicate accepts. When the caller
+   * omits the gate envelope entirely (legacy / module-import-time
+   * call-sites such as the reviewer-prompt template literal), the
+   * gate is **bypassed** — the skill rides the stage block as if no
+   * predicate had been declared. This keeps pre-v8.83 callers working
+   * verbatim while letting runtime call-sites (orchestrator dispatch
+   * envelope construction) opt into gate filtering.
+   *
+   * Introduced in the v8.83-token-axes release for the five reviewer-axis
+   * companion skills (qa-evidence / design-quality / security /
+   * nfr-compliance / edit-discipline). The reviewer's prompt header
+   * still pre-renders the unfiltered block at module load (so an agent
+   * reading the prompt sees the full reviewer-stage skills index); the
+   * orchestrator's dispatch envelope can call
+   * `buildAutoTriggerBlock("review", env)` to render a tighter,
+   * gate-filtered block at runtime.
+   */
+  gate?: (env: GateEnvelope) => boolean;
   body: string;
 }
 
@@ -418,6 +484,87 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     ],
     stages: ["triage", "plan"],
     body: readSkill("ambiguity-discipline.md")
+  },
+  {
+    id: "reviewer-axis-edit-discipline",
+    fileName: "reviewer-axis-edit-discipline.md",
+    description:
+      "Gated reviewer axis (lifted in the v8.83 release) — full rubric, evidence-collection guidance, and severity matrix for the reviewer's `edit-discipline` axis (v8.48+; v8.63 split slice work + AC verification; v8.64 parallel-by-default safety net). Lifted out of `reviewer.ts` so the heavy prose loads only when the axis actually fires (every reviewer iteration in `strict` / `soft`; skipped on `inline` and on `triage.downgradeReason == \"no-git\"`). reviewer.ts retains a 5-line stub pointing here.",
+    triggers: [
+      "specialist:reviewer",
+      "stage:review",
+      "axis:edit-discipline",
+      "ceremony_mode:strict",
+      "ceremony_mode:soft"
+    ],
+    stages: ["review"],
+    gate: (env) => env.editDisciplineActive === true,
+    body: readSkill("reviewer-axis-edit-discipline.md")
+  },
+  {
+    id: "reviewer-axis-qa-evidence",
+    fileName: "reviewer-axis-qa-evidence.md",
+    description:
+      "Gated reviewer axis (lifted in the v8.83 release). Full per-UI-AC evidence rubric, `Status: pass` verb-match cross-check, evidence-tier escalation rules, skip rules, and anti-rationalizations for the `qa-evidence` axis (v8.52+; v8.63 keyed off slice `Surface` for UI gating + AC for evidence rows). Lifted out of `reviewer.ts` so the heavy prose loads only when the qa gate actually fires (`triage.surfaces` ∩ {`ui`, `web`} ≠ ∅ AND `ceremonyMode != \"inline\"`, OR `walkQaEvidenceAxis: true` on the dispatch envelope). reviewer.ts retains a 5-line stub pointing here.",
+    triggers: [
+      "specialist:reviewer",
+      "stage:review",
+      "axis:qa-evidence",
+      "walkQaEvidenceAxis:true",
+      "triage.surfaces:ui",
+      "triage.surfaces:web"
+    ],
+    stages: ["review"],
+    gate: (env) => env.walkQaEvidenceAxis === true,
+    body: readSkill("reviewer-axis-qa-evidence.md")
+  },
+  {
+    id: "reviewer-axis-security",
+    fileName: "reviewer-axis-security.md",
+    description:
+      "Gated reviewer axis (lifted in the v8.83 release). Full five-item threat-model checklist (authentication / authorization / secrets / supply chain / data exposure), per-surface sensitive-change protocol (OAuth flows, external integrations, migrations on user data, runtime deps, logging / analytics), hard rules, edge cases, and common pitfalls for the `security` axis (v8.62 absorbed from the retired `security-reviewer` specialist). Lifted out of `reviewer.ts` so the heavy prose loads only when `triage.securityFlag == true` (or `plan.md` frontmatter `security_flag: true`). reviewer.ts retains a 5-line stub pointing here.",
+    triggers: [
+      "specialist:reviewer",
+      "stage:review",
+      "axis:security",
+      "security-flag:true",
+      "diff:auth|secrets|supply-chain|pii"
+    ],
+    stages: ["review"],
+    gate: (env) => env.securityFlag === true,
+    body: readSkill("reviewer-axis-security.md")
+  },
+  {
+    id: "reviewer-axis-nfr-compliance",
+    fileName: "reviewer-axis-nfr-compliance.md",
+    description:
+      "Gated reviewer axis (lifted in the v8.83 release). Full gating rule + per-NFR-row cross-check protocol (performance ↔ benchmark commits, compatibility ↔ runtime pins, accessibility ↔ a11y test invocations, security ↔ posture rows) and finding shape for the `nfr-compliance` axis. Lifted out of `reviewer.ts` so the heavy prose loads only when `flows/<slug>/plan.md` carries a non-empty `## Non-functional` section (architect-authored budgets). reviewer.ts retains a 5-line stub pointing here.",
+    triggers: [
+      "specialist:reviewer",
+      "stage:review",
+      "axis:nfr-compliance",
+      "plan.nonFunctional:non-empty"
+    ],
+    stages: ["review"],
+    gate: (env) => env.planHasNonFunctional === true,
+    body: readSkill("reviewer-axis-nfr-compliance.md")
+  },
+  {
+    id: "reviewer-axis-design-quality",
+    fileName: "reviewer-axis-design-quality.md",
+    description:
+      "Gated reviewer axis (v8.70; body lifted in the v8.83 release). Full per-dimension 0-10 grading protocol, AI-slop umbrella check, severity ladder (5/10 → consider; ≤3/10 → required; accessibility one-tier escalation; ≤2/10 accessibility → critical), and anti-rationalizations for the `design-quality` axis. Lifted out of `reviewer.ts` so the heavy prose loads only when the gate fires (`walkDesignQualityAxis: true` on the dispatch envelope, OR `triage.surfaces` ∩ {`ui`, `design`, `frontend`, `ux`} ≠ ∅, OR diff contains UI files). reviewer.ts retains a 5-line stub pointing here.",
+    triggers: [
+      "specialist:reviewer",
+      "stage:review",
+      "axis:design-quality",
+      "walkDesignQualityAxis:true",
+      "design-surface:true",
+      "diff:tsx|jsx|vue|svelte|astro|html|css|scss"
+    ],
+    stages: ["review"],
+    gate: (env) => env.walkDesignQualityAxis === true,
+    body: readSkill("reviewer-axis-design-quality.md")
   }
 ];
 
@@ -475,17 +622,31 @@ function renderSkillBullet(skill: AutoTriggerSkill): string {
  *   every stage's block. An unknown stage value falls back to the full
  *   set — same as omitting the parameter — so a typo never silently
  *   strips every skill out of a dispatch.
+ * - v8.83 — when `gateEnvelope` is provided, skills carrying a
+ *   {@link AutoTriggerSkill.gate} predicate are additionally filtered:
+ *   the predicate is invoked with the envelope; only skills whose
+ *   predicate returns `true` are rendered. When the envelope is omitted
+ *   (legacy / module-import-time call-sites such as the reviewer-prompt
+ *   template literal), gated skills bypass the predicate and ride the
+ *   stage block as if no predicate had been declared. This keeps every
+ *   pre-v8.83 caller working verbatim while letting runtime call-sites
+ *   (orchestrator dispatch envelope construction) opt into gate
+ *   filtering.
  *
- * Two token-budget wins composed:
+ * Three token-budget wins composed:
  *
  *  1. stage filtering — out-of-scope skills are not emitted.
- *  2. compact bullet — emitted skills carry id + path only.
+ *  2. gate filtering (v8.83) — gated skills only emit when their gate fires.
+ *  3. compact bullet — emitted skills carry id + path only.
  *
  * The v819-skill-windowing suite asserts a 20%+ stage-vs-full ratio
  * reduction; the v849 overcomplexity-sweep suite asserts the v8.18
  * description prose no longer appears inline.
  */
-export function buildAutoTriggerBlock(stage?: AutoTriggerStage): string {
+export function buildAutoTriggerBlock(
+  stage?: AutoTriggerStage,
+  gateEnvelope?: GateEnvelope
+): string {
   const known = new Set<AutoTriggerStage>([
     "triage",
     "plan",
@@ -498,12 +659,19 @@ export function buildAutoTriggerBlock(stage?: AutoTriggerStage): string {
   ]);
   const useStage = stage !== undefined && known.has(stage) ? stage : undefined;
 
-  const skills = useStage
+  const stageFiltered = useStage
     ? AUTO_TRIGGER_SKILLS.filter((skill) => {
         const declared = skill.stages ?? (["always"] as const);
         return declared.includes(useStage) || declared.includes("always");
       })
     : AUTO_TRIGGER_SKILLS;
+
+  const skills = gateEnvelope
+    ? stageFiltered.filter((skill) => {
+        if (typeof skill.gate !== "function") return true;
+        return skill.gate(gateEnvelope) === true;
+      })
+    : stageFiltered;
 
   const heading = useStage
     ? `## Active skills (stage: \`${useStage}\`)`
@@ -602,6 +770,9 @@ export const SKILLS_INDEX_BODY: string = renderSkillsIndex();
  * `undefined` — useful inside specialist prompt template literals where
  * the stage is hardcoded per file.
  */
-export function buildAutoTriggerBlockForStage(stage: AutoTriggerStage): string {
-  return buildAutoTriggerBlock(stage);
+export function buildAutoTriggerBlockForStage(
+  stage: AutoTriggerStage,
+  gateEnvelope?: GateEnvelope
+): string {
+  return buildAutoTriggerBlock(stage, gateEnvelope);
 }

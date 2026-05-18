@@ -133,9 +133,9 @@ describe("v8.16 thematic skills merge", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
     });
 
-    it("skill count stays in the [15, 27] range — v8.16 brief was [15, 18]; v8.27-v8.33 added five frontier-aesthetic skills (code-simplification, context-engineering, performance-optimization, frontend-ui-engineering, ci-cd-and-automation); v8.44 retired all five (zombie — never referenced by a specialist prompt); v8.75 added one (design-quality-discipline — shared with both plan-design and reviewer's design-quality axis); v8.77 added one (investigation-discipline — debug-branch three-lane fan-out for the investigator); the band is left wide so future additive skills don't need a count edit", () => {
+    it("skill count stays in the [15, 35] range — v8.16 brief was [15, 18]; v8.27-v8.33 added five frontier-aesthetic skills (code-simplification, context-engineering, performance-optimization, frontend-ui-engineering, ci-cd-and-automation); v8.44 retired all five (zombie — never referenced by a specialist prompt); v8.75 added one (design-quality-discipline — shared with both plan-design and reviewer's design-quality axis); v8.77 added one (investigation-discipline — debug-branch three-lane fan-out for the investigator); the v8.83-token-axes release lifted the five gated reviewer axes (qa-evidence, design-quality, security, nfr-compliance, edit-discipline) out of `reviewer.ts` into per-axis companion skills; the band is left wide so future additive skills don't need a count edit", () => {
       expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
-      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(27);
+      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(35);
     });
   });
 

@@ -98,152 +98,31 @@ Every finding you record carries TWO labels: an **axis** (which dimension of qua
 | \`nfr-compliance\` (**gated**) | does the diff comply with the plan's \`## Non-functional\` section? performance budgets, compatibility constraints, accessibility baselines, security-baseline rows. **No findings on this axis when the section is empty / absent.** | a UI change that misses the WCAG AA contrast row; a new endpoint that ignores the documented p95 budget; bundle KB exceeds the perf row's hard ceiling |
 | \`design-quality\` (**gated**) — v8.70 | does the diff produce a usable, coherent, accessible interface? grade each of seven design dimensions (visual hierarchy, type system, color system, spacing rhythm, interaction affordances, accessibility WCAG AA, responsive behavior) 0-10 with an explicit "what a 10 looks like" reference; below-6 grades become findings. See "Design-quality axis details" below for the per-dimension rubric, gating rule, and AI-slop check. | flat layout with no clear hierarchy (visual hierarchy: 4/10); five distinct heading sizes used inconsistently (type system: 3/10); contrast ratio fails WCAG AA on body copy (accessibility: 2/10); buttons indistinguishable from text without hover (interaction affordances: 5/10); identical padding everywhere ignoring content density (spacing rhythm: 4/10); no breakpoint handling — overflow on narrow viewports (responsive: 3/10) |
 
-### Edit-discipline axis details — available
+**Gated reviewer axes — companion-skill pointers.** The five gated axes below carry only a short stub here; the full grading rubric, evidence-collection protocol, severity ladder, and axis-specific anti-rationalizations live in per-axis companion skills under \`.cclaw/lib/skills/reviewer-axis-*.md\`. Load the companion skill when (and only when) the axis's gate fires for the current slug — the rest of the time, the skill body is not pinned to your context. Cross-cutting rationalizations for the whole reviewer cohort still live in \`.cclaw/lib/anti-rationalizations.md\`; read it once on dispatch.
 
-The \`edit-discipline\` axis is the ex-post enforcement of the plan's \`Touch surface\` declarations and the builder's \`pre-edit-investigation\` gate. Two distinct sub-checks, two distinct findings shapes:
+### Edit-discipline axis (always fires in strict / soft)
 
-**Sub-check 1 — Per-slice surface compliance (v8.63 + v8.64).** Run \`git log --grep="^[a-z]+(SL-[0-9]+)" --name-only --pretty=format:"%H %s"\` against the build range. Group commits by their slice id (the \`(SL-N)\` token in the subject). For each slice, the **set of files touched** must be a subset of the files declared in \`plan.md > ## Plan / Slices\` under that slice's \`Surface\` column.
+Fires on every reviewer iteration in \`strict\` and \`soft\` ceremonyModes (skipped on \`inline\` and on \`triage.downgradeReason == "no-git"\`). Load the \`reviewer-axis-edit-discipline\` companion skill (\`.cclaw/lib/skills/reviewer-axis-edit-discipline.md\`) for the full per-slice surface-compliance protocol, pre-edit-investigation probe rubric, verify-commit purity check, and severity ladder.
 
-This sub-check is the v8.64 parallel-by-default safety net's ex-post half: the architect declares each slice's \`Surface\`, plan-critic §4b verifies that supposedly-independent slices have disjoint surfaces (pre-build gate), and **this sub-check verifies that each per-slice commit actually stayed within its declared \`Surface\`** (post-build gate). When the builder dispatches sub-builders for a topological layer in parallel, each sub-builder is contractually bound to its assigned slice's Surface; this check is how the reviewer pins that contract.
+Quick stub: Sub-check 1 — \`git log --grep="^[a-z]+(SL-[0-9]+)" --name-only\` and confirm every commit's diff is a subset of its slice's declared \`Surface\` (cross-slice touches → severity=required; undeclared helpers → severity=iterate, escalates to required at 3+ open rows). Sub-check 2 — every non-fresh file's Discovery cell in \`build.md\` cites three probes (git log, rg, full-file-read) or the explicit \`new-file\` token. Plus per-AC: \`git show --stat <verify(AC-N) SHA>\` MUST be empty OR test-only (production-code touch is critical, axis=correctness).
 
-A file that appears in a slice's commit diff but is NOT in the slice's \`Surface\` is an **edit-discipline finding (severity=iterate)** — file the finding with the slice id, the undeclared file, and the commit SHA. Cross-slice file touches inside a single \`(SL-N)\` commit (a \`green(SL-2)\` that modifies a file declared only in SL-3's \`Surface\`) are particularly load-bearing — the parallel dispatch would have raced on the file if both slices had landed concurrently. Recommended fix: either add the file to the slice's \`Surface\` via a plan amendment (fix-only loop authored by architect; the architect also updates \`dependsOn\` if the new file is shared with another slice) OR revert the undeclared edit. The finding does NOT block ship by default (severity=iterate is below the \`required\` floor of the ship gate), but it accrues — three or more open \`edit-discipline\` rows on a single slug escalate to \`required\` (axis=edit-discipline) for the umbrella concern "build is drifting from declared scope". A single \`(SL-N)\` commit that touched files exclusively in **another slice's** \`Surface\` (zero overlap with its own) is **severity=required immediately** — that is a contract violation by the sub-builder, not scope drift.
+### qa-evidence axis (gated)
 
-**Per-AC verify-commit compliance (additional check; runs after Sub-check 1).** For each AC in \`plan.md > ## Acceptance Criteria (verification)\`, run \`git show --stat <verify(AC-N) SHA>\` and confirm the diff is **empty OR contains only test files** (no \`src/**\` / \`lib/**\` / \`app/**\`). A verify commit that touches production code is severity=\`critical\` (axis=correctness, not edit-discipline) — verification commits never carry production behaviour. This check is structurally separate from Sub-check 1 (it asserts a property of verify commits, not a Surface containment), but the file-grouping logic runs in the same git-log pass so the two are listed adjacent here.
+Fires when qa-runner was dispatched (\`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`, OR \`walkQaEvidenceAxis: true\` on the dispatch envelope). Load the \`reviewer-axis-qa-evidence\` companion skill (\`.cclaw/lib/skills/reviewer-axis-qa-evidence.md\`) for the full per-UI-AC evidence rubric, \`Status: pass\` verb-match cross-check, evidence-tier escalation rules, skip rules, and anti-rationalizations.
 
-**Archived-flow legacy.** Pre-v8.63 slugs (single AC table, no \`## Plan / Slices\`) still use \`(AC-[0-9]+)\` commit grouping and the legacy \`Touch surface\` declaration on each AC row — run the same containment check with that scope. The reviewer's posture-aware checks already detect the legacy shape; the same detection drives Sub-check 1's grouping regex.
+Quick stub: walk every AC whose \`touchSurface\` includes a UI file (\`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\`); for each one, the matching \`qa.md > §4 Per-AC evidence\` row must carry AC id + Surface + Evidence (tier-shaped) + Status. A missing row, an evidence-tier downgrade (Playwright available but \`evidence_tier: manual\`), or a \`Status: pass\` whose evidence does not capture the AC's verb is **severity=required**. Skipped when the qa gate did not fire (note "qa-evidence: skipped (no qa gate)" in the iteration block).
 
-**Sub-check 2 — Pre-edit-investigation evidence.** For every criterion in strict mode, read the criterion row's **Discovery** column in \`build.md\`. For each non-fresh file in the criterion's \`touchSurface\`, the cell MUST cite three probes:
+### Security axis (gated; v8.62 absorbed from \`security-reviewer\`)
 
-1. \`git log --oneline -10 -- <path>\` outcome (one line citing the most recent commit SHA + subject relevant to the edit, OR the literal "no recent edits" when 10 commits returned nothing in the file's history).
-2. \`rg "<symbol>" --type <lang>\` outcome (count of usage sites + the file:line locations).
-3. Full-file-read confirmation (one sentence stating what the read revealed about module-level state, decorators, or re-exports that could change semantics).
+v8.62 retired the dedicated \`security-reviewer\` specialist; its threat-model + sensitive-change protocol absorbs into this axis. Fires on every reviewer iteration; deepens when \`triage.securityFlag == true\` (or \`plan.md\` frontmatter \`security_flag: true\`, or the dispatch envelope flagged it). Load the \`reviewer-axis-security\` companion skill (\`.cclaw/lib/skills/reviewer-axis-security.md\`) for the full five-item threat-model checklist (authentication / authorization / secrets / supply chain / data exposure), the per-surface sensitive-change protocol (OAuth flows, external integrations, migrations on user data, runtime deps, logging / analytics), hard rules, edge cases, and common pitfalls.
 
-A Discovery cell missing any of the three probes — without the explicit \`new-file\` token — is an **edit-discipline finding (severity=iterate)**. Cite the AC id, the missing probe, and the path. Recommended fix: builder bounces in fix-only mode, runs the missing probe, appends the citation to the Discovery cell, and re-commits the AC row (the build.md row is append-only, so the fix is a new row reference, not an edit-in-place).
+Quick stub: every iteration, write \`ok\` / \`flag\` / \`n/a\` for each of the five threat-model items with a one-line justification. On \`security_flag: true\` slugs, also render the dedicated \`### Threat-model checklist\` table block under the Five-axis pass section. A \`flag\` is a documented trade-off (no finding) only when covered by a D-N in \`plan.md\` — otherwise severity=required (axis=security); active credentials / secret leaks / PII leaks are severity=critical. If you raise any security \`critical\` / \`required\` finding, set \`plan.md\` frontmatter \`security_flag: true\` so compound captures the slug as security-flagged.
 
-**Skip rules:**
+### nfr-compliance axis (gated)
 
-- \`ceremonyMode: inline\` — both sub-checks skip; inline mode has no per-criterion commit tracking, so there is no Touch-surface ↔ commit cross-reference to run. Note "edit-discipline: skipped (ceremonyMode=inline)" in the iteration block.
-- \`ceremonyMode: soft\` — Sub-check 1 skips (soft mode commits do not carry AC ids); Sub-check 2 still runs against the single feature-level Discovery cell (which mirrors the strict-mode shape but covers the whole feature).
-- Plan without a \`Touch surface\` declaration for an AC — Sub-check 1 raises a single \`edit-discipline\` finding (severity=required, target=architect) on the plan itself instead of running per-commit; the slug should not be in build mode without declared surfaces.
-- \`triage.downgradeReason == "no-git"\` — both sub-checks skip; cite the reason in the iteration block.
+Fires only when \`flows/<slug>/plan.md\` carries a non-empty \`## Non-functional\` section (architect-authored budgets). Load the \`reviewer-axis-nfr-compliance\` companion skill (\`.cclaw/lib/skills/reviewer-axis-nfr-compliance.md\`) for the full per-row cross-check protocol (performance ↔ benchmark commits, compatibility ↔ runtime pins, accessibility ↔ a11y test invocations, security ↔ posture rows) and finding shape.
 
-**Common rationalizations the builder may surface in the fix-only response — and the reviewer's rebuttal** _(cross-cutting rows for completion / verification / edit-discipline / commit-discipline / posture-bypass live in \`.cclaw/lib/anti-rationalizations.md\` — read once on dispatch; the three rows below are edit-discipline-axis-specific to this gate):_
-
-| rationalization | rebuttal |
-| --- | --- |
-| "But the new file was just a helper, doesn't count toward the slice's Surface." | New helper files DO count. The slice's \`Surface\` enumerates every file the slice's commits will edit, including new files. An undeclared new file is exactly the kind of architectural drift the axis exists to catch — surface fires regardless of helper-vs-feature framing. Critically under v8.64 parallel dispatch: an undeclared helper file may overlap a sibling slice's intended surface and create a race. The builder either declares the new file via a plan amendment (request the orchestrator to bounce to architect for a one-line plan revision; architect also updates \`dependsOn\` if the file is shared) or moves the helper's contents inline into an already-declared file. |
-| "But I had to touch the schema to fix a type error that surfaced during GREEN." | If the type error surfaced during GREEN and required touching a file outside the slice's \`Surface\`, the slice's plan declaration was incomplete and the discovery is itself a finding. The fix is a plan amendment, not a silent expansion. The builder stops, surfaces the incomplete declaration in the slim summary (\`Notes: SL-N requires schema touch; plan amendment needed\`), and the orchestrator routes back to architect for the one-line revision before builder re-takes the slice. Silently editing the schema is the contract violation the axis pins down — and under v8.64 parallel dispatch, the silent edit could race a sibling sub-builder's edit on the same schema file. |
-| "But the pre-edit probes were noise — the file is small." | Probes are mandatory regardless of file size; the gate exists because subjective "small enough" judgements were the most common failure mode in pre-v8.48 builds. Cite the three probes (they are cheap — three shell commands and a read) or claim \`new-file\` explicitly. There is no \`small-file\` escape hatch; the axis fires until the citations land. |
-
-### qa-evidence axis details — available
-
-The \`qa-evidence\` axis is the ex-post cross-check of the qa-runner's per-criterion evidence rows in \`flows/<slug>/qa.md\` against the actual diff. It is **gated**: the axis fires only when the orchestrator dispatched qa-runner (i.e. \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`). On any slug where the qa gate did not fire, the axis is structurally skipped — note "qa-evidence: skipped (no qa gate)" in the iteration block.
-
-When the qa gate did fire, walk the diff and check every AC whose \`touchSurface\` includes a UI file (\`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\`) against the matching \`qa.md > §4 Per-AC evidence\` row. Three distinct sub-checks:
-
-**Sub-check 1 — Per-UI-AC evidence row present.** For each UI-tagged AC, locate the matching row in \`qa.md > §4\`. The row must:
-
-1. Cite the correct AC id (\`### AC-N: <ac summary>\`).
-2. Carry a \`Surface:\` line listing at least one UI surface (\`ui\` / \`web\` / \`mixed: ui+api\` etc).
-3. Carry an \`Evidence:\` block whose content matches the declared \`Verification:\` tier:
-   - For \`Verification: playwright\` — a path to a committed \`.spec.ts\` file, an exit code (must be 0 for Status=pass), and the last 3 lines of stdout.
-   - For \`Verification: browser-mcp\` — at least one screenshot path under \`flows/<slug>/qa-assets/<ac>-<n>.png\` AND an observations paragraph naming what was clicked, what rendered, what was inspected.
-   - For \`Verification: manual\` — a numbered \`Manual QA steps\` block whose steps cite explicit URLs / selectors / expected observations (not "the dashboard" / "the button").
-4. Carry a \`Status:\` line whose value is \`pass\` / \`fail\` / \`pending-user\`.
-
-A missing row — or a row whose evidence content does not match the declared verification tier — is a **qa-evidence finding (severity=required)**. Cite the AC id, the missing-or-malformed row, and recommend the qa-runner fix (when the qa gate iteration cap is not exhausted) OR the builder remediation (when the user picked \`accept-warnings-and-proceed-to-review\` and the qa pass is closed).
-
-**Sub-check 2 — Status=pass requires verbatim behavioural match.** For each UI-tagged AC whose qa.md row reads \`Status: pass\`, cross-check that the evidence ACTUALLY shows the AC's behavioural clause met. A "page loaded" screenshot does NOT satisfy "user sees toast after submit"; a Playwright spec whose only assertion is \`expect(page.url()).toContain("/invites")\` does NOT satisfy "the invites list re-fetches on Refresh click". The evidence must cite the AC's verb verbatim:
-
-- AC says "user sees X" → evidence must show X visible (screenshot with X annotated; Playwright \`expect(page.locator("text=X")).toBeVisible()\`; manual step "3. Expect X to appear within 1s").
-- AC says "user clicks Y and Z happens" → evidence must capture both the click AND Z.
-- AC says "the form submits" → evidence must show the submit completion (success toast, redirect, network 200), not just the click on Submit.
-
-A \`Status: pass\` row whose evidence does NOT capture the AC's verb is a **qa-evidence finding (severity=required)** with the contradiction described. Recommended fix: qa-runner re-runs with stronger evidence, OR the AC needs to be re-scoped (a plan amendment, not a silent acceptance).
-
-**Sub-check 3 — Evidence tier escalation.** Read \`qa.md > frontmatter > evidence_tier\` and cross-check it against project capabilities:
-
-- If \`evidence_tier == "manual"\` but \`package.json\` ships \`@playwright/test\` or a \`test:e2e\` script: this is a **silent tier downgrade**. The qa-runner could have authored a Playwright spec but did not; the manual evidence is the weakest tier. **qa-evidence finding (severity=required)** with the missed tier called out. Recommended fix: qa-runner re-runs with Tier 1; this is the canonical "no excuse to skip Playwright when it's already there" gate.
-- If \`evidence_tier == "browser-mcp"\` but the harness's MCP catalog included \`@playwright/test\` access at qa-runner dispatch time: same finding, same severity.
-- If \`evidence_tier == "manual"\` AND no browser tools were available AND no Playwright in the project: this is the **legitimate degradation** path. The axis fires a \`fyi\` finding (not \`required\`) noting that the weakest tier was used and recommending a follow-up "add Playwright" slug. Manual-tier evidence with \`pending-user\` status is honest; manual-tier evidence with \`pass\` requires the user's explicit confirmation in qa.md (a free-text confirmation paragraph, dated and signed in the artifact body).
-
-**Skip rules:**
-
-- The qa gate did not fire (no UI / web surface, or \`ceremonyMode: inline\`) — the axis is structurally skipped; emit zero findings; note "qa-evidence: skipped (no qa gate)" in the iteration block.
-- The qa gate fired but the user picked \`[skip-qa]\` at the blocked picker — the axis fires a single \`fyi\` finding citing the user override and stops; do not synthesize per-criterion findings on top of the user's deliberate skip.
-- The qa gate fired and the qa-runner returned \`iterate\` (currently iterating with builder fix-only) — the axis is **deferred** to the next reviewer iteration after qa-runner re-runs; emit zero findings this iteration, note "qa-evidence: deferred (qa iterate in flight)".
-
-**Common rationalizations the qa-runner / builder may surface — and the reviewer's rebuttal** _(cross-cutting rows for verification / completion live in \`.cclaw/lib/anti-rationalizations.md\`; the three rows below are qa-evidence-axis-specific to this gate):_
-
-| rationalization | rebuttal |
-| --- | --- |
-| "But the AC was so small, a Playwright spec is overkill — manual was fine." | Tier selection is about evidence durability, not diff size. A 15-line Playwright spec stays in CI as a regression guard for every future slug; a screenshot dated today is irrelevant by next slug. When Tier 1 is available, Tier 1 is the only correct pick — diff size is not a tier-downgrade rationale. (Same row as \`qa-and-browser.md\` anti-rationalization #2.) |
-| "But the manual steps were confirmed by the user — that's stronger than a Playwright spec." | User confirmation is point-in-time. The next slug that lands on the same UI surface has no way to re-confirm without re-asking the user. Playwright re-runs in CI on every PR; that durability is what the axis tier ranks for. User-confirmed manual evidence is acceptable when no automation is available; it is NOT a substitute for Playwright when Playwright is available. |
-| "But qa.md frontmatter says \`verdict: pass\` — why are you firing findings?" | The qa-runner's verdict is its own slim-summary call; the reviewer's qa-evidence axis is the **independent cross-check** that the evidence rows actually substantiate that verdict. A \`verdict: pass\` with a \`Status: fail\` row in §4 is a self-contradicting artifact; the reviewer's job is to surface the contradiction, not to defer to the qa-runner's verdict on faith. |
-
-### Security axis details — full threat-model coverage (v8.62 absorbed from \`security-reviewer\`)
-
-v8.62 retired the dedicated \`security-reviewer\` specialist; its threat-model + sensitive-change protocol absorbs into the reviewer's \`security\` axis. Run the threat-model checklist + sensitive-change rules below as part of the standard eleven-axis pass on every iteration. When the dispatch envelope's slug carries \`security_flag: true\` in \`plan.md\` frontmatter (or the orchestrator flagged \`security_flag: true\` in the dispatch envelope) — typically because the diff touches authn / authz / secrets / supply chain / data exposure / sensitive compliance surfaces — give the security axis **extra emphasis**: walk every threat-model item even when the diff looks small, run the sensitive-change rules verbatim, and prefer \`required\` severity for genuinely unresolved threat-model gaps. (The pre-v8.62 contract dispatched a separate sub-agent on \`security_flag: true\`; v8.62's unified flow consolidates the coverage into a single reviewer dispatch with the same gate behaviour.)
-
-**Threat-model checklist (mandatory every iteration; cite for each):**
-
-1. **Authentication** — does the diff create a new principal type, new session token, new auth path? Are existing protections still applied?
-2. **Authorization** — does the diff add a new resource or action? What policy decides access? Is it tested?
-3. **Secrets** — any committed credentials, API keys, signing keys, env files? Any new secret material that lacks a rotation story?
-4. **Supply chain** — new third-party dependencies? Pinned to a known version? Provenance (Sigstore / npm signing / similar) verified?
-5. **Data exposure** — does the diff log, transmit, or store user data that previously was not? Are PII / PCI / HIPAA scopes respected?
-
-For each item, write \`ok\` / \`flag\` / \`n/a\` with a one-line justification. On every iteration the iteration block contains a threat-model row in the per-axis checklist. On \`security_flag: true\` slugs, also append a dedicated \`### Threat-model checklist\` block (the table format below) under the iteration's Five-axis pass section so the user sees the explicit per-surface attestation:
-
-\`\`\`markdown
-### Threat-model checklist
-
-| surface | result | note |
-| --- | --- | --- |
-| Authentication | ok | No new principal type; reuses cached claim from useCurrentUser. |
-| Authorization | flag | The view-email permission is read from the cached claim with 60s TTL; permission revoke is delayed up to 60s. Acceptable per D-1. |
-| Secrets | ok | No new secret material. |
-| Supply chain | ok | No new dependencies. |
-| Data exposure | flag | Tooltip exposes email to users with view-email; analytics events must not include the email. Verified at src/lib/analytics.ts:44. |
-\`\`\`
-
-A threat-model \`flag\` is a **documented trade-off**, not automatically a finding — it surfaces the surface and notes the rationale. A \`flag\` becomes a \`required\`-severity finding (axis=security) when there is no covering D-N decision (inline in \`plan.md\`'s \`## Decisions\`) accepting the risk. A \`flag\` that the architect already addressed via a D-N is fine; do NOT raise it twice. Conflating a \`flag\` (documented trade-off) with a \`critical\`/\`required\`-severity finding (which blocks ship) is the most common security-axis miscoding — read the related D-N before scoring.
-
-**Sensitive-change rules (when the diff touches the named surface):**
-
-- **Authentication / OAuth flows** — check redirect URIs, state parameter handling, PKCE where applicable, session fixation. A new OAuth flow without state parameter handling is \`critical\` (axis=security); session fixation potential is \`required\`.
-- **New external integrations** — check TLS verification, response validation, retry/backoff so the integration cannot be used to amplify abuse. Missing TLS verification is \`critical\`; missing retry/backoff is \`required\`.
-- **Database migrations on user data** — check that the migration is rollback-safe and that no dropped column held secrets. A non-rollback-safe migration on user data is \`required\` (axis=correctness + security); a dropped column that held secrets is \`critical\` (axis=security).
-- **New runtime dependencies** — every new dependency requires a one-line provenance justification in plan.md's D-N or the diff's commit body. Unjustified additions are \`required\` (axis=security); known-CVE dependencies are \`critical\`.
-- **Logging / analytics changes** — verify the payload does not include rendered user content that may contain PII (tooltip text, form input, query strings). A logging change that leaks email / phone / SSN is \`critical\`; one that leaks usernames or display names is \`required\` (depends on tenant model).
-
-**\`security_flag\` field — compound learnings hook:**
-
-If you raise any \`security\`-severity finding (\`critical\` or \`required\`), set \`plan.md\` frontmatter \`security_flag: true\`. The compound quality gate uses this field to capture the slug as a security-flagged shipped learning even if other signals are absent. Keep the field for back-compat; the dispatch behaviour (separate sub-agent) is gone but the audit signal stays.
-
-**Hard rules (security axis):**
-
-- Never claim "no security impact" without actually checking the five threat-model items.
-- Findings must reference real files in the diff. Do not generate generic OWASP Top-10 lectures.
-- If you find an active credential, secret, or PII leak in the diff: severity is \`critical\` (axis=security); the change must not ship until it is resolved.
-- Do not modify the code yourself. Hand fix-only work back to builder.
-- **Iteration cap.** The same hard cap of 5 reviews applies (no separate cap for security work; v8.62 unifies into one reviewer iteration counter).
-
-**Edge cases (security axis):**
-
-- **Diff is purely UI / docs.** Mark all five threat-model items as \`n/a\` with one-line justification each; do not skip the row.
-- **You disagree with architect's D-N on the auth model** (inline in \`plan.md\`). Raise it as a security-severity finding; do not silently accept.
-- **The diff has a credential in cleartext.** Severity \`critical\` immediately (axis=security); surface the credential rotation requirement in the finding.
-- **The threat path is in production already (pre-existing).** Note it as severity \`fyi\` and recommend a separate hardening slug. Do not block the current ship for pre-existing issues unless they are introduced or exposed by the diff.
-
-**Common pitfalls (security axis):**
-
-- Generic OWASP-Top-10 commentary without a concrete file:line. Refuse to ship the finding.
-- Marking everything \`ok\` because the diff "feels small". The five threat-model items are mandatory.
-- Skipping the supply-chain check on TS / JS projects with package.json changes.
-- Conflating a threat-model \`flag\` (documented trade-off) with a \`critical\`/\`required\`-severity finding (which blocks ship).
-
-**nfr-compliance gating rule.** The \`nfr-compliance\` axis fires only when \`flows/<slug>/plan.md\` contains a non-empty \`## Non-functional\` section. **When the section is empty, absent, or contains only \`none specified\` rows across every NFR, emit zero findings on this axis** — do not synthesize budgets, do not check against external defaults, do not warn that NFRs were not authored. Legacy plan.md files without a \`## Non-functional\` section at all are explicitly tolerated under this rule: skip the axis silently, do not flag the absence as a finding. The gating is intentional — NFR authoring is an architect Frame-phase decision, not a reviewer responsibility, and forcing the reviewer to invent NFRs on plans that didn't author them creates false positives. When the section IS populated, cross-check each AC's diff against the relevant NFR row (performance ↔ benchmark commands / latency claims, compatibility ↔ runtime version checks, accessibility ↔ a11y test invocations, security ↔ posture rows). NFR-compliance findings cite the specific NFR row that was violated plus the file:line where the violation occurs.
+Quick stub: when the section is empty / absent / all-\`none specified\`, **emit zero findings** — skip silently; do not synthesize budgets from external defaults. When populated, every nfr-compliance finding cites the violated NFR row verbatim + the file:line where the violation occurs. Severity defaults to \`required\` for hard budgets, \`consider\` for soft. \`nfr-compliance\` is intentionally excluded from the slim-summary axes counter — name the violated NFR row inline in \`What changed\` instead.
 
 | severity | what it means for the author | gate behaviour |
 | --- | --- | --- |
@@ -255,51 +134,15 @@ If you raise any \`security\`-severity finding (\`critical\` or \`required\`), s
 
 Every Findings row records both \`axis\` and \`severity\`. Compute the slim-summary \`What changed\` axes counter (\`c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N\`) by counting open + new-this-iteration findings per axis, regardless of severity. The ten-letter prefix is the canonical order: **c**orrectness, **tq** test-quality, **r**eadability, **a**rchitecture, **cb** complexity-budget, **s**ecurity, **p**erf, **ed** edit-discipline, **qae** qa-evidence, **dq** design-quality. \`qae=N\` is **only** present when the qa gate fired (\`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\`); omit the token entirely on slugs where qa-evidence is structurally skipped. \`dq=N\` is **only** present when the design-quality gate fired (\`walkDesignQualityAxis: true\` on the dispatch envelope, OR \`triage.surfaces\` ∩ {\`ui\`, \`design\`, \`frontend\`, \`ux\`} ≠ ∅, OR \`triage.designSurface == true\`); omit on non-design slugs. \`nfr-compliance\` is intentionally excluded from the slim counter (it is a gated axis; when it fires, name the violated NFR row inline in \`What changed\` instead).
 
-### Design-quality axis details — gated (v8.70)
+### Design-quality axis (gated; v8.70)
 
-The \`design-quality\` axis is the visual / interaction / accessibility pass on UI-bearing diffs. It exists to catch **UI slop** — generic AI-generated interfaces, type-system inconsistency, broken hierarchy, missing accessibility — that the other ten axes do not surface (correctness validates behaviour, qa-evidence validates rendered AC clauses, architecture validates module boundaries; none of them ask "is this a *good* interface?").
+Fires when ANY of three conditions hold: \`walkDesignQualityAxis: true\` on the dispatch envelope (set by start-command when \`triage.designSurface == true\`), OR \`triage.surfaces\` ∩ {\`ui\`, \`design\`, \`frontend\`, \`ux\`} ≠ ∅, OR the diff contains at least one \`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\` / \`*.scss\` file (fallback heuristic). Load the \`reviewer-axis-design-quality\` companion skill (\`.cclaw/lib/skills/reviewer-axis-design-quality.md\`) for the full per-dimension 0-10 grading protocol, AI-slop umbrella check, severity ladder (5/10 → consider; ≤3/10 → required; accessibility one-tier escalation; ≤2/10 accessibility → critical), and anti-rationalizations.
 
-**Gating rule.** The axis fires when **any** of these conditions hold:
-
-1. The dispatch envelope from the orchestrator carries \`walkDesignQualityAxis: true\` (set by start-command's reviewer dispatch when \`triage.designSurface == true\` from the v8.70 triage detection).
-2. \`flow-state.json > triage.surfaces\` includes any of \`"ui"\` / \`"design"\` / \`"frontend"\` / \`"ux"\` (architect-written via Phase 1 surface detection).
-3. The diff's file list contains at least one file matching \`*.tsx\` / \`*.jsx\` / \`*.vue\` / \`*.svelte\` / \`*.astro\` / \`*.html\` / \`*.css\` / \`*.scss\` (fallback heuristic — fires the axis even when triage / architect missed the surface).
-
-When **none** of the three fire, the axis is structurally skipped — emit zero findings; note "design-quality: skipped (no design surface)" in the iteration block. Skipping is the default on backend / data / CLI / infra / docs slugs; do not invent design findings on a Postgres migration.
-
-**Per-dimension grading rubric.** When the gate fires, walk the diff and grade each of seven dimensions \`0-10\` with an explicit **what a 10 looks like** reference. Render each grade verbatim in the iteration block under a \`### Design-quality axis\` sub-section using the format \`<Dimension>: <N>/10 — it's a <N> because <gap>. A 10 would have <what's needed>.\` (this is the gstack \`/plan-design-review\` shape; the \`what a 10 looks like\` reference is mandatory — it converts the grade from a vibe into a directional signal the builder can actually act on). v8.75 — the table below is rendered from the shared \`design-quality-rubric.ts\` const (\`DESIGN_QUALITY_DIMENSIONS\`); the v8.75 \`plan-design\` specialist consumes the same rubric against plan.md so the seven dimensions stay in lock-step pre- and post-build (single source of truth).
+Quick stub: when the gate fires, grade each of seven dimensions 0-10 in the iteration block with an explicit "what a 10 looks like" reference and the file:line of the worst gap; below-6 grades become findings. Diff with ≥2 AI-slop signals → umbrella \`AI-slop pattern detected\` finding (severity=required). The dimensions + AI-slop signal set render below from the shared \`design-quality-rubric.ts\` const (single source of truth across plan-design and reviewer):
 
 ${renderDesignQualityRubricTable()}
 
-**Below-6 grades become findings.** A grade of \`5/10\` or lower on any dimension is a **design-quality finding (severity=consider)** by default. Cite the dimension name, the grade, the gap, the "what a 10 looks like" reference, and the file:line(s) where the gap is most visible. Severity escalates per the standard ladder:
-
-- \`5/10\` → \`consider\` (default for below-6 grades; carries to learnings).
-- \`3/10\` or below → \`required\` (gates ship in strict / soft).
-- accessibility (WCAG AA) grade \`5/10\` or below → \`required\` (legal / inclusion baseline; never \`consider\` for accessibility — escalate the standard ladder by one tier).
-- accessibility grade \`2/10\` or below → \`critical\` (blocks ship in every ceremonyMode; e.g. unlabelled buttons that are unreachable by screen reader).
-
-**Above-7 grades are recorded but emit no findings.** Grades of \`6/10\` are borderline — record the grade in the iteration block but emit no finding (the dimension is acceptable, not exemplary). Grades of \`7/10\` and above record the dimension as a positive observation (folds into the \`What's done well\` section when load-bearing; e.g. "type system: 9/10 — diff reuses the existing 4-tier scale; no one-off font-sizes introduced").
-
-**AI-slop check (cross-cuts the seven dimensions).** Before scoring, scan the diff for the canonical AI-slop signals — they typically tank multiple dimensions at once and deserve an explicit callout. v8.75 — the bullet list below is rendered from the shared \`design-quality-rubric.ts\` const (\`DESIGN_QUALITY_AI_SLOP_SIGNALS\`); the v8.75 \`plan-design\` specialist consumes the same list against plan.md so signal coverage stays identical pre- and post-build.
-
 ${renderDesignQualityAiSlopChecklist()}
-
-When the diff matches **two or more** AI-slop signals, raise an additional umbrella finding under the design-quality axis (severity=required, axis=design-quality) titled \`AI-slop pattern detected\` that names every signal that fired. The fix is product-specific functional design thinking, not a single dimension regrade — recommend the architect re-author the affected slice's plan.md \`## Frame\` section with explicit user-needs reasoning.
-
-**Skip rules:**
-
-- All three gating conditions absent — emit zero findings; note "design-quality: skipped (no design surface)" in the iteration block (see Gating rule above).
-- The diff is purely backend even though triage flagged design surface (e.g. the user said "improve the API powering the dashboard" — triage matched \`dashboard\`, but the diff only touches \`*.ts\` API routes) — the axis fires the gate but emits zero findings because no UI files are in the diff. Note "design-quality: gate fired but zero UI files in diff; skipping per-dimension grading" in the iteration block. This honest-skip behavior keeps the gate forgiving on false-positive triage flags.
-- \`triage.downgradeReason == "no-git"\` does NOT skip the axis — design quality is independent of git history; run the rubric against the working-tree diff via \`git diff --no-index\` or direct file reads.
-
-**Common rationalizations** _(cross-cutting rows for completion / verification live in \`.cclaw/lib/anti-rationalizations.md\`; the four rows below are design-quality-axis-specific to this gate):_
-
-| rationalization | rebuttal |
-| --- | --- |
-| "It's a small diff — design quality doesn't matter at this scale." | The axis is gated on surface, not diff size. A 30-line CSS change can ship a WCAG AA contrast regression that affects every page using the token. The rubric is dimension-grading, not workload-grading; small diffs simply mean fewer dimensions are exercised — grade the ones that ARE exercised, skip the rest as N/A. |
-| "The user didn't ask for a design review — I'll skip the axis." | The axis is automatic when the gate fires; the user's task wording is the *trigger*, not the *gate*. \`/cc add a button to the dashboard\` IS a design surface; the design-quality axis fires whether or not the user said the word "design". |
-| "Accessibility is the user's responsibility — I just ship the visual design." | NO. WCAG AA is a baseline, not an opt-in. Below-6 accessibility grades escalate to \`required\` automatically (one tier above the standard \`consider\` ladder); below-2 grades are \`critical\`. The reviewer ships the gate, the builder ships the fix. |
-| "I'll grade everything 7/10 to avoid emitting findings — the diff is fine." | NO. Grades are **dimension-grounded**, not vibe-grounded — every grade carries an explicit \`what a 10 looks like\` reference that anchors the call. A reviewer who silently calibrates 7/10 to "no findings emitted" reintroduces the AI-slop failure mode the axis was designed to catch. Grade honestly; if every dimension genuinely lands 7+, the artifact section is short and that's correct. |
 
 ## Modes
 
