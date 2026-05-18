@@ -276,18 +276,22 @@ describe("v8.83 — buildAutoTriggerBlock(stage, gateEnvelope) gate-filters revi
 });
 
 describe("v8.83 — reviewer.ts size is meaningfully smaller post-extraction (sanity check on savings)", () => {
-  it("AC-7 — reviewer.ts source file size dropped from ~93k chars to under 82k chars after the five-axis lift (post-v8.84 + v8.85 stub headroom)", async () => {
+  it("AC-7 — reviewer.ts source file size dropped from ~93k chars to under 83k chars after the five-axis lift (post-v8.84 + v8.85 stub headroom; +v8.96.1 G-2 superset-hint paragraph)", async () => {
     const source = await fs.readFile(REVIEWER_TS_PATH, "utf8");
     // Loose sanity check — the original was ~93k chars. After
     // extracting the five gated-axis bodies, the file should drop by
     // at least ~10k chars (the combined axis prose). We assert a
     // generous ceiling rather than a precise count so future additive
     // edits (v8.84 scope-drift stub, v8.85 assumption-coverage stub +
-    // 13-axis recapture) don't constantly tickle this tripwire.
+    // 13-axis recapture, v8.96.1 superset-hint paragraph wired to
+    // runbooks/dispatch-skills-index.md) don't constantly tickle this
+    // tripwire. v8.96.1 lifted ceiling 82000 → 83000 to absorb the
+    // Phase C G-2 superset-note paragraph (~600 chars) that points
+    // sub-agents at the runtime-resolved per-envelope skills slice.
     expect(
       source.length,
-      `reviewer.ts is ${source.length} chars; the v8.83 lift expected post-extraction size to be under 82000 chars (down from ~92976 chars pre-extraction). A regression here means an axis body was silently re-inlined.`
-    ).toBeLessThan(82000);
+      `reviewer.ts is ${source.length} chars; the v8.83 lift expected post-extraction size to be under 83000 chars (down from ~92976 chars pre-extraction; v8.96.1 lifted ceiling 82000 → 83000 for the G-2 superset-note paragraph). A regression here means an axis body was silently re-inlined.`
+    ).toBeLessThan(83000);
   });
 });
 

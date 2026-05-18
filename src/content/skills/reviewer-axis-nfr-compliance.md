@@ -11,7 +11,7 @@ The `nfr-compliance` axis fires only when `flows/<slug>/plan.md` contains a non-
 
 ## When to use
 
-Pinned to the reviewer's dispatch envelope when `flows/<slug>/plan.md` carries a non-empty `## Non-functional` section. The orchestrator inspects the plan at dispatch time and passes `planHasNonFunctional: true` to `buildAutoTriggerBlock("review", env)`; the skill is rendered only then. The reviewer's prompt body has a 5-line stub naming this skill; the full per-row cross-check protocol lives here.
+Pinned to the reviewer's dispatch envelope when `flows/<slug>/plan.md` carries a non-empty `## Non-functional` section. The orchestrator inspects the plan at dispatch time and stamps `planHasNonFunctional: true` onto the reviewer dispatch envelope (per `start-command.md > Review hop`); the envelope's flag is the runtime source of truth. The orchestrator resolves the envelope shape against `runbooks/dispatch-skills-index.md` and pastes the gate-resolved skills-pointer slice into the envelope's `Active skills (per envelope):` field — when this flag is set, the pointer is included in the slice and the reviewer sub-agent loads the body below; when it is absent, the pointer is omitted from the slice (even though the static superset in `agents/reviewer.md` still lists it). The reviewer's prompt body has a 5-line stub naming this skill; the full per-row cross-check protocol lives here. (v8.96.1 — pre-v8.96.1 this paragraph claimed the orchestrator passes the flag to `buildAutoTriggerBlock("review", env)` at dispatch time; that was tests-only fiction. The function is called at INSTALL time by the dispatch-skills-index runbook composer; the runtime dispatch carries the rendered slice, not a function call.)
 
 ## When NOT to apply
 
