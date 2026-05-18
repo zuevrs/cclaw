@@ -310,17 +310,19 @@ describe("v8.83 — version bump", () => {
 });
 
 describe("v8.83 — README skills count bumps to reflect the five new reviewer-axis skills", () => {
-  it("AC-9 — README references the new 32-skill count (up from the pre-v8.83 27)", async () => {
+  it("AC-9 — README references the current AUTO_TRIGGER_SKILLS.length (post-v8.83 baseline = 32; v8.84 adds scope-drift → 33)", async () => {
     const readme = await fs.readFile(
       path.join(PROJECT_ROOT, "README.md"),
       "utf-8"
     );
     // The README count should match AUTO_TRIGGER_SKILLS.length post-lift.
-    // We allow the count to appear as "32 skills" / "32 auto-trigger
-    // skill bodies" / "**32**" etc.
+    // We assert against the live count so adding a sixth reviewer-axis
+    // skill (v8.84 scope-drift) does not re-light this tripwire — the
+    // count tracks the structural total, not a frozen v8.83 literal.
+    const expected = `${AUTO_TRIGGER_SKILLS.length}`;
     expect(
       readme,
-      "README.md must reflect the post-v8.83 skill count (32)"
-    ).toMatch(/\b32\b\s*(?:skills|auto-trigger)/u);
+      `README.md must reflect the post-v8.83 skill count (currently ${expected}). The literal moved from "32 skills" to "${expected} skills" when scope-drift landed.`
+    ).toMatch(new RegExp(`\\b${expected}\\b\\s*(?:skills|auto-trigger)`, "u"));
   });
 });
