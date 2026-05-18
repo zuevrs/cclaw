@@ -1,6 +1,45 @@
 # Changelog
 
 
+## 8.94.0 — Orchestrator-side stamping prose for new envelope flags (Phase C G-3/4/5 fix)
+
+### Why
+
+The Phase-C audit (gaps G-3, G-4, G-5 — all LOW) found that `src/content/start-command.ts` carried an explicit "Auto-activate design-quality axis (v8.70)" bullet inside the `#### review` section telling the orchestrator to stamp `walkDesignQualityAxis: true` on the reviewer dispatch envelope when the gate condition fires, but the three newer envelope flags introduced by v8.84 / v8.85 / v8.86 had no parallel stamping prose:
+
+- `walkScopeDriftAxis` (v8.84 — Not-Doing gate)
+- `walkAssumptionCoverageAxis` (v8.85 — assumption-validation lite)
+- `walkAntiSlopAxis` (v8.86 — anti-slop graded axis, default-on)
+
+The reviewer-axis companion skills (`src/content/skills.ts`) registered the right gate predicates (`env.walkScopeDriftAxis === true`, `env.walkAssumptionCoverageAxis === true`, `env.walkAntiSlopAxis !== false`) and the CHANGELOG entries for v8.84 / v8.85 / v8.86 all claimed "the orchestrator stamps the envelope flag when the gate condition fires" — but the orchestrator-facing surface (`start-command.ts`, which is the prose the orchestrator agent actually reads) carried no such instruction. The documented contract was unbacked. (Functionally moot today since the gated reviewer-axis skills also fire via the module-load `buildAutoTriggerBlock("review")` call in `src/content/specialist-prompts/reviewer.ts` — the G-2 separate gap — but the contract-vs-prose mismatch needed closure.)
+
+### What changed
+
+`src/content/start-command.ts` `#### review` section now carries three parallel "Auto-activate" bullets right after the existing v8.70 design-quality bullet, matching its shape verbatim:
+
+- **Auto-activate scope-drift axis (v8.84).** Stamp `walkScopeDriftAxis: true` when `plan.md > ## Not Doing (and why)` is non-empty (always true on non-inline ceremonies post-v8.80; pre-v8.80 archived plans and `ceremonyMode: inline` paths skip the gate).
+- **Auto-activate assumption-coverage axis (v8.85).** Stamp `walkAssumptionCoverageAxis: true` when `plan.md > ## Key assumptions to validate` is non-empty AND carries ≥1 bullet leading with a `KA-N` id.
+- **Auto-activate anti-slop axis (v8.86, default-on).** Stamp `walkAntiSlopAxis: true` on EVERY reviewer dispatch by default; only omit (or set `false`) when explicitly disabled via `config.review.anti_slop: false` or `/cc <task> --no-anti-slop`. Structurally skipped only on `ceremonyMode: inline` and structurally-empty diffs.
+
+Each bullet points the reviewer to the companion-skill body for the full rubric / cross-check protocol, mirroring the v8.70 design-quality bullet's "Full rubric ... lives in ..." pattern.
+
+### Tripwire tests
+
+`tests/unit/v894-orchestrator-axis-stamping.test.ts` pins:
+
+- start-command.ts contains the literal `walkScopeDriftAxis: true` stamping instruction AND references `## Not Doing (and why)` as the gate condition.
+- start-command.ts contains the literal `walkAssumptionCoverageAxis: true` stamping instruction AND references `## Key assumptions to validate` as the gate condition.
+- start-command.ts contains the literal `walkAntiSlopAxis: true` stamping instruction AND uses default-on framing (the word `default-on` / `EVERY` / `default` near the bullet).
+- All four envelope flags (`walkDesignQualityAxis`, `walkScopeDriftAxis`, `walkAssumptionCoverageAxis`, `walkAntiSlopAxis`) appear in the same parallel `Auto-activate <axis> axis (vX.Y)` bullet shape — consistent prose-pattern sanity check.
+- Each of the four bullets points to the companion-skill body for its full rubric.
+
+### Cross-cutting
+
+- No runtime behaviour change. The orchestrator agent re-reads `start-command.ts` end-to-end on every `/cc` invocation; this is a prose-level closure for the v8.84 / v8.85 / v8.86 stamping contract.
+- No reviewer axis, skill, runbook, or test-count topology changed beyond the new tripwire file.
+- package.json + CHANGELOG carry the 8.94.0 bump.
+
+
 ## 8.93.0 — Synthesis confidence + priorResearch cite-back (v8.88 work)
 
 ### Why
