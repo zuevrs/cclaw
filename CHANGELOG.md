@@ -1,6 +1,49 @@
 # Changelog
 
 
+## 8.92.0 — Model-tier policy defaults (v8.87 work)
+
+### Why
+
+The v8.13 power-and-economy release shipped the `ModelPreferences` interface in `src/config.ts` so users could pin per-specialist model tiers in `.cclaw/config.yaml`, but it shipped the scaffold WITHOUT a default policy — every field was optional, absent meant "harness default", and the orchestrator had no canonical opinion on which specialist should run on which tier. Two consequences followed:
+
+1. **No default routing signal in the dispatch envelope.** The runbook contract that every specialist envelope carries said nothing about model tier. Harnesses that COULD route on tier (custom OpenCode profiles, Claude Code `agent.toml`) had no input from cclaw — every dispatch fell back to the harness default model regardless of the specialist's cost / latency profile.
+
+2. **No spec line pinning the policy.** Without a default mapping, a future change could silently flip the orchestrator's economics: the cheap fast-iteration cycles (slice-builder, research helpers) could drift to a powerful tier on someone's harness, the adversarial review pass (critic) could drift to fast, and there would be no tripwire to catch it. The default IS the contract — and an absent contract is the slowest, most expensive failure mode.
+
+v8.87 fills both gaps. Reference: obra's `subagent-driven-development` model-selection block — the fast/balanced/powerful split is a load-bearing economy decision, not an implementation detail.
+
+### What changed
+
+**Deliverable 1 — `DEFAULT_MODEL_PREFERENCES` constant in `src/config.ts`.** A frozen `Readonly<Record<ModelPreferenceKey, ModelTier>>` covering every v8.62 live specialist id plus the two read-only research helpers:
+
+| Specialist | Default tier | Rationale |
+| --- | --- | --- |
+| `builder` (formerly `slice-builder` pre-v8.62) | `fast` | High-throughput RED→GREEN→REFACTOR cycles. Slice-level iterations are short-context, fast turn-around; cheap models suit. |
+| `learnings-research` / `repo-research` | `fast` | Read-only research helpers; short slim summaries. |
+| `triage` / `investigator` / `architect` | `balanced` | Routing, root-cause, plan authoring — mid-tier reasoning, no adversarial pressure. |
+| `plan-critic` / `plan-design` / `plan-devex` | `balanced` | Structural pre-impl lenses; routine for the mid-tier. |
+| `qa-runner` / `reviewer` | `balanced` | Post-impl verification + axis sweep; mid-tier. |
+| `critic` | `powerful` | Deep adversarial second-opinion. The one slot where powerful pays for itself. |
+
+The map is `Object.freeze`'d at module load so tests can't silently mutate the policy.
+
+**Deliverable 2 — `resolveModelPreferences(config)` merge helper.** Folds the user's `.cclaw/config.yaml > modelPreferences` block onto the defaults field-by-field. User entries that don't match the literal union `fast | balanced | powerful` are silently dropped — typos and wrong types are a config error, not a runtime crash; the default survives. Returns a `Record<ModelPreferenceKey, ModelTier>` so downstream readers never have to handle the absent case.
+
+**Deliverable 3 — `modelTierFor(specialist, config)` resolver with legacy-alias collapse.** The v8.13-era `slice-builder` key folds onto the v8.62 `builder` key with an explicit-wins rule: a user config carrying BOTH `slice-builder: powerful` and `builder: balanced` reads as `balanced` (live key wins); a config with only `slice-builder` reads through to `builder`'s slot. Documented in the `ModelPreferences` JSDoc so the migration path is visible at the type.
+
+**Deliverable 4 — `Model tier:` line in the dispatch-envelope runbook.** Every `Dispatch <specialist>` block the orchestrator authors now carries a `Model tier: <fast | balanced | powerful>` hint between `Ceremony mode:` and `Pre-flight assumptions:`. Harnesses that route on tier honour it; harnesses that don't fall back to their own default. The runbook gains a `## Model-tier hint (v8.87)` section with the full mapping table so the contract is visible at dispatch authoring time.
+
+**Deliverable 5 — README section `## Model-tier policy`.** New top-level section above `## Architecture deep dive` documenting the defaults table, the override path (`.cclaw/config.yaml > modelPreferences` YAML example), and the literal-union constraint on tier values.
+
+**Deliverable 6 — Tripwires in `tests/unit/v887-model-tier-defaults.test.ts`.** 38 assertions across 9 AC blocks pinning: the canonical tier union (exactly `fast | balanced | powerful`); the default map's key coverage (`SPECIALISTS` ∪ `learnings-research` ∪ `repo-research`, no drift); each specialist's exact default tier (one assertion per specialist so a single-tier flip lights up alone); the `Object.freeze` guarantee; the merge semantics (null / undefined / empty config, single-tier override, multi-tier override, out-of-union typo drop, non-string drop, full-map coverage); the `slice-builder` → `builder` legacy collapse with explicit-wins; the envelope's `Model tier:` line + runbook table; the README section; the version bump + CHANGELOG entry.
+
+### Migration
+
+Drop-in upgrade from 8.91.x. Existing `.cclaw/config.yaml > modelPreferences` blocks keep working — the resolver reads the same fields, just merges onto the v8.87 defaults instead of inheriting from "absent = harness default". If a user previously relied on `absent = harness default` semantics, they can still override any tier explicitly to get the same effect (the harness default may differ from the v8.87 policy default; the policy default is opinionated by design).
+
+The legacy `slice-builder` key keeps parsing and now resolves to `builder`'s slot via `modelTierFor()`. Explicit `builder` always wins over legacy `slice-builder` when both are set.
+
 ## 8.91.0 — Anti-slop graded reviewer axis (v8.86 work)
 
 ### Why
