@@ -102,7 +102,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["task"],
     description:
-      "v8.62 unified plan-stage specialist; v8.65 trimmed to intra-flow plan authoring only. Absorbs the work that was split pre-v8.62 between `design` (Phase 0/2-6: Bootstrap, Frame, Approaches, Decisions, Pre-mortem, Compose) and `ac-author` (Plan, Spec, AC, Edge cases, Topology, Feasibility, Traceability). Runs as a single on-demand sub-agent — no mid-plan user dialogue (v8.61 always-auto removed all pickers); ambiguity is resolved silently using best judgment. Writes `plan.md` (intra-flow `mode: \"task\"`). Depth scales with ceremonyMode: inline skips, soft writes Plan + Spec + Testable conditions + Verification + Touch surface, strict adds Frame + Approaches + Selected Direction + Decisions + Pre-mortem + Topology + Feasibility + Traceability. Research mode (`/cc research <topic>`) is handled by the v8.65 main-context multi-lens research orchestrator (five parallel lenses: engineer / product / architecture / history / skeptic) — the architect is no longer dispatched for research.",
+      "v8.62 unified plan-stage specialist; v8.65 trimmed to intra-flow plan authoring only. Absorbs the work that was split pre-v8.62 between `design` (Phase 0/2-6: Bootstrap, Frame, Approaches, Decisions, Pre-mortem, Compose) and `ac-author` (Plan, Spec, AC, Edge cases, Topology, Feasibility, Traceability). Runs as a single on-demand sub-agent — no mid-plan user dialogue (v8.61 always-auto removed all pickers); ambiguity is resolved silently using best judgment. Writes `plan.md` (intra-flow `mode: \"task\"`). Depth scales with ceremonyMode: inline skips, soft writes Plan + Spec + Testable conditions + Verification + Touch surface, strict adds Frame + Approaches + Selected Direction + Decisions + Pre-mortem + Topology + Feasibility + Traceability. Research mode (`/cc research <topic>`) is handled by the v8.65 main-context multi-lens research orchestrator (six parallel lenses: engineer / product / architecture / history / skeptic / design) — the architect is no longer dispatched for research.",
     prompt: SPECIALIST_PROMPTS.architect
   },
   {
@@ -112,7 +112,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["pre-impl-review"],
     description:
-      "pre-implementation plan-critic. Runs between architect and builder ONLY on the tight gate {ceremonyMode=strict, complexity=large-risky, problemType!=refines, AC count>=2}. Five-dimension protocol (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog) + §6 pre-commitment predictions before final review. Verdicts: pass (advance to builder), revise (bounce to architect once — max 1 revise loop), cancel (user picker: cancel-slug / re-architect). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
+      "pre-implementation plan-critic. Runs between architect and builder ONLY on the tight gate {ceremonyMode=strict, complexity!=trivial, problemType!=refines, AC count>=2} (v8.54 widened the complexity gate from `large-risky` to `complexity != trivial`). Five-dimension protocol (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog) + §6 pre-commitment predictions before final review. Verdicts: pass (advance to builder), revise (bounce to architect once — max 1 revise loop), cancel (user picker: cancel-slug / re-architect). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
     prompt: SPECIALIST_PROMPTS["plan-critic"]
   },
   {
@@ -142,7 +142,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["build", "fix-only"],
     description:
-      "Renamed from `slice-builder` in v8.62 (AC-as-unit-of-work semantics unchanged — slice/AC separation is v8.63 scope). Implements AC slices and post-review scoped fixes. In strict mode every commit carries a posture-driven subject-line prefix (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies via git log --grep.",
+      "Renamed from `slice-builder` in v8.62 (AC-as-unit-of-work semantics unchanged — slice/AC separation is v8.63 scope). Implements AC slices and post-review scoped fixes. In strict mode every per-slice work commit carries the v8.63 posture-driven subject-line prefix (red(SL-N): / green(SL-N): / refactor(SL-N):) the reviewer verifies via git log --grep; after slices land the builder writes one verify(AC-N): passing commit per AC (empty diff when slice tests already cover the AC; test-files-only diff when the AC needs broader verification — perf budget, integration, contract).",
     prompt: SPECIALIST_PROMPTS.builder
   },
   {
