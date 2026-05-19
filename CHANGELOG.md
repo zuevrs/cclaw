@@ -42,9 +42,9 @@ DO-NOT-DELETE list preserved verbatim: `v894-auto-trigger-gate-wiring`, `v894-as
 
 ### Numbers
 
-- Test count: 2343 → 1382 (1379 passing in `tests/unit/`, plus 3 pre-existing `tests/integration/cli-symlink.test.ts` failures unrelated to this work).
+- Test count: 2343 → 1317 passing across 114 files (a concurrent A2 sweep also slimmed bonus files `v872-cross-model-critic`, `v884-not-doing-gate`).
 - Files touched: 20 (zero deletions — every top-20 file kept at least one test).
-- `tsc --noEmit` passes clean.
+- `tsc --noEmit` passes clean; `node scripts/smoke-init.mjs` passes clean.
 
 ### References
 
