@@ -329,6 +329,41 @@ try {
   if (!extendModeBody.includes("refines:")) {
     throw new Error("smoke check failed: v8.59 extend-mode.md must reference the legacy `refines:` frontmatter for back-compat with knowledge-store");
   }
+  // v8.102 — `patch-mode.md` on-demand runbook was added alongside the new
+  // `/cc patch <slug> <task>` post-ship micro-edit entry point. The runbook
+  // is lazy-loaded by the orchestrator on every `/cc` whose argument
+  // starts with `patch ` (case-insensitive, exactly one space); it covers
+  // the full Detect-hop procedure (argument parsing, parent validation
+  // via the reused `loadParentContext` helper, the skip-everything
+  // dispatch shape, the `patch-N.md` artifact, the builder envelope's
+  // `patchMode: true` flag, and multi-level chaining). Install writes
+  // the file unconditionally; it is only consumed on patch-mode
+  // dispatches.
+  const patchModeRunbook = join(tempDir, ".cclaw", "lib", "runbooks", "patch-mode.md");
+  if (!existsSync(patchModeRunbook)) {
+    throw new Error("smoke check failed: v8.102 patch-mode.md runbook missing after init");
+  }
+  const patchModeBody = readFileSync(patchModeRunbook, "utf8");
+  if (!patchModeBody.startsWith("# On-demand runbook —")) {
+    throw new Error("smoke check failed: v8.102 patch-mode.md must open with the canonical `# On-demand runbook —` heading");
+  }
+  if (!patchModeBody.includes("loadParentContext")) {
+    throw new Error("smoke check failed: v8.102 patch-mode.md must reference the reused loadParentContext validator (the v8.59 helper)");
+  }
+  for (const reason of ["in-flight", "cancelled", "missing", "corrupted"]) {
+    if (!patchModeBody.includes(reason)) {
+      throw new Error(`smoke check failed: v8.102 patch-mode.md must document the ParentContextErrorReason \`${reason}\``);
+    }
+  }
+  if (!patchModeBody.includes("patchMode")) {
+    throw new Error("smoke check failed: v8.102 patch-mode.md must reference the builder envelope's `patchMode` flag");
+  }
+  if (!patchModeBody.includes("patch-N.md")) {
+    throw new Error("smoke check failed: v8.102 patch-mode.md must reference the `patch-N.md` artifact shape");
+  }
+  if (!patchModeBody.includes("patch(")) {
+    throw new Error("smoke check failed: v8.102 patch-mode.md must document the `patch(<slug>):` commit prefix");
+  }
   // v8.12 trimmed reference patterns 8 → 2.
   for (const pattern of ["auth-flow.md", "security-hardening.md"]) {
     if (!existsSync(join(tempDir, ".cclaw", "lib", "patterns", pattern))) {

@@ -167,7 +167,7 @@ The shape is **purely informational** at this hop — you do not gate the decisi
 
 Plus two metadata fields the orchestrator persists alongside the five:
 
-- **\`rationale\`** — one short sentence explaining the heuristic decision (\`"3 modules, ~150 LOC, no auth touch."\`). When an override flag fired, append the override tag (\`"3 modules, ~150 LOC, no auth touch. + user override: --strict."\`).
+- **\`rationale\`** — one short sentence explaining the heuristic decision (\`"3 modules, ~150 LOC, no auth touch."\`). When an override flag fired, append the override tag (\`"3 modules, ~150 LOC, no auth touch. + user override: --strict."\`). When the v8.102 §1.6 extend-mode trivial-shape downgrade fired, append the downgrade tag (\`"extend-mode-trivial-shape downgrade from strict parent (1-2 files, single verb, no schema/AC signals)"\`).
 - **\`decidedAt\`** — ISO timestamp of the decision.
 
 ## Override flags (v8.58; preserved verbatim)
@@ -223,6 +223,23 @@ When the orchestrator dispatches you on an extend-mode init, the envelope carrie
 
 The inheritance is one-way: the new flow's values are immutable for its lifetime (except via \`/cc-cancel\` + fresh \`/cc\`). The parent's values are never re-read after extend init.
 
+### §1.6 Trivial-shape downgrade (v8.102 — extend-mode only)
+
+When the inheritance sub-step is running (\`parentContext\` is set in the envelope) AND the parent's \`ceremony_mode\` was \`strict\` AND the new task description matches the **trivial-shape signals** below, **downgrade \`ceremonyMode\` to \`inline\`** for the new flow (not soft — soft would still dispatch architect + plan-critic + plan-design + plan-devex on the design / devex surface gates; inline skips every gated specialist structurally). The downgrade is the inheritance-sub-step's analogue of patch-mode's same-shape ceremony skip: when the parent did the heavy ceremony and the follow-up is a 1-2 file copy-edit on the SAME surface, paying the strict tax twice in a row is dogfooded pain. Stamp \`downgradeReason: "extend-mode-trivial-shape"\` in the orchestrator-persisted triage block (orthogonal to \`"no-git"\` — both fields are optional; both can co-fire if no-git also matches).
+
+**Trivial-shape signals (ALL must fire for the downgrade — strict AND gate, mirrors the patch-mode "When NOT to use" inverse):**
+
+1. **≤2 file references in the task text** — count explicit file paths (\`src/foo/bar.ts\`, \`tests/foo.test.ts\`), file-pattern references (\`*.tsx\`, \`README.md\`), or directory references (\`docs/\`, \`src/components/\`). A task naming 3+ files is structurally a multi-touch change; do NOT downgrade.
+2. **No schema words present** — case-insensitive substring match against: \`schema\`, \`migration\`, \`migrate\`, \`alter table\`, \`drop column\`, \`rename column\`, \`add column\`, \`foreign key\`, \`index\`, \`constraint\`, \`materialised view\`, \`materialized view\`, \`partition\`, \`tenant\`, \`sharding\`. Any hit blocks the downgrade — schema-shape changes always warrant the full ceremony regardless of the parent's mode.
+3. **No AC additions implied** — case-insensitive substring match against: \`add AC\`, \`new AC\`, \`add acceptance\`, \`additional criterion\`, \`add criterion\`, \`AC-\`, \`new behaviour\`, \`new behavior\`, \`additional behaviour\`, \`additional behavior\`, \`new feature\`, \`add feature\`. Any hit means the task adds new behavioural assertions; the architect must run to add D-N + AC-N rows.
+4. **Single concrete verb** — the task's lead clause names exactly ONE imperative verb (\`rename\`, \`extract\`, \`inline\`, \`polish\`, \`tighten\`, \`fix\` (paired with copy-edit context, not bug context), \`update\` (paired with copy / constant / doc context), \`clean up\` (paired with a single named file)). Multi-verb tasks (\`rename and refactor\`, \`fix and add tests\`) imply multi-cycle work; the AND-connector signal (already counted in the \`multi-and\` complexity signal) is the canonical multi-verb tell.
+
+When ALL four signals fire AND the parent was \`strict\`, set \`ceremonyMode: "inline"\` + \`path: ["build"]\` + \`runMode: null\` + \`downgradeReason: "extend-mode-trivial-shape"\`. The audit-log entry's \`rationale\` reads \`"extend-mode-trivial-shape downgrade from strict parent (1-2 files, single verb, no schema/AC signals)"\`. The user sees a one-line note in the orchestrator's response: \`extend-mode downgrade: strict parent + trivial-shape task signals → inline ceremony (file-count ≤2; single verb; no schema/AC additions).\`
+
+The downgrade applies **ONLY in extend-mode** (\`parentContext\` is set). On a fresh \`/cc <task>\` (no parent) the same trivial-shape signals do NOT trigger this downgrade — fresh-mode triage runs its standard heuristic (which has its own trivial-keyword path; see the heuristics table below). The asymmetry is deliberate: extend-mode has the parent's ceremony as ground truth, so the downgrade decision is well-anchored ("the parent already did the heavy work; the follow-up should be lighter"). Fresh-mode lacks that anchor; the trivial-keyword heuristic is the appropriate signal there.
+
+**Override flag precedence over the downgrade:** an explicit \`--strict\` flag on the \`/cc extend\` invocation wins over the trivial-shape downgrade (the user knows the new task's complexity better than the heuristic). The audit log records \`userOverrode: true\` + \`overrideField: ["ceremonyMode"]\`; the inheritance / downgrade fields stay populated for telemetry parity. \`--soft\` and \`--inline\` flags also win in the same way (the user's explicit choice is final).
+
 ## Slim summary (returned to orchestrator)
 
 After classifying, return exactly six required lines plus an optional \`Notes\` line (required when an override flag fired, a no-git downgrade fired, or an inheritance escalation fired):
@@ -261,7 +278,7 @@ The orchestrator parses this slim summary, stamps the five-field decision plus \
 
 | rationalization | truth |
 | --- | --- |
-| "The user said 'just a tiny tweak' — inline regardless of file count." | Words are weak signals; signals win. Run the heuristic and emit the actual tier. |
+| "The user said 'just a tiny tweak' — inline regardless of file count." | **In fresh-mode (no \`parentContext\`):** words are weak signals; signals win. Run the heuristic and emit the actual tier. \`tiny tweak\` / \`minor\` / \`small adjustment\` alone in a fresh \`/cc <task>\` does NOT downgrade — the trivial-keyword heuristic gate exists for that decision (typo / rename file / format only / ≤30 lines). **In extend-mode (\`parentContext\` is set):** the v8.102 §1.6 trivial-shape downgrade explicitly ALLOWS \`tiny tweak\` / \`minor\` / \`small adjustment\` framing as a valid signal IF the four-AND gate fires (≤2 file refs, no schema words, no AC additions, single concrete verb). The asymmetry is deliberate: extend-mode has the parent's ceremony as ground truth so a "tiny tweak" downgrade is well-anchored; fresh-mode lacks that anchor. |
 | "This looks vague — let me ask one clarifying question to nail it down." | The router does not ask. Vague prompts escalate one class so the specialist's Phase 0 / Phase 1 picks up the clarification. Asking here is a contract violation. |
 | "The user passed \`--inline\` but the diff looks large-risky — I'll override their override." | The user's explicit override flag wins. If the call is wrong, the downstream reviewer catches it. Your job is to honour the explicit flag, not second-guess. |
 | "\`--mode=step\` was passed — let me set \`runMode: "step"\` for back-compat." | v8.61 retires step mode. Both \`--mode=auto\` and \`--mode=step\` map to \`auto\`; the orchestrator's flow-control logic no longer branches on step. Emit \`runMode: "auto"\` and the one-line note. |

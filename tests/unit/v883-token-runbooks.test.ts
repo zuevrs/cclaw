@@ -24,6 +24,18 @@ import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 // lifted runbook body.
 const V882_BASELINE_CHARS = 141769;
 
+// v8.102 — patch-mode feature add lands additive text in the Detect-hop
+// section (new `### Detect — patch-mode fork (v8.102+)` block + invocation-
+// matrix row + on-demand-runbooks index row + trivial-path cross-reference).
+// All of it is a NEW lifted runbook pointer (\`runbooks/patch-mode.md\` carries
+// the full procedure; start-command only carries the one-paragraph fork
+// pointer), so it is NOT a re-inline regression — it is additive growth
+// the AC-7 canary should explicitly tolerate. We bump the budget by the
+// measured v8.102 add (~1500 chars; round to 1800 for headroom) so the
+// re-inline canary keeps its mutation-killing edge on FUTURE growth while
+// letting v8.102's additive text land cleanly.
+const V8102_ADDITIVE_CHARS = 1800;
+
 const LIFTED_RUNBOOKS = ["detect-matrix", "approaches-gate", "one-way-door-gate"] as const;
 
 describe("v8.83 — runbooks-on-demand.ts gains three new lift runbooks", () => {
@@ -70,12 +82,16 @@ describe("v8.83 — start-command body no longer carries the lifted duplicate pr
 });
 
 describe("v8.83 — start-command body shrinks measurably vs the v8.82 baseline (re-inline canary)", () => {
-  it("AC-7 — start-command body is at least 2.5% smaller than the v8.82 baseline", () => {
-    const reduction =
-      (V882_BASELINE_CHARS - START_COMMAND_BODY.length) / V882_BASELINE_CHARS;
+  it("AC-7 — start-command body is at least 2.5% smaller than the v8.82 baseline (net of v8.102 patch-mode additive growth)", () => {
+    // Subtract v8.102 patch-mode additive growth before measuring reduction.
+    // The canary's purpose is "did we re-inline a lifted runbook?" — a NEW
+    // lifted runbook pointer (patch-mode.md) does not count against the
+    // canary; only re-inlines of v8.83's three lifted bodies would.
+    const adjustedSize = START_COMMAND_BODY.length - V8102_ADDITIVE_CHARS;
+    const reduction = (V882_BASELINE_CHARS - adjustedSize) / V882_BASELINE_CHARS;
     expect(
       reduction,
-      `start-command body: ${V882_BASELINE_CHARS} → ${START_COMMAND_BODY.length} chars (${(reduction * 100).toFixed(2)}%). Threshold: ≥2.5%.`
+      `start-command body: ${V882_BASELINE_CHARS} → ${START_COMMAND_BODY.length} chars (adjusted ${adjustedSize}; ${(reduction * 100).toFixed(2)}%). Threshold: ≥2.5%.`
     ).toBeGreaterThanOrEqual(0.025);
   });
 });

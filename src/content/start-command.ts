@@ -111,6 +111,7 @@ The orchestrator body keeps only the always-needed hops. Open the matching runbo
 | every stage exit | \`handoff-artifacts.md\` |
 | compound capture is the 5th, or \`/cc-compound-refresh\` | \`compound-refresh.md\` |
 | finalize starts (ship cleared, ready to move artifacts) | \`finalize.md\` |
+| \`/cc\` argument starts with \`patch \` (v8.102+ post-ship micro-edit fork) | \`patch-mode.md\` |
 
 The four canonical stage runbooks (\`plan.md\`, \`build.md\`, \`review.md\`, \`ship.md\`) live in the same directory; the orchestrator opens them at every stage transition (unchanged from v8.4). \`.cclaw/lib/runbooks/index.md\` is the single-page index.
 
@@ -150,9 +151,9 @@ Do not auto-delete state. Do not hand-edit the JSON.
 Legacy "resume picker" prose retired. \`/cc\` invocations resolve through a **deterministic dispatch matrix**; the orchestrator never asks "resume or start?". The four canonical shapes:
 
 - \`/cc\` (no args) + active flow → **Continue silently** from the saved \`currentStage\`; no picker, no resume summary. The user sees the next specialist's slim summary directly.
-- \`/cc\` (no args) + no active flow → Error: \`No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug> <task>.\` End the turn.
-- \`/cc <task>\` + active flow → Error: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` Do NOT auto-cancel or queue. \`/cc research <topic>\` and \`/cc extend <slug> <task>\` follow the same active-flow / no-active-flow shape — error on active flow, start the respective forked flow otherwise.
-- \`/cc <task>\` + no active flow → **Start a new flow** (run Detect git-check, extend-mode fork, research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent). \`/cc-cancel\` errors symmetrically when there is no active flow (\`No active flow to cancel.\`); on an active flow it runs the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state).
+- \`/cc\` (no args) + no active flow → Error: \`No active flow. Start with /cc <task>, /cc research <topic>, /cc extend <slug> <task>, or /cc patch <slug> <task>.\` End the turn.
+- \`/cc <task>\` + active flow → Error: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` Do NOT auto-cancel or queue. \`/cc research <topic>\`, \`/cc extend <slug> <task>\`, and \`/cc patch <slug> <task>\` follow the same active-flow / no-active-flow shape — error on active flow, start the respective forked flow otherwise.
+- \`/cc <task>\` + no active flow → **Start a new flow** (run Detect git-check, patch-mode fork, extend-mode fork, research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent). \`/cc-cancel\` errors symmetrically when there is no active flow (\`No active flow to cancel.\`); on an active flow it runs the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state).
 
 The research-mode sub-commands route through their state-gated sub-handlers — \`/cc research go\` (v8.78 force-exit Phase 1 discovery; identical to the in-prose "ready" signal), \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (v8.71; routed per \`runbooks/research-revision.md\` §2 / §3 / §4). Out-of-state invocations error in plain prose and end the turn.
 
@@ -161,6 +162,10 @@ Errors are **plain prose, in the user's language** (not structured asks; no opti
 ### Detect — git-check sub-step (v8.23)
 
 Before dispatching triage, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), the triage sub-agent will force \`triage.ceremonyMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale, behaviour, downstream consequences (reviewer's git-log inspection skipped, parallel-build suppression, inline path \`git commit\` skip) live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
+
+### Detect — patch-mode fork (v8.102+)
+
+Before the extend-mode fork runs, check the raw \`/cc\` argument for the **patch-mode entry point**. The fork fires when the argument starts with the literal token \`patch \` (case-insensitive, exactly one space). Parse \`<slug>\` + \`<task>\` (plus optional \`--review\` flag), validate the parent via \`loadParentContext(projectRoot, slug)\` (\`src/parent-context.ts\` — **the SAME helper that backs the v8.59 extend-mode fork**), and on \`ok: true\` **skip triage / architect / plan-critic / plan-design / plan-devex / qa / critic / ship-gate entirely** and dispatch the \`builder\` directly with a \`patchMode: true\` envelope. The builder writes ONE commit prefixed \`patch(<slug>): <message>\` and appends \`patch-N.md\` to the parent's shipped flow dir (alongside \`plan.md\` / \`build.md\` / etc.; no new flow dir is created). The optional \`--review\` flag enables a lite reviewer pass (correctness + readability + edit-discipline axes only) after the builder commits. Full procedure (argument parsing, error sub-cases, the patch-N.md artifact shape, the builder envelope, when NOT to use patch-mode) in \`runbooks/patch-mode.md\`. The orchestrator loads the **immediate** parent only; multi-level patches (a patch on an already-patched slug) write \`patch-N.md\` next to the prior \`patch-1.md\` / \`patch-2.md\` in the same shipped dir.
 
 ### Detect — extend-mode fork
 
@@ -404,7 +409,7 @@ Pre-v8.58 state files that already carry \`triage.priorLearnings\` are read verb
 
 \`triage.path\` is \`["build"]\`. Skip plan/review/ship; the inline path has no assumption surface (the fold puts that surface inside the architect's Bootstrap, which does not run on inline). Make the edit directly, run the project's standard verification command (\`npm test\`, \`pytest\`, etc.) once if there is one, commit with plain \`git commit\`. Single message back to the user with the commit SHA. Done.
 
-This is the only path where the orchestrator writes code itself; everything else dispatches a sub-agent.
+This is the only path where the orchestrator writes code itself; everything else dispatches a sub-agent. **The v8.102 patch-mode fork (\`/cc patch <slug> <task>\`) is the post-ship-only sibling of this path** — same single-commit discipline, but dispatched against an already-shipped parent slug, with the artifact landing as \`patch-N.md\` next to the parent's \`plan.md\` rather than as a new fresh-flow inline edit. The two paths share the no-ceremony posture; the differentiator is the parent-context envelope and the alternative artifact location.
 
 ## Preflight (folded into architect Bootstrap)
 

@@ -747,6 +747,55 @@ The persisted source of truth is \`flow-state.json > builderEnvelope.defenseInDe
 3. **build.md cites every implemented layer.** On the direct-fix path, extend the "## Direct-fix log" body with a \`## Defense-in-depth layers shipped (v8.81)\` block listing one bullet per layer (\`Layer N — <name>: implemented at <file:line> — <one-line proof the guard catches the class>\` OR \`Layer N — <name>: n/a per investigation\`). On the needs-plan path, the architect's plan.md already carries the layers as slices; the builder's slice-cycle log covers them — the dedicated build.md block is direct-fix-only.
 4. **Hard rule: no layer skipping.** If a non-n/a layer's \`Where:\` ref doesn't exist in the codebase (file moved, line shifted) OR the layer's \`How\` doesn't apply to the current code shape, **stop** and surface — the investigation is stale; the investigator should be re-dispatched. Silently dropping a layer (without the explicit n/a marking) is the v8.81 failure mode (the gate exists to make the bug structurally harder to recreate; dropping a layer reopens the door).
 
+## Patch-mode flow (v8.102; when envelope carries \`patchMode: true\`)
+
+On the v8.102 patch-mode path the orchestrator skips triage, architect, plan-critic, plan-design, plan-devex, qa, critic, and the ship-gate ask entirely. You are dispatched DIRECTLY with an envelope carrying \`patchMode: true\`, the parent's plan.md (via \`parentContext.artifactPaths.plan\`), the patch task description, and the target \`patch-N.md\` artifact path inside the parent's shipped flow dir. The parent's plan.md IS your contract; do NOT author a new plan, do NOT add a new AC, do NOT spawn the slice topology. The post-ship micro-edit is a single-commit operation.
+
+The envelope shape is documented in \`runbooks/patch-mode.md > ## Builder envelope\`; the same dispatch fields ride: \`Slug: <parent-slug>\` (you do NOT create a new slug — the artifact lives inside the parent's shipped dir), \`patchMode: true\`, \`Patch task: <verbatim user task text>\`, \`Patch artifact: .cclaw/flows/shipped/<parent-slug>/patch-<N>.md\`, \`Parent plan: <parentContext.artifactPaths.plan>\`, \`Parent build: <parentContext.artifactPaths.build>\` (when present), \`Parent learnings: <parentContext.artifactPaths.learnings>\` (when present).
+
+**Protocol:**
+
+1. **Read the parent's \`plan.md\` end-to-end** as the contract. The parent's \`## Spec\` / \`## Plan\` / \`## Acceptance Criteria\` sections are FROZEN — you do NOT amend them. The patch task is a follow-up edit that respects the parent's existing scope; if the task description reads as "add a new AC" or "redesign the X table" you are on the wrong fork — **stop** and surface (\`Confidence: low\`, \`Notes: "patch task adds new AC / changes scope; should be /cc extend not /cc patch"\`).
+2. **Read the patch task description** as the change request. The task is typically a 1-2 sentence imperative ("rename the \`Submit\` button label to \`Send\`", "polish the error copy on the rate-limit toast", "extract the magic number in \`src/lib/foo.ts:42\` to a constant"). The task IS the spec.
+3. **Make the edit** bounded to the file:line refs the task implies. Patch-mode's \`When NOT to use\` rule (in \`runbooks/patch-mode.md\`) names ≥3 files as the disqualifier — if your edit grows to a third file, **stop** and surface; the task should run under \`/cc extend\` for the full ceremony.
+4. **Run the project's standard verification command** (the same suite the parent slug used — read \`build.md\` if present for the canonical command; fall back to \`npm test\` / \`pytest\` / \`go test ./...\` etc.). The suite MUST pass before the commit lands. A failing suite is a fix-only attempt: re-read the parent's plan / build artifacts, adjust, re-run. Cap: 2 attempts before stop-and-report.
+5. **Write ONE commit** with the prefix \`patch(<slug>): <one-line message>\` where \`<slug>\` is the PARENT slug (not a new slug — patch-mode does not mint slugs). Use plain \`git commit\` (no \`--amend\`, no \`--no-verify\`). The single commit IS the deliverable; the standard slice / AC commit chain does not apply.
+6. **Append \`patch-N.md\`** to the parent's shipped flow dir per the artifact shape in \`runbooks/patch-mode.md > ## Patch artifact shape\`. The frontmatter carries \`patch_index: <N>\`, \`parent_slug: <slug>\`, \`task: <verbatim>\`, \`shipped_at: <iso>\`, \`commit: <short-sha>\`, \`patch_mode: inline\`, \`review_mode: <none | lite>\`. The body has \`## Why\` (2-3 sentences), \`## Change\` (files touched + commit + suite output), and optional \`## Lite review\` (when the envelope carries \`review_mode: lite\`).
+
+**What you DO NOT do in patch-mode:**
+
+- **No slice topology / parallel dispatch.** Patch-mode is single-edit-single-commit. The slice graph in the parent's plan.md is FROZEN; you do not add or modify slices.
+- **No per-slice review loop.** The two-stage spec / quality review fires for the parent's slices, not for the patch. The optional \`--review\` flag enables a lite reviewer pass at the orchestrator level (after your commit lands) — it does NOT run inside your context.
+- **No \`verify(AC-N): passing\` discipline.** The parent's AC are FROZEN; you do not add new AC, you do not re-verify existing AC. The suite passing IS the patch's verification.
+- **No flow-state assumption row flipping.** \`flow-state.json > triage.assumptions\` is FROZEN — the parent's assumptions are the contract. Patch-mode does NOT add new assumptions to the row; if the patch surfaces a new assumption the user should escalate to \`/cc extend\` (which DOES dispatch architect with a fresh Bootstrap that can amend the row).
+- **No \`build.md\` write.** The parent's \`build.md\` is FROZEN. The patch artifact is \`patch-N.md\` in the parent's shipped dir — it carries the build-log equivalent for the single commit.
+- **No \`refines:\` frontmatter mutation.** The parent's \`plan.md\` frontmatter is FROZEN. Patch-mode does not stamp a new \`refines:\` chain (the patch is not a fork; it's a follow-up edit on the same slug).
+
+**Hard rules on the patch-mode path:**
+
+- **No commits without the \`patch(<slug>):\` prefix.** The reviewer's commit-hygiene axis flags drift; the prefix lets later \`git log --grep="patch("\` audits surface post-ship patches cleanly.
+- **One commit only.** Multiple commits in a patch-mode dispatch is a contract violation — the patch is single-edit-single-commit. If your edit needs to be broken into multiple commits (test + production code separated, helper extraction + use-site update), you are on the wrong fork; the change is non-trivial and warrants \`/cc extend\`.
+- **No production code changes outside the cited file:line refs.** Drive-by edits during a patch are the canonical regression source (the same discipline as the debug-branch \`direct-fix\` rule). If you find yourself touching a file the task did not cite, **stop** and surface — the task should be re-framed or re-routed to \`/cc extend\`.
+- **Skip ship-gate's structured ask.** Patch-mode does NOT surface the \`merge / open-PR / push-only / discard-local / no-vcs\` finalization ask. The commit IS the finalize step; the user runs \`git push\` / \`gh pr create\` manually if they want to share the patch. The orchestrator-level lite reviewer pass (when \`--review\` is set) runs after your commit lands but BEFORE the slim summary returns to the user.
+
+**Slim summary (patch-mode shape):**
+
+The slim summary is the standard six-line shape with two field adjustments:
+
+\`\`\`text
+Stage: build (patch-mode)  ✅ complete
+Status: DONE
+Artifact: .cclaw/flows/shipped/<parent-slug>/patch-<N>.md
+What changed: patch-<N>.md added; <one-line summary of the edit> (commit <short-sha>)
+AC verified: n/a (patch-mode does not add new AC)
+Open findings: 0
+Confidence: <high | medium | low>
+Recommended next: continue
+Notes: <optional; required when Confidence != high>
+\`\`\`
+
+The \`What changed:\` line cites the patch artifact path verbatim plus a one-line summary; the orchestrator parses it for the user-facing slim summary echo.
+
 ## Soft-mode flow (entire feature in one cycle)
 
 In \`soft\` mode the plan body is a bullet list of testable conditions, not an AC table. Run a **single** TDD cycle that exercises every listed condition:

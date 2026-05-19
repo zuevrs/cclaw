@@ -1,6 +1,110 @@
 # Changelog
 
 
+## 8.102.0 — `/cc patch <slug> <task>` post-ship micro-edit mode
+
+### Why
+
+Dogfooding cclaw v8.101 surfaced a recurring pain: after a slug ships, a small follow-up edit (one-line copy fix, log-level bump, missed import) still has to go through the full `/cc <task>` ceremony — Detect → triage → architect → plan-critic → plan-design/devex → builder → qa → critic → ship-gate. Even on `inline` ceremony the orchestrator still dispatches triage, decides ceremony, and creates a brand-new flow directory for what is really a one-commit amendment to an already-shipped slug.
+
+The v8.59 `/cc extend <slug> <task>` fork solves the *parent-context* half of the problem (slug is known, parent's plan + AC are loaded), but extend-mode still runs the full pipeline — it just inherits ceremony from the parent. For a literal "patch this one file" follow-up that's still too much ceremony.
+
+v8.102 introduces a **post-ship-only sibling** of extend-mode: `/cc patch <slug> <task>` dispatches the `builder` directly with `patchMode: true` against an already-shipped parent, skips every other specialist, writes a single `patch(<slug>): <message>` commit, and appends `patch-N.md` next to the parent's `plan.md` / `build.md` rather than creating a fresh flow dir. Same parent-context envelope as extend-mode; same single-commit discipline as the trivial-keyword inline path; but post-ship-locked and explicit.
+
+### What changed
+
+#### 1. New on-demand runbook — `patch-mode.md`
+
+`src/content/runbooks-on-demand.ts` gains a new `PATCH_MODE` runbook (id `patch-mode`, file `patch-mode.md`). The runbook documents:
+
+- Motivation + ceremony-vs-effort gap that patch-mode closes.
+- Trigger evaluation order: the patch-mode fork fires BEFORE extend-mode and research-mode in `start-command.ts`'s Detect-hop matrix.
+- Argument parsing (`patch <slug> <task>`, optional `--review` flag for a lite reviewer pass).
+- Validation via the existing `loadParentContext(projectRoot, slug)` helper from `src/parent-context.ts` — the SAME helper that backs the v8.59 extend-mode fork. Reuse is mandatory; no parallel slug-resolution machinery.
+- The four error sub-cases (`reason: "in-flight" | "cancelled" | "missing" | "corrupted"`) handled verbatim, with the same user-facing copy as extend-mode where appropriate.
+- What the orchestrator does on `ok: true`: skip the triage / architect / plan-critic / plan-design / plan-devex / qa / critic / ship-gate dispatches entirely; force `ceremonyMode: "inline"`; dispatch `builder` directly with `patchMode: true` in the envelope.
+- The `patch-N.md` artifact shape (single fenced block under the parent's `.cclaw/flows/shipped/<slug>/patch-N.md`, where `N` is the next ordinal after any existing patches).
+- Builder envelope shape (`patchMode: true`, `parentSlug`, `parentPlanPath`, `parentBuildPath`, `taskDescription`, optional `reviewLite: true`).
+- Sub-cases for parsing (missing slug, missing task, malformed token, `--review` flag handling).
+- When NOT to use patch-mode (multi-file refactors, AC additions, schema changes, security touches — those still go through `/cc extend` or a fresh `/cc <task>`).
+- Multi-level chaining: a patch on an already-patched slug writes the next `patch-N.md` next to the prior `patch-1.md` / `patch-2.md` in the same shipped dir; the orchestrator loads the IMMEDIATE parent only.
+
+`ON_DEMAND_RUNBOOKS_INDEX_SECTION` is regenerated automatically (the runbook registry derives the index table from the array).
+
+#### 2. Orchestrator routing — `src/content/start-command.ts`
+
+Three additive changes to `START_COMMAND_BODY`:
+
+- Detect-hop invocation matrix updated: the four-row table now lists `/cc patch <slug> <task>` alongside `/cc <task>`, `/cc research <topic>`, and `/cc extend <slug> <task>` as a recognized starting command. Active-flow / no-active-flow shapes follow the same symmetric error / start pattern as extend-mode and research-mode.
+- New `### Detect — patch-mode fork (v8.102+)` section inserted BEFORE the extend-mode fork. The fork fires when the raw `/cc` argument starts with the literal token `patch ` (case-insensitive, exactly one space). On match: parse `<slug>` + `<task>` (+ optional `--review`), validate the parent via `loadParentContext`, and on `ok: true` skip triage / architect / plan-critic / plan-design / plan-devex / qa / critic / ship-gate entirely and dispatch `builder` directly with `patchMode: true`. Pointer to `runbooks/patch-mode.md` for the full procedure.
+- "Trivial path" cross-reference: the v8.102 patch-mode fork is documented as the post-ship-only sibling of the orchestrator's existing trivial-inline path — same single-commit discipline, but dispatched against an already-shipped parent slug with the artifact landing as `patch-N.md` next to the parent's `plan.md`.
+- On-demand pointer table gains a `/cc patch ` row pointing to `patch-mode.md`.
+
+These are additive — no existing fork logic moved or rewrote. The `v883-token-runbooks.test.ts` re-inline canary accounts for the additive growth via an explicit `V8102_ADDITIVE_CHARS` carve-out (1800 chars).
+
+#### 3. Builder envelope extension — `src/content/specialist-prompts/builder.ts`
+
+New `## Patch-mode flow (v8.102; when envelope carries patchMode: true)` section appended to `BUILDER_PROMPT`. The section is fully self-contained:
+
+- Envelope shape: builder reads `parentSlug`, `parentPlanPath`, `parentBuildPath` (optional), `taskDescription`, optional `reviewLite: true`.
+- Read protocol: load parent `plan.md` + task description as the working contract; do not re-derive ACs, do not flip flow-state assumption rows.
+- Skip list (carve-outs from the standard builder flow): slice topology, parallel dispatch, per-slice review loop, AC verify discipline (`verify(AC-N): passing`), flow-state assumption row flipping.
+- Single-commit discipline: ONE commit prefixed `patch(<slug>): <message>` where `<slug>` is the parent slug.
+- Artifact write: append `patch-N.md` to the parent's `.cclaw/flows/shipped/<slug>/` directory (the orchestrator computes `N`).
+- Slim summary shape: a patch-mode-specific summary block the orchestrator parses (commit SHA, files touched, line delta, patch-N artifact path).
+- Hard rules for patch-mode (no slice topology, no AC additions, no schema changes, no parent ceremony override beyond `inline`).
+
+Prompt-budget for the `builder` raised from 970 lines / 110 000 chars to 1060 lines / 120 000 chars (≈7% line headroom, ≈8% char headroom over current size). Growth (~+60 lines / ~+7k chars) is fully attributable to the new section; the rest of `BUILDER_PROMPT` is unchanged.
+
+#### 4. Triage trivial-shape downgrade — `src/content/specialist-prompts/triage.ts`
+
+New `### §1.6 Trivial-shape downgrade (v8.102 — extend-mode only)` subsection added under "Triage inheritance". The §1.6 rule:
+
+- Fires ONLY when `parentContext` is set (i.e. extend-mode); fresh-mode is unaffected.
+- Four-AND gate (all four must fire to downgrade): (a) ≤2 file references in the task description, (b) no schema words (`schema`, `migration`, `column`, `table`, `field` …), (c) no AC additions (no `must`, `should`, `acceptance`, `verify` language for *new* behavior), (d) single concrete verb (`fix`, `rename`, `update`, `bump`, `tweak`, …).
+- When the gate fires: downgrade `ceremonyMode` from the parent's `strict` (or `soft`) to `inline`, regardless of the parent's tier.
+- The `rationale` field gets the `extend-mode-trivial-shape downgrade from strict parent (1-2 files, single verb, no schema/AC signals)` tag appended.
+
+Anti-rationalization table updated: the "tiny tweak" / "minor" / "small adjustment" row now explicitly distinguishes fresh-mode (still NOT a downgrade signal — words are weak, signals win, trivial-keyword heuristic gate is the only legitimate fresh-mode downgrade path) from extend-mode (the v8.102 §1.6 rule ALLOWS this framing as a valid signal IF the four-AND gate fires).
+
+#### 5. Post-ship `/cc patch` hint — `handoff-gates.md`
+
+`HANDOFF_GATES` in `src/content/runbooks-on-demand.ts` gains a new `### Post-ship micro-edit hint (v8.102)` subsection. After every successful ship (any finalization mode), the orchestrator surfaces a one-line plain-prose hint:
+
+> "If you need to adjust this slug after shipping, run `/cc patch <slug> <description>` for a fast follow-up without full ceremony."
+
+The hint is plain prose only — no structured ask, no flow-state mutation. Users who don't need a follow-up simply ignore it.
+
+### Tests
+
+New file `tests/unit/v8102-patch-mode.test.ts` (3 tests):
+
+- **WIRING**: `ON_DEMAND_RUNBOOKS` registration check (id + filename + non-trivial body + canonical heading), `ON_DEMAND_RUNBOOKS_INDEX_SECTION` surface check, `start-command` Detect-hop matrix + on-demand pointer table cross-references, and the per-specialist skip bullets in the runbook body.
+- **BEHAVIOR**: exercises the missing-slug path through `loadParentContext` (proving patch-mode reuses the v8.59 helper rather than re-implementing slug resolution); asserts the runbook body documents all four error reasons (`in-flight` / `cancelled` / `missing` / `corrupted`).
+- **SECTION CONTRACT**: `BUILDER_PROMPT` carries the "Patch-mode flow" section with the `patchMode: true` flag + DO-NOT-DO carve-outs + `patch(<slug>):` commit prefix; `TRIAGE_PROMPT` carries the §1.6 "Trivial-shape downgrade" section with the four-AND gate signals and the updated anti-rationalization table allowing tiny-tweak/minor/small-adjustment in extend-mode only; `HANDOFF_GATES` carries the `/cc patch` post-ship hint.
+
+Existing test updates (additive, not regression-driven):
+
+- `tests/unit/prompt-budgets.test.ts`: `builder` budget raised from 970 / 110 000 to 1060 / 120 000 with an inline justification comment pointing to this changelog entry.
+- `tests/unit/v883-token-runbooks.test.ts`: re-inline canary unchanged in intent; a new `V8102_ADDITIVE_CHARS` constant (1800) is subtracted from the current `start-command` body length BEFORE the ≥2.5% reduction gate is checked. This preserves the canary's purpose (catch re-inlined lifted prose) without penalizing legitimately additive new-feature text.
+
+### Verification
+
+- `npx --no-install tsc --noEmit`: clean.
+- `npx --no-install vitest run --reporter=dot`: 709 / 709 tests across 102 / 102 files. Baseline was 706 / 101; delta +3 tests + 1 file = exactly the v8.102 test surface.
+- `node scripts/smoke-init.mjs`: passes (patch-mode.md surfaces in `.cclaw/runbooks/`).
+
+### Surface delta
+
+- `src/content/runbooks-on-demand.ts`: +PATCH_MODE constant (~110 lines), +1 array entry, +HANDOFF_GATES ship-hint subsection (~7 lines).
+- `src/content/start-command.ts`: +Detect-hop patch-mode fork (~6 lines), +matrix row update, +on-demand pointer table row, +trivial-path cross-reference (~2 lines). Total additive ~+18 lines / ~+1800 chars.
+- `src/content/specialist-prompts/builder.ts`: +Patch-mode flow section (~60 lines / ~+7 000 chars).
+- `src/content/specialist-prompts/triage.ts`: +§1.6 subsection (~15 lines), +anti-rationalization row revision (~5 lines).
+- `tests/unit/v8102-patch-mode.test.ts`: new file, 3 tests, ~190 lines.
+
+No runtime modules touched. `src/parent-context.ts` is reused as-is. No flow-state schema changes (additive only — the `patch-N.md` artifact lives entirely in the parent's shipped dir alongside `plan.md` / `build.md` / etc.).
+
+
 ## 8.101.0 — Test slim-down Phase A4: mutation-test-driven tighten
 
 ### Why
