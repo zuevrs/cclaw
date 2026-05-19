@@ -1,3 +1,5 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -12,39 +14,24 @@ import {
 } from "../../src/content/anti-slop-rubric.js";
 
 /**
- * v8.86 — Anti-slop graded reviewer axis. Slimmed in v8.99 test-slim-down
- * A2 to one WIRING + one BEHAVIOR + one SECTION CONTRACT test.
+ * v8.86 — Anti-slop graded reviewer axis. Slimmed in v8.99 test-slim-down A2
+ * to one WIRING + one BEHAVIOR + one SECTION CONTRACT test covering the
+ * shared rubric, default-on gate, and reviewer-prompt stub.
  */
 
+const PROJECT_ROOT = path.resolve(process.cwd());
+const SKILLS_DIR = path.join(PROJECT_ROOT, "src/content/skills");
 const ANTI_SLOP_SKILL_ID = "reviewer-axis-anti-slop";
 
-describe("v8.86 — anti-slop axis wiring (rubric module + companion skill + AUTO_TRIGGER_SKILLS + default-on gate)", () => {
-  it("WIRING — ANTI_SLOP_DIMENSIONS exports the 4 canonical Karpathy-projection keys with non-trivial anchors, renderAntiSlopRubricTable emits a valid table, the companion skill is registered with stages=['review'] + default-on gate predicate, and GateEnvelope accepts walkAntiSlopAxis", () => {
-    expect(ANTI_SLOP_DIMENSIONS).toHaveLength(4);
-    const keys = ANTI_SLOP_DIMENSIONS.map((d) => d.key).sort();
-    expect(keys).toEqual(
-      ["senior-test", "speculative-flexibility", "single-use-abstraction", "orphan-cleanup-discipline"].sort()
-    );
-    for (const d of ANTI_SLOP_DIMENSIONS) {
-      expect(typeof d.key).toBe("string");
-      expect(typeof d.anchor10).toBe("string");
-      expect(d.anchor10.length).toBeGreaterThan(80);
-    }
-    const table = renderAntiSlopRubricTable();
-    expect(table).toContain("| dimension | what it covers | what a 10 looks like |");
-    expect(table).toContain("| --- | --- | --- |");
-    for (const dim of ANTI_SLOP_DIMENSIONS) {
-      expect(table).toContain(`| **${dim.name}** |`);
-    }
-
+describe("v8.86 — anti-slop axis wiring", () => {
+  it("WIRING — `reviewer-axis-anti-slop` registered with stages=[review] + default-on gate (fires on empty / true envelope; closes only on explicit walkAntiSlopAxis=false), companion skill body on disk ≥3k chars with canonical frontmatter, GateEnvelope accepts walkAntiSlopAxis true/false; reviewer-axis cohort grew to exactly 8 with every entry following the contract", async () => {
     const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === ANTI_SLOP_SKILL_ID);
-    expect(skill, "AUTO_TRIGGER_SKILLS must register reviewer-axis-anti-slop").toBeDefined();
+    expect(skill, "expected AUTO_TRIGGER_SKILLS to register `reviewer-axis-anti-slop`").toBeDefined();
     expect(skill!.stages).toEqual(["review"]);
     expect(typeof skill!.gate).toBe("function");
     expect(skill!.body.length).toBeGreaterThan(3000);
     expect(skill!.fileName).toBe(`${ANTI_SLOP_SKILL_ID}.md`);
 
-    // Default-on gate contract (the key differentiator from v8.83's surface-driven axes)
     const gate = skill!.gate!;
     expect(gate({})).toBe(true);
     expect(gate({ walkAntiSlopAxis: true })).toBe(true);
@@ -52,53 +39,144 @@ describe("v8.86 — anti-slop axis wiring (rubric module + companion skill + AUT
     expect(
       gate({
         walkQaEvidenceAxis: false,
+        walkDesignQualityAxis: false,
+        securityFlag: false,
+        planHasNonFunctional: false,
+        editDisciplineActive: false,
         walkScopeDriftAxis: false,
         walkAssumptionCoverageAxis: false
-      } as GateEnvelope)
+      })
     ).toBe(true);
+    expect(gate({ walkQaEvidenceAxis: true, walkAntiSlopAxis: false })).toBe(false);
 
-    // reviewer-axis cohort grew to ≥8 with anti-slop in the set
-    const reviewerAxisSkills = AUTO_TRIGGER_SKILLS.filter((s) => s.id.startsWith("reviewer-axis-"));
-    expect(reviewerAxisSkills.length).toBeGreaterThanOrEqual(8);
-    expect(reviewerAxisSkills.map((s) => s.id)).toContain(ANTI_SLOP_SKILL_ID);
+    // GateEnvelope type accepts walkAntiSlopAxis
+    const envTrue: GateEnvelope = { walkAntiSlopAxis: true };
+    const envFalse: GateEnvelope = { walkAntiSlopAxis: false };
+    expect(skill!.gate!(envTrue)).toBe(true);
+    expect(skill!.gate!(envFalse)).toBe(false);
+
+    // Companion skill on disk
+    const skillBody = await fs.readFile(path.join(SKILLS_DIR, `${ANTI_SLOP_SKILL_ID}.md`), "utf8");
+    expect(skillBody.length).toBeGreaterThan(3000);
+    expect(skillBody.startsWith("---\n")).toBe(true);
+    expect(skillBody).toMatch(/^name:\s*reviewer-axis-anti-slop$/m);
+    expect(skillBody).toContain(`# Skill: ${ANTI_SLOP_SKILL_ID}`);
+    for (const key of [
+      "senior-test",
+      "speculative-flexibility",
+      "single-use-abstraction",
+      "orphan-cleanup-discipline"
+    ]) {
+      expect(skillBody).toMatch(new RegExp(key));
+    }
+    expect(skillBody).toMatch(/0-10/);
+    expect(skillBody).toMatch(/Karpathy/i);
+    expect(skillBody).toMatch(/Simplicity First/i);
+    expect(skillBody).toContain("AS-N");
+
+    // Cohort grew to exactly 8
+    const cohort = AUTO_TRIGGER_SKILLS.filter((s) => s.id.startsWith("reviewer-axis-"));
+    expect(cohort).toHaveLength(8);
+    expect(cohort.map((s) => s.id).sort()).toEqual(
+      [
+        "reviewer-axis-anti-slop",
+        "reviewer-axis-assumption-coverage",
+        "reviewer-axis-design-quality",
+        "reviewer-axis-edit-discipline",
+        "reviewer-axis-nfr-compliance",
+        "reviewer-axis-qa-evidence",
+        "reviewer-axis-scope-drift",
+        "reviewer-axis-security"
+      ].sort()
+    );
+    for (const sk of cohort) {
+      expect(sk.stages).toEqual(["review"]);
+      expect(typeof sk.gate).toBe("function");
+      expect(sk.body.length).toBeGreaterThan(3000);
+      expect(sk.fileName).toBe(`${sk.id}.md`);
+    }
   });
 });
 
-describe("v8.86 — anti-slop axis behavior (buildAutoTriggerBlock honors default-on contract + AS-N finding format)", () => {
-  it("BEHAVIOR — buildAutoTriggerBlock emits the anti-slop pointer in legacy/empty/true envelopes, filters out ONLY on explicit walkAntiSlopAxis:false, and the canonical AS-N finding grammar parses for all four dimensions", () => {
+describe("v8.86 — anti-slop axis behavior (buildAutoTriggerBlock default-on + AS-N finding grammar)", () => {
+  it("BEHAVIOR — buildAutoTriggerBlock honors default-on (legacy stage-only call + empty envelope + explicit true all emit the pointer; only explicit walkAntiSlopAxis=false filters it out while other gates keep filtering normally); AS-N finding line `AS-N: <dimension> at <grade>/10: <description>` parses for all four canonical dimensions and rejects shapes missing the namespace prefix or grade slot", () => {
     expect(buildAutoTriggerBlock("review")).toContain(ANTI_SLOP_SKILL_ID);
     expect(buildAutoTriggerBlock("review", {})).toContain(ANTI_SLOP_SKILL_ID);
     expect(buildAutoTriggerBlock("review", { walkAntiSlopAxis: true })).toContain(ANTI_SLOP_SKILL_ID);
-    expect(buildAutoTriggerBlock("review", { walkAntiSlopAxis: false })).not.toContain(ANTI_SLOP_SKILL_ID);
-
-    const explicitDisable = buildAutoTriggerBlock("review", {
+    expect(buildAutoTriggerBlock("review", { walkAntiSlopAxis: false })).not.toContain(
+      ANTI_SLOP_SKILL_ID
+    );
+    const env: GateEnvelope = {
       walkAntiSlopAxis: false,
       walkScopeDriftAxis: true,
       walkAssumptionCoverageAxis: true
-    });
-    expect(explicitDisable).not.toContain(ANTI_SLOP_SKILL_ID);
-    expect(explicitDisable).toContain("reviewer-axis-scope-drift");
-    expect(explicitDisable).toContain("reviewer-axis-assumption-coverage");
+    };
+    const block = buildAutoTriggerBlock("review", env);
+    expect(block).not.toContain(ANTI_SLOP_SKILL_ID);
+    expect(block).toContain("reviewer-axis-scope-drift");
+    expect(block).toContain("reviewer-axis-assumption-coverage");
 
-    const VALID_FINDING_LINE_RE = /^AS-(\d+):\s*([a-z-]+)\s+at\s+(\d{1,2})\/10:\s*(.+)$/;
-    const cases = [
+    // AS-N finding grammar
+    const RE = /^AS-(\d+):\s*([a-z-]+)\s+at\s+(\d{1,2})\/10:\s*(.+)$/;
+    const line = "AS-1: senior-test at 3/10: src/lib/cache.ts:14-22 — diff is 3x baseline";
+    const m = RE.exec(line);
+    expect(m).not.toBeNull();
+    expect(m![1]).toBe("1");
+    expect(m![2]).toBe("senior-test");
+    expect(m![3]).toBe("3");
+    for (const ok of [
       "AS-1: senior-test at 4/10: foo",
       "AS-2: speculative-flexibility at 3/10: bar",
       "AS-3: single-use-abstraction at 5/10: baz",
       "AS-4: orphan-cleanup-discipline at 2/10: qux"
-    ];
-    for (const line of cases) {
-      const match = VALID_FINDING_LINE_RE.exec(line);
-      expect(match, `expected ${line} to parse`).not.toBeNull();
-      expect(ANTI_SLOP_DIMENSIONS.map((d) => d.key)).toContain(match![2]);
+    ]) {
+      const r = RE.exec(ok)!;
+      expect(r).not.toBeNull();
+      expect(ANTI_SLOP_DIMENSIONS.map((d) => d.key)).toContain(r[2]);
     }
-    expect(VALID_FINDING_LINE_RE.exec("F-7: senior-test at 3/10: foo")).toBeNull();
-    expect(VALID_FINDING_LINE_RE.exec("AS-1: senior-test: foo")).toBeNull();
+    for (const bad of [
+      "F-7: senior-test at 3/10: foo",
+      "AS- senior-test at 3/10: foo",
+      "AS-1 senior-test 3/10 foo",
+      "AS-1: senior-test: foo",
+      "AS-1: senior-test at /10: foo"
+    ]) {
+      expect(RE.exec(bad)).toBeNull();
+    }
   });
 });
 
-describe("v8.86 — anti-slop axis section contract (reviewer prompt declares Fourteen-axis intro + gated stub + AS-N namespace + slim counter + dedup enum)", () => {
-  it("SECTION CONTRACT — reviewer prompt declares Fourteen-axis intro, gated `anti-slop` axis-table row, `### Anti-slop axis (gated; default-on; v8.86)` stub naming the companion skill + AS-N finding + Karpathy Simplicity First link, embeds the rendered rubric table, and slim-summary `as=N` counter is documented + listed in the dedup enum", () => {
+describe("v8.86 — anti-slop axis section contract (shared rubric + reviewer prompt + README)", () => {
+  it("SECTION CONTRACT — ANTI_SLOP_DIMENSIONS exports exactly four canonical Karpathy-projection keys with anchor10 references (senior-test → senior, speculative-flexibility → consumer, single-use-abstraction → ≥2 callers, orphan-cleanup-discipline → pre-existing/own); renderAntiSlopRubricTable emits canonical header + 4 data rows; reviewer.ts intro bumps Thirteen-axis → Fourteen-axis + axis-table row + dedicated stub heading (gated; default-on; v8.86) + AS-N grammar + Karpathy Simplicity First citation + embedded rubric table + slim-summary `as=N` token + finding-dedup enum lists anti-slop; README references 14 axes / 35 skills + `anti-slop` + v8.86 citation", async () => {
+    // Shared rubric
+    expect(ANTI_SLOP_DIMENSIONS).toHaveLength(4);
+    expect(ANTI_SLOP_DIMENSIONS.map((d) => d.key).sort()).toEqual(
+      ["senior-test", "speculative-flexibility", "single-use-abstraction", "orphan-cleanup-discipline"].sort()
+    );
+    for (const d of ANTI_SLOP_DIMENSIONS) {
+      expect(typeof d.name).toBe("string");
+      expect(d.summary.length).toBeGreaterThan(40);
+      expect(d.anchor10.length).toBeGreaterThan(80);
+    }
+    expect(ANTI_SLOP_DIMENSIONS.find((d) => d.key === "senior-test")!.anchor10).toMatch(/senior/i);
+    expect(ANTI_SLOP_DIMENSIONS.find((d) => d.key === "speculative-flexibility")!.anchor10).toMatch(
+      /consumer/i
+    );
+    expect(ANTI_SLOP_DIMENSIONS.find((d) => d.key === "single-use-abstraction")!.anchor10).toMatch(
+      /(≥2|two|2 .*call|2\+)/i
+    );
+    expect(ANTI_SLOP_DIMENSIONS.find((d) => d.key === "orphan-cleanup-discipline")!.anchor10).toMatch(
+      /pre-existing|did not create|own (?:mess|orphan|additions)|created by this diff/i
+    );
+
+    const table = renderAntiSlopRubricTable();
+    expect(table).toContain("| dimension | what it covers | what a 10 looks like |");
+    expect(table).toContain("| --- | --- | --- |");
+    for (const dim of ANTI_SLOP_DIMENSIONS) {
+      expect(table).toContain(`| **${dim.name}** |`);
+    }
+
+    // reviewer.ts
     expect(REVIEWER_PROMPT).toMatch(/Fourteen-axis review/);
     expect(REVIEWER_PROMPT).not.toMatch(/Thirteen-axis review/);
     expect(REVIEWER_PROMPT).toMatch(/Fourteen axes; five severities/);
@@ -116,5 +194,16 @@ describe("v8.86 — anti-slop axis section contract (reviewer prompt declares Fo
     expect(REVIEWER_PROMPT).toMatch(/`as=N` is \*\*only\*\* present when the anti-slop gate fired/);
     expect(REVIEWER_PROMPT).toMatch(/\[as=N\]/);
     expect(REVIEWER_PROMPT).toMatch(/\/\s*`anti-slop`\s*\)\./);
+
+    // README
+    const readme = await fs.readFile(path.join(PROJECT_ROOT, "README.md"), "utf-8");
+    expect(readme).toContain("14 axes");
+    expect(readme).not.toContain("13 axes");
+    expect(readme).toContain("35 skills");
+    expect(readme).toMatch(/`anti-slop`/);
+    expect(readme).toContain("reviewer-axis-anti-slop");
+    expect(readme).toMatch(/v8\.86/);
+    expect(readme).toMatch(/Simplicity First/);
+    expect(readme).toMatch(/Karpathy/i);
   });
 });
