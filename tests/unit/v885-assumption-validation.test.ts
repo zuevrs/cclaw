@@ -166,8 +166,10 @@ describe("v8.85 — assumption-validation behavior (parse + flip + collect end-t
 
 describe("v8.85 — assumption-validation section contract (reviewer axis + plan/research/ship templates + architect/plan-critic/builder/start-command prompts)", () => {
   it("SECTION CONTRACT — reviewer.ts declares the gated `assumption-coverage` axis (v8.85) with KA-N finding + companion-skill pointer + slim-summary `av=N` counter, plan + research templates carry KA-N bullets, ship template carries `## Unvalidated assumptions`, and architect Phase 7.5 + plan-critic + builder + start-command all name the `validates: KA-N` payload", async () => {
+    // v8.105 — axis-table row + dedicated stub heading both grew a
+    // `v8.105 cap-at-consider` annotation; the v8.85 anchor remains.
     expect(REVIEWER_PROMPT).toMatch(/\|\s*`assumption-coverage`\s*\(\*\*gated\*\*\)\s*—\s*v8\.85/);
-    expect(REVIEWER_PROMPT).toMatch(/^###\s+Assumption-coverage axis \(gated;\s*v8\.85\)/m);
+    expect(REVIEWER_PROMPT).toMatch(/^###\s+Assumption-coverage axis \(gated;\s*v8\.85;\s*v8\.105 cap-at-consider\)/m);
     expect(REVIEWER_PROMPT).toContain(ASSUMPTION_COVERAGE_SKILL_ID);
     expect(REVIEWER_PROMPT).toContain(`.cclaw/lib/skills/${ASSUMPTION_COVERAGE_SKILL_ID}.md`);
     expect(REVIEWER_PROMPT).toContain("KA-N: not validated by any commit despite high-stakes label");
