@@ -2237,25 +2237,13 @@ Compute the scalar:
 ambiguity = 1 - (goal * 0.4 + constraints * 0.3 + criteria * 0.3 + context * 0.0)
 \`\`\`
 
-**Targeting + challenge-mode rotation:** the next question MUST target the weakest dimension. The same challenge-mode rotation applies (sourced from \`oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"\`):
+**Targeting + challenge-mode stance rotation (v8.105 — internal stance, no user-visible label):** the next question MUST target the weakest dimension. The same challenge-mode rotation applies (sourced from \`oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"\`); the stance is an internal authoring guide for the orchestrator's question composition — the user sees a single question with a single stance behind it, not a labelled round header.
 
-- **Round 4 — Contrarian mode.** Ask "what if the opposite were true?" against the weakest dimension. Tests whether the user's framing is correct or just habitual. (Architect's round 4 is the same stance; for research mode, round 4 may also probe "what if the user is researching the wrong question altogether?").
-- **Round 5 — Simplifier mode.** Ask "what's the simplest version of the question that would still be valuable to answer?". Finds the minimal viable research scope.
+- **Round 4 stance — contrarian.** Ask (silently) "what if the opposite were true?" against the weakest dimension. Tests whether the user's framing is correct or just habitual. (Architect's round 4 is the same stance; for research mode, round 4 may also probe "what if the user is researching the wrong question altogether?").
+- **Round 5 stance — simplifier.** Ask (silently) "what's the simplest version of the question that would still be valuable to answer?". Finds the minimal viable research scope.
 - **Rounds 6-8 (research only).** Continue with open-ended targeting on the weakest dimension; no specific stance injection. The extra rounds exist because research topics genuinely benefit from deeper questioning more often than task-mode Clarify does — but the math-gated exit usually fires before round 6 on focused topics.
 
-**Surface a per-round table to the user** after every answer:
-
-\`\`\`text
-Round <n>:
-| Dimension | Score | Weight | Why |
-| --- | --- | --- | --- |
-| goal | <s_goal> | 0.4 | <one-sentence rationale> |
-| constraints | <s_constraints> | 0.3 | <one-sentence rationale> |
-| criteria | <s_criteria> | 0.3 | <one-sentence rationale> |
-| context | <s_context> | 0.0 | <one-sentence rationale> |
-| **Ambiguity** |  |  | **<a>** |
-Next target: <weakest-dimension> — <one-sentence why>.
-\`\`\`
+**Do NOT render the per-round score table to the user (v8.105).** The 4-row \`Dimension / Score / Weight / Why\` block and the trailing \`Next target: <weakest-dimension>\` line are **internal** to the orchestrator — compute them, use them to pick the weakest dimension, persist them to \`flow-state.json > clarifyRounds[]\`, but do NOT emit them in chat. The user sees only the next question. v8.105 dropped the user-visible render to keep research-mode discovery focused on the question (the v8.78 surface-render block was the dominant friction signal in the v8.105 over-engineering audit; the math itself is preserved). The persisted \`clarifyRounds[]\` array carries the full audit trail for compound learnings + later "why did we ask question 3?" inspection.
 
 Stamp every round into \`flow-state.json > clarifyRounds[]\` (append-only) as a \`ClarifyRoundState\` entry (\`{ round, dimensionScores, ambiguity, targetedDimension, question }\`) — the SAME field used by architect Clarify; research-mode flows share the persistence surface.
 
@@ -2268,7 +2256,7 @@ Stamp every round into \`flow-state.json > clarifyRounds[]\` (append-only) as a 
 
 When the dialogue exits, the orchestrator distils the conversation into a **dialogue summary** — 5-15 bullets capturing what the user told the orchestrator (topic refinement, known constraints, prior attempts, stakeholders, scope edges). The summary is the payload passed to each lens; the lenses do not see the raw dialogue.
 
-The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides for follow-up turns (Cursor's structured-ask, Claude's TUI text input, etc.) but the questions are open-ended (no multiple-choice picker, no "[y/n]" gate) — research-mode discovery is the one cclaw surface where free-form dialogue is the contract. The per-round table is rendered as plain markdown BEFORE each question; the user sees what every answer is moving.
+The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides for follow-up turns (Cursor's structured-ask, Claude's TUI text input, etc.) but the questions are open-ended (no multiple-choice picker, no "[y/n]" gate) — research-mode discovery is the one cclaw surface where free-form dialogue is the contract. v8.105 — the per-round table is NOT rendered in chat (the user sees only the next question); the round-by-round dimension scores persist silently into \`flow-state.json > clarifyRounds[]\` for audit and compound learnings.
 
 If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel"), the orchestrator runs the cancel runtime (move the empty research.md to \`cancelled/<slug>/\`, reset state) and ends the turn.
 

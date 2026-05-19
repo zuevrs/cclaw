@@ -1,6 +1,89 @@
 # Changelog
 
 
+## 8.105.0 — Polish: anti-slop scope-down + Clarify table hidden + assumption-coverage non-blocking
+
+### Why
+
+The v8.105 over-engineering audit surfaced three high-friction surfaces shipped in v8.78 / v8.85 / v8.86 that landed working but with too-aggressive defaults. None of the three were broken; all three were doing more than they needed to do. The polish pass keeps every signal these surfaces produce but trims the consequences:
+
+- **anti-slop axis** (v8.86) graded a diff against Karpathy "Simplicity First" and escalated low grades to `required` / `critical` — the dominant false-positive surface in the audit. Anti-slop dimensions surface **qualitative** simplicity signals (would a senior engineer say this is overcomplicated?), not load-bearing correctness gaps; shipping with an open `consider` is the canonical "noted but not blocking" carry-over for these signals.
+- **iterative-clarify per-round score table** (v8.78) rendered a 4-row Dimension / Score / Weight / Why block to the user after every answer, then a "Next target: <weakest-dimension>" pointer. Users read the table once, then started skimming the question — the surface moved the user's attention away from the question, which is where the actual signal is.
+- **assumption-coverage axis** (v8.85) gated ship on high-stakes KA-N rows lacking `validates: KA-N` payloads from the builder's verify commits. The ship template's `## Unvalidated assumptions` section is the canonical user-acknowledgement surface (the user reads the rows and accepts-and-ships knowingly); making the reviewer axis also block was a redundant gate.
+
+### What changed
+
+#### 1. Anti-slop reviewer axis — severity hard-capped at `consider` (cap-at-consider)
+
+The anti-slop axis still fires on every reviewer iteration (default-on; structurally skipped only on `ceremonyMode: inline` and structurally-empty diffs). The four-dimension 0-10 grading rubric (senior-test / speculative-flexibility / single-use-abstraction / orphan-cleanup-discipline) is unchanged; below-6 grades still become `AS-N` findings filed into the iteration block's Findings table; the signals still flow to `learnings.md` for compound capture.
+
+What changed: **severity hard-capped at `consider` regardless of grade**. The pre-v8.105 ladder (5/10 → consider, 3-4/10 → required, ≤2/10 → required with one-tier critical-escalation on critical-complexity slugs) collapses to a uniform `consider`. The axis never returns a blocking decision in any ceremonyMode. To re-enable blocking on a specific surface (rare), file the same finding under `axis=complexity-budget` — that axis still escalates per the standard cclaw ladder when the AC-vs-ROI math fails. The cap is "safer than default-off": the signal still reaches the user; the friction of false-blocking is dropped.
+
+Surfaces touched:
+
+- `src/content/specialist-prompts/reviewer.ts` — axis-table row + dedicated stub heading both name the cap-at-consider rule.
+- `src/content/skills/reviewer-axis-anti-slop.md` — Sub-check 5 severity grading rewritten; Red flags re-tagged to `consider`; worked examples updated.
+- `src/content/skills.ts` — `reviewer-axis-anti-slop` description updated.
+
+#### 2. Iterative-clarify per-round score table hidden (math preserved)
+
+Architect Phase −1 Clarify (v8.67 / v8.78) and research-mode Phase 1 discovery dialogue (v8.78) both compute four per-dimension scores (`goal * 0.4 + constraints * 0.3 + criteria * 0.3 + context * 0.0`) after every user answer, target the weakest dimension on the next question, and persist every round into `flow-state.json > clarifyRounds[]`. v8.105 keeps **all** of this math; it removes only the **user-visible** render:
+
+- The per-round 4-row `| Dimension | Score | Weight | Why |` markdown block is no longer emitted in chat.
+- The trailing `Next target: <weakest-dimension> — <rationale>` line is no longer emitted.
+- The "Round 4 — Contrarian mode" / "Round 5 — Simplifier mode" user-visible round labels are removed. The contrarian / simplifier stance discipline is preserved as an orchestrator-internal authoring guide for the question itself.
+
+The user now sees one question per turn, one answer per turn, full stop. The math behind it — including the weakest-dimension targeting, the math-gated exit at `ambiguity < 0.25`, the round-cap (5 for architect; 8 for research), the user-signal early exit, and the `clarifyRounds[]` audit persistence — is identical.
+
+Surfaces touched:
+
+- `src/content/specialist-prompts/architect.ts` — Phase −1 explicitly forbids rendering the table; Challenge-mode rotation rewritten as orchestrator-internal stance discipline; `Round 4 — Contrarian mode` / `Round 5 — Simplifier mode` user-visible headers removed.
+- `src/content/runbooks-on-demand.ts` — `RESEARCH_MODE` runbook Phase 1 receives the same treatment for the research-mode 8-round dialogue.
+- `src/types.ts` — `ClarifyRoundState` doc-comment updated to reflect the math-persists / render-absent split.
+
+#### 3. Assumption-coverage reviewer axis — severity hard-capped at `consider`
+
+The assumption-coverage axis (v8.85) still fires when the dispatch envelope carries `walkAssumptionCoverageAxis: true` (set by the orchestrator on plans with ≥1 KA-N bullet in `## Key assumptions to validate`). The four sub-checks are unchanged — Sub-check 1 (per-KA-N row validation cross-check), Sub-check 2 (false-positive `validates:` payload check), Sub-check 3 (unknown-id payload check), Sub-check 4 (ship.md `## Unvalidated assumptions` populated when ≥1 row remains unvalidated).
+
+What changed: **severity hard-capped at `consider` regardless of the row's `(high-stakes)` label**. Pre-v8.105, an unvalidated high-stakes KA-N row was `severity=required` (blocking) on Sub-check 1; a false-positive `validates:` payload was `severity=required` on Sub-check 2. v8.105 caps every assumption-coverage finding at `consider`; the axis never blocks ship.
+
+The builder's `validates: KA-N` commit-message payload becomes **truly optional** — including for high-stakes rows. The payload is still the canonical closure signal (the flow-state validator at `src/assumption-validation.ts` still flips matching rows to `Status: validated by <sha>` automatically when the payload is present), but a high-stakes row shipping with zero validating commits is no longer a ship-blocking finding. The row still surfaces in `ship.md > ## Unvalidated assumptions` for explicit user acknowledgement; the user accepts-and-ships knowingly rather than being blocked by the axis.
+
+Surfaces touched:
+
+- `src/content/specialist-prompts/reviewer.ts` — axis-table row + dedicated stub heading both name the cap-at-consider rule and the truly-optional payload contract.
+- `src/content/skills/reviewer-axis-assumption-coverage.md` — Sub-checks 1-4 severity caps rewritten; Red flags re-tagged to `consider`; rationalizations updated; worked examples now show `severity=consider` on high-stakes rows.
+- `src/content/specialist-prompts/builder.ts` — `validates: KA-N` section explicitly names the new "truly optional" contract under v8.105.
+- `src/content/skills.ts` — `reviewer-axis-assumption-coverage` description updated.
+
+### What did NOT change
+
+- Anti-slop axis still fires default-on, still grades on the same four dimensions, still files `AS-N` findings.
+- Assumption-coverage axis still fires under the same gate (`walkAssumptionCoverageAxis: true` when the plan has KA-N bullets), still runs all four sub-checks, still surfaces unvalidated rows into `ship.md > ## Unvalidated assumptions`.
+- Iterative-clarify still computes per-dimension scores after every answer, still picks the weakest dimension, still persists into `clarifyRounds[]`.
+- `validates: KA-N` payload semantics (flow-state validator, automatic flip to `validated by <sha>`) are unchanged — the payload is just no longer required.
+- The `unvalidatedHighStakesKas: string[]` envelope field (v8.94) is still computed; the reviewer's axis still receives the pre-filtered list — only the severity assignment dropped from `required` to `consider`.
+
+### Migration
+
+No breaking changes. Pre-v8.105 state files continue to validate; pre-v8.105 plan.md / build.md / review.md artifacts continue to read correctly; pre-v8.105 verify commits carrying `validates: KA-N` payloads continue to flip rows on the next post-build pass. Tests written against the pre-v8.105 user-visible Clarify table or the pre-v8.105 anti-slop / assumption-coverage `required` severity should be updated to assert the new contract (renders absent; severities capped at `consider`); the math itself remains accessible from `clarifyRounds[]`.
+
+### Files changed
+
+- `src/content/specialist-prompts/reviewer.ts` — anti-slop + assumption-coverage axis-table rows + dedicated stub headings updated.
+- `src/content/specialist-prompts/architect.ts` — Phase −1 Clarify table-render block removed; Round 4 / Round 5 user-visible labels removed; rationalizations updated.
+- `src/content/specialist-prompts/builder.ts` — `validates: KA-N` payload section updated for truly-optional contract.
+- `src/content/runbooks-on-demand.ts` — `RESEARCH_MODE` Phase 1 receives the same hidden-table treatment.
+- `src/content/skills/reviewer-axis-anti-slop.md` — cap-at-consider severity ladder.
+- `src/content/skills/reviewer-axis-assumption-coverage.md` — cap-at-consider severity ladder + truly-optional payload contract.
+- `src/content/skills.ts` — anti-slop + assumption-coverage skill descriptions.
+- `src/types.ts` — `ClarifyRoundState` doc-comment updated.
+- `tests/unit/v8105-polish.test.ts` — new test file pinning all three cap-at-consider rules and the math-persists / render-absent split.
+- Affected existing tests updated (v878 Round-4/5 labels; v885 reviewer prompt assertions).
+- `CHANGELOG.md` — this entry.
+- `package.json` — version bump to `8.105.0`.
+
+
 ## 8.104.0 — Merge plan-critic + plan-design + plan-devex (10 → 8 specialists)
 
 ### Why

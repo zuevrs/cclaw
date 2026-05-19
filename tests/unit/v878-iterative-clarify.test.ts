@@ -199,7 +199,7 @@ describe("v8.78 — FlowState.clarifyRounds[] persistence + validator", () => {
 });
 
 describe("v8.78 — architect + start-command surfaces declare per-dimension scoring", () => {
-  it("architect prompt declares the 4 dimensions, the ambiguity formula, the exit threshold, and the round-5 challenge cap", () => {
+  it("architect prompt declares the 4 dimensions, the ambiguity formula, the exit threshold, and the math-only stance rotation (v8.105 — table render hidden; stance discipline preserved)", () => {
     expect(ARCHITECT_PROMPT).toMatch(/\bgoal\b/i);
     expect(ARCHITECT_PROMPT).toMatch(/\bconstraints?\b/i);
     expect(ARCHITECT_PROMPT).toMatch(/\bcriteria\b/i);
@@ -209,8 +209,15 @@ describe("v8.78 — architect + start-command surfaces declare per-dimension sco
     );
     expect(ARCHITECT_PROMPT).toMatch(/ambiguity\s*<\s*0\.25/);
     expect(ARCHITECT_PROMPT).toMatch(/weakest\s+dimension/i);
-    expect(ARCHITECT_PROMPT).toMatch(/Round\s*4\s*[—–-]\s*Contrarian/i);
-    expect(ARCHITECT_PROMPT).toMatch(/Round\s*5\s*[—–-]\s*Simplifier/i);
+    // v8.105 — user-visible `Round 4 — Contrarian mode` / `Round 5 —
+    // Simplifier mode` labels are removed; the stance discipline is
+    // preserved as an orchestrator-internal authoring guide. Tripwire:
+    // the contrarian + simplifier descriptors still appear (math is
+    // preserved); the user-visible bolded round-label headers do not.
+    expect(ARCHITECT_PROMPT).toMatch(/contrarian/i);
+    expect(ARCHITECT_PROMPT).toMatch(/simplifier/i);
+    expect(ARCHITECT_PROMPT).not.toMatch(/\*\*Round 4 — Contrarian mode\.\*\*/);
+    expect(ARCHITECT_PROMPT).not.toMatch(/\*\*Round 5 — Simplifier mode\.\*\*/);
     expect(ARCHITECT_PROMPT).toMatch(/clarifyRounds/);
   });
 

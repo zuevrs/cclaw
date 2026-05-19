@@ -60,13 +60,15 @@ Cite the file:line of each single-use abstraction. Note explicitly when an abstr
 
 Cite the file:line of each orphan or drive-by deletion. Below-6 grades become findings.
 
-**Sub-check 5 — Severity grading (0-10 → severity).** Each below-6 dimension grade maps to a severity per the standard cclaw axis ladder:
+**Sub-check 5 — Severity grading (0-10 → severity; v8.105 cap-at-consider).** Every below-6 dimension grade maps to `severity = consider` — full stop. The pre-v8.105 ladder ramped 5/10 → consider, 3-4/10 → required, 0-2/10 → required-or-critical-escalation; v8.105 collapses the ramp to a hard cap:
 
 - **5/10** — severity = `consider`. Author may push back with reason; carries to learnings.md if unaddressed.
-- **3-4/10** — severity = `required`. Blocks ship on strict (any open `required` row); carries over with note in soft.
-- **0-2/10** — severity = `required` with one-tier escalation on `triage.complexity == "critical"` slugs → `critical` (blocks ship in every ceremonyMode). The 0-2/10 grade names diffs whose over-engineering is structural; a critical-complexity slug shipping a structurally-overengineered fix is the canonical reverted-after-ship pattern this axis exists to catch.
+- **3-4/10** — severity = `consider` (was `required` pre-v8.105). Same carry-over rule.
+- **0-2/10** — severity = `consider` (was `required`-or-`critical`-escalation pre-v8.105). No tier escalation on `triage.complexity == "critical"`; the 0-2/10 grade still surfaces the structural over-engineering signal in the Findings table, but no ship gate fires.
 
-A finding with grade `5/10` may be downgraded to `nit` if the author's push-back includes a citation that the over-engineering is required by an AC's named technical constraint (e.g. "the `OptionsParser` class is single-use today but AC-3 of THIS slug names the second call site landing in SL-4"). The downgrade requires the citation; "looks fine to me" without evidence is not enough.
+The cap is the v8.105 over-engineering-audit response: anti-slop dimensions surface **qualitative simplicity signals** (Karpathy's "would a senior engineer say this is overcomplicated?") rather than load-bearing correctness gaps, and the v8.86 blocking ladder was the dominant false-positive surface in the audit. The cap is "safer than default-off": the signal still reaches `review.md` Findings AND `learnings.md` AND any downstream compound learnings; the human still sees the feedback; but the axis never returns a blocking decision. To re-enable blocking on a specific slug (rare), file the same surface separately as a `required + axis=complexity-budget` finding — the cap is anti-slop-axis-only, not on the cross-cutting `complexity-budget` axis (which still escalates per the standard cclaw severity ladder when the AC-vs-ROI math fails).
+
+A finding with grade `5/10` may still be downgraded to `nit` if the author's push-back includes a citation that the over-engineering is required by an AC's named technical constraint (e.g. "the `OptionsParser` class is single-use today but AC-3 of THIS slug names the second call site landing in SL-4"). The downgrade requires the citation; "looks fine to me" without evidence is not enough. The cap-at-consider rule is the maximum severity the axis emits; downgrades below `consider` (to `nit` / `fyi`) remain available when the citation supports them.
 
 **Sub-check 6 — Finding shape.** File findings in the iteration block's Findings table as `AS-N: <dimension> at <grade>: <description>`. Example: `AS-1: speculative-flexibility at 3/10: src/lib/cache.ts:14-22 exports a Strategy interface with one concrete implementation (`MemoryCacheStrategy`) and no second caller; recommended fix — inline the strategy into the consumer or drop the interface and call the concrete class directly`. The `AS-` prefix is the anti-slop axis's namespace inside the reviewer's broader `F-N` ledger (an `AS-N` is filed as `F-N axis=anti-slop severity=<grade>` in the Findings table; the AS-prefix is the axis-local mnemonic recommended in the description body, mirroring the SD-N / KA-N convention from v8.84 / v8.85).
 
@@ -83,26 +85,28 @@ Cross-cutting rows live in `.cclaw/lib/anti-rationalizations.md`; the four rows 
 
 ## Red flags
 
-- A new `XManager` / `XService` / `XProvider` / `XStrategy` / `XFactory` / `XProvider` class introduced by the diff whose body is a single method called from one call site — severity = `required` immediately on single-use-abstraction; grade ≤3.
-- A new `options?: { ... }` parameter where every field is optional AND no caller in the diff passes any of the fields — severity = `required` on speculative-flexibility; grade ≤3.
-- A new exported interface / type with one concrete implementation in the diff AND no place in the codebase that imports the type symbol distinct from its single implementation — severity = `required` on speculative-flexibility; grade ≤3.
-- A diff that contains both the AC-required change AND ≥10 lines of cleanup of pre-existing dead code unrelated to the AC — severity = `required` on orphan-cleanup-discipline; grade ≤4 (the cleanup should be its own slug; "remove only your own mess").
-- A diff that adds ≥3 levels of indirection (function → method → strategy → implementation) where the AC needed ≤1 level — severity = `required` on single-use-abstraction; grade ≤3.
-- A diff whose total LOC is ≥3× the conceptually-simplest implementation visible from the AC + plan.md — severity = `required` on senior-test; grade ≤3. The 3× multiplier is the senior-test's structural escalation: at ≥3× simplicity-ratio, even a sympathetic senior reviewer would push back.
+Each red flag below names a low-grade pattern the axis still calls out as a finding; per the v8.105 cap-at-consider rule, severity is **always `consider`** even when the underlying grade is 0-3/10. The "grade" column drives the iteration block's grading table (and the learnings capture), not a ship gate.
+
+- A new `XManager` / `XService` / `XProvider` / `XStrategy` / `XFactory` / `XProvider` class introduced by the diff whose body is a single method called from one call site — severity = `consider` (grade ≤3 on single-use-abstraction).
+- A new `options?: { ... }` parameter where every field is optional AND no caller in the diff passes any of the fields — severity = `consider` (grade ≤3 on speculative-flexibility).
+- A new exported interface / type with one concrete implementation in the diff AND no place in the codebase that imports the type symbol distinct from its single implementation — severity = `consider` (grade ≤3 on speculative-flexibility).
+- A diff that contains both the AC-required change AND ≥10 lines of cleanup of pre-existing dead code unrelated to the AC — severity = `consider` (grade ≤4 on orphan-cleanup-discipline; the cleanup should be its own slug; "remove only your own mess").
+- A diff that adds ≥3 levels of indirection (function → method → strategy → implementation) where the AC needed ≤1 level — severity = `consider` (grade ≤3 on single-use-abstraction).
+- A diff whose total LOC is ≥3× the conceptually-simplest implementation visible from the AC + plan.md — severity = `consider` (grade ≤3 on senior-test). The 3× multiplier is the senior-test's structural threshold: at ≥3× simplicity-ratio, even a sympathetic senior reviewer would push back — the finding still surfaces to learnings, the cap-at-consider rule just keeps it from ship-gating.
 
 ## Worked example
 
-A reviewer iteration that fires Sub-check 2 might produce:
+A reviewer iteration that fires Sub-check 2 might produce (v8.105 — note `severity=consider` even at grade 3/10):
 
 ```markdown
-F-7 anti-slop/required — src/lib/cache.ts:14-22 — AS-1: speculative-flexibility at 3/10. The diff exports a `CacheStrategy` interface with one concrete implementation (`MemoryCacheStrategy` at src/lib/cache.ts:24-40) and zero second callers. The AC required "add a cache for the hot endpoints" — the interface adds a layer of indirection that the AC did not ask for. No second strategy is committed to a future slug; the next-slug roadmap (plan.md > ## Future work) does not name a second cache backend. Karpathy "Simplicity First" rebuttal: the second strategy belongs to the slug that actually adds it; today's diff should drop the interface and call MemoryCacheStrategy directly.
+F-7 anti-slop/consider — src/lib/cache.ts:14-22 — AS-1: speculative-flexibility at 3/10. The diff exports a `CacheStrategy` interface with one concrete implementation (`MemoryCacheStrategy` at src/lib/cache.ts:24-40) and zero second callers. The AC required "add a cache for the hot endpoints" — the interface adds a layer of indirection that the AC did not ask for. No second strategy is committed to a future slug; the next-slug roadmap (plan.md > ## Future work) does not name a second cache backend. Karpathy "Simplicity First" rebuttal: the second strategy belongs to the slug that actually adds it; today's diff should drop the interface and call MemoryCacheStrategy directly. The finding surfaces here for learnings.md; per v8.105 cap-at-consider, it does NOT block ship.
 → Recommended fix: inline `MemoryCacheStrategy`'s logic into the cache module and drop the `CacheStrategy` interface. If a second backend genuinely lands in a follow-up slug, re-extract the interface then. Cost of re-extraction is ~10 lines; cost of carrying the unused interface is permanent cognitive overhead.
 ```
 
-A Sub-check 4 orphan-cleanup-discipline example:
+A Sub-check 4 orphan-cleanup-discipline example (v8.105 — still `consider`):
 
 ```markdown
-F-8 anti-slop/required — src/lib/permissions.ts:12 — AS-2: orphan-cleanup-discipline at 4/10. The diff deletes `legacyHasViewEmail` (pre-existing helper at the now-deleted line 12-18), which was NOT created by this slug — it was a pre-existing dead code surface that THIS diff stumbled upon. The AC was "add tooltip permission check"; the diff legitimately added `hasViewEmail` (lines 14-22) but ALSO deleted unrelated pre-existing dead code. Karpathy "Surgical Changes" rebuttal: remove only orphans YOUR changes created; mention pre-existing dead code in `## Summary > Things I noticed but didn't touch`.
+F-8 anti-slop/consider — src/lib/permissions.ts:12 — AS-2: orphan-cleanup-discipline at 4/10. The diff deletes `legacyHasViewEmail` (pre-existing helper at the now-deleted line 12-18), which was NOT created by this slug — it was a pre-existing dead code surface that THIS diff stumbled upon. The AC was "add tooltip permission check"; the diff legitimately added `hasViewEmail` (lines 14-22) but ALSO deleted unrelated pre-existing dead code. Karpathy "Surgical Changes" rebuttal: remove only orphans YOUR changes created; mention pre-existing dead code in `## Summary > Things I noticed but didn't touch`.
 → Recommended fix: revert the `legacyHasViewEmail` deletion in a separate commit, OR move the pre-existing dead code cleanup to its own follow-up slug (with its own AC for "remove unused legacyHasViewEmail helper"). The current diff conflates two changes; split them.
 ```
 

@@ -1723,9 +1723,11 @@ export interface TriageDecision {
  *   architect understand the surrounding code well enough to modify it
  *   safely? Weight is 0.0 in the ambiguity formula — `context` is
  *   *informational*, not gating. Even on greenfield projects context
- *   may be unclear; we surface it in the per-round table so the user
- *   can volunteer pointers, but the math-gated exit threshold does
- *   not block on it. Reference: deep-interview's brownfield context
+ *   may be unclear; we persist it in the round's `clarifyRounds[]` audit
+ *   entry so the orchestrator can target it on later rounds, but the
+ *   math-gated exit threshold does not block on it. v8.105 removed the
+ *   user-visible per-round table render; the dimension's value is now
+ *   carried purely in flow-state for audit / compound learnings. Reference: deep-interview's brownfield context
  *   dimension folded into the same vocabulary so cclaw stays
  *   single-shape across project types.
  *
@@ -1773,9 +1775,14 @@ export interface ClarifyDimensionScore {
  * (the weakest dimension on the post-answer scores), and the question
  * the orchestrator asked.
  *
- * The round array is the persistent audit trail mirrored verbatim
- * under plan.md / research.md's Clarify per-round table. Append-only
- * (rounds are never mutated after the orchestrator advances).
+ * The round array is the persistent audit trail for the Clarify
+ * dialogue. v8.78 mirrored the rounds verbatim under a user-visible
+ * per-round score table rendered in chat; v8.105 dropped the
+ * user-visible render (only the question reaches the user). The
+ * scores still persist here for audit / compound learnings / later
+ * "why did we ask question N?" inspection — the cclaw round array is
+ * the canonical record of the dialogue math. Append-only (rounds are
+ * never mutated after the orchestrator advances).
  *
  * - `round` — 1-indexed round number.
  * - `dimensionScores` — array of 4 entries, one per
