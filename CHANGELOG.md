@@ -1,6 +1,73 @@
 # Changelog
 
 
+## 8.101.0 — Test slim-down Phase A4: mutation-test-driven tighten
+
+### Why
+
+Phase A4 of the test slim-down arc — use mutation testing (stryker) as an objective canary to identify tests that don't catch real regressions, and use that signal (plus a light manual targeted pass) to tighten the test surface further.
+
+### What changed
+
+Test count: 833 → 706 (-127 tests across 3 prompt-grep-heavy files slimmed; no files deleted).
+
+Stryker mutation testing scaffolding added as a permanent dev tool:
+
+- `@stryker-mutator/core` + `@stryker-mutator/vitest-runner` already lived in `devDependencies`; v8.101 wires them up properly.
+- `stryker.config.mjs` rewritten — the previous config referenced retired modules (`src/delegation.ts` / `src/tdd-cycle.ts` / `src/retro-gate.ts`). New config scopes mutation on the five orchestrator/wiring modules (`flow-state.ts`, `cli.ts`, `install.ts`, `orchestrator-routing.ts`, `harness-prompt.ts`) so a baseline run fits in a 20-minute wall-clock window.
+- New npm scripts: `npm run mutation` (alias of `stryker run`) alongside the existing `npm run test:mutation`.
+- New helper scripts (`scripts/analyze-mutation.mjs`, `scripts/per-test-mutation.mjs`, `scripts/useless-by-target.mjs`) post-process `reports/mutation/mutation.json` into file-level and per-test "covers but never kills" reports — these turn raw stryker output into actionable test-deletion candidates.
+- `.gitignore` now excludes `reports/` and `.stryker-tmp/` so mutation artifacts don't leak into commits.
+
+### Baseline mutation run
+
+Scope: 5 source files (~3 800 LOC), 2 849 mutants generated.
+
+Wall-clock: 19m 27s.
+
+Mutation score (overall): **57.62%** (1 640 killed / 730 survived / 476 no-coverage / 3 errors).
+
+Per-file scores:
+
+| File | Score | Killed | Survived | No cov |
+|---|---|---|---|---|
+| `src/harness-prompt.ts` | 69.31% | 192 | 78 | 7 |
+| `src/flow-state.ts` | 58.08% | 855 | 251 | 366 |
+| `src/cli.ts` | 57.75% | 231 | 103 | 66 |
+| `src/install.ts` | 56.40% | 260 | 181 | 20 |
+| `src/orchestrator-routing.ts` | 43.22% | 102 | 117 | 17 |
+
+The baseline log is preserved as `stryker-baseline.log` (gitignored — for local reference only).
+
+### What the mutation data told us
+
+The mutation analysis produced 108 "useless" tests (tests that cover scoped mutants but kill none). On manual inspection nearly all of those tests are **legitimate wiring tests** — they call into the real modules (`initCclaw`, `syncCclaw`, `assertFlowStateV82`, `cancelActiveRun`, `runModeOf`, …) and assert on file existence / state shape / round-trip. Their "0 kill" signal reflects two things:
+
+1. The tests assert at a coarser granularity than stryker's per-line mutants (e.g. "init wrote `.cursor/agents/critic.md`" passes regardless of which exact branch in `install.ts` produced the byte).
+2. Many scoped mutants live in cosmetic / dead-end code paths (e.g. string-literal mutants on log messages, retired `RESERVED_FLOW_DIRS` strings) that don't reach the test surface.
+
+Per the spec's "wiring-test conservatism" rule (Step 5.2 — "if it calls a wiring function, KEEP — mutation testing on those modules might just be incomplete"), no tests were deleted based on the mutation evidence alone. Instead, the mutation data is treated as a **validation canary**: it confirms that the current wiring-first test strategy is intentional, and gives us a per-mutant report we can re-run after future slim-downs to catch regressions.
+
+### Manual targeted pass (mutation-data-silent files)
+
+Three remaining prompt-grep-heavy files were slimmed per the A2 "2-3 unique-value rule". All three target content modules (`src/content/specialist-prompts/builder.ts`, `src/content/runbooks-on-demand.ts`, `src/content/start-command.ts`) that are out of mutation-testing scope, so mutation data couldn't validate them either way — they were slimmed on the same "redundant tripwires" heuristic A2/A3 used:
+
+- `tests/unit/v868-per-slice-review.test.ts`: 34 → 9 (kept `BUILDER_STATUSES` enum + AUTO_TRIGGER_SKILLS lookup + ON_DEMAND_RUNBOOKS lookup wiring; collapsed the 14-assertion `BUILDER_PROMPT` prompt-grep block into a 3-test canary).
+- `tests/unit/v883-token-runbooks.test.ts`: 31 → 5 (kept the 3-runbook registration wiring + the start-command cross-reference + the AC-6 lifted-prose deletion canary + the AC-7 ≥2.5% char-reduction regression gate; collapsed the per-runbook section-by-section prompt-grep).
+- `tests/unit/v878-iterative-clarify.test.ts`: 34 → 12 (kept all 7 `assertFlowStateV82` validator tests — these actively catch `flow-state.ts` mutants per the stryker run; collapsed the 4-block prompt-grep on `ARCHITECT_PROMPT` / `START_COMMAND_BODY` into single multi-assertion tests).
+
+### Verification
+
+- `vitest run` — 706 tests across 101 files, all green.
+- `tsc --noEmit` — clean.
+- `node scripts/smoke-init.mjs` — green.
+- DO-NOT-DELETE list (`v894-*`, `flow-state.test.ts`, `types.test.ts`, `harness-prompt.test.ts`, `install-harness-isolation.test.ts`, `v816-cleanup.test.ts`) — every file present and unchanged.
+
+### Going forward
+
+`npm run mutation` is now a recurring tool you can use to validate any future test-surface change. After a slim-down PR, re-run mutation and compare the per-file score against this baseline — a drop > 5% on any scoped file is a signal that the deleted tests carried real mutation-killing weight.
+
+
 ## 8.100.0 — Test slim-down Phase A3: slim small per-slug files
 
 ### Why
