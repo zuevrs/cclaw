@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.108.0 - 2026-05-19
+
+### Improved
+- **F-1 / cross-model critic prompt-budget awareness:** v8.72's second-adversarial-pass dispatch (via Codex/Gemini MCP) now estimates prompt size pre-dispatch, applies priority-drop trimming if over budget, refuses-and-skips on min-set overflow instead of silent truncation. New config knob `critic.cross_model_min_context` (default 16000). Pattern from gsd-v1 #3081 / `6a5fa591`. Disclosure in critic.md frontmatter when trimming occurred.
+- **R2 / state-lock atomicity:** Wrapped `patchFlowState`, `setOutcomeSignal`, `appendKnowledgeEntry` in per-path in-process mutex. Reads/writes now serialized; concurrent calls no longer lose updates. Fail-loudly on contention (gstack style), re-acquire on last retry (gsd-v1 #3717 specific lesson). Future-proofs v8.66 parallel slices + v8.73 worktree parallel + v8.102 patch mode for concurrent writers.
+- **F-9 / investigator hypothesis discipline:** Aligned `investigator.ts` (v8.77 + v8.81) with everyinc ce-debug `6fc57c50` improvements: concrete-observation requirement per hypothesis, Phase 0.5 trivial-bug fast-path (single-file + clear-cause skips multi-hypothesis), rationalization-phrase spotter (flags low-confidence hypothesis language).
+
+### Fixed
+- **F-2 / research lens drift:** `research-engineer.ts` and `research-product.ts` cited "the everyinc-compound ce-web-researcher methodology" with its rigid budget numbers (2-4 broad / 3-6 targeted / ~10 queries / ~5 fetches) verbatim. Upstream removed those numbers; cclaw synced to the new "Bias toward stopping early" phrasing.
+
 ## 8.107.0 - 2026-05-19
 
 ### Documentation

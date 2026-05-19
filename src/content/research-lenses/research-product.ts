@@ -84,7 +84,7 @@ The product lens covers external markets, competitor positioning, and prior-art 
    - **\`user-exa\`** (or comparable web-search MCP — \`web_search\` / \`webSearch\` / \`search\`) — preferred for market / competitor / pricing / community-pattern queries.
    - **\`user-context7\`** when a SaaS surfaces structured API docs (\`Stripe SDK v15\` / \`OpenAI API\`).
 
-3. **Dispatch shape** — same phased shape as the engineer lens: 2-4 broad scoping queries, 3-6 targeted, 1-3 follow-ups; cap at ~10 queries / ~5 fetches. Stop on redundancy.
+3. **Dispatch shape** — same iterative shape as the engineer lens (per the everyinc-compound \`ce-web-researcher\` methodology, upstream PR #836 / \`6fa1277e\`): scope broadly first, then narrow with targeted queries and deep-extract the highest-value sources, then gap-fill any load-bearing single-sourced claim. **Bias toward stopping early**: end when successive searches surface the same sources, when another query would not change the synthesis meaningfully, or when external signal on the topic is genuinely thin. A short, honest digest beats a padded one.
 
 4. **Citation discipline** — every market / competitor / vendor / pricing claim folded into the findings block carries a URL citation. Untraceable claims tagged \`(general pattern)\` (e.g. "most CI tools solve this with X") are exempt from URL citations but the tag is mandatory. The orchestrator's synthesis self-review pass scans for unsourced market claims.
 

@@ -205,7 +205,42 @@ The cross-model pass MAY also surface findings under the human-perspective lense
 
 **Graceful fallback (mandatory).** When the envelope flag is set BUT no cross-model MCP tool is wired (the harness has no \`user-codex\` / \`user-gemini\` / equivalent MCP server registered, OR the configured tool errored on dispatch), the critic writes ONE line into the \`## Cross-model second opinion\` section verbatim: \`Cross-model unavailable: skipped.\` (no findings, no error trail, no install-layer change required to opt in later). The fallback line is itself the evidence of the attempted pass; the critic does NOT escalate or fail the dispatch on the absence of the MCP. The pass also short-circuits when \`config.critic.cross_model == false\` AND the envelope flag was set ONLY by the heuristic (security_flag / irreversible D-N) — the config knob is the project-level opt-in. The explicit \`--critic-cross-model\` user flag bypasses the config knob (user override wins).
 
-**Recalibration into the verdict.** Cross-model findings carry the same severity vocabulary (\`block-ship\` / \`iterate\` / \`fyi\`) and feed §6 realist check + §7 verdict rollup the same way §3 findings do. A \`block-ship\` \`X-F-N\` blocks ship; an \`iterate\` \`X-F-N\` is captured in learnings.md. The §7 verdict line "Adversarial findings" reports the combined count (e.g. \`Adversarial findings: 4 total (§3: 3, cross-model: 1); 1 block-ship / 3 iterate / 0 fyi\`). When the cross-model pass returned the \`Cross-model unavailable: skipped\` fallback, §7 verdict's "Cross-model" rollup line reads \`Cross-model: skipped (MCP unavailable)\` and the dispatch carries \`Confidence: medium\` at minimum (one section of the protocol did not run).
+**Prompt-budget awareness (v8.108 — F-1).** Before dispatching the second-opinion model, the critic estimates the assembled prompt size and compares it against the project's configured second-opinion-model context budget (\`config.critic.cross_model_min_context\`; default 16000 characters ≈ 4k tokens at the 4-chars-per-token estimate). Small-context second-opinion models (local Codex stand-ins, Gemini Nano variants) silently truncate prompts that overflow their context window — silent truncation on a \`securityFlag\` / \`Reversibility: one-way\` dispatch is the highest-stakes failure mode. The critic refuses-and-skips the dispatch (or trims via the priority-drop list below) BEFORE the truncation can fire. Pattern: gsd-v1 #3081 / \`6a5fa591\` (review.max_prompt_tokens with priority-drop ordering + minSet refuse-and-skip).
+
+The pre-dispatch budget check, in order:
+
+1. **Estimate the assembled prompt size.** Sum the character lengths of every input that will be folded into the second-opinion model's dispatch envelope: \`plan.md + review.md + critic.md + priorLearnings + researchExcerpts + axisGate + skillsBlock\`. Divide by 4 to get the rough token estimate (the same heuristic gsd-v1's prompt-budget uses). Compare against the configured budget.
+
+2. **If \`estimate ≤ budget\`** — dispatch the cross-model pass as-is. No disclosure note, no trim, no skipped marker. This is the common case on harnesses pointing at a 200k-context model (Codex / Claude Opus 4.7 / Gemini 1.5 Pro) where the default 16000-char floor is met by every realistic slug.
+
+3. **If \`estimate > budget\` AND the minimum-set fits** — apply the priority-drop trim list in order. The minimum-set is \`critic.md body + axisGate + skillsBlock + slim plan\` — the inputs whose absence would make the second-opinion pass structurally meaningless. Drop in this order, re-estimate after each drop, stop when the prompt fits:
+
+   1. **First drop: full \`priorLearnings\`** — keep only the top-3 entries by \`prior_learnings_relevance_score\` (the rest are below the down-weight knee and contribute marginal signal at high token cost).
+   2. **Then drop: full \`researchExcerpts\`** — keep only excerpts that are CITED by an \`AC-N\` or \`D-N\` in the plan (\`grep\` the plan body for the excerpt's anchor; if not cited, drop). Uncited excerpts are evidence the architect collected but the plan didn't depend on.
+   3. **Then drop: full \`plan.md\`** — replace with a \`## Plan summary\` slim version: the first paragraph of \`## Frame\` + the slice id list from \`## Plan / Slices\` (one line each, no \`Verifies\` column). Loses the per-slice prose but preserves the structural shape.
+   4. **Then drop: full \`review.md\`** — replace with axis-verdict-only: the verdict line per axis (e.g. \`correctness: clear\`, \`security: warn\`), no rationale, no per-finding ledger. Loses the reviewer's evidence trail but preserves the cleared/flagged signal.
+
+   When trimming fires, stamp the disclosure in \`critic.md\` frontmatter via the \`cross_model_trim_disclosure:\` field — one line naming the trims applied verbatim:
+
+   \`\`\`yaml
+   cross_model_trim_disclosure: "priorLearnings: top-3 only; researchExcerpts: AC/D-cited only; plan.md: slim summary"
+   \`\`\`
+
+   Also stamp a \`> NOTE — cross-model prompt trimmed to fit budget X chars; sections trimmed: <list>. Treat any missing context as out-of-scope rather than a review concern.\` blockquote at the TOP of the \`## Cross-model second opinion\` section body, so the second-opinion model itself knows it received a trimmed prompt.
+
+4. **If the minimum-set still overflows** — REFUSE-and-SKIP the cross-model dispatch. Do NOT silently truncate. Stamp \`cross_model_skipped_reason: budget\` in \`critic.md\` frontmatter, write \`Cross-model skipped: prompt budget overflow (min-set exceeds <budget> chars).\` as the single line under the \`## Cross-model second opinion\` section, and proceed to §6 / §7 / §8 without the cross-model contribution. **This does NOT block ship** — the cross-model pass is graceful by contract; a budget overflow on a smaller-context second-opinion model means the slug is too rich for that model, not that the slug is unsafe. The §7 verdict's "Cross-model" rollup line reads \`Cross-model: skipped (budget overflow)\` and the dispatch carries \`Confidence: medium\` at minimum (the structural pass with the lower-context model would not have completed honestly).
+
+**Trimming vs skipping decision tree (verbatim):**
+
+\`\`\`text
+estimate ≤ budget                       → dispatch as-is; no disclosure
+estimate > budget AND min-set ≤ budget  → trim per priority-drop list; stamp disclosure
+min-set > budget                        → refuse-and-skip; stamp cross_model_skipped_reason: budget
+\`\`\`
+
+The disclosure / skipped fields are FRONTMATTER metadata, not body content — the body still reads as a normal \`## Cross-model second opinion\` section so downstream readers (ship, learnings, compound capture) can grep findings without parsing the disclosure surface.
+
+**Recalibration into the verdict.** Cross-model findings carry the same severity vocabulary (\`block-ship\` / \`iterate\` / \`fyi\`) and feed §6 realist check + §7 verdict rollup the same way §3 findings do. A \`block-ship\` \`X-F-N\` blocks ship; an \`iterate\` \`X-F-N\` is captured in learnings.md. The §7 verdict line "Adversarial findings" reports the combined count (e.g. \`Adversarial findings: 4 total (§3: 3, cross-model: 1); 1 block-ship / 3 iterate / 0 fyi\`). When the cross-model pass returned the \`Cross-model unavailable: skipped\` fallback, §7 verdict's "Cross-model" rollup line reads \`Cross-model: skipped (MCP unavailable)\` and the dispatch carries \`Confidence: medium\` at minimum (one section of the protocol did not run). When the v8.108 budget refuse-and-skip fired, the rollup line reads \`Cross-model: skipped (budget overflow)\` instead; same \`Confidence: medium\` floor.
 
 ### §4. Criterion check (are the verifiable plan criteria the right criteria, not are they met?)
 

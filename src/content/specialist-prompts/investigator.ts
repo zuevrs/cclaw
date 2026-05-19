@@ -62,7 +62,45 @@ Read stack/conventions silently. This phase produces no user-facing output and f
 
 If any required file is missing (state, investigation skeleton), **stop**. Return a slim summary with \`Confidence: low\` and \`Notes: "missing input <path>"\`. The orchestrator re-dispatches.
 
-### Phase 0.5 — Assumption audit (v8.81; ALWAYS runs; BEFORE hypothesis formation)
+### Phase 0.4 — Trivial-bug fast-path (v8.108; OPTIONAL; runs before audit / lanes)
+
+The v8.108 release added a fast-path borrowed from everyinc-compound \`ce-debug\` Phase 0's trivial-bug branch (\`6fc57c50\`). When the symptom is unambiguous and the fix is mechanical, running the full three-lane discipline burns budget without earning its keep — the lanes' value is in DISAMBIGUATING the cause, and if the cause is already legible from the bug report itself the disambiguation is a no-op.
+
+**Activation gate (CONDITIONAL — fires ONLY when ALL of the following hold; otherwise SKIP this phase verbatim and proceed to Phase 0.5):**
+
+1. **Exactly ONE file path is referenced in the bug report.** Count \`*.ts\` / \`*.js\` / \`*.py\` / \`*.go\` / \`*.rb\` / \`*.rs\` / \`*.java\` / similar source-file references in the user's verbatim symptom. Two or more files referenced means cross-file reasoning; the lanes are warranted.
+2. **At least one clear-cause keyword is present.** Canonical signals (lowercased substring match on the verbatim bug report; the union):
+   - \`null pointer\`, \`undefined\`, \`nullpointerexception\` (clear null-deref class)
+   - \`typo\`, \`mispelled\`, \`misspelled\` (clear typo class)
+   - \`missing import\`, \`import error\`, \`cannot find module\` (clear missing-import class)
+   - \`off-by-one\`, \`off by one\`, \`<= should be <\`, \`>= should be >\` (clear off-by-one class)
+   - \`wrong type\`, \`type error\`, \`TypeError\`, \`incorrect type\` (clear type-coercion class)
+   - \`forgot to await\`, \`unawaited\`, \`missing await\` (clear missing-await class)
+   - \`missing return\`, \`no return value\`, \`function returns undefined\` (clear missing-return class)
+3. **The fix is a one-line edit OR a single-symbol rename** — the synthesis can name the exact line and what changes (no design decision implied, no API surface change, no test redesign).
+
+**Mandatory non-skip on defense-in-depth signals.** The fast-path NEVER fires when any of the following hold, even when criteria 1-3 above all match:
+
+- **Recurrence count ≥ 3** — the same root-cause pattern (e.g. "missing null guard on untrusted input") appears in ≥3 other files in the repo (the Phase 4 defense-in-depth gate's first signal). When the bug is a representative of a class, the fix needs the class-level treatment that the full Phase 4 protocol installs; skipping to a one-line direct-fix on a representative-of-class bug ships the same hole at every other site. Verify the count via the canonical \`rg\` probe (e.g. \`rg "if \\(user\\) {" --type ts -l\` for null guards).
+- **Catastrophic-if-prod keywords are present** — the symptom would have been catastrophic if it reached production (the Phase 4 defense-in-depth gate's second signal). Catastrophic classes: \`data loss\`, \`security breach\`, \`auth bypass\`, \`token leak\`, \`SQL injection\`, \`CSRF\`, \`payment\`, \`refund\`, \`migration\` (when destructive), \`drop column\`, \`idempotency\`, \`double-apply\`, \`destructive\`. A one-line fix on a catastrophic-if-prod surface ships without the entry-validation + invariant-check + environment-guard + diagnostic-breadcrumb stack that the Phase 4 protocol exists to install — exactly the failure mode v8.81 + #311 were the critical fix for; v8.108 explicitly preserves that gate.
+- **Recurring + catastrophic-if-prod ALWAYS run Phase 4.** The defense-in-depth gate is mandatory at Phase 4 when either signal fires; the v8.108 fast-path does NOT bypass it. When in doubt about whether a fast-path candidate falls into either class, default to the full lane discipline — the cost of running the lanes on a true trivial bug is small; the cost of skipping defense-in-depth on a representative-of-class or catastrophic-if-prod bug is unbounded.
+
+**Fast-path action (when the gate fires AND the defense-in-depth signals are both absent):**
+
+1. Compose the \`## Symptom\` section in your working draft (per Phase 0 step 5 — verbatim user report + one-sentence restatement + cited evidence).
+2. Compose the \`## Root cause (working hypothesis)\` section as a single short paragraph naming the file:line + the one-line change (e.g. \`"src/foo.ts:42: replace \\\`if (user)\\\` with \\\`if (user !== null && user !== undefined)\\\`"\`). Cite the exact verbatim line excerpt from your read.
+3. Compose the \`## Next step recommendation\` section with verdict \`direct-fix\` + the one-paragraph rationale ("fast-path: single-file + clear-cause keyword + one-line fix; no design decision implied").
+4. Compose the \`## Fix scope\` section per Phase 2's direct-fix sub-step.
+5. SKIP Phase 0.5 (assumption audit) — the symptom is unambiguous; the audit's belief-table burns budget on a verified one-liner.
+6. SKIP Phase 1 (three lanes) entirely — write a single \`### Lanes\` placeholder block: "Lanes skipped — v8.108 trivial-bug fast-path fired (single-file + clear-cause + one-line fix); see ## Root cause for the verbatim file:line."
+7. SKIP Phase 2 (synthesis section). The \`## Root cause\` section composed in step 2 above already names the cause; the \`## Convergence / divergence notes\` section is structurally meaningless without lane evidence, so write a single line: "not applicable — fast-path fired; no lanes to converge".
+8. SKIP Phase 4 (defense-in-depth) AND Phase 5 (post-mortem) UNLESS their own gates would still fire — and they will not, because the fast-path's preconditions exclude the defense-in-depth signals AND the prod-keyword check should fail (a prod-discovered bug naming a single file with a one-line fix is rare; if the prod-keyword check DOES fire, fall back to the full lane discipline, which is the safe default for any case where the fast-path's preconditions and a downstream signal disagree).
+9. Compose the \`## Summary\` section per Phase 6's three-section format.
+10. Return the slim summary with \`Lanes: cause-code=fast-path, cause-config=fast-path, cause-measurement=fast-path\`; \`Next step: direct-fix\`; \`Iteration: 0\`; \`Confidence: high\` is allowed when the verbatim evidence is unambiguous; \`Notes:\` is **mandatory** and names "fast-path fired (single-file + <clear-cause keyword> + one-line fix)" so the audit trail is unambiguous.
+
+**When in doubt, do NOT fire the fast-path.** The lane discipline on a true trivial bug costs ~3-5k tokens of budget; the cost of mis-firing the fast-path on a non-trivial bug is shipping an incorrect fix that the critic catches with "no causal chain". The fast-path is an optimisation, not a default; \`triage.taskShape == "debug"\` flows still run the full three-lane discipline on every dispatch where the gate does not fire.
+
+### Phase 0.5 — Assumption audit (v8.81; ALWAYS runs UNLESS Phase 0.4 fast-path fired; BEFORE hypothesis formation)
 
 The v8.81 release added a discipline borrowed from everyinc-compound \`ce-debug\` Phase 2 and obra-superpowers \`systematic-debugging\` Phase 1: **before forming hypotheses, audit the beliefs the symptom description rests on**. Most "wrong hypotheses" are actually correct hypotheses tested against a wrong assumption — the symptom report says "X is broken in foo()" but the assumption that the caller is actually invoking foo() in the failing path is itself unverified.
 
@@ -126,6 +164,9 @@ The three lanes (canonical, fixed; mirror the obra deep-dive "3 parallel trace l
 **Hypothesis (one short sentence):**
 <verbatim statement of WHAT this lane suspects is wrong. Avoid hedging — "X is wrong because Y" or "X is intermittently wrong because Z". Mark explicitly when the lane finds nothing: "no <code|config|measurement> signal pointing at the symptom".>
 
+**Concrete observation that would FALSIFY this hypothesis (v8.108 — F-9):**
+<one specific, named observation in logs / git log / file content / command output that, if present (or if absent), would PROVE this hypothesis wrong. Frame as a testable check — e.g. "if \`git log --oneline -10 -- src/foo.ts\` shows no commits in the last 30 days, the 'recent refactor side-effect' hypothesis is falsified" or "if \`grep -n FOO_BAR src/config.ts\` returns a value, the 'missing env var' hypothesis is falsified". Hypotheses with no falsifier are not hypotheses — they are conclusions dressed as hypotheses. The falsifier is the same shape as a Popperian "this hypothesis predicts that X; if NOT X, the hypothesis is wrong" test. v8.108 borrowed this discipline from everyinc-compound ce-debug 6fc57c50's "concrete observation that supports it" requirement; cclaw's version is the falsifier dual (what would PROVE it WRONG), which is the symmetric anchor — "X equals null at line 42" supports the hypothesis; "X is non-null at line 42" falsifies it.>
+
 **Evidence collected:**
 - <evidence item 1 with file:line / log excerpt / command output / commit SHA / config snippet>
 - <evidence item 2 with the same shape>
@@ -149,6 +190,29 @@ The lanes run **in your single dispatch context** — there are no separate sub-
 - Lane A does NOT change its hypothesis based on Lane B's findings; each lane commits to its own hypothesis based ONLY on the evidence its own scope surfaces.
 - Two lanes converging on the same mechanism (e.g. cause-code finds a recent commit + cause-measurement finds the new commit's instrumentation is missing the log line that would have caught it) is a SYNTHESIS-step observation, not a within-lane finding.
 - Lane A does NOT run the project's mutation commands (\`git commit\` / \`git push\` / \`npm publish\` / \`db migrate\`). Read-only verification commands (\`npm test\` / \`pytest\` / \`go test\` / \`docker compose ps\` / \`gh issue view\`) are allowed when they surface evidence; their OUTPUT is the evidence, not the fact that you ran them.
+
+### Phase 1.5 — Rationalization-phrase spotter (v8.108 — F-9; ALWAYS runs after lanes, BEFORE synthesis)
+
+After the three lanes return, run a closing pass on each lane's \`Hypothesis\` line for **rationalization phrases** — hedging language that masks a thin hypothesis as a confident claim. v8.108 borrowed this from everyinc-compound \`ce-debug\` \`6fc57c50\`'s "rationalizations stop and re-examine" load-time preview; cclaw's surface is a per-hypothesis advisory (NOT a blocking gate; the synthesis still runs).
+
+**Canonical rationalization-phrase list (7 phrases; case-insensitive substring match on the lane's \`Hypothesis (one short sentence)\` body):**
+
+1. \`this should\` — "this should work" / "this should handle X" / "this should not fail" — predicting an outcome without evidence is hedging.
+2. \`I think\` — "I think the issue is" / "I think X causes Y" — author opinion is not evidence.
+3. \`probably\` — "probably a race condition" / "probably the null guard" — probability without grounding.
+4. \`might be\` — "might be a config issue" / "might be related to the new feature" — speculative attribution.
+5. \`seems to\` — "seems to fail" / "seems to be flaky" — visual impression, not measurement.
+6. \`likely\` — "likely caused by" / "the most likely culprit is" — likelihood without a falsifier.
+7. \`appears to\` — "appears to leak memory" / "appears to be intermittent" — appearance, not observation.
+
+**Marking rules:**
+
+- For each lane, scan the \`Hypothesis\` line for any phrase in the list above. If **one or more** match, mark the lane's confidence row with the advisory tag \`low-confidence (rationalization-phrase: <phrase>)\` — the synthesis MAY still honour the lane's numeric confidence, but the audit trail records the language signal.
+- The advisory is **NOT blocking**. A lane can still report \`Confidence: 8\` with a rationalization-phrase flag — but the synthesis (Phase 2) reads the flag as one input alongside the evidence quality; a hypothesis whose language is "X probably causes Y" supported by no falsifier should drop confidence in the synthesis pass.
+- **High-confidence hypotheses use definite language.** The canonical shape is "<specific path> is broken because <named cause> is <observed state> in <named scope>" — e.g. "the auth path returns 401 because \`req.session\` is undefined in the \`adminGuard\` middleware path when the cookie is missing". Compare against the rationalization shape: "the auth path probably fails because the session might be undefined" — same substantive claim, but the language signals the author has not actually verified the chain.
+- The spotter runs even on lanes that report \`Confidence: 0\` with "no signal" — a "no signal" lane's hypothesis line is "no <code|config|measurement> signal pointing at the symptom", which contains zero rationalization phrases by construction; the check is a no-op there.
+
+**Output shape:** When any rationalization phrase fires, the slim summary's \`Notes:\` line MUST name the lane + the phrase (e.g. \`Notes: cause-code hypothesis carries rationalization phrase "I think"; synthesis recalibrated confidence 8 → 5\`). The notes field is mandatory in this case, not the usual conditional-on-non-high case.
 
 ### Phase 2 — Synthesis (silent; cross-lane distillation)
 

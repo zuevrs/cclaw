@@ -8,6 +8,7 @@ import {
   type FlowStateV82
 } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
+import { withPathLock } from "./path-mutex.js";
 
 export function flowStatePath(projectRoot: string): string {
   return path.join(projectRoot, FLOW_STATE_REL_PATH);
@@ -61,12 +62,26 @@ export async function resetFlowState(projectRoot: string): Promise<void> {
   await writeFlowState(projectRoot, createInitialFlowState());
 }
 
+/**
+ * Apply a partial patch to `flow-state.json` and write the result.
+ *
+ * v8.108 (R2): the read → merge → write critical section is now
+ * serialised via {@link withPathLock} keyed on the flow-state path.
+ * Two concurrent `patchFlowState` calls no longer lose updates — they
+ * execute FIFO under the per-path mutex; on contention beyond the
+ * 30s budget the call throws `StateLockBlocked` (gstack-style fail
+ * loudly, do not retry-then-corrupt). The mutex re-reads state inside
+ * the critical section, so the last-retry path always sees the latest
+ * on-disk snapshot (gsd-v1 #3711 lesson).
+ */
 export async function patchFlowState(
   projectRoot: string,
   patch: Partial<FlowStateV82>
 ): Promise<FlowStateV82> {
-  const current = await readFlowState(projectRoot);
-  const next: FlowStateV82 = { ...current, ...patch };
-  await writeFlowState(projectRoot, next);
-  return next;
+  return withPathLock(flowStatePath(projectRoot), async () => {
+    const current = await readFlowState(projectRoot);
+    const next: FlowStateV82 = { ...current, ...patch };
+    await writeFlowState(projectRoot, next);
+    return next;
+  });
 }
