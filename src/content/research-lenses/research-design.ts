@@ -88,7 +88,7 @@ The research-design lens covers existing products, design systems, and interacti
    - **\`user-exa\`** — preferred for design-system tours, pattern critiques, postmortems, community discussion.
    - **\`user-context7\`** — when a design system has structured component docs (\`shadcn/ui\` / \`Radix UI\` / \`Material 3\`).
 
-3. **Dispatch shape** — 2-4 broad scoping queries, 3-6 targeted, 1-3 follow-ups; cap at ~10 queries / ~5 fetches. Stop on redundancy.
+3. **Dispatch shape** — iterative, not budget-bounded (per the everyinc-compound \`ce-web-researcher\` methodology, upstream PR #836 / \`6fa1277e\`): scope broadly first, then narrow with targeted queries and deep-extract the highest-value sources, then gap-fill any load-bearing single-sourced claim. **Bias toward stopping early**: end when successive searches surface the same sources, when another query would not change the synthesis meaningfully, or when external signal on the topic is genuinely thin.
 
 4. **Citation discipline** — every pattern / product / framework claim folded into the findings block carries a URL citation. Untraceable claims tagged \`(general pattern; training knowledge)\` are exempt from URL citations but the tag is mandatory. The orchestrator's synthesis self-review pass scans for unsourced design claims.
 

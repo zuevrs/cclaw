@@ -59,7 +59,7 @@ The architecture lens covers system-fit + cross-domain pattern reuse — both ax
    - **\`user-context7\`** — preferred for framework / runtime documentation (\`tRPC v11\` migration guide, \`Kubernetes 1.30\` API).
    - **\`user-exa\`** — preferred for pattern / approach / community-pattern queries (\`CQRS at scale 2026\`, \`event-sourcing pitfalls\`).
 
-3. **Dispatch shape** — phased: 2-4 broad scoping, 3-6 targeted, 1-3 follow-ups; cap ~10 queries / ~5 fetches.
+3. **Dispatch shape** — iterative, not budget-bounded (per the everyinc-compound \`ce-web-researcher\` methodology, upstream PR #836 / \`6fa1277e\`): scope broadly first, then narrow with targeted queries and deep-extract the highest-value sources, then gap-fill any load-bearing single-sourced claim. **Bias toward stopping early**: end when successive searches surface the same sources, when another query would not change the synthesis meaningfully, or when external signal on the topic is genuinely thin.
 
 4. **Citation discipline** — every architectural pattern claim cites either a URL (community signal) or context7 doc (vendor signal). Industry-pattern claims tagged \`(general pattern)\` are exempt from URL citations but the tag is mandatory. The orchestrator's synthesis self-review pass scans for unsourced architectural claims.
 

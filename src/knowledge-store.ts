@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { KNOWLEDGE_LOG_REL_PATH } from "./constants.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
+import { withPathLock } from "./path-mutex.js";
 
 /**
  * categorical classification a shipped slug carries forward.
@@ -284,15 +285,29 @@ function signatureSet(entry: KnowledgeEntry): ReadonlySet<string> {
   return tokens;
 }
 
+/**
+ * Append a new entry to `knowledge.jsonl`.
+ *
+ * v8.108 (R2): wrapped in {@link withPathLock} keyed on the log path
+ * to serialise concurrent appends. `fs.appendFile` is POSIX-atomic
+ * for writes < PIPE_BUF (~4KB) and cclaw entries are well under that
+ * floor, so the on-disk write itself was already safe — the mutex
+ * exists to (a) compose with {@link setOutcomeSignal}'s
+ * read-modify-rewrite on the same file (which IS race-prone without
+ * the lock), and (b) future-proof against larger entries breaching
+ * PIPE_BUF (v8.66 parallel-slice envelopes carry richer notes).
+ */
 export async function appendKnowledgeEntry(projectRoot: string, entry: KnowledgeEntry): Promise<void> {
   assertEntry(entry);
   const target = knowledgeLogPath(projectRoot);
   const line = `${JSON.stringify(entry)}\n`;
-  if (!(await exists(target))) {
-    await writeFileSafe(target, line);
-    return;
-  }
-  await fs.appendFile(target, line, "utf8");
+  await withPathLock(target, async () => {
+    if (!(await exists(target))) {
+      await writeFileSafe(target, line);
+      return;
+    }
+    await fs.appendFile(target, line, "utf8");
+  });
 }
 
 export async function readKnowledgeLog(projectRoot: string): Promise<KnowledgeEntry[]> {
@@ -716,20 +731,22 @@ export async function setOutcomeSignal(
     throw new KnowledgeStoreError("setOutcomeSignal: targetSlug must be a non-empty string.");
   }
   const target = knowledgeLogPath(projectRoot);
-  if (!(await exists(target))) return false;
-  const entries = await readKnowledgeLog(projectRoot);
-  const idx = entries.findIndex((entry) => entry.slug === targetSlug);
-  if (idx === -1) return false;
-  const next: KnowledgeEntry = {
-    ...entries[idx]!,
-    outcome_signal: signal,
-    outcome_signal_updated_at: updatedAt,
-    outcome_signal_source: source
-  };
-  entries[idx] = next;
-  const body = `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
-  await writeFileSafe(target, body);
-  return true;
+  return withPathLock(target, async () => {
+    if (!(await exists(target))) return false;
+    const entries = await readKnowledgeLog(projectRoot);
+    const idx = entries.findIndex((entry) => entry.slug === targetSlug);
+    if (idx === -1) return false;
+    const next: KnowledgeEntry = {
+      ...entries[idx]!,
+      outcome_signal: signal,
+      outcome_signal_updated_at: updatedAt,
+      outcome_signal_source: source
+    };
+    entries[idx] = next;
+    const body = `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
+    await writeFileSafe(target, body);
+    return true;
+  });
 }
 
 export async function findRefiningChain(projectRoot: string, slug: string): Promise<KnowledgeEntry[]> {

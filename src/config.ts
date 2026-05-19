@@ -295,6 +295,39 @@ export interface CriticConfig {
    * is configured).
    */
   cross_model?: boolean;
+  /**
+   * Minimum context-window budget (in characters; the critic estimates
+   * tokens as characters/4) the second-opinion model must support before
+   * the cross-model dispatch fires without trimming (v8.108 — F-1).
+   *
+   * The critic estimates the assembled prompt size pre-dispatch
+   * (`plan.md + review.md + critic.md + priorLearnings + researchExcerpts
+   * + axisGate + skillsBlock`) and compares it against this budget:
+   *
+   *   - `estimate ≤ budget` → dispatch as-is, no disclosure note.
+   *   - `estimate > budget` AND the minimum-set (critic.md body +
+   *     axisGate + skillsBlock + slim plan) still fits → apply the
+   *     priority-drop trim list (priorLearnings → researchExcerpts →
+   *     plan.md → review.md), stamp a disclosure note in critic.md
+   *     frontmatter.
+   *   - Min-set overflow → refuse-and-skip the dispatch, record
+   *     `cross_model_skipped_reason: budget` in critic.md frontmatter
+   *     (does NOT block ship — the cross-model pass is graceful).
+   *
+   * Default `16000` characters (≈ 4k tokens at the 4-chars-per-token
+   * estimate). Sized around the smallest second-opinion model context
+   * window currently seen in the wild (Gemini Nano variants, local
+   * 7B-class Codex stand-ins). The default is conservative — projects
+   * pointing the cross-model dispatch at a larger model (Codex
+   * 200k-context / Gemini 1.5 Pro) raise this knob to suppress
+   * unnecessary trim ceremony.
+   *
+   * Pattern: gsd-v1 #3081 / `6a5fa591` (review.max_prompt_tokens with
+   * priority-drop ordering + minSet refuse-and-skip). cclaw's surface
+   * is single-knob because the second-opinion model is one slot, not
+   * a fan-out of N reviewers.
+   */
+  cross_model_min_context?: number;
 }
 
 export interface CclawConfig {
@@ -409,6 +442,37 @@ export const DEFAULT_CRITIC_CROSS_MODEL = false;
 export function criticCrossModelOf(config: CclawConfig | null | undefined): boolean {
   const raw = config?.critic?.cross_model;
   if (typeof raw !== "boolean") return DEFAULT_CRITIC_CROSS_MODEL;
+  return raw;
+}
+
+/**
+ * Default for `critic.cross_model_min_context` when the knob is absent
+ * or out-of-range. 16000 characters (~4k tokens at the 4-chars/token
+ * estimate) — sized for the smallest second-opinion model context
+ * window seen in the wild. v8.108 (F-1): pre-dispatch prompt-budget
+ * check; the critic trims via priority-drop OR refuse-and-skip the
+ * cross-model pass when the assembled prompt would silently truncate.
+ */
+export const DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT = 16000;
+
+/**
+ * Read the configured `critic.cross_model_min_context` knob with the
+ * documented fallback. Returns
+ * {@link DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT} when the config is
+ * absent, the `critic` block is missing, the field is absent, or the
+ * value is not a finite positive number. Negative / zero / non-finite
+ * inputs silently fall back to the default — a misconfigured budget
+ * would otherwise refuse every cross-model dispatch, which is louder
+ * than a sane default and a one-line note in critic.md.
+ */
+export function criticCrossModelMinContextOf(
+  config: CclawConfig | null | undefined
+): number {
+  const raw = config?.critic?.cross_model_min_context;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT;
+  }
+  if (raw <= 0) return DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT;
   return raw;
 }
 
