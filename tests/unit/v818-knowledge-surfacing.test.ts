@@ -9,9 +9,6 @@ import {
   type KnowledgeEntry
 } from "../../src/knowledge-store.js";
 import { runCli } from "../../src/cli.js";
-import { START_COMMAND_BODY } from "../../src/content/start-command.js";
-import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
-import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { assertFlowStateV82 } from "../../src/flow-state.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
@@ -154,30 +151,6 @@ describe("v8.18 findNearKnowledge — knowledge-surfacing helper", () => {
 });
 
 describe("v8.18 orchestrator wiring — triage.priorLearnings", () => {
-  it("(e) start-command spec describes the v8.58 prior-learnings consumption surface (lookup moved from orchestrator to specialists)", () => {
-    // v8.58 — the v8.18 `findNearKnowledge` lookup was REMOVED from the
-    // orchestrator's Hop 2.5; the same lookup is now performed by the
-    // specialist that consumes it. v8.62 unified flow collapses the
-    // pre-v8.62 split: the single `architect` specialist owns both the
-    // Bootstrap-phase `findNearKnowledge` lookup and the
-    // `learnings-research` dispatch. The start-command body still
-    // references the lookup name and the `triage.priorLearnings`
-    // back-compat read so pre-v8.58 state files continue to validate.
-    expect(START_COMMAND_BODY).toMatch(/^### prior-learnings consumption/mu);
-    expect(START_COMMAND_BODY).toContain("findNearKnowledge");
-    expect(START_COMMAND_BODY).toContain("triage.priorLearnings");
-  });
-
-  it("(f) start-command spec explains that the orchestrator no longer writes triage.priorLearnings on v8.58 (specialist owns the write)", () => {
-    // v8.58 — pre-v8.58 the body said "omit `priorLearnings` from
-    // `flow-state.json` entirely" when results were empty. v8.58 retires
-    // the orchestrator-side write entirely; the specialists own the read
-    // and never write back to `triage.priorLearnings` (their results land
-    // in `plan.md` / `research.md`). The body now states the v8.58 router
-    // never writes the field.
-    expect(START_COMMAND_BODY).toMatch(/v8\.58 router never writes it/u);
-  });
-
   it("flow-state validator accepts triage.priorLearnings as an optional KnowledgeEntry[]", () => {
     const state = {
       schemaVersion: 3,
@@ -241,28 +214,6 @@ describe("v8.18 orchestrator wiring — triage.priorLearnings", () => {
       triage: null
     };
     expect(() => assertFlowStateV82(state)).not.toThrow();
-  });
-});
-
-describe("v8.18 specialist prompts surface prior learnings (v8.62 unified flow — `architect` absorbs the dead `design`'s and renamed `ac-author`'s prior-learnings reads; v8.58 moved the lookup out of the orchestrator and into the architect's own `learnings-research` dispatch)", () => {
-  it("(g) architect dispatches the `learnings-research` helper that reads `.cclaw/knowledge.jsonl` and surfaces priors inline in its slim-summary Notes; the architect copies surfaced lessons into `## Prior lessons applied` rather than verbatim-pasting them", () => {
-    // v8.58 moved the prior-learnings lookup out of the orchestrator (Hop 2.5) and into
-    // the architect's read-only `learnings-research` sub-agent dispatch. The v8.62
-    // unified-flow architect inherits that contract verbatim — there is no longer a
-    // `triage.priorLearnings` field for the architect to read on fresh flows (pre-v8.58
-    // state files still carry it for back-compat, but the v8.58+ router never writes it).
-    expect(ARCHITECT_PROMPT).toMatch(/learnings-research/);
-    expect(ARCHITECT_PROMPT).toMatch(/knowledge\.jsonl/);
-    expect(ARCHITECT_PROMPT).toMatch(/## Prior lessons applied/);
-    // The architect must explicitly NOT copy raw entries verbatim into the plan;
-    // it copies the helper-surfaced lessons (with rationale lines) instead.
-    expect(ARCHITECT_PROMPT).toMatch(/Why this applies here|surfaced lessons|read.{0,10}verbatim|verbatim quotes/i);
-  });
-
-  it("(i) reviewer prompt instructs to use triage.priorLearnings as priors when scoring findings (v8.62 — back-compat path: pre-v8.58 state files still carry `triage.priorLearnings`; reviewer's read is unchanged)", () => {
-    expect(REVIEWER_PROMPT).toContain("triage.priorLearnings");
-    expect(REVIEWER_PROMPT).toMatch(/priors when judging severity/iu);
-    expect(REVIEWER_PROMPT).toMatch(/do not copy entries into the Findings table verbatim/iu);
   });
 });
 

@@ -1,6 +1,74 @@
 # Changelog
 
 
+## 8.100.0 — Test slim-down Phase A3: slim small per-slug files
+
+### Why
+
+Phase A3 of the test slim-down arc — slim ~30 small per-slug test files (each 5-30 tests) where 80%+ of the assertions were pure `expect(prompt).toContain(...)` / `expect(prompt).toMatch(...)` prompt-grep tripwires. Each file's wiring/integration coverage (calls to `initCclaw` / `syncCclaw` / `assertFlowStateV82` / `createInitialFlowState` / `sliceWorktree.*` / `runModeOf` / `parseFlowState*` / similar runtime functions) was preserved; the prompt-string greps were deleted.
+
+### What changed
+
+Test count: 1317 → 833 (-484 tests across 13 files deleted + 17 files slimmed; 1 file left alone).
+
+Files DELETED entirely (no wiring/integration coverage remained — all tests were pure content-grep on data exports):
+
+- `tests/unit/v812-cleanup.test.ts` — 22 tests of content-grep on SPECIALIST_PROMPTS / ARTIFACT_TEMPLATES / STAGE_PLAYBOOKS / START_COMMAND_BODY / META_SKILL / etc.
+- `tests/unit/v813-cleanup.test.ts` — 13 tests of content-grep on data exports (ANTIPATTERNS / SPECIALIST_PROMPTS / STAGE_PLAYBOOKS / ON_DEMAND_RUNBOOKS / AUTO_TRIGGER_SKILLS / START_COMMAND_BODY).
+- `tests/unit/v824-two-stage-reviewer-default.test.ts` — 15 tests of content-grep on START_COMMAND_BODY / ON_DEMAND_RUNBOOKS / SPECIALIST_PROMPTS.
+- `tests/unit/v825-nfrs-first-class.test.ts` — 16 tests of content-grep on PLAN_TEMPLATE_STRICT / PLAN_TEMPLATE_SOFT / ARCHITECT_PROMPT / REVIEWER_PROMPT.
+- `tests/unit/v826-skill-anatomy.test.ts` — 8 tests of regex grep on each `AUTO_TRIGGER_SKILLS[i].body`; the skill anatomy is enforced structurally by the data export.
+- `tests/unit/v830-skill-anatomy-gaps.test.ts` — 8 tests of regex grep on each skill body for "When NOT to apply" + rationalization tables.
+- `tests/unit/v840-cleanup.test.ts` — 23 tests of source-file greps + REVIEWER_PROMPT prompt-greps; v8.40 posture-validation wiring is fully covered by `v836-cleanup.test.ts`.
+- `tests/unit/v846-spec-section.test.ts` — 16 tests of content-grep on PLAN_TEMPLATE_* / ARCHITECT_PROMPT / REVIEWER_PROMPT.
+- `tests/unit/v848-discipline-skills.test.ts` — 10 tests of content-grep on AUTO_TRIGGER_SKILLS / BUILDER_PROMPT / REVIEWER_PROMPT / START_COMMAND_BODY.
+- `tests/unit/v854-consolidation-pass.test.ts` — 21 tests of content-grep on ON_DEMAND_RUNBOOKS / STAGE_PLAYBOOKS / source files / CI yml.
+- `tests/unit/v870-founder-design.test.ts` — 29 tests of content-grep on RESEARCH_LENS_PROMPTS / REVIEWER_PROMPT / TRIAGE_PROMPT / START_COMMAND_BODY.
+- `tests/unit/v883-docs-fix.test.ts` — 12 tests of README + START_COMMAND_BODY + CRITIC_PROMPT prompt-grep tripwires.
+- `tests/unit/v894-orchestrator-axis-stamping.test.ts` — 14 tests of content-grep on START_COMMAND_BODY for "Auto-activate <axis>" bullet shape (the orchestrator stamping prose). Not on the DO-NOT-DELETE list; pure prose tripwires.
+
+Files SLIMMED (test counts before → after):
+
+- `tests/unit/v821-preflight-fold.test.ts`: 9 → 3 (kept `assertFlowStateV82` triage.assumptions validator tests).
+- `tests/unit/v823-no-git-fallback.test.ts`: 15 → 6 (kept `initCclaw` / `syncCclaw` / `readFlowState` / `writeFlowState` wiring tests).
+- `tests/unit/v831-path-aware-trimming.test.ts`: 12 → 2 (kept `renderStartCommand` body-budget tests).
+- `tests/unit/v834-knowledge-type-and-runmode-toggle.test.ts`: 13 → 4 (kept `appendKnowledgeEntry` / `readKnowledgeLog` / `findNearKnowledge` wiring tests).
+- `tests/unit/v835-context-md-glossary.test.ts`: 17 → 6 (kept `readContextGlossary` + `initCclaw --with-context` wiring tests).
+- `tests/unit/v836-cleanup.test.ts`: 20 → 12 (kept `isBehaviorAdding` + `validatePostureTouchSurface` + `expectedCommitsForPosture` wiring tests).
+- `tests/unit/v839-cleanup.test.ts`: 11 → 2 (kept `renderMenuFrame` integration tests).
+- `tests/unit/v849-overcomplexity-sweep.test.ts`: 22 → 6 (kept `buildAutoTriggerBlock` / `renderSkillsIndex` / `renderAntiRationalizationsCatalog` wiring tests).
+- `tests/unit/v851-plan-critic.test.ts`: 25 → 5 (kept `assertFlowStateV8` planCritic.* validator tests).
+- `tests/unit/v852-qa-and-browser.test.ts`: 23 → 6 (kept `assertFlowStateV8` qa.* validator tests).
+- `tests/unit/v853-critic-enhancements.test.ts`: 11 → 2 (kept `ambiguityThresholdOf` config-util tests).
+- `tests/unit/v860-cleanup.test.ts`: 8 → 2 (kept `syncCclaw` retired-command sweep tests).
+- `tests/unit/v861-always-auto.test.ts`: 16 → 4 (kept `runModeOf` legacy-value folding tests).
+- `tests/unit/v862-unified-flow.test.ts`: 25 → 2 (kept SPECIALISTS roster ordering anchor + `assertFlowStateV82` permissive `lastSpecialist` back-compat test).
+- `tests/unit/v864-parallel-default.test.ts`: 23 → 2 (kept `topologicalLayers` wiring tests).
+- `tests/unit/v867-clarify-mode.test.ts`: 25 → 5 (kept `clarifyAmbiguityThresholdOf` + `initCclaw` ambiguity-discipline skill tests).
+- `tests/unit/v873-worktree-slices.test.ts`: 25 → 6 (kept `sliceWorktree.*` lifecycle helper tests — spec explicitly enumerates these as wiring).
+- `tests/unit/v818-knowledge-surfacing.test.ts`: 18 → 14 (removed only the 4 prompt-grep tests on START_COMMAND_BODY / ARCHITECT_PROMPT / REVIEWER_PROMPT; kept all `findNearKnowledge` / `appendKnowledgeEntry` / `assertFlowStateV82` / `runCli` wiring tests).
+- `tests/unit/v820-review-loop-polish.test.ts`: 24 → 5 (kept `createInitialFlowState` + `assertFlowStateV82` reviewCounter + iterationOverride tests).
+- `tests/unit/v822-orchestrator-slim.test.ts`: 26 → 9 (kept `initCclaw` / `syncCclaw` runbook install + orphan-cleanup tests; body-budget already covered by `v831`).
+
+Files LEFT ALONE (all tests were real wiring tests):
+
+- `tests/unit/v810-install-tui.test.ts` (24 tests, all UI rendering function calls).
+- `tests/unit/v817-orphan-cleanup.test.ts` (11 tests, all `initCclaw` / `syncCclaw` orphan-cleanup tests).
+- `tests/unit/v856-ceremony-mode.test.ts` (6 tests, all `migrateFlowState` / `readFlowState` tests).
+- Files on the DO-NOT-DELETE list and the v8.99 A2-slimmed cohort.
+
+### How
+
+For each candidate small file:
+
+1. Read the file.
+2. Classify each test as KEEP (calls a runtime function — `initCclaw` / `syncCclaw` / `assertFlowStateV82` / `createInitialFlowState` / `sliceWorktree.*` / `runModeOf` / `orchestrator.*` / `parseFlowState*` / similar; imports from `../../src/cli`; verifies Composition footer / Section contract) or DELETE (pure prompt-string grep).
+3. Apply edits: delete the prompt-grep tests; if no wiring coverage remained, delete the file entirely.
+4. After every batch of 5 files: run `vitest run --reporter=dot` + `tsc --noEmit` to catch broken imports early.
+
+Tripwires retained per slimmed file are documented in each test file's leading JSDoc comment so a future maintainer can trace which wiring contract each remaining test pins.
+
+
 ## 8.99.0 — Test slim-down Phase A2: slim top-20 prompt-grep heavy files
 
 ### Why

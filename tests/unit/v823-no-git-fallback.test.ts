@@ -1,109 +1,19 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { renderStartCommand } from "../../src/content/start-command.js";
-import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import { initCclaw, syncCclaw } from "../../src/install.js";
 import { readFlowState, writeFlowState } from "../../src/run-persistence.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
 /**
- * v8.23 — no-git fallback. The original v8.23 had three surfaces that
- * broke without git: strict-mode commit-helper (now retired in v8.40),
- * the inline path's terminal `git commit`, and parallel-build worktrees.
+ * v8.23 no-git fallback — flow-state + install-layer wiring.
  *
- * v8.40 reframes the fallback: with the commit-helper hook gone, the
- * strict-mode chain is now reviewer-enforced ex-post via
- * `git log --grep="(AC-N):"`. Without `.git/` the reviewer cannot scan
- * the chain, and the parallel-build worktree path is still unavailable —
- * so the auto-downgrade `strict → soft` (with `triage.downgradeReason:
- * "no-git"`) stays the right call. These tripwires pin that contract
- * survives the v8.40 hook removal.
+ * Slimmed in v8.100: kept the `readFlowState` / `writeFlowState` round-
+ * trips for the `triage.downgradeReason` schema and the `initCclaw` /
+ * `syncCclaw` no-git survival tests. The renderStartCommand and
+ * triage-gate skill-body prompt-greps were removed.
  */
-
-const TRIAGE_GATE_SKILL = (() => {
-  const skill = AUTO_TRIGGER_SKILLS.find((s) => s.fileName === "triage-gate.md");
-  if (!skill) throw new Error("triage-gate skill not found");
-  return skill.body;
-})();
-
-describe("v8.23 no-git fallback — detect step git-check + auto-downgrade", () => {
-  it("AC-1 — `start-command.ts` detect step documents the git-check sub-step", () => {
-    const body = renderStartCommand();
-    expect(
-      body,
-      "detect should explicitly mention a git-check sub-step so a maintainer can find the v8.23 fallback path"
-    ).toMatch(/Detect[\s\S]+?git[- ]check/i);
-  });
-
-  it("AC-1 — body names the auto-downgrade rule (strict → soft when no .git/)", () => {
-    const body = renderStartCommand();
-    expect(body).toMatch(/no.?git/i);
-    expect(
-      body,
-      "body should name the downgrade target so a future maintainer reading detect knows what ceremonyMode the orchestrator settles on"
-    ).toMatch(/strict.*soft|soft.*downgrade|ceremonyMode.*soft/);
-  });
-
-  it("AC-1 — body names `triage.downgradeReason` as the audit-trail field", () => {
-    const body = renderStartCommand();
-    expect(body).toContain("downgradeReason");
-    expect(body).toMatch(/"no-git"/);
-  });
-
-  it("AC-1 — body still tells the agent to surface a one-line warning to the user", () => {
-    const body = renderStartCommand();
-    expect(body).toMatch(/warn(ing)?|notify/i);
-  });
-});
-
-describe("v8.23 no-git fallback — triage-gate skill documents the auto-downgrade", () => {
-  it("AC-2 — `triage-gate.md` names the no-git auto-downgrade rule", () => {
-    expect(TRIAGE_GATE_SKILL).toMatch(/no.?git/i);
-    expect(
-      TRIAGE_GATE_SKILL,
-      "skill should explain that strict mode auto-downgrades to soft when .git/ is absent"
-    ).toMatch(/strict.*soft|ceremonyMode.*soft|downgrade.*soft/);
-  });
-
-  it("AC-2 — `triage-gate.md` records the audit-trail field name (downgradeReason)", () => {
-    expect(TRIAGE_GATE_SKILL).toContain("downgradeReason");
-  });
-
-  it("AC-2 — `triage-gate.md` calls out the inline `git commit` and parallel-build worktree consequences", () => {
-    expect(
-      TRIAGE_GATE_SKILL,
-      "skill should at least mention parallel-build can't run without git, so the user knows why the orchestrator chose soft mode"
-    ).toMatch(/parallel.?build|worktree/i);
-  });
-
-  // v8.40 "triage-gate.md no longer references commit-helper" is covered by
-  // tests/unit/retired-tokens.test.ts (v8.54 consolidated sweep).
-});
-
-describe("v8.40 no-git fallback — strict-mode chain check is skipped when no .git/", () => {
-  it("AC-3 — `triage-gate.md` notes that strict mode requires per-criterion commits the reviewer reads via git log", () => {
-    expect(TRIAGE_GATE_SKILL).toMatch(/strict mode requires per-criterion commits/i);
-    expect(TRIAGE_GATE_SKILL).toMatch(/git log/i);
-  });
-
-  it("AC-3 — reviewer prompt notes that the chain check is skipped when triage.downgradeReason is no-git", () => {
-    // The reviewer's posture-aware git-log inspection only fires for
-    // strict-mode flows that have a `.git/` directory; when the triage
-    // recorded downgradeReason=no-git, the chain check is structurally
-    // impossible (nothing to grep) and the reviewer should skip it.
-    const reviewerPath = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "../../src/content/specialist-prompts/reviewer.ts"
-    );
-    return fs.readFile(reviewerPath, "utf8").then((source) => {
-      expect(source).toMatch(/no-git/u);
-    });
-  });
-});
-
 describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReason", () => {
   let project: string;
   afterEach(async () => {
