@@ -1,6 +1,42 @@
 # Changelog
 
 
+## 8.98.0 — Test slim-down Phase A1: delete redundant release-lock files
+
+### Why
+
+Per the test-slim-down audit, six per-slug release-lock test files (~201 tests across `v861-triage-subagent`, `v861-auto-continue`, `v863-slice-ac-separation`, `v869-research-powerful`, `v880-not-doing-and-bets`, `v888-synthesis-confidence-citeback`) were pure prompt-grep tripwires that asserted only `expect(prompt).toContain(...)` / `expect(prompt).toMatch(...)` on a single v8.XX release's strings. Their coverage is already provided by the v8.94 wiring tripwires (`v894-auto-trigger-gate-wiring`, `v894-assumption-validation-wiring`, `v894-docs-drift-sweep`, `v894-model-tier-sync`) plus the surviving per-slug suites that exercise validator / install / orchestrator behaviour (`assertFlowStateV82`, `initCclaw`, `syncCclaw`, `sliceWorktree.*`, `runModeOf`).
+
+### What changed
+
+Deleted six redundant release-lock test files (201 tests):
+
+- `tests/unit/v861-triage-subagent.test.ts` (15 tests)
+- `tests/unit/v861-auto-continue.test.ts` (15 tests)
+- `tests/unit/v863-slice-ac-separation.test.ts` (17 tests)
+- `tests/unit/v869-research-powerful.test.ts` (55 tests)
+- `tests/unit/v880-not-doing-and-bets.test.ts` (42 tests)
+- `tests/unit/v888-synthesis-confidence-citeback.test.ts` (57 tests)
+
+Audit-listed candidates that were KEPT because they exercise behaviour beyond pure prompt-grep:
+
+- `v860-cleanup`, `v865-powerful-research`, `v874-ethos-bundle` — call `initCclaw` / `syncCclaw` and verify installed file contents.
+- `v862-unified-flow`, `v871-research-revision`, `v876-research-design-approaches`, `v879-one-way-door-gate`, `v881-investigator-v2` — exercise `assertFlowStateV82` / `createInitialFlowState` validator branches (parser coverage).
+- `v861-always-auto` — exercises the `runModeOf` flow-state helper.
+- `v873-worktree-slices` — exercises `sliceWorktreePath` / `sliceWorktreeBranch` / `SliceWorktreeError` runtime exports.
+- `v875-plan-design-lens`, `v877-investigator`, `v882-devex-lens` — preserved on the explicit DO-NOT-DELETE list (specialist-prompts `## Composition` footer contract assertions).
+
+DO-NOT-DELETE list preserved verbatim: `v894-auto-trigger-gate-wiring`, `v894-assumption-validation-wiring`, `v894-docs-drift-sweep`, `v894-model-tier-sync`, `v816-cleanup`, `flow-state.test.ts`, `types.test.ts`, `harness-prompt.test.ts`, `install-harness-isolation.test.ts`, plus every file with a specialist-prompts `## Composition` footer assertion.
+
+### Numbers
+
+- Test files: 120 → 114 (6 deletions).
+- Tests: 2544 → 2343 (201 release-lock tripwires removed).
+- The same 3 pre-existing `tests/integration/cli-symlink.test.ts` failures remain (symlinked `node_modules` smoke), unrelated to this change.
+
+A2 / A3 will catch the remaining release-lock candidates that fell outside Phase A1's strict pure-prompt-grep criterion.
+
+
 ## 8.97.0 — Sweep stale axis/lens/field-count strings; add regex tripwire (Phase C G-6 fix)
 
 ### Why
