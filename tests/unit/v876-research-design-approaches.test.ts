@@ -109,12 +109,15 @@ describe("v8.76 — research-design-lens + approaches-gate wiring", () => {
 });
 
 describe("v8.76 — research-design-lens + approaches-gate behavior (orchestrator dispatch)", () => {
-  it("BEHAVIOR — start-command body wires (a) Phase 1.5 Approaches Gate with 2-3 framings cap + `all` default + flow-state.approaches/selectedApproaches stamp + push-back loop + reference patterns (obra / idea-refine), and (b) Phase 2 dispatch of research-design with `--lens=design` / `--lens=-design` toggles + mutual-exclusion last-wins + light-depth skip + `Framing:` envelope + design-signal detection", () => {
-    // Phase 1.5 — approaches gate
-    expect(START_COMMAND_BODY).toMatch(/#### Phase 1\.5 — approaches gate/u);
-    const approachesIdx = START_COMMAND_BODY.indexOf("#### Phase 1.5 — approaches gate");
+  it("BEHAVIOR — start-command body wires (a) Phase 1.5 Approaches Gate with 2-3 framings cap + `all` default + flow-state.approaches/selectedApproaches stamp + push-back loop + reference patterns (obra / idea-refine), and (b) Phase 2 dispatch of research-design with `--lens=design` / `--lens=-design` toggles + mutual-exclusion last-wins + light-depth skip + `Framing:` envelope + design-signal detection. v8.103 — Phase 1.5 + Phase 2 detail moved to runbooks/research-mode.md; start-command keeps the one-paragraph research-mode pointer.", async () => {
+    const { ON_DEMAND_RUNBOOKS } = await import("../../src/content/runbooks-on-demand.js");
+    const researchMode = ON_DEMAND_RUNBOOKS.find((r) => r.id === "research-mode")?.body ?? "";
+
+    // Phase 1.5 — approaches gate (v8.103 lift)
+    expect(researchMode).toMatch(/Phase 1\.5.*?approaches gate/iu);
+    const approachesIdx = researchMode.search(/Phase 1\.5.*?approaches gate/iu);
     expect(approachesIdx).toBeGreaterThan(0);
-    const approachesBlock = START_COMMAND_BODY.slice(approachesIdx, approachesIdx + 6000);
+    const approachesBlock = researchMode.slice(approachesIdx, approachesIdx + 6000);
     expect(approachesBlock).toMatch(/2-3 (candidate )?FRAMINGS|2-3 framings/iu);
     expect(approachesBlock).toMatch(/"all"|all.{0,40}every framing/iu);
     expect(approachesBlock).toMatch(/default/u);
@@ -124,21 +127,21 @@ describe("v8.76 — research-design-lens + approaches-gate behavior (orchestrato
     expect(approachesBlock).toMatch(/(idea-refine|addyosmani)/iu);
     expect(approachesBlock).toMatch(/push-back/u);
 
-    // Phase 2 dispatch
-    expect(START_COMMAND_BODY).toContain("research-design");
-    expect(START_COMMAND_BODY).toContain("--lens=design");
-    expect(START_COMMAND_BODY).toContain("--lens=-design");
-    expect(START_COMMAND_BODY).toMatch(/Design-signal detection/u);
-    expect(START_COMMAND_BODY).toMatch(
+    // Phase 2 dispatch (v8.103 lift)
+    expect(researchMode).toContain("research-design");
+    expect(researchMode).toContain("--lens=design");
+    expect(researchMode).toContain("--lens=-design");
+    expect(researchMode).toMatch(/Design-signal detection/u);
+    expect(researchMode).toMatch(
       /--lens=design.{0,80}--lens=-design.{0,80}(last-wins|mutually exclusive)|mutually exclusive.{0,80}--lens=design.{0,80}--lens=-design/u
     );
-    const phase2Idx = START_COMMAND_BODY.indexOf("#### Phase 2 — parallel lens dispatch");
+    const phase2Idx = researchMode.search(/Phase 2.*?parallel lens dispatch/iu);
     expect(phase2Idx).toBeGreaterThan(0);
-    const phase2Block = START_COMMAND_BODY.slice(phase2Idx, phase2Idx + 10000);
+    const phase2Block = researchMode.slice(phase2Idx, phase2Idx + 10000);
     expect(phase2Block).toMatch(/`Framing:`|\\`Framing:\\`/u);
     expect(phase2Block).toMatch(/light.{0,50}NOT|light.{0,80}skip|skip.{0,80}light/iu);
     expect(phase2Block).toMatch(/5 lenses|5 default|standard.{0,80}5|standard.{0,80}6|6 lenses/u);
-    expect(START_COMMAND_BODY).toMatch(/six.{0,80}(engineer|design)|6 lenses|engineer.{0,120}design/iu);
+    expect(researchMode).toMatch(/six.{0,80}(engineer|design)|6 lenses|engineer.{0,120}design/iu);
   });
 });
 

@@ -148,20 +148,23 @@ describe("v8.71 — research revision loop behavior (validators accept/reject + 
 });
 
 describe("v8.71 — research revision loop section contract (start-command + runbook + template)", () => {
-  it("SECTION CONTRACT — start-command body declares the 3 sub-commands (/cc research revise|push-back|accept), Phase 3.5 awaiting-user-review gate before Phase 4, points at runbooks/research-revision.md, and stamps every lifecycle state; runbook documents 3 sub-commands + state transition table + push-back re-dispatches skeptic + authoring lens + 5-col revision history table + append-only invariant + references; template revision-history section appears AFTER `## Recommended next step` with the 3 sub-commands + append-only declaration + runbook pointer", () => {
-    // start-command body
-    expect(START_COMMAND_BODY).toMatch(/\/cc research revise/);
-    expect(START_COMMAND_BODY).toMatch(/\/cc research push-back/);
-    expect(START_COMMAND_BODY).toMatch(/\/cc research accept/);
-    expect(START_COMMAND_BODY).toMatch(/Phase 3\.5/);
+  it("SECTION CONTRACT — start-command body declares the 3 sub-commands (/cc research revise|push-back|accept), Phase 3.5 awaiting-user-review gate before Phase 4, points at runbooks/research-revision.md, and stamps every lifecycle state; runbook documents 3 sub-commands + state transition table + push-back re-dispatches skeptic + authoring lens + 5-col revision history table + append-only invariant + references; template revision-history section appears AFTER `## Recommended next step` with the 3 sub-commands + append-only declaration + runbook pointer. v8.103 — phase-detail lifted to runbooks/research-mode.md; sub-command + lifecycle assertions check the research-mode runbook + research-revision runbook.", async () => {
+    // start-command body keeps the research-mode pointer + the Phase 3.5 anchor
     expect(START_COMMAND_BODY).toMatch(/awaiting-user-review/);
-    expect(START_COMMAND_BODY).toMatch(/runbooks\/research-revision\.md/);
+
+    // v8.103 — phase-detail lifted to runbooks/research-mode.md (Phase 3.5 +
+    // Phase 4) + runbooks/research-revision.md (sub-commands + lifecycle).
+    const { ON_DEMAND_RUNBOOKS } = await import("../../src/content/runbooks-on-demand.js");
+    const researchMode = ON_DEMAND_RUNBOOKS.find((r) => r.id === "research-mode")?.body ?? "";
+    expect(researchMode).toMatch(/\/cc research revise/);
+    expect(researchMode).toMatch(/\/cc research push-back/);
+    expect(researchMode).toMatch(/\/cc research accept/);
+    expect(researchMode).toMatch(/Phase 3\.5/);
+    expect(researchMode).toMatch(/awaiting-user-review/);
+    expect(researchMode).toMatch(/runbooks\/research-revision\.md/);
     for (const s of RESEARCH_STATES) {
-      expect(START_COMMAND_BODY).toContain(s);
+      expect(researchMode).toContain(s);
     }
-    expect(START_COMMAND_BODY).toMatch(
-      /Phase 4[^]*?finalises the flow only after the user invokes `\/cc research accept`/
-    );
 
     // runbook
     const rb = RESEARCH_REVISION_RUNBOOK!.body;

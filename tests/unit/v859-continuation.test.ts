@@ -203,7 +203,7 @@ describe("v8.59 — continuation behavior (loadParentContext + findNearKnowledge
 });
 
 describe("v8.59 — continuation section contract (specialist prompts + ## Extends + start-command Detect fork)", () => {
-  it("SECTION CONTRACT — renderExtendsSection emits the canonical ## Extends block, architect/reviewer/critic prompts wire flowState.parentContext, and start-command body carries the Detect-hop extend-mode fork + prior-context consumption pointer", () => {
+  it("SECTION CONTRACT — renderExtendsSection emits the canonical ## Extends block, architect/reviewer/critic prompts wire flowState.parentContext, and start-command body carries the Detect-hop extend-mode fork + prior-context consumption pointer", async () => {
     const out = renderExtendsSection({
       parentSlug: PARENT_SLUG,
       shippedAt: "2026-05-14T12:00:00Z",
@@ -245,9 +245,13 @@ describe("v8.59 — continuation section contract (specialist prompts + ## Exten
     expect(body).toMatch(/### Detect — extend-mode fork/u);
     expect(body).toContain("runbooks/extend-mode.md");
     expect(body).toContain("loadParentContext");
-    expect(body).toMatch(/### prior-context consumption/u);
-    expect(body).toMatch(/flowState\.parentContext/u);
     expect(body).toMatch(/immediate.{0,30}parent/iu);
     expect(body).toContain("findRefiningChain");
+
+    // v8.103 — prior-context consumption detail moved to runbooks/triage-gate.md.
+    const { ON_DEMAND_RUNBOOKS } = await import("../../src/content/runbooks-on-demand.js");
+    const triageGate = ON_DEMAND_RUNBOOKS.find((r) => r.id === "triage-gate")?.body ?? "";
+    expect(triageGate).toMatch(/prior-context consumption/iu);
+    expect(triageGate).toMatch(/flowState\.parentContext|parentContext/u);
   });
 });

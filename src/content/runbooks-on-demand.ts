@@ -2187,6 +2187,284 @@ The \`oneWayDoorConfirmation\` field persists for the rest of the flow's lifetim
 | "Architect's slim summary said \`Recommended next: continue\` but the scan found a one-way D-N — trust the slim summary and skip the gate." | NO. The scan is the source of truth (plan-critic §A guarantees the field is present on every D-N in strict mode). When the slim summary and the scan disagree, the scan wins — and surface the inconsistency as an architect finding for the next iteration. |
 `;
 
+const RESEARCH_MODE = `# On-demand runbook — research-mode multi-lens flow (v8.65+; v8.103 lift)
+
+The orchestrator opens this runbook whenever the \`/cc\` argument starts with the literal token \`research \` (case-insensitive, exactly one space) OR carries the explicit \`--research\` flag anywhere in the argument string. The runbook is the canonical procedure; \`start-command.ts\` carries only the one-paragraph fork reference + the on-demand-runbooks trigger row.
+
+## §1 — Fork detection and slug stamping
+
+When the fork fires:
+
+- Strip the trigger from the task text. The topic that flows into the lenses is the argument WITHOUT \`research \` / \`--research\`.
+- Build a research-mode slug: \`YYYYMMDD-research-<semantic-kebab>\`. The \`-research-\` infix is mandatory; it keeps \`flows/shipped/\` unambiguous and distinguishes research artifacts from task flows.
+- **Skip triage dispatch entirely.** Stamp \`flow-state.json > triage\` with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\` + \`research_depth: <light | standard | deep-product>\` (v8.69; parsed from explicit \`--light\` / \`--standard\` / \`--deep-product\` flag, otherwise auto-classified from topic wording — full mapping in \`runbooks/research-depth-and-self-review.md\`).
+- Stamp \`flow-state.json > currentSlug\` with the new slug, \`currentStage: "plan"\` (used purely as a sentinel — research mode has no plan / build / review / critic / ship stages; the field is the only signal that distinguishes "research in flight" from "task in flight" for the v8.61 invocation matrix).
+
+The orchestrator then enters the **multi-lens research flow** — replacing the v8.58/v8.62 architect-standalone-research interim. The flow is four phases (with two intermediate gates at 1.5 and 3.5).
+
+## §2 — Phase 0 — bootstrap (silent; main-context)
+
+The orchestrator (NOT a sub-agent — research mode's discovery dialogue lives in the main-context flow so the user can iterate openly without round-trip envelopes) does:
+
+1. Read \`.cclaw/state/flow-state.json\` (already initialised at the fork).
+2. Read \`CONTEXT.md\` at the project root if it exists.
+3. Read \`README.md\` first paragraph + Architecture / Purpose section for high-level project framing.
+4. Initialise an empty \`.cclaw/flows/<slug>/research.md\` from the \`research\` template (\`.cclaw/lib/templates/research.md\`); the orchestrator will fill it in Phase 3.
+
+## §3 — Phase 1 — iterative open-ended discovery dialogue with per-dimension scoring (main-context; v8.78)
+
+The orchestrator opens the dialogue with the user in plain prose, in the user's language:
+
+> "Hi. What are you researching? Tell me what you know and what you don't."
+
+The user replies. The orchestrator then runs the **same iterative per-dimension scoring machinery** as the architect Phase −1 Clarify protocol (see \`.cclaw/lib/agents/architect.md > Phase −1\`), with two adjustments:
+
+- **Round cap is higher: 8 rounds** (vs 5 for architect Clarify). Research discovery has more axes to pin (research is exploratory by definition; the budget allows deeper questioning).
+- **Math-gated exit threshold is the same: \`ambiguity < 0.25\`.** Both surfaces share the same exit math; only the round cap differs.
+
+**Per-dimension scoring (same four dimensions as architect Clarify):**
+
+| Dimension | Weight | What it measures in research mode |
+| --- | --- | --- |
+| \`goal\` | 0.4 | What question is the research answering? Can you state it in one sentence? Is the topic phrased as a question (good) or as a conclusion the user has already reached (bad — surfaces in skeptic lens otherwise)? |
+| \`constraints\` | 0.3 | What's out of scope? What technical / organisational / time constraints bound the research? What's the user's risk tolerance? |
+| \`criteria\` | 0.3 | What would a satisfying research output look like? "I want to know whether X" (concrete) vs "research X" (open-ended). What decision will the research unblock? |
+| \`context\` | 0.0 | Repo / market / prior-art context. **Informational, not gating** — surfaced so the user can volunteer pointers (prior research, internal docs, competitor links), but the math-gated exit does NOT block on it. |
+
+Compute the scalar:
+
+\`\`\`text
+ambiguity = 1 - (goal * 0.4 + constraints * 0.3 + criteria * 0.3 + context * 0.0)
+\`\`\`
+
+**Targeting + challenge-mode rotation:** the next question MUST target the weakest dimension. The same challenge-mode rotation applies (sourced from \`oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"\`):
+
+- **Round 4 — Contrarian mode.** Ask "what if the opposite were true?" against the weakest dimension. Tests whether the user's framing is correct or just habitual. (Architect's round 4 is the same stance; for research mode, round 4 may also probe "what if the user is researching the wrong question altogether?").
+- **Round 5 — Simplifier mode.** Ask "what's the simplest version of the question that would still be valuable to answer?". Finds the minimal viable research scope.
+- **Rounds 6-8 (research only).** Continue with open-ended targeting on the weakest dimension; no specific stance injection. The extra rounds exist because research topics genuinely benefit from deeper questioning more often than task-mode Clarify does — but the math-gated exit usually fires before round 6 on focused topics.
+
+**Surface a per-round table to the user** after every answer:
+
+\`\`\`text
+Round <n>:
+| Dimension | Score | Weight | Why |
+| --- | --- | --- | --- |
+| goal | <s_goal> | 0.4 | <one-sentence rationale> |
+| constraints | <s_constraints> | 0.3 | <one-sentence rationale> |
+| criteria | <s_criteria> | 0.3 | <one-sentence rationale> |
+| context | <s_context> | 0.0 | <one-sentence rationale> |
+| **Ambiguity** |  |  | **<a>** |
+Next target: <weakest-dimension> — <one-sentence why>.
+\`\`\`
+
+Stamp every round into \`flow-state.json > clarifyRounds[]\` (append-only) as a \`ClarifyRoundState\` entry (\`{ round, dimensionScores, ambiguity, targetedDimension, question }\`) — the SAME field used by architect Clarify; research-mode flows share the persistence surface.
+
+**Exit conditions (any of):**
+
+- Math-gated exit: \`ambiguity < 0.25\`.
+- Round cap: 8 rounds asked.
+- User signals readiness (any of "ready" / "I'm ready" / "go ahead" / "let's go" / "go on" / "proceed" / "finalize" / "explore now" / "dispatch the lenses" / "run the research" / "do it" / "ship it" / a clear "I've said what I know — over to you" framing).
+- **v8.78 — user runs \`/cc research go\`** to force-exit the dialogue. The \`go\` sub-command is treated identically to the in-prose "ready" signal: stop asking, distil, proceed to Phase 1.5 Approaches Gate. \`go\` is the canonical "I trust the orchestrator to dispatch with what I've already said" force-exit; the orchestrator does NOT push back on the user even if \`ambiguity\` is still > 0.25.
+
+When the dialogue exits, the orchestrator distils the conversation into a **dialogue summary** — 5-15 bullets capturing what the user told the orchestrator (topic refinement, known constraints, prior attempts, stakeholders, scope edges). The summary is the payload passed to each lens; the lenses do not see the raw dialogue.
+
+The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides for follow-up turns (Cursor's structured-ask, Claude's TUI text input, etc.) but the questions are open-ended (no multiple-choice picker, no "[y/n]" gate) — research-mode discovery is the one cclaw surface where free-form dialogue is the contract. The per-round table is rendered as plain markdown BEFORE each question; the user sees what every answer is moving.
+
+If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel"), the orchestrator runs the cancel runtime (move the empty research.md to \`cancelled/<slug>/\`, reset state) and ends the turn.
+
+**Reference patterns:** \`oh-my-claudecode/skills/deep-interview/SKILL.md\` (mathematical scoring + challenge-mode rotation); \`everyinc-compound\` brainstorming Phase 1.2 gap lenses (specificity / evidence / counterfactual / attachment — the same lenses backing the four canonical dimensions); pre-v8.78 research-mode used "as many questions as productive" with no scoring — v8.78 replaces that with the math-gated discipline so research mode stops bleeding rounds when the user has already pinned the question.
+
+## §4 — Phase 1.5 — approaches gate (v8.76)
+
+Immediately after Phase 1 distillation completes and BEFORE Phase 2 dispatches any lens, the orchestrator runs the **Approaches Gate**: distil 2-3 candidate FRAMINGS of the research question and ask which framing(s) the downstream lenses should carry in their dispatch envelopes. Without the gate, lenses dispatch against an implicit single framing (whatever the orchestrator settled on during dialogue distillation), and downstream findings inherit that framing's blind spots. The gate is the research-mode analogue of the obra-superpowers brainstorming Phase 2-3 ("2-3 approach options before committing") and the addyosmani \`idea-refine\` Phase 1.3 Cluster + Stress-test discipline.
+
+A framing is a DIFFERENT framing of the same research question (NOT 2-3 conclusions, NOT 2-3 implementation candidates). Worked example for "add caching to the search endpoint" — **framing A: caching as infra primitive** (Redis / in-memory / HTTP cache; engineer lens leans hardest), **framing B: caching as search-quality lever** (what we cache, invalidation, when to bust; product + engineer split the load, skeptic centres on stale-data abuse cases), **framing C: caching as organizational gate** (ownership / on-call; product + history + skeptic lead). Each framing routes the lens dispatch differently even though the topic text is identical.
+
+**Procedure.** Distil 2-3 framings (\`id\` + 4-8-word \`title\` + one-paragraph \`summary\`); **Stamp \`flow-state.json > approaches\`** as a {@link ResearchApproach}\[\] (\`src/types.ts\`) and \`researchState: "approaches-gate"\`; surface the framings as a bulleted block + picker prompt \`Pick one (e.g. "A" / "B") or accept "all" (every framing flows to every lens — the default).\`; wait for the user's pick (single-letter ids \`A\` / \`A B\` / \`A,B\`, or case-insensitive title substring match, or \`all\` / \`every\` / \`default\` — the silent default is "all", NOT "stop" — the gate is non-coercive); stamp \`flow-state.json > selectedApproaches\` (zero-based indices into \`approaches[]\`); dispatch Phase 2 with the selected framings carried in every lens envelope under the new \`Framing:\` field (string array; one entry per selected framing as \`<title> — <summary>\`).
+
+**Sub-cases.** **Only one obvious framing emerges from the dialogue** — surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"); never fewer than 2 framings, never more than 3. When the user picks a framing not on the list, accept verbatim and append as the next-index entry in \`approaches[]\`. When the user cancels mid-gate ("stop" / "never mind" / "/cc-cancel"), run the cancel runtime and end the turn. Mid-research re-framings route through the existing v8.71 \`/cc research push-back <framing>\` machinery (framings ARE claims about the research question); the original \`approaches[]\` is NEVER mutated (immutable for audit).
+
+Full procedure — picker grammar, sub-cases, the Phase 2 envelope shape, anti-rationalization (silent-pick / collapse / orchestrator-knows-best traps) — lives in \`.cclaw/lib/runbooks/approaches-gate.md\`. Open that runbook on every transition from Phase 1 distillation exit to Phase 2 lens dispatch.
+
+## §5 — Phase 2 — parallel lens dispatch
+
+When Phase 1.5 (Approaches Gate) clears, the orchestrator **dispatches research lenses in parallel**. The depth tier (\`triage.research_depth\`) controls the base lens set, and a topic's design-signal status conditionally adds the v8.76 design lens:
+
+- **\`light\` → engineer + skeptic** (2 lenses). Design is NOT added even when the topic touches UI — light-depth dispatches are narrow clarifications ("which library does X?") that don't carry enough framing to ground a design pass. Parenthetical \`*(Skipped on light depth.)*\` marks the absent four below.
+- **\`standard\` (default) → engineer + product + architecture + history + skeptic** (5 lenses by default). When the orchestrator's design-signal heuristic fires (see "Design-signal detection" below), add \`research-design\` for a total of **6 lenses**.
+- **\`deep-product\` → engineer + product + architecture + history + skeptic + extra probes (durability / thesis / adjacent-product) folded into product + skeptic prompts**. When the design-signal heuristic fires, add \`research-design\` for a total of **6 lenses** + extra probes; the design lens itself folds its own deep-product subsection (Adjacent design surfaces).
+
+The **explicit user-toggle flags** override the heuristic in either direction:
+
+- \`/cc research --lens=design <topic>\` — **force-include** the design lens on \`standard\` / \`deep-product\` depth even when the heuristic missed (the user knows it's a UI topic; the orchestrator stamps the flag verbatim). Ignored on \`light\` depth with a one-line note (\`design lens not dispatched on light depth; downgraded to standard if you want it included\`).
+- \`/cc research --lens=-design <topic>\` — **force-exclude** the design lens on \`standard\` / \`deep-product\` depth even when the heuristic fired (the topic happens to mention "interface" but the user doesn't want a design pass; rare but valid).
+- Multiple lens-toggle flags are accepted (\`--lens=design --lens=-skeptic\` is a no-op on \`-skeptic\` for now — only \`design\` is force-toggleable; other lenses are gated by depth tier). Future widening (e.g. \`--lens=-product\` to skip the product lens) is v8.77+ scope.
+
+**Design-signal detection.** The orchestrator's heuristic on \`standard\` / \`deep-product\` depth fires when ANY of:
+
+- the topic text or dialogue summary names a UI / UX / design / frontend / accessibility / interface concept (e.g. \`UI\`, \`UX\`, \`design\`, \`frontend\`, \`accessibility\`, \`a11y\`, \`page\`, \`component\`, \`dialog\`, \`modal\`, \`form\`, \`button\`, \`navigation\`, \`onboarding\`, \`empty state\`, \`dashboard\`, \`landing\`, \`screen\`, \`affordance\`, \`positioning\`);
+- the topic names a known design system / UI library (\`shadcn\`, \`Radix\`, \`Material 3\`, \`Polaris\`, \`Tailwind UI\`, \`Linear\`, \`Notion\`);
+- the dialogue summary surfaces stakeholders described in user-facing terms (\`end users\`, \`customers\`, \`visitors\`, \`new signups\`) AND the topic is not a pure backend / infra / CLI / library refactor.
+
+The heuristic is **inclusive**: when in doubt, dispatch the design lens. The lens's own scope rules (gate everything against the seven design-quality dimensions; mark \`out-of-scope\` honestly) absorb false positives gracefully — a backend topic accidentally dispatched against design ends up with all seven dimensions graded \`out-of-scope\` and a one-line "Internal-scope topic; no design surface implicated." block. False negatives (UI topics that miss the heuristic and need the user to add \`--lens=design\`) are the costlier failure mode.
+
+**Lens roster (six lenses on standard with design added):**
+
+- \`research-engineer\` — technical feasibility, stack fit, implementation paths, blockers, risks, rough effort.
+- \`research-product\` *(Skipped on light depth.)* — user / product value, who benefits, alternatives considered (always including "do nothing"), market / domain context, open product questions.
+- \`research-architecture\` *(Skipped on light depth.)* — surface impact, coupling points, boundaries crossed, scalability considerations, reusable in-repo patterns.
+- \`research-history\` *(Skipped on light depth.)* — prior attempts via \`.cclaw/knowledge.jsonl\` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift.
+- \`research-skeptic\` — failure modes, edge cases, abuse cases, hidden costs, explicit don't-proceed triggers.
+- \`research-design\` *(Skipped on light depth; conditionally added on standard / deep-product depth via the design-signal heuristic or the \`--lens=design\` / \`--lens=-design\` user-toggle flags.)* — UI / UX / positioning / affordances lens (v8.76). Walks the seven-dimension design-quality rubric (shared with the v8.75 plan-design specialist + v8.70 reviewer's design-quality axis) at research framing time — grades each dimension for relevance (\`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`), surfaces existing patterns to study (with first-class web search via \`user-exa\` / \`user-context7\`), anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect.
+
+Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\` but with the lens-specific shape):
+
+- \`Slug:\` — the research slug.
+- \`Topic:\` — the stripped task text (no \`research \` / \`--research\` prefix, no \`--lens=\` flag, no \`--light\` / \`--standard\` / \`--deep-product\` flag).
+- \`Dialogue summary:\` — the 5-15 bullets from Phase 1.
+- \`Framing:\` (v8.76) — the selected framing(s) from the Phase 1.5 Approaches Gate. A string array; each entry is \`<framing-title> — <framing-summary>\` for the framings the user picked (or every framing when the user accepted "all" / the default). Lenses grade their findings against this set rather than the implicit "any framing".
+- \`Project root:\` — absolute path.
+- \`Active flow state:\` — the sentinel triage block (lenses do not run heuristics on it).
+- \`Research depth:\` — \`triage.research_depth\` (v8.69; \`light\` / \`standard\` / \`deep-product\`); on \`deep-product\` product + skeptic + design fire extra probes, other lenses run identically.
+- \`Required first read:\` — the lens contract at \`.cclaw/lib/research-lenses/<lens-id>.md\`.
+
+Lenses run independently. The engineer + architecture lenses MAY dispatch \`repo-research\` on brownfield projects (the history lens reads \`.cclaw/knowledge.jsonl\` directly — that's the in-research mirror of \`learnings-research\`, and dispatching \`learnings-research\` from the history lens would be redundant; the design lens does NOT dispatch \`repo-research\` — its surface is design patterns external to or layered atop the repo). Lenses MAY use an MCP web-search tool (\`user-exa\`, \`user-context7\`, or comparable) when one is available; web search is **optional** for engineer / product / architecture / skeptic, **first-class** for design (the design lens treats every pattern claim as needing a URL citation or \`(general pattern; training knowledge)\` tag) — lenses fall back to training knowledge if no tool is wired, and stamp the fallback in their slim summary's \`Notes\` field. Research mode does NOT hard-require MCP web search.
+
+Each lens returns a structured findings block (the markdown payload that becomes the \`## <Lens> lens\` section of \`research.md\`) and a slim summary (≤8 lines). The orchestrator collects all dispatched lenses before proceeding (5 default on standard; 6 when design is added; 2 on light; 5+ probes on deep-product without design; 6+ probes on deep-product with design).
+
+If any lens returns \`Confidence: low\` AND the dialogue summary was thin, the orchestrator MAY re-dispatch ONLY that lens once with a richer envelope (extra bullets from the dialogue, the cited framing). Cap: 1 re-dispatch per lens, total cap 2 re-dispatches across the dispatched set. After the cap, proceed with partial findings — the synthesis section will surface the thin-coverage warning.
+
+## §6 — Phase 3 — synthesis (main-context)
+
+The orchestrator authors \`research.md\` by:
+
+1. Pasting each lens's findings block verbatim under the corresponding section (\`## Engineer lens\`, \`## Product lens\`, \`## Architecture lens\`, \`## History lens\`, \`## Skeptic lens\`).
+2. Writing the \`## Discovery dialogue summary\` section from the Phase 1 bullets.
+3. Composing the \`## Synthesis\` section — a 3-7 paragraph cross-lens distillation. The synthesis surfaces:
+   - Convergence: where 2+ lenses point the same way (e.g. "engineer + product both flag X as the blocker").
+   - Divergence: where lenses disagree (e.g. "product says high value, skeptic flags an unmitigated abuse case").
+   - The big trade-off space the user / follow-up architect must navigate.
+3a. **Populating the \`## Key assumptions to validate\` section (v8.80; KA-N ids in v8.85).** 2-5 bullets naming **bets** the research rests on — beliefs about user demand, market state, technology behaviour, performance characteristics, or downstream system capability that the lenses absorbed as load-bearing premises rather than as findings. Each bullet leads with a stable \`KA-N\` id (Key Assumption N — \`KA-1\`, \`KA-2\`, ..., monotonically numbered) and pairs the bet with a validation method (benchmark, user research, log query, A/B test, prior-art scan) and a status (\`unvalidated\` on first authoring; \`validated\` / \`invalidated\` once evidence lands). Format: \`- **KA-N** — <assumption>. Validate by: <method>. Status: <unvalidated | validated | invalidated>\`. Distinct from \`## Framings considered\` (those are alternative shapes of the question; this section is the implicit beliefs the framings rely on). The follow-up \`/cc <task>\` flow's architect Bootstrap copies the bullets verbatim — KA-N ids preserved — into \`plan.md > ## Key assumptions to validate\` so the bets carry forward; the builder's optional \`validates: KA-N\` commit payload (v8.85) and the reviewer's \`assumption-coverage\` axis then close the loop on the bets as the build lands.
+3b. **Populating the \`## Not Doing (and why)\` section (v8.80).** 3-5 bullets naming scope explicitly excluded from this research's framing, each paired with a one-sentence rationale. Format: \`- **<scope item>** — <one-sentence reason>\`. Surfaces deliberate non-commitments the lens dispatch and synthesis already implied — adjacent topics deferred to a future research flow, framings dropped at the Approaches Gate, lens findings deliberately not synthesised. The follow-up \`/cc <task>\` flow's architect reads this section as load-bearing scope context — "the research already excluded X for reason Y — do not relitigate it in the plan's \`## Not Doing (and why)\` section". Every research that ships excludes something — name it; every research rests on bets — surface them with validation methods.
+3c. **Composing the \`### Confidence summary\` subsection of \`## Synthesis\` (v8.88).** Each lens now stamps per-finding numeric confidence in its \`### Findings (with confidence)\` block (each \`#### F-N (confidence: 0.0-1.0)\`). The synthesis pass aggregates across lenses in three parts: **weighted averages** per finding-equivalent (weight = 1/lens-count contributing; cite F-N ids inline); **confidence cliffs** (any pair with ≥0.5 spread on the same claim — the highest-signal divergence); **per-lens rollup** (mean confidence per lens, rounded to two decimals). RESEARCH_TEMPLATE pins the full format; emit \`No cross-lens confidence cliffs detected; per-lens means within ±0.15 of each other.\` verbatim when no cliffs exist. Mandatory section — absence is a structural failure for the follow-up \`/cc <task>\` architect Bootstrap, which reads research.md end-to-end as \`priorResearch\` context.
+4. Composing the \`## Recommended next step\` section. The recommendation is ONE of:
+   - **"plan with \`/cc <task>\`"** — research converges on a workable direction; risks are tracked but proceedable. Suggest a concrete kebab-case task description the user can type.
+   - **"more research needed (specific area)"** — one or more lenses returned \`Confidence: low\` AND the user gap is concrete (e.g. "need to talk to the data team about the migration window first").
+   - **"don't proceed (skeptic blocked: <reason>)"** — the skeptic lens set \`Don't-proceed: yes\` AND no obvious mitigation exists within the topic's scope. Cite the specific trigger.
+5. Stamping frontmatter with \`lenses\` (the depth-determined subset; failed lenses marked \`failed\`), \`research_depth\`, \`generated_at\`.
+6. **Synthesis self-review pass (v8.69)** — BEFORE \`research.md\` lands, walk the draft through four scans (placeholder / contradiction / scope drift / ambiguity); fix inline; record fixes in \`## Synthesis > ### Self-review notes\` (\`No self-review issues found.\` when clean). Full procedure in \`runbooks/research-depth-and-self-review.md\`.
+
+## §7 — Phase 3.5 — awaiting user review (v8.71)
+
+After Phase 3 lands \`research.md\` on disk, the orchestrator stamps \`flow-state.json > researchState: "awaiting-user-review"\` and surfaces the review prompt with three options: \`/cc research revise <area>\` (re-dispatch lens(es) covering \`<area>\` → \`engineer\` / \`product\` / \`architecture\` / \`history\` / \`skeptic\` / \`synthesis\` / \`all\`; cycles state back to \`awaiting-user-review\` after the rewrite); \`/cc research push-back <claim>\` (re-dispatch \`research-skeptic\` plus the authoring lens to challenge the cited claim; same cycle-back); \`/cc research accept\` (terminal — appends \`accept\` row to \`## Revision history\`, stamps \`researchState: "accepted"\`, runs Phase 4 finalize). Each revise / push-back appends a \`ResearchRevision\` entry to \`flow-state.json > revisions[]\` AND a row to \`research.md > ## Revision history\` (canonical audit trail; append-only). Lifecycle states: \`discovery\` → \`lens-dispatch\` → \`synthesis\` → \`awaiting-user-review\` ⇄ \`revising\` → \`accepted\`. Full procedure (parsing, lens-set mapping, fuzzy claim search, failure handling, anti-rationalization) lives in \`runbooks/research-revision.md\`. Reference patterns: obra-superpowers brainstorming User Review Gate, addyosmani idea-refine divergent-then-converge, everyinc-compound ce-brainstorm Phase 2.5 confirmation gate.
+
+## §8 — Phase 4 — finalize
+
+The orchestrator finalises the flow only after the user invokes \`/cc research accept\` at the Phase 3.5 gate (v8.71+; pre-v8.71 flows finalised straight from Phase 3): \`git mv\` the artifact into \`.cclaw/flows/shipped/<slug>/research.md\` (NO build / review / critic / ship stages — research mode has no implementation pipeline). Reset \`flow-state.json > currentSlug\` to \`null\`. After finalize, surface the **handoff prompt** in plain prose (no structured ask):
+
+> "\`research.md\` is ready at \`.cclaw/flows/shipped/<slug>/research.md\`. Recommended next: <verbatim Phase 3 recommendation>. Ready to plan? Run \`/cc <task>\` and I'll carry the research as \`priorResearch\` context."
+
+The next \`/cc <task>\` invocation on the same project reads the most-recent shipped research slug under \`flows/shipped/\` and stamps it into \`flow-state.json > priorResearch: { slug, topic, path }\`; the architect's Bootstrap on that follow-up flow reads \`priorResearch.path\` and includes the research artifact (including the \`## Revision history\` block) as Frame / Approaches / Decisions context.
+
+## §9 — Sub-cases
+
+- **Argument is \`research\` alone (no topic)** — surface \`research mode needs a topic; try '/cc research <topic>'\`, end the turn.
+- **Argument starts with \`research \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — flags are ignored (research's path is fixed at the multi-lens flow; ceremonyMode doesn't apply). One-line note: \`research mode ignores ceremonyMode flags\`, then proceed.
+- **Research-mode + \`--mode=auto\` / \`--mode=step\`** — toggle dropped with one-line note (research has no stages to chain; the run mode does not apply).
+- **Research-mode + multiple depth flags** (\`--light --deep-product\`) — last-wins with one-line note (\`mutually exclusive depth flags; using --deep-product\`), then proceed.
+- **Research-mode + \`--lens=design\` flag on \`light\` depth** — design lens is structurally not dispatched on light depth (narrow clarifications). Drop the flag with a one-line note (\`design lens not dispatched on light depth; rerun with --standard or --deep-product to include it\`), then proceed with the light-depth 2-lens set.
+- **Research-mode + \`--lens=design\` AND \`--lens=-design\` both present** — last-wins with a one-line note (\`mutually exclusive --lens=design / --lens=-design flags; using <last>\`), then proceed.
+- **Research-mode + unknown \`--lens=<name>\` flag** (e.g. \`--lens=experimental\`) — drop the flag with a one-line note (\`unknown --lens=<name> flag; only --lens=design / --lens=-design accepted in v8.76\`), then proceed with the heuristic-determined lens set.
+- **User cancels mid-dialogue** — run the cancel runtime, end the turn.
+- **All dispatched lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
+
+The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The v8.76 roster is **six** lenses (engineer / product / architecture / history / skeptic / design). The ten flow specialists (triage, architect, builder, plan-critic, plan-design, plan-devex, qa-runner, reviewer, critic, investigator) are untouched.
+`;
+
+const TRIAGE_GATE = `# On-demand runbook — Triage hop (orchestrator-side; v8.103 lift)
+
+The orchestrator opens this runbook on every fresh \`/cc <task>\` Triage hop (research-mode / extend-mode / patch-mode forks bypass this hop). The runbook is the canonical orchestrator-side procedure — persisted shape, audit-log surface, follow-up-bug detection, prior-context consumption, prior-learnings consumption, and the v8.42 critic-stage insertion rule. The \`triage\` sub-agent's lightweight-router contract still lives in \`.cclaw/lib/agents/triage.md\`; this runbook covers ONLY what the orchestrator does around the dispatch.
+
+## §1 — Persisted triage shape
+
+After the triage sub-agent returns, the orchestrator stamps \`flow-state.json > triage\` with the eight-field decision plus the audit fields. The persisted shape:
+
+\`\`\`json
+{
+  "triage": {
+    "complexity": "small-medium",
+    "ceremonyMode": "soft",
+    "path": ["plan", "build", "review", "critic", "ship"],
+    "mode": "task",
+    "rationale": "3 modules, ~150 LOC, no auth touch.",
+    "decidedAt": "2026-05-08T12:34:56Z",
+    "runMode": "auto"
+  }
+}
+\`\`\`
+
+\`runMode\` is \`null\` on inline (\`triage.path == ["build"]\`) and \`"auto"\` everywhere else (v8.61 always-auto — the user-facing \`step\` / \`auto\` choice was retired; the orchestrator no longer branches on this value at plan / review / critic gates). \`mode\` is \`"task"\` on the standard \`/cc <task>\` entry point and \`"research"\` on \`/cc research <topic>\` flows; pre-v8.58 state files lack the field and readers MUST default to \`"task"\`.
+
+## §2 — Migration prose (surfaces, qa, prior-learnings)
+
+**\`triage.surfaces\` is no longer written here.** The surface-detection step that used to live at this Hop moved to the architect (post-v8.62 unified flow): the architect writes the surfaces list to \`flow-state.json\` after authoring \`## Frame\` + \`## Spec\` on either the soft or strict path; the inline path does not write the field (no specialist runs). The qa-runner gate (v8.52) continues to read \`triage.surfaces\` literally — only the WRITER moved. Pre-v8.58 state files that already carry \`triage.surfaces\` from the orchestrator continue to validate unchanged; the value is read as ground truth on resume.
+
+**\`triage.path\` no longer includes \`"qa"\` at triage time.** The qa-stage insertion that used to happen at this Hop moved to the architect's surface-write step: when the architect writes \`triage.surfaces\` and the detected surfaces include \`"ui"\` or \`"web"\` AND \`ceremonyMode != "inline"\`, the same write rewrites \`triage.path\` to insert \`"qa"\` between \`"build"\` and \`"review"\`. The qa-runner gate continues to read the rewritten \`triage.path\` at Hop 4.25; only the writer moved. Pre-v8.58 state files whose \`triage.path\` already contains \`"qa"\` validate unchanged.
+
+**the orchestrator no longer runs a prior-learnings lookup at this Hop.** The v8.18 \`findNearKnowledge\` lookup that used to live between triage persistence and the first dispatch moved into the architect, which dispatches \`learnings-research\` (reads \`knowledge.jsonl\` directly) and queries the store on demand during Decisions / Pre-mortem. Pre-v8.58 state files that carry \`triage.priorLearnings\` continue to be read verbatim by specialists on resume (back-compat); new flows leave the field absent.
+
+## §3 — Audit log
+
+\`.cclaw/state/triage-audit.jsonl\` is write-only telemetry (\`userOverrode\`, \`autoExecuted\`, \`iterationOverride\`); appends to this JSONL log instead of the triage object. Append one line per triage decision immediately after persisting the triage write (best-effort; if the write fails, log and continue). Schema mirrors \`TriageAuditEntry\` in \`src/triage-audit.ts\`:
+
+\`\`\`json
+{"decidedAt":"2026-05-08T12:34:56Z","slug":"<slug>","complexity":"small-medium","ceremonyMode":"soft","userOverrode":false,"autoExecuted":true}
+\`\`\`
+
+\`autoExecuted: true\` is the v8.58+ default (no user-facing ask at triage). \`userOverrode: true\` is stamped only when the user passed an explicit \`--inline\` / \`--soft\` / \`--strict\` flag AND the flag's ceremonyMode differs from the heuristic recommendation; the triage sub-agent reports both values in its slim summary so the orchestrator can stamp the diff.
+
+## §4 — v8.42 critic-stage insertion rule
+
+\`triage.path\` includes the \`"critic"\` stage between \`"review"\` and \`"ship"\` whenever \`ceremonyMode != "inline"\`. On \`ceremonyMode: "inline"\` the path stays \`["build"]\`. See \`runbooks/critic-steps.md\` for the full contract.
+
+## §5 — Follow-up-bug detection (applyFollowUpBugSignals)
+
+Immediately after triage persistence, call \`applyFollowUpBugSignals(projectRoot, triage.taskSummary, <iso-now>)\` (in \`src/outcome-detection.ts\`). The helper reads \`.cclaw/knowledge.jsonl\`, scans \`taskSummary\` for slug-cased references to prior shipped slugs paired with a bug keyword (\`bug\` / \`fix\` / \`broken\` / \`regression\` / \`crash\` / \`hotfix\` / \`hot-fix\` / \`revert\` / \`rollback\`), and stamps \`outcome_signal: "follow-up-bug"\` on every match. Both signals (slug-cased reference AND bug keyword) are required so refinement / rephrase tasks that mention a prior without bug intent don't false-positive. Missing / empty / unreadable file is a no-op. Sister capture paths (\`reverted\`, \`manual-fix\`) run at compound time — see \`runbooks/compound-refresh.md\` and \`runCompoundAndShip\`. The follow-up-bug helper writes to \`.cclaw/knowledge.jsonl\` (telemetry on shipped entries); it does NOT write to \`flow-state.json > triage.priorLearnings\` (that field is no longer populated by the router; see §7 below).
+
+## §6 — prior-context consumption (extend-mode)
+
+When extend-mode stamped \`flowState.parentContext\`, specialists treat parent artifacts as load-bearing context (lazy \`await exists\` reads; missing = no-op). Per-specialist contracts: \`architect\` Bootstrap reads parent's \`## Spec\` / \`## Decisions\` / \`## Selected Direction\` and surfaces inheritance bullets in soft mode; on strict mode the architect's Plan-tier write authors the mandatory \`## Extends\` section in plan.md. \`reviewer\` adds a parent-contradictions cross-check; \`critic\` §3 adds a skeptic question on parent decisions. The field is orthogonal to \`priorResearch\` and may co-exist on a single flow. Full per-specialist read patterns live in each specialist's contract; orchestrator-side dispatch + triage-inheritance lives in \`runbooks/extend-mode.md\`.
+
+## §7 — prior-learnings consumption (architect owns the lookup; OUTCOME_SIGNAL_MULTIPLIERS)
+
+The v8.18 \`findNearKnowledge\` lookup that used to run at this hop and stamp \`triage.priorLearnings\` is removed from the orchestrator. The architect now owns the lookup:
+
+- **soft + strict paths** — \`architect\` dispatches \`learnings-research\` as part of its pre-author research order. The research helper reads \`.cclaw/knowledge.jsonl\` directly, runs the Jaccard + outcome-signal weighting (\`OUTCOME_SIGNAL_MULTIPLIERS\` in \`src/knowledge-store.ts\`), and writes a short markdown summary that the architect folds into \`plan.md\`'s \`## Prior lessons\` section. On strict mode, the architect also queries the store on demand during the Decisions phase to weight D-N options against prior outcomes.
+- **inline path** — no lookup runs (no specialist, no plan, no learnings to fold in).
+
+Pre-v8.58 state files that already carry \`triage.priorLearnings\` are read verbatim by specialists on resume (back-compat); the field stays on the \`TriageDecision\` type as optional + deprecated for one release. The v8.58 router never writes it.
+
+\`OUTCOME_SIGNAL_MULTIPLIERS\` is the sorted weighting table (reverted < follow-up-bug < manual-fix < good=unknown) that \`learnings-research\` uses to down-weight prior entries whose \`outcome_signal\` indicates the prior shipment regressed; the canonical values live in \`src/knowledge-store.ts\` and the v8.50 outcome-loop tests pin the ordering.
+
+## §8 — No-git auto-downgrade audit trail
+
+The git-check sub-step (Detect hop) runs before this Triage hop dispatches; when \`<projectRoot>/.git/\` is absent the triage sub-agent stamps \`triage.ceremonyMode = "soft"\` regardless of class plus \`triage.downgradeReason = "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences (strict requires per-AC commits; parallel-build needs \`git worktree\`; inline's terminal commit is gracefully suppressed) live in \`.cclaw/lib/skills/triage-gate.md\` § "No-git auto-downgrade".
+
+## §9 — Slug naming
+
+Every flow slug uses the format \`YYYYMMDD-<semantic-kebab>\` (UTC date + kebab-case 2-4 word summary). Examples: \`20260510-file-cli\`, \`20260512-approval-page\`, \`20260613-mute-notifications\`. The date prefix is **mandatory** — it keeps \`flows/shipped/\` unambiguous and makes same-day re-runs visible. The triage sub-agent's slim summary suggests a slug; the orchestrator finalises it (collision handling against \`.cclaw/flows/\` + \`.cclaw/flows/shipped/\` + \`.cclaw/flows/cancelled/\`). On same-day collision (rare), append \`-2\`, \`-3\`, etc. until the slug is unique.
+
+## §10 — Anti-rationalization
+
+| excuse | reality |
+| --- | --- |
+| "Re-run the orchestrator-side prior-learnings lookup to be safe — the architect might skip it." | NO. The architect's pre-author research order ALWAYS includes \`learnings-research\` on soft + strict; running the lookup at the orchestrator is double-work and risks stamping a stale \`triage.priorLearnings\` value. |
+| "Skip the follow-up-bug helper when the task summary is short." | NO. \`applyFollowUpBugSignals\` is cheap (one JSONL read + a regex scan); skipping it loses the outcome-signal capture for the prior shipped slug. Missing / empty / unreadable file is already a no-op. |
+| "Stamp \`triage.priorLearnings\` for back-compat — old specialists might still read it." | NO. v8.58+ specialists do NOT read \`triage.priorLearnings\` from new flows. Pre-v8.58 state files that already carry the field on disk are read verbatim by specialists on resume (back-compat); the router never writes it for new flows. |
+| "Insert \`qa\` into \`triage.path\` here to be safe — the architect might forget." | NO. The qa-stage insertion is the architect's job (post-Frame surface-write step). Pre-empting it at the orchestrator double-writes and risks a stale path when the architect's surface detection lands a different conclusion. |
+`;
+
+
 export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "dispatch-envelope",
@@ -2314,6 +2592,18 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     title:
       "Dispatch skills index (Phase C G-2 fix; v8.96.1) — per-envelope reviewer skill pointers",
     body: DISPATCH_SKILLS_INDEX
+  },
+  {
+    id: "research-mode",
+    fileName: "research-mode.md",
+    title: "Research-mode multi-lens flow (v8.65+; Phase 0-4 + Approaches Gate + revision loop)",
+    body: RESEARCH_MODE
+  },
+  {
+    id: "triage-gate",
+    fileName: "triage-gate.md",
+    title: "Triage hop (orchestrator-side; persist-shape + audit + follow-up-bug + prior-context + prior-learnings)",
+    body: TRIAGE_GATE
   }
 ];
 

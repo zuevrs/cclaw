@@ -1,6 +1,61 @@
 # Changelog
 
 
+## 8.103.0 — Startup token diet (orchestrator entry compression)
+
+### Why
+
+The `/cc` orchestrator entry (`src/content/start-command.ts`) had grown to ~134k chars / ~33k tokens — every `/cc` invocation paid that input cost on every model call. Profiling showed ≈80% of the body was procedural detail (research-mode Phase 0-4, the 11 `#### <stage>` subsections under Dispatch, triage migration prose, debug-branch routing, one-way-door-gate ceremony, available-specialists list) that the orchestrator already loads on demand from `runbooks/*.md` when a relevant trigger fires. The body was duplicating content that the runbook layer was designed to own; the diet lifts the duplicates and leaves the body as a thin orchestrator entry pointing at the runbooks.
+
+### What changed
+
+#### 1. Two new on-demand runbooks
+
+- **`runbooks/research-mode.md`** — the full Phase 0-4 multi-lens research flow (fork detection + slug stamping, bootstrap, iterative open-ended discovery dialogue with per-dimension scoring, Approaches Gate, parallel lens dispatch with depth-tier + design-signal heuristic + `--lens=design` / `--lens=-design` toggles, synthesis, awaiting-user-review + revise / push-back / accept sub-commands, finalize). Loads on `/cc` arguments starting with `research ` OR carrying `--research`.
+- **`runbooks/triage-gate.md`** — the orchestrator-side Triage hop procedure: persisted eight-field shape, audit log schema, pre-v8.58 migration prose, follow-up-bug detection (`applyFollowUpBugSignals`, `OUTCOME_SIGNAL_MULTIPLIERS` down-weight table), prior-context consumption (extend-mode `flowState.parentContext` reads), prior-learnings consumption (architect dispatches `learnings-research`), debug-branch hand-off at `triage.taskShape == "debug"`, v8.42 critic-stage insertion rule, no-git auto-downgrade audit trail. Loads on every fresh `/cc <task>` triage dispatch.
+
+#### 2. `## Dispatch` per-stage subsections collapsed
+
+The 11 `#### <stage>` subsections (investigator / plan / One-way Door Gate / plan-critic / plan-design / plan-devex / build / qa / review / critic / ship) under `## Dispatch` were trimmed in place: each subsection keeps a one-paragraph contract pointer naming `agents/<id>.md` + the relevant runbook + the gate + the verdict-routing summary, but the full per-stage detail (gate conditions, dispatch envelope shape, slim-summary contract, flow-state.json patches, iteration-cap enforcement, anti-rationalization) lives on disk in `agents/*.md` + the linked runbook. The `### Stage → specialist mapping` table gained a `Contract (agents/* + runbooks/*)` column so the orchestrator can open BOTH the agent file AND the runbook in one lookup.
+
+#### 3. `## Triage` block compacted
+
+The Triage section keeps the 7-line orchestrator-side procedure (build envelope, dispatch, parse slim summary, stamp `flow-state.json > triage`, append to triage-audit.jsonl, surface no-git warning, proceed to first dispatch) + the lightweight-router pointer. The detailed shape, audit schema, follow-up-bug detection, prior-context / prior-learnings consumption, and migration prose all live in `runbooks/triage-gate.md`.
+
+#### 4. `## Debug-branch routing` collapsed
+
+The debug-branch routing block keeps a one-paragraph pointer naming the investigator hop, three-lane fan-out, `Next step:` verdict matrix, and the v8.81 defense-in-depth envelope propagation rule. The full procedure (gating, dispatch envelope shape, verdict-routing matrix, iteration-cap enforcement, builder direct-fix protocol, architect `priorInvestigation` read protocol, reviewer cross-check, defense-in-depth implementation contract, pre-v8.77 legacy migration) lives in `runbooks/debug-branch.md`.
+
+#### 5. `## Dispatch → One-way Door Gate` collapsed
+
+The `#### One-way Door Gate` subsection keeps a one-paragraph pointer that names the gate scan (`Reversibility: one-way` in plan.md `## Decisions`), the three-option ask (`confirm` / `edit` / `cancel`), the lite-ceremony skip, and the `awaiting-one-way-confirmation` `RecommendedNext` enum row. The verbatim structured-ask payload, transition prose, anti-rationalization table, and downstream-persistence rules live in `runbooks/one-way-door-gate.md`.
+
+#### 6. `## Available specialists` + `## Available research helpers` collapsed
+
+The bullet rendering of every specialist and every research helper is gone; the `### Stage → specialist mapping` table above already names them via `agents/<id>.md`. The body keeps a one-paragraph summary that names the reviewer's multi-mode contract, the triage sub-agent's once-per-flow gate, the ten-specialist v8.82 roster, and the research-helper dispatch protocol (architect owns the lookup; helpers never become `lastSpecialist`).
+
+#### 7. Other sections trimmed
+
+`## Compound`, `## Finalize`, `## Pause and resume`, `## Always-ask rules`, `## Always-auto failure handling`, `## Two-reviewer per-task loop`, `## Namespace router` each become one paragraph naming the trigger + linked runbook + invariant. The detail lives in the existing runbook (`compound-refresh.md` / `finalize.md` / `pause-resume.md` / `always-auto-failure-handling.md` / `adversarial-rerun.md`).
+
+#### 8. Tests
+
+- **New** — `tests/unit/v8103-token-diet.test.ts`: 8 assertions — `START_COMMAND_BODY.length < 60_000`, `renderStartCommand().length < 60_000`, `research-mode.md` runbook exists with Phase 0-4 + Approaches Gate + the six-lens roster, `triage-gate.md` runbook exists with shape + audit + follow-up-bug + prior-context + prior-learnings + `applyFollowUpBugSignals` + `OUTCOME_SIGNAL_MULTIPLIERS` content, the on-demand-runbooks index surfaces every lifted runbook, the Stage → specialist mapping table carries a Contract column, body references both new lift runbooks, body no longer inlines the lifted Phase 3.5 / Phase 4 ceremony.
+- **Recalibrated** — `tests/unit/v883-token-runbooks.test.ts` AC-7 canary: `V882_BASELINE_CHARS = 141_769` retired; new ceiling is `V8103_BASELINE_CHARS = 58_000` (re-inline regression gate). The `V8102_ADDITIVE_CHARS = 1800` carve-out folds into the new baseline.
+- **Updated** — eight existing tests (`v8.11`, `v8.50`, `v8.58`, `v8.59`, `v8.71`, `v8.74`, `v8.76`, `v8.79`) updated to assert content presence in the new runbook bodies instead of `START_COMMAND_BODY` for the lifted blocks; per-stage subheading + key anchor strings (e.g. `lightweight router`, `EXACTLY five fields`, slug naming format, `#### critic (v8.42+, critic step)`) preserved in the body so the existing section-contract tripwires still fire.
+
+### Migration
+
+None for users — the runtime contract is unchanged. The `/cc <task>` invocation, the research-mode fork, the extend-mode fork, the patch-mode fork, every gate, every slim summary, every flow-state.json field is identical to v8.102. The orchestrator opens the new runbooks lazily (only when a relevant trigger fires); the body is now a thin entry point. Re-installing cclaw mirrors the new runbooks to `.cclaw/lib/runbooks/`.
+
+### Stats
+
+- `src/content/start-command.ts` body: **134 659 → 52 827 chars (≈61% reduction)**
+- `renderStartCommand()` output: **141 769 → 50 378 chars (≈64% reduction)**
+- Two new on-demand runbooks (`research-mode.md` + `triage-gate.md`); zero behaviour changes outside body compression.
+- Test count delta: **709 → 717** (+1 new file with 8 assertions).
+
+
 ## 8.102.0 — `/cc patch <slug> <task>` post-ship micro-edit mode
 
 ### Why
