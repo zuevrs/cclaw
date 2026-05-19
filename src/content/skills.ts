@@ -312,10 +312,10 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "design-quality-discipline",
     fileName: "design-quality-discipline.md",
     description:
-      "shared discipline for the seven-dimension design-quality rubric (added in the v8.75 release) (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) consumed by both the pre-build `plan-design` specialist (walks plan.md) and the post-build reviewer's gated `design-quality` axis (walks the rendered diff). Single source of truth for the rubric lives in `src/content/design-quality-rubric.ts`; this skill spells out HOW to grade (pre-commitment predictions, severity ladder with accessibility one-tier escalation, AI-slop umbrella, block-ship semantics) regardless of which specialist is reading. Auto-on at plan + review stages when triage detects a UI / design / frontend / UX surface.",
+      "shared discipline for the seven-dimension design-quality rubric (added in the v8.75 release; v8.104 plan-design specialist merged into `plan-critic` with `rubricMode: \"design\"`) (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) consumed by both the pre-build `plan-critic` specialist on `rubricMode: \"design\"` dispatches (walks plan.md) and the post-build reviewer's gated `design-quality` axis (walks the rendered diff). Single source of truth for the rubric lives in `src/content/design-quality-rubric.ts`; this skill spells out HOW to grade (pre-commitment predictions, severity ladder with accessibility one-tier escalation, AI-slop umbrella, block-ship semantics) regardless of which specialist is reading. Auto-on at plan + review stages when triage detects a UI / design / frontend / UX surface.",
     triggers: [
       "design-surface:true",
-      "specialist:plan-design",
+      "specialist:plan-critic",
       "specialist:reviewer",
       "stage:plan",
       "stage:review",
@@ -328,10 +328,10 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "devex-quality-discipline",
     fileName: "devex-quality-discipline.md",
     description:
-      "shared discipline for the six-dimension developer-experience (DevEx) rubric (added in the v8.82 release) (getting started / API ergonomics / error messages / docs / upgrade path / measurement) consumed by the pre-build `plan-devex` specialist (walks plan.md). Single source of truth for the rubric lives in `src/content/devex-quality-rubric.ts`; this skill spells out HOW to grade (pre-commitment predictions, severity ladder with getting-started one-tier escalation, upgrade-path cap on breaking changes, AI-slop umbrella, block-ship semantics). Auto-on at plan stage when triage detects an SDK / API / CLI / library / public-interface surface.",
+      "shared discipline for the six-dimension developer-experience (DevEx) rubric (added in the v8.82 release; v8.104 plan-devex specialist merged into `plan-critic` with `rubricMode: \"devex\"`) (getting started / API ergonomics / error messages / docs / upgrade path / measurement) consumed by the pre-build `plan-critic` specialist on `rubricMode: \"devex\"` dispatches (walks plan.md). Single source of truth for the rubric lives in `src/content/devex-quality-rubric.ts`; this skill spells out HOW to grade (pre-commitment predictions, severity ladder with getting-started one-tier escalation, upgrade-path cap on breaking changes, AI-slop umbrella, block-ship semantics). Auto-on at plan stage when triage detects an SDK / API / CLI / library / public-interface surface.",
     triggers: [
       "devex-surface:true",
-      "specialist:plan-devex",
+      "specialist:plan-critic",
       "stage:plan",
       "diff:index.ts|cli.ts|openapi|swagger|.proto|.d.ts|.pyi"
     ],
@@ -911,7 +911,7 @@ export function buildAutoTriggerBlockForStage(
  * path into production (Phase C audit G-2 fix; introduced in v8.96.1).
  *
  * The specialist-prompt template literals (reviewer.ts / qa-runner.ts /
- * plan-design.ts / etc.) all call `buildAutoTriggerBlock(stage)` at
+ * plan-critic.ts / etc.) all call `buildAutoTriggerBlock(stage)` at
  * module-import time with NO gate envelope — that renders the static
  * SUPERSET of every gate-tagged skill for the stage. The
  * `gateEnvelope` parameter that v8.83-token-axes added to

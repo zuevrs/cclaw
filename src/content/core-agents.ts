@@ -112,28 +112,8 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["pre-impl-review"],
     description:
-      "pre-implementation plan-critic. Runs between architect and builder ONLY on the tight gate {ceremonyMode=strict, complexity!=trivial, problemType!=refines, AC count>=2} (v8.54 widened the complexity gate from `large-risky` to `complexity != trivial`). Five-dimension protocol (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog) + §6 pre-commitment predictions before final review. Verdicts: pass (advance to builder), revise (bounce to architect once — max 1 revise loop), cancel (user picker: cancel-slug / re-architect). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
+      "pre-implementation plan-critic. v8.104 unified three pre-impl lenses (plan-critic / plan-design / plan-devex) into a single specialist with a `rubricMode: \"generic\" | \"design\" | \"devex\"` envelope fan-out. Three rubric modes share one prompt body: (1) `generic` (default) — adversarial structural pass on the tight gate {ceremonyMode=strict, complexity!=trivial, problemType!=refines, AC count>=2}: goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + decision-integrity + bets-and-exclusions; (2) `design` — walks plan.md against the seven-dimension design-quality rubric (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) on the design-surface gate {triage.designSurface OR triage.surfaces ∩ {ui, design, frontend, ux}; ceremonyMode ∈ {soft, strict}}, emits PD-N findings appended to plan.md's ## Plan-design findings; (3) `devex` — walks the six-dimension DevEx rubric (Getting Started / API ergonomics / Error messages / Docs / Upgrade path / Measurement) on the devex-surface gate {triage.devexSurface OR triage.surfaces ∩ {cli, library, api}; ceremonyMode ∈ {soft, strict}}, emits DX-N findings appended to plan.md's ## Plan-devex findings. Orchestrator may dispatch up to three times sequentially per slug (generic first, then design, then devex; each independently gated). Verdicts: pass (advance), revise (bounce to architect once — max 1 revise loop per mode), cancel (generic mode only; structural plan defect) or block (design / devex modes; stop-and-report). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
     prompt: SPECIALIST_PROMPTS["plan-critic"]
-  },
-  {
-    id: "plan-design",
-    kind: "specialist",
-    title: "Plan design",
-    activation: "on-demand",
-    modes: ["pre-impl-design"],
-    description:
-      "pre-implementation plan-design specialist (added in the v8.75 release). Walks plan.md against the same seven-dimension design-quality rubric the reviewer applies post-build (rubric lifted into a shared const at src/content/design-quality-rubric.ts so both surfaces stay in lock-step). Dispatched after plan-critic (when plan-critic's strict gate fires) or directly after architect (when plan-critic is gated off but the design gate still fires) on the surface gate {triage.designSurface == true OR triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅; ceremonyMode ∈ {soft, strict}}. Below-6 dimension grades become PD-N findings appended to plan.md's ## Plan-design findings section; severity ≥ medium blocks ship in strict mode. Verdicts: pass (advance to builder), revise (bounce to architect once — max 1 revise loop), block (stop-and-report; high-severity row open or strict-mode block-ship floor engaged). Read-only on the codebase; appends to plan.md only.",
-    prompt: SPECIALIST_PROMPTS["plan-design"]
-  },
-  {
-    id: "plan-devex",
-    kind: "specialist",
-    title: "Plan devex",
-    activation: "on-demand",
-    modes: ["pre-impl-devex"],
-    description:
-      "v8.82 pre-implementation developer-experience specialist. Walks plan.md against a six-dimension DevEx rubric (Getting Started / API ergonomics / Error messages / Docs / Upgrade path / Measurement; rubric lifted into a shared const at src/content/devex-quality-rubric.ts so a future post-build reviewer `devex` axis or research-devex lens can consume the same dimensions). Dispatched after plan-critic AND after plan-design when their gates fire — sequential, not parallel — on the devex-surface gate {triage.devexSurface == true OR triage.surfaces ∩ {cli, library, api} ≠ ∅; ceremonyMode ∈ {soft, strict}}. Below-6 dimension grades become DX-N findings appended to plan.md's ## Plan-devex findings section; severity ≥ medium blocks ship in strict mode. Getting-started severity escalates one tier (TTHW is load-bearing); upgrade-path on breaking changes caps at high regardless of mode. Verdicts: pass (advance to builder), revise (bounce to architect once — max 1 revise loop shared with plan-critic + plan-design), block (stop-and-report). Read-only on the codebase; appends to plan.md only.",
-    prompt: SPECIALIST_PROMPTS["plan-devex"]
   },
   {
     id: "builder",

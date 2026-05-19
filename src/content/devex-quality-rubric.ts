@@ -4,12 +4,14 @@
  *
  * One consumer today, one shape ready for two tomorrow:
  *
- * - {@link "src/content/specialist-prompts/plan-devex.ts" | PLAN_DEVEX_PROMPT} —
- *   the v8.82 pre-build `plan-devex` specialist. Walks plan.md against the
- *   six DevEx dimensions when triage detects an SDK / API / CLI / library /
- *   public-interface surface; below-6 grades become `DX-N` findings
- *   appended to plan.md's `## Plan-devex findings` section. Block-ship on
- *   strict at severity ≥ medium.
+ * - {@link "src/content/specialist-prompts/plan-critic.ts" | PLAN_CRITIC_PROMPT} —
+ *   the pre-build `plan-critic` specialist on `rubricMode: "devex"` dispatches
+ *   (v8.82 added the DevEx lens as a standalone `plan-devex` specialist;
+ *   v8.104 merged it into `plan-critic` as one of three rubric modes). Walks
+ *   plan.md against the six DevEx dimensions when triage detects an SDK / API
+ *   / CLI / library / public-interface surface; below-6 grades become `DX-N`
+ *   findings appended to plan.md's `## Plan-devex findings` section. Block-
+ *   ship on strict at severity ≥ medium.
  *
  * Why one const, not "next slug bakes the rubric into the prompt": the v8.75
  * design-quality rubric showed that consumers fragment fast — the moment a
@@ -20,9 +22,9 @@
  * cannot drift across surfaces.
  *
  * The exported {@link renderDevexQualityRubricTable} produces the verbatim
- * markdown the plan-devex prompt embeds; surface-specific wrapping
- * (intro / "translate to plan.md" rules / verdict shape) lives in the
- * consuming specialist's prompt body. Reference: gstack plan-devex-review
+ * markdown the plan-critic prompt (rubricMode: "devex") embeds; surface-
+ * specific wrapping (intro / "translate to plan.md" rules / verdict shape)
+ * lives in the consuming specialist's prompt body. Reference: gstack plan-devex-review
  * SKILL.md lines 1019-1129 (the persona / competitive benchmark / magical
  * moment opening sequence) — cclaw bakes the dimensions into the rubric
  * but keeps the prompt single-shot (no AskUserQuestion pauses — v8.61

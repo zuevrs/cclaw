@@ -215,23 +215,19 @@ try {
   if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "qa-runner.md"))) {
     throw new Error("smoke check failed: v8.52 qa-runner.md agent file missing after init");
   }
-  // v8.75 — `plan-design.md` agent file added alongside the new pre-impl
-  // plan-design specialist. Runs at the plan stage on the design-surface
-  // gate (triage.designSurface == true OR triage.surfaces ∩ {ui, design,
-  // frontend, ux} ≠ ∅, ceremonyMode ∈ {soft, strict}, plan.md exists).
-  // The agent file ships unconditionally; the orchestrator gates the
-  // dispatch on the three AND conditions.
-  if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "plan-design.md"))) {
-    throw new Error("smoke check failed: v8.75 plan-design.md agent file missing after init");
-  }
-  // v8.82 — `plan-devex.md` agent file added alongside the new pre-impl
-  // plan-devex specialist. Runs at the plan stage on the devex-surface
-  // gate (triage.devexSurface == true OR triage.surfaces ∩ {cli, library,
-  // api} ≠ ∅, ceremonyMode ∈ {soft, strict}, plan.md exists). The agent
-  // file ships unconditionally; the orchestrator gates the dispatch on
-  // the three AND conditions.
-  if (!existsSync(join(tempDir, ".cclaw", "lib", "agents", "plan-devex.md"))) {
-    throw new Error("smoke check failed: v8.82 plan-devex.md agent file missing after init");
+  // v8.104 — `plan-design` and `plan-devex` specialists were absorbed into
+  // `plan-critic` as `rubricMode: "design"` and `rubricMode: "devex"`. The
+  // standalone `plan-design.md` / `plan-devex.md` agent files no longer
+  // install; the seven-dimension design rubric and six-dimension DevEx
+  // rubric are now reachable via plan-critic envelope fan-out (the rubric
+  // text lives in `src/content/{design,devex}-quality-rubric.ts` as a
+  // single source of truth and is embedded verbatim in plan-critic.ts).
+  for (const retiredAgent of ["plan-design.md", "plan-devex.md"]) {
+    if (existsSync(join(tempDir, ".cclaw", "lib", "agents", retiredAgent))) {
+      throw new Error(
+        `smoke check failed: v8.104 retired agent ${retiredAgent} must not install after init (merged into plan-critic as rubricMode)`
+      );
+    }
   }
   // v8.62 — unified flow specialist roster. `architect` (renamed from
   // `ac-author`, absorbing the dead `design` specialist's Phase 0-6

@@ -70,8 +70,6 @@ describe("v8.87 — model-tier policy wiring", () => {
       "architect",
       "reviewer",
       "plan-critic",
-      "plan-design",
-      "plan-devex",
       "triage",
       "qa-runner",
       "investigator"

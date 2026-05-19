@@ -33,7 +33,7 @@ const SRC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../
 const LENS_DIR = path.join(SRC_ROOT, "content/research-lenses");
 
 describe("v8.65 + v8.76 — lens directory + RESEARCH_LENSES registry", () => {
-  it("WIRING — content/research-lenses/ holds the six lens .ts files + index.ts (v8.76 added research-design); RESEARCH_LENSES enumerates the six ids in canonical order; SPECIALISTS does NOT contain any lens id (lenses live in RESEARCH_LENSES, not SPECIALISTS); SPECIALISTS has length 10 (v8.77+v8.82)", async () => {
+  it("WIRING — content/research-lenses/ holds the six lens .ts files + index.ts (v8.76 added research-design); RESEARCH_LENSES enumerates the six ids in canonical order; SPECIALISTS does NOT contain any lens id (lenses live in RESEARCH_LENSES, not SPECIALISTS); SPECIALISTS has length 8 (v8.104 — plan-design + plan-devex merged into plan-critic as rubric modes)", async () => {
     const entries = (await fs.readdir(LENS_DIR)).sort();
     expect(entries).toEqual([
       "index.ts",
@@ -59,7 +59,7 @@ describe("v8.65 + v8.76 — lens directory + RESEARCH_LENSES registry", () => {
     for (const id of RESEARCH_LENSES) {
       expect(SPECIALISTS as readonly string[]).not.toContain(id);
     }
-    expect(SPECIALISTS).toHaveLength(10);
+    expect(SPECIALISTS).toHaveLength(8);
   });
 });
 

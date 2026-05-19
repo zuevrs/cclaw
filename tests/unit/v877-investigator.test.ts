@@ -40,20 +40,18 @@ describe("v8.77 — investigator wiring", () => {
       "architect",
       "builder",
       "plan-critic",
-      "plan-design",
-      "plan-devex",
       "qa-runner",
       "reviewer",
       "critic"
     ]);
-    expect(SPECIALISTS).toHaveLength(10);
+    expect(SPECIALISTS).toHaveLength(8);
     const agent = SPECIALIST_AGENTS.find((a) => a.id === "investigator");
     expect(agent).toBeDefined();
     expect(agent?.kind).toBe("specialist");
     expect(agent?.activation).toBe("on-demand");
     expect(agent?.prompt).toBe(INVESTIGATOR_PROMPT);
     expect(SPECIALIST_PROMPTS["investigator"]).toBe(INVESTIGATOR_PROMPT);
-    expect(CORE_AGENTS.filter((a) => a.kind === "specialist")).toHaveLength(10);
+    expect(CORE_AGENTS.filter((a) => a.kind === "specialist")).toHaveLength(8);
 
     const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "investigation-discipline");
     expect(skill).toBeDefined();

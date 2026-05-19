@@ -201,7 +201,7 @@ ${sections}
 
 ## Symmetry note for non-reviewer stages
 
-The non-reviewer stages (\`plan\` / \`build\` / \`qa\` / \`triage\` / \`ship\` / \`compound\`) currently have NO stage-scoped skills with a gate predicate — every \`AUTO_TRIGGER_SKILLS\` entry tagged for those stages either rides every dispatch (no gate) or rides via \`stages: ["always"]\` (no stage filter). So the dispatch envelope flags don't affect their rendered block, and the on-disk \`agents/<specialist>.md\` static block is already the precise per-dispatch list for those specialists. This runbook covers the reviewer stage only because the reviewer is the only specialist with gated skills as of v8.96.1. If a future specialist adds gated skills (e.g. a \`plan-design\` axis gated on UI-density flags), add a per-stage table here mirroring the reviewer one.
+The non-reviewer stages (\`plan\` / \`build\` / \`qa\` / \`triage\` / \`ship\` / \`compound\`) currently have NO stage-scoped skills with a gate predicate — every \`AUTO_TRIGGER_SKILLS\` entry tagged for those stages either rides every dispatch (no gate) or rides via \`stages: ["always"]\` (no stage filter). So the dispatch envelope flags don't affect their rendered block, and the on-disk \`agents/<specialist>.md\` static block is already the precise per-dispatch list for those specialists. This runbook covers the reviewer stage only because the reviewer is the only specialist with gated skills as of v8.96.1. If a future specialist adds gated skills (e.g. a future \`plan-critic\` rubricMode-specific dispatch axis gated on UI-density flags), add a per-stage table here mirroring the reviewer one.
 `;
 }
 
@@ -247,7 +247,7 @@ Every envelope carries a \`Model tier:\` line. The orchestrator computes the tie
 | \`builder\` (formerly \`slice-builder\` pre-v8.62) | \`fast\` |
 | \`learnings-research\` / \`repo-research\` | \`fast\` |
 | \`triage\` / \`investigator\` / \`architect\` | \`balanced\` |
-| \`plan-critic\` / \`plan-design\` / \`plan-devex\` | \`balanced\` |
+| \`plan-critic\` (all three rubric modes — generic / design / devex; v8.104 merged the pre-impl lens surface) | \`balanced\` |
 | \`qa-runner\` / \`reviewer\` | \`balanced\` |
 | \`critic\` | \`powerful\` |
 
@@ -571,7 +571,7 @@ The hint mechanics:
 - **One line, plain prose** in the user's language (the mechanical tokens \`/cc patch\`, \`<slug>\`, and \`<description>\` stay English — they're the wire protocol).
 - **Always emitted** on a clean ship — every finalization mode (merge / open-PR / push-only / discard-local / no-vcs) surfaces the same hint. The hint is non-coercive informational text; it does NOT block, does NOT add a structured ask, does NOT consume an iteration of the chain.
 - **Substitute \`<slug>\` for the just-shipped slug** when rendering the hint to the user — the literal slug (\`20260514-auth-flow\`) lands in the prose so the user can copy-paste the suggestion verbatim. \`<description>\` stays as a placeholder.
-- **Patch-mode trade-off**: patch-mode skips triage, architect, plan-critic, plan-design, plan-devex, qa, critic, and the ship-gate ask. The full runbook (\`runbooks/patch-mode.md\`) names the four "when NOT to use patch-mode" conditions (≥3 files, new AC, schema/migration/auth/public-API wording, full reviewer pass needed); the user reaches for \`/cc extend\` instead in those cases.
+- **Patch-mode trade-off**: patch-mode skips triage, architect, plan-critic (all three rubric modes — generic / design / devex), qa, critic, and the ship-gate ask. The full runbook (\`runbooks/patch-mode.md\`) names the four "when NOT to use patch-mode" conditions (≥3 files, new AC, schema/migration/auth/public-API wording, full reviewer pass needed); the user reaches for \`/cc extend\` instead in those cases.
 
 The hint exists so post-ship "tiny tweak" tasks have a frictionless entry point. Dogfooded slugs routinely paid the full ceremony cost on 2-line follow-ups; surfacing the patch-mode option immediately after ship is the cheapest place to teach the user the fork exists.
 
@@ -1362,9 +1362,9 @@ The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts
 
 ## Why patch-mode exists (dogfood-driven)
 
-Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy edit on the same surface the parent slug already shipped) routinely cost more ceremony than they deserve under the existing pipeline. The full \`/cc <task>\` chain dispatches triage → architect → plan-critic → plan-design → plan-devex → builder → qa? → reviewer → critic → ship — eight to ten sub-agents — even when the change is a 2-line edit to a single file the parent already touched. The v8.59 \`/cc extend <slug>\` fork reduced the context-loading cost (parent artifacts ride on the envelope) but kept every ceremony stage; the trivial-shape downgrade in triage (v8.102 §1.6) helps when the task signals are clean, but the user still pays the dispatch tax.
+Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy edit on the same surface the parent slug already shipped) routinely cost more ceremony than they deserve under the existing pipeline. The full \`/cc <task>\` chain dispatches triage → architect → plan-critic (up to three sequential rubric modes: generic / design / devex) → builder → qa? → reviewer → critic → ship — six to ten sub-agent dispatches — even when the change is a 2-line edit to a single file the parent already touched. The v8.59 \`/cc extend <slug>\` fork reduced the context-loading cost (parent artifacts ride on the envelope) but kept every ceremony stage; the trivial-shape downgrade in triage (v8.102 §1.6) helps when the task signals are clean, but the user still pays the dispatch tax.
 
-\`/cc patch <slug> <task>\` is the **micro-edit fast path**: a slug that has already shipped gets a follow-up edit with NO triage, NO architect, NO plan-critic, NO plan-design, NO plan-devex, NO qa, NO critic, NO ship gate. The builder dispatches directly with the parent context envelope, writes ONE commit prefixed \`patch(<slug>): <message>\`, appends a \`patch-N.md\` artifact next to the parent's shipped \`plan.md\` / \`build.md\` (no separate flow dir), and ends. Optional \`--review\` enables a lite reviewer pass (correctness + readability + edit-discipline axes only) for the user who wants a second pair of eyes on a security-adjacent micro-edit.
+\`/cc patch <slug> <task>\` is the **micro-edit fast path**: a slug that has already shipped gets a follow-up edit with NO triage, NO architect, NO plan-critic (every rubric mode — generic / design / devex), NO qa, NO critic, NO ship gate. The builder dispatches directly with the parent context envelope, writes ONE commit prefixed \`patch(<slug>): <message>\`, appends a \`patch-N.md\` artifact next to the parent's shipped \`plan.md\` / \`build.md\` (no separate flow dir), and ends. Optional \`--review\` enables a lite reviewer pass (correctness + readability + edit-discipline axes only) for the user who wants a second pair of eyes on a security-adjacent micro-edit.
 
 ## Trigger evaluation order (Detect hop)
 
@@ -1409,7 +1409,7 @@ The slug resolves to a shipped flow with a non-empty \`plan.md\`. Continue with 
 1. **Skip the slug-creation step.** Patch mode does NOT create a new \`YYYYMMDD-<task>\` slug under \`.cclaw/flows/<slug>/\` — the artifact lives in the parent's shipped flow dir as \`patch-N.md\` (see below). \`flow-state.json > currentSlug\` stays \`null\`; \`lastSpecialist\` stays \`null\`. The patch is logged as a separate artifact alongside the parent's \`plan.md\`, NOT as a new active flow.
 2. **Skip the triage dispatch entirely.** The slug already shipped — its triage decision is in the parent's \`plan.md\` frontmatter; there is no fresh triage to make. The patch-mode dispatch carries a synthesised sentinel triage envelope: \`ceremonyMode: "inline"\` (always; the architect-skip-builder-only path), \`path: ["build"]\`, \`runMode: null\`, \`mode: "task"\`, \`complexity: "trivial"\`, \`rationale: "patch-mode post-ship micro-edit"\`. Stamp \`triage-audit.jsonl\` with one entry recording \`autoExecuted: true\` + \`userOverrode: false\` + \`patchMode: true\` for telemetry parity.
 3. **Skip the architect dispatch entirely.** No \`plan.md\` is authored — the parent's \`plan.md\` IS the contract. The builder reads the parent's \`plan.md\` (via \`parentContext.artifactPaths.plan\`) + the patch task description as its envelope inputs. No \`## Acceptance Criteria (verification)\` table is added; the patch is verified by the suite running green after the edit.
-4. **Skip plan-critic / plan-design / plan-devex / qa / critic.** All gated specialists structurally skip the inline path; patch mode IS an inline path. The ceremony reduction is the entire point of the fork.
+4. **Skip plan-critic (every rubric mode — generic / design / devex) / qa / critic.** All gated specialists structurally skip the inline path; patch mode IS an inline path. The ceremony reduction is the entire point of the fork.
 5. **Dispatch \`builder\` directly with the patch envelope** (see "Builder envelope" below). The builder writes ONE commit prefixed \`patch(<slug>): <message>\` and appends \`patch-N.md\` to the parent's shipped dir.
 6. **Skip the ship-gate structured ask.** Patch mode auto-commits the single commit; pushing / PR-opening / merging are user-driven via plain \`git\` commands. There is no \`finalization_mode\` ask — the commit IS the finalize step.
 7. **Optional \`--review\` flag.** When the user invokes \`/cc patch <slug> --review <task>\`, the orchestrator dispatches a lite reviewer pass AFTER the builder commits, scoped to **three axes only**: \`correctness\` / \`readability\` / \`edit-discipline\`. No other axes fire. A \`block\` finding from the lite reviewer routes the patch back to the builder for a fix-only commit (capped at 2 iterations; third failure stops and reports). The lite review surfaces inline in the same \`patch-N.md\` (no separate \`review.md\`).
@@ -1866,8 +1866,8 @@ The orchestrator parses this slim summary, patches \`flow-state.json\` (\`invest
 
 | \`Next step:\` value | Action | Envelope mutations | flow-state.json patches | Stop? |
 | --- | --- | --- | --- | --- |
-| \`direct-fix\` | Dispatch \`builder\` directly (skip architect, plan-critic, plan-design entirely). Builder reads investigation.md as plan-substitute. | Builder envelope gets \`priorInvestigation: { path: "flows/<slug>/investigation.md", verdict: "direct-fix", confidence: "<high\|medium\|low>" }\`. NO plan.md is authored on this path. | \`investigatorVerdict: "direct-fix"\`, \`currentStage: "build"\` (skip plan-stage sub-steps). | no — continue to builder dispatch in same turn. |
-| \`needs-plan\` | Dispatch \`architect\` with \`priorInvestigation\` on envelope. plan-critic / plan-design gates fire as normal afterwards. | Architect envelope (and every downstream specialist envelope in same flow) gets \`priorInvestigation: { path, verdict: "needs-plan", confidence }\`. | \`investigatorVerdict: "needs-plan"\`, \`currentStage: "plan"\` (architect runs next; plan-stage continues). | no — continue to architect dispatch in same turn. |
+| \`direct-fix\` | Dispatch \`builder\` directly (skip architect, plan-critic entirely — every rubric mode). Builder reads investigation.md as plan-substitute. | Builder envelope gets \`priorInvestigation: { path: "flows/<slug>/investigation.md", verdict: "direct-fix", confidence: "<high\|medium\|low>" }\`. NO plan.md is authored on this path. | \`investigatorVerdict: "direct-fix"\`, \`currentStage: "build"\` (skip plan-stage sub-steps). | no — continue to builder dispatch in same turn. |
+| \`needs-plan\` | Dispatch \`architect\` with \`priorInvestigation\` on envelope. plan-critic gates (generic / design / devex) fire as normal afterwards. | Architect envelope (and every downstream specialist envelope in same flow) gets \`priorInvestigation: { path, verdict: "needs-plan", confidence }\`. | \`investigatorVerdict: "needs-plan"\`, \`currentStage: "plan"\` (architect runs next; plan-stage continues). | no — continue to architect dispatch in same turn. |
 | \`more-investigation\` | Re-dispatch investigator with \`Iteration: 1\` (cap at 1; second \`more-investigation\` is a stop-and-report). | Investigator envelope iteration 1 carries the prior probe-recommendations forward in each lane's Hypothesis line. | \`investigatorIteration: 1\`, \`investigatorVerdict: "more-investigation"\`. | no on iter 0 → 1; yes on iter 1 → stop-and-report (see §5). |
 | \`not-a-bug\` | Stop-and-report. Surface investigator's \`## Next step recommendation\` paragraph verbatim to the user. | none (turn ends). | \`investigatorVerdict: "not-a-bug"\`, \`currentStage: "stalled-not-a-bug"\` (immutable until \`/cc-cancel\` or user re-invokes \`/cc\`). | yes — end turn with reframe surfaced. |
 
@@ -1905,7 +1905,7 @@ priorInvestigation: { path: "flows/<slug>/investigation.md", verdict: "<direct-f
 \`\`\`
 
 - **architect** (on \`needs-plan\`) — reads investigation.md at Bootstrap as load-bearing context; copies the root-cause lead clause verbatim into Frame's first clause; cites \`investigation.md\` inline for reviewer cross-check.
-- **plan-critic** / **plan-design** (on \`needs-plan\` when their gates fire) — cross-check plan.md's Frame + Decisions against the investigation's root cause; flag finding if plan diverges silently.
+- **plan-critic** (on \`needs-plan\` when any rubric mode's gate fires — generic / design / devex) — cross-check plan.md's Frame + Decisions against the investigation's root cause; flag finding if plan diverges silently.
 - **builder** (on \`direct-fix\` — no plan.md exists) — reads investigation.md as plan-substitute; RED-before-GREEN against the cited symptom; fix bounded to \`## Fix scope\` file:line refs; commit prefix \`fix(<scope>):\`.
 - **builder** (on \`needs-plan\` — plan.md exists) — reads investigation.md as carry-over context; standard slice/AC flow; commit prefix \`<type>(SL-N):\` as normal.
 - **reviewer** — cross-checks the diff against the investigation's cited root cause; flags finding if the diff addresses a different mechanism.
@@ -1926,7 +1926,7 @@ When the verdict is \`more-investigation\` and \`investigatorIteration\` is 0:
 
 ## §8 — Legacy pre-v8.77 state file migration
 
-Pre-v8.77 \`flow-state.json\` files lack the \`triage.taskShape\` field. The validator (\`src/flow-state.ts > assertTriageOrNull\`) accepts absent \`taskShape\` and treats it as undefined; the orchestrator's gate check (\`triage.taskShape === "debug"\`) is false on absent values, so the investigator hop does NOT fire on legacy flows — they run the pre-v8.77 path verbatim (architect → plan-critic? → plan-design? → builder → qa? → reviewer → critic → ship). No migration is required; the v8.77 wiring is purely additive on the debug branch.
+Pre-v8.77 \`flow-state.json\` files lack the \`triage.taskShape\` field. The validator (\`src/flow-state.ts > assertTriageOrNull\`) accepts absent \`taskShape\` and treats it as undefined; the orchestrator's gate check (\`triage.taskShape === "debug"\`) is false on absent values, so the investigator hop does NOT fire on legacy flows — they run the pre-v8.77 path verbatim (architect → plan-critic (any rubric mode that gates true)? → builder → qa? → reviewer → critic → ship). No migration is required; the v8.77 wiring is purely additive on the debug branch.
 
 When a legacy flow that was originally a bug-shaped task resumes under v8.77, the orchestrator does NOT retroactively dispatch the investigator (the architect's plan.md already exists; rerunning the investigator would be a wasted dispatch). The legacy flow continues to ship under the pre-v8.77 routing; future debug-shaped flows benefit from the investigator hop.
 
@@ -2113,7 +2113,7 @@ Neither replaces the other; both run when both gates fire.
 
 ## §2 — Gate scan
 
-After the architect's slim summary returns (with \`Recommended next: awaiting-one-way-confirmation\` if the gate fires, or any other value otherwise) AND before plan-critic / plan-design / plan-devex / builder dispatch:
+After the architect's slim summary returns (with \`Recommended next: awaiting-one-way-confirmation\` if the gate fires, or any other value otherwise) AND before plan-critic (any rubric mode) / builder dispatch:
 
 1. Read \`.cclaw/flows/<slug>/plan.md\`.
 2. Scan for any \`## Decisions\` D-N row marked \`Reversibility: one-way\` (literal substring match against the rendered plan.md).
@@ -2172,7 +2172,7 @@ The final \`Choose:\` line is the structured ask. Use the harness's \`AskUserQue
 
 The \`oneWayDoorConfirmation\` field persists for the rest of the flow's lifetime once \`userChoice\` is set. Downstream specialists MAY read it:
 
-- **plan-critic / plan-design / plan-devex** — no-op; the gate fires BEFORE these specialists dispatch.
+- **plan-critic** (every rubric mode — generic / design / devex) — no-op; the gate fires BEFORE this specialist dispatches.
 - **builder** — may surface a one-line note in \`build.md\` frontmatter (\`oneWayConfirmedAt: <iso>\`) for the v8.74 cross-model critic to cross-reference.
 - **reviewer / critic** — cross-check builder's \`build.md\` against the cited one-way D-Ns; flag findings if the build silently deviated from a confirmed irreversible commit.
 - **v8.74 cross-model critic** — explicitly reads \`oneWayDoorConfirmation\` as input ("the user accepted these decisions on <confirmedAt>; do they still hold?").
@@ -2315,7 +2315,7 @@ The heuristic is **inclusive**: when in doubt, dispatch the design lens. The len
 - \`research-architecture\` *(Skipped on light depth.)* — surface impact, coupling points, boundaries crossed, scalability considerations, reusable in-repo patterns.
 - \`research-history\` *(Skipped on light depth.)* — prior attempts via \`.cclaw/knowledge.jsonl\` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift.
 - \`research-skeptic\` — failure modes, edge cases, abuse cases, hidden costs, explicit don't-proceed triggers.
-- \`research-design\` *(Skipped on light depth; conditionally added on standard / deep-product depth via the design-signal heuristic or the \`--lens=design\` / \`--lens=-design\` user-toggle flags.)* — UI / UX / positioning / affordances lens (v8.76). Walks the seven-dimension design-quality rubric (shared with the v8.75 plan-design specialist + v8.70 reviewer's design-quality axis) at research framing time — grades each dimension for relevance (\`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`), surfaces existing patterns to study (with first-class web search via \`user-exa\` / \`user-context7\`), anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect.
+- \`research-design\` *(Skipped on light depth; conditionally added on standard / deep-product depth via the design-signal heuristic or the \`--lens=design\` / \`--lens=-design\` user-toggle flags.)* — UI / UX / positioning / affordances lens (v8.76). Walks the seven-dimension design-quality rubric (shared with the v8.104 plan-critic specialist's \`rubricMode: "design"\` body — former v8.75 standalone \`plan-design\` specialist — and v8.70 reviewer's design-quality axis) at research framing time — grades each dimension for relevance (\`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`), surfaces existing patterns to study (with first-class web search via \`user-exa\` / \`user-context7\`), anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect.
 
 Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\` but with the lens-specific shape):
 
@@ -2378,7 +2378,7 @@ The next \`/cc <task>\` invocation on the same project reads the most-recent shi
 - **User cancels mid-dialogue** — run the cancel runtime, end the turn.
 - **All dispatched lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
 
-The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The v8.76 roster is **six** lenses (engineer / product / architecture / history / skeptic / design). The ten flow specialists (triage, architect, builder, plan-critic, plan-design, plan-devex, qa-runner, reviewer, critic, investigator) are untouched.
+The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The v8.76 roster is **six** lenses (engineer / product / architecture / history / skeptic / design). The v8.104 flow roster is **eight** specialists (triage, architect, builder, plan-critic with three rubric modes, qa-runner, reviewer, critic, investigator) — the pre-v8.104 v8.82 ten-specialist roster collapsed plan-design + plan-devex into plan-critic's rubricMode fan-out.
 `;
 
 const TRIAGE_GATE = `# On-demand runbook — Triage hop (orchestrator-side; v8.103 lift)
