@@ -105,10 +105,11 @@ export const DEVEX_QUALITY_DIMENSIONS: readonly DevexQualityDimension[] = [
 
 /**
  * Render the six-dimension rubric table as the exact markdown the
- * plan-devex prompt embeds. Three columns: dimension name, "what it
- * covers", "what a 10 looks like". The leading header + separator are
- * emitted so the consumer can drop the result into the prompt body
- * verbatim.
+ * plan-critic prompt (on `rubricMode: "devex"` dispatches; v8.104 merged
+ * the former standalone `plan-devex` specialist into plan-critic) embeds.
+ * Three columns: dimension name, "what it covers", "what a 10 looks like".
+ * The leading header + separator are emitted so the consumer can drop
+ * the result into the prompt body verbatim.
  *
  * The function takes NO arguments — the dimensions are immutable. Any
  * future consumer can render the same table without drifting.
@@ -125,10 +126,11 @@ export function renderDevexQualityRubricTable(): string {
 /**
  * Canonical AI-slop signals for the DevEx surface. Mirrors the
  * `DESIGN_QUALITY_AI_SLOP_SIGNALS` shape: when ≥2 signals fire on the
- * same plan, the plan-devex specialist emits a single umbrella `DX-N`
- * finding rather than per-signal noise. The signals are intentionally
- * concrete (developer-experience clichés that ship without thought),
- * not vague (good docs / bad docs).
+ * same plan, plan-critic (on `rubricMode: "devex"` dispatches; v8.104
+ * merged the former standalone `plan-devex` specialist into plan-critic)
+ * emits a single umbrella `DX-N` finding rather than per-signal noise.
+ * The signals are intentionally concrete (developer-experience clichés
+ * that ship without thought), not vague (good docs / bad docs).
  */
 export const DEVEX_QUALITY_AI_SLOP_SIGNALS: readonly string[] = [
   "method names that read like marketing (e.g. `client.smartFetch()`, `api.executeIntelligently()`) — the developer cannot predict what the call does from the name alone",
