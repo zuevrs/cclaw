@@ -249,10 +249,14 @@ describe("v8.105 — CHANGELOG + version bump", () => {
     expect(changelog).toMatch(/cap-at-consider|consider/i);
   });
 
-  it("package.json is bumped to 8.105.0", async () => {
+  it("package.json is at or above 8.105.0", async () => {
     const pkg = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "package.json"), "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("8.105.0");
+    const [major, minor] = pkg.version
+      .split(".")
+      .map((n) => Number.parseInt(n, 10));
+    expect(major).toBe(8);
+    expect(minor).toBeGreaterThanOrEqual(105);
   });
 });

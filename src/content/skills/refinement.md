@@ -14,18 +14,18 @@ trigger: when /cc detects an existing plan (active or shipped) for the new task
 
 ## When to use
 
-Triggered by `flow-resume.md` detection when a fresh `/cc <task>` collides with an active flow or fuzzy-matches a recently shipped slug. Skipped on `/cc` (no argument) — that's pure resume, not refinement. Skipped on `/cc-cancel`.
+Triggered by the Detect matrix (in `start-command.md > Detect — /cc invocation matrix`) when a fresh `/cc <task>` collides with an active flow or fuzzy-matches a recently shipped slug. Skipped on `/cc` (no argument) — that's pure resume, not refinement. Skipped on `/cc-cancel`.
 
 ## When NOT to apply
 
-- **Resume gesture (`/cc` with no task argument).** That is a pure resume of the active slug; `flow-resume.md` runs, not refinement.
+- **Resume gesture (`/cc` with no task argument).** That is a pure resume of the active slug per the Detect matrix; the refinement decision tree is not opened.
 - **`/cc-cancel`.** Cancel shelves the active flow; no refinement decision is opened.
-- **Fresh task with no slug-fuzzy-match.** The picker doesn't fire when the prompt has nothing nearby; `triage-gate.md` runs from a clean slate.
+- **Fresh task with no slug-fuzzy-match.** The picker doesn't fire when the prompt has nothing nearby; the triage sub-agent (`.cclaw/lib/agents/triage.md`) runs from a clean slate via `runbooks/triage-gate.md`.
 - **User picked "new" at the collision picker.** The picker output is a fork: refinement-vs-new. Once "new" was chosen, the refinement decision tree is closed for the rest of the flow.
 
 ## Common pitfalls
 
-See `flow-resume.md` for the full resume-vs-collision UX and `plan-authoring.md` for the rules a refining plan must satisfy. This skill carries only the refinement-specific decision tree.
+See `start-command.md > Detect — /cc invocation matrix` (and the canonical `runbooks/detect-matrix.md`) for the full resume-vs-collision UX and `plan-authoring.md` for the rules a refining plan must satisfy. This skill carries only the refinement-specific decision tree.
 
 ## Rules for refinement
 

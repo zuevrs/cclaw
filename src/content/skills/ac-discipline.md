@@ -45,7 +45,7 @@ You don't. Adding AC during build is scope creep. Either the new work fits an ex
 
 ## ac-traceability
 
-This part of the skill applies only when the active flow's `ceremony_mode` is `strict` (set at the triage gate for large-risky / security-flagged work). In `inline` and `soft` modes there is no per-criterion commit prefix and no AC↔commit chain — see `triage-gate.md` for what each mode does.
+This part of the skill applies only when the active flow's `ceremony_mode` is `strict` (set at the triage gate for large-risky / security-flagged work). In `inline` and `soft` modes there is no per-criterion commit prefix and no AC↔commit chain — see `agents/triage.md` (routing contract) and `runbooks/triage-gate.md` (orchestrator-side Triage procedure) for what each mode does.
 
 In `strict` mode, cclaw has one mandatory gate: every commit produced inside `/cc` references exactly one AC via a posture-driven subject-line prefix, and the AC ↔ commit chain is reconstructible by anyone who runs `git log --grep="(AC-N):" --oneline`.
 

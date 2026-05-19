@@ -57,7 +57,7 @@ The flow walks these stages, in order:
 6. **Compound** — automatic learnings capture after ship; gated on quality signals.
 7. **Finalize** — orchestrator-only: \`git mv\` every active artifact into \`shipped/<slug>/\`, reset flow-state. Never delegated to a sub-agent. \`trivial\` skips compound and finalize.
 
-Skipping any stage is a bug; the gates downstream will fail. Read \`triage-gate.md\`, \`pre-flight-assumptions.md\`, \`flow-resume.md\`, \`tdd-and-verification.md\` (active during build), and \`ac-discipline.md\` (active in strict mode) before starting.
+Skipping any stage is a bug; the gates downstream will fail. Read \`runbooks/triage-gate.md\` + \`agents/triage.md\` (triage-gate logic), the Detect matrix above (resume picker), \`agents/architect.md > Bootstrap\` (pre-flight assumption capture), \`tdd-and-verification.md\` (build), and \`ac-discipline.md\` (strict) before starting.
 
 ## On-demand runbooks
 
@@ -121,11 +121,11 @@ Legacy "resume picker" prose retired. \`/cc\` invocations resolve through a **de
 
 The research-mode sub-commands route through their state-gated sub-handlers — \`/cc research go\` (v8.78 force-exit Phase 1 discovery; identical to the in-prose "ready" signal), \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (v8.71; routed per \`runbooks/research-revision.md\` §2 / §3 / §4). Out-of-state invocations error in plain prose and end the turn.
 
-Errors are **plain prose, in the user's language** (not structured asks; no option list, no \`[y/n]\` picker). User re-invokes \`/cc\` or \`/cc-cancel\` to recover. \`<slug>\`, \`<stage>\`, and command tokens stay English (wire protocol); the surrounding sentence renders in the user's language. The \`/cc\` continue path is **silent** — the user sees the next specialist's slim summary directly. Full matrix (every invocation × active-flow shape, the research-state-gated sub-commands, plain-prose error templates, worked examples, anti-rationalization) lives in \`.cclaw/lib/runbooks/detect-matrix.md\` (also mirrored in \`.cclaw/lib/skills/flow-resume.md\`).
+Errors are **plain prose, in the user's language** (not structured asks; no option list, no \`[y/n]\` picker). User re-invokes \`/cc\` or \`/cc-cancel\` to recover. \`<slug>\`, \`<stage>\`, and command tokens stay English (wire protocol); the surrounding sentence renders in the user's language. The \`/cc\` continue path is **silent** — the user sees the next specialist's slim summary directly. Full matrix (every invocation × active-flow shape, the research-state-gated sub-commands, plain-prose error templates, worked examples, anti-rationalization) lives in \`.cclaw/lib/runbooks/detect-matrix.md\` (sole resume contract).
 
 ### Detect — git-check sub-step (v8.23)
 
-Before dispatching triage, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), the triage sub-agent will force \`triage.ceremonyMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences live in \`triage-gate.md\` § "No-git auto-downgrade (v8.23)".
+Before dispatching triage, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), the triage sub-agent will force \`triage.ceremonyMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences live in \`runbooks/triage-gate.md\` § "No-git auto-downgrade audit trail".
 
 ### Detect — patch-mode fork (v8.102+)
 
@@ -274,7 +274,7 @@ Every specialist's full gate / inputs / output / slim-summary / verdict routing 
 
 #### review
 
-\`agents/reviewer.md\` + \`runbooks/review.md\` + \`runbooks/dispatch-skills-index.md\`. Fourteen-axis check (8 base + 6 gated). Gate flags stamped on the envelope (\`security_flag\` / \`walkDesignQualityAxis\` / \`walkScopeDriftAxis\` / \`walkAssumptionCoverageAxis\` (v8.85; KA-N \`validates: KA-N\` payload audit) / \`walkAntiSlopAxis\`). After stamping the gate flags, the orchestrator **resolves the per-envelope skill slice** against \`runbooks/dispatch-skills-index.md\` and pastes the matching shape's Rendered block into the dispatch envelope as \`Active skills (per envelope):\` (G-2 fix; v8.96.1) — the reviewer reads this field as its runtime override of the auto-trigger skill set. Hard cap: 5 review/fix iterations (→ \`runbooks/cap-reached-recovery.md\`); pre-reviewer self-review gate per builder strict-mode return → \`runbooks/handoff-gates.md\`; per-flag detection rules + Failure Modes checklist live in the runbook.
+\`agents/reviewer.md\` + \`runbooks/review.md\` + \`runbooks/dispatch-skills-index.md\`. Fourteen-axis check (8 base + 6 gated). Gate flags stamped on the envelope (\`security_flag\` / \`walkDesignQualityAxis\` / \`walkScopeDriftAxis\` / \`walkAssumptionCoverageAxis\` (v8.85; KA-N \`validates: KA-N\` payload audit) / \`walkAntiSlopAxis\`). After stamping the gate flags, the orchestrator **resolves the per-envelope skill slice** against \`runbooks/dispatch-skills-index.md\` and pastes the matching shape's Rendered block into the dispatch envelope as \`Active skills (per envelope):\` (G-2 fix; v8.96.1) — the reviewer reads this field as its runtime override of the auto-trigger skill set. **v8.106 fall-back path**: \`runbooks/dispatch-skills-index.md\` caches only the three highest-traffic envelope shapes (no-flags / strict-baseline / UI+design); for any other shape the orchestrator falls back to the on-disk \`agents/reviewer.md\` static superset (which is itself rendered from \`buildAutoTriggerBlock(stage)\` at install time, so semantic correctness is preserved). Hard cap: 5 review/fix iterations (→ \`runbooks/cap-reached-recovery.md\`); pre-reviewer self-review gate per builder strict-mode return → \`runbooks/handoff-gates.md\`; per-flag detection rules + Failure Modes checklist live in the runbook.
 
 #### critic (v8.42+, critic step)
 
@@ -315,9 +315,6 @@ These skills auto-trigger during \`/cc\`. Do not re-explain them; obey them. Eac
 - **cclaw-ethos** — reference doc only (v8.74+); the five cross-cutting principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) live in \`.cclaw/lib/cclaw-ethos.md\` and are prepended to every specialist dispatch envelope as the Required ethos read.
 - **conversation-language** — always-on; reply in user's language; never translate \`AC-N\`, \`D-N\`, \`F-N\`, slugs, paths, frontmatter keys, mode names, hook output.
 - **anti-slop** — always-on; bans redundant verification and environment shims.
-- **triage-gate** — reference doc only (v8.61+); the triage sub-agent's contract is in \`.cclaw/lib/agents/triage.md\`; the orchestrator-side procedure lives in \`runbooks/triage-gate.md\` (v8.103 lift).
-- **pre-flight-assumptions** — reference doc only (v8.21+; v8.62 unified flow); the architect's Bootstrap owns the assumption-capture surface.
-- **flow-resume** — reference doc only (v8.61+); the Detect matrix above replaces the resume picker.
 - **plan-authoring** — on every edit to \`flows/<slug>/plan.md\`.
 - **ac-discipline** — ac-quality (always-on for AC authoring) + ac-traceability (strict only; before every commit).
 - **tdd-and-verification** — always-on while \`stage=build\`; granularity scales with ceremonyMode. The build stage is a TDD cycle (RED → GREEN → REFACTOR; strict mode runs the full per-slice cadence, soft runs once for the feature) and the Iron Law (RED first, every commit) is enforced via the wrapper skill plus the reviewer's \`test-quality\` axis ex-post.

@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderCancelCommand } from "../../src/content/cancel-command.js";
 import { renderStartCommand } from "../../src/content/start-command.js";
-import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
+import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 
 const startBody = renderStartCommand();
 const cancelBody = renderCancelCommand();
-
-const skillBody = (id: string): string => {
-  const found = AUTO_TRIGGER_SKILLS.find((skill) => skill.id === id);
-  if (!found) throw new Error(`skill ${id} not found`);
-  return found.body;
-};
 
 /**
  * v8.11 — cleanup anchors (slimmed in v8.54).
@@ -22,12 +16,18 @@ const skillBody = (id: string): string => {
  * folded into the `## Triage` paragraph as part of the orchestrator token
  * diet; the assertion now checks the slug format + collision fallback prose
  * rather than the heading text.
+ *
+ * v8.106 — the `flow-resume` skill was retired (reference-only doc whose
+ * actual logic is the start-command Detect matrix + the canonical
+ * `runbooks/detect-matrix.md`). The Cancel-arm assertion now runs against
+ * the Detect matrix runbook body instead of the retired skill body.
  */
 
 describe("v8.11 — cancel-vs-recovery contract", () => {
-  it("flow-resume picker does NOT offer Cancel as an arm", () => {
-    const flowResume = skillBody("flow-resume");
-    expect(flowResume).not.toMatch(/\[c\]\s+Cancel/);
+  it("detect-matrix runbook (v8.106 successor of flow-resume skill) does NOT offer Cancel as a picker arm", () => {
+    const detectMatrix = ON_DEMAND_RUNBOOKS.find((r) => r.id === "detect-matrix");
+    expect(detectMatrix, "detect-matrix runbook must exist").toBeDefined();
+    expect(detectMatrix!.body).not.toMatch(/\[c\]\s+Cancel/);
   });
 
   it("/cc-cancel is never a clickable option from start-command (explicit-only nuke)", () => {

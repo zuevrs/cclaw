@@ -1,6 +1,71 @@
 # Changelog
 
 
+## 8.106.0 — Cleanup: vestigial skills retired + reviewer trim + dispatch envelopes lazy
+
+### Why
+
+The v8.102-v8.106 simplify-and-fix arc closes with a focused cleanup pass. v8.102 added `/cc patch`, v8.103 trimmed the orchestrator entry, v8.104 merged plan-critic + plan-design + plan-devex (10 → 8 specialists), v8.105 polished anti-slop / clarify table / assumption-coverage. v8.106 sweeps three known cleanup debts that have been carried since v8.61 / v8.62 / v8.83 / v8.96.1:
+
+- **3 vestigial reference-only skills** (`triage-gate`, `pre-flight-assumptions`, `flow-resume`) whose actual runtime logic moved elsewhere in v8.61 / v8.62 but whose markdown bodies stuck around as documentation. They were no-ops at runtime but consumed install-time disk space + skill-index slots; the registered skill count was overstating the live skill cohort.
+- **reviewer.ts inline rubric duplicates** — v8.83 lifted gated reviewer axes to companion skills (`reviewer-axis-*.md`) but the long inline worked examples + verbose adversarial-mode pre-mortem template stayed inline, duplicating canonical content that already lives in `review-discipline.md > ## Worked example`. The prompt body was paying the token cost twice.
+- **`REVIEWER_DISPATCH_ENVELOPES` over-cached** — v8.96.1 (Phase C G-2 fix) introduced the pre-rendered envelope-shape table to wire the runtime `buildAutoTriggerBlock(stage, gateEnvelope)` path into production via the install-time runbook composer. The original table cached 9 envelope shapes; in practice three shapes carry the vast majority of dispatches (no-flags / strict-baseline / UI+design) and the other six rarely match. The fall-back path (on-disk `agents/reviewer.md` static superset + `buildAutoTriggerBlock` runtime gate-walking) was already in place since v8.96.1 — the audit just hadn't pruned the cached table.
+
+### What changed
+
+#### 1. Three vestigial skills retired (skills count 35 → 32)
+
+Deleted:
+
+- `src/content/skills/flow-resume.md` (95 lines) — the runtime "what flow am I resuming?" routing was absorbed by the `start-command` Detect matrix (see `start-command.ts > ## Detect` + `runbooks/detect-matrix.md`) in v8.61. The skill body was reference-only since then.
+- `src/content/skills/pre-flight-assumptions.md` (59 lines) — pre-flight assumption capture is the architect's Bootstrap phase (`architect.ts > Phase 0 — Bootstrap`) and the triage's `assumptions[]` field on `flow-state.json`. The skill body restated the contract without adding new behaviour.
+- `src/content/skills/triage-gate.md` (258 lines) — the actual triage routing is the `agents/triage.md` contract + the `runbooks/triage-gate.md` orchestrator-side procedure. The skill body was a third reference copy.
+
+Updated callers that still pointed at the retired skill ids in v8.105:
+
+- `src/content/skills.ts` — removed the three `AUTO_TRIGGER_SKILLS` entries.
+- `src/content/meta-skill.ts`, `src/content/runbooks-on-demand.ts`, `src/content/start-command.ts` — pointer references updated.
+- `src/content/skills/ac-discipline.md`, `src/content/skills/completion-discipline.md`, `src/content/skills/refinement.md` — cross-references updated.
+- `src/content/specialist-prompts/architect.ts`, `src/content/specialist-prompts/builder.ts` — cross-references updated.
+- Tests updated: `tests/unit/v811-cleanup.test.ts` (Cancel-arm assertion now runs against `runbooks/detect-matrix.md` body), `tests/unit/v819-skill-windowing.test.ts` (canonical stage mapping dropped the three retired ids), `tests/unit/v858-router-research.test.ts`, `tests/unit/v886-anti-slop-axis.test.ts` (axis-row dimension match relaxed since the inline rubric table was lifted; README now references 32 skills).
+- `README.md` — skills count badge updated 35 → 32; the retired skill ids are still named once as a historical pointer so readers see where the logic went.
+
+#### 2. reviewer.ts trimmed (≥15% smaller)
+
+`src/content/specialist-prompts/reviewer.ts` shrank from 86,057 chars (v8.105 HEAD) to ~68,500 chars (~20% reduction) via three independent cuts:
+
+- **Axis-table rows compressed.** The six gated-axis rows (qa-evidence / nfr-compliance / design-quality / scope-drift / assumption-coverage / anti-slop) carried verbose multi-clause descriptions that duplicated the corresponding companion-skill prose. The rows are now one-line summaries + companion-skill pointers; the full grading rubric / evidence protocol / severity ladder / anti-rationalizations live in the per-axis `.cclaw/lib/skills/reviewer-axis-*.md` body (v8.83 lift).
+- **Inline rubric-table embed dropped.** The anti-slop axis section embedded `${renderAntiSlopRubricTable()}` inline (~70 lines of markdown table). The rubric is now loaded only via the `reviewer-axis-anti-slop` companion skill body — the shared `anti-slop-rubric.ts` const is still the single source of truth (companion skill renders from it; the unused imports on reviewer.ts are gone).
+- **Worked examples lifted.** The 130-line `## Worked example — \`code\` mode, iteration 1` + `## Worked example — iteration 2 closes F-1` + `## Worked example — \`adversarial\` mode` sections were verbatim duplicates of `review-discipline.md > ## Worked example` (the canonical three-iteration convergence walkthrough). The reviewer prompt now points at the wrapping skill instead.
+- **Adversarial-mode pre-mortem template trimmed.** The 35-line `## Pre-mortem (adversarial)` markdown skeleton (Scenario exercise + Most likely failure modes + Underexplored axes + Failure-class checklist table + Recommended pre-ship actions) was prose-summarized to a single paragraph naming the section structure; the verbatim template lives in `review-discipline.md`.
+
+Load-bearing prompt content preserved verbatim: the Fourteen-axis review table, the per-axis checklist guide, the AS-N / SD-N / KA-N finding grammars, the severity ladder, the slim-summary `What changed` axes counter, the Findings table contract, the convergence detector, the Decision values, the Five Failure Modes pass, the `What's done well` anti-sycophancy rule, the Verification story rule, the Posture-aware TDD checks block, the Parent-contradictions cross-check, the Prior learnings as priors block.
+
+#### 3. `REVIEWER_DISPATCH_ENVELOPES` table pruned (9 shapes → 3)
+
+`src/content/runbooks-on-demand.ts` — the pre-rendered envelope-shape table that the install-time runbook composer iterates over to populate `runbooks/dispatch-skills-index.md` shrank from nine shapes to three:
+
+- **kept (cached fast-path):** `no flags — empty envelope`; `strict-mode baseline — anti-slop + edit-discipline + scope-drift + assumption-coverage`; `UI / design slug — qa-evidence + design-quality stacked on the strict baseline`.
+- **dropped (use fall-back path):** `default-on anti-slop only`; `security-sensitive slug`; `NFR-bearing slug`; `every gate flag set`; `anti-slop explicitly disabled`. These shapes now resolve via the v8.96.1 G-2 fall-back rule documented in `runbooks/dispatch-skills-index.md > ## Fall-back rules`: the orchestrator either reads the on-disk `agents/reviewer.md` static superset (token-wasteful but correct), or derives the block at orchestrator time by walking `AUTO_TRIGGER_SKILLS` and applying each skill's gate predicate — which is exactly what `buildAutoTriggerBlock(stage, gateEnvelope)` does internally.
+
+Semantic correctness is preserved because both the cached fast-path and the fall-back path resolve through the same `buildAutoTriggerBlock(stage, gateEnvelope)` runtime (the cached entries are install-time renders of that function; the fall-back is the same function called at dispatch time via the on-disk superset). The pruning trades 6 rare cached blocks for 6 fall-back resolutions per million dispatches; the install-disk runbook body shrinks accordingly.
+
+`src/content/start-command.ts` (Review hop) now names the v8.106 fall-back path explicitly so a reviewer agent reading the start-command prose sees the same architecture the runbook documents.
+
+### Test pins (`tests/unit/v8106-cleanup.test.ts`)
+
+Tripwires:
+
+- AC-1: `AUTO_TRIGGER_SKILLS` ids exclude `flow-resume` / `pre-flight-assumptions` / `triage-gate`; the three skill markdown files do not exist on disk; skills count is exactly 32.
+- AC-2: `reviewer.ts` length ≤ 75,000 chars (v8.105 HEAD baseline was 86,057; 15% reduction target ≤ 73,148; current ~68,500); the inline worked-example sections are gone; the adversarial-mode section is ≤ 2,500 chars; the load-bearing schema (Fourteen-axis intro, AS-N grammar, cap-at-consider, `Active skills (per envelope):` field) survives the cut.
+- AC-3: `REVIEWER_DISPATCH_SKILLS_INDEX` exposes exactly three cached shapes with the canonical labels; the runbooks source carries the v8.106 cap comment + names `buildAutoTriggerBlock`; `start-command` carries the v8.106 fall-back path name.
+- AC-4: `package.json` ≥ 8.106.0; CHANGELOG carries the v8.106 entry naming all three pillars.
+
+### Migration / breaking changes
+
+None. The three retired skills were reference-only; their runtime equivalents (start-command Detect matrix; architect Bootstrap; triage agent + runbook) have been in place since v8.61 / v8.62. The reviewer prompt trim is internal; the per-iteration output contract is unchanged (Findings table, axes pass, severity ladder, slim summary). The dispatch envelopes pruning is install-time; the fall-back path was already in production since v8.96.1.
+
+
 ## 8.105.0 — Polish: anti-slop scope-down + Clarify table hidden + assumption-coverage non-blocking
 
 ### Why

@@ -189,8 +189,19 @@ describe("v8.86 — anti-slop axis section contract (shared rubric + reviewer pr
     expect(REVIEWER_PROMPT).toMatch(/AS-N:\s*<dimension>\s*at\s*<grade>:\s*<description>/);
     expect(REVIEWER_PROMPT).toMatch(/Simplicity First/);
     expect(REVIEWER_PROMPT).toMatch(/Karpathy/i);
+    // v8.106 — the renderAntiSlopRubricTable() embed was moved out of reviewer.ts
+    // (cleanup: vestigial skills + reviewer trim + dispatch envelopes lazy). The
+    // rubric table now lives in the `reviewer-axis-anti-slop` companion skill
+    // body, not inline in the prompt. The shared rubric helper still emits the
+    // canonical shape (asserted above against the helper directly), and the
+    // axis-table row + per-dimension example grades on the reviewer-prompt row
+    // continue to name each dimension by id so a cold reviewer agent knows what
+    // to grade before loading the companion skill.
     for (const dim of ANTI_SLOP_DIMENSIONS) {
-      expect(REVIEWER_PROMPT).toContain(`| **${dim.name}** |`);
+      expect(
+        REVIEWER_PROMPT,
+        `reviewer.ts axis row should name anti-slop dimension ${dim.key}`
+      ).toMatch(new RegExp(dim.key.replace(/-/g, "[- ]")));
     }
     expect(REVIEWER_PROMPT).toMatch(/as=N/);
     expect(REVIEWER_PROMPT).toMatch(/`as=N` is \*\*only\*\* present when the anti-slop gate fired/);
@@ -201,7 +212,8 @@ describe("v8.86 — anti-slop axis section contract (shared rubric + reviewer pr
     const readme = await fs.readFile(path.join(PROJECT_ROOT, "README.md"), "utf-8");
     expect(readme).toContain("14 axes");
     expect(readme).not.toContain("13 axes");
-    expect(readme).toContain("35 skills");
+    expect(readme).toContain("32 skills");
+    expect(readme).not.toContain("35 skills");
     expect(readme).toMatch(/`anti-slop`/);
     expect(readme).toContain("reviewer-axis-anti-slop");
     expect(readme).toMatch(/v8\.86/);
