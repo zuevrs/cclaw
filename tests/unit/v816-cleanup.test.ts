@@ -5,9 +5,11 @@ import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
  * v8.16 lock-in tests. The release merges 13 source skills into 6 thematic
  * groups, leaving 17 auto-trigger skills total (was 24 in v8.15).
  *
- * Each tripwire test pins one invariant of the merge so a future change that
- * forgets the move (re-adds a deleted id, drops a verbatim snippet, miswires
- * a specialist prompt) lights up immediately.
+ * Slimmed in v8.99 test-slim-down A2: kept the dangling-skill-ref tripwires
+ * (specialist prompts must only cite live skills) plus a small number of
+ * canonical v8.16 invariants (shape, merged/deleted ids, provenance, the
+ * two highest-value trigger tripwires). Drops the per-snippet × per-skill
+ * × per-trigger fan-out that was prompt-grep coverage.
  */
 
 const MERGED_SKILL_IDS = [
@@ -35,278 +37,104 @@ const DELETED_SOURCE_IDS = [
   "browser-verification",
 ] as const;
 
-/**
- * For each merged skill, 2-3 verbatim snippets from each source that must
- * survive the merge. These are the load-bearing parts the reviewer and
- * slice-builder cite — finding templates, anti-rationalization rows,
- * threat-model checklist items, etc.
- */
 const PROVENANCE_SNIPPETS: Record<(typeof MERGED_SKILL_IDS)[number], string[]> = {
-  "ac-discipline": [
-    // from ac-quality
-    "Three checks per AC:",
-    "Independently committable",
-    'tests/unit/search.test.ts: \'returns BM25-ranked hits\'',
-    // from ac-traceability — v8.40 retired commit-helper; ac-discipline
-    // now anchors the prompt-only commit-prefix contract enforced by
-    // reviewer git-log inspection.
-    "git log --grep",
-    "red(AC-",
-    "green(AC-",
-  ],
-  "commit-hygiene": [
-    // from commit-message-quality
-    "Imperative voice",
-    "Subject ≤72 characters",
-    // v8.40 reshaped the fix-commit prefix: `fix: F-2 ...` → `red(AC-N): fix F-2 — ...`.
-    "fix F-2 — separate rejected token",
-    // from surgical-edit-hygiene
-    "Surgical Changes",
-    "A-4 — Drive-by edits to adjacent comments / formatting / imports",
-    "A-5 — Deletion of pre-existing dead code without permission",
-    "`git add -A` is forbidden.",
-  ],
+  "ac-discipline": ["Three checks per AC:", "git log --grep"],
+  "commit-hygiene": ["Surgical Changes", "`git add -A` is forbidden."],
   "tdd-and-verification": [
-    // from tdd-cycle
     "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST",
-    "Iron Law",
-    "Anti-rationalization table",
-    "rationalization | truth",
-    "vertical / tracer bullet",
-    // from verification-loop
     "build/typecheck/lint/test/security",
-    "Never skip a gate to \"save time\"",
-    "Verification log",
-    // from refactor-safety
     "Chesterton's Fence",
-    "Rule of 500",
-    "behaviour-preserving",
   ],
-  "api-evolution": [
-    // from api-and-interface-design
-    "Hyrum's Law",
-    "one-version rule",
-    "two-adapter rule",
-    "Untrusted third-party API responses",
-    // from breaking-changes
-    "Churn Rule",
-    "Strangler Pattern",
-    "Zombie code",
-    "BREAKING:",
-  ],
-  "review-discipline": [
-    // v8.45 renamed "Concern Ledger" → "Findings"
-    "Findings",
-    "Five Failure Modes",
-    "Hallucinated actions",
-    "Scope creep",
-    "Cascading errors",
-    "Context loss",
-    "Tool misuse",
-    "convergence detector",
-    // from security-review
-    "Threat-model checklist",
-    "Authentication",
-    "Authorization",
-    "Supply chain",
-    "Data exposure",
-  ],
-  "debug-and-browser": [
-    // from debug-loop
-    "Hypothesis ranking",
-    "loop ladder",
-    "Tagged debug logs",
-    "Multi-run protocol",
-    "no seam",
-    // from browser-verification
-    "DevTools",
-    "Console hygiene",
-    "Accessibility",
-    "Browser content as untrusted data",
-    "five-check pass",
-  ],
+  "api-evolution": ["Hyrum's Law", "Strangler Pattern", "BREAKING:"],
+  "review-discipline": ["Findings", "Five Failure Modes", "Threat-model checklist"],
+  "debug-and-browser": ["Hypothesis ranking", "Tagged debug logs", "DevTools"],
 };
 
 describe("v8.16 thematic skills merge", () => {
-  describe("Skill set shape after merge", () => {
-    it("ships 17 or more auto-trigger skills (down from 24 in v8.15; v8.27-v8.33 added five frontier-aesthetic imports that v8.44 retired — back to 17)", () => {
-      expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
-    });
-
-    it("skill count stays in the [15, 35] range — v8.16 brief was [15, 18]; v8.27-v8.33 added five frontier-aesthetic skills (code-simplification, context-engineering, performance-optimization, frontend-ui-engineering, ci-cd-and-automation); v8.44 retired all five (zombie — never referenced by a specialist prompt); v8.75 added one (design-quality-discipline — shared with both plan-design and reviewer's design-quality axis); v8.77 added one (investigation-discipline — debug-branch three-lane fan-out for the investigator); the v8.83-token-axes release lifted the five gated reviewer axes (qa-evidence, design-quality, security, nfr-compliance, edit-discipline) out of `reviewer.ts` into per-axis companion skills; the band is left wide so future additive skills don't need a count edit", () => {
-      expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
-      expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(35);
-    });
+  it("auto-trigger skill count stays in the [15, 35] band (v8.16 floor of 17 merged skills + room for additive imports)", () => {
+    expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(15);
+    expect(AUTO_TRIGGER_SKILLS.length).toBeLessThanOrEqual(35);
+    expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
   });
 
-  describe("Merged skills exist with expected ids", () => {
+  it("every merged skill id is registered with the expected fileName + frontmatter", () => {
     for (const expectedId of MERGED_SKILL_IDS) {
-      it(`registers the merged skill \`${expectedId}\``, () => {
-        const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === expectedId);
-        expect(skill).toBeDefined();
-        expect(skill!.fileName).toBe(`${expectedId}.md`);
-        expect(skill!.body.startsWith("---\n")).toBe(true);
-        expect(skill!.body).toMatch(new RegExp(`name:\\s*${expectedId}`));
-      });
+      const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === expectedId);
+      expect(skill, `merged skill \`${expectedId}\` must be registered`).toBeDefined();
+      expect(skill!.fileName).toBe(`${expectedId}.md`);
+      expect(skill!.body.startsWith("---\n")).toBe(true);
+      expect(skill!.body).toMatch(new RegExp(`name:\\s*${expectedId}`));
     }
   });
 
-  describe("Deleted source skills do not reappear", () => {
+  it("no retired pre-v8.16 source skill id reappears in AUTO_TRIGGER_SKILLS", () => {
     for (const deletedId of DELETED_SOURCE_IDS) {
-      it(`does NOT register the retired skill \`${deletedId}\``, () => {
-        const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === deletedId);
-        expect(skill).toBeUndefined();
-      });
+      const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === deletedId);
+      expect(skill, `retired skill \`${deletedId}\` must not reappear`).toBeUndefined();
     }
   });
 
-  describe("Content provenance — no verbatim snippet was dropped", () => {
+  it("merged skill bodies still contain the load-bearing verbatim snippets from each source skill (provenance check)", () => {
     for (const mergedId of MERGED_SKILL_IDS) {
-      const snippets = PROVENANCE_SNIPPETS[mergedId];
-      for (const snippet of snippets) {
-        it(`\`${mergedId}\` body still contains: ${snippet.slice(0, 50)}${snippet.length > 50 ? "…" : ""}`, () => {
-          const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === mergedId);
-          expect(skill).toBeDefined();
-          expect(skill!.body).toContain(snippet);
-        });
+      const skill = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === mergedId)!;
+      for (const snippet of PROVENANCE_SNIPPETS[mergedId]) {
+        expect(skill.body, `\`${mergedId}\` must contain ${snippet.slice(0, 50)}`).toContain(snippet);
       }
     }
   });
 
-  describe("Trigger semantics preserved (v8.62 roster: `ac-author` → `architect`, `slice-builder` → `builder`, `security-reviewer` absorbed into `reviewer`'s `security` axis)", () => {
-    it("ac-discipline inherits ac-quality + ac-traceability triggers (union, deduped; v8.62 specialist trigger updated to `architect`)", () => {
-      const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "ac-discipline")!;
-      for (const trigger of [
-        "edit:.cclaw/flows/*/plan.md",
-        "specialist:architect",
-        "specialist:reviewer:text-review",
-        "before:git-commit",
-        "before:git-push",
-        "ceremony_mode:strict",
-      ]) {
-        expect(skill.triggers).toContain(trigger);
-      }
-    });
-
-    it("commit-hygiene inherits commit-message-quality + surgical-edit-hygiene triggers (v8.40: before:commit-helper removed; v8.62: specialist trigger updated to `builder`)", () => {
-      const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "commit-hygiene")!;
-      for (const trigger of [
-        "always-on",
-        "specialist:builder",
-        "before:git-commit",
-      ]) {
-        expect(skill.triggers).toContain(trigger);
-      }
-      // v8.40 tripwire: ensure the retired hook trigger does not creep back in.
-      expect(skill.triggers).not.toContain("before:commit-helper");
-    });
-
-    it("tdd-and-verification inherits tdd-cycle + verification-loop + refactor-safety triggers (v8.62: specialist trigger updated to `builder`)", () => {
-      const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "tdd-and-verification")!;
-      for (const trigger of [
-        "stage:build",
-        "specialist:builder",
-        "specialist:reviewer",
-        "stage:review",
-        "stage:ship",
-        "task:refactor",
-        "pattern:refactor",
-      ]) {
-        expect(skill.triggers).toContain(trigger);
-      }
-    });
-
-    it("api-evolution inherits api-and-interface-design + breaking-changes triggers (v8.62: specialist trigger updated to `architect`)", () => {
-      const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "api-evolution")!;
-      for (const trigger of [
-        "specialist:architect",
-        "decision:public-interface",
-        "decision:new-dependency",
-        "touch-surface:public-api",
-        "diff:public-api",
-        "frontmatter:breaking_change=true",
-      ]) {
-        expect(skill.triggers).toContain(trigger);
-      }
-    });
-
-    it("review-discipline inherits review-loop + security-review triggers (v8.62: `security-reviewer` absorbed into `reviewer`'s `security` axis; the specialist trigger collapses to `reviewer`, the security-flag and diff triggers persist because the security axis still needs the same trigger surface)", () => {
-      const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "review-discipline")!;
-      for (const trigger of [
-        "specialist:reviewer",
-        "security-flag:true",
-        "diff:auth|secrets|supply-chain|pii",
-      ]) {
-        expect(skill.triggers).toContain(trigger);
-      }
-      // v8.62 tripwire: ensure the retired `security-reviewer` specialist
-      // trigger does not creep back into the trigger list.
-      expect(skill.triggers).not.toContain("specialist:security-reviewer");
-    });
-
-    it("debug-and-browser inherits debug-loop + browser-verification triggers (v8.62: specialist trigger updated to `builder:fix-only`)", () => {
-      const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "debug-and-browser")!;
-      for (const trigger of [
-        "stop-the-line",
-        "specialist:builder:fix-only",
-        "task:bug-fix",
-        "test-failed-unclear-reason",
-        "ceremony_mode:strict",
-        "touch-surface:ui",
-        "diff:tsx|jsx|vue|svelte|html|css",
-      ]) {
-        expect(skill.triggers).toContain(trigger);
-      }
-    });
+  // v8.40 + v8.62 tripwires — the highest-value trigger invariants the merge
+  // must preserve. Per-skill trigger fan-out tests dropped in v8.99 slim-down.
+  it("commit-hygiene does NOT carry the retired `before:commit-helper` trigger (v8.40 retired commit-helper)", () => {
+    const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "commit-hygiene")!;
+    expect(skill.triggers).not.toContain("before:commit-helper");
+    expect(skill.triggers).toContain("specialist:builder");
   });
 
-  describe("Specialist prompt `lib/skills/<id>.md` references resolve to live skills (v8.62 specialist files: `architect`, `builder`, `reviewer`)", () => {
-    it("every cited skill file in architect, builder, reviewer, start-command resolves to a registered id", async () => {
-      const fileNames = new Set(AUTO_TRIGGER_SKILLS.map((s) => s.fileName));
-      const sources = await Promise.all([
-        import("../../src/content/specialist-prompts/architect.js"),
-        import("../../src/content/specialist-prompts/builder.js"),
-        import("../../src/content/specialist-prompts/reviewer.js"),
-        import("../../src/content/start-command.js"),
-      ]);
-      const corpus = sources
-        .map((mod) => Object.values(mod).filter((v): v is string => typeof v === "string").join("\n"))
-        .join("\n");
-      const cited = new Set<string>();
-      const re = /\.cclaw\/lib\/skills\/([a-z-]+\.md)/g;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(corpus)) !== null) {
-        cited.add(m[1]!);
-      }
-      for (const fileName of cited) {
-        if (fileName === "cclaw-meta.md") continue;
-        expect(fileNames, `cited \`lib/skills/${fileName}\` must be a live AUTO_TRIGGER_SKILLS entry`).toContain(fileName);
-      }
-    });
-
-    it("no specialist prompt cites a deleted (pre-v8.16) skill file", async () => {
-      const deletedFileNames = DELETED_SOURCE_IDS.map((id) => `${id}.md`);
-      const sources = await Promise.all([
-        import("../../src/content/specialist-prompts/architect.js"),
-        import("../../src/content/specialist-prompts/builder.js"),
-        import("../../src/content/specialist-prompts/reviewer.js"),
-      ]);
-      const corpus = sources
-        .map((mod) => Object.values(mod).filter((v): v is string => typeof v === "string").join("\n"))
-        .join("\n");
-      for (const deletedFileName of deletedFileNames) {
-        expect(corpus, `specialist prompts must not cite the retired \`lib/skills/${deletedFileName}\``).not.toMatch(
-          new RegExp(`\\.cclaw/lib/skills/${deletedFileName.replace(".", "\\.")}`),
-        );
-      }
-    });
+  it("review-discipline absorbed the security-review axis (v8.62) — does NOT name `specialist:security-reviewer`", () => {
+    const skill = AUTO_TRIGGER_SKILLS.find((e) => e.id === "review-discipline")!;
+    expect(skill.triggers).toContain("specialist:reviewer");
+    expect(skill.triggers).not.toContain("specialist:security-reviewer");
   });
 
-  describe("Install layer writes exactly the registered count", () => {
-    it("AUTO_TRIGGER_SKILLS.length stays ≥17, the basis for the install loop (v8.27 lifted floor from =17 to ≥17 for additive skill imports; v8.44 retired the five zombies but the floor stays ≥17 because the v8.16 merge core never shrank)", () => {
-      // install.ts iterates AUTO_TRIGGER_SKILLS and writes one .md per entry
-      // plus cclaw-meta.md; the resulting on-disk count is N+1.
-      expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
-    });
+  // Dangling-skill-ref tripwires — PRESERVED per v8.99 slim-down plan.
+  it("every `.cclaw/lib/skills/<id>.md` reference in architect, builder, reviewer, start-command resolves to a live AUTO_TRIGGER_SKILLS entry", async () => {
+    const fileNames = new Set(AUTO_TRIGGER_SKILLS.map((s) => s.fileName));
+    const sources = await Promise.all([
+      import("../../src/content/specialist-prompts/architect.js"),
+      import("../../src/content/specialist-prompts/builder.js"),
+      import("../../src/content/specialist-prompts/reviewer.js"),
+      import("../../src/content/start-command.js"),
+    ]);
+    const corpus = sources
+      .map((mod) => Object.values(mod).filter((v): v is string => typeof v === "string").join("\n"))
+      .join("\n");
+    const cited = new Set<string>();
+    const re = /\.cclaw\/lib\/skills\/([a-z-]+\.md)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(corpus)) !== null) {
+      cited.add(m[1]!);
+    }
+    for (const fileName of cited) {
+      if (fileName === "cclaw-meta.md") continue;
+      expect(fileNames, `cited \`lib/skills/${fileName}\` must be a live AUTO_TRIGGER_SKILLS entry`).toContain(fileName);
+    }
+  });
+
+  it("no specialist prompt cites a deleted (pre-v8.16) skill file", async () => {
+    const deletedFileNames = DELETED_SOURCE_IDS.map((id) => `${id}.md`);
+    const sources = await Promise.all([
+      import("../../src/content/specialist-prompts/architect.js"),
+      import("../../src/content/specialist-prompts/builder.js"),
+      import("../../src/content/specialist-prompts/reviewer.js"),
+    ]);
+    const corpus = sources
+      .map((mod) => Object.values(mod).filter((v): v is string => typeof v === "string").join("\n"))
+      .join("\n");
+    for (const deletedFileName of deletedFileNames) {
+      expect(corpus, `specialist prompts must not cite the retired \`lib/skills/${deletedFileName}\``).not.toMatch(
+        new RegExp(`\\.cclaw/lib/skills/${deletedFileName.replace(".", "\\.")}`),
+      );
+    }
   });
 });
