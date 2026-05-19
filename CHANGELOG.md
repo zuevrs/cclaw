@@ -1,6 +1,56 @@
 # Changelog
 
 
+## 8.99.0 — Test slim-down Phase A2: slim top-20 prompt-grep heavy files
+
+### Why
+
+Phase A2 of the test slim-down arc — slim the top-20 highest-test-count files in `tests/unit/` down to the wiring + behavior + section-contract trio that actually catches drift. Each of these files had grown to 36-114 tests of mostly `expect(prompt).toContain(...)` / `expect(prompt).toMatch(...)` prompt-grep, with three or four lines of "real" coverage (validator branches, integration fixtures, orchestrator wiring) buried inside. The slim-down keeps one WIRING test (the feature is registered + reachable), one BEHAVIOR test (the feature works end-to-end), and one SECTION CONTRACT test (the prompt body declares the canonical sections + clauses), deleting the rest.
+
+### What changed
+
+Slimmed 20 high-test-count files (test counts before → after, per file):
+
+- `tests/unit/research-lenses.test.ts`: 114 → 15 (one per lens, special handling)
+- `tests/unit/v816-cleanup.test.ts`: 85 → 10 (kept dangling-skill-ref + v8.16 tripwires, special handling)
+- `tests/unit/v877-investigator.test.ts`: 65 → 3
+- `tests/unit/v859-continuation.test.ts`: 63 → 3
+- `tests/unit/v881-investigator-v2.test.ts`: 60 → 3
+- `tests/unit/v850-outcome-loop.test.ts`: 56 → 3
+- `tests/unit/v885-assumption-validation.test.ts`: 56 → 3
+- `tests/unit/v876-research-design-approaches.test.ts`: 51 → 3
+- `tests/unit/v879-one-way-door-gate.test.ts`: 46 → 3
+- `tests/unit/v886-anti-slop-axis.test.ts`: 45 → 3
+- `tests/unit/v883-token-axes.test.ts`: 44 → 3
+- `tests/unit/v882-devex-lens.test.ts`: 43 → 3
+- `tests/unit/v858-router-research.test.ts`: 42 → 3
+- `tests/unit/v871-research-revision.test.ts`: 40 → 3
+- `tests/unit/v874-ethos-bundle.test.ts`: 39 → 3
+- `tests/unit/v855-harness-rules.test.ts`: 38 → 3
+- `tests/unit/v887-model-tier-defaults.test.ts`: 38 → 3
+- `tests/unit/critic-specialist.test.ts`: 37 → 5 (kept the four behavioral gates + wiring, special handling)
+- `tests/unit/v819-skill-windowing.test.ts`: 37 → 3
+- `tests/unit/v875-plan-design-lens.test.ts`: 36 → 3
+
+Special handling per spec:
+
+- `research-lenses.test.ts` slimmed to ~15 (one per lens: H1 header + lens-id validity + canonical contract sections), preserving the registry invariant + lens-independence + web-search fallback tests.
+- `v816-cleanup.test.ts` slimmed to ~10 (kept dangling-skill-ref tests + canonical v8.16 tripwires); NOT deleted (it is on the DO-NOT-DELETE list but the spec explicitly allows slimming).
+- `critic-specialist.test.ts` slimmed to ~5 (cross-model gate, force-stance opening, adversarial mode + ceremonyMode gating + escalation triggers, anti-rationalization + read-only contract, wiring + artifact template).
+
+DO-NOT-DELETE list preserved verbatim: `v894-auto-trigger-gate-wiring`, `v894-assumption-validation-wiring`, `v894-docs-drift-sweep`, `v894-model-tier-sync`, `flow-state.test.ts`, `types.test.ts`, `harness-prompt.test.ts`, `install-harness-isolation.test.ts`. `## Composition` footer contract assertions on `plan-devex`, `plan-design`, `investigator`, and `critic` were preserved inside the slimmed files' SECTION CONTRACT tests.
+
+### Numbers
+
+- Test count: 2343 → 1317 passing across 114 files (a concurrent A2 sweep also slimmed bonus files `v872-cross-model-critic`, `v884-not-doing-gate`).
+- Files touched: 20 (zero deletions — every top-20 file kept at least one test).
+- `tsc --noEmit` passes clean; `node scripts/smoke-init.mjs` passes clean.
+
+### References
+
+- Follow-up phases A3/A4 will sweep the remaining prompt-grep heavy files (<35 tests/file) and the still-bloated medium-count files.
+
+
 ## 8.98.0 — Test slim-down Phase A1: delete redundant release-lock files
 
 ### Why
