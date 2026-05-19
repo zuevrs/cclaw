@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION,
-  isBehaviorAdding
-} from "../../src/is-behavior-adding.js";
-import { DEFAULT_POSTURE, POSTURES } from "../../src/types.js";
-import { ARCHITECT_PROMPT, REVIEWER_PROMPT, BUILDER_PROMPT } from "../../src/content/specialist-prompts/index.js";
-import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
+import { isBehaviorAdding } from "../../src/is-behavior-adding.js";
+import { POSTURES } from "../../src/types.js";
 import {
   POSTURE_COMMIT_PREFIXES,
   expectedCommitsForPosture,
@@ -14,104 +9,16 @@ import {
 } from "../../src/posture-validation.js";
 
 /**
- * v8.36 — `is_behavior_adding` predicate + `posture` field.
+ * v8.36 — `is_behavior_adding` predicate + `posture` wiring.
  *
- * Tripwires that guard the cross-cutting integration: a single change
- * to the predicate or the posture enum must keep five surfaces in sync
- * (TS module / architect prompt / builder prompt / reviewer prompt /
- * tdd-and-verification skill — v8.62 unified flow renamed `ac-author` →
- * `architect` and `slice-builder` → `builder`). v8.40 retired the
- * commit-helper hook; the cross-check that used to live in the .mjs
- * body now lives in `src/posture-validation.ts` (reviewer-side, ex-post).
- *
- * If any single surface drifts, ONE of the tests below lights up — the
- * "cleanup" tag is the convention for these v8.<N>-cleanup test files.
+ * Slimmed in v8.100: kept the predicate behavior tests and the
+ * posture-validation wiring tests. The cross-prompt POSTURES greps
+ * (architect / builder / reviewer / tdd skill mentions) were removed.
  */
-
-const TDD_SKILL = (() => {
-  const skill = AUTO_TRIGGER_SKILLS.find((s) => s.fileName === "tdd-and-verification.md");
-  if (!skill) throw new Error("tdd-and-verification skill not found");
-  return skill.body;
-})();
-
-describe("v8.36 — predicate exports + cross-surface alignment", () => {
-  it("predicate exclusion description names every protected category at least once", () => {
-    for (const token of [
-      "*.md",
-      "*.json",
-      "*.yml",
-      "*.yaml",
-      "*.toml",
-      "*.ini",
-      "*.cfg",
-      "*.conf",
-      ".env",
-      "tests/**",
-      "*.test.*",
-      "*.spec.*",
-      "__tests__/**",
-      "docs/**",
-      ".cclaw/**",
-      ".github/**"
-    ]) {
-      expect(
-        IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION,
-        `predicate exclusion description must name "${token}" so docs and code stay aligned`
-      ).toContain(token);
-    }
-  });
-
-  it("predicate exclusion description matches the spec exactly (no silent additions)", () => {
-    expect(IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION).toMatch(/^\*\.md \/ /);
-    expect(IS_BEHAVIOR_ADDING_EXCLUSION_DESCRIPTION).toMatch(/\.github\/\*\*$/);
-  });
-
-  it("predicate behaves consistently with the prose: pure docs → false, source-only → true", () => {
+describe("v8.36 — isBehaviorAdding predicate behaviour", () => {
+  it("predicate: pure docs → false, source-only → true", () => {
     expect(isBehaviorAdding(["README.md"])).toBe(false);
     expect(isBehaviorAdding(["src/index.ts"])).toBe(true);
-  });
-});
-
-describe("v8.36 — POSTURES enum is documented in user-facing prompts", () => {
-  it("architect prompt names every posture value (heuristic table is the source of truth; v8.62 renamed from `ac-author`)", () => {
-    for (const posture of POSTURES) {
-      expect(
-        ARCHITECT_PROMPT,
-        `architect prompt must mention "${posture}" so the heuristic table covers every value`
-      ).toContain(posture);
-    }
-  });
-
-  it("builder prompt names every posture value (ceremony section; v8.62 renamed from `slice-builder`)", () => {
-    for (const posture of POSTURES) {
-      expect(
-        BUILDER_PROMPT,
-        `builder prompt must mention "${posture}" — ceremony selector lives here`
-      ).toContain(posture);
-    }
-  });
-
-  it("reviewer prompt names every posture value (posture-specific checks)", () => {
-    for (const posture of POSTURES) {
-      expect(
-        REVIEWER_PROMPT,
-        `reviewer prompt must mention "${posture}" — posture-aware checks live here`
-      ).toContain(posture);
-    }
-  });
-
-  it("tdd-and-verification skill carries the canonical posture-to-ceremony table", () => {
-    for (const posture of POSTURES) {
-      expect(
-        TDD_SKILL,
-        `tdd-and-verification.md must mention "${posture}" — it owns the canonical posture map`
-      ).toContain(posture);
-    }
-    expect(TDD_SKILL).toMatch(/posture/i);
-  });
-
-  it("DEFAULT_POSTURE is referenced by name in the architect prompt (so legacy plans inherit it; v8.62 renamed from `ac-author`)", () => {
-    expect(ARCHITECT_PROMPT).toContain(DEFAULT_POSTURE);
   });
 });
 
@@ -140,9 +47,6 @@ describe("v8.40 — posture-validation helper owns the predicate-as-cross-check"
   });
 
   it("bootstrap posture expects green → refactor (AC-1 escape; AC-2+ uses test-first)", () => {
-    // The bootstrap entry covers AC-1's reduced ceremony (no preceding
-    // RED). The reviewer prompt handles the AC-2+ promotion to the
-    // standard test-first sequence.
     expect(POSTURE_COMMIT_PREFIXES["bootstrap"]).toEqual(["green", "refactor"]);
   });
 

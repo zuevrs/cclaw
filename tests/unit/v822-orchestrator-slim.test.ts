@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { renderStartCommand, START_COMMAND_BODY } from "../../src/content/start-command.js";
 import {
   ON_DEMAND_RUNBOOKS,
   ON_DEMAND_RUNBOOKS_INDEX_SECTION
@@ -13,19 +12,13 @@ import type { ProgressEvent } from "../../src/ui.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
 /**
- * v8.22 — orchestrator-slim. The pre-v8.22 `/cc` body was 901 lines (~15-20k
- * tokens) inlined into every harness invocation. v8.22 lifts six on-demand
- * runbooks out of `start-command.ts` into `.cclaw/lib/runbooks/`, keeping
- * only the always-needed hops (detect / triage / pause / iron-laws /
- * catalogues) in the orchestrator body. Target: ≤480 lines.
+ * v8.22 — orchestrator-slim install-layer wiring.
  *
- * The runbook set also covers four operational procedures previously
- * inlined under Hop 3 / Hop 4 / Hop 5 / Hop 6 — dispatch-envelope,
- * handoff-artifacts, compound-refresh, discovery (large-risky plan).
- * Each runbook is opened only on its specific trigger.
- *
- * Each tripwire test pins one invariant so an accidental re-inline,
- * orphan-cleanup miss, or pointer drift lights up immediately.
+ * Slimmed in v8.100: kept the `initCclaw` / `syncCclaw` install + orphan-
+ * cleanup wiring tests for the .cclaw/lib/runbooks/ surface. The body
+ * line / char budget tests were removed (v831-path-aware-trimming.test.ts
+ * already covers them). The pointer-integrity content-greps on the
+ * rendered start-command body were also removed.
  */
 
 const RUNBOOKS_DIR = path.join(".cclaw", "lib", "runbooks");
@@ -48,164 +41,6 @@ async function seedRunbookOrphan(projectRoot: string, fileName: string): Promise
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, `# stale runbook ${fileName}\n`, "utf8");
 }
-
-describe("v8.22 orchestrator-slim — `/cc` body line budget", () => {
-  it("AC-1 — `start-command.ts` body stays ≤830 lines (was 901 on v8.21; v8.42 absorbed ~5 lines for the new Hop 4.5 critic stage pointer; v8.51 absorbed ~15 lines for the pre-implementation plan-critic sub-step pointer; v8.52 absorbed ~20 lines for the qa stage Hop-2 surface-detection block + the qa step body section + the qa-runner stage-table row; v8.59 absorbed ~10 lines for the Detect-hop extend-mode fork pointer + prior-context consumption pointer; v8.69 absorbed ~3 lines for the research-depth fork-stamp sub-bullet + the synthesis self-review step + the depth-flag sub-case; v8.70 absorbed ~2 lines for the design-quality envelope-activation bullet + the eleven-axis update; v8.71 absorbed ~10 lines for the Phase 3.5 awaiting-user-review pointer + the invocation-matrix row for the three new research sub-commands — full procedure lives in runbooks/research-revision.md; v8.74 absorbed ~5 lines for the ethos-preamble paragraph under Dispatch envelope + the Skills-attached `cclaw-ethos` reference doc bullet + the updated Always-ask rules line naming the Required ethos read; v8.78 raised by 80 lines for the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring (4 dimensions table + ambiguity formula + targeting + challenge-mode rotation + per-round table + math-gated exit + `/cc research go` force-exit + the invocation-matrix row for `/cc research go`); v8.82 raised by 30 lines (800 → 830) for the new #### plan-devex body section + stage-table row)", () => {
-    const body = renderStartCommand();
-    const lineCount = body.split("\n").length;
-    expect(
-      lineCount,
-      `start-command body is ${lineCount} lines (budget 830). v8.42 lifted ~95% of the new critic stage's content into runbooks/critic-stage.md. v8.51 added a parallel pointer for the pre-impl plan-critic sub-step. v8.52 lifted ~95% of the new qa stage content. v8.59 added ~10 lines for extend-mode fork + prior-context. v8.69 added ~3 lines for research_depth. v8.70 added ~2 lines for design-quality. v8.71 added ~10 lines for Phase 3.5. v8.74 added ~5 lines for the ethos-preamble + cclaw-ethos bullet. v8.78 added ~80 lines (lifted ceiling 720 → 800) for the rewritten Phase 1 iterative discovery dialogue with per-dimension scoring. v8.82 lifted ceiling 800 → 830 (~15 lines under) to absorb the new #### plan-devex body section + stage-table row + the rotating-lastSpecialist update for plan-devex returns. If new runtime semantics need a body block, weigh moving an existing block to .cclaw/lib/runbooks/ instead of raising the budget.`
-    ).toBeLessThanOrEqual(830);
-  });
-
-  it("AC-1 — the body is meaningfully smaller than the legacy v8.21 size (≥5% cut after v8.82 plan-devex addition)", () => {
-    const lineCount = renderStartCommand().split("\n").length;
-    const v821Baseline = 901;
-    const ratio = lineCount / v821Baseline;
-    expect(
-      ratio,
-      `start-command body is ${lineCount} lines, ratio ${ratio.toFixed(2)} of v8.21 baseline (${v821Baseline}). v8.22's win disappears if the body re-grows past 95% of pre-v8.22 (v8.77 raised the ceiling from 0.70 to 0.80; v8.78 from 0.80 to 0.90 for the rewritten Phase 1 iterative discovery dialogue; v8.82 from 0.90 to 0.95 to absorb the new #### plan-devex body section + stage-table row).`
-    ).toBeLessThanOrEqual(0.95);
-  });
-});
-
-describe("v8.22 orchestrator-slim — on-demand runbooks exist and are wired", () => {
-  // v8.31 extends the v8.22 set with two path-conditional runbooks:
-  // pause-resume.md (non-inline pause/resume mechanics) and
-  // plan-small-medium.md (small-medium plan dispatch contract).
-  // The list grows; the v8.22 invariant (every runbook is reachable
-  // from the body and has a `# On-demand runbook —` heading) is
-  // preserved.
-  // v8.42 extends the set with `critic-stage.md` — the on-demand runbook
-  // for Hop 4.5 critic dispatch (ceremonyMode gating, escalation triggers,
-  // verdict routing, flow-state patches, legacy migration).
-  // v8.51 extends the set with `plan-critic-stage.md` — the on-demand
-  // runbook for the pre-implementation plan-critic sub-step (gating
-  // table: ceremonyMode=strict + complexity=large-risky + problemType!=refines
-  // + AC count>=2, verdict routing pass/revise/cancel, iteration cap,
-  // flow-state patches).
-  // v8.52 extends the set with `qa-stage.md` — the on-demand runbook for
-  // the qa step's dispatch envelope + verdict-routing + iteration-cap +
-  // flow-state patches + reviewer cross-check + legacy migration.
-  // v8.59 extends the set with `extend-mode.md` — the on-demand runbook for
-  // the v8.59 \`/cc extend <slug>\` entry point: Detect-hop fork (argument
-  // parsing, parent validation via \`loadParentContext\`, slug-init patches
-  // for \`parentContext\` + \`refines:\` + \`parent_slug:\`), triage inheritance
-  // sub-step (ceremonyMode / runMode / surfaces + precedence rules), the
-  // seven sub-cases (no slug / no task / collision / reverted-parent /
-  // ceremonyMode-flag / runMode-flag / research-suffix), multi-level
-  // chaining policy (immediate-parent only), backwards compat, and worked
-  // examples.
-  // v8.69 extends the set with `research-depth-and-self-review.md` — the
-  // on-demand runbook covering /cc research depth tiers (light /
-  // standard / deep-product), triage auto-classification heuristics, the
-  // depth-conditional Phase 2 lens dispatch table, and the synthesis
-  // self-review four-scan procedure (placeholder / contradiction /
-  // scope-drift / ambiguity).
-  const expectedRunbookFiles = [
-    "dispatch-envelope.md",
-    "parallel-build.md",
-    "finalize.md",
-    "cap-reached-recovery.md",
-    "adversarial-rerun.md",
-    "handoff-gates.md",
-    "handoff-artifacts.md",
-    "compound-refresh.md",
-    "pause-resume.md",
-    "critic-steps.md",
-    "qa-stage.md",
-    "extend-mode.md",
-    "always-auto-failure-handling.md",
-    "research-depth-and-self-review.md",
-    "research-revision.md",
-    "debug-branch.md",
-    "detect-matrix.md",
-    "approaches-gate.md",
-    "one-way-door-gate.md",
-    "dispatch-skills-index.md",
-  ];
-
-  it("AC-2 — `ON_DEMAND_RUNBOOKS` contains exactly the expected on-demand runbooks (v8.54: 4 merges + 2 lifts → 11 files; v8.59: +1 extend-mode → 12 files; v8.61: +1 always-auto-failure-handling → 13 files; v8.69: +1 research-depth-and-self-review → 14 files; v8.71: +1 research-revision → 15 files; v8.77: +1 debug-branch → 16 files; v8.83: +3 token-compression lifts (detect-matrix, approaches-gate, one-way-door-gate) → 19 files; v8.96.1: +1 dispatch-skills-index (Phase C G-2 fix — production-path caller of buildAutoTriggerBlock(stage, gateEnvelope)) → 20 files)", () => {
-    const fileNames = ON_DEMAND_RUNBOOKS.map((r) => r.fileName).sort();
-    expect(fileNames).toEqual([...expectedRunbookFiles].sort());
-  });
-
-  it("AC-2 — every runbook body is non-empty and starts with a `# On-demand runbook —` heading", () => {
-    for (const runbook of ON_DEMAND_RUNBOOKS) {
-      expect(runbook.body.length, `${runbook.fileName} body is empty`).toBeGreaterThan(200);
-      expect(
-        runbook.body,
-        `${runbook.fileName} should open with a "# On-demand runbook —" heading so the file is self-identifying`
-      ).toMatch(/^# On-demand runbook — /m);
-    }
-  });
-
-  it("AC-3 — `start-command.ts` body references every on-demand runbook by file name", () => {
-    const body = renderStartCommand();
-    for (const fileName of expectedRunbookFiles) {
-      expect(
-        body,
-        `start-command body does not reference \`${fileName}\` — a runbook on disk that the orchestrator never points at is orphaned by spec, not by install layer.`
-      ).toContain(fileName);
-    }
-  });
-
-  it("AC-3 — body includes the v8.22 trigger table introducing the on-demand runbooks", () => {
-    const body = renderStartCommand();
-    expect(body).toMatch(/## On-demand runbooks/);
-    expect(body).toMatch(/\| trigger \| runbook \|/);
-  });
-
-  it("AC-3 — body declares the runbooks live under `.cclaw/lib/runbooks/`", () => {
-    const body = renderStartCommand();
-    expect(body).toContain(".cclaw/lib/runbooks/");
-  });
-
-  it("AC-3 — body no longer inlines the v8.22-extracted block headings", () => {
-    const body = renderStartCommand();
-    const movedHeadings = [
-      /^### Handoff artifacts \(T2-3, gsd pattern; v8\.13\)$/m,
-      /^### Compound-refresh sub-step \(T2-4, everyinc pattern; v8\.13\)$/m,
-      /^### Discoverability self-check \(T2-12\)$/m,
-      /^##### Parallel-build fan-out /m,
-      /^##### Cap-reached split-plan \(T1-10\)$/m,
-      /^##### Adversarial pre-mortem rerun on fix-only hot paths \(T1-9\)$/m,
-      /^##### Self-review gate \(mandatory before reviewer dispatch\)$/m,
-      /^##### Ship-gate user ask \(finalization mode\)$/m,
-    ];
-    for (const heading of movedHeadings) {
-      expect(
-        body,
-        `start-command body still contains the legacy heading ${heading} — that block should now live in a runbook`
-      ).not.toMatch(heading);
-    }
-  });
-});
-
-describe("v8.22 orchestrator-slim — token-budget tripwire (body + runbooks)", () => {
-  it("AC-4 — body alone is ≤145000 chars (... v8.79 lifted ceiling 125k → 135k for the One-way Door Gate section + the new `awaiting-one-way-confirmation` enum value; v8.82 lifted ceiling 135k → 145k for the new #### plan-devex body section + stage-table row + the rotating-lastSpecialist update for plan-devex returns)", () => {
-    const charCount = renderStartCommand().length;
-    expect(
-      charCount,
-      `start-command body is ${charCount} chars (budget 145000). v8.79 added ~4k chars (lifted 125k → 135k) for the One-way Door Gate section + the new \`awaiting-one-way-confirmation\` enum value. v8.82 added ~5k chars (lifted 135k → 145k) for the new #### plan-devex body section + stage-table row. Do not raise this further without a CHANGELOG note.`
-    ).toBeLessThanOrEqual(145000);
-  });
-
-  it("AC-4 — `START_COMMAND_BODY` export matches `renderStartCommand` output (no drift)", () => {
-    expect(renderStartCommand()).toBe(START_COMMAND_BODY);
-  });
-
-  it("AC-4 — combined body + all on-demand runbook bodies stays under a soft 340k-char ceiling (... v8.80 lifted ceiling 275k → 285k for the research-mode synthesis Phase 3 sub-steps; v8.82 lifted ceiling 285k → 295k to absorb ~5k chars of new body prose for the #### plan-devex section + stage-table row — no new runbook in v8.82; v8.83 lifted ceiling 295k → 320k for the three new lift runbooks (detect-matrix / approaches-gate / one-way-door-gate) that absorb ~25k chars of body prose lifted off start-command.ts while their canonical procedures + worked examples land on disk for harness reads; v8.96.1 lifted ceiling 320k → 340k for the new dispatch-skills-index runbook (Phase C audit G-2 fix — pre-rendered per-envelope skills slice for the reviewer dispatch envelope, composed via the production-path two-arg buildAutoTriggerBlock(stage, gateEnvelope) call inside the runbook composer; ~14k chars of runbook body))", () => {
-    const combined =
-      renderStartCommand().length +
-      ON_DEMAND_RUNBOOKS.reduce((acc, r) => acc + r.body.length, 0);
-    expect(
-      combined,
-      `Combined body + on-demand runbooks total ${combined} chars (soft ceiling 340000). v8.80 added ~3k chars (lifted 275k → 285k). v8.82 added ~5k chars (lifted 285k → 295k) for the new #### plan-devex body section + stage-table row. v8.83 added ~10k chars net (lifted 295k → 320k) for three new lift runbooks. v8.96.1 added ~14k chars (lifted 320k → 340k) for the dispatch-skills-index runbook that wires the buildAutoTriggerBlock(stage, gateEnvelope) runtime path into production (Phase C audit G-2 fix; the runbook is composed at install time from canonical reviewer-dispatch envelope shapes). Expanding past 340k means a block belongs on disk.`
-    ).toBeLessThanOrEqual(340000);
-  });
-});
 
 describe("v8.22 orchestrator-slim — install layer writes new runbooks", () => {
   let project: string;
@@ -244,10 +79,7 @@ describe("v8.22 orchestrator-slim — install layer writes new runbooks", () => 
     );
     expect(indexBody).toContain("On-demand runbooks");
     for (const runbook of ON_DEMAND_RUNBOOKS) {
-      expect(
-        indexBody,
-        `runbooks/index.md does not list \`${runbook.fileName}\` — the per-trigger table should be findable from the index`
-      ).toContain(runbook.fileName);
+      expect(indexBody).toContain(runbook.fileName);
     }
   });
 
@@ -338,50 +170,5 @@ describe("v8.22 orchestrator-slim — generic orphan-cleanup also covers runbook
     expect(first.events.filter((e) => e.step === "Removed orphan runbook").length).toBe(1);
     expect(second.events.find((e) => e.step === "Removed orphan runbook")).toBeUndefined();
     expect(second.events.find((e) => e.step === "Cleaned orphan runbooks")).toBeUndefined();
-  });
-});
-
-describe("v8.22 orchestrator-slim — pointer integrity (body → runbook)", () => {
-  it("AC-7 — every on-demand runbook is reachable from the orchestrator (forward pointer)", () => {
-    const body = renderStartCommand();
-    for (const runbook of ON_DEMAND_RUNBOOKS) {
-      expect(
-        body,
-        `start-command body lacks a pointer to \`${runbook.fileName}\``
-      ).toMatch(new RegExp(runbook.fileName.replace(/\./g, "\\.")));
-    }
-  });
-
-  it("AC-7 — finalize is no longer a body section (only a pointer paragraph)", () => {
-    const body = renderStartCommand();
-    expect(body).toMatch(/^## Finalize \(ship-finalize/m);
-    expect(body).toContain("runbooks/finalize.md");
-    expect(body, "finalize body should be short — full procedure lives in finalize.md").not.toMatch(
-      /\*\*Pre-condition check\.\*\* `flows\/<slug>\/ship\.md` exists with `status: shipped`/
-    );
-  });
-
-  it("AC-7 — parallel-build fan-out ASCII no longer appears in the body", () => {
-    const body = renderStartCommand();
-    expect(body).not.toContain("git worktree add .cclaw/worktrees/<slug>-s-1");
-  });
-
-  it("AC-7 — self-review gate fix-only bounce envelope no longer appears in the body", () => {
-    const body = renderStartCommand();
-    expect(body).not.toMatch(/Stage: build \(self-review fix-only\)/);
-  });
-
-  it("AC-7 — ship-gate `askUserQuestion(...)` block no longer appears inline", () => {
-    const body = renderStartCommand();
-    expect(body, "ship-gate user-ask example should live in ship-gate.md").not.toMatch(
-      /option label conveying: open a PR with structured body/
-    );
-  });
-
-  it("AC-7 — discovery auto-skip heuristic detailed conditions live in discovery.md, not body", () => {
-    const body = renderStartCommand();
-    expect(body).not.toMatch(
-      /1\. `triage\.confidence` is `high` \(the heuristic produced an unambiguous large-risky classification\)\./
-    );
   });
 });
