@@ -560,6 +560,21 @@ If the user wants to abandon the flow at this point, they type \`/cc-cancel\` (o
 1. The flow has already passed code-mode review + adversarial pre-mortem; cancelling here is unusual.
 2. The shipped artefacts may have already been partially written (manifest-as-frontmatter, learnings.md); cancelling mid-finalize requires a different recovery path than \`/cc-cancel\` from earlier stages.
 
+### Post-ship micro-edit hint (v8.102)
+
+After every successful ship (regardless of finalization mode), the orchestrator surfaces a one-line plain-prose hint pointing the user at the v8.102 patch-mode entry point:
+
+> "If you need to adjust this slug after shipping, run \`/cc patch <slug> <description>\` for a fast follow-up without full ceremony."
+
+The hint mechanics:
+
+- **One line, plain prose** in the user's language (the mechanical tokens \`/cc patch\`, \`<slug>\`, and \`<description>\` stay English — they're the wire protocol).
+- **Always emitted** on a clean ship — every finalization mode (merge / open-PR / push-only / discard-local / no-vcs) surfaces the same hint. The hint is non-coercive informational text; it does NOT block, does NOT add a structured ask, does NOT consume an iteration of the chain.
+- **Substitute \`<slug>\` for the just-shipped slug** when rendering the hint to the user — the literal slug (\`20260514-auth-flow\`) lands in the prose so the user can copy-paste the suggestion verbatim. \`<description>\` stays as a placeholder.
+- **Patch-mode trade-off**: patch-mode skips triage, architect, plan-critic, plan-design, plan-devex, qa, critic, and the ship-gate ask. The full runbook (\`runbooks/patch-mode.md\`) names the four "when NOT to use patch-mode" conditions (≥3 files, new AC, schema/migration/auth/public-API wording, full reviewer pass needed); the user reaches for \`/cc extend\` instead in those cases.
+
+The hint exists so post-ship "tiny tweak" tasks have a frictionless entry point. Dogfooded slugs routinely paid the full ceremony cost on 2-line follow-ups; surfacing the patch-mode option immediately after ship is the cheapest place to teach the user the fork exists.
+
 ### Adversarial pre-mortem (strict mode only)
 
 Before the ship gate finalises, the orchestrator dispatches \`reviewer\` mode=\`adversarial\` against the diff produced for this slug. The adversarial reviewer's specific job is to **think like the failure**: how would this break in production a week from now?
@@ -1341,6 +1356,170 @@ When \`userOverrode: true\` is recorded, the entry also includes a \`overrideFie
 - **Auto-detection deferral.** If a future release ships auto-detection, the entry point in this runbook stays unchanged — auto-detection becomes a second path into the same init code (the explicit \`/cc extend\` slug stays as the primary, unambiguous entry).
 `;
 
+const PATCH_MODE = `# On-demand runbook — patch-mode entry point (v8.102+)
+
+The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts with the literal token \`patch \` (case-insensitive, exactly one space)**. The Detect hop fires before the extend-mode and research-mode forks — \`patch\` always wins. This runbook covers the full patch-mode contract: argument parsing, parent validation, the inline-only ceremony force, the one-commit builder dispatch, and the \`patch-N.md\` append into the parent's shipped flow dir.
+
+## Why patch-mode exists (dogfood-driven)
+
+Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy edit on the same surface the parent slug already shipped) routinely cost more ceremony than they deserve under the existing pipeline. The full \`/cc <task>\` chain dispatches triage → architect → plan-critic → plan-design → plan-devex → builder → qa? → reviewer → critic → ship — eight to ten sub-agents — even when the change is a 2-line edit to a single file the parent already touched. The v8.59 \`/cc extend <slug>\` fork reduced the context-loading cost (parent artifacts ride on the envelope) but kept every ceremony stage; the trivial-shape downgrade in triage (v8.102 §1.6) helps when the task signals are clean, but the user still pays the dispatch tax.
+
+\`/cc patch <slug> <task>\` is the **micro-edit fast path**: a slug that has already shipped gets a follow-up edit with NO triage, NO architect, NO plan-critic, NO plan-design, NO plan-devex, NO qa, NO critic, NO ship gate. The builder dispatches directly with the parent context envelope, writes ONE commit prefixed \`patch(<slug>): <message>\`, appends a \`patch-N.md\` artifact next to the parent's shipped \`plan.md\` / \`build.md\` (no separate flow dir), and ends. Optional \`--review\` enables a lite reviewer pass (correctness + readability + edit-discipline axes only) for the user who wants a second pair of eyes on a security-adjacent micro-edit.
+
+## Trigger evaluation order (Detect hop)
+
+1. **Git-check sub-step** — \`.git/\` presence; force \`ceremonyMode: soft\` if absent (does not apply here — patch mode is inline; no git check is run).
+2. **patch-mode fork** — argument starts with \`patch \`.
+3. **extend-mode fork** — argument starts with \`extend \`.
+4. **research-mode fork** — argument starts with \`research \` OR carries \`--research\`.
+5. **Default routes** — fresh / resume / collision / pre-v8 state per the Detect table.
+
+The order matters: \`/cc patch <slug> extend <task>\` enters patch mode (the trailing \`extend\` is part of the task text). \`/cc extend <slug> patch <task>\` enters extend mode (the trailing \`patch\` is part of the task text). The two forks are mutually exclusive at the Detect layer; the first-matched-wins rule is deterministic.
+
+## Argument parsing
+
+When the fork fires, parse the argument into two parts:
+
+- \`<slug>\` — the **first whitespace-separated token** after \`patch \`. Cases:
+  - Empty (argument is exactly \`patch\` with no remainder) → sub-case "no slug".
+  - Present but no follow-up text → sub-case "no task".
+  - Present + remainder → continue to validation.
+
+- \`<task>\` — the **remainder of the argument string** after the slug, trimmed. Must be non-empty for the fork to proceed.
+
+The slug token is matched verbatim; no fuzzy resolution at this layer (a typo surfaces as \`reason: "missing"\` from \`loadParentContext\` and the orchestrator's error message points the user at \`cclaw --non-interactive knowledge\` for the canonical list).
+
+## Parent validation via \`loadParentContext\` (REUSED from v8.59)
+
+Call \`loadParentContext(projectRoot, slug)\` from \`src/parent-context.ts\` — **the SAME helper that backs the v8.59 \`/cc extend\` fork**. The contract is identical: the slug MUST resolve to a shipped flow with a non-empty \`plan.md\`. Patch mode reuses every error sub-case verbatim:
+
+| \`reason\` | meaning | message template |
+| --- | --- | --- |
+| \`"in-flight"\` | slug is still active under \`flows/<slug>/\` | \`Slug '<slug>' is still in-flight (active under flows/<slug>/). Ship it first, then run /cc patch.\` |
+| \`"cancelled"\` | slug was cancelled (under \`flows/cancelled/<slug>/\`) | \`Slug '<slug>' was cancelled (under flows/cancelled/<slug>/, never shipped). Pass a shipped slug.\` |
+| \`"corrupted"\` | shipped dir exists but \`plan.md\` is missing | \`Shipped slug '<slug>' is corrupted (plan.md missing under flows/shipped/<slug>/). Cannot use as parent for patch-mode.\` |
+| \`"missing"\` | slug not found under \`flows/\` or \`flows/shipped/\` or \`flows/cancelled/\` | \`Unknown slug '<slug>'. Run 'cclaw --non-interactive knowledge' to list shipped slugs.\` |
+
+The error message is plain prose, ends the turn, and does NOT consume any of the user's quota of clarifying questions. The fork does not allow patching an in-flight slug — that's what \`/cc\` (no args) on an active flow already does. Patch is for **post-ship** micro-edits only.
+
+## What the orchestrator does on \`ok: true\`
+
+The slug resolves to a shipped flow with a non-empty \`plan.md\`. Continue with patch-mode initialisation:
+
+1. **Skip the slug-creation step.** Patch mode does NOT create a new \`YYYYMMDD-<task>\` slug under \`.cclaw/flows/<slug>/\` — the artifact lives in the parent's shipped flow dir as \`patch-N.md\` (see below). \`flow-state.json > currentSlug\` stays \`null\`; \`lastSpecialist\` stays \`null\`. The patch is logged as a separate artifact alongside the parent's \`plan.md\`, NOT as a new active flow.
+2. **Skip the triage dispatch entirely.** The slug already shipped — its triage decision is in the parent's \`plan.md\` frontmatter; there is no fresh triage to make. The patch-mode dispatch carries a synthesised sentinel triage envelope: \`ceremonyMode: "inline"\` (always; the architect-skip-builder-only path), \`path: ["build"]\`, \`runMode: null\`, \`mode: "task"\`, \`complexity: "trivial"\`, \`rationale: "patch-mode post-ship micro-edit"\`. Stamp \`triage-audit.jsonl\` with one entry recording \`autoExecuted: true\` + \`userOverrode: false\` + \`patchMode: true\` for telemetry parity.
+3. **Skip the architect dispatch entirely.** No \`plan.md\` is authored — the parent's \`plan.md\` IS the contract. The builder reads the parent's \`plan.md\` (via \`parentContext.artifactPaths.plan\`) + the patch task description as its envelope inputs. No \`## Acceptance Criteria (verification)\` table is added; the patch is verified by the suite running green after the edit.
+4. **Skip plan-critic / plan-design / plan-devex / qa / critic.** All gated specialists structurally skip the inline path; patch mode IS an inline path. The ceremony reduction is the entire point of the fork.
+5. **Dispatch \`builder\` directly with the patch envelope** (see "Builder envelope" below). The builder writes ONE commit prefixed \`patch(<slug>): <message>\` and appends \`patch-N.md\` to the parent's shipped dir.
+6. **Skip the ship-gate structured ask.** Patch mode auto-commits the single commit; pushing / PR-opening / merging are user-driven via plain \`git\` commands. There is no \`finalization_mode\` ask — the commit IS the finalize step.
+7. **Optional \`--review\` flag.** When the user invokes \`/cc patch <slug> --review <task>\`, the orchestrator dispatches a lite reviewer pass AFTER the builder commits, scoped to **three axes only**: \`correctness\` / \`readability\` / \`edit-discipline\`. No other axes fire. A \`block\` finding from the lite reviewer routes the patch back to the builder for a fix-only commit (capped at 2 iterations; third failure stops and reports). The lite review surfaces inline in the same \`patch-N.md\` (no separate \`review.md\`).
+
+## Patch artifact shape — \`patch-N.md\` (in parent's shipped dir)
+
+Patch mode does NOT create a new flow dir. The artifact lives at \`.cclaw/flows/shipped/<parent-slug>/patch-1.md\`, \`patch-2.md\`, etc. — numbered monotonically (the next \`patch-N\` is N = max(existing) + 1; on a parent with no prior patches the first patch is \`patch-1.md\`). The shape:
+
+\`\`\`markdown
+---
+patch_index: 1
+parent_slug: 20260514-auth-flow
+task: <verbatim copy of the user's task description>
+shipped_at: <iso-now>
+commit: <short-sha>
+patch_mode: inline
+review_mode: <none | lite>
+---
+
+# patch-1 — <one-line task summary>
+
+## Why
+
+<2-3 sentences explaining the post-ship motivation; cite the parent's \`plan.md\` section the patch touches when applicable>
+
+## Change
+
+- **Files touched**: <list of file:line refs the patch modified>
+- **Diff summary**: <one-paragraph summary; no full diff — that's in \`git show <sha>\`>
+- **Commit**: \`patch(<slug>): <message>\` (\`<short-sha>\`)
+- **Suite run**: \`<verification command>\` → \`<n> passed, 0 failed\`
+
+## Lite review (when --review flag was set)
+
+<one-bullet per axis; absent when --review was not set>
+
+- correctness: <pass | block: <verbatim gap>>
+- readability: <pass | block: <verbatim gap>>
+- edit-discipline: <pass | block: <verbatim gap>>
+\`\`\`
+
+The patch artifact is single-shot — no iterations, no append-only log. If the lite review bounces the patch back, the builder amends the file in place (re-runs the suite, re-writes the commit's SHA in the \`commit\` frontmatter, re-emits the lite review block). Patch-mode does NOT support multi-step revisions; if the post-ship edit grows beyond a 1-2 file tweak, the user should \`/cc-cancel\` the patch attempt and re-invoke \`/cc extend <slug> <task>\` for the full ceremony.
+
+## Builder envelope (patchMode: true)
+
+The orchestrator dispatches the builder with an envelope that carries \`patchMode: true\` plus the parent context:
+
+\`\`\`
+Dispatch builder
+─ Stage: build (patch-mode; post-ship micro-edit)
+─ Slug: <parent-slug> (NOTE: no new slug created; artifact lands in parent's shipped dir)
+─ Mode: patch
+─ patchMode: true
+─ Patch task: <verbatim user task text>
+─ Patch artifact: .cclaw/flows/shipped/<parent-slug>/patch-<N>.md
+─ Parent plan: <parentContext.artifactPaths.plan>
+─ Parent build (when present): <parentContext.artifactPaths.build>
+─ Parent learnings (when present): <parentContext.artifactPaths.learnings>
+─ Required ethos read: .cclaw/lib/cclaw-ethos.md
+─ Required first read: .cclaw/lib/agents/builder.md (Patch-mode flow section)
+─ Required second read: .cclaw/lib/runbooks/patch-mode.md (this file)
+\`\`\`
+
+The builder's contract carries a dedicated **Patch-mode flow** section (see \`agents/builder.md\`) that walks the protocol:
+
+- Read parent's \`plan.md\` + the patch task description as builder context (the parent plan IS the contract; you DO NOT re-author it).
+- Skip slice topology / parallel dispatch entirely (patch mode is single-edit-single-commit).
+- Skip the per-slice review loop (the lite reviewer pass, if requested, runs at the orchestrator level after commit — not in the builder's context).
+- Skip the per-criterion \`verify(AC-N): passing\` discipline (no new AC is added; the parent's AC are unchanged).
+- Skip flow-state assumption row flipping (no \`triage.assumptions\` field is touched; the parent's assumptions stay frozen).
+- Write ONE commit prefixed \`patch(<slug>): <message>\` after the suite passes.
+- Append \`patch-N.md\` to the parent's shipped dir per the artifact shape above.
+
+The builder's slim summary is the standard six-line shape but the \`What changed:\` line names the patch artifact path verbatim (\`patch-1.md added to flows/shipped/<parent-slug>/\`).
+
+## Sub-cases — argument shapes the parser must handle
+
+- **Argument is \`patch\` alone (no slug, no task)** — surface \`patch mode needs a parent slug and task; try '/cc patch <slug> <task>'\`, end the turn.
+- **Argument is \`patch <slug>\` (slug but no task)** — surface \`patch mode needs a follow-up task description; try '/cc patch <slug> <task>'\`, end the turn.
+- **Argument is \`patch <slug> <task>\` AND a flow is active (\`currentSlug != null\`)** — collision case. Surface \`Active flow: <slug> (stage: <stage>). Continue with /cc or cancel with /cc-cancel before running /cc patch.\` Patch mode does NOT auto-cancel; it lives outside the active-flow lifecycle.
+- **Argument is \`patch <slug> --review <task>\`** — sets \`review_mode: "lite"\`; the lite reviewer pass runs after the builder commits (three axes: correctness / readability / edit-discipline).
+- **Argument is \`patch <slug> <task>\` AND \`<slug>\` resolves to a shipped slug with \`outcome_signal: "reverted"\` in \`knowledge.jsonl\`** — proceed with the patch, but emit a one-line informational note: \`parent slug '<slug>' was later reverted — patching a reverted slug is unusual; verify intent.\` The user can still ship the patch; the note exists so a reverted parent does not become invisible context.
+- **Argument starts with \`patch \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — the ceremonyMode flag is IGNORED (patch mode is structurally inline; soft / strict ceremonies don't apply to a 1-2 file post-ship edit). Surface a one-line \`patch-mode ignores ceremonyMode flags\` note, then proceed.
+- **Argument starts with \`patch \` AND the \`--mode=auto\` / \`--mode=step\` flag is also present** — the toggle is IGNORED (patch mode is single-dispatch; the always-auto chain has nothing to chain). Surface a one-line note, then proceed.
+- **Argument starts with \`patch \` AND \`<slug>\` matches an active in-flight flow (under \`flows/<slug>/\`, not \`flows/shipped/\`)** — surface the \`"in-flight"\` error: \`Slug '<slug>' is still in-flight. Ship it first, then run /cc patch.\` Patch is post-ship-only.
+
+## When NOT to use patch-mode
+
+Patch-mode is the **micro-edit** fast path. The user should reach for \`/cc extend <slug> <task>\` (or a fresh \`/cc <task>\`) instead when ANY of:
+
+- the change touches ≥3 files (the patch artifact's \`Files touched\` line is intentionally short — bigger surfaces warrant the full ceremony);
+- the change adds a new AC (the parent's AC table is frozen; new behavioural assertions need an architect pass to add D-N + AC-N);
+- the change carries schema / migration / public-API / payment / auth wording (security-adjacent edges always escalate; patch-mode has no plan-critic / critic / adversarial pass to catch the regression);
+- the user wants a full reviewer pass (patch-mode's lite reviewer covers three axes only; the full fourteen-axis pass requires \`/cc extend\`).
+
+The orchestrator does NOT auto-detect these escape conditions — that's the user's call. Patch-mode trusts the user's framing; the runbook documents the guardrails.
+
+## Multi-level chaining
+
+A patch on a patched slug works: \`/cc patch <slug> <task>\` against a slug that already carries \`patch-1.md\` / \`patch-2.md\` writes \`patch-3.md\` next to them. The parent's plan.md still anchors the contract; the prior patches ride alongside as informational context but the builder does NOT have to re-read them (the patch task is independent of prior patches by construction — if the new task touches the same surface as a prior patch, the user should re-verify the suite passes against the cumulative state, but the builder's discipline is single-edit-single-commit regardless).
+
+A patch on an \`/cc extend\`-ed slug also works: the patch targets the EXTENSION slug (the child of the original parent), not the grandparent. \`refines:\` chains are NOT walked at the patch layer — the patch trusts the immediate slug as the contract.
+
+## Backwards compatibility
+
+- **Pre-v8.102 state files** never carry \`patchMode\` in any envelope. Readers default to \`false\`/absent meaning "standard build flow". Migration is a no-op; the field is opt-in on the builder envelope.
+- **Pre-v8.102 shipped slugs** are valid patch targets. The parent does not need any \`patch_*\` frontmatter field to be patch-able; the artifact lands in the shipped dir without modifying the parent's existing artifacts.
+- **Pre-v8.102 knowledge-store entries** are not touched by patch mode (the patch is not a separate slug; no new knowledge entry is appended). A patch that materially changes the parent's behaviour SHOULD also be captured via \`/cc extend\` rather than \`/cc patch\` — the knowledge-store gate is the user's compass.
+`;
+
 const RESEARCH_DEPTH_AND_SELF_REVIEW = `# On-demand runbook — research depth tiers + synthesis self-review (v8.69+)
 
 The orchestrator opens this runbook on every \`/cc research <topic>\` flow — once at the Detect-hop research-mode fork (to parse the depth flag / classify the depth) and once at Phase 3 synthesis (to run the self-review pass before \`research.md\` is written). The body of \`/cc\` carries only the one-paragraph pointer; this runbook is the canonical source.
@@ -2086,6 +2265,12 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "extend-mode.md",
     title: "Extend-mode entry point (v8.59+)",
     body: EXTEND_MODE
+  },
+  {
+    id: "patch-mode",
+    fileName: "patch-mode.md",
+    title: "Patch-mode entry point (v8.102+ — post-ship micro-edit)",
+    body: PATCH_MODE
   },
   {
     id: "research-depth-and-self-review",

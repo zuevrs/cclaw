@@ -151,8 +151,21 @@ const PROMPT_BUDGETS: PromptBudget[] = [
     // over the v8.73 envelope; budget raised to 970 lines / 110000 chars
     // (≈6% line headroom, ≈6% char headroom over current size). Growth
     // justified in CHANGELOG.md (v8.77 — investigator debug-branch).
-    maxLines: 970,
-    maxChars: 110000
+    //
+    // v8.102 — patch-mode flow: new "Patch-mode flow (v8.102; when envelope
+    // carries `patchMode: true`)" section codifies the post-ship micro-edit
+    // protocol — read parent's plan.md as contract, skip slice topology /
+    // per-slice review / AC verify discipline, write ONE commit prefixed
+    // `patch(<slug>):`, append `patch-N.md` to parent's shipped dir. Section
+    // also names the patch-mode slim-summary shape and the patch-mode hard
+    // rules (no production-code changes outside cited file:line refs; one
+    // commit only; skip ship-gate ask). Growth lands ~+60 lines / ~+7k
+    // chars over the v8.77 envelope; budget raised to 1060 lines / 120000
+    // chars (≈7% line headroom, ≈8% char headroom over current size).
+    // Growth justified in CHANGELOG.md (v8.102 — /cc patch post-ship
+    // micro-edit mode).
+    maxLines: 1060,
+    maxChars: 120000
   }
 ];
 
