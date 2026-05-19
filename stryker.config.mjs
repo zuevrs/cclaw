@@ -1,28 +1,25 @@
+/** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 const config = {
   testRunner: "vitest",
+  reporters: ["html", "clear-text", "progress", "json"],
   coverageAnalysis: "perTest",
+  // v8.101 — mutation testing scope. Stryker is wired as a dev tool to
+  // canary specific src modules; default scope is the highest-leverage
+  // wiring/parser modules. Override on CLI with `--mutate '<glob>'` to
+  // expand scope on demand.
   mutate: [
     "src/flow-state.ts",
-    "src/delegation.ts",
-    "src/tdd-cycle.ts",
-    "src/retro-gate.ts"
+    "src/cli.ts",
+    "src/install.ts",
+    "src/orchestrator-routing.ts",
+    "src/harness-prompt.ts"
   ],
-  testFiles: [
-    "tests/unit/flow-state.test.ts",
-    "tests/unit/flow-tracks.test.ts",
-    "tests/unit/delegation.test.ts",
-    "tests/unit/tdd-cycle.test.ts",
-    "tests/unit/runs.test.ts"
-  ],
-  reporters: ["clear-text", "progress", "html"],
-  thresholds: {
-    high: 95,
-    low: 85,
-    break: 0
-  },
   vitest: {
-    related: true
-  }
+    configFile: "vitest.config.ts"
+  },
+  thresholds: { high: 80, low: 60, break: null },
+  timeoutMS: 60000,
+  concurrency: 4
 };
 
 export default config;

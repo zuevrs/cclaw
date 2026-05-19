@@ -5,6 +5,9 @@ coverage/
 *.tgz
 .DS_Store
 release-artifacts/
+# stryker mutation testing — local-only outputs
+reports/
+.stryker-tmp/
 # cclaw generated artifacts
 .cclaw/
 .claude/commands/cc-*.md

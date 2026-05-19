@@ -16,11 +16,12 @@ import { createTempProject, removeProject } from "../helpers/temp-project.js";
 /**
  * v8.42 — adversarial critic Hop 4.5 integration test.
  *
- * v8.54 merged the standalone `critic-stage.md` and `plan-critic-stage.md`
- * runbooks into a single `critic-steps.md` that covers both the
- * pre-implementation (plan-critic) and post-implementation (critic)
- * passes. The test layer follows the merge — every runbook reference
- * here points at `critic-steps.md`.
+ * Slimmed in v8.101 test-slim-down A4 from 12 atomized its() to 5
+ * packed integration tests (init writes templates+agents+runbook in one
+ * pass; start-command body wiring; runbook verdict surface; critic
+ * prompt scope; CORE_AGENTS + agent-file roster). The init-writes
+ * block shares a single `initCclaw` invocation now to avoid 3 redundant
+ * project bootstraps.
  */
 
 const CRITIC_STEPS_FILENAME = "critic-steps.md";
@@ -31,78 +32,58 @@ describe("v8.42 — critic Hop 4.5 install layer (e2e)", () => {
     if (project) await removeProject(project);
   });
 
-  it("init writes .cclaw/lib/templates/critic.md", async () => {
+  it("WIRING — single initCclaw run writes the critic.md artifact template, .cclaw/lib/agents/critic.md (on-demand activation + Modes: gap/adversarial), and the merged .cclaw/lib/runbooks/critic-steps.md (v8.54 merged post-impl + pre-impl)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    const target = path.join(project, ".cclaw", "lib", "templates", "critic.md");
-    const body = await fs.readFile(target, "utf8");
-    const tpl = ARTIFACT_TEMPLATES.find((t) => t.id === "critic")!;
-    expect(body).toBe(tpl.body);
-  });
 
-  it("init writes .cclaw/lib/agents/critic.md with on-demand activation", async () => {
-    project = await createTempProject();
-    await initCclaw({ cwd: project });
-    const body = await fs.readFile(
+    const tplPath = path.join(project, ".cclaw", "lib", "templates", "critic.md");
+    const tplBody = await fs.readFile(tplPath, "utf8");
+    const tpl = ARTIFACT_TEMPLATES.find((t) => t.id === "critic")!;
+    expect(tplBody).toBe(tpl.body);
+
+    const agentBody = await fs.readFile(
       path.join(project, ".cclaw", "lib", "agents", "critic.md"),
       "utf8"
     );
-    expect(body).toMatch(/^---\nname: critic\n/);
-    expect(body).toContain("activation: on-demand");
-    expect(body).toMatch(/## Modes\n\n- gap\n- adversarial/);
-  });
+    expect(agentBody).toMatch(/^---\nname: critic\n/);
+    expect(agentBody).toContain("activation: on-demand");
+    expect(agentBody).toMatch(/## Modes\n\n- gap\n- adversarial/);
 
-  it("init writes .cclaw/lib/runbooks/critic-steps.md (v8.54 merged: post-impl + pre-impl)", async () => {
-    project = await createTempProject();
-    await initCclaw({ cwd: project });
-    const body = await fs.readFile(
+    const runbookBody = await fs.readFile(
       path.join(project, ".cclaw", "lib", "runbooks", CRITIC_STEPS_FILENAME),
       "utf8"
     );
     const runbook = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === CRITIC_STEPS_FILENAME)!;
-    expect(body).toBe(runbook.body);
+    expect(runbookBody).toBe(runbook.body);
   });
 });
 
-describe("v8.42 — critic step dispatch path reachable from start-command body", () => {
-  it("body adds `critic` between `review` and `ship` in the canonical path", () => {
+describe("v8.42 — critic step dispatch surface (start-command body)", () => {
+  it("BEHAVIOR — body inserts `critic` between `review` and `ship` in the canonical path, names the v8.42+ critic-step heading, references the merged critic-steps.md runbook, and includes `critic` in the lastSpecialist enum (v8.61 reframe)", () => {
     const body = renderStartCommand();
     expect(body).toMatch(/`plan`,\s*`build`,\s*`review`,\s*`critic`,\s*`ship`/);
     expect(body).toMatch(/#### critic \(v8\.42\+, critic step\)/);
-  });
-
-  it("body references the merged `critic-steps.md` runbook", () => {
-    expect(renderStartCommand()).toContain(CRITIC_STEPS_FILENAME);
-  });
-
-  it("body includes `critic` in the lastSpecialist enum (v8.61 reframed from the resume-summary 'Last specialist:' line)", () => {
+    expect(body).toContain(CRITIC_STEPS_FILENAME);
     expect(START_COMMAND_BODY).toMatch(/`lastSpecialist`\s*=[\s\S]+`critic`/);
   });
 });
 
 describe("v8.42 — critic-steps runbook documents both verdict surfaces", () => {
-  const runbook = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === CRITIC_STEPS_FILENAME)!;
-
-  it("post-impl section names all three critic verdicts (pass / iterate / block-ship)", () => {
-    expect(runbook.body).toContain("`pass`");
-    expect(runbook.body).toContain("`iterate`");
-    expect(runbook.body).toContain("`block-ship`");
-  });
-
-  it("post-impl section names the block-ship picker shape + cap rules", () => {
+  it("BEHAVIOR — runbook names all three post-impl verdicts (`pass` / `iterate` / `block-ship`), the block-ship picker shape + cap rules (fix-and-rereview / accept-and-ship / criticIteration), and the v8.51/v8.54 pre-impl (plan-critic) widened gate", () => {
+    const runbook = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === CRITIC_STEPS_FILENAME)!;
+    for (const verdict of ["`pass`", "`iterate`", "`block-ship`"]) {
+      expect(runbook.body).toContain(verdict);
+    }
     expect(runbook.body).toMatch(/fix and re-?review/i);
     expect(runbook.body).toMatch(/accept-and-ship/i);
     expect(runbook.body).toMatch(/criticIteration/);
-  });
-
-  it("pre-impl (plan-critic) section is present with v8.54 widened gate", () => {
     expect(runbook.body).toMatch(/Pre-implementation pass \(plan-critic, v8\.51\)/);
     expect(runbook.body).toMatch(/triage\.complexity != "trivial"/);
   });
 });
 
-describe("v8.42 — critic prompt covers known-bad scenarios", () => {
-  it("§3 adversarial techniques scaffold + gap-axis vocabulary are present", () => {
+describe("v8.42 — critic prompt scope", () => {
+  it("BEHAVIOR — critic prompt covers the §3 adversarial techniques scaffold + gap-axis vocabulary (assumption violation / composition failures / cascade construction / abuse cases / edge-case / scope-creep / goal-backward)", () => {
     const prompt = SPECIALIST_PROMPTS.critic;
     for (const token of [
       "assumption violation",
@@ -118,15 +99,13 @@ describe("v8.42 — critic prompt covers known-bad scenarios", () => {
   });
 });
 
-describe("v8.62 — specialist count end-to-end (unified flow: 10 specialists + 2 research helpers after v8.82)", () => {
-  it("CORE_AGENTS contains 10 specialists + 2 research helpers (v8.62 unified flow dropped `design` (absorbed into `architect`) and `security-reviewer` (absorbed into `reviewer`'s `security` axis); renamed `ac-author` → `architect`, `slice-builder` → `builder`; v8.75 added pre-implementation `plan-design`; v8.77 added read-only debug-branch `investigator`; v8.82 added pre-implementation `plan-devex`)", () => {
+describe("v8.62 / v8.82 — specialist count end-to-end (unified flow)", () => {
+  it("WIRING — CORE_AGENTS contains 10 specialists + 2 research helpers (v8.62 unified, v8.75 plan-design, v8.77 investigator, v8.82 plan-devex) and init writes the canonical 12-agent .md roster to .cclaw/lib/agents", async () => {
     const specialists = CORE_AGENTS.filter((a) => a.kind === "specialist");
     const research = CORE_AGENTS.filter((a) => a.kind === "research");
     expect(specialists).toHaveLength(10);
     expect(research).toHaveLength(2);
-  });
 
-  it("init writes the 12 expected agent files (v8.82 unified flow roster — `architect`, `builder`, `critic`, `investigator`, `plan-critic`, `plan-design`, `plan-devex`, `qa-runner`, `reviewer`, `triage` plus the two research helpers)", async () => {
     let project: string | null = null;
     try {
       project = await createTempProject();

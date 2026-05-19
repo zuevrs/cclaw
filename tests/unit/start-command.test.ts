@@ -1,65 +1,69 @@
 import { describe, expect, it } from "vitest";
 import { renderStartCommand } from "../../src/content/start-command.js";
 
-describe("start command (/cc) markdown", () => {
+/**
+ * Slimmed in v8.101 test-slim-down A4 from 9 single-grep its() to 3
+ * packed wiring tests (stage scaffolding, /cc invocation matrix,
+ * approval+failure protocol). Each test packs all anchors for that
+ * surface; the legacy per-anchor split was pure prompt-grep with no
+ * objective mutation upside.
+ */
+
+describe("start command (/cc) markdown — stage scaffolding", () => {
   const body = renderStartCommand();
 
-  it("explains the four core stages plan/build/review/ship", () => {
+  it("BEHAVIOR — body documents the four core stages (plan/build/review/ship), the v8.45 stage sequence (Detect/Triage/Dispatch/Pause-and-resume/Compound), the triage gate (immutable decision + userOverrode), and the per-stage sub-agent dispatch contract (Slim summary + dispatch-envelope.md)", () => {
     for (const stage of ["plan", "build", "review", "ship"]) {
       expect(body).toContain(stage);
     }
-  });
-
-  it("describes the v8.45 stage sequence: detect → triage → dispatch → pause → compound", () => {
-    expect(body).toMatch(/^## Detect$/m);
-    expect(body).toMatch(/^## Triage/m);
-    expect(body).toMatch(/^## Dispatch$/m);
-    expect(body).toMatch(/^## Pause and resume$/m);
-    expect(body).toMatch(/^## Compound/m);
-  });
-
-  it("requires the triage gate on every fresh /cc and persists the decision", () => {
+    for (const heading of [
+      /^## Detect$/m,
+      /^## Triage/m,
+      /^## Dispatch$/m,
+      /^## Pause and resume$/m,
+      /^## Compound/m
+    ]) {
+      expect(body).toMatch(heading);
+    }
     expect(body).toMatch(/triage[- ]gate/i);
     expect(body).toMatch(/triage decision is \*\*immutable\*\*/i);
     expect(body).toMatch(/userOverrode/);
-  });
-
-  it("describes per-stage sub-agent dispatch with a slim summary contract (v8.22: envelope shape in runbook)", () => {
     expect(body).toMatch(/Slim summary/i);
     expect(body).toContain("dispatch-envelope.md");
     expect(body).toMatch(/Dispatch envelope/);
   });
+});
 
-  it("v8.61 — describes the deterministic /cc dispatch matrix that replaced the resume picker", () => {
+describe("start command (/cc) markdown — v8.61 deterministic invocation matrix + AC modes", () => {
+  const body = renderStartCommand();
+
+  it("BEHAVIOR — body documents the v8.61 Detect invocation matrix that replaced the r/s/n resume picker (no `[r]`, `[s]`, `[c] Cancel` tokens; the four entry-point shapes are enumerated for both active and non-active flow states) and names the three AC modes (inline/soft/strict)", () => {
     expect(body).toMatch(/Detect — `\/cc` invocation matrix \(v8\.61\)/);
-    // No more r/s/n picker — the resume decision is silent on /cc no-args.
     expect(body).not.toMatch(/\[r\]/);
     expect(body).not.toMatch(/\[s\]/);
     expect(body).not.toMatch(/\[c\] Cancel/);
-    // The matrix must enumerate the four entry-point shapes (no-args, task, research, extend) for both active and non-active flow states.
-    expect(body).toMatch(/Continue silently/);
-    expect(body).toMatch(/Active flow: <slug>/);
-    expect(body).toMatch(/No active flow\. Start with/);
-    expect(body).toMatch(/No active flow to cancel/);
+    for (const matrixCell of [
+      /Continue silently/,
+      /Active flow: <slug>/,
+      /No active flow\. Start with/,
+      /No active flow to cancel/
+    ]) {
+      expect(body).toMatch(matrixCell);
+    }
+    for (const mode of [/inline/, /soft/, /strict/]) {
+      expect(body).toMatch(mode);
+    }
   });
+});
 
-  it("documents the three AC modes (inline/soft/strict) at the build stage", () => {
-    expect(body).toMatch(/inline/);
-    expect(body).toMatch(/soft/);
-    expect(body).toMatch(/strict/);
-  });
+describe("start command (/cc) markdown — push approval + compound + failure-mode loop", () => {
+  const body = renderStartCommand();
 
-  it("requires explicit user approval for push and PR", () => {
+  it("BEHAVIOR — body requires explicit user approval for push/PR, describes the automatic compound + shipped move, and references the Failure Modes loop with the hard cap of 5 review iterations", () => {
     expect(body).toMatch(/git push/i);
     expect(body).toMatch(/explicit/i);
-  });
-
-  it("describes the automatic compound + shipped move", () => {
     expect(body).toMatch(/Compound \(automatic\)/);
     expect(body).toMatch(/shipped/);
-  });
-
-  it("references the failure-mode loop and the hard cap of 5 review iterations", () => {
     expect(body).toMatch(/Failure Modes/i);
     expect(body).toMatch(/5 review/);
   });
