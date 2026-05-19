@@ -27,16 +27,16 @@ import {
  */
 
 describe("v8.103 — startup token diet (orchestrator entry compression)", () => {
-  it("START_COMMAND_BODY chars < 55 000 (was ~137 000) — body-level char ceiling", () => {
+  it("START_COMMAND_BODY chars < 50 000 (was ~137 000) — body-level char ceiling", () => {
     expect(
       START_COMMAND_BODY.length,
-      `START_COMMAND_BODY is ${START_COMMAND_BODY.length} chars; expected < 55 000.`
-    ).toBeLessThan(55_000);
+      `START_COMMAND_BODY is ${START_COMMAND_BODY.length} chars; expected < 50 000.`
+    ).toBeLessThan(50_000);
   });
 
-  it("renderStartCommand() output chars < 55 000 — rendered-output char ceiling", () => {
+  it("renderStartCommand() output chars < 50 000 — rendered-output char ceiling", () => {
     const out = renderStartCommand();
-    expect(out.length, `renderStartCommand() is ${out.length} chars; expected < 55 000.`).toBeLessThan(55_000);
+    expect(out.length, `renderStartCommand() is ${out.length} chars; expected < 50 000.`).toBeLessThan(50_000);
   });
 
   it("new research-mode runbook exists with Phase 0-4 content + Approaches Gate + lens roster", () => {

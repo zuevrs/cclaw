@@ -21,12 +21,12 @@ import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 
 // v8.103 — Startup token diet recalibration. The pre-v8.103 baseline was
 // V882_BASELINE_CHARS = 141_769; the v8.103 token-diet lift dropped
-// start-command body from ~141k to ~58k chars (≈60% reduction). The
+// start-command body from ~141k to ≈49.7k chars (≈65% reduction). The
 // canary's purpose is unchanged: catch re-inlines of lifted runbook
 // bodies. With the new baseline, the AC-7 gate fires on any future slug
 // that grows start-command back past the v8.103 ceiling + a small
 // additive headroom.
-const V8103_BASELINE_CHARS = 55000;
+const V8103_BASELINE_CHARS = 50000;
 
 // v8.102 additive carve-out (patch-mode) folds into the new baseline; no
 // separate budget. New additive headroom is intentionally tight: each
@@ -79,7 +79,7 @@ describe("v8.83 — start-command body no longer carries the lifted duplicate pr
 });
 
 describe("v8.83 — start-command body stays under the v8.103 ceiling (re-inline canary, recalibrated)", () => {
-  it("AC-7 — start-command body is at or below the v8.103 baseline (≤55 000 chars)", () => {
+  it("AC-7 — start-command body is at or below the v8.103 baseline (≤50 000 chars)", () => {
     const adjustedSize = START_COMMAND_BODY.length - V8102_ADDITIVE_CHARS;
     expect(
       adjustedSize,
