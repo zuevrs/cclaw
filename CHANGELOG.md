@@ -1,6 +1,21 @@
 # Changelog
 
 
+
+## 8.106.1 — Docstring sweep: devex-quality-rubric.ts contextualises post-v8.104 plan-critic merge
+
+### Why
+
+Post-v8.106 audit of the v8.102-v8.106 simplify-and-fix arc surfaced one LOW-severity docstring drift. v8.104 merged the standalone `plan-design` and `plan-devex` specialists into `plan-critic` (dispatched with `rubricMode: "design"` or `rubricMode: "devex"`). The file-top docstring on `src/content/devex-quality-rubric.ts` was swept correctly at v8.104 land, but two per-function comments inside the file (above `renderDevexQualityRubricTable()` and `DEVEX_QUALITY_AI_SLOP_SIGNALS`) still named "the plan-devex prompt" and "the plan-devex specialist" verbatim. Zero runtime impact (comments only), but a future reader following the comment trail would land on a name that doesn't exist as a standalone specialist anymore.
+
+### What changed
+
+`src/content/devex-quality-rubric.ts` — the two per-function docstrings now name "plan-critic (on `rubricMode: \"devex\"` dispatches; v8.104 merged the former standalone `plan-devex` specialist into plan-critic)" verbatim, matching the file-top docstring and the v8.104 CHANGELOG entry's canonical phrasing.
+
+### Migration / breaking changes
+
+None. Comments-only cleanup.
+
 ## 8.106.0 — Cleanup: vestigial skills retired + reviewer trim + dispatch envelopes lazy
 
 ### Why
