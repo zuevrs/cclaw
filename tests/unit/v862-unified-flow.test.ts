@@ -15,16 +15,14 @@ import {
  * prompt-greps, plan template content-greps, and start-command body
  * greps were removed.
  */
-describe("v8.62 — SPECIALISTS roster is the canonical pipeline (post-v8.82: 10 entries)", () => {
-  it("orders the ten specialists along the canonical pipeline", () => {
+describe("v8.62 — SPECIALISTS roster is the canonical pipeline (post-v8.104: 8 entries — plan-design + plan-devex merged into plan-critic as rubric modes)", () => {
+  it("orders the eight specialists along the canonical pipeline", () => {
     expect(SPECIALISTS).toEqual([
       "triage",
       "investigator",
       "architect",
       "builder",
       "plan-critic",
-      "plan-design",
-      "plan-devex",
       "qa-runner",
       "reviewer",
       "critic"
@@ -32,13 +30,15 @@ describe("v8.62 — SPECIALISTS roster is the canonical pipeline (post-v8.82: 10
   });
 });
 
-describe("v8.62 — clean break: pre-v8.62 state files validate via permissive readers", () => {
-  it("the flow-state validator MUST NOT reject `lastSpecialist` values that are pre-v8.62 names (design, ac-author, slice-builder, security-reviewer)", () => {
+describe("v8.62 — clean break: pre-v8.62 / pre-v8.104 state files validate via permissive readers", () => {
+  it("the flow-state validator MUST NOT reject `lastSpecialist` values that are pre-v8.62 names (design, ac-author, slice-builder, security-reviewer) or pre-v8.104 names (plan-design, plan-devex — both merged into plan-critic as rubric modes)", () => {
     for (const legacyId of [
       "design",
       "ac-author",
       "slice-builder",
-      "security-reviewer"
+      "security-reviewer",
+      "plan-design",
+      "plan-devex"
     ]) {
       expect(() =>
         assertFlowStateV82({

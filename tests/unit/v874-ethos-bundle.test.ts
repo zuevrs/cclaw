@@ -10,8 +10,6 @@ import {
   CRITIC_PROMPT,
   INVESTIGATOR_PROMPT,
   PLAN_CRITIC_PROMPT,
-  PLAN_DESIGN_PROMPT,
-  PLAN_DEVEX_PROMPT,
   QA_RUNNER_PROMPT,
   REVIEWER_PROMPT,
   SPECIALIST_PROMPTS,
@@ -32,7 +30,7 @@ const FORCE_STANCE_CLAUSE =
   "Adversarial stance: Assume the artifact under review is flawed until evidence proves otherwise. Your starting hypothesis: this work will not deliver the stated goal. Look for disqualifying evidence first, then balance with what works.";
 
 describe("v8.74 — ethos preamble + reversibility field wiring", () => {
-  it("WIRING — ETHOS_PRINCIPLES exports the 5 canonical ids ([boil-the-lake, search-before-building, surgical-edits, user-sovereignty, three-knowledge-layers]); CCLAW_ETHOS_BODY = ethosMarkdown(); install layer writes .cclaw/lib/cclaw-ethos.md verbatim; SPECIALIST_PROMPTS roster equals the 10 specialists tested (ethos auto-prepended via dispatch envelope); plan template ships in catalogue; types.ts exports `Reversibility = one-way | two-way | mostly-two-way` + Decision.reversibility field", async () => {
+  it("WIRING — ETHOS_PRINCIPLES exports the 5 canonical ids ([boil-the-lake, search-before-building, surgical-edits, user-sovereignty, three-knowledge-layers]); CCLAW_ETHOS_BODY = ethosMarkdown(); install layer writes .cclaw/lib/cclaw-ethos.md verbatim; SPECIALIST_PROMPTS roster equals the 8 specialists tested — v8.104 merged plan-design + plan-devex into plan-critic as rubric modes (ethos auto-prepended via dispatch envelope); plan template ships in catalogue; types.ts exports `Reversibility = one-way | two-way | mostly-two-way` + Decision.reversibility field", async () => {
     expect(ETHOS_PRINCIPLES).toHaveLength(5);
     expect(ETHOS_PRINCIPLES.map((p) => p.id)).toEqual([
       "boil-the-lake",
@@ -49,13 +47,11 @@ describe("v8.74 — ethos preamble + reversibility field wiring", () => {
       ["architect", ARCHITECT_PROMPT],
       ["builder", BUILDER_PROMPT],
       ["plan-critic", PLAN_CRITIC_PROMPT],
-      ["plan-design", PLAN_DESIGN_PROMPT],
-      ["plan-devex", PLAN_DEVEX_PROMPT],
       ["qa-runner", QA_RUNNER_PROMPT],
       ["reviewer", REVIEWER_PROMPT],
       ["critic", CRITIC_PROMPT]
     ] as const;
-    expect(specialists).toHaveLength(10);
+    expect(specialists).toHaveLength(8);
     expect(Object.keys(SPECIALIST_PROMPTS).sort()).toEqual(
       specialists.map(([id]) => id).slice().sort()
     );
@@ -107,14 +103,15 @@ describe("v8.74 — ethos preamble + reversibility field behavior (plan template
     expect(ARCHITECT_PROMPT).toMatch(/`mostly-two-way`/);
     expect(ARCHITECT_PROMPT).toMatch(/critic.*cross-model.*one-way|one-way.*cross-model/i);
 
-    expect(PLAN_CRITIC_PROMPT).toMatch(/§A\.\s*Decision integrity/);
+    expect(PLAN_CRITIC_PROMPT).toMatch(/§2\.A\s+Decision integrity/);
     expect(PLAN_CRITIC_PROMPT).toMatch(/decision-missing-reversibility/);
     expect(PLAN_CRITIC_PROMPT).toMatch(/Missing.*Reversibility/);
     expect(PLAN_CRITIC_PROMPT).toMatch(/block-ship/);
     expect(PLAN_CRITIC_PROMPT).toMatch(/decision-bad-reversibility/);
     expect(PLAN_CRITIC_PROMPT).toMatch(/decision-overstated-reversibility/);
-    expect(PLAN_CRITIC_PROMPT).toMatch(/Decision integrity findings.*§A.*Reversibility/);
-    expect(PLAN_CRITIC_PROMPT).toMatch(/Skip §A.*no.*Decisions/);
+    expect(PLAN_CRITIC_PROMPT).toMatch(/Decision integrity findings \(§2\.A\)/);
+    expect(PLAN_CRITIC_PROMPT).toMatch(/Decision integrity audit \(Reversibility/);
+    expect(PLAN_CRITIC_PROMPT).toMatch(/Skip §2\.A.*no.*Decisions/);
 
     const criticIdx = START_COMMAND_BODY.indexOf("#### critic");
     expect(criticIdx).toBeGreaterThan(0);

@@ -37,13 +37,15 @@ const REPO_ROOT = path.resolve(
  * narrative ("v8.85 added the 13th axis, v8.86 bumped to 14") stays
  * intact.
  *
- * Canonical counts as of v8.94:
+ * Canonical counts (current as of v8.104):
  *   - REVIEWER AXES: 14 (8 base + 6 gated post-v8.86)
  *   - RESEARCH LENSES: 6 (engineer / product / architecture / history
  *     / skeptic / design — design added v8.76)
- *   - SPECIALISTS: 10 (triage / investigator / architect / plan-critic
- *     / plan-design / plan-devex / builder / qa-runner / reviewer /
- *     critic)
+ *   - SPECIALISTS: 8 (triage / investigator / architect / builder /
+ *     plan-critic / qa-runner / reviewer / critic — v8.104 merged
+ *     v8.75 plan-design + v8.82 plan-devex into plan-critic as
+ *     rubric modes "design" / "devex"; one specialist, three rubric
+ *     modes dispatched via envelope fan-out)
  *   - TRIAGE FIELD-COUNT (bimodal):
  *       sub-agent core decision surface: 5 (complexity / ceremonyMode
  *       / path / runMode / mode)
@@ -55,7 +57,7 @@ const REPO_ROOT = path.resolve(
 
 const AXES_CANONICAL = 14;
 const LENSES_CANONICAL = 6;
-const SPECIALISTS_CANONICAL = 10;
+const SPECIALISTS_CANONICAL = 8;
 const TRIAGE_FIELDS_CORE = 5;
 const TRIAGE_FIELDS_AGGREGATE = 8;
 
@@ -328,7 +330,7 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
     });
 
     it(`README declares "${SPECIALISTS_CANONICAL} sub-agents" in the Specialists count row`, () => {
-      expect(README).toMatch(/10 sub-agents/);
+      expect(README).toMatch(/8 sub-agents/);
     });
 
     it(`README's Triage row declares the aggregated "${TRIAGE_FIELDS_AGGREGATE}-field" stamped state`, () => {

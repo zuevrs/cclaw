@@ -1,6 +1,63 @@
 # Changelog
 
 
+## 8.104.0 — Merge plan-critic + plan-design + plan-devex (10 → 8 specialists)
+
+### Why
+
+The three pre-build specialists — `plan-critic`, `plan-design` (v8.75), and `plan-devex` (v8.82) — shipped with identical five-section scaffolds (§1 pre-commitment predictions / §2 N-dimension rubric / §3 AI-slop check / §4 findings ledger / §5 verdict). The bodies diverged only on (a) which dimensions §2 walked, (b) the finding-id namespace (`G-N` vs `PD-N` vs `DX-N`), (c) which output artifact §4 wrote into, and (d) which verdict vocabulary §5 used. Maintaining three near-identical prompts meant rubric-discipline edits had to land three times (the v8.85 KA-N closure-loop discipline already had to cross-check three bodies; the v8.86 anti-slop axis introduction touched two). The dispatch surface was the same shape: orchestrator picks specialist, builds envelope, dispatches once, parses slim summary, routes verdict. The three lenses are orthogonal but share one specialist contract; merging consolidates the prompt-discipline surface without losing rubric coverage.
+
+### What changed
+
+#### 1. Three pre-impl specialists merge into one `plan-critic` with a `rubricMode` envelope
+
+The merged `plan-critic` accepts a `rubricMode: "generic" | "design" | "devex"` envelope field (default `"generic"` on absent — pre-v8.104 envelopes continue to type-check). One unified prompt body inlines all three rubric scaffolds:
+
+- **`rubricMode: "generic"`** (default; pre-v8.104 plan-critic behaviour) — adversarial structural pass on the tight gate {ceremonyMode=strict, complexity≠trivial, problemType≠refines, AC count≥2}. Walks goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + §2.A decision-integrity audit + §2.6.5 bets-and-exclusions audit. Verdicts `pass` / `revise` / `cancel`; writes `flows/<slug>/plan-critic.md`.
+- **`rubricMode: "design"`** (v8.75 surface absorbed) — walks the seven-dimension design-quality rubric (shared verbatim with the v8.70 reviewer's design-quality axis via `design-quality-rubric.ts`) on the design-surface gate {`triage.designSurface == true` OR `triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅`; ceremonyMode ∈ {soft, strict}; plan.md exists}. Below-6 grades become `PD-N` findings appended to plan.md's `## Plan-design findings`. Verdicts `pass` / `revise` / `block`.
+- **`rubricMode: "devex"`** (v8.82 surface absorbed) — walks the six-dimension DevEx rubric (`devex-quality-rubric.ts`) on the devex-surface gate {`triage.devexSurface == true` OR `triage.surfaces ∩ {cli, library, api} ≠ ∅`; ceremonyMode ∈ {soft, strict}; plan.md exists}. Below-6 grades become `DX-N` findings appended to plan.md's `## Plan-devex findings`. Verdicts `pass` / `revise` / `block`.
+
+The orchestrator may dispatch `plan-critic` **up to three times per slug** (sequential, NEVER parallel), once per rubricMode whose gate fires. Multi-surface slugs (UI page that also exports an SDK) trigger all three sequentially: generic → design → devex. The `lastSpecialist` field on flow-state stays `plan-critic` across all three dispatches; the per-mode flow-state field names (`planCriticVerdict` / `planDesignVerdict` / `planDevexVerdict` with their iteration / findings-count / dispatchedAt siblings) are preserved verbatim across the merge so pre-v8.104 state files continue to validate and downstream readers branch on `rubricMode` rather than on `lastSpecialist`.
+
+#### 2. `SPECIALISTS` roster drops 10 → 8
+
+`src/types.ts > SPECIALISTS` now contains eight entries: `triage`, `investigator`, `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`. `plan-design` and `plan-devex` move to `LEGACY_SPECIALIST_IDS` so pre-v8.104 state files with `lastSpecialist == "plan-design"` (or `plan-devex`) validate on read. Two new exports surface the rubricMode contract: `PLAN_CRITIC_RUBRIC_MODES` (runtime const triple) + `PlanCriticRubricMode` (literal union type) + `DEFAULT_PLAN_CRITIC_RUBRIC_MODE`.
+
+#### 3. `PlanCriticVerdict` extends to include `"block"`
+
+`PlanCriticVerdict` = `"pass" | "revise" | "cancel" | "block"`. Each rubric mode emits a fixed slice: generic uses `pass / revise / cancel`; design + devex use `pass / revise / block`. `PlanDesignVerdict` and `PlanDevexVerdict` remain as `@deprecated` type aliases (`= "pass" | "revise" | "block"`) for one release so pre-v8.104 readers continue to compile.
+
+#### 4. Specialist-prompt files
+
+- **Deleted** — `src/content/specialist-prompts/plan-design.ts` (~245 lines) and `src/content/specialist-prompts/plan-devex.ts` (~249 lines).
+- **Rewritten** — `src/content/specialist-prompts/plan-critic.ts` now inlines all three rubric scaffolds + the mode-specific gate + finding-id namespace + output artifact + verdict semantics; imports + embeds the shared `renderDesignQualityRubricTable()` + `renderDesignQualityAiSlopChecklist()` + `renderDevexQualityRubricTable()` + `renderDevexQualityAiSlopChecklist()` so the rubric tables stay in lock-step with the post-build reviewer's design-quality axis and the v8.76 `research-design` lens.
+- **Updated** — `src/content/specialist-prompts/index.ts` drops the `PLAN_DESIGN_PROMPT` / `PLAN_DEVEX_PROMPT` exports + their `SPECIALIST_PROMPTS` rows.
+
+#### 5. Orchestrator dispatch surface
+
+- `src/content/start-command.ts` collapses the three `#### plan-design` / `#### plan-devex` per-stage subsections into the existing `#### plan-critic` block, which now documents all three rubricMode dispatches (gate + ordering + verdict routing + flow-state patches per mode) under one heading. The Stage → specialist mapping table carries three `plan-critic` rows (one per rubricMode) with the gate inlined.
+- `src/content/core-agents.ts` drops the `plan-design` + `plan-devex` registrations; the surviving `plan-critic` entry's description now names all three rubric modes.
+- `src/config.ts` removes the `"plan-design"` + `"plan-devex"` keys from `ModelPreferences` + `DEFAULT_MODEL_PREFERENCES`; they move to the legacy fields block so pre-v8.104 configs continue to parse.
+- `src/content/skills.ts` updates the `design-quality-discipline` + `devex-quality-discipline` skill descriptions + triggers to point at `plan-critic` (with the matching rubricMode) instead of the retired specialists.
+
+#### 6. Skill documentation
+
+- `src/content/skills/design-quality-discipline.md` + `src/content/skills/devex-quality-discipline.md` updated end-to-end to reference `plan-critic` on the matching `rubricMode` dispatch instead of the retired standalone specialists. Severity ladders, block-ship semantics, hard rules, anti-rationalization tables stay byte-for-byte identical — only the consumer name changed.
+- `src/content/skills/reviewer-axis-design-quality.md` updated to point at `plan-critic rubricMode: "design"` for the shared source-of-truth narrative.
+
+#### 7. Tests
+
+- **New** — `tests/unit/v8104-merge-plan-critics.test.ts` (16 assertions across 4 describe blocks): SPECIALISTS=8 + roster-order; SPECIALIST_AGENTS one-for-one; LEGACY_SPECIALIST_IDS contains `plan-design` + `plan-devex`; plan-design.ts + plan-devex.ts deleted; PLAN_CRITIC_RUBRIC_MODES = `[generic, design, devex]` + default = `generic`; plan-critic prompt body declares the rubricMode envelope + the three mode-specific rubric scaffolds (5 generic dimensions / 7 design / 6 devex); finding-id namespaces (G-N / PD-N / DX-N); per-mode verdict vocabularies; CORE_AGENTS' plan-critic description names the three modes; start-command's per-stage block carries the three rubricMode dispatch rows + sequential ordering + design/devex gates + per-mode flow-state field names.
+- **Deleted** — `tests/unit/v875-plan-design-lens.test.ts` and `tests/unit/v882-devex-lens.test.ts` (the standalone-specialist guarantees they tested are now covered by `v8104-merge-plan-critics.test.ts` against the unified surface).
+- **Updated** — `tests/unit/v862-unified-flow.test.ts` / `v865-powerful-research.test.ts` / `v874-ethos-bundle.test.ts` / `v877-investigator.test.ts` / `v885-assumption-validation.test.ts` / `v887-model-tier-defaults.test.ts` / `v894-docs-drift-sweep.test.ts` / `v8102-patch-mode.test.ts` / `core-agents.test.ts` / `types.test.ts` / `integration/critic-hop.test.ts` — every hardcoded `SPECIALISTS.length == 10` / `SPECIALIST_AGENTS.length == 10` assertion + every exhaustive specialist-id list assertion that named `plan-design` or `plan-devex` is updated to the eight-specialist v8.104 roster.
+
+### Migration
+
+Pre-v8.104 `flow-state.json` files validate unchanged: `lastSpecialist == "plan-design"` and `lastSpecialist == "plan-devex"` route through `LEGACY_SPECIALIST_IDS`; the `planDesignVerdict` / `planDevexVerdict` field shapes are preserved verbatim. The orchestrator-side gates are byte-identical to v8.103 — what changed is which specialist receives the dispatch envelope (now always `plan-critic` with the matching rubricMode), not which gate fires. Pre-v8.104 `.cclaw/config.yaml > modelPreferences > plan-design` / `plan-devex` entries continue to parse via the legacy fields block; the resolver no longer reads them (apply the tier to the unified `plan-critic` key instead).
+
+Net lines: ~494 lines deleted (plan-design.ts + plan-devex.ts; ~245 + 249) + ~150 lines added to the unified plan-critic.ts; net ~340-line reduction on the specialist surface. Test count: 717 → 711 (the two deleted v875 / v882 files held 6 tests; the new v8104 file adds 16 — net +10, but the test-file count net is -1 since v875 + v882 lifted, v8104 added).
+
+
 ## 8.103.0 — Startup token diet (orchestrator entry compression)
 
 ### Why

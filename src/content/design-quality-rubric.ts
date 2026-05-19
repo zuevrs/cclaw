@@ -8,11 +8,14 @@
  *   reviewer walks the DIFF and grades each dimension 0-10; below-6 grades
  *   become F-N findings (severity ladder: 5→consider, ≤3→required;
  *   accessibility one tier sharper; accessibility ≤2 → critical).
- * - {@link "src/content/specialist-prompts/plan-design.ts" | PLAN_DESIGN_PROMPT} —
- *   the v8.75 pre-build `plan-design` specialist. Walks PLAN.MD (not a diff)
- *   and grades the same seven dimensions for plan-level design clarity;
- *   below-6 grades become PD-N findings appended to `## Plan-design findings`
- *   in plan.md. Block-ship on strict at severity ≥ medium.
+ * - {@link "src/content/specialist-prompts/plan-critic.ts" | PLAN_CRITIC_PROMPT} —
+ *   the pre-build `plan-critic` specialist on `rubricMode: "design"` dispatches
+ *   (v8.75 added the design lens as a standalone `plan-design` specialist;
+ *   v8.104 merged it into `plan-critic` as one of three rubric modes). Walks
+ *   PLAN.MD (not a diff) and grades the same seven dimensions for plan-level
+ *   design clarity; below-6 grades become PD-N findings appended to
+ *   `## Plan-design findings` in plan.md. Block-ship on strict at severity ≥
+ *   medium.
  *
  * Why one const, not two prompts that drift: prior cclaw versions baked the
  * rubric verbatim into reviewer.ts. v8.75 lifts the rubric into a const so
@@ -20,10 +23,10 @@
  * cross-cut all live in one place — change the rubric here and both
  * specialists pick it up at install time.
  *
- * The rubric is NOT prose-pluggable across the two specialists in every
- * surface area: each consumer wraps the rubric with surface-specific
- * intro / outro framing (the reviewer reads the rendered diff; plan-design
- * reads plan.md sections). The exported {@link renderDesignQualityRubricTable}
+ * The rubric is NOT prose-pluggable across the two surfaces in every
+ * area: each consumer wraps the rubric with surface-specific
+ * intro / outro framing (the reviewer reads the rendered diff; plan-critic
+ * with `rubricMode: "design"` reads plan.md sections). The exported {@link renderDesignQualityRubricTable}
  * and {@link renderDesignQualityAiSlopChecklist} helpers produce the
  * verbatim markdown that both prompts embed; the wrapping context is each
  * specialist's responsibility.
@@ -118,8 +121,8 @@ export const DESIGN_QUALITY_DIMENSIONS: readonly DesignQualityDimension[] = [
  * design-quality surface (severity=required by default).
  *
  * Lifted verbatim from v8.70 reviewer.ts so the slop set has a single
- * source of truth across pre-build (plan-design) and post-build (reviewer)
- * lenses; both lenses fire the same signals.
+ * source of truth across pre-build (plan-critic on `rubricMode: "design"`)
+ * and post-build (reviewer) lenses; both lenses fire the same signals.
  */
 export const DESIGN_QUALITY_AI_SLOP_SIGNALS: readonly string[] = [
   "3-column feature grids with identical cards regardless of metric importance",

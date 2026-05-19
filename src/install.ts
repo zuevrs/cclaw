@@ -192,20 +192,25 @@ const RETIRED_COMMAND_FILES: readonly string[] = [
  * Retired specialist agent .md files. v8.62 collapsed `design` + `ac-author`
  * into the new `architect` specialist, renamed `slice-builder` to `builder`,
  * and absorbed `security-reviewer` into the reviewer's `security` axis.
- * The installer sweeps the stale `.md` files on every `cclaw install / sync`
- * so projects upgrading from v8.61 or earlier do not carry leftover agent
- * files that reference the removed prompts.
+ * v8.104 collapsed `plan-design` + `plan-devex` into the existing
+ * `plan-critic` specialist as `rubricMode: "design"` and `rubricMode:
+ * "devex"` (one specialist, three rubric modes dispatched via envelope
+ * fan-out). The installer sweeps the stale `.md` files on every `cclaw
+ * install / sync` so projects upgrading from a prior cclaw do not carry
+ * leftover agent files that reference the removed prompts.
  *
  * Swept locations:
  *   - `.cclaw/lib/agents/<file>` (shared runtime root)
  *   - `<harness>.agents.dir/<file>` for every installed harness
- *     (e.g. `.cursor/agents/design.md`, `.claude/agents/ac-author.md`)
+ *     (e.g. `.cursor/agents/design.md`, `.claude/agents/plan-design.md`)
  */
 const RETIRED_AGENT_FILES: readonly string[] = [
   "design.md",
   "ac-author.md",
   "slice-builder.md",
-  "security-reviewer.md"
+  "security-reviewer.md",
+  "plan-design.md",
+  "plan-devex.md"
 ];
 
 const RETIRED_TEMPLATE_FILES: readonly string[] = ["ideas.md"];

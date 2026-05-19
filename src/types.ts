@@ -56,80 +56,53 @@ export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
  * v8.62: specialist count drops 9 → 7. Removed: `design` (absorbed into
  * `architect`) and `security-reviewer` (absorbed into `reviewer`'s
  * `security` axis). Renamed: `ac-author` → `architect`; `slice-builder`
- * → `builder`. Surviving roster: `triage`, `architect`, `builder`,
- * `plan-critic`, `qa-runner`, `reviewer`, `critic`. The order in this
- * array traces the canonical pipeline (triage → plan → build → qa →
- * review → critic → ship).
+ * → `builder`. The order in this array traces the canonical pipeline
+ * (triage → plan → build → qa → review → critic → ship).
  *
  * v8.75: specialist count grows 7 → 8 with the addition of `plan-design`,
- * a pre-implementation design-coherence pass that walks plan.md against
- * the seven-dimension design-quality rubric (the same rubric the v8.70
- * reviewer applies post-build; lifted into a shared const at
- * `src/content/design-quality-rubric.ts` so both surfaces stay in
- * lock-step). plan-design runs after plan-critic (or directly after
- * architect when plan-critic's strict gate is off) and ONLY when the
- * orchestrator detects a UI / design / frontend / UX surface in
- * ceremonyMode ∈ {soft, strict}. plan-design appends `PD-N` findings to
- * plan.md's `## Plan-design findings` section; below-6 grades become
- * findings; severity ≥ medium blocks ship in strict mode.
+ * a pre-implementation design-coherence pass.
  *
- * Background on the joiners that remain:
- * - `critic` (v8.42) is an on-demand sub-agent that runs at the critic
- *   stage between `review` and `ship`. It walks what was built (gap
- *   analysis + adversarial lenses).
- * - `plan-critic` (separate from `critic`) is a pre-implementation
- *   adversarial pass that runs at the plan stage on the tight gate
- *   {ceremonyMode=strict, complexity=large-risky, problemType!=refines,
- *   AC count>=2}. It walks the plan itself (goal coverage / granularity
- *   / dependencies / parallelism / risk catalog) before any code is
- *   written and writes `flows/<slug>/plan-critic.md`.
- * - `plan-design` (v8.75) is a pre-implementation design-coherence pass
- *   that runs at the plan stage when triage detects a design surface
- *   and ceremonyMode is not inline. Walks plan.md against the
- *   seven-dimension rubric shared with the reviewer's `design-quality`
- *   axis; below-6 grades become `PD-N` findings appended to plan.md.
- */
-/**
- * v8.82: specialist count grows 9 → 10 with the addition of `plan-devex`,
- * a pre-implementation developer-experience pass that walks plan.md against
- * a six-dimension DevEx rubric (Getting Started / API ergonomics / Error
- * messages / Docs / Upgrade path / Measurement; rubric lifted into a shared
- * const at `src/content/devex-quality-rubric.ts` so a future post-build
- * reviewer `devex` axis or research-devex lens can consume the same
- * dimensions). plan-devex runs after plan-critic AND after plan-design (when
- * those gates fire) — sequential, not parallel, to keep prompt budget
- * manageable; when neither gate fires and the devex-surface gate DOES fire,
- * it runs directly after architect. The gate is `triage.devexSurface == true`
- * OR `triage.surfaces` ∩ {cli, library, api} ≠ ∅ AND ceremonyMode ∈ {soft,
- * strict}. Below-6 dimension grades become `DX-N` findings appended to
- * plan.md's `## Plan-devex findings` section; severity ≥ medium blocks
- * ship in strict mode.
- *
- * Mirrors the v8.75 plan-design joiner shape (same single-shot append-only
- * contract; same verdict surface {pass, revise, block}; same 1-revise-loop
- * cap shared with plan-critic + plan-design); different lens (DevEx, not
- * visual design); different evidence base (the plan's commitments to the
- * developer-facing surface, not the plan's commitments to the user-facing
- * surface).
- */
-/**
  * v8.77: specialist count grows 8 → 9 with the addition of `investigator`,
  * a read-only diagnostic specialist that runs on bug-shaped tasks
- * (triage.taskShape == "debug") BEFORE the architect. The investigator
- * dispatches three parallel hypothesis lanes (cause-code / cause-config
- * / cause-measurement) and writes an `investigation.md` artifact with a
- * synthesised root-cause hypothesis plus a next-step recommendation
- * (direct-fix / needs-plan / more-investigation / not-a-bug). The
- * orchestrator branches on the recommendation: `direct-fix` skips
- * architect and goes straight to builder (with `priorInvestigation` on
- * the envelope so the builder reads investigation.md as a plan
- * substitute); `needs-plan` routes to architect with `priorInvestigation`
- * so the architect frames the fix at design level around the cited root
- * cause; `more-investigation` re-dispatches investigator with a sharper
- * probe; `not-a-bug` surfaces a reframe to the user. The investigator is
- * read-only — no code edits, no plan writing — so the SPECIALISTS roster
- * grows only by one and downstream stage routing for `build` / `qa` /
- * `review` / `critic` / `ship` is unchanged.
+ * (triage.taskShape == "debug") BEFORE the architect.
+ *
+ * v8.82: specialist count grows 9 → 10 with the addition of `plan-devex`,
+ * a pre-implementation developer-experience pass.
+ *
+ * **v8.104: specialist count drops 10 → 8.** The three pre-build specialists
+ * (`plan-critic`, `plan-design`, `plan-devex`) shared the same scaffold
+ * (§1 pre-commit / §2 N-dim rubric / §3 AI-slop / §4 findings ledger /
+ * §5 verdict) and collapse into a single **`plan-critic` specialist with
+ * a `rubricMode` envelope** that fans out across three modes:
+ *
+ * - `rubricMode: "generic"` (default) — current plan-critic behaviour
+ *   (adversarial structural pass: goal coverage / granularity / dependency
+ *   accuracy / parallelism feasibility / risk catalog + decision integrity
+ *   + bets and exclusions audits). Writes `flows/<slug>/plan-critic.md`.
+ * - `rubricMode: "design"` — walks the same seven design dimensions the
+ *   reviewer's `design-quality` axis applies post-build (rubric lives in
+ *   `src/content/design-quality-rubric.ts` — single source of truth).
+ *   Appends `PD-N` findings to plan.md's `## Plan-design findings`
+ *   section.
+ * - `rubricMode: "devex"` — walks the same six DevEx dimensions
+ *   (`src/content/devex-quality-rubric.ts` — single source of truth).
+ *   Appends `DX-N` findings to plan.md's `## Plan-devex findings` section.
+ *
+ * Surviving roster (8): `triage`, `investigator`, `architect`, `builder`,
+ * `plan-critic`, `qa-runner`, `reviewer`, `critic`. The orchestrator may
+ * dispatch `plan-critic` up to **three times per slug** (once per mode
+ * whose gate fires), sequential never parallel. The rubrics still live
+ * in shared TS consts; the merge consolidates dispatch surface, not the
+ * rubric content. `PD-N` and `DX-N` finding-id shapes are preserved
+ * verbatim so flow-state and reviewer cross-references continue to work.
+ *
+ * Background on the joiners that remain:
+ * - `critic` (v8.42) — on-demand post-impl sub-agent at the critic stage
+ *   between `review` and `ship`. Gap analysis + adversarial lenses.
+ * - `plan-critic` (separate from `critic`; v8.104 merged surface) — the
+ *   pre-implementation pass. One specialist, three rubric modes.
+ * - `investigator` (v8.77) — read-only diagnostic before architect on
+ *   bug-shaped flows.
  */
 export const SPECIALISTS = [
   "triage",
@@ -137,13 +110,31 @@ export const SPECIALISTS = [
   "architect",
   "builder",
   "plan-critic",
-  "plan-design",
-  "plan-devex",
   "qa-runner",
   "reviewer",
   "critic"
 ] as const;
 export type SpecialistId = (typeof SPECIALISTS)[number];
+
+/**
+ * v8.104: `rubricMode` envelope field on every plan-critic dispatch.
+ * Selects which of the three rubric scaffolds the plan-critic walks on
+ * this dispatch — `generic` for the structural plan-shape audit
+ * (default; pre-v8.104 plan-critic behaviour), `design` for the
+ * seven-dimension design-quality rubric (former v8.75 plan-design
+ * specialist body, now a plan-critic mode), or `devex` for the
+ * six-dimension DevEx rubric (former v8.82 plan-devex specialist body,
+ * now a plan-critic mode).
+ *
+ * The orchestrator stamps exactly one value per dispatch; multiple
+ * modes for the same slug are handled by sequential re-dispatches
+ * (NEVER parallel — the rubric mode is per-envelope, not per-prompt).
+ * Absent / pre-v8.104 envelopes default to `"generic"`.
+ */
+export const PLAN_CRITIC_RUBRIC_MODES = ["generic", "design", "devex"] as const;
+export type PlanCriticRubricMode = (typeof PLAN_CRITIC_RUBRIC_MODES)[number];
+
+export const DEFAULT_PLAN_CRITIC_RUBRIC_MODE: PlanCriticRubricMode = "generic";
 
 /**
  * v8.77: task shape dimension on `TriageDecision`. Distinguishes the
@@ -288,9 +279,10 @@ export interface BuilderEnvelope {
 }
 
 /**
- * Pre-v8.62 specialist ids that no longer exist. Kept as a type-level
- * reminder for permissive validators that accept old `lastSpecialist`
- * strings on read without migrating. Do not add new entries.
+ * Specialist ids that no longer exist as standalone roster entries. Kept
+ * as a type-level reminder for permissive validators that accept old
+ * `lastSpecialist` strings on read without migrating. Do not add new
+ * entries.
  *
  * - `design` / `ac-author`: absorbed into {@link DISCOVERY_SPECIALISTS}'s
  *   `architect` (v8.62).
@@ -301,13 +293,21 @@ export interface BuilderEnvelope {
  *   the reviewer prompt).
  * - `brainstormer`: removed v8.14, kept here for the same back-compat
  *   reason.
+ * - `plan-design` / `plan-devex` (v8.104): absorbed into `plan-critic`
+ *   as `rubricMode: "design"` and `rubricMode: "devex"`. Pre-v8.104
+ *   state files where `lastSpecialist == "plan-design"` or
+ *   `lastSpecialist == "plan-devex"` validate on read; the orchestrator
+ *   re-dispatches `plan-critic` with the matching rubricMode on the
+ *   next `/cc`.
  */
 export const LEGACY_SPECIALIST_IDS = [
   "design",
   "ac-author",
   "slice-builder",
   "security-reviewer",
-  "brainstormer"
+  "brainstormer",
+  "plan-design",
+  "plan-devex"
 ] as const;
 export type LegacySpecialistId = (typeof LEGACY_SPECIALIST_IDS)[number];
 
@@ -588,61 +588,55 @@ export const SURFACES = [
 export type Surface = (typeof SURFACES)[number];
 
 /**
- * verdict the pre-implementation plan-critic returns in its
- * slim summary. Drives the plan-critic step routing (between
- * `architect` and `builder` on the tight gate {ceremonyMode=strict,
- * complexity=large-risky, problemType!=refines, AC count>=2}):
+ * verdict the pre-implementation plan-critic returns in its slim
+ * summary. v8.104 unified plan-critic carries a `rubricMode` envelope
+ * field that selects the rubric scaffold (generic / design / devex);
+ * each mode emits one verdict from a fixed slice of this union:
  *
- * - `pass` — advance to builder dispatch (no ceremony).
- * - `revise` (iteration 0) — bounce to architect with plan-critic
- *   findings prepended; architect updates plan.md and the orchestrator
- *   re-dispatches plan-critic (iteration 1).
+ * - **`rubricMode: "generic"`** emits one of `pass` / `revise` / `cancel`
+ *   (pre-v8.104 plan-critic vocabulary; `cancel` means structural plan
+ *   problem requiring re-author).
+ * - **`rubricMode: "design"`** emits one of `pass` / `revise` / `block`
+ *   (pre-v8.104 plan-design vocabulary; `block` means design-coherence
+ *   failure that blocks ship — stop-and-report).
+ * - **`rubricMode: "devex"`** emits one of `pass` / `revise` / `block`
+ *   (pre-v8.104 plan-devex vocabulary; `block` means DevEx-coherence
+ *   failure that blocks ship — stop-and-report).
+ *
+ * Drives the plan-critic step routing (between `architect` and `builder`
+ * on the per-mode gates documented in the plan-critic prompt):
+ *
+ * - `pass` — advance to the next dispatched rubric mode (if any gated) or
+ *   to builder dispatch.
+ * - `revise` (iteration 0) — bounce to architect with the mode's
+ *   findings prepended; architect updates plan.md; orchestrator
+ *   re-dispatches plan-critic with the same `rubricMode` (iteration 1).
  * - `revise` (iteration 1) — orchestrator surfaces the user picker
  *   (cancel / accept-warnings-and-proceed / re-architect); no third
- *   plan-critic dispatch is allowed (1 revise loop max).
- * - `cancel` (any iteration) — structural plan problem (goal-coverage
- *   gap requiring re-author, dependency cycle that can't be untangled);
- *   orchestrator surfaces the cancel picker (cancel-slug / re-architect)
+ *   plan-critic dispatch is allowed for the same mode (1 revise loop
+ *   max per mode).
+ * - `cancel` (generic mode only; any iteration) — structural plan
+ *   problem requiring re-author; orchestrator surfaces the cancel picker
  *   immediately, no silent fallback.
+ * - `block` (design / devex modes only; any iteration) — coherence
+ *   failure that blocks ship; orchestrator surfaces the stop-and-report
+ *   status block immediately.
  *
  * Distinct from {@link CriticVerdict} on purpose: the post-impl critic
- * has a `block-ship` verdict (build/review already ran); plan-critic
- * has `cancel` (build hasn't run yet so "block-ship" would be a
+ * has a `block-ship` verdict (build/review already ran); plan-critic has
+ * `cancel` / `block` (build hasn't run yet so "block-ship" would be a
  * category error). Both enums coexist; readers branch on which
  * specialist is in flight, not on a merged verdict shape.
  */
-export type PlanCriticVerdict = "pass" | "revise" | "cancel";
+export type PlanCriticVerdict = "pass" | "revise" | "cancel" | "block";
 
 /**
- * verdict the v8.75 pre-implementation plan-design specialist returns in
- * its slim summary. Drives the plan-design step routing (between
- * `plan-critic` (when its strict gate fires) or `architect` (when
- * plan-critic is skipped) and `builder` on the design-surface gate
- * {triage.designSurface == true OR triage.surfaces ∩ {ui, design,
- * frontend, ux} ≠ ∅; ceremonyMode ∈ {soft, strict}}):
- *
- * - `pass` — zero open `medium` / `high` PD-N rows; advance to builder
- *   dispatch (no ceremony).
- * - `revise` (iteration 0) — at least one `medium` row open AND zero
- *   `high` rows; bounce to architect with the open PD-N rows prepended
- *   to the dispatch envelope, then re-dispatch plan-design (iteration
- *   1). Max 1 revise loop.
- * - `revise` (iteration 1) — second revise; orchestrator surfaces the
- *   stop-and-report status block (no third dispatch).
- * - `block` (any iteration) — at least one `high` row OR (strict mode)
- *   at least one `medium` row AND the block-ship-on-strict floor
- *   engaged; orchestrator surfaces the stop-and-report status block
- *   immediately.
- *
- * Distinct from {@link PlanCriticVerdict} on purpose: plan-critic has a
- * `cancel` verdict (structural plan problem requiring re-author); plan-
- * design caps at `block` because the worst case at plan-time is "the
- * plan does not commit to the design work" — a fix-by-architect amend,
- * not a re-author. Distinct from {@link CriticVerdict} on purpose: the
- * post-impl critic has a `block-ship` verdict that fires after build /
- * review; plan-design fires BEFORE the build so the wording diverges
- * (`block` not `block-ship` because the build hasn't run yet — calling
- * it `block-ship` would mislead readers into thinking the diff exists).
+ * @deprecated v8.104 — plan-design merged into plan-critic as
+ * `rubricMode: "design"`. The verdict shape (`pass` / `revise` / `block`)
+ * is preserved verbatim on plan-critic design-mode dispatches; new code
+ * should branch on {@link PlanCriticVerdict} narrowed by rubricMode
+ * rather than importing this alias. Kept as a type alias for one
+ * release so pre-v8.104 readers continue to type-check.
  */
 export type PlanDesignVerdict = "pass" | "revise" | "block";
 
@@ -675,34 +669,12 @@ export type PlanDesignVerdict = "pass" | "revise" | "block";
 export type PlanDesignSeverity = "low" | "medium" | "high";
 
 /**
- * verdict the v8.82 pre-implementation plan-devex specialist returns in
- * its slim summary. Drives the plan-devex step routing (between
- * `plan-design` (when its design-surface gate fires) or `plan-critic`
- * (when plan-critic fires and plan-design is skipped) or `architect`
- * (when both are gated off) and `builder` on the devex-surface gate
- * {triage.devexSurface == true OR triage.surfaces ∩ {cli, library, api}
- * ≠ ∅; ceremonyMode ∈ {soft, strict}}):
- *
- * - `pass` — zero open `medium` / `high` DX-N rows; advance to builder
- *   dispatch (no ceremony).
- * - `revise` (iteration 0) — at least one `medium` row open AND zero
- *   `high` rows; bounce to architect with the open DX-N rows prepended
- *   to the dispatch envelope, then re-dispatch plan-devex (iteration
- *   1). Max 1 revise loop.
- * - `revise` (iteration 1) — second revise; orchestrator surfaces the
- *   stop-and-report status block (no third dispatch).
- * - `block` (any iteration) — at least one `high` row OR (strict mode)
- *   at least one `medium` row AND the block-ship-on-strict floor
- *   engaged; orchestrator surfaces the stop-and-report status block
- *   immediately.
- *
- * Distinct from {@link PlanCriticVerdict} on purpose: plan-critic has a
- * `cancel` verdict (structural plan problem requiring re-author); plan-
- * devex caps at `block` because the worst case at plan-time is "the
- * plan does not commit to the DevEx work" — a fix-by-architect amend,
- * not a re-author. Mirrors {@link PlanDesignVerdict}'s surface shape
- * (pass / revise / block) so the two pre-impl lenses route through the
- * same combined-revise hand-off semantics in the orchestrator.
+ * @deprecated v8.104 — plan-devex merged into plan-critic as
+ * `rubricMode: "devex"`. The verdict shape (`pass` / `revise` / `block`)
+ * is preserved verbatim on plan-critic devex-mode dispatches; new code
+ * should branch on {@link PlanCriticVerdict} narrowed by rubricMode
+ * rather than importing this alias. Kept as a type alias for one
+ * release so pre-v8.104 readers continue to type-check.
  */
 export type PlanDevexVerdict = "pass" | "revise" | "block";
 

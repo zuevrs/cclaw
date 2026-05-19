@@ -99,11 +99,11 @@ describe("v8.42 — critic prompt scope", () => {
   });
 });
 
-describe("v8.62 / v8.82 — specialist count end-to-end (unified flow)", () => {
-  it("WIRING — CORE_AGENTS contains 10 specialists + 2 research helpers (v8.62 unified, v8.75 plan-design, v8.77 investigator, v8.82 plan-devex) and init writes the canonical 12-agent .md roster to .cclaw/lib/agents", async () => {
+describe("v8.62 / v8.82 / v8.104 — specialist count end-to-end (unified flow)", () => {
+  it("WIRING — CORE_AGENTS contains 8 specialists + 2 research helpers (v8.104 merge — collapsed v8.75 plan-design + v8.82 plan-devex into v8.51 plan-critic as `rubricMode: \"design\"` / `rubricMode: \"devex\"`) and init writes the canonical 10-agent .md roster to .cclaw/lib/agents", async () => {
     const specialists = CORE_AGENTS.filter((a) => a.kind === "specialist");
     const research = CORE_AGENTS.filter((a) => a.kind === "research");
-    expect(specialists).toHaveLength(10);
+    expect(specialists).toHaveLength(8);
     expect(research).toHaveLength(2);
 
     let project: string | null = null;
@@ -119,8 +119,6 @@ describe("v8.62 / v8.82 — specialist count end-to-end (unified flow)", () => {
         "investigator.md",
         "learnings-research.md",
         "plan-critic.md",
-        "plan-design.md",
-        "plan-devex.md",
         "qa-runner.md",
         "repo-research.md",
         "reviewer.md",

@@ -47,8 +47,6 @@ export interface ModelPreferences {
   architect?: ModelTier;
   builder?: ModelTier;
   "plan-critic"?: ModelTier;
-  "plan-design"?: ModelTier;
-  "plan-devex"?: ModelTier;
   "qa-runner"?: ModelTier;
   reviewer?: ModelTier;
   critic?: ModelTier;
@@ -71,6 +69,10 @@ export interface ModelPreferences {
    * - `brainstormer` → removed v8.14.
    * - `planner` → renamed to `ac-author` v8.14–v8.27, then absorbed into
    *   `architect` v8.62.
+   * - `plan-design` / `plan-devex` → merged into `plan-critic` v8.104 (the
+   *   three pre-impl lenses now ride one specialist via the
+   *   `rubricMode: "generic" | "design" | "devex"` envelope fan-out; the
+   *   tier hint applies to all three modes equally).
    *
    * The resolver does NOT collapse legacy keys onto live keys — if a user
    * config carries `slice-builder: powerful` and the upgrade renamed the
@@ -84,6 +86,8 @@ export interface ModelPreferences {
   "security-reviewer"?: ModelTier;
   brainstormer?: ModelTier;
   planner?: ModelTier;
+  "plan-design"?: ModelTier;
+  "plan-devex"?: ModelTier;
 }
 
 /**
@@ -145,8 +149,6 @@ export const DEFAULT_MODEL_PREFERENCES: Readonly<
   investigator: "balanced",
   architect: "balanced",
   "plan-critic": "balanced",
-  "plan-design": "balanced",
-  "plan-devex": "balanced",
   "qa-runner": "balanced",
   reviewer: "balanced",
 
