@@ -17,6 +17,11 @@ const skillBody = (id: string): string => {
  *
  * Cancel-vs-recovery contract + slug naming format. Detailed two-turn
  * pacing tests live in v847; cancel mechanics live in `cancel.test.ts`.
+ *
+ * v8.103 — the dedicated `### Slug naming (mandatory format)` heading was
+ * folded into the `## Triage` paragraph as part of the orchestrator token
+ * diet; the assertion now checks the slug format + collision fallback prose
+ * rather than the heading text.
  */
 
 describe("v8.11 — cancel-vs-recovery contract", () => {
@@ -36,9 +41,8 @@ describe("v8.11 — cancel-vs-recovery contract", () => {
 });
 
 describe("v8.11 — slug naming format (YYYYMMDD-<semantic-kebab>)", () => {
-  it("start-command spells out the mandatory date-prefix slug format + collision fallback", () => {
-    expect(startBody).toMatch(/Slug naming \(mandatory format\)/);
+  it("start-command spells out the mandatory date-prefix slug format + collision fallback (v8.103 — heading folded into the Triage paragraph)", () => {
     expect(startBody).toMatch(/\\?`?YYYYMMDD-<semantic-kebab>\\?`?/);
-    expect(startBody).toMatch(/append\s+\\?`?-2\\?`?,\s*\\?`?-3\\?`?/);
+    expect(startBody).toMatch(/append(ing)?\s+\\?`?-2\\?`?,\s*\\?`?-3\\?`?/);
   });
 });

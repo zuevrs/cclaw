@@ -19,22 +19,19 @@ import { START_COMMAND_BODY } from "../../src/content/start-command.js";
  *   - 1 char-reduction regression guard (AC-7, the canary for re-inline)
  */
 
-// The v8.82 main-branch baseline of the rendered START_COMMAND_BODY. AC-7
-// is the regression gate that lights up if a future slug re-inlines a
-// lifted runbook body.
-const V882_BASELINE_CHARS = 141769;
+// v8.103 — Startup token diet recalibration. The pre-v8.103 baseline was
+// V882_BASELINE_CHARS = 141_769; the v8.103 token-diet lift dropped
+// start-command body from ~141k to ≈49.7k chars (≈65% reduction). The
+// canary's purpose is unchanged: catch re-inlines of lifted runbook
+// bodies. With the new baseline, the AC-7 gate fires on any future slug
+// that grows start-command back past the v8.103 ceiling + a small
+// additive headroom.
+const V8103_BASELINE_CHARS = 50000;
 
-// v8.102 — patch-mode feature add lands additive text in the Detect-hop
-// section (new `### Detect — patch-mode fork (v8.102+)` block + invocation-
-// matrix row + on-demand-runbooks index row + trivial-path cross-reference).
-// All of it is a NEW lifted runbook pointer (\`runbooks/patch-mode.md\` carries
-// the full procedure; start-command only carries the one-paragraph fork
-// pointer), so it is NOT a re-inline regression — it is additive growth
-// the AC-7 canary should explicitly tolerate. We bump the budget by the
-// measured v8.102 add (~1500 chars; round to 1800 for headroom) so the
-// re-inline canary keeps its mutation-killing edge on FUTURE growth while
-// letting v8.102's additive text land cleanly.
-const V8102_ADDITIVE_CHARS = 1800;
+// v8.102 additive carve-out (patch-mode) folds into the new baseline; no
+// separate budget. New additive headroom is intentionally tight: each
+// future feature add must justify its own per-slug additive_chars bump.
+const V8102_ADDITIVE_CHARS = 0;
 
 const LIFTED_RUNBOOKS = ["detect-matrix", "approaches-gate", "one-way-door-gate"] as const;
 
@@ -81,17 +78,12 @@ describe("v8.83 — start-command body no longer carries the lifted duplicate pr
   });
 });
 
-describe("v8.83 — start-command body shrinks measurably vs the v8.82 baseline (re-inline canary)", () => {
-  it("AC-7 — start-command body is at least 2.5% smaller than the v8.82 baseline (net of v8.102 patch-mode additive growth)", () => {
-    // Subtract v8.102 patch-mode additive growth before measuring reduction.
-    // The canary's purpose is "did we re-inline a lifted runbook?" — a NEW
-    // lifted runbook pointer (patch-mode.md) does not count against the
-    // canary; only re-inlines of v8.83's three lifted bodies would.
+describe("v8.83 — start-command body stays under the v8.103 ceiling (re-inline canary, recalibrated)", () => {
+  it("AC-7 — start-command body is at or below the v8.103 baseline (≤50 000 chars)", () => {
     const adjustedSize = START_COMMAND_BODY.length - V8102_ADDITIVE_CHARS;
-    const reduction = (V882_BASELINE_CHARS - adjustedSize) / V882_BASELINE_CHARS;
     expect(
-      reduction,
-      `start-command body: ${V882_BASELINE_CHARS} → ${START_COMMAND_BODY.length} chars (adjusted ${adjustedSize}; ${(reduction * 100).toFixed(2)}%). Threshold: ≥2.5%.`
-    ).toBeGreaterThanOrEqual(0.025);
+      adjustedSize,
+      `start-command body: ${START_COMMAND_BODY.length} chars (adjusted ${adjustedSize}); v8.103 ceiling: ${V8103_BASELINE_CHARS}. A breach means a lifted runbook body (research-mode / triage-gate / one-way-door-gate / debug-branch / etc.) was re-inlined or a new feature add did not lift its detail to a runbook.`
+    ).toBeLessThanOrEqual(V8103_BASELINE_CHARS);
   });
 });

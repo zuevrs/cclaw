@@ -239,14 +239,20 @@ describe("v8.58 — lightweight router + research mode behavior (research templa
 });
 
 describe("v8.58 — lightweight router + research mode section contract (start-command + triage + architect prompts)", () => {
-  it("SECTION CONTRACT — start-command body declares triage as 'lightweight router' with EXACTLY five fields (complexity / ceremonyMode / path / runMode / mode), documents the `/cc research` entry-point fork + sentinel triage block + priorResearch handoff prompt + qa-stage surface gating, and rejects the legacy v8.14-v8.57 combined-form ask; triage prompt owns the moved-out classification surface (assumptions / surfaces / priorLearnings / interpretationForks) + override flags + zero-question rule; architect prompt absorbs Bootstrap-phase assumption capture + Frame-phase interpretation forks / surface detection / qa-stage path rewrite + learnings-research dispatch + flowState.priorResearch consumption + drops v8.58 two-mode `## Activation modes` (research is now the orchestrator's multi-lens fork)", () => {
+  it("SECTION CONTRACT — start-command body declares triage as 'lightweight router' with EXACTLY five fields (complexity / ceremonyMode / path / runMode / mode), documents the `/cc research` entry-point fork + sentinel triage block + priorResearch handoff prompt + qa-stage surface gating, and rejects the legacy v8.14-v8.57 combined-form ask; triage prompt owns the moved-out classification surface (assumptions / surfaces / priorLearnings / interpretationForks) + override flags + zero-question rule; architect prompt absorbs Bootstrap-phase assumption capture + Frame-phase interpretation forks / surface detection / qa-stage path rewrite + learnings-research dispatch + flowState.priorResearch consumption + drops v8.58 two-mode `## Activation modes` (research is now the orchestrator's multi-lens fork). v8.103 — lightweight-router prose and the research-mode 4-phase detail moved to runbooks/triage-gate.md and runbooks/research-mode.md; start-command keeps the one-paragraph pointers and the sentinel triage block.", async () => {
     const body = renderStartCommand();
+    const { ON_DEMAND_RUNBOOKS } = await import("../../src/content/runbooks-on-demand.js");
+    const triageRunbook = ON_DEMAND_RUNBOOKS.find((r) => r.id === "triage-gate");
+    const researchRunbook = ON_DEMAND_RUNBOOKS.find((r) => r.id === "research-mode");
+    expect(triageRunbook, "triage-gate runbook must exist").toBeDefined();
+    expect(researchRunbook, "research-mode runbook must exist").toBeDefined();
+    const triageBody = triageRunbook?.body ?? "";
+    const researchBody = researchRunbook?.body ?? "";
 
-    // start-command body
-    expect(body).toMatch(/lightweight router/iu);
-    expect(body).toMatch(/EXACTLY five fields/iu);
-    for (const field of ["`complexity`", "`ceremonyMode`", "`path`", "`runMode`", "`mode`"]) {
-      expect(body).toMatch(new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"));
+    // v8.103 — start-command keeps high-level pointers; per-field detail moved to the triage-gate runbook.
+    expect(triageBody).toMatch(/lightweight router|router/iu);
+    for (const field of ["complexity", "ceremonyMode", "path", "runMode", "mode"]) {
+      expect(triageBody).toContain(field);
     }
     expect(body).toMatch(/research-mode (entry point|fork)/iu);
     expect(body).toContain("`research `");
@@ -255,7 +261,8 @@ describe("v8.58 — lightweight router + research mode section contract (start-c
     expect(body).toMatch(/mode:\s*"research"/u);
     expect(body).toMatch(/ceremonyMode:\s*"strict"/u);
     expect(body).toMatch(/path:\s*\["plan"\]/u);
-    expect(body).toMatch(/Ready to plan/iu);
+    // v8.103 — Phase 4 handoff prompt moved to research-mode runbook.
+    expect(researchBody).toMatch(/Ready to plan/iu);
     expect(body).toMatch(/priorResearch/u);
     expect(body).toMatch(/qa-(stage|runner)/iu);
     expect(body).toMatch(/`triage\.surfaces`[\s\S]{0,80}(includes|∩).{0,40}(`"ui"`|"ui")/u);

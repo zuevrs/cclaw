@@ -194,15 +194,22 @@ describe("v8.50 — outcome loop behavior (runCompoundAndShip stamps revert + ma
 });
 
 describe("v8.50 — outcome loop section contract (start-command + reviewer/critic prompts surface outcome_signal)", () => {
-  it("SECTION CONTRACT — start-command body documents the v8.50 outcome-signal down-weight + capture paths (revert + manual-fix + follow-up-bug); reviewer + critic prompts cite outcome_signal; architect routes via learnings-research helper", () => {
+  it("SECTION CONTRACT — start-command body documents the v8.50 outcome-signal down-weight + capture paths (revert + manual-fix + follow-up-bug); reviewer + critic prompts cite outcome_signal; architect routes via learnings-research helper. v8.103 — capture-path detail (applyFollowUpBugSignals + OUTCOME_SIGNAL_MULTIPLIERS) moved to runbooks/triage-gate.md; start-command keeps the high-level pointers.", async () => {
     const body = renderStartCommand();
-    expect(body).toMatch(/OUTCOME_SIGNAL_MULTIPLIERS/);
     expect(body).toMatch(/outcome_signal/);
-    expect(body).toMatch(/applyFollowUpBugSignals/);
     expect(body).toMatch(/follow-up-bug/);
     expect(body).toMatch(/revert/i);
     expect(body).toMatch(/manual-fix/);
     expect(body).toMatch(/runCompoundAndShip/);
+
+    // v8.103 — capture-path detail now lives in runbooks/triage-gate.md (the
+    // follow-up-bug detection block) and architect's prior-learnings dispatch
+    // points at OUTCOME_SIGNAL_MULTIPLIERS via the same runbook.
+    const { ON_DEMAND_RUNBOOKS } = await import("../../src/content/runbooks-on-demand.js");
+    const triageRunbook = ON_DEMAND_RUNBOOKS.find((r) => r.id === "triage-gate");
+    expect(triageRunbook, "triage-gate runbook must exist").toBeDefined();
+    expect(triageRunbook?.body).toMatch(/applyFollowUpBugSignals/);
+    expect(triageRunbook?.body).toMatch(/OUTCOME_SIGNAL_MULTIPLIERS/);
 
     for (const [name, prompt] of [
       ["reviewer", REVIEWER_PROMPT],
