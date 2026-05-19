@@ -1,6 +1,23 @@
 # Changelog
 
+## 8.107.0 - 2026-05-19
 
+### Documentation
+- README rewritten from 439 lines / 70k chars to ~166 lines / ~6.6k chars (-90%). Tagline → install → 4 example commands → how it works + mermaid → 3-row ceremony table → deeper docs links. Removed: 17-row "What you get" inventory table, 11-bullet "Why cclaw" preamble, all `v8.XX` annotations, all internal jargon (`KA-N`, `PD-N`, `rubricMode`, `taskShape`).
+
+### Refactor
+- Deleted `DesignConfig` dead block in `src/config.ts` (~90 lines including v853 test): `DesignConfig` interface, `design?` field, `DEFAULT_AMBIGUITY_THRESHOLD`, `ambiguityThresholdOf()`. Unreachable since v8.62 absorbed the design specialist; v8.67's `clarifyAmbiguityThresholdOf` is the live equivalent.
+- `start-command.ts:4` docstring updated to `~52k` (was incorrectly `~30k` since v8.103 lift; actual body 52,307 chars).
+- Trimmed retired `--mode=auto / --mode=step` mention from patch-mode runbook (flags retired in v8.61 always-auto).
+
+### Fixed
+- "Unknown slug" error now wires `listShippedSlugs()` (helper present since v8.59, never wired) — points users at `.cclaw/flows/shipped/` directly with 1-10 suggestion list, instead of the (compound-quality-gated) `--non-interactive knowledge` output. 5 sites updated (1 source, 4 runbook prose mirrors).
+- `cclaw --help` now lists the 6 `/cc` subcommand patterns including `/cc patch <slug>` from v8.102 — previously undiscoverable without reading CHANGELOG.
+
+### Tests
+- v8.94 docs-drift tripwire extended to runbook count (23 canonical).
+- Deleted `tests/unit/v853-critic-enhancements.test.ts` (32 lines) — tested deleted code.
+- Net: tests 750 → ~749 (depending on Phase 4 added test).
 
 ## 8.106.1 — Docstring sweep: devex-quality-rubric.ts contextualises post-v8.104 plan-critic merge
 

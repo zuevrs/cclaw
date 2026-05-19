@@ -57,6 +57,18 @@ describe("cli (v8.29 TUI-first surface)", () => {
     expect(ctx.out.data).toContain("--non-interactive");
   });
 
+  it("--help lists the v8.107 /cc subcommand patterns including /cc patch + /cc extend", async () => {
+    const ctx = mkContext("/tmp");
+    const code = await runCli(["--help"], ctx);
+    expect(code).toBe(0);
+    expect(ctx.out.data).toContain("/cc subcommand patterns");
+    expect(ctx.out.data).toContain("/cc <task>");
+    expect(ctx.out.data).toContain("/cc research <topic>");
+    expect(ctx.out.data).toContain("/cc patch <slug> <task>");
+    expect(ctx.out.data).toContain("/cc extend <slug> <task>");
+    expect(ctx.out.data).toContain("/cc-cancel");
+  });
+
   it("prints help when -h flag is passed", async () => {
     const ctx = mkContext("/tmp");
     const code = await runCli(["-h"], ctx);

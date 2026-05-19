@@ -199,11 +199,12 @@ describe("v8.85 — assumption-validation section contract (reviewer axis + plan
     expect(BUILDER_PROMPT).toMatch(/assumption-validation\.ts/);
     expect(START_COMMAND_PROMPT).toMatch(/KA-N/);
 
-    // README + axis count (v8.85+ baseline)
+    // v8.107 README rewrite removed per-axis name lists and the
+    // `validates: KA-N` envelope phrasing (now lives in source prompts
+    // + CHANGELOG, asserted by the source-of-truth checks above). One
+    // axis-count regression guard remains so the rewrite never
+    // re-introduces a stale axis-count claim.
     const readme = await fs.readFile(path.join(path.resolve(process.cwd()), "README.md"), "utf-8");
     expect(readme).not.toContain("12 axes");
-    expect(readme).toMatch(/`assumption-coverage`/);
-    expect(readme).toContain("reviewer-axis-assumption-coverage");
-    expect(readme).toMatch(/validates:\s*KA-N/);
   });
 });

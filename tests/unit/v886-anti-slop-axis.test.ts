@@ -208,16 +208,13 @@ describe("v8.86 — anti-slop axis section contract (shared rubric + reviewer pr
     expect(REVIEWER_PROMPT).toMatch(/\[as=N\]/);
     expect(REVIEWER_PROMPT).toMatch(/\/\s*`anti-slop`\s*\)\./);
 
-    // README
+    // README — v8.107 rewrite collapsed the inventory section + removed
+    // all `v8.XX` annotations. Two count-pin guards remain so the rewrite
+    // never re-introduces a stale axis or skill count; the anti-slop axis
+    // surface itself is pinned in the source-of-truth assertions above.
     const readme = await fs.readFile(path.join(PROJECT_ROOT, "README.md"), "utf-8");
     expect(readme).toContain("14 axes");
     expect(readme).not.toContain("13 axes");
-    expect(readme).toContain("32 skills");
     expect(readme).not.toContain("35 skills");
-    expect(readme).toMatch(/`anti-slop`/);
-    expect(readme).toContain("reviewer-axis-anti-slop");
-    expect(readme).toMatch(/v8\.86/);
-    expect(readme).toMatch(/Simplicity First/);
-    expect(readme).toMatch(/Karpathy/i);
   });
 });

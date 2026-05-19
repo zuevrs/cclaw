@@ -131,17 +131,13 @@ describe("v8.84 — not-doing gate behavior (buildAutoTriggerBlock + README + ve
     }
 
     const readme = await fs.readFile(path.join(PROJECT_ROOT, "README.md"), "utf-8");
+    // v8.107 README rewrite intentionally removed the inventory table, all
+    // `v8.XX` annotations, and per-axis name lists. The reviewer-axis surface
+    // is now pinned in CHANGELOG + source-of-truth prompts (asserted below
+    // and in the SECTION CONTRACT block). Two cross-version regression guards
+    // remain so the rewrite never re-introduces stale axis counts.
     expect(readme).not.toContain("11 axes");
-    expect(readme).toMatch(/`scope-drift`/);
-    expect(readme).toMatch(/`qa-evidence`/);
-    expect(readme).toMatch(/`nfr-compliance`/);
-    expect(readme).toMatch(/`design-quality`/);
-    // v8.106 — vestigial-skills retirement moved the skill count from 35 → 32.
-    // The previous "not 32 skills" guard pinned the pre-v8.106 baseline.
     expect(readme).not.toContain("35 skills");
-    expect(readme).toContain("reviewer-axis-scope-drift");
-    expect(readme).toMatch(/v8\.84/);
-    expect(readme).toMatch(/Not Doing|scope[- ]drift|## Not Doing/);
 
     const pkg = JSON.parse(
       await fs.readFile(path.join(PROJECT_ROOT, "package.json"), "utf-8")

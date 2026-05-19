@@ -1,7 +1,7 @@
 import { RESEARCH_AGENTS, SPECIALIST_AGENTS } from "./core-agents.js";
 import { ironLawsMarkdown } from "./iron-laws.js";
 
-// v8.103 — start-command compressed from ~137k chars to ~30k. The lifted
+// v8.103 — start-command compressed from ~137k chars to ~52k. The lifted
 // content (research-mode 4-phase flow; per-stage subsection detail; triage
 // migration prose; debug-branch routing; one-way door gate detail; Compound /
 // Finalize / Pause-and-resume / Always-ask reference paragraphs; reviewer +

@@ -167,12 +167,21 @@ export async function loadParentContext(
     };
   }
 
+  const shippedSlugs = await listShippedSlugs(projectRoot);
+  let suffix: string;
+  if (shippedSlugs.length === 0) {
+    suffix = "No shipped slugs found in .cclaw/flows/shipped/.";
+  } else if (shippedSlugs.length <= 10) {
+    suffix = `Available shipped slugs: ${shippedSlugs.join(", ")}.`;
+  } else {
+    const head = shippedSlugs.slice(0, 10).join(", ");
+    suffix = `Available shipped slugs (showing 10 of ${shippedSlugs.length}): ${head}. Full list: 'ls .cclaw/flows/shipped/'.`;
+  }
   return {
     ok: false,
     reason: "missing",
     slug,
-    message:
-      `Unknown slug '${slug}'. Run 'cclaw --non-interactive knowledge' to list shipped slugs.`
+    message: `Unknown slug '${slug}'. ${suffix}`
   };
 }
 

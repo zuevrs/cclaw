@@ -106,6 +106,14 @@ Flow control (plan / build / review / ship) lives inside the harness
 via the /cc command, not in this CLI. There is no \`cclaw plan\`,
 \`cclaw status\`, \`cclaw ship\`, or \`cclaw migrate\` — by design.
 
+/cc subcommand patterns (inside your harness, after install):
+  /cc <task>                       Fresh slug — triage → plan → build → review → critic → ship.
+  /cc research <topic>             Multi-lens research mode; emits research.md, no build.
+  /cc patch <slug> <task>          Post-ship micro-edit (v8.102): inline ceremony, single commit, parent context reused.
+  /cc extend <slug> <task>         Full follow-up arc on a shipped slug; parent's plan / build / learnings load as context.
+  /cc                              Resume the active flow.
+  /cc-cancel                       Discard the active flow.
+
 Per-flow override flags (parsed by the /cc orchestrator inside the
 harness, NOT by this CLI):
   --inline / --soft / --strict        force a ceremonyMode

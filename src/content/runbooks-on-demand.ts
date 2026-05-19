@@ -1195,7 +1195,7 @@ When the fork fires, parse the argument into two parts:
 
 - \`<task>\` — the **remainder of the argument string** after the slug, trimmed. Must be non-empty for the fork to proceed.
 
-The slug token is matched verbatim; no fuzzy resolution at this layer (a typo surfaces as \`reason: "missing"\` from \`loadParentContext\` and the orchestrator's error message points the user at \`cclaw --non-interactive knowledge\` for the canonical list).
+The slug token is matched verbatim; no fuzzy resolution at this layer (a typo surfaces as \`reason: "missing"\` from \`loadParentContext\` and the orchestrator's error message lists the available shipped slugs from \`.cclaw/flows/shipped/\` directly — first 10 inline; pointer to \`ls .cclaw/flows/shipped/\` when more).
 
 ## Parent validation via \`loadParentContext\`
 
@@ -1230,7 +1230,7 @@ Surface the resolution's \`message\` field verbatim to the user and end the turn
 | \`"in-flight"\` | slug is still active under \`flows/<slug>/\` | \`Slug '<slug>' is still in-flight (active under flows/<slug>/). Ship it first, then run /cc extend.\` |
 | \`"cancelled"\` | slug was cancelled (under \`flows/cancelled/<slug>/\`) | \`Slug '<slug>' was cancelled (under flows/cancelled/<slug>/, never shipped). Pass a shipped slug.\` |
 | \`"corrupted"\` | shipped dir exists but \`plan.md\` is missing | \`Shipped slug '<slug>' is corrupted (plan.md missing under flows/shipped/<slug>/). Cannot use as parent context.\` |
-| \`"missing"\` | slug not found under \`flows/\` or \`flows/shipped/\` or \`flows/cancelled/\` | \`Unknown slug '<slug>'. Run 'cclaw --non-interactive knowledge' to list shipped slugs.\` |
+| \`"missing"\` | slug not found under \`flows/\` or \`flows/shipped/\` or \`flows/cancelled/\` | \`Unknown slug '<slug>'. Available shipped slugs: <slug1>, <slug2>, ....\` (or \`No shipped slugs found in .cclaw/flows/shipped/.\` when empty; truncated to 10 + \`Full list: 'ls .cclaw/flows/shipped/'.\` when >10) |
 
 The error message is plain prose, ends the turn, and does NOT consume any of the user's quota of clarifying questions (the lightweight router from still asks zero questions; extend mode does not change that contract).
 
@@ -1339,7 +1339,7 @@ When the fork fires, parse the argument into two parts:
 
 - \`<task>\` — the **remainder of the argument string** after the slug, trimmed. Must be non-empty for the fork to proceed.
 
-The slug token is matched verbatim; no fuzzy resolution at this layer (a typo surfaces as \`reason: "missing"\` from \`loadParentContext\` and the orchestrator's error message points the user at \`cclaw --non-interactive knowledge\` for the canonical list).
+The slug token is matched verbatim; no fuzzy resolution at this layer (a typo surfaces as \`reason: "missing"\` from \`loadParentContext\` and the orchestrator's error message lists the available shipped slugs from \`.cclaw/flows/shipped/\` directly — first 10 inline; pointer to \`ls .cclaw/flows/shipped/\` when more).
 
 ## Parent validation via \`loadParentContext\` (REUSED from v8.59)
 
@@ -1350,7 +1350,7 @@ Call \`loadParentContext(projectRoot, slug)\` from \`src/parent-context.ts\` —
 | \`"in-flight"\` | slug is still active under \`flows/<slug>/\` | \`Slug '<slug>' is still in-flight (active under flows/<slug>/). Ship it first, then run /cc patch.\` |
 | \`"cancelled"\` | slug was cancelled (under \`flows/cancelled/<slug>/\`) | \`Slug '<slug>' was cancelled (under flows/cancelled/<slug>/, never shipped). Pass a shipped slug.\` |
 | \`"corrupted"\` | shipped dir exists but \`plan.md\` is missing | \`Shipped slug '<slug>' is corrupted (plan.md missing under flows/shipped/<slug>/). Cannot use as parent for patch-mode.\` |
-| \`"missing"\` | slug not found under \`flows/\` or \`flows/shipped/\` or \`flows/cancelled/\` | \`Unknown slug '<slug>'. Run 'cclaw --non-interactive knowledge' to list shipped slugs.\` |
+| \`"missing"\` | slug not found under \`flows/\` or \`flows/shipped/\` or \`flows/cancelled/\` | \`Unknown slug '<slug>'. Available shipped slugs: <slug1>, <slug2>, ....\` (or \`No shipped slugs found in .cclaw/flows/shipped/.\` when empty; truncated to 10 + \`Full list: 'ls .cclaw/flows/shipped/'.\` when >10) |
 
 The error message is plain prose, ends the turn, and does NOT consume any of the user's quota of clarifying questions. The fork does not allow patching an in-flight slug — that's what \`/cc\` (no args) on an active flow already does. Patch is for **post-ship** micro-edits only.
 
@@ -1445,7 +1445,6 @@ The builder's slim summary is the standard six-line shape but the \`What changed
 - **Argument is \`patch <slug> --review <task>\`** — sets \`review_mode: "lite"\`; the lite reviewer pass runs after the builder commits (three axes: correctness / readability / edit-discipline).
 - **Argument is \`patch <slug> <task>\` AND \`<slug>\` resolves to a shipped slug with \`outcome_signal: "reverted"\` in \`knowledge.jsonl\`** — proceed with the patch, but emit a one-line informational note: \`parent slug '<slug>' was later reverted — patching a reverted slug is unusual; verify intent.\` The user can still ship the patch; the note exists so a reverted parent does not become invisible context.
 - **Argument starts with \`patch \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — the ceremonyMode flag is IGNORED (patch mode is structurally inline; soft / strict ceremonies don't apply to a 1-2 file post-ship edit). Surface a one-line \`patch-mode ignores ceremonyMode flags\` note, then proceed.
-- **Argument starts with \`patch \` AND the \`--mode=auto\` / \`--mode=step\` flag is also present** — the toggle is IGNORED (patch mode is single-dispatch; the always-auto chain has nothing to chain). Surface a one-line note, then proceed.
 - **Argument starts with \`patch \` AND \`<slug>\` matches an active in-flight flow (under \`flows/<slug>/\`, not \`flows/shipped/\`)** — surface the \`"in-flight"\` error: \`Slug '<slug>' is still in-flight. Ship it first, then run /cc patch.\` Patch is post-ship-only.
 
 ## When NOT to use patch-mode
