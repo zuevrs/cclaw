@@ -140,7 +140,15 @@ describe("v8.59 — continuation behavior (loadParentContext + findNearKnowledge
 
     const missing = await loadParentContext(project, "20260101-does-not-exist");
     expect(missing.ok).toBe(false);
-    if (!missing.ok) expect(missing.reason).toBe("missing");
+    if (!missing.ok) {
+      expect(missing.reason).toBe("missing");
+      // v8.107 — message now lists available shipped slugs directly
+      // instead of pointing at `cclaw --non-interactive knowledge`.
+      // The parent we just seeded is the only canonical shipped slug,
+      // so the "Available shipped slugs: ..." suffix must include it.
+      expect(missing.message).toContain(`Available shipped slugs: ${PARENT_SLUG}`);
+      expect(missing.message).not.toContain("cclaw --non-interactive knowledge");
+    }
 
     const activeDir = path.join(project, ".cclaw", "flows", "20260601-in-flight");
     await fs.mkdir(activeDir, { recursive: true });
@@ -199,6 +207,45 @@ describe("v8.59 — continuation behavior (loadParentContext + findNearKnowledge
     expect(result.filter((entry) => entry.slug === PARENT_SLUG)).toHaveLength(1);
 
     await expect(findNearKnowledge("x", project, { parentSlug: "" })).rejects.toThrow(/parentSlug/u);
+  });
+
+  it("BEHAVIOR — v8.107 unknown-slug message: empty / 1-10 / >10 shipped slugs render the right suffix", async () => {
+    // Empty: no shipped slugs at all.
+    const empty = await loadParentContext(project, "20260101-nope");
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) {
+      expect(empty.reason).toBe("missing");
+      expect(empty.message).toContain(
+        "No shipped slugs found in .cclaw/flows/shipped/."
+      );
+    }
+
+    // 1-10: inline list.
+    await seedShippedParent(project, "20260101-alpha");
+    await seedShippedParent(project, "20260101-beta");
+    await seedShippedParent(project, "20260101-gamma");
+    const small = await loadParentContext(project, "20260101-nope");
+    expect(small.ok).toBe(false);
+    if (!small.ok) {
+      expect(small.message).toContain(
+        "Available shipped slugs: 20260101-alpha, 20260101-beta, 20260101-gamma."
+      );
+    }
+
+    // >10: truncate to 10 + pointer at `ls .cclaw/flows/shipped/`.
+    for (let i = 0; i < 9; i += 1) {
+      // 9 more, total = 3 + 9 = 12.
+      const slugIndex = String(i + 1).padStart(2, "0");
+      await seedShippedParent(project, `20260201-extra-${slugIndex}`);
+    }
+    const big = await loadParentContext(project, "20260101-nope");
+    expect(big.ok).toBe(false);
+    if (!big.ok) {
+      expect(big.message).toMatch(
+        /Available shipped slugs \(showing 10 of 12\):/u
+      );
+      expect(big.message).toContain("Full list: 'ls .cclaw/flows/shipped/'.");
+    }
   });
 });
 

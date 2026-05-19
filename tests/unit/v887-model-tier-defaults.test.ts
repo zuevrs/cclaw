@@ -142,14 +142,13 @@ describe("v8.87 — model-tier policy section contract (dispatch-envelope runboo
     expect(body).toMatch(/\| `critic` \| `powerful` \|/);
     expect(body).toMatch(/\| `learnings-research` \/ `repo-research` \| `fast` \|/);
 
+    // v8.107 README rewrite removed the standalone "Model-tier policy"
+    // section + all v8.XX annotations. The model-tier override surface
+    // (`modelPreferences` in `.cclaw/config.yaml`) is now mentioned in
+    // the README's Configuration example block; the canonical policy
+    // lives in the dispatch-envelope runbook (asserted above) and in
+    // CHANGELOG. Pin only the override surface on the README.
     const readme = await fs.readFile(path.join(PROJECT_ROOT, "README.md"), "utf-8");
-    expect(readme).toMatch(/^##\s+Model-tier policy/m);
-    expect(readme).toMatch(/v8\.87/);
-    expect(readme).toMatch(/`fast`/);
-    expect(readme).toMatch(/`balanced`/);
-    expect(readme).toMatch(/`powerful`/);
-    expect(readme).toMatch(/`builder`/);
-    expect(readme).toMatch(/`critic`/);
     expect(readme).toMatch(/modelPreferences/);
 
     const pkg = JSON.parse(

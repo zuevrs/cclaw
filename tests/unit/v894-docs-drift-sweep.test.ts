@@ -37,7 +37,7 @@ const REPO_ROOT = path.resolve(
  * narrative ("v8.85 added the 13th axis, v8.86 bumped to 14") stays
  * intact.
  *
- * Canonical counts (current as of v8.104):
+ * Canonical counts (current as of v8.107):
  *   - REVIEWER AXES: 14 (8 base + 6 gated post-v8.86)
  *   - RESEARCH LENSES: 6 (engineer / product / architecture / history
  *     / skeptic / design — design added v8.76)
@@ -46,6 +46,8 @@ const REPO_ROOT = path.resolve(
  *     v8.75 plan-design + v8.82 plan-devex into plan-critic as
  *     rubric modes "design" / "devex"; one specialist, three rubric
  *     modes dispatched via envelope fan-out)
+ *   - RUNBOOKS: 23 (on-demand runbooks loaded by trigger from
+ *     `runbooks-on-demand.ts`; tripwire added v8.107)
  *   - TRIAGE FIELD-COUNT (bimodal):
  *       sub-agent core decision surface: 5 (complexity / ceremonyMode
  *       / path / runMode / mode)
@@ -58,6 +60,7 @@ const REPO_ROOT = path.resolve(
 const AXES_CANONICAL = 14;
 const LENSES_CANONICAL = 6;
 const SPECIALISTS_CANONICAL = 8;
+const RUNBOOKS_CANONICAL = 23;
 const TRIAGE_FIELDS_CORE = 5;
 const TRIAGE_FIELDS_AGGREGATE = 8;
 
@@ -187,6 +190,17 @@ const RULES: Rule[] = [
     ),
     canonical: SPECIALISTS_CANONICAL,
     noun: "specialists"
+  },
+  // Runbooks — `<N> runbook(s)` (v8.107 added — currently 23 on-demand
+  // runbooks dispatched by `runbooks-on-demand.ts`). Catches stale
+  // `13 runbooks` / `16 runbooks` / `18 runbooks` count rows accumulated
+  // across `README.md`, specialist prompts, and start-command pointer
+  // prose.
+  {
+    id: "runbooks-count",
+    pattern: /\b(\d+)\s+runbooks?\b/gi,
+    canonical: RUNBOOKS_CANONICAL,
+    noun: "runbooks"
   }
 ];
 
@@ -325,21 +339,29 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
       "utf8"
     );
 
-    it(`README declares "${AXES_CANONICAL} axes" in the Review count row`, () => {
+    it(`README declares "${AXES_CANONICAL} axes" in the reviewer phrasing`, () => {
       expect(README).toMatch(/14 axes/);
     });
 
-    it(`README declares "${SPECIALISTS_CANONICAL} sub-agents" in the Specialists count row`, () => {
-      expect(README).toMatch(/8 sub-agents/);
+    it(`README declares "${SPECIALISTS_CANONICAL} specialist contracts" (post-v8.107 rewrite phrasing)`, () => {
+      // v8.107 rewrote README from inventory-table prose ("8 sub-agents")
+      // to deeper-docs link prose ("8 specialist contracts"). Either
+      // canonical phrasing pins the specialists count.
+      expect(README).toMatch(/8 (?:sub-agents|specialist contracts)/);
     });
 
-    it(`README's Triage row declares the aggregated "${TRIAGE_FIELDS_AGGREGATE}-field" stamped state`, () => {
-      expect(README).toMatch(/8-field/);
+    it(`README declares the runbook count (${RUNBOOKS_CANONICAL} on-demand runbooks)`, () => {
+      expect(README).toMatch(/23 on-demand runbooks/);
     });
 
-    it("README mentions `six lenses` OR `6 research-only lens`", () => {
+    it("README mentions the research-lens count (six / 6)", () => {
+      // v8.107 rewrote the lens count phrasing from `6 research-only
+      // lens contracts` to `6 research lenses`. Either canonical
+      // phrasing pins the lens count.
       const hasSix =
-        README.includes("six lenses") || README.includes("6 research-only");
+        README.includes("six lenses") ||
+        README.includes("6 research-only") ||
+        README.includes("6 research lenses");
       expect(hasSix).toBe(true);
     });
 
