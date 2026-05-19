@@ -245,30 +245,6 @@ function readSkill(fileName: string): string {
 
 export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
-    id: "triage-gate",
-    fileName: "triage-gate.md",
-    description: "Mandatory first step of every new /cc flow: classify complexity, propose ceremonyMode/path, ask user to confirm, persist the decision.",
-    triggers: ["start:/cc"],
-    stages: ["triage"],
-    body: readSkill("triage-gate.md")
-  },
-  {
-    id: "flow-resume",
-    fileName: "flow-resume.md",
-    description: "When /cc is invoked with no task or with an active flow, render a resume summary and let the user continue / show / cancel / start fresh.",
-    triggers: ["start:/cc", "active-flow-detected"],
-    stages: ["always"],
-    body: readSkill("flow-resume.md")
-  },
-  {
-    id: "pre-flight-assumptions",
-    fileName: "pre-flight-assumptions.md",
-    description: "Surface 3-7 default assumptions (stack, conventions, architecture defaults, out-of-scope) for the user to confirm before any specialist runs. Skipped on the inline path.",
-    triggers: ["after:triage-gate", "before:first-dispatch"],
-    stages: ["triage", "plan"],
-    body: readSkill("pre-flight-assumptions.md")
-  },
-  {
     id: "plan-authoring",
     fileName: "plan-authoring.md",
     description: "Auto-applies whenever the agent edits .cclaw/flows/<slug>/plan.md.",

@@ -16,7 +16,7 @@ import { BUILDER_PROMPT } from "../../src/content/specialist-prompts/builder.js"
  */
 
 describe("v8.19 skill-windowing wiring (data shape + canonical stage mapping)", () => {
-  it("WIRING — AUTO_TRIGGER_SKILLS ships ≥17 entries with unique fileNames + non-empty bodies, every skill carries a stages array drawn from the known AutoTriggerStage union, and the canonical per-skill stage mapping is intact (triage-gate=triage; flow-resume/conversation-language/anti-slop/summary-format=always; pre-flight-assumptions=triage+plan; plan-authoring=plan; ac-discipline=plan+build+review; tdd-and-verification=build+review+ship; commit-hygiene=build+ship; review-discipline=review; documentation-and-adrs=plan+ship; api-evolution=plan+review; refinement=triage+plan)", () => {
+  it("WIRING — AUTO_TRIGGER_SKILLS ships ≥17 entries with unique fileNames + non-empty bodies, every skill carries a stages array drawn from the known AutoTriggerStage union, and the canonical per-skill stage mapping is intact (v8.106 retired triage-gate / flow-resume / pre-flight-assumptions reference-only skills; conversation-language/anti-slop/summary-format=always; plan-authoring=plan; ac-discipline=plan+build+review; tdd-and-verification=build+review+ship; commit-hygiene=build+ship; review-discipline=review; documentation-and-adrs=plan+ship; api-evolution=plan+review; refinement=triage+plan)", () => {
     expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
 
     const fileNames = AUTO_TRIGGER_SKILLS.map((s) => s.fileName);
@@ -39,12 +39,9 @@ describe("v8.19 skill-windowing wiring (data shape + canonical stage mapping)", 
       AUTO_TRIGGER_SKILLS.find((s) => s.id === id)!.stages ?? ["always"];
 
     const expected: Record<string, AutoTriggerStage[]> = {
-      "triage-gate": ["triage"],
-      "flow-resume": ["always"],
       "conversation-language": ["always"],
       "anti-slop": ["always"],
       "summary-format": ["always"],
-      "pre-flight-assumptions": ["triage", "plan"],
       "plan-authoring": ["plan"],
       "ac-discipline": ["plan", "build", "review"],
       "tdd-and-verification": ["build", "review", "ship"],
@@ -57,6 +54,14 @@ describe("v8.19 skill-windowing wiring (data shape + canonical stage mapping)", 
     for (const [id, want] of Object.entries(expected)) {
       expect(stagesById(id), `${id} stages drift`).toEqual(want);
     }
+
+    // v8.106 — the three vestigial reference-only skills are gone from the registry.
+    for (const retiredId of ["triage-gate", "flow-resume", "pre-flight-assumptions"]) {
+      expect(
+        AUTO_TRIGGER_SKILLS.find((s) => s.id === retiredId),
+        `${retiredId} should be retired in v8.106`
+      ).toBeUndefined();
+    }
   });
 });
 
@@ -67,9 +72,9 @@ describe("v8.19 skill-windowing behavior (buildAutoTriggerBlock filter + always-
       expect(fullBlock).toContain(`**${skill.id}**`);
     }
 
-    // triage-stage filter
+    // triage-stage filter (v8.106 — triage-gate / flow-resume / pre-flight-assumptions retired)
     const triageBlock = buildAutoTriggerBlock("triage");
-    for (const s of ["**triage-gate**", "**pre-flight-assumptions**", "**flow-resume**", "**conversation-language**"]) {
+    for (const s of ["**refinement**", "**conversation-language**", "**anti-slop**", "**summary-format**"]) {
       expect(triageBlock).toContain(s);
     }
     for (const s of ["**commit-hygiene**", "**review-discipline**", "**tdd-and-verification**", "**parallel-build**"]) {
@@ -81,7 +86,7 @@ describe("v8.19 skill-windowing behavior (buildAutoTriggerBlock filter + always-
     for (const s of ["**review-discipline**", "**ac-discipline**", "**tdd-and-verification**", "**anti-slop**"]) {
       expect(reviewBlock).toContain(s);
     }
-    for (const s of ["**triage-gate**", "**plan-authoring**", "**pre-flight-assumptions**"]) {
+    for (const s of ["**plan-authoring**", "**refinement**"]) {
       expect(reviewBlock).not.toContain(s);
     }
 
@@ -117,12 +122,13 @@ describe("v8.19 skill-windowing behavior (buildAutoTriggerBlock filter + always-
 });
 
 describe("v8.19 skill-windowing section contract (specialist prompts embed the right stage block)", () => {
-  it("SECTION CONTRACT — architect prompt embeds `## Active skills (stage: `plan`)` and lists pre-flight-assumptions; reviewer prompt embeds the `review` stage block and excludes plan-only skills; builder prompt embeds the `build` stage block and excludes plan-only skills", () => {
+  it("SECTION CONTRACT — architect prompt embeds `## Active skills (stage: `plan`)` and lists plan-authoring; reviewer prompt embeds the `review` stage block and excludes plan-only skills; builder prompt embeds the `build` stage block and excludes plan-only skills (v8.106 — pre-flight-assumptions retired; the architect's Bootstrap phase now owns the assumption-capture surface natively)", () => {
     expect(ARCHITECT_PROMPT).toContain("## Active skills (stage: `plan`)");
-    expect(ARCHITECT_PROMPT).toContain("**pre-flight-assumptions**");
+    expect(ARCHITECT_PROMPT).toContain("**plan-authoring**");
+    expect(ARCHITECT_PROMPT).not.toContain("**pre-flight-assumptions**");
     expect(REVIEWER_PROMPT).toContain("## Active skills (stage: `review`)");
     expect(REVIEWER_PROMPT).not.toContain("**plan-authoring**");
     expect(BUILDER_PROMPT).toContain("## Active skills (stage: `build`)");
-    expect(BUILDER_PROMPT).not.toContain("**pre-flight-assumptions**");
+    expect(BUILDER_PROMPT).not.toContain("**plan-authoring**");
   });
 });

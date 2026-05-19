@@ -136,7 +136,9 @@ describe("v8.84 — not-doing gate behavior (buildAutoTriggerBlock + README + ve
     expect(readme).toMatch(/`qa-evidence`/);
     expect(readme).toMatch(/`nfr-compliance`/);
     expect(readme).toMatch(/`design-quality`/);
-    expect(readme).not.toContain("32 skills");
+    // v8.106 — vestigial-skills retirement moved the skill count from 35 → 32.
+    // The previous "not 32 skills" guard pinned the pre-v8.106 baseline.
+    expect(readme).not.toContain("35 skills");
     expect(readme).toContain("reviewer-axis-scope-drift");
     expect(readme).toMatch(/v8\.84/);
     expect(readme).toMatch(/Not Doing|scope[- ]drift|## Not Doing/);

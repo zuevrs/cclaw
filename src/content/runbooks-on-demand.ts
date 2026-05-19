@@ -13,19 +13,26 @@ export interface OnDemandRunbook {
 
 /**
  * Canonical reviewer-dispatch envelope shapes the orchestrator
- * encounters (introduced in v8.96.1; Phase C audit G-2 fix).
- * The install pipeline pre-renders the gate-resolved skills
- * slice for each shape (via {@link renderDispatchSkillsIndex}) so the
- * dispatch-skills-index runbook is a static index of every per-envelope
- * skills-pointer block the orchestrator might need to paste into a live
- * reviewer dispatch envelope.
+ * encounters (introduced in v8.96.1; Phase C audit G-2 fix;
+ * v8.106 trim to 3 most-common shapes).
  *
- * The shapes here cover the high-traffic combinations (no flags, every
- * individual gate, common multi-gate combinations that fire together on
- * post-v8.80 strict-mode plans). For envelope shapes outside the table
- * the orchestrator falls back to {@link buildAutoTriggerBlock} reasoning
- * (the on-disk reviewer.md remains the superset hint); the table is a
- * fast-path for the common cases, not a closed enum.
+ * The install pipeline pre-renders the gate-resolved skills slice for
+ * each shape (via {@link renderDispatchSkillsIndex}) so the
+ * dispatch-skills-index runbook is a static index of the high-traffic
+ * per-envelope skills-pointer blocks the orchestrator might need to
+ * paste into a live reviewer dispatch envelope.
+ *
+ * v8.106 — Cached shapes reduced from 9 to 3. Pre-v8.106 the table
+ * also included `default-on anti-slop only`, `security-sensitive`,
+ * `NFR-bearing`, `every gate flag set`, and `anti-slop explicitly
+ * disabled` shapes; those shapes are now derived on-demand by the
+ * orchestrator via the on-disk reviewer.md superset (fall-back rule
+ * documented below) — the cached fast-path covers the top three
+ * traffic shapes only. The fall-back path is the same
+ * `buildAutoTriggerBlock(stage, gateEnvelope)` runtime that
+ * {@link renderDispatchSkillsIndex} wraps, so semantic correctness is
+ * preserved on every envelope shape; the table is a fast-path index,
+ * not a closed enum.
  *
  * Phase C audit G-2 fix — production-path caller of
  * `buildAutoTriggerBlock(stage, gateEnvelope)` so the runtime path the
@@ -44,12 +51,6 @@ const REVIEWER_DISPATCH_ENVELOPES: ReadonlyArray<{
       "Every surface-driven gated axis filtered out (qa-evidence / design-quality / security / nfr-compliance / edit-discipline / scope-drift / assumption-coverage). Anti-slop still fires per the default-on contract (`walkAntiSlopAxis !== false` — `undefined` opens the gate). Reviewer renders correctness / test-quality / readability / architecture / complexity-budget / perf / always-on stage skills plus the anti-slop axis. Only fires in practice on doc-only ceremony=soft slugs or as the structural baseline when the orchestrator has not yet stamped surface-driven flags."
   },
   {
-    label: "default-on anti-slop only (no surface-driven gates)",
-    envelope: { walkAntiSlopAxis: true },
-    notes:
-      "Most common shape on non-design / non-UI / non-NFR-bearing soft-mode slugs. anti-slop fires by default per v8.86; the other gated axes (qa-evidence / design-quality / nfr-compliance / scope-drift / assumption-coverage / security / edit-discipline) skip silently."
-  },
-  {
     label: "strict-mode baseline — anti-slop + edit-discipline + scope-drift + assumption-coverage",
     envelope: {
       walkAntiSlopAxis: true,
@@ -58,7 +59,7 @@ const REVIEWER_DISPATCH_ENVELOPES: ReadonlyArray<{
       walkAssumptionCoverageAxis: true
     },
     notes:
-      "Canonical strict-mode reviewer dispatch envelope on a post-v8.80 plan that respects plan-critic §6.5 (Not-Doing section non-empty) and v8.85 (Key assumptions to validate section non-empty). edit-discipline always fires in strict / soft per v8.48."
+      "Canonical strict-mode reviewer dispatch envelope on a post-v8.80 plan that respects plan-critic §6.5 (Not-Doing section non-empty) and v8.85 (Key assumptions to validate section non-empty). edit-discipline always fires in strict / soft per v8.48. Highest-traffic shape across the corpus."
   },
   {
     label: "UI / design slug — qa-evidence + design-quality stacked on the strict baseline",
@@ -71,57 +72,7 @@ const REVIEWER_DISPATCH_ENVELOPES: ReadonlyArray<{
       walkDesignQualityAxis: true
     },
     notes:
-      "Strict-mode UI slug — `triage.surfaces` ∩ {ui, web} ≠ ∅ AND `triage.designSurface == true`. The two surface-driven gates ride on top of the strict-mode baseline."
-  },
-  {
-    label: "security-sensitive slug — security flag on top of the strict baseline",
-    envelope: {
-      walkAntiSlopAxis: true,
-      editDisciplineActive: true,
-      walkScopeDriftAxis: true,
-      walkAssumptionCoverageAxis: true,
-      securityFlag: true
-    },
-    notes:
-      "Strict-mode slug whose touched files matched the sensitive-surface heuristic (auth / oauth / saml / session / secret / migration / route file / dependency manifest / `@security-sensitive` marker). v8.62 absorbed `security-reviewer` into the reviewer's security axis; `securityFlag: true` pins the reviewer-axis-security companion skill."
-  },
-  {
-    label: "NFR-bearing slug — planHasNonFunctional stacked on the strict baseline",
-    envelope: {
-      walkAntiSlopAxis: true,
-      editDisciplineActive: true,
-      walkScopeDriftAxis: true,
-      walkAssumptionCoverageAxis: true,
-      planHasNonFunctional: true
-    },
-    notes:
-      "Strict-mode slug whose architect-authored `plan.md > ## Non-functional` section is non-empty. The reviewer-axis-nfr-compliance companion skill is pinned so per-row cross-checks fire."
-  },
-  {
-    label: "every gate flag set",
-    envelope: {
-      walkAntiSlopAxis: true,
-      editDisciplineActive: true,
-      walkScopeDriftAxis: true,
-      walkAssumptionCoverageAxis: true,
-      walkQaEvidenceAxis: true,
-      walkDesignQualityAxis: true,
-      securityFlag: true,
-      planHasNonFunctional: true
-    },
-    notes:
-      "All eight reviewer-stage gated axes active. Sanity-check shape — the rendered block here is the upper bound and matches the static superset embedded in reviewer.md."
-  },
-  {
-    label: "anti-slop explicitly disabled (default-on opt-out)",
-    envelope: {
-      walkAntiSlopAxis: false,
-      editDisciplineActive: true,
-      walkScopeDriftAxis: true,
-      walkAssumptionCoverageAxis: true
-    },
-    notes:
-      "User / project config set `walkAntiSlopAxis: false` on this slug (tightly-scoped change where the axis would only add noise). Every other strict-baseline gate continues to fire."
+      "Strict-mode UI slug — `triage.surfaces` ∩ {ui, web} ≠ ∅ AND `triage.designSurface == true`. The two surface-driven gates ride on top of the strict-mode baseline. Other shapes (security-sensitive, NFR-bearing, every-gate, anti-slop-disabled) derive on-demand via the on-disk reviewer.md static superset fall-back path; see the fall-back rules table below."
   }
 ];
 
@@ -192,12 +143,13 @@ ${sections}
 
 ## Fall-back rules
 
+v8.106 — the cached fast-path table above lists the three highest-traffic shapes only (no-flags / strict-baseline / UI+design). Other shapes (security-sensitive, NFR-bearing, every-gate, anti-slop-disabled, default-on-anti-slop-only) derive on-demand via the rules below; semantic correctness is preserved because the on-disk \`agents/reviewer.md\` is the static superset of every gated axis and \`buildAutoTriggerBlock(stage, gateEnvelope)\` is the same runtime the cached entries wrap.
+
 | envelope condition | what to do |
 | --- | --- |
-| matches one of the canonical shapes above | use that shape's **Rendered block** verbatim |
-| every gate flag is \`true\` (all eight) | use the **every gate flag set** section's block; this is the upper bound and matches the static superset in \`agents/reviewer.md\` |
+| matches one of the three cached shapes above | use that shape's **Rendered block** verbatim |
 | every gate flag is unset / \`false\` AND \`walkAntiSlopAxis\` is not explicitly \`true\` | use the **no flags — empty envelope** section; expect zero gated-axis pointers in the rendered block |
-| envelope carries a combination not tabulated | the runbook is a fast-path index, not a closed enum — fall back to the on-disk \`agents/reviewer.md\` static superset (token-wasteful but correct); OR derive the block manually by walking \`AUTO_TRIGGER_SKILLS\` in \`src/content/skills.ts\` and applying each skill's gate predicate |
+| envelope carries a combination not in the cached three | fall back to the on-disk \`agents/reviewer.md\` static superset (token-wasteful but correct — the reviewer sub-agent reads the superset as a hint when no \`Active skills (per envelope):\` field is set); OR derive the block at orchestrator time by walking \`AUTO_TRIGGER_SKILLS\` in \`src/content/skills.ts\` and applying each skill's gate predicate against the envelope (this is what \`buildAutoTriggerBlock(stage, gateEnvelope)\` does internally) |
 
 ## Symmetry note for non-reviewer stages
 
@@ -1943,7 +1895,7 @@ When a legacy flow that was originally a bug-shaped task resumes under v8.77, th
 
 const DETECT_MATRIX = `# On-demand runbook — Detect \`/cc\` invocation matrix (v8.61+)
 
-The orchestrator opens this runbook on every \`/cc\` / \`/cc <task>\` / \`/cc-cancel\` invocation BEFORE deciding to dispatch. The matrix is the canonical contract; the orchestrator body keeps a short summary pointer (see \`Detect — \`/cc\` invocation matrix (v8.61)\` section in start-command). The matrix is also mirrored verbatim in \`.cclaw/lib/skills/flow-resume.md\` so harness-level resume tooling and the orchestrator's prompt share one source of truth.
+The orchestrator opens this runbook on every \`/cc\` / \`/cc <task>\` / \`/cc-cancel\` invocation BEFORE deciding to dispatch. The matrix is the canonical contract; the orchestrator body keeps a short summary pointer (see \`Detect — \`/cc\` invocation matrix (v8.61)\` section in start-command). v8.106 — the former \`skills/flow-resume.md\` reference doc was retired; this runbook + the start-command Detect matrix are the sole resume-contract surfaces.
 
 ## §1 — Active flow detection
 
@@ -2436,7 +2388,7 @@ Pre-v8.58 state files that already carry \`triage.priorLearnings\` are read verb
 
 ## §8 — No-git auto-downgrade audit trail
 
-The git-check sub-step (Detect hop) runs before this Triage hop dispatches; when \`<projectRoot>/.git/\` is absent the triage sub-agent stamps \`triage.ceremonyMode = "soft"\` regardless of class plus \`triage.downgradeReason = "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences (strict requires per-AC commits; parallel-build needs \`git worktree\`; inline's terminal commit is gracefully suppressed) live in \`.cclaw/lib/skills/triage-gate.md\` § "No-git auto-downgrade".
+The git-check sub-step (Detect hop) runs before this Triage hop dispatches; when \`<projectRoot>/.git/\` is absent the triage sub-agent stamps \`triage.ceremonyMode = "soft"\` regardless of class plus \`triage.downgradeReason = "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences (strict requires per-AC commits; parallel-build needs \`git worktree\`; inline's terminal commit is gracefully suppressed) live in the triage sub-agent contract at \`.cclaw/lib/agents/triage.md > "No-git auto-downgrade"\` (v8.106 — the former \`skills/triage-gate.md\` reference doc was retired; the canonical contract now lives on the triage agent prompt).
 
 ## §9 — Slug naming
 

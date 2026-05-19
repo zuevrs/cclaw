@@ -9,6 +9,7 @@ import { renderStartCommand } from "../../src/content/start-command.js";
 import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { TRIAGE_PROMPT } from "../../src/content/specialist-prompts/triage.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
+import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { assertFlowStateV82, migrateFlowState } from "../../src/flow-state.js";
 import { ARTIFACT_FILE_NAMES, activeArtifactPath, shippedArtifactPath } from "../../src/artifact-paths.js";
 import {
@@ -209,32 +210,41 @@ describe("v8.58 — lightweight router + research mode behavior (research templa
       expect(out).not.toMatch(retired);
     }
 
-    // triage-gate skill
-    const triageSkill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "triage-gate");
-    expect(triageSkill, "triage-gate skill missing").toBeDefined();
-    const skillBody = triageSkill!.body;
-    expect(skillBody).toMatch(/routing contract/u);
-    expect(skillBody).toMatch(/complexity.+ceremonyMode.+path.+runMode.+mode/u);
-    expect(skillBody).toContain("--inline");
-    expect(skillBody).toContain("--soft");
-    expect(skillBody).toContain("--strict");
-    expect(skillBody).toMatch(/mutually exclusive/iu);
-    expect(skillBody).toMatch(/REMOVED in v8\.58/u);
-    expect(skillBody).toMatch(/research-mode entry point/iu);
-    expect(skillBody).toMatch(/router runs no heuristics/u);
-    expect(skillBody).toMatch(/router does NOT decide/iu);
+    // triage-gate logic — v8.106 retired the reference-only `triage-gate` skill. The
+    // routing contract now lives on the triage sub-agent prompt (`agents/triage.md`)
+    // and the orchestrator-side procedure lives in `runbooks/triage-gate.md`. The
+    // assertions below collectively check both surfaces carry the routing-contract
+    // canon.
+    expect(
+      AUTO_TRIGGER_SKILLS.find((s) => s.id === "triage-gate"),
+      "triage-gate skill should be retired in v8.106"
+    ).toBeUndefined();
+    const triagePromptBody = TRIAGE_PROMPT;
+    expect(triagePromptBody).toMatch(/routing|router|five-field decision/iu);
+    expect(triagePromptBody).toMatch(/complexity[\s\S]+ceremonyMode[\s\S]+path[\s\S]+runMode[\s\S]+mode/u);
+    expect(triagePromptBody).toContain("--inline");
+    expect(triagePromptBody).toContain("--soft");
+    expect(triagePromptBody).toContain("--strict");
+    expect(triagePromptBody).toMatch(/mutually exclusive/iu);
+    expect(triagePromptBody).toMatch(/research-mode/iu);
+    expect(triagePromptBody).toMatch(/zero[- ]question/iu);
+    const triageRunbookBody =
+      ON_DEMAND_RUNBOOKS.find((r) => r.id === "triage-gate")?.body ?? "";
+    expect(triageRunbookBody.length).toBeGreaterThan(0);
+    expect(triageRunbookBody).toMatch(/no-git auto-downgrade/iu);
+    expect(triageRunbookBody).toMatch(/downgradeReason/u);
+    // Moved-out fields list lives on the triage agent prompt.
     for (const field of [
-      "`surfaces`",
-      "`assumptions`",
-      "`priorLearnings`",
-      "`interpretationForks`",
-      "`criticOverride`",
-      "`notes`"
+      "surfaces",
+      "assumptions",
+      "priorLearnings",
+      "interpretationForks"
     ]) {
-      expect(skillBody).toContain(field);
+      expect(
+        triagePromptBody.includes(field) || triageRunbookBody.includes(field),
+        `triage contract should mention ${field}`
+      ).toBe(true);
     }
-    expect(skillBody).toMatch(/no-git auto-downgrade/iu);
-    expect(skillBody).toMatch(/downgradeReason/u);
   });
 });
 

@@ -25,7 +25,7 @@ The rule applies in every ceremonyMode (`inline` / `soft` / `strict`) and every 
 - **Mid-stage probing / debug-loop runs.** When a specialist runs a probe to understand a failure (e.g., capture a stack trace, dump intermediate state), the probe's output is evidence, not a completion claim. The "I ran this and it failed because X" surfacing is fine; the "I'm done debugging, this works now" claim that follows it must carry fresh evidence per this skill.
 - **Mechanical step acknowledgements.** A specialist saying "I read `plan.md`" or "I opened the runbook" is not a completion claim; it is a procedural acknowledgement. No verification gate fires on procedural moves.
 - **Hypothesis statements during debug-loop discipline.** Stating "my top hypothesis is X" (per `debug-and-browser.md`) is not a completion claim — it is a hypothesis to test. The fix-and-claim moment after the probe lands is what fires the gate.
-- **Re-rendering a prior slim summary** during resume (e.g., `flow-resume.md` rendering the last specialist's return verbatim). Re-render does not re-claim; the prior claim's evidence is what survives on disk.
+- **Re-rendering a prior slim summary** during resume (e.g., the Detect matrix's `/cc` continue path rendering the last specialist's return verbatim per `start-command.md > Detect — /cc invocation matrix`). Re-render does not re-claim; the prior claim's evidence is what survives on disk.
 
 ## Forbidden phrases
 

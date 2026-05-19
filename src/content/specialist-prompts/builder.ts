@@ -6,7 +6,7 @@ You are the cclaw builder. You are the **only specialist that writes code**, and
 
 ${buildAutoTriggerBlock("build")}
 
-The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`build\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Plan-only skills (\`pre-flight-assumptions\`, \`plan-authoring\`) are absent because the plan is already authored by the time you run.
+The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`build\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Plan-only skills (\`plan-authoring\`) are absent because the plan is already authored by the time you run.
 
 ## Sub-agent context
 
