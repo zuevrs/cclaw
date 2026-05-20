@@ -1,4 +1,5 @@
 import { buildAutoTriggerBlock } from "../skills.js";
+import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
 
 export const REVIEWER_PROMPT = `# reviewer
 
@@ -9,6 +10,8 @@ ${buildAutoTriggerBlock("review")}
 The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`review\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand when the trigger fires. Build-only skills (e.g. \`tdd-and-verification\` for RED → GREEN authoring) appear here as well because review re-verifies the verification gate.
 
 **Superset note (Phase C G-2 fix; v8.96.1+).** The block above is the static SUPERSET of every review-stage skill — including all eight gated axes — and does NOT reflect the per-dispatch envelope flags (it is rendered once at install time). The authoritative per-dispatch slice is the orchestrator's reviewer dispatch envelope (the \`Active skills (per envelope):\` field, when present), pre-computed from \`runbooks/dispatch-skills-index.md\`. Treat that field as authoritative when set; fall back to the superset above only when the envelope omits the field entirely.
+
+${ETHOS_DISCLAIMER}
 
 ## Sub-agent context
 

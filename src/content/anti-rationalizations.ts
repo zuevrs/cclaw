@@ -133,9 +133,15 @@ export const SHARED_ANTI_RATIONALIZATIONS: Record<
   "commit-discipline": [
     {
       rationalization:
-        '"I\'ll skip the `red(AC-N): ...` / `green(AC-N): ...` / `refactor(AC-N): ...` prefix this once."',
+        '"I\'ll skip the `red(SL-N): ...` / `green(SL-N): ...` / `refactor(SL-N): ...` prefix this once."',
       truth:
-        "The reviewer's git-log scan keys off the prefix (`git log --grep=\"(AC-N):\" --oneline`). Without it the commit is invisible to the chain check and the AC reads as missing. Amend the message or write a fixup commit; do not leave the chain broken."
+        "The reviewer's git-log scan keys off the prefix (`git log --grep=\"(SL-N):\" --oneline` for slice work, `git log --grep=\"verify(AC-N):\" --oneline` for AC verification). Without it the commit is invisible to the chain check and the slice (or AC) reads as missing. Amend the message or write a fixup commit; do not leave the chain broken."
+    },
+    {
+      rationalization:
+        '"I\'ll skip the `verify(AC-N): passing` commit since the slice commits already touched the AC."',
+      truth:
+        "The slice commits are the TDD unit; the `verify(AC-N): passing` commit is the atomic AC closure signal (v8.63). The reviewer dual-greps: `(SL-N):` for slice work, `verify(AC-N):` for AC verification. Without the verify commit the AC reads as unclosed even if every slice that contributes to it landed. Stamp one `verify(AC-N): passing` commit per AC once its contributing slices are green."
     },
     {
       rationalization: '"`git add -A` is fine, I know what changed."',
@@ -152,12 +158,12 @@ export const SHARED_ANTI_RATIONALIZATIONS: Record<
       rationalization:
         '"I\'ll bundle the rename and the bug fix into one commit; they\'re related."',
       truth:
-        "They are not. The rename is `refactor(AC-N):`; the bug fix is `red(AC-N):` + `green(AC-N):`. Mixing them defeats the audit trail and makes the diff unreviewable."
+        "They are not. The rename is `refactor(SL-N):`; the bug fix is `red(SL-N):` + `green(SL-N):`. Mixing them defeats the audit trail and makes the diff unreviewable."
     },
     {
       rationalization: '"I\'ll amend the last commit since I already pushed."',
       truth:
-        "Once pushed, do not amend - the orchestrator's ship stage owns force-push. Write a fixup commit (`git commit --allow-empty -m \"<prefix>(AC-N): re-record subject for <orig-SHA>\"`) and surface the mis-record in your slim summary."
+        "Once pushed, do not amend - the orchestrator's ship stage owns force-push. Write a fixup commit (`git commit --allow-empty -m \"<prefix>(SL-N): re-record subject for <orig-SHA>\"` for slice work; `git commit --allow-empty -m \"verify(AC-N): re-record for <orig-SHA>\"` for AC verification) and surface the mis-record in your slim summary."
     }
   ],
   "posture-bypass": [
@@ -176,13 +182,13 @@ export const SHARED_ANTI_RATIONALIZATIONS: Record<
       rationalization:
         '"REFACTOR is unnecessary here; the GREEN code is already clean."',
       truth:
-        "Then say so explicitly. default: write `Refactor: skipped - <reason>` in the AC's `build.md` row REFACTOR notes column - no empty commit needed; the reviewer reads the row token. Legacy path `git commit --allow-empty -m \"refactor(AC-N) skipped: <reason>\"` is still accepted. Silence on REFACTOR (neither row token nor commit) fails the gate."
+        "Then say so explicitly. default: write `Refactor: skipped - <reason>` in the slice's `build.md` row REFACTOR notes column - no empty commit needed; the reviewer reads the row token. Legacy path `git commit --allow-empty -m \"refactor(SL-N) skipped: <reason>\"` is still accepted. Silence on REFACTOR (neither row token nor commit) fails the gate."
     },
     {
       rationalization:
         '"The mechanical TDD hook is gone; I can write production code without a test first."',
       truth:
-        "The Iron Law is a discipline, not a hook. Skipping RED breaks the audit trail the reviewer reads at handoff. A `green(AC-N)` without a prior `red(AC-N)` is an A-1 finding, severity=required, axis=correctness."
+        "The Iron Law is a discipline, not a hook. Skipping RED breaks the audit trail the reviewer reads at handoff. A `green(SL-N)` without a prior `red(SL-N)` is an A-1 finding, severity=required, axis=correctness. Same shape applies to `verify(AC-N): passing` without prior contributing slice work."
     },
     {
       rationalization:

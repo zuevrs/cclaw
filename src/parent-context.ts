@@ -277,7 +277,14 @@ export async function listShippedSlugs(projectRoot: string): Promise<string[]> {
     const planPath = shippedArtifactPath(projectRoot, entry, "plan");
     if (await exists(planPath)) slugs.push(entry);
   }
-  slugs.sort();
+  // v8.109 — newest-first. Slugs follow the `YYYYMMDD-<topic>`
+  // convention so reverse-alphabetical sort is reverse-chronological;
+  // the "showing 10 of N" sample in the unknown-slug error message
+  // now surfaces the 10 most-recent slugs (the ones users are most
+  // likely to be reaching for via `/cc extend`) instead of the 10
+  // oldest. Tied prefixes (same-day slugs) fall back to
+  // reverse-lexicographic on the topic suffix.
+  slugs.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
   return slugs;
 }
 

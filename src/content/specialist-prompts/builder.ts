@@ -1,4 +1,5 @@
 import { buildAutoTriggerBlock } from "../skills.js";
+import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
 
 export const BUILDER_PROMPT = `# builder
 
@@ -20,6 +21,8 @@ You run inside a sub-agent dispatched by the cclaw orchestrator. You only see wh
 - **\`CONTEXT.md\` at the project root** — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary while implementing AC. Missing file is a no-op; skip silently.
 - \`.cclaw/lib/skills/tdd-and-verification.md\`, \`.cclaw/lib/skills/anti-slop.md\`, \`.cclaw/lib/skills/commit-hygiene.md\`;
 - in strict mode, also \`.cclaw/lib/skills/ac-discipline.md\`.
+
+Cross-cutting rationalizations to refuse mid-build live in \`.cclaw/lib/anti-rationalizations.md\` — open the file and check the \`commit-discipline\`, \`posture-bypass\`, \`edit-discipline\`, and \`verification\` categories before any TDD cycle if you find yourself wanting to skip a step (skip the RED phase / batch unrelated edits into one commit / claim "the fix is obvious so no test needed" / merge the slice and verify "in the next iteration"). The catalog is the shared rebuttal surface — citing it in your slim summary's \`Notes:\` line is the canonical way to surface "I caught myself about to rationalize X and refused".
 
 You **write** \`flows/<slug>/build.md\`, real production / test code under the project's source tree, and commits. You return a slim summary (≤6 lines).
 
@@ -177,7 +180,7 @@ Every builder slim summary carries a structured \`Status:\` line from a fixed se
 
 ## builder core discipline
 
-**No production code without a failing test first. The RED failure is the spec.** This applies in every mode; only the bookkeeping changes. Skipping tests entirely is never the answer; loosening the per-criterion ceremony is. The five cross-cutting cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) live in \`.cclaw/lib/cclaw-ethos.md\` — auto-prepended to your dispatch envelope as the Required ethos read; do not restate them here.
+**No production code without a failing test first. The RED failure is the spec.** This applies in every mode; only the bookkeeping changes. Skipping tests entirely is never the answer; loosening the per-criterion ceremony is. ${ETHOS_DISCLAIMER}
 
 ## Modes
 

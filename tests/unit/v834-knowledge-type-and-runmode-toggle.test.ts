@@ -3,9 +3,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  appendKnowledgeEntry,
-  findNearKnowledge,
+  KnowledgeStoreError,
   knowledgeLogPath,
+  matchesProblemType,
   readKnowledgeLog,
   type KnowledgeEntry
 } from "../../src/knowledge-store.js";
@@ -15,10 +15,14 @@ import { createTempProject, removeProject } from "../helpers/temp-project.js";
 /**
  * v8.34 — KnowledgeEntry `problemType` field wiring.
  *
- * Slimmed in v8.100: kept only the knowledge-store wiring tests
- * (append + read + findNearKnowledge round-trips). The
- * renderStartCommand prompt-grep tripwires for the v8.61-retired
- * mid-flight runMode toggle were removed.
+ * Slimmed in v8.100: kept only the knowledge-store wiring tests.
+ * v8.109 honesty sweep — rewrote to test the read-side validator
+ * (`readKnowledgeLog` / `matchesProblemType`) on file-written
+ * fixtures. The write helpers (`appendKnowledgeEntry`,
+ * `findNearKnowledge`) were deleted as dead code; the LLM writes
+ * `knowledge.jsonl` directly via `Write` / `Bash`, so the field
+ * contract surface is the entry validator (`assertEntry`) and the
+ * filter helper (`matchesProblemType`).
  */
 describe("v8.34 — KnowledgeEntry `problemType` field wiring", () => {
   let project: string;
@@ -26,7 +30,13 @@ describe("v8.34 — KnowledgeEntry `problemType` field wiring", () => {
     if (project) await removeProject(project);
   });
 
-  it("round-trips `problemType` through append + read", async () => {
+  async function writeLog(entries: KnowledgeEntry[]): Promise<void> {
+    const target = knowledgeLogPath(project);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length ? "\n" : ""), "utf8");
+  }
+
+  it("round-trips `problemType` through read", async () => {
     project = await createTempProject();
     await ensureRuntimeRoot(project);
     const entry: KnowledgeEntry = {
@@ -37,63 +47,56 @@ describe("v8.34 — KnowledgeEntry `problemType` field wiring", () => {
       problemType: "bug",
       tags: ["security"]
     };
-    await appendKnowledgeEntry(project, entry);
+    await writeLog([entry]);
     const entries = await readKnowledgeLog(project);
     expect(entries).toHaveLength(1);
-    expect(entries[0].problemType).toBe("bug");
+    expect(entries[0]!.problemType).toBe("bug");
   });
 
   it("rejects an entry whose `problemType` is not in the enum", async () => {
     project = await createTempProject();
     await ensureRuntimeRoot(project);
-    await expect(
-      appendKnowledgeEntry(project, {
-        slug: "v8.34-bad",
-        ship_commit: "abc1234",
-        shipped_at: "2026-05-11T00:00:00Z",
-        signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: false },
-        // @ts-expect-error — runtime validation should reject this
-        problemType: "invalid"
-      })
-    ).rejects.toThrow(/problemType/i);
+    const target = knowledgeLogPath(project);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    const bad = {
+      slug: "v8.34-bad",
+      ship_commit: "abc1234",
+      shipped_at: "2026-05-11T00:00:00Z",
+      signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: false },
+      problemType: "invalid"
+    };
+    await fs.writeFile(target, `${JSON.stringify(bad)}\n`, "utf8");
+    await expect(readKnowledgeLog(project)).rejects.toThrow(/problemType/iu);
   });
 
-  it("`findNearKnowledge` returns ONLY entries whose `problemType` matches the filter", async () => {
-    project = await createTempProject();
-    await ensureRuntimeRoot(project);
-    await appendKnowledgeEntry(project, {
+  it("`matchesProblemType` filters entries by problemType (with back-compat for absent/null)", async () => {
+    const bug: KnowledgeEntry = {
       slug: "20260510-bug-slug",
       ship_commit: "a",
       shipped_at: "2026-05-10T00:00:00Z",
       signals: { hasArchitectDecision: false, reviewIterations: 1, securityFlag: true, userRequestedCapture: false },
       tags: ["auth", "permissions"],
       problemType: "bug"
-    });
-    await appendKnowledgeEntry(project, {
+    };
+    const decision: KnowledgeEntry = {
       slug: "20260511-decision-slug",
       ship_commit: "b",
       shipped_at: "2026-05-11T00:00:00Z",
       signals: { hasArchitectDecision: true, reviewIterations: 0, securityFlag: false, userRequestedCapture: false },
       tags: ["auth", "permissions"],
       problemType: "decision"
-    });
-    await appendKnowledgeEntry(project, {
-      slug: "20260512-perf-slug",
+    };
+    const legacy: KnowledgeEntry = {
+      slug: "20260101-legacy",
       ship_commit: "c",
-      shipped_at: "2026-05-12T00:00:00Z",
+      shipped_at: "2026-01-01T00:00:00Z",
       signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: false },
-      tags: ["auth", "permissions"],
-      problemType: "performance"
-    });
-
-    const onlyBugs = await findNearKnowledge("auth permissions", project, { problemType: "bug" });
-    expect(onlyBugs.map((e) => e.slug)).toEqual(["20260510-bug-slug"]);
-
-    const onlyDecisions = await findNearKnowledge("auth permissions", project, { problemType: "decision" });
-    expect(onlyDecisions.map((e) => e.slug)).toEqual(["20260511-decision-slug"]);
-
-    const noFilter = await findNearKnowledge("auth permissions", project);
-    expect(noFilter.length, "without the filter, all 3 entries hit the threshold").toBeGreaterThanOrEqual(2);
+      tags: ["legacy"]
+    };
+    const entries = [bug, decision, legacy];
+    expect(entries.filter((e) => matchesProblemType(e, "bug")).map((e) => e.slug)).toEqual(["20260510-bug-slug"]);
+    expect(entries.filter((e) => matchesProblemType(e, "decision")).map((e) => e.slug)).toEqual(["20260511-decision-slug"]);
+    expect(entries.filter((e) => matchesProblemType(e, "knowledge")).map((e) => e.slug)).toEqual(["20260101-legacy"]);
   });
 
   it("back-compat: legacy entries (no problemType) still validate on read", async () => {
@@ -111,6 +114,15 @@ describe("v8.34 — KnowledgeEntry `problemType` field wiring", () => {
     await fs.writeFile(target, `${JSON.stringify(legacyEntry)}\n`, "utf8");
     const entries = await readKnowledgeLog(project);
     expect(entries).toHaveLength(1);
-    expect(entries[0].problemType).toBeUndefined();
+    expect(entries[0]!.problemType).toBeUndefined();
+  });
+
+  it("KnowledgeStoreError is the canonical error type surfaced on malformed entries", async () => {
+    project = await createTempProject();
+    await ensureRuntimeRoot(project);
+    const target = knowledgeLogPath(project);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, "not json\n", "utf8");
+    await expect(readKnowledgeLog(project)).rejects.toBeInstanceOf(KnowledgeStoreError);
   });
 });

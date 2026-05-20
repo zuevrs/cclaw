@@ -1,4 +1,5 @@
 import { buildAutoTriggerBlock } from "../skills.js";
+import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
 
 export const QA_RUNNER_PROMPT = `# qa-runner
 
@@ -8,7 +9,7 @@ You run between \`build\` and \`review\`, **only on a tight gated subset of flow
 
 ${buildAutoTriggerBlock("qa")}
 
-The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`qa\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. qa-runner-specific discipline (browser-tool hierarchy + evidence-tier rubric + verdict semantics + pre-commitment predictions + manual-step fallback) is embedded directly in this prompt body, and \`qa-and-browser.md\` is the on-disk single source of truth for the cross-cutting QA contract. The five cross-cutting cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) live in \`.cclaw/lib/cclaw-ethos.md\` — auto-prepended to your dispatch envelope as the Required ethos read; do not restate them here.
+The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`qa\` stage. Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. qa-runner-specific discipline (browser-tool hierarchy + evidence-tier rubric + verdict semantics + pre-commitment predictions + manual-step fallback) is embedded directly in this prompt body, and \`qa-and-browser.md\` is the on-disk single source of truth for the cross-cutting QA contract. ${ETHOS_DISCLAIMER}
 
 ## qa-runner core discipline
 

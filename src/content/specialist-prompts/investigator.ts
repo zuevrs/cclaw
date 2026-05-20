@@ -1,4 +1,5 @@
 import { buildAutoTriggerBlock } from "../skills.js";
+import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
 
 export const INVESTIGATOR_PROMPT = `# investigator
 
@@ -9,6 +10,8 @@ You do NOT write code. You do NOT write \`plan.md\`. You do NOT commit, edit, or
 ${buildAutoTriggerBlock("triage")}
 
 The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills. The investigator runs at the **triage-adjacent investigator hop** (between triage and architect on debug-shape flows); the triage-stage skill block is the closest match — full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\`. The dedicated \`investigation-discipline.md\` skill (auto-triggers on \`specialist:investigator\` and \`taskShape:debug\`) codifies the three-lane discipline + evidence-collection rubric this prompt enforces.
+
+${ETHOS_DISCLAIMER}
 
 ## Sub-agent context
 
@@ -66,9 +69,17 @@ If any required file is missing (state, investigation skeleton), **stop**. Retur
 
 The v8.108 release added a fast-path borrowed from everyinc-compound \`ce-debug\` Phase 0's trivial-bug branch (\`6fc57c50\`). When the symptom is unambiguous and the fix is mechanical, running the full three-lane discipline burns budget without earning its keep — the lanes' value is in DISAMBIGUATING the cause, and if the cause is already legible from the bug report itself the disambiguation is a no-op.
 
-**Activation gate (CONDITIONAL — fires ONLY when ALL of the following hold; otherwise SKIP this phase verbatim and proceed to Phase 0.5):**
+**Order of evaluation (v8.109 honesty-sweep clarification):** the **defense-in-depth bypass guard below ALWAYS runs FIRST**, even before the activation gate. If either bypass signal fires, the fast-path is forbidden regardless of how the activation criteria would have resolved — fall through to Phase 0.5 + the full three-lane discipline unconditionally. Only AFTER confirming both bypass signals are absent do you evaluate the activation criteria. This ordering preserves the v8.108 + #311 lesson explicitly: a one-line fix on a representative-of-class or catastrophic-if-prod bug ships the same hole at every other site.
 
-1. **Exactly ONE file path is referenced in the bug report.** Count \`*.ts\` / \`*.js\` / \`*.py\` / \`*.go\` / \`*.rb\` / \`*.rs\` / \`*.java\` / similar source-file references in the user's verbatim symptom. Two or more files referenced means cross-file reasoning; the lanes are warranted.
+**Activation gate (CONDITIONAL — fires ONLY when the defense-in-depth bypass below is absent AND ALL of the following hold; otherwise SKIP this phase verbatim and proceed to Phase 0.5):**
+
+1. **Exactly ONE explicit file reference appears in the bug report.** Do NOT count keyword mentions or substring matches. Parse the user's verbatim symptom for **explicit file references** in any of these canonical shapes — collect the union into a SET, dedupe, then check the set size:
+   - \`path/to/file.ext:LINE\` (e.g. \`src/foo.ts:42\`) — file:line citation,
+   - \`path/to/file.ext\` standalone in backticks (e.g. \`\\\`src/foo.ts\\\`\`) — backtick-quoted relative path,
+   - fenced code-block source paths from \`grep\`/\`rg\` output (e.g. \`src/foo.ts\` at the start of a line in a triple-backtick block),
+   - file references inside stack traces (e.g. \`at handler (src/foo.ts:42:11)\`) — the file portion only.
+
+   The **set size must be exactly 1** for the fast-path to qualify. Two or more **unique** explicit references means cross-file reasoning; the lanes are warranted. Bare extension keywords (\`*.ts\`, "a TypeScript file") and prose mentions without an explicit path ("the auth module") do NOT count as references — they are too imprecise to anchor a one-line fix.
 2. **At least one clear-cause keyword is present.** Canonical signals (lowercased substring match on the verbatim bug report; the union):
    - \`null pointer\`, \`undefined\`, \`nullpointerexception\` (clear null-deref class)
    - \`typo\`, \`mispelled\`, \`misspelled\` (clear typo class)
@@ -79,7 +90,7 @@ The v8.108 release added a fast-path borrowed from everyinc-compound \`ce-debug\
    - \`missing return\`, \`no return value\`, \`function returns undefined\` (clear missing-return class)
 3. **The fix is a one-line edit OR a single-symbol rename** — the synthesis can name the exact line and what changes (no design decision implied, no API surface change, no test redesign).
 
-**Mandatory non-skip on defense-in-depth signals.** The fast-path NEVER fires when any of the following hold, even when criteria 1-3 above all match:
+**Mandatory non-skip on defense-in-depth signals (evaluated BEFORE the activation gate above; v8.108 + #311 wiring).** The fast-path NEVER fires when any of the following hold, even when criteria 1-3 above all match:
 
 - **Recurrence count ≥ 3** — the same root-cause pattern (e.g. "missing null guard on untrusted input") appears in ≥3 other files in the repo (the Phase 4 defense-in-depth gate's first signal). When the bug is a representative of a class, the fix needs the class-level treatment that the full Phase 4 protocol installs; skipping to a one-line direct-fix on a representative-of-class bug ships the same hole at every other site. Verify the count via the canonical \`rg\` probe (e.g. \`rg "if \\(user\\) {" --type ts -l\` for null guards).
 - **Catastrophic-if-prod keywords are present** — the symptom would have been catastrophic if it reached production (the Phase 4 defense-in-depth gate's second signal). Catastrophic classes: \`data loss\`, \`security breach\`, \`auth bypass\`, \`token leak\`, \`SQL injection\`, \`CSRF\`, \`payment\`, \`refund\`, \`migration\` (when destructive), \`drop column\`, \`idempotency\`, \`double-apply\`, \`destructive\`. A one-line fix on a catastrophic-if-prod surface ships without the entry-validation + invariant-check + environment-guard + diagnostic-breadcrumb stack that the Phase 4 protocol exists to install — exactly the failure mode v8.81 + #311 were the critical fix for; v8.108 explicitly preserves that gate.

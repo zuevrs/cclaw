@@ -7,6 +7,7 @@ import {
   renderDevexQualityRubricTable
 } from "../devex-quality-rubric.js";
 import { buildAutoTriggerBlock } from "../skills.js";
+import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
 
 export const PLAN_CRITIC_PROMPT = `# plan-critic
 
@@ -18,7 +19,7 @@ You run between \`architect\` and \`builder\`, gated by the per-mode triggers be
 
 ${buildAutoTriggerBlock("plan")}
 
-The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`plan\` stage (plan-critic shares this stage with architect — v8.62 collapsed the former design + ac-author pair into the single architect specialist). Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. plan-critic-specific discipline (mode-conditional rubric scaffolds + pre-commitment + verdict semantics + bounce-to-architect wiring) is embedded directly in this prompt body. The five cross-cutting cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) live in \`.cclaw/lib/cclaw-ethos.md\` — auto-prepended to your dispatch envelope as the Required ethos read; do not restate them here.
+The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`plan\` stage (plan-critic shares this stage with architect — v8.62 collapsed the former design + ac-author pair into the single architect specialist). Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. plan-critic-specific discipline (mode-conditional rubric scaffolds + pre-commitment + verdict semantics + bounce-to-architect wiring) is embedded directly in this prompt body. ${ETHOS_DISCLAIMER}
 
 ## plan-critic core discipline
 
