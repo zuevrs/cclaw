@@ -1,5 +1,35 @@
 # Changelog
 
+## 8.109.0 - 2026-05-20
+
+### BREAKING (internal — no API surface change)
+- **Removed dead state-lock + compound runtime infrastructure (~600 LoC).** Audit (cclaw-internal-quality v8.108.0, anchor `A1.7.1`) confirmed `src/path-mutex.ts`, `appendKnowledgeEntry`, `setOutcomeSignal`, `runCompoundAndShip`, `applyFollowUpBugSignals`, `findNearKnowledge` were exported from `dist/` but NEVER invoked from `dist/cli.js`. cclaw is a prompt toolkit; the LLM writes files directly via `Write` / `Bash` — the v8.108 mutex wraps were operating on already-single-writer paths. Specifically:
+  - Deleted `src/path-mutex.ts` (`withPathLock`, `StateLockBlockedError`).
+  - Slimmed `src/knowledge-store.ts` to read-side helpers + type definitions only — deleted `appendKnowledgeEntry`, `setOutcomeSignal`, `outcomeSignalOf`, `outcomeMultiplier`, `findNearKnowledge`, `findNearDuplicate`, `findRefiningChain`, plus the Jaccard / tokenization scaffolding.
+  - Deleted `src/compound.ts` (`runCompoundAndShip` + compound flow) and `src/outcome-detection.ts` (`applyFollowUpBugSignals`, `setOutcomeSignal`).
+  - Unwrapped `patchFlowState` from the mutex in `src/run-persistence.ts` (still used by `cancel.ts`; plain read-modify-write is the production reality).
+  - Deleted `tests/unit/v8108-state-lock.test.ts`, `tests/unit/v89-cleanup.test.ts`, `tests/unit/v818-knowledge-surfacing.test.ts`, `tests/unit/v850-outcome-loop.test.ts`, `tests/unit/compound.test.ts`. Rewrote `v834-knowledge-type-and-runmode-toggle.test.ts`, `v859-continuation.test.ts`, `v894-assumption-validation-wiring.test.ts` to cover only surviving read-side helpers.
+  - Config knobs (`compound.refreshEvery`, `critic.cross_model`, `critic.cross_model_min_context`, etc.) are preserved — they inform prompt content, not TS runtime.
+
+### Refactor
+- **Completed v8.63 slice/AC migration in three lagging surfaces (B.1):**
+  - `BUILD_TEMPLATE` (strict): TDD cycle log rekeyed from AC-N to `SL-N`; separate `## AC verification` section added carrying the `verify(AC-N): passing` SHA column.
+  - `SHIP_TEMPLATE`: AC↔commit map columns rewritten to `AC | verify SHA | result | notes`; parallel `## Slice↔commit map` added for `SL-N` tracing.
+  - `anti-rationalizations.ts > commit-discipline`: rows rewritten to cite `red(SL-N)/green(SL-N)/refactor(SL-N)` for slice work and `verify(AC-N): passing` for AC verification.
+  - Reviewer-grep instructions updated to dual-grep: `git log --grep="(SL-N):"` for slice work + `git log --grep="verify(AC-N):"` for AC verification.
+- **`ETHOS_DISCLAIMER` extracted to shared constant (B.6)** in `src/content/specialist-prompts/ethos-disclaimer.ts`; all 8 specialist prompts (architect, builder, reviewer, critic, plan-critic, qa-runner, triage, investigator) now import and reference it exactly once (was 4 of 8 inlined with prose duplication; 4 of 8 missing the disclaimer entirely).
+- **`builder.ts` now cites the shared anti-rationalizations catalog (B.9)** — pointer to `.cclaw/lib/anti-rationalizations.md` naming the four relevant categories (`commit-discipline`, `posture-bypass`, `edit-discipline`, `verification`) for mid-build rebuttal.
+
+### Fixed
+- **Multi-harness install MERGES instead of REPLACES (B.2):** `cclaw install --harness=cursor` after a prior `cclaw install --harness=claude` now writes `harnesses: [claude, cursor]` instead of clobbering claude. `resolveHarnesses` in `src/install.ts` deduplicates while preserving existing order.
+- **`listShippedSlugs` returns newest-first (B.3):** sort reversed in `src/parent-context.ts` — `YYYYMMDD-` slugs surface the 10 NEWEST as the "showing 10 of N" sample (was alphabetical ascending = 10 OLDEST).
+- **Investigator Phase 0.4 trivial-bug fast-path parses explicit file references (B.8):** the gate now collects the SET of explicit file references from the bug report (`path/to/file.ext:LINE`, backtick-quoted relative paths, fenced code-block source paths, stack-trace file portions), dedupes, and fires only when the set size is exactly 1. Bare extension keywords (`*.ts`, "a TypeScript file") and prose mentions no longer false-trigger. The defense-in-depth bypass guard (recurrence ≥3 OR catastrophic-if-prod) is explicitly evaluated FIRST and preserves the v8.108 + #311 wiring against representative-of-class fast-path mis-fires.
+- **`CRITIC_TEMPLATE` frontmatter declares v8.108 slots (B.4):** `cross_model_skipped_reason`, `cross_model_trim_disclosure`, `priority_drop_log` are now scaffolded in the template instead of materializing only when the critic fills them in.
+
+### Documentation
+- **README `## Configuration` expanded to full table (B.5):** all 9 config knobs documented (was 3 of 9). Each row: knob, default, purpose.
+- **Summary block scaffolding added to 5 missing templates (B.7):** `PLAN_TEMPLATE`, `PLAN_TEMPLATE_SOFT`, `BUILD_TEMPLATE`, `BUILD_TEMPLATE_SOFT`, `REVIEW_TEMPLATE`, `SHIP_TEMPLATE`, `LEARNINGS_TEMPLATE` now carry the three-section block (`Changes made` / `Things I noticed but didn't touch` / `Potential concerns`) per `summary-format.md`'s mandate. CRITIC_TEMPLATE's existing numbered `## 8. Summary — critic` block retained (already had the three subsections).
+
 ## 8.108.0 - 2026-05-19
 
 ### Improved

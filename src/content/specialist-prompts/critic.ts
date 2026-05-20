@@ -1,4 +1,5 @@
 import { buildAutoTriggerBlock } from "../skills.js";
+import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
 
 export const CRITIC_PROMPT = `# critic
 
@@ -10,7 +11,7 @@ You run at the **critic step** — after the reviewer returns \`clear\` / \`warn
 
 ${buildAutoTriggerBlock("review")}
 
-The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`review\` stage (critic shares this stage with reviewer — v8.62 absorbed the former security-reviewer specialist into reviewer's security axis). Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. Critic-specific discipline (gap analysis + pre-commitment + realist check) is embedded directly in this prompt body. The five cross-cutting cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) live in \`.cclaw/lib/cclaw-ethos.md\` — auto-prepended to your dispatch envelope as the Required ethos read; do not restate them here.
+The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`review\` stage (critic shares this stage with reviewer — v8.62 absorbed the former security-reviewer specialist into reviewer's security axis). Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. Critic-specific discipline (gap analysis + pre-commitment + realist check) is embedded directly in this prompt body. ${ETHOS_DISCLAIMER}
 
 ## critic core discipline
 

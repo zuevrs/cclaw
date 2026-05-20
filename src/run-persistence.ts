@@ -8,7 +8,6 @@ import {
   type FlowStateV82
 } from "./flow-state.js";
 import { ensureDir, exists, writeFileSafe } from "./fs-utils.js";
-import { withPathLock } from "./path-mutex.js";
 
 export function flowStatePath(projectRoot: string): string {
   return path.join(projectRoot, FLOW_STATE_REL_PATH);
@@ -65,23 +64,23 @@ export async function resetFlowState(projectRoot: string): Promise<void> {
 /**
  * Apply a partial patch to `flow-state.json` and write the result.
  *
- * v8.108 (R2): the read → merge → write critical section is now
- * serialised via {@link withPathLock} keyed on the flow-state path.
- * Two concurrent `patchFlowState` calls no longer lose updates — they
- * execute FIFO under the per-path mutex; on contention beyond the
- * 30s budget the call throws `StateLockBlocked` (gstack-style fail
- * loudly, do not retry-then-corrupt). The mutex re-reads state inside
- * the critical section, so the last-retry path always sees the latest
- * on-disk snapshot (gsd-v1 #3711 lesson).
+ * cclaw is a prompt toolkit; the LLM is the only writer of
+ * `flow-state.json` (via specialist sub-agents invoked one at a time
+ * by the orchestrator). The v8.108 `withPathLock` wrap was operating
+ * on an already-single-writer path and was removed in v8.109's
+ * honesty sweep. Plain read → merge → write is the production reality.
+ *
+ * Used by `cancel.ts` to clear `lastSpecialist` on `/cc cancel`, and
+ * by specialist prompts that instruct the LLM to invoke the helper via
+ * `Bash` for fields the spec assigns to specialist ownership
+ * (`triage.surfaces`, `clarifyRounds[]`, `investigatorVerdict`, …).
  */
 export async function patchFlowState(
   projectRoot: string,
   patch: Partial<FlowStateV82>
 ): Promise<FlowStateV82> {
-  return withPathLock(flowStatePath(projectRoot), async () => {
-    const current = await readFlowState(projectRoot);
-    const next: FlowStateV82 = { ...current, ...patch };
-    await writeFlowState(projectRoot, next);
-    return next;
-  });
+  const current = await readFlowState(projectRoot);
+  const next: FlowStateV82 = { ...current, ...patch };
+  await writeFlowState(projectRoot, next);
+  return next;
 }

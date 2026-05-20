@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   parseVerifyCommitLog,
@@ -9,65 +9,24 @@ import {
   unvalidatedHighStakesKaIds,
   parseAssumptionRows
 } from "../../src/assumption-validation.js";
-import { runCompoundAndShip } from "../../src/compound.js";
-import { activeArtifactPath, shippedArtifactPath } from "../../src/artifact-paths.js";
-import { writeFileSafe } from "../../src/fs-utils.js";
-import { writeFlowState } from "../../src/run-persistence.js";
-import { templateBody } from "../../src/content/artifact-templates.js";
 import type { GateEnvelope } from "../../src/content/skills.js";
-import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
 /**
- * v8.94 — wire `src/assumption-validation.ts` into the orchestrator
- * (Phase C G-1 fix).
+ * v8.94 — assumption-validation lite module surface.
  *
- * v8.85 declared the assumption-validation module but never imported
- * it from any runtime entry point. The prompt surfaces (builder /
- * reviewer / skills / templates) all advertised "post-build
- * validator MAY fire" — but no orchestrator code actually invoked
- * the module, so the closure loop was prose-only. v8.94 wires the
- * module end-to-end:
+ * v8.85 declared the assumption-validation module; v8.94 documented
+ * the post-build flow that consumes its pure helpers (the LLM parses
+ * `verify(AC-N): passing` commit messages for `validates: KA-N`
+ * payloads and flips matching plan.md rows via the helpers below).
  *
- *   1. `runCompoundAndShip` scans `verify(AC-*): passing` commits
- *      for `validates: KA-N` payloads BEFORE artifact moves and
- *      flips matching plan.md rows via `flipAssumptionRows`.
- *   2. The ship.md `## Unvalidated assumptions` section is rewritten
- *      from the post-flip plan.md row list via
- *      `replaceUnvalidatedAssumptionsSection`.
- *   3. The reviewer dispatch envelope grew an
- *      `unvalidatedHighStakesKas: string[]` field so the
- *      `assumption-coverage` axis skill receives the high-stakes
- *      list directly (no re-parse).
- *
- * The tripwires + behaviour tests below pin all three wirings so a
- * future change that silently disconnects any of them lights up
- * immediately.
+ * v8.109 honesty sweep — dropped the `runCompoundAndShip` end-to-end
+ * tripwires (the TS runtime helper was deleted as dead code; cclaw
+ * is a prompt toolkit, the LLM performs the flow via the helpers
+ * cited above). The pure-function module tests below remain the
+ * canonical contract for the assumption-validation surface.
  */
 
 const PROJECT_ROOT = path.resolve(process.cwd());
-
-describe("v8.94 — tripwire: src/compound.ts imports src/assumption-validation.ts", () => {
-  it("AC-1 — `src/compound.ts` source file carries an import from `./assumption-validation.js`", async () => {
-    const compoundPath = path.join(PROJECT_ROOT, "src/compound.ts");
-    const body = await fs.readFile(compoundPath, "utf8");
-    expect(body).toMatch(/import\s+\{[\s\S]*\}\s+from\s+["']\.\/assumption-validation\.js["']/u);
-  });
-
-  it("AC-1 — `src/compound.ts` imports the four core validator entry points", () => {
-    return fs
-      .readFile(path.join(PROJECT_ROOT, "src/compound.ts"), "utf8")
-      .then((body) => {
-        for (const symbol of [
-          "collectValidations",
-          "flipAssumptionRows",
-          "parseAssumptionRows",
-          "replaceUnvalidatedAssumptionsSection"
-        ]) {
-          expect(body).toContain(symbol);
-        }
-      });
-  });
-});
 
 describe("v8.94 — parseVerifyCommitLog round-trips the git-log payload shape", () => {
   it("AC-2 — parses a single block", () => {
@@ -146,27 +105,25 @@ describe("v8.94 — renderUnvalidatedAssumptionsBody renders the ship.md section
   it("AC-3 — renders one bullet per unvalidated row", () => {
     const rows = parseAssumptionRows(PLAN);
     const body = renderUnvalidatedAssumptionsBody(rows);
-    expect(body).toContain("**KA-1**");
-    expect(body).toContain("**KA-3**");
+    expect(body).toContain("**KA-1** — search p95 stays under 200ms (high-stakes)");
+    expect(body).toContain("`unvalidated` at ship time");
+    expect(body).toContain("**KA-3** — Stripe API stays at v2024-09");
     expect(body).not.toContain("**KA-2**");
-    expect(body).toMatch(/Status: `unvalidated` at ship time\./);
   });
 
-  it("AC-3 — falls back to literal `All key assumptions validated.` when no unvalidated rows", () => {
-    const planAllValidated = PLAN.replace(/Status: unvalidated\./gu, "Status: validated by deadbeef.");
-    const rows = parseAssumptionRows(planAllValidated);
+  it("AC-3 — renders `All key assumptions validated.` when no unvalidated rows", () => {
+    const allValidated = PLAN.replace(/Status: unvalidated\./gu, "Status: validated by aaa1111.");
+    const rows = parseAssumptionRows(allValidated);
     expect(renderUnvalidatedAssumptionsBody(rows)).toBe("All key assumptions validated.");
   });
 
-  it("AC-3 — falls back to literal `All key assumptions validated.` on empty rows", () => {
-    expect(renderUnvalidatedAssumptionsBody([])).toBe("All key assumptions validated.");
-  });
-
-  it("AC-3 — drops legacy rows without a KA-N id", () => {
+  it("AC-3 — renders `All key assumptions validated.` when no rows at all (legacy plan)", () => {
     const legacyPlan = [
-      "## Key assumptions to validate",
+      "# slug",
       "",
-      "- **search p95 stays under 200ms** — Validate by: bench. Status: unvalidated.",
+      "## Plan / Slices",
+      "",
+      "- SL-1",
       ""
     ].join("\n");
     const rows = parseAssumptionRows(legacyPlan);
@@ -225,10 +182,6 @@ describe("v8.94 — replaceUnvalidatedAssumptionsSection rewrites ship.md", () =
   });
 
   it("AC-4 — appends the section at EOF when ship.md lacks it", () => {
-    const shipWithoutSection = SHIP_FIXTURE
-      .replace(/## Unvalidated assumptions[\s\S]*?(?=## Victory Detector)/u, "")
-      .replace("## Victory Detector", "## Victory Detector");
-    // Strip the section entirely:
     const stripped = SHIP_FIXTURE.replace(
       /## Unvalidated assumptions[\s\S]*?(?=\n## )/u,
       ""
@@ -244,8 +197,6 @@ describe("v8.94 — replaceUnvalidatedAssumptionsSection rewrites ship.md", () =
     const updated = replaceUnvalidatedAssumptionsSection(stripped, rows);
     expect(updated).toContain("## Unvalidated assumptions");
     expect(updated).toMatch(/- \*\*KA-1\*\*/);
-    // unused fixture-only var assertion (force linter not to drop import)
-    expect(shipWithoutSection).toBeTruthy();
   });
 
   it("AC-4 — idempotent (re-applying with same rows yields the same body)", () => {
@@ -280,310 +231,6 @@ describe("v8.94 — unvalidatedHighStakesKaIds filters by high-stakes label", ()
   it("AC-5 — returns empty when every high-stakes row was validated", () => {
     const allValidated = PLAN.replace(/Status: unvalidated\./gu, "Status: validated by aaa1111.");
     expect(unvalidatedHighStakesKaIds(allValidated)).toEqual([]);
-  });
-});
-
-describe("v8.94 — runCompoundAndShip wires the assumption-validation pass end-to-end", () => {
-  let project: string | undefined;
-
-  afterEach(async () => {
-    if (project) await removeProject(project);
-    project = undefined;
-  });
-
-  it("AC-6 — flips plan.md KA-N rows from unvalidated → validated by <sha> on synthetic verify commits", async () => {
-    project = await createTempProject();
-    await writeFlowState(project, {
-      schemaVersion: 3,
-      currentSlug: "demo",
-      currentStage: "ship",
-      ac: [{ id: "AC-1", text: "outcome", status: "committed", commit: "abc" }],
-      lastSpecialist: null,
-      startedAt: "2026-05-18T00:00:00Z",
-      reviewIterations: 0,
-      securityFlag: false,
-      triage: null
-    });
-    const planBody = [
-      "# demo",
-      "",
-      "## Key assumptions to validate",
-      "",
-      "- **KA-1** — search p95 stays under 200ms (high-stakes). Validate by: vitest bench. Status: unvalidated.",
-      "- **KA-2** — users prefer inline preview. Validate by: A/B. Status: unvalidated.",
-      "- **KA-3** — Stripe API stays at v2024-09. Validate by: changelog. Status: unvalidated.",
-      "",
-      "## Plan / Slices",
-      "",
-      "- SL-1"
-    ].join("\n");
-    const shipBody = templateBody("ship", { "SLUG-PLACEHOLDER": "demo" });
-    await writeFileSafe(activeArtifactPath(project, "plan", "demo"), planBody);
-    await writeFileSafe(activeArtifactPath(project, "build", "demo"), "build body");
-    await writeFileSafe(activeArtifactPath(project, "review", "demo"), "review body");
-    await writeFileSafe(activeArtifactPath(project, "ship", "demo"), shipBody);
-
-    const result = await runCompoundAndShip(project, {
-      shipCommit: "shipsha",
-      signals: {
-        hasArchitectDecision: false,
-        reviewIterations: 0,
-        securityFlag: false,
-        userRequestedCapture: false
-      },
-      outcomeProbes: { disable: true },
-      assumptionProbe: {
-        commits: [
-          {
-            sha: "ka1commit",
-            message: "verify(AC-1): passing\n\nvalidates: KA-1\nbench: 142ms"
-          },
-          {
-            sha: "ka2commit",
-            message: "verify(AC-2): passing\n\nvalidates: KA-2"
-          }
-        ]
-      }
-    });
-
-    expect(result.assumptionValidation).toBeDefined();
-    expect(result.assumptionValidation?.validations).toEqual([
-      { kaId: "KA-1", sha: "ka1commit" },
-      { kaId: "KA-2", sha: "ka2commit" }
-    ]);
-    expect(result.assumptionValidation?.planUpdated).toBe(true);
-    expect(result.assumptionValidation?.shipUpdated).toBe(true);
-    expect(result.assumptionValidation?.unvalidatedKaIds).toEqual(["KA-3"]);
-    expect(result.assumptionValidation?.unvalidatedHighStakesKaIds).toEqual([]);
-
-    const shippedPlan = await fs.readFile(
-      shippedArtifactPath(project, "demo", "plan"),
-      "utf8"
-    );
-    expect(shippedPlan).toContain(
-      "**KA-1** — search p95 stays under 200ms (high-stakes). Validate by: vitest bench. Status: validated by ka1commit."
-    );
-    expect(shippedPlan).toContain(
-      "**KA-2** — users prefer inline preview. Validate by: A/B. Status: validated by ka2commit."
-    );
-    expect(shippedPlan).toContain("**KA-3** — Stripe API stays at v2024-09. Validate by: changelog. Status: unvalidated.");
-  });
-
-  it("AC-7 — ship.md `## Unvalidated assumptions` section is populated with remaining unvalidated rows", async () => {
-    project = await createTempProject();
-    await writeFlowState(project, {
-      schemaVersion: 3,
-      currentSlug: "demo",
-      currentStage: "ship",
-      ac: [{ id: "AC-1", text: "outcome", status: "committed", commit: "abc" }],
-      lastSpecialist: null,
-      startedAt: "2026-05-18T00:00:00Z",
-      reviewIterations: 0,
-      securityFlag: false,
-      triage: null
-    });
-    const planBody = [
-      "# demo",
-      "",
-      "## Key assumptions to validate",
-      "",
-      "- **KA-1** — search p95 stays under 200ms (high-stakes). Validate by: vitest bench. Status: unvalidated.",
-      "- **KA-2** — users prefer inline preview. Validate by: A/B. Status: unvalidated.",
-      ""
-    ].join("\n");
-    const shipBody = templateBody("ship", { "SLUG-PLACEHOLDER": "demo" });
-    await writeFileSafe(activeArtifactPath(project, "plan", "demo"), planBody);
-    await writeFileSafe(activeArtifactPath(project, "build", "demo"), "build");
-    await writeFileSafe(activeArtifactPath(project, "review", "demo"), "review");
-    await writeFileSafe(activeArtifactPath(project, "ship", "demo"), shipBody);
-
-    const result = await runCompoundAndShip(project, {
-      shipCommit: "shipsha",
-      signals: {
-        hasArchitectDecision: false,
-        reviewIterations: 0,
-        securityFlag: false,
-        userRequestedCapture: false
-      },
-      outcomeProbes: { disable: true },
-      assumptionProbe: {
-        commits: [
-          {
-            sha: "flipka2",
-            message: "verify(AC-2): passing\n\nvalidates: KA-2"
-          }
-        ]
-      }
-    });
-
-    expect(result.assumptionValidation?.unvalidatedKaIds).toEqual(["KA-1"]);
-    expect(result.assumptionValidation?.unvalidatedHighStakesKaIds).toEqual(["KA-1"]);
-
-    const shippedShip = await fs.readFile(
-      shippedArtifactPath(project, "demo", "ship"),
-      "utf8"
-    );
-    expect(shippedShip).toMatch(/## Unvalidated assumptions/);
-    // KA-1 remains unvalidated; KA-2 was flipped above.
-    expect(shippedShip).toMatch(
-      /- \*\*KA-1\*\* — search p95 stays under 200ms \(high-stakes\)\. Validate by: vitest bench\. Status: `unvalidated` at ship time\./
-    );
-    expect(shippedShip).not.toMatch(/- \*\*KA-2\*\* — users prefer inline preview/);
-    expect(shippedShip).not.toContain("template placeholder body");
-  });
-
-  it("AC-8 — when every KA-N row is validated, ship.md renders the literal `All key assumptions validated.` line", async () => {
-    project = await createTempProject();
-    await writeFlowState(project, {
-      schemaVersion: 3,
-      currentSlug: "demo",
-      currentStage: "ship",
-      ac: [{ id: "AC-1", text: "outcome", status: "committed", commit: "abc" }],
-      lastSpecialist: null,
-      startedAt: "2026-05-18T00:00:00Z",
-      reviewIterations: 0,
-      securityFlag: false,
-      triage: null
-    });
-    const planBody = [
-      "# demo",
-      "",
-      "## Key assumptions to validate",
-      "",
-      "- **KA-1** — bet 1 (high-stakes). Validate by: bench. Status: unvalidated.",
-      ""
-    ].join("\n");
-    const shipBody = templateBody("ship", { "SLUG-PLACEHOLDER": "demo" });
-    await writeFileSafe(activeArtifactPath(project, "plan", "demo"), planBody);
-    await writeFileSafe(activeArtifactPath(project, "build", "demo"), "build");
-    await writeFileSafe(activeArtifactPath(project, "review", "demo"), "review");
-    await writeFileSafe(activeArtifactPath(project, "ship", "demo"), shipBody);
-
-    const result = await runCompoundAndShip(project, {
-      shipCommit: "shipsha",
-      signals: {
-        hasArchitectDecision: false,
-        reviewIterations: 0,
-        securityFlag: false,
-        userRequestedCapture: false
-      },
-      outcomeProbes: { disable: true },
-      assumptionProbe: {
-        commits: [
-          {
-            sha: "flipall",
-            message: "verify(AC-1): passing\n\nvalidates: KA-1"
-          }
-        ]
-      }
-    });
-
-    expect(result.assumptionValidation?.unvalidatedKaIds).toEqual([]);
-    expect(result.assumptionValidation?.unvalidatedHighStakesKaIds).toEqual([]);
-
-    const shippedShip = await fs.readFile(
-      shippedArtifactPath(project, "demo", "ship"),
-      "utf8"
-    );
-    expect(shippedShip).toContain("## Unvalidated assumptions");
-    expect(shippedShip).toContain("All key assumptions validated.");
-  });
-
-  it("AC-9 — assumptionProbe.disable: true skips the entire pass (plan.md and ship.md untouched)", async () => {
-    project = await createTempProject();
-    await writeFlowState(project, {
-      schemaVersion: 3,
-      currentSlug: "demo",
-      currentStage: "ship",
-      ac: [{ id: "AC-1", text: "outcome", status: "committed", commit: "abc" }],
-      lastSpecialist: null,
-      startedAt: "2026-05-18T00:00:00Z",
-      reviewIterations: 0,
-      securityFlag: false,
-      triage: null
-    });
-    const planBody = [
-      "## Key assumptions to validate",
-      "",
-      "- **KA-1** — bet (high-stakes). Validate by: bench. Status: unvalidated.",
-      ""
-    ].join("\n");
-    const shipBody = templateBody("ship", { "SLUG-PLACEHOLDER": "demo" });
-    await writeFileSafe(activeArtifactPath(project, "plan", "demo"), planBody);
-    await writeFileSafe(activeArtifactPath(project, "build", "demo"), "build");
-    await writeFileSafe(activeArtifactPath(project, "review", "demo"), "review");
-    await writeFileSafe(activeArtifactPath(project, "ship", "demo"), shipBody);
-
-    const result = await runCompoundAndShip(project, {
-      shipCommit: "shipsha",
-      signals: {
-        hasArchitectDecision: false,
-        reviewIterations: 0,
-        securityFlag: false,
-        userRequestedCapture: false
-      },
-      outcomeProbes: { disable: true },
-      assumptionProbe: { disable: true }
-    });
-
-    expect(result.assumptionValidation?.validations).toEqual([]);
-    expect(result.assumptionValidation?.planUpdated).toBe(false);
-    expect(result.assumptionValidation?.shipUpdated).toBe(false);
-
-    const shippedPlan = await fs.readFile(
-      shippedArtifactPath(project, "demo", "plan"),
-      "utf8"
-    );
-    expect(shippedPlan).toContain("Status: unvalidated.");
-  });
-
-  it("AC-10 — assumptionProbe accepts a raw git-log payload via the `gitLog` field", async () => {
-    project = await createTempProject();
-    await writeFlowState(project, {
-      schemaVersion: 3,
-      currentSlug: "demo",
-      currentStage: "ship",
-      ac: [{ id: "AC-1", text: "outcome", status: "committed", commit: "abc" }],
-      lastSpecialist: null,
-      startedAt: "2026-05-18T00:00:00Z",
-      reviewIterations: 0,
-      securityFlag: false,
-      triage: null
-    });
-    const planBody = [
-      "## Key assumptions to validate",
-      "",
-      "- **KA-1** — bet (high-stakes). Validate by: bench. Status: unvalidated.",
-      ""
-    ].join("\n");
-    const shipBody = templateBody("ship", { "SLUG-PLACEHOLDER": "demo" });
-    await writeFileSafe(activeArtifactPath(project, "plan", "demo"), planBody);
-    await writeFileSafe(activeArtifactPath(project, "build", "demo"), "build");
-    await writeFileSafe(activeArtifactPath(project, "review", "demo"), "review");
-    await writeFileSafe(activeArtifactPath(project, "ship", "demo"), shipBody);
-
-    const gitLogPayload =
-      "fed1234\nverify(AC-1): passing\n\nvalidates: KA-1\n---END---";
-    const result = await runCompoundAndShip(project, {
-      shipCommit: "shipsha",
-      signals: {
-        hasArchitectDecision: false,
-        reviewIterations: 0,
-        securityFlag: false,
-        userRequestedCapture: false
-      },
-      outcomeProbes: { disable: true },
-      assumptionProbe: { gitLog: gitLogPayload }
-    });
-
-    expect(result.assumptionValidation?.validations).toEqual([
-      { kaId: "KA-1", sha: "fed1234" }
-    ]);
-    const shippedPlan = await fs.readFile(
-      shippedArtifactPath(project, "demo", "plan"),
-      "utf8"
-    );
-    expect(shippedPlan).toContain("Status: validated by fed1234.");
   });
 });
 

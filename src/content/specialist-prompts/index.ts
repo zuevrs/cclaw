@@ -6,6 +6,7 @@ import { PLAN_CRITIC_PROMPT } from "./plan-critic.js";
 import { QA_RUNNER_PROMPT } from "./qa-runner.js";
 import { BUILDER_PROMPT } from "./builder.js";
 import { TRIAGE_PROMPT } from "./triage.js";
+import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
 import { LEARNINGS_RESEARCH_PROMPT } from "../research-prompts/learnings-research.js";
 import { REPO_RESEARCH_PROMPT } from "../research-prompts/repo-research.js";
 import type { SpecialistId } from "../../types.js";
@@ -29,7 +30,8 @@ export {
   PLAN_CRITIC_PROMPT,
   QA_RUNNER_PROMPT,
   BUILDER_PROMPT,
-  TRIAGE_PROMPT
+  TRIAGE_PROMPT,
+  ETHOS_DISCLAIMER
 };
 
 export const RESEARCH_PROMPTS = [

@@ -787,14 +787,44 @@ async function maybeWriteContextStub(
   }
 }
 
+/**
+ * resolve the final harness list for this install pass.
+ *
+ * v8.109 — when both `--harness=<id>` (fromOptions) and an existing
+ * `.cclaw/config.yaml > harnesses` (fromConfig) are present, the
+ * result is the **union** (deduped, preserving order: existing
+ * config first, then any new harnesses from options that weren't
+ * already in the config). Pre-v8.109, `fromOptions` REPLACED the
+ * config list — running `install --harness=cursor` after
+ * `install --harness=claude` silently dropped `claude` from the
+ * config. The merge keeps multi-harness setups additive: each
+ * `--harness=<id>` call layers onto the existing list.
+ *
+ * Precedence when only one source is set is unchanged: options
+ * override (when no config exists), config wins (when no options
+ * are passed), then auto-detect / picker / hard error in that order.
+ */
 async function resolveHarnesses(
   projectRoot: string,
   fromOptions: HarnessId[] | undefined,
   fromConfig: HarnessId[] | undefined,
   interactive: boolean
 ): Promise<HarnessId[]> {
-  if (fromOptions && fromOptions.length > 0) return fromOptions;
-  if (fromConfig && fromConfig.length > 0) return fromConfig;
+  const hasOptions = !!(fromOptions && fromOptions.length > 0);
+  const hasConfig = !!(fromConfig && fromConfig.length > 0);
+  if (hasOptions && hasConfig) {
+    const merged: HarnessId[] = [];
+    const seen = new Set<HarnessId>();
+    for (const harness of [...fromConfig!, ...fromOptions!]) {
+      if (!seen.has(harness)) {
+        merged.push(harness);
+        seen.add(harness);
+      }
+    }
+    return merged;
+  }
+  if (hasOptions) return fromOptions!;
+  if (hasConfig) return fromConfig!;
   const detected = await detectHarnesses(projectRoot);
   if (interactive && isInteractive()) {
     return runPicker({ detected });

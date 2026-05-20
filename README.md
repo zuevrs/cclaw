@@ -79,16 +79,36 @@ Pin a tier explicitly: `/cc --inline <task>` / `/cc --soft <task>` / `/cc --stri
 
 ## Configuration
 
-`.cclaw/config.yaml` is optional. Defaults are good:
+`.cclaw/config.yaml` is optional. Defaults are good — every knob below is opt-in.
+
+| Knob | Default | Purpose |
+| --- | --- | --- |
+| `harnesses` | _(set at install time; merged on re-install)_ | List of harnesses to wire (`claude` / `cursor` / `opencode` / `codex`). v8.109 — re-running `install --harness=<id>` MERGES with the existing list instead of replacing it. |
+| `legacyArtifacts` | `false` | Keep the pre-v8.11 9-artefact layout (separate `manifest.md` / `pre-mortem.md` / `decisions.md`) instead of the consolidated `plan.md` shape. |
+| `compoundRefreshEvery` | `5` | Run the compound-refresh sub-step every Nth capture (T2-4 everyinc). Set to `0` to disable. |
+| `compoundRefreshFloor` | `10` | Minimum `knowledge.jsonl` entries the floor gate requires before compound-refresh fires. Belt-and-braces with `compoundRefreshEvery`. |
+| `captureLearningsBypass` | `false` | Skip the learnings hard-stop structured-ask in CI / autonomous pipelines that can't surface an interruption. |
+| `modelPreferences.<specialist>` | per-specialist (see `src/config.ts` `DEFAULT_MODEL_PREFERENCES`) | Tier hint (`fast` / `balanced` / `powerful`) passed through to the harness's model router on dispatch. |
+| `clarify.ambiguity_threshold` | `60` | `triage.ambiguityScore >= this` AND `ceremonyMode != "inline"` opens the architect's Clarify phase before Bootstrap. Integer in `[0, 100]`. |
+| `critic.cross_model` | `false` | Opt-in second adversarial critic pass via a different model through an available MCP cross-model tool (Codex / Gemini / etc.) on high-stakes slugs. |
+| `critic.cross_model_min_context` | `16000` | Minimum char budget the second-opinion model needs before the critic dispatches; below this the critic refuse-and-skip path fires (v8.108 §3.5 priority-drop). |
+
+Example:
 
 ```yaml
 harnesses: [claude, cursor]
 critic:
- cross_model: false # opt-in second adversarial pass via a different model (MCP)
+  cross_model: false # opt-in second adversarial pass via a different model (MCP)
+  cross_model_min_context: 16000 # v8.108 — refuse-and-skip below this budget
+clarify:
+  ambiguity_threshold: 60 # default; lower = more Clarify, higher = less
 modelPreferences:
- builder: balanced # default fast
- reviewer: powerful # default balanced
- critic: balanced # default powerful
+  builder: balanced # default fast
+  reviewer: powerful # default balanced
+  critic: balanced # default powerful
+compoundRefreshEvery: 5
+compoundRefreshFloor: 10
+captureLearningsBypass: false
 ```
 
 ## Deeper docs

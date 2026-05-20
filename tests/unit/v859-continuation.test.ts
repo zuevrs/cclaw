@@ -23,11 +23,6 @@ import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { ARCHITECT_PROMPT } from "../../src/content/specialist-prompts/architect.js";
 import { REVIEWER_PROMPT } from "../../src/content/specialist-prompts/reviewer.js";
 import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/critic.js";
-import {
-  appendKnowledgeEntry,
-  findNearKnowledge,
-  type KnowledgeEntry
-} from "../../src/knowledge-store.js";
 import { ARTIFACT_FILE_NAMES, shippedArtifactDir } from "../../src/artifact-paths.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
@@ -114,7 +109,7 @@ describe("v8.59 — continuation wiring (types + helpers + runbook + plan templa
   });
 });
 
-describe("v8.59 — continuation behavior (loadParentContext + findNearKnowledge end-to-end)", () => {
+describe("v8.59 — continuation behavior (loadParentContext + listShippedSlugs end-to-end)", () => {
   let project: string;
   beforeEach(async () => {
     project = await createTempProject({ prefix: "cclaw-v859-behavior-" });
@@ -123,7 +118,7 @@ describe("v8.59 — continuation behavior (loadParentContext + findNearKnowledge
     if (project) await removeProject(project);
   });
 
-  it("BEHAVIOR — loadParentContext returns ok for shipped slug, returns the four canonical error reasons (in-flight / cancelled / missing / corrupted), listShippedSlugs filters non-canonical slugs, and findNearKnowledge with parentSlug prepends the parent entry", async () => {
+  it("BEHAVIOR — loadParentContext returns ok for shipped slug, returns the four canonical error reasons (in-flight / cancelled / missing / corrupted), and listShippedSlugs filters non-canonical slugs", async () => {
     await seedShippedParent(project, PARENT_SLUG, {
       ship: `---\nslug: ${PARENT_SLUG}\nstage: shipped\nstatus: shipped\nshipped_at: 2026-05-14T12:34:56Z\n---\n\n# ship\n`,
       build: "# build\n"
@@ -176,37 +171,6 @@ describe("v8.59 — continuation behavior (loadParentContext + findNearKnowledge
     expect(slugs).toContain(PARENT_SLUG);
     expect(slugs).not.toContain("not-a-canonical-slug");
     expect(slugs).not.toContain("20260601-corrupted");
-
-    const makeEntry = (overrides: Partial<KnowledgeEntry>): KnowledgeEntry => ({
-      slug: overrides.slug ?? "20260101-x",
-      ship_commit: "deadbeef",
-      shipped_at: "2026-01-01T00:00:00Z",
-      signals: {
-        hasArchitectDecision: false,
-        reviewIterations: 0,
-        securityFlag: false,
-        userRequestedCapture: false
-      },
-      ...overrides
-    });
-    await appendKnowledgeEntry(
-      project,
-      makeEntry({ slug: PARENT_SLUG, tags: ["auth"], touchSurface: ["src/auth.ts"] })
-    );
-    await appendKnowledgeEntry(
-      project,
-      makeEntry({ slug: "20260201-saml-overlap", tags: ["saml", "auth"], touchSurface: ["src/saml.ts"] })
-    );
-    const result = await findNearKnowledge("add saml auth flow", project, {
-      parentSlug: PARENT_SLUG,
-      threshold: 0.1,
-      limit: 2
-    });
-    expect(result.length).toBeLessThanOrEqual(2);
-    expect(result[0]?.slug).toBe(PARENT_SLUG);
-    expect(result.filter((entry) => entry.slug === PARENT_SLUG)).toHaveLength(1);
-
-    await expect(findNearKnowledge("x", project, { parentSlug: "" })).rejects.toThrow(/parentSlug/u);
   });
 
   it("BEHAVIOR — v8.107 unknown-slug message: empty / 1-10 / >10 shipped slugs render the right suffix", async () => {
@@ -220,7 +184,10 @@ describe("v8.59 — continuation behavior (loadParentContext + findNearKnowledge
       );
     }
 
-    // 1-10: inline list.
+    // 1-10: inline list. v8.109 — listShippedSlugs returns
+    // newest-first (reverse-chronological for YYYYMMDD- slugs;
+    // reverse-lexicographic on same-day prefix), so the listing
+    // surfaces gamma → beta → alpha rather than ascending.
     await seedShippedParent(project, "20260101-alpha");
     await seedShippedParent(project, "20260101-beta");
     await seedShippedParent(project, "20260101-gamma");
@@ -228,7 +195,7 @@ describe("v8.59 — continuation behavior (loadParentContext + findNearKnowledge
     expect(small.ok).toBe(false);
     if (!small.ok) {
       expect(small.message).toContain(
-        "Available shipped slugs: 20260101-alpha, 20260101-beta, 20260101-gamma."
+        "Available shipped slugs: 20260101-gamma, 20260101-beta, 20260101-alpha."
       );
     }
 

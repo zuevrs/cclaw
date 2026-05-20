@@ -3,63 +3,56 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   KnowledgeStoreError,
-  appendKnowledgeEntry,
-  findRefiningChain,
+  PROBLEM_TYPES,
   knowledgeLogPath,
-  readKnowledgeLog
+  matchesProblemType,
+  readKnowledgeLog,
+  type KnowledgeEntry
 } from "../../src/knowledge-store.js";
 import { ensureRuntimeRoot } from "../../src/install.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
-describe("knowledge-store", () => {
+const baseEntry = (overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry => ({
+  slug: "alpha",
+  ship_commit: "abc1234",
+  shipped_at: "2026-05-07T00:00:00Z",
+  signals: { hasArchitectDecision: true, reviewIterations: 1, securityFlag: false, userRequestedCapture: false },
+  ...overrides
+});
+
+async function writeLog(project: string, entries: KnowledgeEntry[]): Promise<void> {
+  const target = knowledgeLogPath(project);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length ? "\n" : ""), "utf8");
+}
+
+describe("knowledge-store — read-side helpers consumed by cli.ts", () => {
   let project: string;
   afterEach(async () => {
     if (project) await removeProject(project);
   });
 
-  it("appends entries one per line", async () => {
+  it("readKnowledgeLog returns [] when the log is missing", async () => {
     project = await createTempProject();
     await ensureRuntimeRoot(project);
-    const entry = {
-      slug: "alpha",
-      ship_commit: "abc1234",
-      shipped_at: "2026-05-07T00:00:00Z",
-      signals: { hasArchitectDecision: true, reviewIterations: 1, securityFlag: false, userRequestedCapture: false }
-    };
-    await appendKnowledgeEntry(project, entry);
-    await appendKnowledgeEntry(project, { ...entry, slug: "beta" });
-    const raw = await fs.readFile(knowledgeLogPath(project), "utf8");
-    expect(raw.split("\n").filter((line) => line.length > 0)).toHaveLength(2);
-  });
-
-  it("readKnowledgeLog round-trips entries", async () => {
-    project = await createTempProject();
-    await ensureRuntimeRoot(project);
-    await appendKnowledgeEntry(project, {
-      slug: "alpha",
-      ship_commit: "deadbeef",
-      shipped_at: "2026-05-07T00:00:00Z",
-      signals: { hasArchitectDecision: false, reviewIterations: 4, securityFlag: false, userRequestedCapture: false }
-    });
     const entries = await readKnowledgeLog(project);
-    expect(entries).toHaveLength(1);
-    expect(entries[0].signals.reviewIterations).toBe(4);
+    expect(entries).toEqual([]);
   });
 
-  it("rejects entries missing required fields", async () => {
+  it("readKnowledgeLog round-trips well-formed entries", async () => {
     project = await createTempProject();
     await ensureRuntimeRoot(project);
-    await expect(
-      appendKnowledgeEntry(project, {
-        slug: "",
-        ship_commit: "x",
-        shipped_at: "y",
-        signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: false }
-      })
-    ).rejects.toBeInstanceOf(KnowledgeStoreError);
+    const a = baseEntry({ slug: "alpha", signals: { hasArchitectDecision: false, reviewIterations: 4, securityFlag: false, userRequestedCapture: false } });
+    const b = baseEntry({ slug: "beta" });
+    await writeLog(project, [a, b]);
+    const entries = await readKnowledgeLog(project);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]!.slug).toBe("alpha");
+    expect(entries[0]!.signals.reviewIterations).toBe(4);
+    expect(entries[1]!.slug).toBe("beta");
   });
 
-  it("rejects malformed JSON lines on read", async () => {
+  it("readKnowledgeLog rejects malformed JSON lines", async () => {
     project = await createTempProject();
     await ensureRuntimeRoot(project);
     const target = knowledgeLogPath(project);
@@ -68,31 +61,32 @@ describe("knowledge-store", () => {
     await expect(readKnowledgeLog(project)).rejects.toBeInstanceOf(KnowledgeStoreError);
   });
 
-  it("findRefiningChain follows refines pointers", async () => {
+  it("readKnowledgeLog rejects entries missing required fields", async () => {
     project = await createTempProject();
     await ensureRuntimeRoot(project);
-    await appendKnowledgeEntry(project, {
-      slug: "v3",
-      ship_commit: "ccc",
-      shipped_at: "2026-05-07T03:00:00Z",
-      signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: true },
-      refines: "v2"
-    });
-    await appendKnowledgeEntry(project, {
-      slug: "v2",
-      ship_commit: "bbb",
-      shipped_at: "2026-05-07T02:00:00Z",
-      signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: true },
-      refines: "v1"
-    });
-    await appendKnowledgeEntry(project, {
-      slug: "v1",
-      ship_commit: "aaa",
-      shipped_at: "2026-05-07T01:00:00Z",
-      signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: true }
-    });
+    const target = knowledgeLogPath(project);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(
+      target,
+      `${JSON.stringify({ slug: "", ship_commit: "x", shipped_at: "y", signals: { hasArchitectDecision: false, reviewIterations: 0, securityFlag: false, userRequestedCapture: false } })}\n`,
+      "utf8"
+    );
+    await expect(readKnowledgeLog(project)).rejects.toBeInstanceOf(KnowledgeStoreError);
+  });
 
-    const chain = await findRefiningChain(project, "v3");
-    expect(chain.map((entry) => entry.slug)).toEqual(["v3", "v2", "v1"]);
+  it("matchesProblemType surfaces absent / null problemType only under the `knowledge` filter", () => {
+    const absent = baseEntry();
+    const nulled = baseEntry({ problemType: null });
+    const bug = baseEntry({ problemType: "bug" });
+    expect(matchesProblemType(absent, "knowledge")).toBe(true);
+    expect(matchesProblemType(absent, "bug")).toBe(false);
+    expect(matchesProblemType(nulled, "knowledge")).toBe(true);
+    expect(matchesProblemType(nulled, "bug")).toBe(false);
+    expect(matchesProblemType(bug, "bug")).toBe(true);
+    expect(matchesProblemType(bug, "knowledge")).toBe(false);
+  });
+
+  it("PROBLEM_TYPES lists the five canonical values", () => {
+    expect(PROBLEM_TYPES).toEqual(["bug", "knowledge", "decision", "performance", "refactor"]);
   });
 });

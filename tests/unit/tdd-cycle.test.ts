@@ -75,11 +75,16 @@ describe("TDD cycle wiring — builder + reviewer prompts + per-AC commit prefix
 });
 
 describe("TDD cycle wiring — build template + antipatterns + /cc start-command surface", () => {
-  it("WIRING — BUILD_TEMPLATE has the six-column TDD log table + Iron Law + tdd_cycle:enforced; ANTIPATTERNS covers TDD phase integrity via git-log inspection (red/green/refactor(AC-N), Work outside the AC, `git add -A`); START_COMMAND_BODY wires build as a TDD cycle (RED → GREEN → REFACTOR, strict mode, Iron Law, tdd-and-verification skill)", () => {
+  it("WIRING — BUILD_TEMPLATE has the slice-keyed TDD cycle log + separate AC verification section + Iron Law + tdd_cycle:enforced (v8.109 completed v8.63 slice/AC migration); ANTIPATTERNS covers TDD phase integrity via git-log inspection (red/green/refactor(AC-N), Work outside the AC, `git add -A`); START_COMMAND_BODY wires build as a TDD cycle (RED → GREEN → REFACTOR, strict mode, Iron Law, tdd-and-verification skill)", () => {
     const template = ARTIFACT_TEMPLATES.find((entry) => entry.id === "build")!;
-    for (const column of ["Discovery", "RED proof", "GREEN evidence", "REFACTOR notes", "commits"]) {
-      expect(template.body).toContain(column);
-    }
+    expect(template.body).toContain("## TDD cycle log");
+    expect(template.body).toContain("## AC verification");
+    expect(template.body).toContain("Watched-RED proofs");
+    expect(template.body).toContain("GREEN suite evidence");
+    expect(template.body).toContain("REFACTOR notes");
+    expect(template.body).toContain("verify SHA");
+    expect(template.body).toMatch(/red\(SL-N\)|green\(SL-N\)|refactor\(SL-N\)/u);
+    expect(template.body).toMatch(/verify\(AC-N\): passing/u);
     expect(template.body).toContain("Iron Law");
     expect(template.body).toContain("tdd_cycle: enforced");
 

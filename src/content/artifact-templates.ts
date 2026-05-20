@@ -275,6 +275,17 @@ The stamp is computed once per plan, before builder enters. The reviewer cross-c
 - AC-2 → commit pending (\`verify(AC-2): passing\`)
 
 This block is filled in by the builder as each slice's TDD cycle lands (slice SHAs) and as each AC's verification commit lands (\`verify(AC-N): passing\` SHA). The reviewer's posture-aware \`git log --grep="(SL-N):"\` and \`git log --grep="verify(AC-N):"\` scans reconcile it against the actual git history at handoff and ship time. Do not edit by hand once a row in \`build.md\` carries SHAs.
+
+## Summary — architect
+
+### Changes made
+- _(one bullet per concrete change you committed to this plan, in plain past tense. AC ids, D-N ids, slice ids, citations welcome.)_
+
+### Things I noticed but didn't touch
+- _(one bullet per scope-adjacent issue you spotted but deliberately did NOT change; write \`None.\` when nothing applies.)_
+
+### Potential concerns
+- _(one bullet per uncertainty, missing input, or risk the next stage / next reader should weigh; drop \`Confidence: low\` items here verbatim; write \`None.\` when nothing applies.)_
 `;
 
 const PLAN_TEMPLATE_SOFT = `---
@@ -348,6 +359,17 @@ _(Files the builder is allowed to modify. Used by reviewer to flag scope creep.)
 ## Notes
 
 _(Optional. The architect's Approaches / Decisions / Pre-mortem phases do NOT run for soft-mode (small/medium) flows; if you discover the work needs structural decisions, alternative comparison, or threat modelling mid-flight, surface back to the orchestrator and ask to re-triage as strict so the architect's full Frame → Compose pass can run.)_
+
+## Summary
+
+### Changes made
+- _(one bullet per concrete change you committed to this plan, in plain past tense.)_
+
+### Things I noticed but didn't touch
+- _(one bullet per scope-adjacent issue you spotted but deliberately did NOT change; write \`None.\` when nothing applies.)_
+
+### Potential concerns
+- _(one bullet per uncertainty, missing input, or risk the next stage / next reader should weigh; write \`None.\` when nothing applies.)_
 `;
 
 const BUILD_TEMPLATE = `---
@@ -361,7 +383,7 @@ tdd_cycle: enforced
 
 # Build log — SLUG-PLACEHOLDER
 
-This is the TDD implementation journal. Every AC goes through RED → GREEN → REFACTOR (or its posture-specific shape); every phase is a separate commit with a posture-driven subject-line prefix (\`red(AC-N): ...\` / \`green(AC-N): ...\` / \`refactor(AC-N): ...\` / \`refactor(AC-N) skipped: ...\` / \`test(AC-N): ...\` / \`docs(AC-N): ...\`) the reviewer reads via \`git log --grep="(AC-N):" --oneline\`.
+This is the TDD implementation journal. Every SLICE (SL-N from \`plan.md > ## Plan / Slices\`) goes through RED → GREEN → REFACTOR (or its posture-specific shape); every phase is a separate commit with a posture-driven subject-line prefix (\`red(SL-N): ...\` / \`green(SL-N): ...\` / \`refactor(SL-N): ...\` / \`refactor(SL-N) skipped: ...\` / \`test(SL-N): ...\` / \`docs(SL-N): ...\`) the reviewer reads via \`git log --grep="(SL-N):" --oneline\` for slice work. The companion \`verify(AC-N): passing\` commits stamp AC verification and are scanned via \`git log --grep="verify(AC-N):" --oneline\`.
 
 > **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
 
@@ -371,37 +393,47 @@ _(One paragraph mirroring \`plans/SLUG-PLACEHOLDER.md\` Plan section.)_
 
 ## TDD cycle log
 
-For every AC, append one row with **all six columns filled** before the AC is considered done.
+For every SLICE in \`plan.md > ## Plan / Slices\`, append one row with **all five columns filled** before the slice is considered done. The slice cycle is the TDD unit (v8.63 — slices replaced AC as the TDD key); AC verification lives in the separate \`## AC verification\` table below.
 
-| AC | Discovery | RED proof | GREEN evidence | REFACTOR notes | commits |
-| --- | --- | --- | --- | --- | --- |
-| AC-1 | _file:path:line refs from discovery_ | _failing test name + 1-3 line failure excerpt_ | _full-suite command + PASS summary_ | _shape change applied, or "Refactor: skipped — <reason>" (default; no empty commit needed)_ | _red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped")_ |
+| slice | commit | SHA | rationale | notes |
+| --- | --- | --- | --- | --- |
+| SL-1 | \`red(SL-1)\` | _SHA_ | _failing test name + 1-3 line failure excerpt that proves RED failed for the right reason_ | _file:path:line refs from discovery_ |
+| SL-1 | \`green(SL-1)\` | _SHA_ | _full-suite command + PASS summary_ | _production diff path_ |
+| SL-1 | \`refactor(SL-1)\` | _SHA or "skipped"_ | _shape change applied, or "Refactor: skipped — <reason>" (default; no empty commit needed)_ | — |
+
+## AC verification
+
+Once every slice that contributes to an AC has landed (RED + GREEN + REFACTOR-or-skipped), stamp the AC with a \`verify(AC-N): passing\` commit. The verify commit is the AC's atomic "this acceptance criterion is closed" signal — its body MAY carry a \`validates: KA-N [KA-M ...]\` payload when the AC's evidence also closes a \`Key assumptions to validate\` row from plan.md (v8.85 assumption-validation lite).
+
+| AC | verify SHA | passing/failing | notes |
+| --- | --- | --- | --- |
+| AC-1 | _SHA_ | _passing_ | _which slices contributed (e.g. SL-1, SL-2); validates: KA-N if payload set_ |
 
 ## Watched-RED proofs
 
 \`\`\`text
-_(Per AC: command run, test name, 1-3 line failure excerpt that proves RED failed for the right reason.)_
-_AC-1: npm test src/lib/permissions.ts -- -t "renders email"_
+_(Per slice: command run, test name, 1-3 line failure excerpt that proves RED failed for the right reason.)_
+_SL-1: npm test src/lib/permissions.ts -- -t "renders email"_
 _         AssertionError: expected 'anna@example.com' got undefined_
 \`\`\`
 
 ## GREEN suite evidence
 
 \`\`\`text
-_(Per AC: command run, PASS/FAIL summary of the FULL relevant suite — not the single test.)_
-_AC-1: npm test src/lib/__       47 passed, 0 failed (in 1.8s)_
+_(Per slice: command run, PASS/FAIL summary of the FULL relevant suite — not the single test.)_
+_SL-1: npm test src/lib/__       47 passed, 0 failed (in 1.8s)_
 \`\`\`
 
 ## REFACTOR notes
 
-_(Per AC: one-line shape change applied, or explicit "Refactor: skipped — <reason>" (default — no empty commit needed; the reviewer reads this row), or legacy "skipped: <reason>" empty-commit marker. Silence is not acceptable; the gate forces the question.)_
+_(Per slice: one-line shape change applied, or explicit "Refactor: skipped — <reason>" (default — no empty commit needed; the reviewer reads this row), or legacy "skipped: <reason>" empty-commit marker. Silence is not acceptable; the gate forces the question.)_
 
-- AC-1: extracted \`hasViewEmail\` helper from inline check.
-- AC-2: Refactor: skipped — 8-line addition, idiomatic; nothing to extract.
+- SL-1: extracted \`hasViewEmail\` helper from inline check.
+- SL-2: Refactor: skipped — 8-line addition, idiomatic; nothing to extract.
 
 ## Coverage assessment
 
-_(Per AC, written between GREEN and REFACTOR. One row per AC. Verdict is one of \`full\` / \`partial\` / \`refactor-only\`. \`partial\` is a valid verdict — name the uncovered branch and the reason; an absent row is **not** a valid verdict and the reviewer treats it as severity=\`required\`, axis=correctness.)_
+_(Per AC, written between GREEN and REFACTOR of the AC's last contributing slice. One row per AC. Verdict is one of \`full\` / \`partial\` / \`refactor-only\`. \`partial\` is a valid verdict — name the uncovered branch and the reason; an absent row is **not** a valid verdict and the reviewer treats it as severity=\`required\`, axis=correctness.)_
 
 | AC | Verdict | Branches covered (file:line) | Branches uncovered + reason |
 | --- | --- | --- | --- |
@@ -409,25 +441,37 @@ _(Per AC, written between GREEN and REFACTOR. One row per AC. Verdict is one of 
 
 ## Fix iterations (after a review block)
 
-_(Append one fix-iteration block per review iteration that returned \`block\`. Same TDD cycle applies; same AC id is reused; finding F-N is cited in the message.)_
+_(Append one fix-iteration block per review iteration that returned \`block\`. Same TDD cycle applies; the slice id is reused if the fix lives inside a prior slice's surface, or a new SL-N is opened if the fix introduces a new slice; finding F-N is cited in the message.)_
 
 ### Fix iteration 1 — review block 1
 
-| F-N | AC | phase | commit | files | note |
+| F-N | slice | phase | commit | files | note |
 | --- | --- | --- | --- | --- | --- |
-| F-2 | AC-1 | red | _SHA_ | _tests/...:line_ | _what the new RED encodes_ |
-| F-2 | AC-1 | green | _SHA_ | _src/...:line_ | _minimal fix_ |
-| F-2 | AC-1 | refactor (skipped) | — | — | _reason_ |
+| F-2 | SL-1 | red | _SHA_ | _tests/...:line_ | _what the new RED encodes_ |
+| F-2 | SL-1 | green | _SHA_ | _src/...:line_ | _minimal fix_ |
+| F-2 | SL-1 | refactor (skipped) | — | — | _reason_ |
 
 ## Commits
 
-- \`git commit -m "red(AC-1): …"\` → _SHA_ (test files only)
-- \`git commit -m "green(AC-1): …"\` → _SHA_ (production diff)
-- \`git commit -m "refactor(AC-1): …"\` → _SHA_ (real refactor) **OR** omit the refactor commit entirely and declare \`Refactor: skipped — <reason>\` in the AC's REFACTOR notes column above (default). The legacy \`git commit --allow-empty -m "refactor(AC-1) skipped: <reason>"\` empty-marker is still accepted for backwards compat on already-shipped slugs.
+- \`git commit -m "red(SL-1): …"\` → _SHA_ (test files only)
+- \`git commit -m "green(SL-1): …"\` → _SHA_ (production diff)
+- \`git commit -m "refactor(SL-1): …"\` → _SHA_ (real refactor) **OR** omit the refactor commit entirely and declare \`Refactor: skipped — <reason>\` in the slice's REFACTOR notes row above (default). The legacy \`git commit --allow-empty -m "refactor(SL-1) skipped: <reason>"\` empty-marker is still accepted for backwards compat on already-shipped slugs.
+- \`git commit -m "verify(AC-1): passing"\` → _SHA_ (AC verification; one commit per AC after every contributing slice has landed). MAY carry a \`validates: KA-N [KA-M ...]\` payload in the body when the AC's evidence also closes a \`Key assumptions to validate\` row from plan.md.
 
 ## Notes
 
 _(Surprises, deviations from the plan, tests added, refactors that came up, paths considered and discarded, etc.)_
+
+## Summary
+
+### Changes made
+- _(one bullet per concrete change committed in this build, in plain past tense. Slice ids, AC verify SHAs, file paths welcome.)_
+
+### Things I noticed but didn't touch
+- _(one bullet per scope-adjacent issue you spotted but deliberately did NOT change; write \`None.\` when nothing applies.)_
+
+### Potential concerns
+- _(one bullet per uncertainty, missing input, or risk the next stage / next reader should weigh; write \`None.\` when nothing applies.)_
 `;
 
 const BUILD_TEMPLATE_SOFT = `---
@@ -462,6 +506,17 @@ _(One paragraph mirroring \`flows/SLUG-PLACEHOLDER/plan.md\` Plan section.)_
 ## Notes
 
 _(Surprises, deviations from the plan, paths considered and discarded, etc.)_
+
+## Summary
+
+### Changes made
+- _(one bullet per concrete change committed in this build, in plain past tense.)_
+
+### Things I noticed but didn't touch
+- _(one bullet per scope-adjacent issue you spotted but deliberately did NOT change; write \`None.\` when nothing applies.)_
+
+### Potential concerns
+- _(one bullet per uncertainty, missing input, or risk the next stage / next reader should weigh; write \`None.\` when nothing applies.)_
 `;
 
 const REVIEW_TEMPLATE = `---
@@ -542,6 +597,17 @@ Tie-breaker: if iteration 5 closes the last block row, return \`clear\` (signal 
 - **warn** — convergence signal #2 fired. Open warns carry over. Ship may proceed.
 - **clear** — signal #1 (all closed) or signal #2 (warn-only convergence). Ready for ship.
 - **cap-reached** — signal #3. Stop; orchestrator surfaces remaining open rows to the user; user picks \`/cc-cancel\` or \`accept warns and ship\` (only valid if every open row is severity=warn).
+
+## Summary — iteration N
+
+### Changes made
+- _(one bullet per concrete finding you opened/closed in this iteration, in plain past tense. F-N ids, axis names, severity, citations welcome.)_
+
+### Things I noticed but didn't touch
+- _(one bullet per scope-adjacent issue you spotted but deliberately did NOT raise as a finding; write \`None.\` when nothing applies.)_
+
+### Potential concerns
+- _(one bullet per uncertainty, missing input, or risk the next iteration / ship gate should weigh; write \`None.\` when nothing applies.)_
 `;
 
 const CRITIC_TEMPLATE = `---
@@ -559,6 +625,9 @@ escalation_triggers: []                       # list of trigger strings — see 
 verdict: pending                              # pending | pass | iterate | block-ship
 token_budget_used: 0                          # orchestrator stamps this from the sub-agent return
 critic_iteration: 1                           # 1 on first dispatch; only ever 2 on a single rerun (hard cap)
+cross_model_skipped_reason: none              # v8.108 §3.5 — none | budget | unavailable | other (stamped when the second-opinion dispatch refused or was unreachable)
+cross_model_trim_disclosure: none             # v8.108 §3.5 — none | applied — see priority-drop log (stamped when the dispatched prompt was trimmed)
+priority_drop_log: []                         # v8.108 §3.5 — list of trimmed sections in canonical order (priorLearnings → researchExcerpts → plan.md → review.md); empty when no trim fired
 ---
 
 # Critic — SLUG-PLACEHOLDER
@@ -1046,11 +1115,19 @@ If \`N > 0\` and any of those commits touch this slug's \`touchSurface\`, rebase
 
 ## AC ↔ commit map
 
-| AC | text (one line) | red SHA | green SHA | refactor SHA | description |
-| --- | --- | --- | --- | --- | --- |
-| AC-1 | _AC text_ | _sha_ | _sha_ | _sha or skipped_ | _short description_ |
+| AC | text (one line) | verify SHA | result | notes |
+| --- | --- | --- | --- | --- |
+| AC-1 | _AC text_ | _sha_ | _passing / failing_ | _which slices contributed (e.g. SL-1, SL-2); validates: KA-N if payload set_ |
 
-This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > Acceptance Criteria\` with the final SHAs reconstructed from \`git log --grep="(AC-N):" --oneline\` for every AC in the plan. The ship-stage reviewer (\`mode=release\`) is the canonical gate: a missing or incomplete posture-driven commit sequence is reported as an A-1 finding (severity=required, axis=correctness) and blocks ship until the builder produces the missing commits in a fix-only iteration.
+This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > Acceptance Criteria\` with the final \`verify(AC-N): passing\` SHA reconstructed from \`git log --grep="verify(AC-N):" --oneline\` for every AC in the plan. The slice-level commits (red / green / refactor) are tracked in the parallel \`## Slice ↔ commit map\` section below.
+
+## Slice ↔ commit map
+
+| slice | red SHA | green SHA | refactor SHA | rationale |
+| --- | --- | --- | --- | --- |
+| SL-1 | _sha_ | _sha_ | _sha or skipped_ | _short description of the slice's shape (which AC(s) it contributes to, and the discovery → RED → GREEN narrative in one line)_ |
+
+This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > ## Plan / Slices\` with the final SHAs reconstructed from \`git log --grep="(SL-N):" --oneline\` for every slice in the plan. The ship-stage reviewer (\`mode=release\`) is the canonical gate: a missing or incomplete posture-driven commit sequence (either a slice RED/GREEN/REFACTOR triplet OR an AC \`verify(AC-N): passing\` stamp) is reported as an A-1 finding (severity=required, axis=correctness) and blocks ship until the builder produces the missing commits in a fix-only iteration.
 
 ## Rollback plan (mandatory)
 
@@ -1124,6 +1201,17 @@ Ship is allowed only when ALL of these are true:
 - repo_mode matches the chosen finalization (\`no-vcs\` repo cannot pick \`FINALIZE_MERGE_LOCAL\`)
 
 If any field is stale or missing, keep \`status: blocked\` and iterate.
+
+## Summary
+
+### Changes made
+- _(one bullet per concrete change committed in the ship pass, in plain past tense. ship_commit, finalization_mode, preflight outcomes welcome.)_
+
+### Things I noticed but didn't touch
+- _(one bullet per scope-adjacent issue you spotted but deliberately did NOT change; write \`None.\` when nothing applies.)_
+
+### Potential concerns
+- _(one bullet per uncertainty, missing input, or risk the post-ship reader / operator should weigh; carry-over warns and unvalidated KAs welcome; write \`None.\` when nothing applies.)_
 `;
 
 const DECISIONS_TEMPLATE = `---
@@ -1239,6 +1327,17 @@ _(Reusable patterns we saw fail.)_
 ## Follow-ups
 
 - _(Items intentionally deferred. Each one becomes a separate \`/cc <task>\` later.)_
+
+## Summary
+
+### Changes made
+- _(one bullet per concrete learning captured here, in plain past tense. D-N references, patterns, anti-patterns welcome.)_
+
+### Things I noticed but didn't touch
+- _(one bullet per scope-adjacent learning you spotted but deliberately did NOT capture; write \`None.\` when nothing applies.)_
+
+### Potential concerns
+- _(one bullet per uncertainty, missing input, or risk that future readers should weigh when reusing these learnings; write \`None.\` when nothing applies.)_
 `;
 
 const MANIFEST_TEMPLATE = `---

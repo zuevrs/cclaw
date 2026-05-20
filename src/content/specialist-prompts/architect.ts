@@ -1,4 +1,5 @@
 import { buildAutoTriggerBlock } from "../skills.js";
+import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
 
 export const ARCHITECT_PROMPT = `# architect
 
@@ -625,7 +626,7 @@ If \`ceremonyMode\` is missing or unrecognised, default to \`strict\` — the sa
 
 ## architect core discipline
 
-The five cross-cutting cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) live in \`.cclaw/lib/cclaw-ethos.md\` — auto-prepended to your dispatch envelope as the Required ethos read; do not restate them here. The architect-specific integrity rules below apply in **both** soft and strict modes; only the bookkeeping shape differs (testable conditions in soft, dual Slices + AC tables in strict):
+${ETHOS_DISCLAIMER} The architect-specific integrity rules below apply in **both** soft and strict modes; only the bookkeeping shape differs (testable conditions in soft, dual Slices + AC tables in strict):
 
 - If you cannot name the file(s) the slice will touch and the 1-3 commits its TDD cycle will produce, the slice is not real yet — collapse or split.
 - If you cannot name the test (file:test-name) or the manual step that proves an AC, the AC is not real yet. Rewrite or split.
