@@ -232,6 +232,34 @@ export interface FlowStateV82 {
    */
   criticEscalation?: CriticEscalation;
   /**
+   * Cross-model convergence-loop round counter (v8.112 santa-loop contract).
+   *
+   * `0` = fallback / non-applicable (cross-model MCP unavailable, or the
+   *       envelope flag was not set on this dispatch). Single-critic gate.
+   * `1` / `2` / `3` = active convergence-loop round. Incremented each time
+   *       BOTH critics dispatch in parallel. After round 3 with no
+   *       convergence, the critic emits `verdict: block-ship` with
+   *       `note: "cross-model convergence failed"` and the orchestrator
+   *       stops-and-reports; the counter is NOT incremented past 3.
+   *
+   * Optional in TypeScript so pre-v8.112 state files (which lack the
+   * field) still validate; readers MUST default to `0` on absent. The
+   * orchestrator's post-critic gate uses this field to decide whether
+   * to read Critic B's verdict alongside Critic A (round >= 1) or only
+   * Critic A (round == 0).
+   */
+  criticConvergenceRound?: number;
+  /**
+   * Verdict returned by Critic B (the cross-model second critic) on the
+   * most-recent convergence-loop round (v8.112).
+   *
+   * Same vocabulary as {@link criticVerdict} (`pass` / `iterate` /
+   * `block-ship`). Absent when the convergence loop did not run on this
+   * dispatch (`criticConvergenceRound === 0`). Persisted for
+   * compound-learning audit + the orchestrator's post-critic gate.
+   */
+  criticCrossModelVerdict?: CriticVerdict;
+  /**
    * verdict returned by the most-recent plan-critic dispatch.
    *
    * `pass` — plan was approved; advance to builder.
@@ -1079,6 +1107,25 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
   }
   if (state.criticEscalation !== undefined && !isCriticEscalation(state.criticEscalation)) {
     throw new Error(`Invalid criticEscalation: ${String(state.criticEscalation)}`);
+  }
+  if (state.criticConvergenceRound !== undefined) {
+    if (
+      typeof state.criticConvergenceRound !== "number" ||
+      state.criticConvergenceRound < 0 ||
+      state.criticConvergenceRound > 3
+    ) {
+      throw new Error(
+        "flow-state.criticConvergenceRound must be an integer in [0, 3] when present"
+      );
+    }
+  }
+  if (
+    state.criticCrossModelVerdict !== undefined &&
+    !isCriticVerdict(state.criticCrossModelVerdict)
+  ) {
+    throw new Error(
+      `Invalid criticCrossModelVerdict: ${String(state.criticCrossModelVerdict)}`
+    );
   }
   if (
     state.planCriticVerdict !== undefined &&

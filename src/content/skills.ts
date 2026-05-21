@@ -687,6 +687,23 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     stages: ["review"],
     gate: (env) => env.walkAntiSlopAxis !== false,
     body: readSkill("reviewer-axis-anti-slop.md")
+  },
+  {
+    id: "writing-skills",
+    fileName: "writing-skills.md",
+    description:
+      "v8.112 meta-skill (obra-superpowers `writing-skills` namesake). Teaches HOW to write, register, and validate a new cclaw skill. Fires when an agent is about to edit `src/content/skills/` or `src/content/skills.ts` OR receives a `task:add-skill` framing. Codifies (a) the three-lane taxonomy (inline prompt block vs runbook vs skill — promote only when the discipline genuinely crosses ≥3 specialist surfaces); (b) the mandatory frontmatter + body section template; (c) the registration schema in `AUTO_TRIGGER_SKILLS` (id / fileName / description / triggers / stages / optional gate); (d) the RED → GREEN → REFACTOR validation cycle adapted to cclaw subagent dispatch (RED = baseline subagent fails the discipline; GREEN = skill body + registration → subagent passes; REFACTOR = adversarial rationalising probes close every loophole); (e) the four canonical loophole-checking probes (unlisted carve-out / trigger-doesn't-match / vague HOW / excuse-not-in-table); (f) three cite-back reference patterns (`tdd-and-verification` / `anti-slop` / `pre-commitment-predictions`). Net-new content; replaces nothing.",
+    triggers: [
+      "task:add-skill",
+      "before:edit src/content/skills/",
+      "before:edit src/content/skills.ts",
+      "edit:src/content/skills/*",
+      "edit:src/content/skills.ts",
+      "stage:plan",
+      "stage:build"
+    ],
+    stages: ["plan", "build"],
+    body: readSkill("writing-skills.md")
   }
 ];
 

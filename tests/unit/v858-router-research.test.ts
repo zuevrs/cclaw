@@ -214,7 +214,8 @@ describe("v8.58 — lightweight router + research mode behavior (research templa
     // routing contract now lives on the triage sub-agent prompt (`agents/triage.md`)
     // and the orchestrator-side procedure lives in `runbooks/triage-gate.md`. The
     // assertions below collectively check both surfaces carry the routing-contract
-    // canon.
+    // canon. v8.112 retired the per-flow ceremony override flags + the back-compat
+    // run-mode toggles; the heuristic is the sole source of truth at this hop.
     expect(
       AUTO_TRIGGER_SKILLS.find((s) => s.id === "triage-gate"),
       "triage-gate skill should be retired in v8.106"
@@ -222,12 +223,15 @@ describe("v8.58 — lightweight router + research mode behavior (research templa
     const triagePromptBody = TRIAGE_PROMPT;
     expect(triagePromptBody).toMatch(/routing|router|five-field decision/iu);
     expect(triagePromptBody).toMatch(/complexity[\s\S]+ceremonyMode[\s\S]+path[\s\S]+runMode[\s\S]+mode/u);
-    expect(triagePromptBody).toContain("--inline");
-    expect(triagePromptBody).toContain("--soft");
-    expect(triagePromptBody).toContain("--strict");
-    expect(triagePromptBody).toMatch(/mutually exclusive/iu);
+    expect(triagePromptBody).toMatch(/heuristic is the sole source of truth|heuristic-driven/iu);
     expect(triagePromptBody).toMatch(/research-mode/iu);
     expect(triagePromptBody).toMatch(/zero[- ]question/iu);
+    for (const retiredFlag of ["--inline", "--soft", "--strict", "--mode=auto", "--mode=step"]) {
+      expect(
+        triagePromptBody,
+        `v8.112: triage prompt must not mention retired flag ${retiredFlag}`
+      ).not.toContain(retiredFlag);
+    }
     const triageRunbookBody =
       ON_DEMAND_RUNBOOKS.find((r) => r.id === "triage-gate")?.body ?? "";
     expect(triageRunbookBody.length).toBeGreaterThan(0);
@@ -266,7 +270,8 @@ describe("v8.58 — lightweight router + research mode section contract (start-c
     }
     expect(body).toMatch(/research-mode (entry point|fork)/iu);
     expect(body).toContain("`research `");
-    expect(body).toContain("`--research`");
+    // v8.112 — the `--research` flag form was retired; the literal `research ` prefix is the sole entry point.
+    expect(body).not.toContain("--research");
     expect(body).toMatch(/skips? triage (entirely|dispatch entirely)/iu);
     expect(body).toMatch(/mode:\s*"research"/u);
     expect(body).toMatch(/ceremonyMode:\s*"strict"/u);
@@ -283,10 +288,13 @@ describe("v8.58 — lightweight router + research mode section contract (start-c
     for (const moved of ["assumptions", "surfaces", "priorLearnings", "interpretationForks"]) {
       expect(TRIAGE_PROMPT).toContain(moved);
     }
-    for (const flag of ["--inline", "--soft", "--strict"]) {
-      expect(TRIAGE_PROMPT).toContain(flag);
+    // v8.112 — the per-flow ceremony override flags are retired; the triage heuristic is the sole source of truth.
+    for (const retiredFlag of ["--inline", "--soft", "--strict", "--mode=auto", "--mode=step"]) {
+      expect(
+        TRIAGE_PROMPT,
+        `v8.112: triage prompt must not mention retired flag ${retiredFlag}`
+      ).not.toContain(retiredFlag);
     }
-    expect(TRIAGE_PROMPT).toMatch(/mutually exclusive/iu);
     expect(TRIAGE_PROMPT).toMatch(/Zero-question rule/iu);
     expect(TRIAGE_PROMPT).not.toContain("askUserQuestion(\n  questions:");
 

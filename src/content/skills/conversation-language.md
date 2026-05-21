@@ -43,7 +43,7 @@ Mechanical tokens stay in their original form regardless of conversation languag
 - AC ids (`AC-1`, `AC-2`).
 - Decision ids (`D-1`, `D-2`).
 - Slugs (`add-approval-page`, never "добавить-страницу-одобрения").
-- Commands and CLI flags (`/cc`, `/cc-cancel`, `/cc-review`).
+- Commands and CLI flags (`/cc`, `/cc-cancel`, `--critic-cross-model`).
 - Machine-readable JSON.
 - Specialist names (`triage`, `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`).
 - Mode names (`code`, `text-review`, `integration`, `release`, `adversarial`, `fix-only`).

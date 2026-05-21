@@ -82,7 +82,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["heuristic", "override"],
     description:
-      "v8.61 lightweight router moved to a sub-agent. Decides exactly five fields (complexity, ceremonyMode, path, runMode, mode) for every fresh `/cc <task>` (research-mode and extend-mode flows skip triage — the orchestrator's Detect hop forks before dispatch). Zero-question rule preserved verbatim from v8.58. Honours the three v8.58 override flags (--inline / --soft / --strict) and the v8.34 --mode=auto / --mode=step toggle (both now collapse to auto per v8.61 always-auto). Auto-downgrades strict to soft when .git/ is absent and stamps downgradeReason: \"no-git\". Returns a slim summary; the orchestrator persists the decision to flow-state.json.",
+      "v8.61 lightweight router moved to a sub-agent. Decides exactly five fields (complexity, ceremonyMode, path, runMode, mode) for every fresh `/cc <task>` (research-mode and extend-mode flows skip triage — the orchestrator's Detect hop forks before dispatch). Zero-question rule preserved verbatim from v8.58. v8.112 retired the per-flow ceremony override flags and the back-compat run-mode toggles; the heuristic is the sole source of truth at this hop. Auto-downgrades strict to soft when .git/ is absent and stamps downgradeReason: \"no-git\". Returns a slim summary; the orchestrator persists the decision to flow-state.json.",
     prompt: SPECIALIST_PROMPTS.triage
   },
   {

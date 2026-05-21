@@ -114,24 +114,31 @@ via the /cc command, not in this CLI. There is no \`cclaw plan\`,
   /cc                              Resume the active flow.
   /cc-cancel                       Discard the active flow.
 
-Per-flow override flags (parsed by the /cc orchestrator inside the
-harness, NOT by this CLI):
-  --inline / --soft / --strict        force a ceremonyMode
-  --research / --light / --standard / --deep-product   research mode + depth
-  --critic-cross-model                 force a cross-model second
-                                       opinion in critic via MCP
-                                       (v8.72). Graceful fallback:
+Per-flow flags (parsed by the /cc orchestrator inside the harness,
+NOT by this CLI). v8.112 cleaned this surface to the three flags
+that toggle behaviour the triage heuristic structurally can't
+infer; everything else now flows from the heuristic + task wording:
+  --critic-cross-model                 force a cross-model convergence
+                                       loop in critic via MCP (v8.74
+                                       trigger; v8.112 convergence
+                                       contract — both critics must
+                                       PASS or up to 3 rounds run).
+                                       Graceful fallback:
                                        \`Cross-model unavailable: skipped\`
                                        is written when no MCP tool is
-                                       wired (no install-layer change
-                                       needed to opt in later).
-                                       Default off; opt in
+                                       wired. Default off; opt in
                                        project-wide via
                                        \`critic.cross_model: true\` in
                                        \`.cclaw/config.yaml\`.
-  --capture-learnings                  force a compound-learnings
-                                       capture even when the heuristic
-                                       gate did not fire`;
+  --review                             /cc patch only: enable the lite
+                                       reviewer pass (correctness,
+                                       readability, edit-discipline
+                                       axes only) after the patch
+                                       commit lands.
+  --lens=design / --lens=-design       research mode only: force-include
+                                       or force-exclude the v8.76
+                                       design lens, overriding the
+                                       design-signal heuristic.`;
 
 const HELP_COMMANDS: ReadonlyArray<readonly [string, string]> = [
   ["install", "Install / reapply cclaw assets (idempotent; runs orphan cleanup). The single installer."],
