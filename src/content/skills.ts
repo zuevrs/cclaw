@@ -516,6 +516,23 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     body: readSkill("structured-status.md")
   },
   {
+    id: "pre-commitment-predictions",
+    fileName: "pre-commitment-predictions.md",
+    description:
+      "v8.111 consolidation. The 3-5 pre-commitment predictions discipline shared by post-impl critic (§1), plan-critic (§1 of each rubric mode), and qa-runner (§3): write 3-5 falsifiable predictions of what is most likely wrong / missing BEFORE reading the rest of the artifact set in detail, then run the §2-§N walks and verify each prediction against the evidence. Codifies the 3-5 cap rationale, the 'before reading the rest' ordering, the outcome enum (`confirmed` / `refuted` / `partial`), the 'refuted is information' rule, the 'more than 5 is fishing' guidance, and the per-specialist mode-flavoured prediction shape (adversarial expands to 5-7). Replaces three near-identical inline blocks in plan-critic.ts / critic.ts / qa-runner.ts with a one-line anchor each. Sourced from oh-my-claudecode/agents/critic.md:58-60 (deliberate-search-vs-passive-evaluation framing).",
+    triggers: [
+      "specialist:plan-critic",
+      "specialist:critic",
+      "specialist:qa-runner",
+      "before:section-1",
+      "stage:plan",
+      "stage:review",
+      "stage:qa"
+    ],
+    stages: ["plan", "review", "qa"],
+    body: readSkill("pre-commitment-predictions.md")
+  },
+  {
     id: "investigation-discipline",
     fileName: "investigation-discipline.md",
     description:

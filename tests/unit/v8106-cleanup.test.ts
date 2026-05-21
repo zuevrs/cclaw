@@ -50,7 +50,7 @@ const RETIRED_SKILL_IDS = [
 ] as const;
 
 describe("v8.106 — cleanup (vestigial skills + reviewer trim + dispatch envelopes lazy)", () => {
-  it("AC-1 — the three retired skill ids are no longer in AUTO_TRIGGER_SKILLS, the corresponding .md bodies are deleted, and the registry holds 32 entries", async () => {
+  it("AC-1 — the three retired skill ids are no longer in AUTO_TRIGGER_SKILLS, the corresponding .md bodies are deleted, and the registry holds 33 entries (32 + v8.111 pre-commitment-predictions)", async () => {
     for (const id of RETIRED_SKILL_IDS) {
       const entry = AUTO_TRIGGER_SKILLS.find((s) => s.id === id);
       expect(
@@ -71,7 +71,7 @@ describe("v8.106 — cleanup (vestigial skills + reviewer trim + dispatch envelo
       ).rejects.toThrow();
     }
 
-    expect(AUTO_TRIGGER_SKILLS.length).toBe(32);
+    expect(AUTO_TRIGGER_SKILLS.length).toBe(33);
   });
 
   it("AC-2 — the canonical replacement surfaces still carry the lifted logic (triage agent prompt, triage-gate runbook, start-command Detect matrix, architect Bootstrap)", async () => {
