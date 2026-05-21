@@ -255,7 +255,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "ac-discipline",
     fileName: "ac-discipline.md",
-    description: "merge of ac-quality + ac-traceability (revised — hook removed). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the posture-driven commit-prefix contract (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):) the reviewer verifies ex-post via git log --grep. AC-quality always-on for AC authoring; AC-traceability active only when ceremony_mode=strict, no chain enforced in soft / inline modes.",
+    description: "merge of ac-quality + ac-traceability (v8.63 split + v8.110 skill-side completion — slice work prefixes (red(SL-N): / green(SL-N): / refactor(SL-N):) live under slice-discipline; this skill teaches the AC-side contract). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the per-AC `verify(AC-N): passing` commit the reviewer verifies ex-post via `git log --grep=\"verify(AC-N):\"` (test-only or empty diff; never touches production code). AC-quality always-on for AC authoring; the verification chain is active only when ceremony_mode=strict, no chain enforced in soft / inline modes.",
     triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:architect", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ceremony_mode:strict"],
     stages: ["plan", "build", "review"],
     body: readSkill("ac-discipline.md")
@@ -341,7 +341,7 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "commit-hygiene",
     fileName: "commit-hygiene.md",
-    description: "merge of commit-message-quality + surgical-edit-hygiene (revised — hook removed). v8.62: `specialist:slice-builder` trigger renamed to `specialist:builder` (rename only; AC-as-unit semantics unchanged). Enforces commit-message conventions AND the always-on rules for builder commits: posture-driven subject-line prefix in strict mode (red(AC-N): / green(AC-N): / refactor(AC-N): / test(AC-N): / docs(AC-N):); no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
+    description: "merge of commit-message-quality + surgical-edit-hygiene (v8.110 skill-side completion of the v8.63 slice/AC split). v8.62: `specialist:slice-builder` trigger renamed to `specialist:builder`. Enforces commit-message conventions AND the always-on rules for builder commits: posture-driven subject-line prefix in strict mode — slice work `red(SL-N):` / `green(SL-N):` / `refactor(SL-N):` / `test(SL-N):` / `docs(SL-N):`, AC verification `verify(AC-N): passing`; no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
     triggers: ["always-on", "specialist:builder", "before:git-commit"],
     stages: ["build", "ship"],
     body: readSkill("commit-hygiene.md")

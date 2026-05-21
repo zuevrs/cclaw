@@ -5,7 +5,7 @@ trigger: when stage=build (granularity depends on ceremony_mode — see below); 
 
 # Skill: tdd-and-verification (RED → GREEN → REFACTOR + staged verification gate + refactor safety)
 
-This merged skill covers the full build-stage loop: the test-first cycle (formerly **tdd-cycle**), the staged verification gate that wraps handoffs (formerly **verification-loop**), and the behaviour-preservation rules that govern the REFACTOR step on pure-refactor slugs (formerly **refactor-safety**).
+This merged skill covers the full build-stage loop: the test-first cycle (formerly **tdd-cycle**), the staged verification gate that wraps handoffs (formerly **verification-loop**), and the behaviour-preservation rules that govern the REFACTOR step on pure-refactor slugs (formerly **refactor-safety**). v8.63+ split work (slices, `SL-N`) from verification (AC, `verify(AC-N): passing`); this skill teaches both halves in strict mode.
 
 ## tdd-cycle
 
@@ -15,22 +15,22 @@ build is a TDD stage. **What changes between modes is the granularity, not wheth
 | --- | --- | --- |
 | `inline` (trivial) | optional; one quick check is enough | nothing |
 | `soft` (small/medium) | one TDD cycle per feature: write 1–3 tests that exercise the listed conditions, then implement | reviewer at `/cc-review` |
-| `strict` (large-risky / security-flagged) | full RED → GREEN → REFACTOR per AC ID | reviewer ex-post via `git log --grep="(AC-N):"` and `build.md` inspection |
+| `strict` (large-risky / security-flagged) | full RED → GREEN → REFACTOR per slice (`SL-N`), then one `verify(AC-N): passing` per AC after all contributing slices land | reviewer ex-post via `git log --grep="(SL-N):"` (slice work) AND `git log --grep="verify(AC-N):"` (AC verification) + `build.md` inspection |
 
 > **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.
 
-The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests entirely is never the answer; loosening the per-criterion ceremony is.
+The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests entirely is never the answer; loosening the per-slice ceremony is.
 
-## The three phases
+## The three phases (per slice in strict mode)
 
 ### RED — write a failing test
 
 - Touch test files **only**. No production edits in the RED commit.
-- The test must encode the AC verification line authored by architect.
-- The test must fail for the **right reason** — the assertion that encodes the AC, not a syntax / import / fixture error.
+- The test must encode the slice's intended observable behaviour (consult the AC rows that list this slice in `Verifies` to know what observation must hold).
+- The test must fail for the **right reason** — the assertion that encodes the behaviour, not a syntax / import / fixture error.
 - Capture the runner output that proves the failure (command + 1-3 line excerpt). This is the **watched-RED proof**.
-- **Test files are named by the unit under test, NOT by the AC id.** Mirror the production module path: `src/lib/permissions.ts` → `tests/unit/permissions.test.ts` (or whatever the project's convention is — `*.spec.ts`, `__tests__/*.ts`, `*_test.go`, `test_*.py`). `AC-1.test.ts`, `tests/AC-2.test.ts`, `spec/ac3.spec.ts` are anti-patterns. The AC id lives **inside** the test name (`it('AC-1: tooltip shows email …', …)`), in the commit message (`red(AC-1): …`), and in the build log — never in the filename.
-- Commit: `git add tests/<path>.test.ts && git commit -m "red(AC-N): <assertion description>"`. The `red(AC-N):` prefix is the contract the reviewer's `git log --grep="^red(AC-N):"` scan reads at handoff time.
+- **Test files are named by the unit under test, NOT by the slice or AC id.** Mirror the production module path: `src/lib/permissions.ts` → `tests/unit/permissions.test.ts` (or whatever the project's convention is — `*.spec.ts`, `__tests__/*.ts`, `*_test.go`, `test_*.py`). `SL-1.test.ts`, `AC-1.test.ts`, `tests/AC-2.test.ts`, `spec/sl3.spec.ts` are anti-patterns. The slice id lives **inside** the test name (`it('SL-1: tooltip shows email …', …)` for slice tests; `it('AC-1: tooltip-AC verification passes', …)` for the verify pass), in the commit message (`red(SL-1): …` / `verify(AC-1): passing`), and in the build log — never in the filename.
+- Commit: `git add tests/<path>.test.ts && git commit -m "red(SL-N): <assertion description>"`. The `red(SL-N):` prefix is the contract the reviewer's `git log --grep="^red(SL-N):"` scan reads at handoff time.
 
 ### GREEN — minimal production change
 
@@ -38,8 +38,8 @@ The Iron Law holds in every mode; only the *bookkeeping* differs. Skipping tests
 - Run the **affected-test suite first** (test impact analysis), not the full suite — fast feedback. The affected tests are: tests in the test directory mirroring the modified production module path PLUS tests that import the modified module directly. Tools: `vitest related <file>`, `jest --findRelatedTests <file>`, `pytest --testmon` if available, or a manual `grep` for imports + the mirrored test file.
 - After affected tests pass, run the **full relevant suite** as the safety net before commit. A passing single test with the suite broken elsewhere is a regression, not GREEN.
 - Capture both: the affected-tests command + PASS summary, AND the full-suite command + PASS summary. The two together are the **GREEN evidence** in `build.md`.
-- Touch only files declared in the plan. If a file outside the plan is required, **stop** and surface the conflict.
-- Commit: `git add src/<path>.ts && git commit -m "green(AC-N): <minimal impl>"`. The reviewer's `git log --grep="^green(AC-N):"` scan verifies a `red(AC-N): ...` commit precedes it (skipping the check is an A-1 finding for `test-first` / `characterization-first` postures).
+- Touch only files declared in the slice's `Surface`. If a file outside `Surface` is required, **stop** and surface the conflict.
+- Commit: `git add src/<path>.ts && git commit -m "green(SL-N): <minimal impl>"`. The reviewer's `git log --grep="^green(SL-N):"` scan verifies a `red(SL-N): ...` commit precedes it (skipping the check is an A-1 finding for `test-first` / `characterization-first` postures).
 
 Why two-stage: affected tests close the loop in seconds → fast iteration; full suite catches regressions impact analysis missed (test discovery is heuristic, not guaranteed). In tiny repos (<100 tests, <2s suite) the two stages collapse to one command — that is fine. In larger repos the difference is real wall-clock; affected-first matters.
 
@@ -54,53 +54,65 @@ After the refactor edits:
 
 If a refactor is warranted, apply it and commit:
 
-`git add src/<path>.ts && git commit -m "refactor(AC-N): <one-line shape change>"`.
+`git add src/<path>.ts && git commit -m "refactor(SL-N): <one-line shape change>"`.
 
 If no refactor is warranted, say so **explicitly**. Three paths are accepted (the reviewer reads them in order; any one satisfies the gate):
 
-1. **preferred — declare in `build.md`.** Write `Refactor: skipped — <one-line reason>` in the AC row's REFACTOR notes column. No git commit for the refactor phase. The reviewer reads the build.md row and treats the literal token `Refactor: skipped` as the satisfied refactor slot. This is the new default — it keeps the git log free of no-op markers while preserving the audit trail in the artifact the reviewer already inspects.
-2. **Legacy — empty marker commit.** `git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"`. Still accepted so already-shipped slugs continue to pass review without re-work; the reviewer keys off the literal `skipped:` token in the commit subject.
+1. **preferred — declare in `build.md`.** Write `Refactor: skipped — <one-line reason>` in the slice row's REFACTOR notes column. No git commit for the refactor phase. The reviewer reads the build.md row and treats the literal token `Refactor: skipped` as the satisfied refactor slot. This is the new default — it keeps the git log free of no-op markers while preserving the audit trail in the artifact the reviewer already inspects.
+2. **Legacy — empty marker commit.** `git commit --allow-empty -m "refactor(SL-N) skipped: <reason>"`. Still accepted so already-shipped slugs continue to pass review without re-work; the reviewer keys off the literal `skipped:` token in the commit subject.
 3. **Combined** (belt-and-suspenders, not required) — both the build.md row AND the empty marker commit. Either alone is sufficient.
 
 Silence fails the gate; "I just didn't refactor" with no row token and no commit is a missing-refactor finding.
 
-## Mandatory gates per AC
+## The AC verification pass (strict mode; after all slices land)
 
-All eight gates are reviewer-enforced ex-post (v8.40+; no mechanical commit hook). The builder's `self_review[]` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running `git log --grep="(AC-N):"` against the plan's AC list and reading `build.md`.
+After every slice in `plan.md > ## Plan / Slices` is implemented, refactored (or refactor-skipped), and the full relevant suite passes on the merged state, run the **AC verification pass**. For each AC in `plan.md > ## Acceptance Criteria (verification)`, stamp ONE `verify(AC-N): passing` commit. Two paths:
 
-(a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited. *Evidence: Discovery column in build.md row.*
+- **Path V1 — no test edit needed.** The slice tests already cover the AC's observable behaviour. Land an empty commit: `git commit --allow-empty -m "verify(AC-N): passing"`. The commit body MAY include a one-line evidence citation (`covered by <test-file>:<test-name> committed under SL-K`).
+- **Path V2 — test edit needed.** The AC requires a verification target the slice tests do not yet cover (perf budget, integration scenario, contract assertion). Write or update the test file. Run the relevant suite — it MUST pass. Stage only the test file, then `git commit -m "verify(AC-N): passing"`. **Production code MUST NOT change in a verify commit** — if it does, the responsible slice is incomplete.
+
+The reviewer's `git log --grep="^verify(AC-N): passing"` scan reconstructs the AC chain; one commit per AC is required. See `ac-discipline.md` for the full AC-side contract (test-only-or-empty diff rule, optional `validates: KA-N` payload, `build.md > ## AC verification` row shape).
+
+## Mandatory gates per slice
+
+All eight gates are reviewer-enforced ex-post (v8.40+; no mechanical commit hook). The builder's `self_review[]` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running `git log --grep="(SL-N):"` (slice work) AND `git log --grep="verify(AC-N):"` (AC verification) against the plan's tables and reading `build.md`.
+
+(a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited. *Evidence: Discovery column in build.md slice row.*
 (b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named. *Evidence: Discovery column citations.*
-(c) **red_test_written** — failing test exists, watched-RED proof attached. *Evidence: RED proof column in build.md + commit `red(AC-N): ...` visible via `git log --grep="^red(AC-N):"`.*
+(c) **red_test_written** — failing test exists, watched-RED proof attached. *Evidence: RED proof column in build.md + commit `red(SL-N): ...` visible via `git log --grep="^red(SL-N):"`.*
 (d) **red_fails_for_right_reason** — RED captured a real assertion failure. *Evidence: 1-3 line failure excerpt in build.md's RED proof column (must be an assertion failure, not a syntax/import/fixture error).*
-(e) **green_two_stage_suite** — affected-tests pass AND full relevant suite passes after GREEN. Both commands captured in build.md. *Evidence: GREEN evidence column + commit `green(AC-N): ...` visible via `git log --grep="^green(AC-N):"`.*
-(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran (with FULL suite green afterward), or explicitly skipped with reason. *Evidence: REFACTOR notes column carries either a real shape-change line + `refactor(AC-N): ...` commit, OR the literal token `Refactor: skipped — <reason>` (no empty commit needed), OR the legacy `refactor(AC-N) skipped: <reason>` empty-marker commit visible via `git log --grep="^refactor(AC-N)"`. Any one of the three satisfies the gate.*
-(g) **traceable_to_plan** — commits reference plan AC ids and the plan's file set. *Evidence: commits column in build.md + reviewer cross-references `git show <SHA> --stat` against `plan.md`'s touchSurface.*
-(h) **commit_chain_intact** — `git log --grep="(AC-N):" --oneline` shows the posture-appropriate sequence (e.g., `red` before `green` for `test-first`; `refactor` only for `refactor-only`; `test` only for `tests-as-deliverable`; `docs` only for `docs-only`). *Evidence: reviewer's posture-aware git-log inspection (see `src/posture-validation.ts` for the per-posture expected-prefix list).*
+(e) **green_two_stage_suite** — affected-tests pass AND full relevant suite passes after GREEN. Both commands captured in build.md. *Evidence: GREEN evidence column + commit `green(SL-N): ...` visible via `git log --grep="^green(SL-N):"`.*
+(f) **refactor_run_or_skipped_with_reason** — REFACTOR ran (with FULL suite green afterward), or explicitly skipped with reason. *Evidence: REFACTOR notes column carries either a real shape-change line + `refactor(SL-N): ...` commit, OR the literal token `Refactor: skipped — <reason>` (no empty commit needed), OR the legacy `refactor(SL-N) skipped: <reason>` empty-marker commit visible via `git log --grep="^refactor(SL-N)"`. Any one of the three satisfies the gate.*
+(g) **traceable_to_plan** — slice commits reference the slice id and the slice's `Surface`; verify commits reference one AC id verbatim. *Evidence: commits column in build.md + reviewer cross-references `git show <SHA> --stat` against `plan.md`'s Slices + Acceptance Criteria tables.*
+(h) **commit_chain_intact** — `git log --grep="(SL-N):" --oneline` shows the posture-appropriate sequence (e.g., `red` before `green` for `test-first`; `refactor` only for `refactor-only`; `test` only for `tests-as-deliverable`; `docs` only for `docs-only`) AND `git log --grep="verify(AC-N):" --oneline` shows exactly one verify commit per AC, landed after every slice in its `Verifies` list. *Evidence: reviewer's posture-aware git-log inspection (see `src/posture-validation.ts` for the per-posture expected-prefix list).*
 
 ## Vertical slicing — tracer bullets, never horizontal waves
 
-**One test → one impl → repeat.** Even in strict mode, you do not write all RED tests for the slice and then all GREEN code. That horizontal pattern produces tests of *imagined* behaviour: the data shape you guessed, the function signature you guessed, the error message you guessed. The tests pass when behaviour breaks and fail when behaviour is fine.
+**One test → one impl → repeat.** Even in strict mode, you do not write all RED tests for the slug and then all GREEN code. That horizontal pattern produces tests of *imagined* behaviour: the data shape you guessed, the function signature you guessed, the error message you guessed. The tests pass when behaviour breaks and fail when behaviour is fine.
 
-The correct pattern is a tracer bullet per AC:
+The correct pattern is a tracer bullet per slice:
 
 ```
 WRONG (horizontal):
-  RED:   AC-1 test, AC-2 test, AC-3 test
-  GREEN: AC-1 impl, AC-2 impl, AC-3 impl
+  RED:   SL-1 test, SL-2 test, SL-3 test
+  GREEN: SL-1 impl, SL-2 impl, SL-3 impl
 
 RIGHT (vertical / tracer bullet):
-  AC-1: RED → GREEN → REFACTOR  (commit chain closes here)
-  AC-2: RED → GREEN → REFACTOR  (next chain starts here, informed by what you learned in AC-1)
-  AC-3: RED → GREEN → REFACTOR
+  SL-1: RED → GREEN → REFACTOR  (commit chain closes here)
+  SL-2: RED → GREEN → REFACTOR  (next chain starts here, informed by what you learned in SL-1)
+  SL-3: RED → GREEN → REFACTOR
+… after all slices land:
+  verify(AC-1): passing
+  verify(AC-2): passing
 ```
 
-Each cycle informs the next. The AC-2 test is shaped by what the AC-1 implementation revealed about the real interface. Tracer-bullet discipline is now prompt-enforced (and reviewer-verified ex-post): committing `red(AC-2): ...` before AC-1's chain has closed (`red(AC-1) → green(AC-1) → refactor(AC-1)`) is an A-N finding the reviewer catches via `git log` ordering, not a hook-rejected commit.
+Each cycle informs the next. The SL-2 test is shaped by what the SL-1 implementation revealed about the real interface. Tracer-bullet discipline is now prompt-enforced (and reviewer-verified ex-post): committing `red(SL-2): ...` before SL-1's chain has closed (`red(SL-1) → green(SL-1) → refactor(SL-1)`) is an A-N finding the reviewer catches via `git log` ordering, not a hook-rejected commit. (v8.64 parallel-by-default: independent slices in the same topological layer may run concurrently in worktrees; the per-slice chain still has to close in order within each worktree.)
 
 In soft mode the same principle applies at feature granularity: write 1–3 tests for the highest-priority condition, implement, then if more tests are needed for adjacent conditions, write them after you've seen the real shape of the GREEN code.
 
 ## Stop-the-line rule
 
-When **anything** unexpected happens during build — a test fails for the wrong reason, the build breaks, a prior-green test starts failing, the typecheck rejects the change — **stop adding code**. Do not push past the failure to "come back later". Errors compound: a wrong assumption in AC-1 makes AC-2 and AC-3 wrong.
+When **anything** unexpected happens during build — a test fails for the wrong reason, the build breaks, a prior-green test starts failing, the typecheck rejects the change — **stop adding code**. Do not push past the failure to "come back later". Errors compound: a wrong assumption in SL-1 makes SL-2 and SL-3 wrong.
 
 Procedure:
 
@@ -123,7 +135,7 @@ When the input is a bug fix, the order is non-negotiable:
 4. Run the full relevant suite — the fix must not break adjacent behaviour.
 5. Refactor.
 
-Bug-fix RED commits use `git commit -m "red(AC-N): reproduce <bug>"` like any other RED. The AC id is the user's bug-fix slug (e.g. `AC-1: completing a task sets completedAt`). In soft mode, the same five steps apply, just with one cycle for the whole fix and a plain `git commit` without the `red(...)` prefix.
+Bug-fix RED commits use `git commit -m "red(SL-N): reproduce <bug>"` like any other RED — the slice represents the unit of bug-fix work (`SL-1: completing a task sets completedAt`). After the slice closes, stamp `verify(AC-N): passing` for the AC the bug-fix slice verifies. In soft mode, the same five steps apply, just with one cycle for the whole fix and a plain `git commit` without the slice / AC prefix.
 
 ## Writing good tests (state, not interactions; DAMP, not DRY)
 
@@ -190,79 +202,86 @@ The reviewer cites a generic-fetcher mock with conditional logic as **Generic-fe
 
 ### Smell catalogue — primitive obsession & feature envy
 
-When a test reveals a structural smell in the production code, the builder surfaces the smell as a finding **even if the AC does not require fixing it**. Two named smells the reviewer cites:
+When a test reveals a structural smell in the production code, the builder surfaces the smell as a finding **even if the slice does not require fixing it**. Two named smells the reviewer cites:
 
 - **Primitive obsession.** A function that takes `(string, string, number)` where each `string` has a different meaning (e.g. `(userId, accountId, ageInDays)`) is at risk of caller-side mistakes (passing args in the wrong order). The fix is a typed value object (`UserId`, `AccountId`, `Days`); refactor surfaces the type system to catch the mistake. Severity: `consider`.
 
 - **Feature envy.** A method on `A` that mostly reads / writes fields of `B` is "envious" of `B` — it probably belongs on `B`. Symptom: `a.method()` reads as `if (b.x === ...) b.y = b.z + ...`. The fix is to move the method to `B`. Severity: `consider`.
 
-These are surfaced under the build summary's `### Noticed but didn't touch` (per `commit-hygiene` / `surgical-edit-hygiene` rules); the AC scope does NOT expand to fix them.
+These are surfaced under the build summary's `### Noticed but didn't touch` (per `commit-hygiene` / `surgical-edit-hygiene` rules); the slice's `Surface` does NOT expand to fix them.
 
 ## Anti-patterns
 
 The TDD cycle has a small number of well-known failure modes, all catalogued in `antipatterns.md`. The reviewer cites the antipattern entry directly; this list is a lookup.
 
 - **Skipping RED, scrambling phases, missing REFACTOR, production code in the RED commit.** A-1 — TDD phase integrity broken. The cycle is the contract; an audit trail with reordered phases is unverifiable.
+- **Production code in the AC verify commit.** A-1 (severity=critical, axis=correctness). The verify commit's diff is test-only or empty; a `src/**` / `lib/**` / `app/**` touch means the responsible slice was incomplete.
 - **Single test green, didn't run the suite.** that is a regression, not GREEN. Run the full relevant suite after every implementation change.
-- **Stage everything with `git add -A`.** A-2 — work outside the AC. Stage AC-related files explicitly (`git add <path>` per file, or `git add -p`).
+- **Stage everything with `git add -A`.** A-2 — work outside the slice. Stage slice-related files explicitly (`git add <path>` per file, or `git add -p`).
 - **Horizontal slicing (RED-batch then GREEN-batch).** writing all RED tests first, then all GREEN code produces tests of imagined behaviour. One test → one impl → repeat. See the Vertical Slicing section above.
 - **Pushing past a failing test.** the next cycle is built on the previous cycle's invariants; if those are broken, you are debugging a stack of broken assumptions. Stop the line, root-cause, then resume.
 - **Mocking what should not be mocked.** A-3 — mocking a database driver for a query test reads green and breaks in production. Use a real test DB or an in-memory fake; mock only what is genuinely outside your control.
-- **Test file named after the AC id** (`AC-1.test.ts`, `tests/AC-2.spec.ts`). The reviewer cites this as severity=`required`. Mirror the unit under test in the filename; carry the AC id inside the test name and commit message only.
+- **Test file named after the slice or AC id** (`SL-1.test.ts`, `AC-1.test.ts`, `tests/AC-2.spec.ts`, `spec/sl3.spec.ts`). The reviewer cites this as severity=`required`. Mirror the unit under test in the filename; carry the slice / AC id inside the test name and commit message only.
 
 ## Fix-only flow
 
 When reviewer returns `block`, the same TDD cycle applies to the fix:
 
-- F-N changes observable behaviour → new RED test that encodes the corrected behaviour (`git commit -m "red(AC-N): fix F-N — <one-line>"`), then GREEN, then REFACTOR.
-- F-N is purely a refactor → `git commit -m "refactor(AC-N): fix F-N — <one-line>"`.
-- F-N is a docs / log / config nit → `git commit -m "refactor(AC-N): fix F-N — <one-line>"` or `git commit --allow-empty -m "refactor(AC-N) skipped: fix F-N — already covered by <SHA>"`.
+- F-N changes observable behaviour → new RED test that encodes the corrected behaviour (`git commit -m "red(SL-N): fix F-N — <one-line>"`), then GREEN, then REFACTOR against the slice that owns the surface. After the slice fix lands, re-run the AC verification pass for every AC that lists this slice in `Verifies` — emit one fresh `verify(AC-N): passing` commit per affected AC (the prior verify SHA is NOT amended; a new commit captures the re-verify).
+- F-N is purely a refactor → `git commit -m "refactor(SL-N): fix F-N — <one-line>"`.
+- F-N is a docs / log / config nit → `git commit -m "refactor(SL-N): fix F-N — <one-line>"` or `git commit --allow-empty -m "refactor(SL-N) skipped: fix F-N — already covered by <SHA>"`.
 
-The AC id stays the same; commit messages cite `F-N` in the subject. The reviewer's git-log scan still keys off the `(AC-N):` prefix; the `fix F-N` token in the subject is what cross-references the review-block finding.
+The slice id stays the same; commit messages cite `F-N` in the subject. The reviewer's git-log scan still keys off the `(SL-N):` prefix (slice work) and the fresh `verify(AC-N): passing` SHA (re-verify); the `fix F-N` token in the subject is what cross-references the review-block finding.
 
-## Posture mapping (v8.36, supersedes "When NOT to apply")
+## Posture mapping (v8.36; v8.63 retargeted to per-slice)
 
-Every AC in strict mode carries a **`posture`** value in its `plan.md` frontmatter — a per-criterion annotation that picks the right TDD ceremony. The default is `test-first` (the standard RED → GREEN → REFACTOR cycle); the other five values cover the cases where the standard cycle is structurally absent or actively wrong. The architect sets the posture using the heuristic table in its prompt; the builder reads it and selects the ceremony; the reviewer applies the posture-specific check ex-post via `git log --grep` and the `src/posture-validation.ts` helper.
+Every slice in strict mode carries a **`Posture`** column in `plan.md > ## Plan / Slices` — a per-slice annotation that picks the right TDD ceremony. The default is `test-first` (the standard RED → GREEN → REFACTOR cycle); the other five values cover the cases where the standard cycle is structurally absent or actively wrong. The architect sets the posture using the heuristic table in its prompt; the builder reads it and selects the ceremony; the reviewer applies the posture-specific check ex-post via `git log --grep` and the `src/posture-validation.ts` helper.
 
-The mapping is mechanical — there is no "did the agent feel like TDD today?" judgement call. Pick the row that matches the AC's posture; do exactly what that row says.
+The mapping is mechanical — there is no "did the agent feel like TDD today?" judgement call. Pick the row that matches the slice's posture; do exactly what that row says.
 
 | posture | ceremony required | commit shape (builder writes) | verification-loop mode | reviewer checks (ex-post via `git log`) |
 | --- | --- | --- | --- | --- |
-| **`test-first`** (default) | RED → GREEN → REFACTOR (3 commits) | `git commit -m "red(AC-N): ..."`, then `green(AC-N)`, then `refactor(AC-N): ...` (or `refactor(AC-N) skipped: <reason>`) | full (build, lint, typecheck, test, scope) | A-1 fires if `green(AC-N)` is found without a prior `red(AC-N)` by git-log order, OR if the `red(AC-N)` commit's `git show --stat` includes production files; full TDD-integrity check |
+| **`test-first`** (default) | RED → GREEN → REFACTOR (3 commits) | `git commit -m "red(SL-N): ..."`, then `green(SL-N)`, then `refactor(SL-N): ...` (or `refactor(SL-N) skipped: <reason>`) | full (build, lint, typecheck, test, scope) | A-1 fires if `green(SL-N)` is found without a prior `red(SL-N)` by git-log order, OR if the `red(SL-N)` commit's `git show --stat` includes production files; full TDD-integrity check |
 | **`characterization-first`** | RED (pin existing behaviour) → GREEN (tiny shape fix) → REFACTOR (the real structural change) (3 commits) | same as `test-first` | full | same as `test-first` plus a check that the RED test actually exercises the code about to be refactored |
-| **`tests-as-deliverable`** | write the contract / integration / snapshot test, capture deterministic outcome, single commit | `git commit -m "test(AC-N): ..."` | full (the test IS the deliverable; it must compile, run, and produce a deterministic outcome) | A-1 does NOT fire; reviewer checks (a) test compiles + runs, (b) deterministic outcome (named pass OR named expected-failure), (c) `touchSurface` is test/spec files only — cross-checked via `src/posture-validation.ts:validatePostureTouchSurface(...)` |
-| **`refactor-only`** | pin existing suite (run, capture pass) → apply refactor → re-run suite (must pass with identical output), single commit | `git commit -m "refactor(AC-N): ..."` | full (existing suite is the safety net) | A-1 does NOT fire; reviewer checks (a) pre-refactor suite captured passing in build.md, (b) post-refactor suite passes with same output, (c) no snapshot diff (snapshot move is `critical` axis=correctness); a `No-behavioural-delta:` block in the commit body is required |
-| **`docs-only`** | single commit; no behaviour change | `git commit -m "docs(AC-N): ..."` | `diff-only` (skip build/typecheck/lint/test gates; only working-tree cleanliness + touchSurface match) | A-1 does NOT fire; reviewer checks (a) `touchSurface` matches the exclusion set via `src/posture-validation.ts:validatePostureTouchSurface(...)` (using `isBehaviorAdding`), (b) verification ran in `diff-only` mode |
-| **`bootstrap`** | AC-1: GREEN-only (runner is being installed; no RED is possible) ⇒ subsequent AC: full `test-first` cycle | AC-1: `git commit -m "green(AC-1): ..."` (no prior RED); AC-2+: standard `red(AC-N)` → `green(AC-N)` → `refactor(AC-N)` | full | A-1 fires on AC-2+ if RED is missing; does NOT fire on AC-1 of a bootstrap slug |
+| **`tests-as-deliverable`** | write the contract / integration / snapshot test, capture deterministic outcome, single commit | `git commit -m "test(SL-N): ..."` | full (the test IS the deliverable; it must compile, run, and produce a deterministic outcome) | A-1 does NOT fire; reviewer checks (a) test compiles + runs, (b) deterministic outcome (named pass OR named expected-failure), (c) the slice's `Surface` is test/spec files only — cross-checked via `src/posture-validation.ts:validatePostureTouchSurface(...)` |
+| **`refactor-only`** | pin existing suite (run, capture pass) → apply refactor → re-run suite (must pass with identical output), single commit | `git commit -m "refactor(SL-N): ..."` | full (existing suite is the safety net) | A-1 does NOT fire; reviewer checks (a) pre-refactor suite captured passing in build.md, (b) post-refactor suite passes with same output, (c) no snapshot diff (snapshot move is `critical` axis=correctness); a `No-behavioural-delta:` block in the commit body is required |
+| **`docs-only`** | single commit; no behaviour change | `git commit -m "docs(SL-N): ..."` | `diff-only` (skip build/typecheck/lint/test gates; only working-tree cleanliness + Surface match) | A-1 does NOT fire; reviewer checks (a) `Surface` matches the exclusion set via `src/posture-validation.ts:validatePostureTouchSurface(...)` (using `isBehaviorAdding`), (b) verification ran in `diff-only` mode |
+| **`bootstrap`** | SL-1: GREEN-only (runner is being installed; no RED is possible) ⇒ subsequent slices: full `test-first` cycle | SL-1: `git commit -m "green(SL-1): ..."` (no prior RED); SL-2+: standard `red(SL-N)` → `green(SL-N)` → `refactor(SL-N)` | full | A-1 fires on SL-2+ if RED is missing; does NOT fire on SL-1 of a bootstrap slug |
 
-The reviewer's predicate-as-cross-check: `src/posture-validation.ts:validatePostureTouchSurface(posture, touchSurface)` returns a non-null error string when `posture` is `docs-only` but `touchSurface` includes a source file (anything not in the exclusion set: `*.md`, `*.json`, `*.yml|*.yaml`, `*.toml`, `*.ini`, `*.cfg`, `*.conf`, `.env*`, `tests/**`, `*.test.*`, `*.spec.*`, `__tests__/**`, `docs/**`, `.cclaw/**`, `.github/**`); the same helper enforces the symmetric rule for `tests-as-deliverable` (only test files allowed). The posture is the **annotation** the architect picked, the predicate is the **ex-post cross-check** that catches a contradiction.
+After every slice (regardless of posture) lands, the **AC verification pass** runs once over the merged state: one `verify(AC-N): passing` commit per AC declared in `plan.md > ## Acceptance Criteria (verification)`. The verify commit's diff is empty (Path V1) or test-only (Path V2); production code never appears in a verify commit. See `ac-discipline.md` for the full AC-side rules.
 
-### Bootstrap escape — the only AC-1 exception to RED-before-GREEN (v8.38, named)
+The reviewer's predicate-as-cross-check: `src/posture-validation.ts:validatePostureTouchSurface(posture, touchSurface)` returns a non-null error string when `posture` is `docs-only` but `Surface` includes a source file (anything not in the exclusion set: `*.md`, `*.json`, `*.yml|*.yaml`, `*.toml`, `*.ini`, `*.cfg`, `*.conf`, `.env*`, `tests/**`, `*.test.*`, `*.spec.*`, `__tests__/**`, `docs/**`, `.cclaw/**`, `.github/**`); the same helper enforces the symmetric rule for `tests-as-deliverable` (only test files allowed). The posture is the **annotation** the architect picked, the predicate is the **ex-post cross-check** that catches a contradiction.
 
-AC-1 of a slug whose first task is installing the test framework itself sets `posture: bootstrap`; the reviewer accepts a `green(AC-1): ...` commit without a prior `red(AC-1): ...` for that AC only. AC-2+ in the same slug uses the full RED → GREEN → REFACTOR cycle. The legacy `state.buildProfile === "bootstrap"` field is still honoured for in-flight projects whose flow-state predates v8.36 — when set, the reviewer treats every AC as `posture: bootstrap` regardless of what its stanza says.
+### Bootstrap escape — the only SL-1 exception to RED-before-GREEN
+
+SL-1 of a slug whose first task is installing the test framework itself sets `Posture: bootstrap`; the reviewer accepts a `green(SL-1): ...` commit without a prior `red(SL-1): ...` for that slice only. SL-2+ in the same slug uses the full RED → GREEN → REFACTOR cycle. The legacy `state.buildProfile === "bootstrap"` field is still honoured for in-flight projects whose flow-state predates v8.36 — when set, the reviewer treats every slice as `Posture: bootstrap` regardless of what its row says.
 
 ### Worked examples — picking the posture
 
-Each of the five legacy "When NOT to apply" examples maps cleanly to a posture row above; the canonical TDD list is now the table, not the prose.
+Each example below maps cleanly to a posture row above; the canonical TDD list is now the table, not the prose.
 
-- **Pure prose / config edits** (README typo, CHANGELOG edit, `package.json` version bump): posture is **`docs-only`**. Single `docs(AC-N): ...` commit; verification-loop in `diff-only` mode; `touchSurface` constrained to docs/config files (the reviewer's `validatePostureTouchSurface` flags any source file in `touchSurface` as an A-1 finding).
-- **Mechanical renames** (e.g. rename a symbol via codemod): posture is **`refactor-only`**. Pin the suite, perform the rename, re-run the suite, single `refactor(AC-N): ...` commit. If the existing suite has insufficient coverage of the renamed code, surface a `required` finding and switch the posture to `characterization-first` — the rename cannot land without a pin.
-- **Contract / integration / snapshot test slug** (e.g. "add a contract test against the public API"): posture is **`tests-as-deliverable`**. Write the test, run it, capture deterministic outcome, single `test(AC-N): ...` commit. The test IS the AC; there is no fake RED-then-immediately-GREEN dance.
-- **Bootstrap of the test framework itself** (a slug whose AC-1 is "test framework installed and one passing example test exists"): posture is **`bootstrap`** on AC-1.
-- **Characterization slug** (about to refactor a legacy module and want a safety net before touching it): posture is **`characterization-first`** on the pinning AC, then **`refactor-only`** on the structural-change AC.
+- **Pure prose / config edits** (README typo, CHANGELOG edit, `package.json` version bump): posture is **`docs-only`**. Single `docs(SL-N): ...` commit; verification-loop in `diff-only` mode; `Surface` constrained to docs/config files (the reviewer's `validatePostureTouchSurface` flags any source file in `Surface` as an A-1 finding).
+- **Mechanical renames** (e.g. rename a symbol via codemod): posture is **`refactor-only`**. Pin the suite, perform the rename, re-run the suite, single `refactor(SL-N): ...` commit. If the existing suite has insufficient coverage of the renamed code, surface a `required` finding and switch the posture to `characterization-first` — the rename cannot land without a pin.
+- **Contract / integration / snapshot test slug** (e.g. "add a contract test against the public API"): posture is **`tests-as-deliverable`**. Write the test, run it, capture deterministic outcome, single `test(SL-N): ...` commit. The test IS the slice's deliverable; there is no fake RED-then-immediately-GREEN dance.
+- **Bootstrap of the test framework itself** (a slug whose SL-1 is "test framework installed and one passing example test exists"): posture is **`bootstrap`** on SL-1.
+- **Characterization slug** (about to refactor a legacy module and want a safety net before touching it): posture is **`characterization-first`** on the pinning slice, then **`refactor-only`** on the structural-change slice.
 
 ## When NOT to apply
 
-The posture mapping above covers every AC the builder will see. Two cases live OUTSIDE the posture system because they are not "an AC with a different ceremony" — they are "no AC at all in the strict-mode sense", and so the skill itself does not apply:
+The posture mapping above covers every slice the builder will see. Two cases live OUTSIDE the posture system because they are not "a slice with a different ceremony" — they are "no slice at all in the strict-mode sense", and so the skill itself does not apply:
 
-- **`triage.ceremonyMode == "inline"`.** Trivial inline edits commit straight without the per-criterion commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo. The orchestrator never dispatches the builder for inline mode, so this skill never opens.
+- **`triage.ceremonyMode == "inline"`.** Trivial inline edits commit straight without the per-slice commit chain. A quick sanity check is enough; the audit-trail cost is wasted on a typo. The orchestrator never dispatches the builder for inline mode, so this skill never opens.
 - **Architect-phase artifacts** (architect Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose, plan / decisions / ADR drafts before the build stage opens). Those produce prose, not behaviour; the build stage is where the posture system opens. The skill is a build-stage rule, not an architect-stage rule.
 
-For every other AC, pick a row from the posture mapping above and follow it. There is no third "skip TDD entirely" escape hatch beyond these two — every other "we don't need a test here" instinct maps to **`docs-only`**, **`refactor-only`**, or **`tests-as-deliverable`** posture and gets the corresponding (smaller) ceremony, not zero ceremony.
+For every other slice, pick a row from the posture mapping above and follow it. There is no third "skip TDD entirely" escape hatch beyond these two — every other "we don't need a test here" instinct maps to **`docs-only`**, **`refactor-only`**, or **`tests-as-deliverable`** posture and gets the corresponding (smaller) ceremony, not zero ceremony.
+
+## Archived-flow back-compat (pre-v8.63)
+
+Slugs authored before v8.63 used a single `## Acceptance Criteria` table (no `## Plan / Slices`) and keyed the entire TDD chain off `(AC-N)` instead of `(SL-N)` (no separate verify pass). The reviewer auto-detects the archived shape from the absence of `## Plan / Slices` and applies the legacy per-posture recipe (`red(AC-N)` → `green(AC-N)` → `refactor(AC-N)`) directly against the AC token. New strict-mode slugs always carry both tables and split work (`SL-N`) from verification (`verify(AC-N): passing`); do not mix shapes within a single slug.
 
 ## Anti-rationalization table (T2-8, addyosmani pattern; v8.13)
 
-**Cross-cutting rationalizations:** the canonical RED-skipping / REFACTOR-silence / "manual test" rows live in `.cclaw/lib/anti-rationalizations.md` under category `posture-bypass`. The rows below stay here because they are TDD-cycle-specific (suppressing failure, mock vs real DB, AC-named test files, prefix discipline at the per-criterion chain). Treat the catalog as the cross-cutting source of truth; treat this table as the cycle-specific deepening.
+**Cross-cutting rationalizations:** the canonical RED-skipping / REFACTOR-silence / "manual test" rows live in `.cclaw/lib/anti-rationalizations.md` under category `posture-bypass`. The rows below stay here because they are TDD-cycle-specific (suppressing failure, mock vs real DB, slice / AC-named test files, prefix discipline at the per-slice chain). Treat the catalog as the cross-cutting source of truth; treat this table as the cycle-specific deepening.
 
 This table is the **explicit list of excuses an agent will produce to skip the cycle**, paired with the truth. When you catch yourself thinking the left column, do the right column instead. Surface the rationalization in your slim-summary Notes when you choose the right column anyway, so the reviewer can see the discipline.
 
@@ -270,13 +289,14 @@ This table is the **explicit list of excuses an agent will produce to skip the c
 | --- | --- |
 | "This is a 5-line change, RED isn't worth the time." | RED takes 60-90 seconds and produces an audit trail. Without it, you're trusting a 5-line read against a 500-line context. The cost was always paid by the next agent who had to verify it. |
 | "I already know this works because I tested it manually." | Manual tests don't ship; the watched-RED proof does. The next agent who reads the build log can't repeat your manual test. |
-| "The full suite is slow; I'll just run the test for this AC." | A regression in another module makes the diff non-shippable regardless of whether your AC's test passes. Run the relevant suite, not the single test. |
-| "REFACTOR is unnecessary here, the GREEN code is already clean." | Then say so explicitly. default: write `Refactor: skipped — <reason>` in the AC's build.md row REFACTOR notes column — no empty commit needed; the reviewer reads the row token. Legacy path `git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"` is still accepted. Silence on REFACTOR (neither row token nor commit) fails the gate. |
+| "The full suite is slow; I'll just run the test for this slice." | A regression in another module makes the diff non-shippable regardless of whether your slice's test passes. Run the relevant suite, not the single test. |
+| "REFACTOR is unnecessary here, the GREEN code is already clean." | Then say so explicitly. default: write `Refactor: skipped — <reason>` in the slice's build.md row REFACTOR notes column — no empty commit needed; the reviewer reads the row token. Legacy path `git commit --allow-empty -m "refactor(SL-N) skipped: <reason>"` is still accepted. Silence on REFACTOR (neither row token nor commit) fails the gate. |
 | "I added a try/catch around the failing path so the test passes." | The RED test was supposed to fail because the production code was wrong; suppressing the error doesn't fix it. Restore the failure, then fix the production code. |
 | "I mocked the database to make the test green faster." | A-3 finding. Real DB > in-memory fake > stub > mock. Reach for the simplest level that gets the job done. |
-| "The test file named `AC-1.test.ts` is fine — it's clearer where this test lives." | Required-severity finding. Tests are named after the unit under test; the AC id lives in the test name + commit message. `tests/unit/permissions.test.ts` is correct. |
-| "The mechanical TDD hook is gone; I can write production code without a test first." | The Iron Law is a discipline, not a hook. Skipping RED breaks the audit trail the reviewer reads at handoff. The reviewer will find the gap by `git log --grep="(AC-N):" --oneline` inspection (a `green(AC-N)` without a prior `red(AC-N)` is an A-1 finding, severity=required, axis=correctness) — fix it before commit by writing the RED test first. |
-| "I'll commit production and tests together because there's no helper to stop me." | That's an A-1 finding (severity=required) on the next reviewer pass — `git show <SHA> --stat` for the `red(AC-N): ...` commit must show test files only; mixing in production files is the same violation the retired hook used to catch. Keep the per-criterion RED-then-GREEN sequence by staging test files and committing `red(AC-N): ...` before touching production. |
+| "The test file named `SL-1.test.ts` (or `AC-1.test.ts`) is fine — it's clearer where this test lives." | Required-severity finding. Tests are named after the unit under test; the slice / AC id lives in the test name + commit message. `tests/unit/permissions.test.ts` is correct. |
+| "The mechanical TDD hook is gone; I can write production code without a test first." | The Iron Law is a discipline, not a hook. Skipping RED breaks the audit trail the reviewer reads at handoff. The reviewer will find the gap by `git log --grep="(SL-N):" --oneline` inspection (a `green(SL-N)` without a prior `red(SL-N)` is an A-1 finding, severity=required, axis=correctness) — fix it before commit by writing the RED test first. |
+| "I'll commit production and tests together because there's no helper to stop me." | That's an A-1 finding (severity=required) on the next reviewer pass — `git show <SHA> --stat` for the `red(SL-N): ...` commit must show test files only; mixing in production files is the same violation the retired hook used to catch. Keep the per-slice RED-then-GREEN sequence by staging test files and committing `red(SL-N): ...` before touching production. |
+| "I'll fold a production tweak into the `verify(AC-N): passing` commit so the AC actually passes." | A-1 critical (axis=correctness). Verify commits are test-only or empty by contract. If the AC won't pass on the merged state, the responsible slice is incomplete — return to its TDD cycle, then re-emit `verify(AC-N): passing` as a fresh commit. |
 
 ## verification-loop
 
@@ -287,9 +307,9 @@ A **staged verification gate**. Each step runs only when the previous step passe
 1. **build** — `npm run build` (or the project's equivalent). Compilation / bundling success. Cheapest gate, catches type errors that escape the editor LSP, missing imports, etc.
 2. **typecheck** — `npm run typecheck` / `tsc --noEmit` / `pyright` / `mypy` / `go vet`. Run separately from `build` because some build pipelines emit on type errors and only fail at runtime; the typecheck gate makes the contract explicit.
 3. **lint** — `npm run lint` / `ruff check` / `golangci-lint run`. Style + obvious-bugs gate. Lint warnings count as **failures** here when the project has lint-as-error in CI; otherwise warnings pass but are recorded.
-4. **test** — the project's full relevant suite (`npm test`, `pytest`, `go test ./...`). The builder's GREEN evidence is a *subset* of this gate (per-criterion suite); verification-loop runs the full repo suite.
+4. **test** — the project's full relevant suite (`npm test`, `pytest`, `go test ./...`). The builder's GREEN evidence is a *subset* of this gate (per-slice suite); verification-loop runs the full repo suite.
 5. **security** — when the slug's `security_flag` is true OR the diff matches the security-sensitive heuristic from the review stage (see start-command.ts), run the project's security check (`npm audit --audit-level=high`, `pip-audit`, `bandit`, `govulncheck`). When the check is absent, skip with an explicit "no security check configured" line in the verification log.
-6. **diff** — `git diff --stat` + `git diff --name-only` against the slug's plan-base. Verifies the working tree is clean (no uncommitted changes) and the touched-file set matches the AC's union of touchSurfaces. Detects accidental commits to files outside the slug.
+6. **diff** — `git diff --stat` + `git diff --name-only` against the slug's plan-base. Verifies the working tree is clean (no uncommitted changes) and the touched-file set matches the union of slice `Surface` rows + AC verification targets. Detects accidental commits to files outside the slug.
 
 ## How to run
 
@@ -306,8 +326,8 @@ Run gates **in order**. On failure of any gate:
 ## Modes
 
 - **strict** (default for ship-gate): every gate must pass; failure of any blocks the next.
-- **continuous** (builder between AC): runs in the background as you work; reports status after each AC's REFACTOR commit. Failures surface as warnings; build proceeds to the next AC, but the cumulative failure list must be empty before review-stage entry.
-- **diff-only** (text-only changes): skip build/typecheck/lint/test/security; run only the diff gate (working tree cleanliness + touchSurface match).
+- **continuous** (builder between slices): runs in the background as you work; reports status after each slice's REFACTOR commit. Failures surface as warnings; build proceeds to the next slice, but the cumulative failure list must be empty before review-stage entry.
+- **diff-only** (text-only changes): skip build/typecheck/lint/test/security; run only the diff gate (working tree cleanliness + Surface match).
 
 ## Output format
 
@@ -323,7 +343,7 @@ Append to `flows/<slug>/build.md > Verification log` (one block per run):
 | lint | npm run lint | pass | exit 0; 0 warnings |
 | test | npm test | pass | 47 passed, 0 failed (2.3s) |
 | security | npm audit --audit-level=high | pass | 0 high or critical vulnerabilities |
-| diff | git diff --stat origin/main...HEAD | pass | 4 files changed, 89 ins, 12 del; touchSurface match |
+| diff | git diff --stat origin/main...HEAD | pass | 4 files changed, 89 ins, 12 del; Surface match |
 
 Verdict: pass — ready for handoff.
 ```
@@ -332,7 +352,7 @@ When a gate fails, the row records `fail` with the excerpt; subsequent rows are 
 
 ## When to invoke
 
-- **builder** runs the loop in `continuous` mode after every AC's REFACTOR commit; in `strict` mode before returning the slim summary.
+- **builder** runs the loop in `continuous` mode after every slice's REFACTOR commit; in `strict` mode before returning the slim summary.
 - **reviewer** runs the loop in `strict` mode before deciding `clear` or `warn`; a failed gate forces `block` regardless of finding count.
 - **ship-gate** runs the loop in `strict` mode (this is the same set of gates §2 + §2a of the ship runbook codifies; verification-loop is the named skill that wraps them coherently).
 - **builder fix-only** runs the loop in `strict` mode after the fix commit, before re-handing off to reviewer.
@@ -364,7 +384,7 @@ Before any rewrite, identify the pin:
 - a snapshot or fixture set that should not change;
 - a manual repro the user accepts as the contract.
 
-If no pin exists, "add a pin" is AC-1 of the refactor.
+If no pin exists, "add a pin" is SL-1 of the refactor.
 
 ## One refactor at a time
 
@@ -434,10 +454,10 @@ When the refactor is "make this easier to read", apply named patterns. Each is a
 | Lost intermediate values in a long chain | **Extract variable** | Name intermediate steps; the diff reads as prose. |
 | Inline comment explaining what code does | **Extract function** | Move the block into a function whose name replaces the comment. |
 
-Each pattern is a refactor; each refactor still ships as a `refactor(AC-N): ...` commit (or the empty marker `refactor(AC-N) skipped: ...` when the pattern doesn't apply). The reviewer cites a missed pattern as severity `consider`, never `required` — pattern hygiene is a polish concern, not a correctness concern.
+Each pattern is a refactor; each refactor still ships as a `refactor(SL-N): ...` commit (or the empty marker `refactor(SL-N) skipped: ...` when the pattern doesn't apply). The reviewer cites a missed pattern as severity `consider`, never `required` — pattern hygiene is a polish concern, not a correctness concern.
 
 ### Hard rules
 
 - **Chesterton's Fence applies before any deletion** — comments, branches, option flags, env-var defaults included.
 - **The 500-line threshold is a hard line** — over it, codemod or split the slug.
-- **Pattern names go in commit messages.** `refactor(AC-3): extract guard clauses in paginate()` is the right shape; `refactor(AC-3): cleanup` is not.
+- **Pattern names go in commit messages.** `refactor(SL-3): extract guard clauses in paginate()` is the right shape; `refactor(SL-3): cleanup` is not.

@@ -1,5 +1,24 @@
 # Changelog
 
+## 8.110.0 - 2026-05-21
+
+### Fixed
+- **Skill-side slice/AC migration completion (live shipping bug closed).** v8.109 completed the v8.63 `SL-N` (slice work) / `verify(AC-N): passing` (AC verification) split on the TS side (`BUILD_TEMPLATE`, `SHIP_TEMPLATE`, `anti-rationalizations.ts`, `reviewer.ts`, `builder.ts`) — but the auto-loaded skill bodies still taught the pre-v8.63 commit-prefix shape. Because the skill bodies load AFTER the prompt body, the LLM saw a contradictory contract (builder.ts says `(SL-N)`, skill body says `(AC-N)`) and emitted `red(AC-N):`-style commits the reviewer's new `git log --grep="(SL-N):"` scan silently missed. Five auto-loaded skill bodies retargeted to the canonical contract from `builder.ts` + `reviewer.ts`:
+  - `src/content/skills/ac-discipline.md` — `ac-traceability` section reshaped to teach the `verify(AC-N): passing` chain only (test-only-or-empty diff; one commit per AC; archived-flow back-compat for pre-v8.63 slugs preserved in a labeled paragraph).
+  - `src/content/skills/tdd-and-verification.md` — the always-on TDD teacher rekeyed: RED → GREEN → REFACTOR per slice (`SL-N`), `verify(AC-N): passing` per AC after all contributing slices land, posture mapping retargeted to per-slice, fix-only flow updated, anti-rationalization table updated.
+  - `src/content/skills/commit-hygiene.md` — Strict-mode subject rule rewritten to teach slice work `(SL-N)` + AC verification `verify(AC-N): passing`; worked examples rewritten; anti-rationalizations updated; reviewer finding templates updated.
+  - `src/content/skills/conversation-language.md` — wire-protocol token list and commit-prefix examples updated.
+  - `src/content/skills/plan-authoring.md` — traceability-block rule updated to name the dual grep (`(SL-N)` for slice work + `verify(AC-N)` for verification).
+  - `src/content/skills.ts` — descriptions for `ac-discipline` and `commit-hygiene` rewritten to reflect the v8.63 split.
+- New tripwire `tests/unit/v8110-skill-contract.test.ts` (4 describe blocks; pins SL-N prefix presence, buggy `red(AC-` / `green(AC-` / `refactor(AC-` absence outside archived-flow framing, `verify(AC-N): passing` shape presence in the three AC-side skills, and `skills.ts` description shape).
+
+### Documentation
+- **Landed `CONTRIBUTING.md`** (~30 lines) — closes the dangling `README.md:126` link that pointed at a non-existent file. Covers the dogfood note, test commands (`npm test`, `npm run build`, `npm run smoke:runtime`, `npm run release:check`), commit conventions (pointer at `commit-hygiene.md` + `anti-rationalizations.ts > commit-discipline`), and the slug-release process.
+
+### Refactor
+- **Investigator anti-rationalizations pointer (closes v8.109 B.9 gap on the investigator side).** Added a 2-line pointer to `.cclaw/lib/anti-rationalizations.md` to both local rationalization tables in `src/content/specialist-prompts/investigator.ts`: the Phase 1.5 rationalization-phrase spotter section (~line 226) and the synthesis-time Anti-rationalization table (~line 461). Builder.ts already cited the catalog as of v8.109; triage.ts was intentionally skipped (does not author flow artifacts, so cross-rationalization risk is low). The local tables stay — they carry investigator-specific rationalizations the cross-cutting catalog doesn't cover.
+- **Merged 5 micro v8XX-cleanup test files into `tests/unit/historical-cleanup-tripwires.test.ts`** (file count -4, no coverage change). Combined: `v811-cleanup.test.ts` (cancel-vs-recovery + slug naming), `v814-cleanup.test.ts` (legacy-discovery + decisions template), `v816-cleanup.test.ts` (v8.16 thematic skills merge), `v839-cleanup.test.ts` (TUI menu cleanup), `v860-cleanup.test.ts` (command retirement install integration). Every assertion preserved verbatim; per-slug section comments retain the v8.XX framing for the next reader.
+
 ## 8.109.0 - 2026-05-20
 
 ### BREAKING (internal — no API surface change)

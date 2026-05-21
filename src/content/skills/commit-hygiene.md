@@ -9,41 +9,42 @@ This merged skill covers both kinds of "what lands in a commit" discipline: how 
 
 ## When NOT to apply
 
-- **Inline / trivial flows commit with plain `git commit`.** In inline / soft modes there is no AC↔commit chain; the per-criterion prefix rules below apply only in strict mode.
-- **Amending the most recent commit before push.** Amend is acceptable when the commit has not been pushed AND the amend fixes the message (e.g. correcting a mis-prefixed subject so the reviewer's `git log --grep="(AC-N):"` scan picks it up). Avoid amending once another commit is layered on top.
-- **Cleaning up pre-existing dead code outside the AC's `touchSurfaces`.** Surfaced under `## Summary → Noticed but didn't touch`; never deleted in-scope. The audit trail breaks regardless of whether the dead code was real.
+- **Inline / trivial flows commit with plain `git commit`.** In inline / soft modes there is no slice ↔ commit / AC ↔ verify chain; the per-criterion prefix rules below apply only in strict mode.
+- **Amending the most recent commit before push.** Amend is acceptable when the commit has not been pushed AND the amend fixes the message (e.g. correcting a mis-prefixed subject so the reviewer's `git log --grep="(SL-N):"` or `git log --grep="verify(AC-N):"` scan picks it up). Avoid amending once another commit is layered on top.
+- **Cleaning up pre-existing dead code outside the slice's `Surface`.** Surfaced under `## Summary → Noticed but didn't touch`; never deleted in-scope. The audit trail breaks regardless of whether the dead code was real.
 - **Writing co-author trailers on solo commits.** Anti-pattern call-out — co-author trailers belong on collaborative commits.
 - **`git add -A` for "convenience".** Forbidden. Stage explicitly (`git add <path>` or `git add -p`); shell history with `-A` is an A-2 finding.
-- **Stylistic / formatter passes that touch files the AC didn't authorise.** A drive-by reformat is A-4; bundle it into a follow-up slug instead.
+- **Stylistic / formatter passes that touch files the slice didn't authorise.** A drive-by reformat is A-4; bundle it into a follow-up slug instead.
 
 ## commit-message-quality
 
-The reviewer's posture-aware chain check keys off the subject-line prefix. The plan-traceability chain only stays usable if every commit's subject is readable AND prefixed correctly.
+The reviewer's posture-aware chain check keys off the subject-line prefix. The plan-traceability chain only stays usable if every commit's subject is readable AND prefixed correctly. v8.63+ splits the chain in strict mode: slice work uses `(SL-N)` and AC verification uses `verify(AC-N): passing` — the reviewer dual-greps both.
 
 ## Rules
 
 1. **Imperative voice** — "Add StatusPill component", not "Added" or "Adding".
 2. **Subject ≤72 characters** — long subjects truncate in `git log --oneline` and CI signals.
-3. **Strict-mode subject starts with the posture-driven prefix.** One of `red(AC-N):` / `green(AC-N):` / `refactor(AC-N):` / `refactor(AC-N) skipped:` / `test(AC-N):` / `docs(AC-N):`. The prefix is the contract the reviewer's `git log --grep="(AC-N):"` scan reads. In soft / inline modes use plain `<feat|fix|refactor|docs>: <one-line>` without an AC id.
-4. **Body when needed** — second-line blank, then a short rationale paragraph and any non-obvious context. Use `-m` for the subject; for multi-line messages use `git commit -F <file>` or repeat `-m` per paragraph.
-5. **Cite finding ids in fix commits** — `red(AC-1): fix F-2 — separate rejected token`. The `fix F-N` token in the body or subject is what cross-references the review-block finding at handoff time.
+3. **Strict-mode subject starts with the posture-driven prefix.** Slice work uses one of `red(SL-N):` / `green(SL-N):` / `refactor(SL-N):` / `refactor(SL-N) skipped:` / `test(SL-N):` / `docs(SL-N):` (pick the prefix from the slice's `Posture` value in `plan.md > ## Plan / Slices`). AC verification uses the fixed subject `verify(AC-N): passing`. The prefix is the contract the reviewer's `git log --grep="(SL-N):"` (slice work) and `git log --grep="verify(AC-N):"` (AC verification) scans read. In soft / inline modes use plain `<feat|fix|refactor|docs>: <one-line>` without a slice or AC id.
+4. **Body when needed** — second-line blank, then a short rationale paragraph and any non-obvious context. Use `-m` for the subject; for multi-line messages use `git commit -F <file>` or repeat `-m` per paragraph. v8.85 — a `verify(AC-N): passing` commit MAY append `validates: KA-N` lines in the body when the verification closes the loop on a `## Key assumptions to validate` row.
+5. **Cite finding ids in fix commits** — `red(SL-1): fix F-2 — separate rejected token` for slice fixes; `verify(AC-3): passing` (with `# re-verify after F-5 fix` in the body) for fresh AC verification after a fix-only loop. The `fix F-N` token in the body or subject is what cross-references the review-block finding at handoff time.
 
 ## Anti-patterns
 
 - "WIP", "fixes", "stuff", "more". The reviewer rejects these as F-1 `block`.
 - Subject lines that paraphrase the diff. Diff is the diff; the message is the why.
 - Co-author trailers in solo commits.
-- Strict-mode commits without the `(AC-N):` token — the reviewer's chain scan misses them and the AC reads as incomplete (A-1, severity=required, axis=correctness).
+- Strict-mode slice commits without the `(SL-N):` token — the reviewer's slice-chain scan misses them and the slice reads as incomplete (A-1, severity=required, axis=correctness).
+- Strict-mode AC verification commits without `verify(AC-N): passing` — the reviewer's AC-chain scan misses them and the AC reads as unclosed (A-1, severity=required, axis=correctness).
 
 ## When to amend
 
-In strict mode it is OK to amend the most recent commit when (a) the commit has NOT been pushed, AND (b) the amend fixes the subject prefix (e.g. correcting `fix bug` → `red(AC-3): reproduce off-by-one`). Once another commit has landed on top, do NOT amend — write a fixup commit instead: `git commit --allow-empty -m "<prefix>(AC-N): re-record subject for <orig-SHA>"`. Both paths keep the reviewer's `git log --grep` scan honest.
+In strict mode it is OK to amend the most recent commit when (a) the commit has NOT been pushed, AND (b) the amend fixes the subject prefix (e.g. correcting `fix bug` → `red(SL-3): reproduce off-by-one`, or `all green` → `verify(AC-2): passing`). Once another commit has landed on top, do NOT amend — write a fixup commit instead: `git commit --allow-empty -m "<prefix>(SL-N): re-record subject for <orig-SHA>"` for slice work, or `git commit --allow-empty -m "verify(AC-N): re-record for <orig-SHA>"` for AC verification. Both paths keep the reviewer's `git log --grep` scans honest.
 
 After a push, never amend (it requires force-push, which the builder never does — that is the orchestrator's ship-stage call).
 
 ## surgical-edit-hygiene
 
-cclaw's iron law of **Surgical Changes** says "Touch only what each AC requires." This skill is the operational rulebook that turns the iron law into mechanical, reviewer-checkable behaviour.
+cclaw's iron law of **Surgical Changes** says "Touch only what each slice (and each AC verification) requires." This skill is the operational rulebook that turns the iron law into mechanical, reviewer-checkable behaviour.
 
 > Drive-by improvements are the second-most-common AI-coding failure mode after silent scope creep. They look helpful in isolation; they corrupt the audit trail in aggregate. cclaw rejects them.
 
@@ -51,17 +52,17 @@ cclaw's iron law of **Surgical Changes** says "Touch only what each AC requires.
 
 ### Rule 1 — No drive-by edits to adjacent code
 
-When the AC asks you to fix a bug in `fn foo()`, you fix `fn foo()`. You do **not**:
+When the slice asks you to fix a bug in `fn foo()`, you fix `fn foo()`. You do **not**:
 
 - "improve" comments above or below the function;
 - reformat the surrounding block ("while we're here, let me reflow this");
 - reorder imports;
-- rename a local variable that is clearer-as-renamed but unrelated to the AC;
+- rename a local variable that is clearer-as-renamed but unrelated to the slice;
 - add a missing JSDoc / docstring on a sibling function;
 - delete a TODO comment because "it's stale";
 - normalise quote style, indentation, or trailing-whitespace anywhere outside your touched lines.
 
-Each of those is a separate slug (or, if trivial, a separate inline-mode flow). Inside this slug, you ship the AC and **only** the AC.
+Each of those is a separate slug (or, if trivial, a separate inline-mode flow). Inside this slug, you ship the slice's diff and **only** that — plus, for the AC verification pass, the test-only edits the AC actually requires.
 
 The reviewer cites a drive-by edit as **A-4 — Drive-by edits to adjacent comments / formatting / imports** with severity `consider` (or `required` when the drive-by edit hides scope creep).
 
@@ -75,9 +76,9 @@ After your edits, scan the diff for **orphans you produced**:
 - dead branches your change cut off;
 - exports your change demoted to internal.
 
-You **must** remove these. They are debt **your** AC created and they belong in the AC's commit chain.
+You **must** remove these. They are debt **your** slice created and they belong in the slice's commit chain.
 
-You **must NOT** remove orphans that **pre-dated** your change. Pre-existing dead code is not your scope; deleting it produces a diff that mixes "AC implementation" with "cleanup of code I did not own". The AC's audit trail breaks.
+You **must NOT** remove orphans that **pre-dated** your change. Pre-existing dead code is not your scope; deleting it produces a diff that mixes "slice implementation" with "cleanup of code I did not own". The slice's audit trail breaks.
 
 The reviewer cites a deleted pre-existing orphan as **A-5 — Deletion of pre-existing dead code without permission** with severity `required`.
 
@@ -86,7 +87,7 @@ The reviewer cites a deleted pre-existing orphan as **A-5 — Deletion of pre-ex
 When you spot pre-existing dead code, list it under your build artifact's `## Summary → Noticed but didn't touch` block (per the `summary-format` skill). Format:
 
 ```
-- Noticed pre-existing dead code: `src/legacy/foo.ts` exports `oldHelper()` with no callers (verified via grep). Did NOT delete; outside AC scope. Recommend a follow-up cleanup slug.
+- Noticed pre-existing dead code: `src/legacy/foo.ts` exports `oldHelper()` with no callers (verified via grep). Did NOT delete; outside slice scope. Recommend a follow-up cleanup slug.
 ```
 
 Be specific: cite the file, the symbol, and the evidence (grep output, IDE reference count, etc.). A bare "there's dead code somewhere" bullet is worthless and the reviewer downgrades it to severity `fyi` (no actionable signal).
@@ -95,18 +96,18 @@ Be specific: cite the file, the symbol, and the evidence (grep output, IDE refer
 
 The three rules above run **alongside** the `## Summary` block. The block's three sections map naturally:
 
-- `### Changes made` — the AC-aligned diff (test files + minimal production diff + your-orphan cleanup; nothing else).
-- `### Noticed but didn't touch` — pre-existing dead code, drive-by-fix temptations you resisted, formatting noise you saw, code smells outside the AC surface.
-- `### Potential concerns` — ambiguities your implementation surfaced, edge cases the AC didn't cover, rollback gotchas.
+- `### Changes made` — the slice-aligned diff (test files + minimal production diff + your-orphan cleanup; nothing else) plus the AC verification's test-only additions where applicable.
+- `### Noticed but didn't touch` — pre-existing dead code, drive-by-fix temptations you resisted, formatting noise you saw, code smells outside the slice's Surface.
+- `### Potential concerns` — ambiguities your implementation surfaced, edge cases the slice didn't cover, rollback gotchas.
 
-A builder that ships an AC and writes "no drive-by edits noticed" in the `Noticed but didn't touch` block when the diff actually contains one is a **contract violation**. The reviewer catches the drive-by; the absence of the bullet is itself a finding (axis=readability, severity=consider).
+A builder that ships a slice and writes "no drive-by edits noticed" in the `Noticed but didn't touch` block when the diff actually contains one is a **contract violation**. The reviewer catches the drive-by; the absence of the bullet is itself a finding (axis=readability, severity=consider).
 
 ## Reviewer finding template — drive-by edit
 
 Whenever the reviewer detects a drive-by edit, they record a finding with this exact shape:
 
 ```
-| F-N | architecture | consider | AC-X | src/foo.ts:42 | A-4 — Drive-by edit: comment reflowed adjacent to AC-X change. The diff at lines 38-44 contains a comment normalisation that is unrelated to the AC. | Move the comment change to a separate slug, or revert it from this commit. |
+| F-N | architecture | consider | SL-X | src/foo.ts:42 | A-4 — Drive-by edit: comment reflowed adjacent to SL-X change. The diff at lines 38-44 contains a comment normalisation that is unrelated to the slice. | Move the comment change to a separate slug, or revert it from this commit. |
 ```
 
 Severity: `consider` for cosmetic drive-bys (formatting, comments, rename of local var). Escalate to `required` when the drive-by edit also hides logic change (e.g. "reformatted block" that quietly removed a guard clause).
@@ -114,7 +115,7 @@ Severity: `consider` for cosmetic drive-bys (formatting, comments, rename of loc
 ## Reviewer finding template — deleted pre-existing dead code
 
 ```
-| F-N | correctness | required | AC-X | src/legacy/util.ts | A-5 — Pre-existing helper `oldHelper()` deleted in this commit. The deletion is unrelated to AC-X (no AC referenced it). | Restore the deletion; surface as a follow-up slug under `## Summary → Noticed but didn't touch`. |
+| F-N | correctness | required | SL-X | src/legacy/util.ts | A-5 — Pre-existing helper `oldHelper()` deleted in this commit. The deletion is unrelated to SL-X (no slice or AC referenced it). | Restore the deletion; surface as a follow-up slug under `## Summary → Noticed but didn't touch`. |
 ```
 
 Always `required` (even when the deletion is "obviously dead"): the audit trail breaks regardless of whether the dead code was real.
@@ -124,13 +125,13 @@ Always `required` (even when the deletion is "obviously dead"): the audit trail 
 - **A drive-by edit is a contract violation, not a style issue.** The reviewer flags every one.
 - **Pre-existing dead code is never deleted in-scope.** Always surfaced under the summary block; never silently removed.
 - **Your-orphan cleanup is mandatory.** An import your change made unused stays in the same commit chain as the change.
-- **The diff scope test:** for every changed line in your commit, you must be able to point at an AC verification line that justifies the change. If you cannot, the line is a drive-by — revert it or split the slug.
-- **`git add -A` is forbidden.** Stage files explicitly (`git add <path>` per file or `git add -p` to pick hunks). The reviewer cites `git add -A` in shell history as A-2 (work outside AC).
-- **Strict-mode commits carry the `(AC-N):` token in the subject.** The reviewer's `git log --grep="(AC-N):"` scan is the chain check; missing prefixes break it.
+- **The diff scope test:** for every changed line in your commit, you must be able to point at a slice's `Surface` row (work pass) or an AC's verification target (verify pass) that justifies the change. If you cannot, the line is a drive-by — revert it or split the slug.
+- **`git add -A` is forbidden.** Stage files explicitly (`git add <path>` per file or `git add -p` to pick hunks). The reviewer cites `git add -A` in shell history as A-2 (work outside slice).
+- **Strict-mode commits carry the right token in the subject.** Slice commits carry `(SL-N)`; AC verification commits carry `verify(AC-N): passing` verbatim. The reviewer's dual `git log --grep` scan reads both — missing tokens break the chain.
 
 ## Worked example — RIGHT
 
-AC-1 says "Fix off-by-one in `paginate()` so the last page renders". Your diff:
+SL-1's plan row says "Fix off-by-one in `paginate()` so the last page renders"; AC-1's `Verifies` list contains SL-1. Your diff:
 
 ```
 src/lib/paginate.ts: -2 lines, +2 lines (the off-by-one fix)
@@ -141,9 +142,10 @@ tests/unit/paginate.test.ts: +14 lines (the RED test, then GREEN verification)
 Commits:
 
 ```
-red(AC-1): paginate returns last page on integer divisor   (tests/unit/paginate.test.ts only)
-green(AC-1): fix off-by-one in last-page boundary         (src/lib/paginate.ts only)
-refactor(AC-1) skipped: 2-line fix, no extraction warranted
+red(SL-1): paginate returns last page on integer divisor   (tests/unit/paginate.test.ts only)
+green(SL-1): fix off-by-one in last-page boundary         (src/lib/paginate.ts only)
+refactor(SL-1) skipped: 2-line fix, no extraction warranted
+verify(AC-1): passing                                       (empty — slice test already covers the observable)
 ```
 
 Build summary:
@@ -151,18 +153,19 @@ Build summary:
 ```
 ## Summary — builder
 ### Changes made
-- Fixed off-by-one in `paginate()` (`src/lib/paginate.ts:84`); last page now renders.
-- Removed unused `Math.ceil` import made unreferenced by the fix.
+- SL-1: fixed off-by-one in `paginate()` (`src/lib/paginate.ts:84`); last page now renders.
+- SL-1: removed unused `Math.ceil` import made unreferenced by the fix.
+- AC-1 verified: empty `verify(AC-1): passing` commit — covered by `tests/unit/paginate.test.ts: "returns last page on integer divisor"` committed under SL-1.
 ### Noticed but didn't touch
 - Pre-existing comment block in `src/lib/paginate.ts:14-22` repeats outdated math. Did NOT edit; recommend a follow-up doc slug.
-- File `src/lib/legacy-paginate.ts` exports `oldPaginate()` with no callers (verified `rg "oldPaginate" src/`). Did NOT delete; outside AC scope.
+- File `src/lib/legacy-paginate.ts` exports `oldPaginate()` with no callers (verified `rg "oldPaginate" src/`). Did NOT delete; outside slice scope.
 ### Potential concerns
-- The fix changes off-by-one rounding for empty result sets too — confirm this is the desired behaviour (AC text didn't specify).
+- The fix changes off-by-one rounding for empty result sets too — confirm this is the desired behaviour (AC-1 text didn't specify).
 ```
 
 ## Worked example — WRONG
 
-Same AC, but the builder also "improved":
+Same slice + AC, but the builder also "improved":
 
 ```
 src/lib/paginate.ts: -2 lines, +2 lines (the fix)        ← OK
@@ -174,9 +177,9 @@ tests/unit/paginate.test.ts: +14 lines                   ← OK
 Reviewer findings:
 
 - F-1 architecture consider (A-4) — drive-by reformat in lines 14-26.
-- F-2 correctness required (A-5) — `legacyPaginate` deletion unrelated to AC-1.
+- F-2 correctness required (A-5) — `legacyPaginate` deletion unrelated to SL-1.
 
-Both findings block the slice from going to compound until the builder splits the diff: one commit for AC-1, drive-by reverts in a separate commit (or in a follow-up slug for the "real" cleanups).
+Both findings block the slice from going to compound until the builder splits the diff: one commit for SL-1, drive-by reverts in a separate commit (or in a follow-up slug for the "real" cleanups).
 
 ## Common rationalizations
 
@@ -190,10 +193,11 @@ The drive-by reflex and the dead-code-cleanup reflex are how scope discipline br
 | "This dead code is obviously unused, I'll just delete it." | Pre-existing dead code is A-5, severity `required` — the audit trail breaks regardless of whether the deletion was "obviously safe". Surface under `Noticed but didn't touch` instead. |
 | "`git add -A` is fine, I know what changed." | Forbidden. Stage explicitly (`git add <path>` per file, or `git add -p` for hunks). Shell history with `-A` is itself an A-2 finding. |
 | "The message will say `WIP` for now; I'll fix it in review." | The reviewer rejects `WIP` / `fixes` / `stuff` as F-1 `block`. The cost to write a real subject is 30 seconds; the cost to fix later is a review iteration. |
-| "I'll amend the last commit since I already pushed." | Once pushed, do not amend — the orchestrator's ship stage owns force-push. Write a fixup commit (`git commit --allow-empty -m "<prefix>(AC-N): re-record subject for <orig-SHA>"`) and surface the mis-record in your slim summary. |
+| "I'll amend the last commit since I already pushed." | Once pushed, do not amend — the orchestrator's ship stage owns force-push. Write a fixup commit (`git commit --allow-empty -m "<prefix>(SL-N): re-record subject for <orig-SHA>"` for slice work; `git commit --allow-empty -m "verify(AC-N): re-record for <orig-SHA>"` for AC verification) and surface the mis-record in your slim summary. |
 | "Subject 80 characters is fine, `git log --oneline` will truncate it nicely." | 72-char hard cap. Past that, CI signals truncate in unhelpful places and `git log --oneline` becomes unreadable. |
-| "The diff has 5 files outside touchSurfaces but they're trivial." | If you cannot point at an AC verification line that justifies a changed line, the line is a drive-by. Revert it or split the slug; "trivial" is not a justification. |
-| "I'll bundle the rename and the bug fix into one commit; they're related." | They're not. The rename is a `refactor(AC-N): ...` commit; the bug fix is `red(AC-N): ...` + `green(AC-N): ...`. Mixing them defeats the audit trail and makes the diff unreviewable. |
+| "The diff has 5 files outside the slice's Surface but they're trivial." | If you cannot point at a slice Surface row (or AC verification target) that justifies a changed line, the line is a drive-by. Revert it or split the slug; "trivial" is not a justification. |
+| "I'll bundle the rename and the bug fix into one commit; they're related." | They're not. The rename is a `refactor(SL-N): ...` commit; the bug fix is `red(SL-N): ...` + `green(SL-N): ...`. Mixing them defeats the audit trail and makes the diff unreviewable. |
+| "I'll fold a production tweak into the `verify(AC-N): passing` commit so the AC actually passes." | NO. Verify commits are test-only or empty by contract; production-code touch is A-1 critical (axis=correctness). Fix the responsible slice, then re-emit `verify(AC-N): passing` as a fresh commit. |
 
 ## Composition
 
