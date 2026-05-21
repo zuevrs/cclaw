@@ -24,12 +24,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # `registry-url` is intentionally NOT set: setup-node would write
+      # `_authToken=${NODE_AUTH_TOKEN}` to .npmrc and rely on npm to expand
+      # that placeholder at publish time. That indirection silently produced
+      # E404 "not in this registry" auth failures starting 2026-05-20 on
+      # npm 10.x. Auth is configured explicitly below by writing the real
+      # token directly into .npmrc. See npm/cli#8730.
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "20.x"
           cache: npm
-          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: npm ci
@@ -100,10 +105,19 @@ jobs:
             exit 1
           fi
 
-      - name: Publish package to npm
+      - name: Configure npm registry auth
         if: steps.npm_state.outputs.already_published != 'true'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          {
+            echo 'registry=https://registry.npmjs.org/'
+            printf '//registry.npmjs.org/:_authToken=%s\n' "${NPM_TOKEN}"
+          } > "${HOME}/.npmrc"
+          chmod 600 "${HOME}/.npmrc"
+
+      - name: Publish package to npm
+        if: steps.npm_state.outputs.already_published != 'true'
         run: npm publish --access public
 
       - name: Publish existing draft release
