@@ -1,6 +1,6 @@
 {
   "name": "cclaw-cli",
-  "version": "8.110.0",
+  "version": "8.111.0",
   "description": "Lightweight harness-first flow toolkit for coding agents",
   "type": "module",
   "bin": {
@@ -10,7 +10,9 @@
   "files": [
     "dist",
     "dist/content/skills/**/*.md",
+    "dist/content/runbooks/**/*.md",
     "src/content/skills/**/*.md",
+    "src/content/runbooks/**/*.md",
     "README.md",
     "LICENSE"
   ],

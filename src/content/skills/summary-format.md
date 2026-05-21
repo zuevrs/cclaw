@@ -69,6 +69,20 @@ Drop `Confidence: low` items here verbatim with a one-line cause. The reviewer c
 
 If there are no real concerns, write `None.` and own it.
 
+## Confidence ladder (v8.111 — canonical across every slim summary)
+
+The `Confidence` line on every post-triage slim summary uses a three-band ladder. The ladder is the same across all specialists; the **accents** (which specific sampled section, which specific brushed cap, which specific missing input dropped you to medium / low) are the specialist's own concern and stay in the specialist body — the canonical ladder below sets the *common* shape every specialist projects onto.
+
+- **`high`** — the protocol ran end-to-end without holes. Every required input was present, every required section / axis / lane was **walked** (not sampled), every cited evidence row resolves to a real artefact (file:line, commit SHA, test output, screenshot, suite line). No bound was brushed; no prediction was `partial`. The specialist would re-emit the same verdict on a second dispatch with the same inputs.
+- **`medium`** — exactly one of: (a) one section / axis / lane was **sampled** rather than walked (e.g. perf reviewed by spot-check; one investigator lane returned mid-range confidence; one critic technique skipped on `light` escalation); (b) the dispatch **brushed against a hard cap** (token / iteration / diff-size); (c) one input was **thin** (ambiguous prompt; partial prior-context blob; helper helper-dispatch returned `Confidence: low` → contagion); (d) a pre-commitment prediction was `partial`. The slim summary's `Notes` line is **mandatory** and names which of (a)-(d) fired.
+- **`low`** — any of: (a) a required input was **missing** (file unreadable, prior artefact absent, envelope misshaped); (b) the dispatch **exceeded a hard cap** (token / iteration / diff-size); (c) the specialist could not honestly emit a single converged verdict (lanes diverged, axes contradicted, predictions mostly refuted with no replacement framing); (d) the dispatch was **gated against** (e.g. `ceremonyMode: inline` reached a strict-only specialist; investigator dispatched on a non-debug shape). `Notes` line is **mandatory** and names which of (a)-(d) fired.
+
+**Default gate semantics.** The orchestrator treats `Confidence: low` as a **hard gate** on every post-triage slim summary: dispatch stops, slim summary is surfaced to the user, the slug does not advance until the named gap is resolved. `Confidence: medium` advances but is logged as a quality signal — the next stage's specialist may downgrade its own confidence on the contagion principle (e.g. the architect's `learnings-research returns Confidence: low → downgrade to medium` rule).
+
+**Triage exception.** `Confidence: low` at triage is **NOT** a hard gate. The router's classification is an opening posture, and the downstream specialist's Phase 0 / Phase 1 picks up the clarification surface (the architect's Clarify protocol, the investigator's symptom-restatement, etc.). The router still emits `Confidence: low` honestly when the prompt is vague; the downstream specialist consumes it as additional input, not as a stop signal.
+
+The per-specialist accent — *which* sampled section, *which* brushed cap, *which* missing input — is the specialist's own concern and stays in the specialist body. This skill encodes the canonical mapping from those accents to the three-band emission so every post-triage slim summary's `Confidence` field means the same thing to the orchestrator.
+
 ## Hard rules
 
 - **All three subheadings present.** Even when one is empty, the H3 heading + `None.` line stays. Skipping a subheading is a finding (reviewer axis=readability, severity=consider).

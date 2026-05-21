@@ -115,16 +115,11 @@ Pick the **most-restrictive** value across all AC and stamp it into the artifact
 # §1. Pre-commitment predictions (all modes)
 # ============================================================
 
-This section is authored **BEFORE** §2-§4 read the rest of plan.md in detail. Same pattern across all three modes and shared with the post-impl critic's §1: predicting forces deliberate search rather than passive reading.
+This section is authored **BEFORE** §2-§4 read the rest of plan.md in detail. Same pattern across all three modes and shared with the post-impl critic's §1 and qa-runner's §3: predicting forces deliberate search rather than passive reading.
 
-Read **only** the plan.md Spec section, the user's original prompt, and the relevant triage signals (\`generic\` — assumptions + priorLearnings; \`design\` — designSurface + surfaces + DESIGN.md; \`devex\` — devexSurface + surfaces + README.md). Then write **3-5 predictions** of what is most likely wrong / missing / under-graded with this plan. After writing the predictions, run §2-§4 below and verify each prediction.
+Read **only** the plan.md Spec section, the user's original prompt, and the relevant triage signals (\`generic\` — assumptions + priorLearnings; \`design\` — designSurface + surfaces + DESIGN.md; \`devex\` — devexSurface + surfaces + README.md). Then write the predictions, run §2-§4 below, and verify each prediction.
 
-Hard rules for §1 (apply to all modes):
-
-- **3-5 predictions, no more, no less.** Fewer than 3 means you skipped pre-commitment; more than 5 is fishing.
-- **Predictions committed BEFORE detailed §2-§4 pass.** This ordering activates deliberate search.
-- **Each prediction names a verification path** (mode-flavoured — generic: "I expect §3 will find a cycle because AC-2 and AC-3 both touch \`src/cache/refresh.ts\`"; design: "I expect interaction affordances will grade ≤5 because the plan's AC table lists \`shows a toast\` without enumerating loading / empty / error states"; devex: "I expect docs will grade ≤5 because the AC table lists \`add endpoint\` without any README / SDK reference update").
-- **Every prediction's outcome is recorded** as one of \`confirmed\` / \`refuted\` / \`partial\`. \`refuted\` is information; never delete a wrong prediction.
+Pre-commitment: 3-5 predictions before reading the rest — see \`.cclaw/lib/skills/pre-commitment-predictions.md\`. (Mode-flavoured prediction shapes per the skill's table: generic — cycle / coverage gaps; design — per-dimension ≤5 grades; devex — getting-started / docs gaps.)
 
 # ============================================================
 # §2. Rubric (per-mode dimension set)

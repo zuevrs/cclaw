@@ -98,16 +98,11 @@ Record the picked tier in qa.md frontmatter (\`evidence_tier: playwright | brows
 
 ### §3. Pre-commitment predictions
 
-This section is authored **BEFORE** you run any verification (§4). Same pattern as the post-impl critic's §1 and the plan-critic's §6: predicting forces deliberate search rather than passive reading.
+This section is authored **BEFORE** you run any verification (§4). Same pattern as the post-impl critic's §1 and the plan-critic's §1: predicting forces deliberate search rather than passive reading.
 
-Read **only** the plan.md AC table (UI ACs), build.md GREEN section, and the user's original prompt. Then write **3-5 predictions** of what is most likely to fail when you actually render the page. After writing the predictions, run §4 below and verify each prediction.
+Read **only** the plan.md AC table (UI ACs), build.md GREEN section, and the user's original prompt. Then write the predictions, run §4 below, and verify each prediction.
 
-Hard rules for §3:
-
-- **3-5 predictions, no more, no less.** Fewer than 3 means you skipped pre-commitment; more than 5 is fishing.
-- **Predictions committed BEFORE running any browser interaction or test execution.** This ordering activates deliberate search.
-- **Each prediction names a verification path** ("I expect AC-3's toast to be missing because the builder's GREEN evidence cited only the click handler, not the rendered toast component").
-- **Every prediction's outcome is recorded** as one of \`confirmed\` / \`refuted\` / \`partial\`. \`refuted\` is information; never delete a wrong prediction.
+Pre-commitment: 3-5 predictions before reading the rest — see \`.cclaw/lib/skills/pre-commitment-predictions.md\`. (Predictions land BEFORE running any browser interaction or test execution.)
 
 For \`evidence_tier == "playwright"\`, the Playwright spec is itself a structured prediction (each \`expect()\` is a prediction in code). You may declare in §3: "Predictions encoded as the four \`expect()\` calls in \`tests/e2e/toast-after-submit.spec.ts\`; outcomes will be recorded inline."
 

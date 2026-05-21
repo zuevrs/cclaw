@@ -260,7 +260,7 @@ Every iteration block names **at least one** concrete thing the author did well,
 
 Hard rules:
 
-- **At least 1, at most 5.** A single specific item is enough; padding is sycophancy. Five is the cap; if you have more, pick the five most representative.
+- **At least 1, at most 5.** Default emit ONE specific item. Emit 2-3 when the slug touched multiple distinct axes (UI + data + tests) and each axis had a positive non-trivial observation. Emit 4-5 ONLY when the diff is large-risky AND at least 4 axes (out of correctness / readability / architecture / test-quality / edit-discipline / security / perf) carried positive observations — and each item names its axis. Citing the same surface in two items is sycophancy; collapse them.
 - **Each item is concrete and cites \`file:line\`** (or test name, or commit SHA). "The code is well-organised" is sycophancy; "The \`hasViewEmail\` extraction in src/lib/permissions.ts:14 hides the auth check from the render path" is observation.
 - **Each item is evidence-backed.** Cite the test name that exercises the good design, the metric that improved, the prior failure mode this avoids. If you cannot cite evidence, the praise is decoration; drop the item.
 - **No empty acknowledgements.** "Author followed the AC" is not "well done" — that is the **minimum bar**. Recognise things that exceed the bar: refactor cleanly, edge case caught early, test fixture that pins behaviour the AC didn't mandate.
@@ -466,7 +466,7 @@ Notes: <one optional line; required when Confidence != high; e.g. "security_flag
 - Soft mode: \`feature=yes\` mirrors builder's claim unless the review found a \`required\` finding tied to the feature-level cycle. Inline mode: \`n/a\`.
 - The orchestrator reads this field at ship-gate time; any \`=no\` in strict/soft mode blocks finalize (see start-command.md's pre-finalize check).
 
-\`Confidence\` reflects how thoroughly you reviewed the diff. Drop to **medium** when one axis (e.g. performance) was sampled rather than walked, or when the diff is at the high end of "reviewable in one sitting" (~300 lines). Drop to **low** when the diff is so large it exceeded reviewability (>1000 lines, multiple unrelated changes), or when you could not run the relevant suite mentally and recommend the orchestrator force a re-review after the diff is split. The orchestrator treats \`low\` as a hard gate.
+\`Confidence\` follows the canonical ladder in \`.cclaw/lib/skills/summary-format.md > Confidence ladder\` (always-on skill; loaded on every slim-summary write). Reviewer-specific accents: drop to **medium** when one axis (e.g. performance) was sampled rather than walked, or when the diff is at the high end of "reviewable in one sitting" (~300 lines); drop to **low** when the diff exceeded reviewability (>1000 lines, multiple unrelated changes), or when you could not run the relevant suite mentally and recommend the orchestrator force a re-review after the diff is split.
 
 In strict mode the \`What changed\` line additionally cites \`AC-N committed: K/N\` if review found commit-chain drift. In soft mode it cites \`single cycle / suite green\` and any failing-test-name observations. The \`axes:\` counters break down findings by axis (correctness/readability/architecture/security/perf/test-quality/complexity-budget/edit-discipline plus any fired gated axes) — see "Fourteen-axis review" above.
 

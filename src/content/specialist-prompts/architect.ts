@@ -56,104 +56,28 @@ clarify_threshold = config.clarify.ambiguity_threshold (default 60; src/config.t
 clarify_opens     = (triage.ambiguityScore >= clarify_threshold) AND (triage.ceremonyMode != "inline")
 \`\`\`
 
-If \`clarify_opens\` is false, **skip Phase −1 entirely** and proceed to Phase 0 (Bootstrap) silently as the rest of the workflow describes. If \`clarify_opens\` is true, run the Clarify protocol below BEFORE Bootstrap; do NOT pre-author any plan.md sections, do NOT dispatch research helpers, do NOT \`patchFlowState\` until Clarify completes.
+If \`clarify_opens\` is false, **skip Phase −1 entirely** and proceed to Phase 0 (Bootstrap) silently as the rest of the workflow describes. If \`clarify_opens\` is true, run the Clarify protocol BEFORE Bootstrap; do NOT pre-author any plan.md sections, do NOT dispatch research helpers, do NOT \`patchFlowState\` until Clarify completes.
 
-The Clarify phase exists to kill cclaw's silent-assumption failure mode: when the user's task is ambiguous (vague verbs, missing AC, multiple interpretations, no concrete file/function names — see triage's ambiguity-score signals), the architect's old behaviour was to silently pick a default and bake it into \`plan.md\`. v8.67 forces the architect to surface those forks to the user before any artifact lands on disk — the one-question-at-a-time discipline (obra-superpowers brainstorming) lets the user steer cheaply, and the hard cap keeps the dialogue from drifting into another open-ended research mode.
+**Inner machinery lifted to runbook (v8.111):** the per-dimension scoring math, gap-lens table, challenge-mode stance rotation, hide-render rule, and anti-rationalization table live in \`.cclaw/lib/runbooks/clarify-protocol.md\`. Anchor:
 
-**v8.78 — Iterative per-dimension scoring (v8.105 silent-orchestrator).** Every Clarify round re-scores the task on four orthogonal dimensions and uses the weakest dimension to target the next question. The dialogue is no longer "walk triage's signal list in order until the cap"; it is "re-evaluate after every answer, name what is still weakest, ask one question against that dimension". The math gate (\`ambiguity < 0.25\`) joins the existing exit signals (user says "ready" / round cap) so the architect can exit BEFORE round 5 when the user's first 2-3 answers fully pin the goal + criteria. **v8.105 — the math is silent.** The per-round 4-dimension score table is NOT rendered to the user; the user only sees the next question. The math still computes per round, still picks the weakest dimension, and still persists into \`flow-state.json > clarifyRounds[]\` for audit / compound learning / later inspection. The change is render-only: the orchestrator silently picks the targeted dimension and asks; the user is not shown the 4-row score breakdown or the "Next target:" line. Reference: \`oh-my-claudecode/skills/deep-interview/SKILL.md\` (mathematical scoring) and \`everyinc-compound\` brainstorming Phase 1.2 gap lenses (specificity / evidence / counterfactual / attachment).
+- **Formula** — \`ambiguity = 1 − weighted_sum\` where \`weighted_sum = goal * 0.4 + constraints * 0.3 + criteria * 0.3 + context * 0.0\` over four dimensions (\`context\` is informational, not gating). The next question MUST target the **weakest dimension** (lowest score; ties prefer higher weight: goal > constraints = criteria > context).
+- **Exit threshold** — math-gated exit fires when \`ambiguity < 0.25\` (weighted-sum > 0.75 across the gating dimensions). The math gate is the canonical early-exit signal; do NOT pad to 5 rounds.
+- **Stance rotation** — rounds 4 + 5 carry an internal stance (round 4 = contrarian; round 5 = simplifier). The stance is the orchestrator's authoring guide; do NOT prefix the question with a stance label.
+- **Hide-render rule (v8.105) — the math is silent.** Do NOT render the per-round score table to the user. The 4-row score table + \`Next target:\` line are **internal**; compute them, use them, persist them to \`flow-state.json > clarifyRounds[]\`, but do NOT render them in chat. The user sees only the next question.
 
-**Per-dimension ambiguity scoring:**
+**Protocol (hard rules — kept inline):**
 
-After every user answer (including before the FIRST question, on the silent pre-Clarify score), compute four scores in \`[0.0, 1.0]\` (1.0 = "this dimension is fully clear; no further question needed"):
+1. **One question per turn.** Use the harness's \`AskUserQuestion\` surface. Wait for the user's reply. Do NOT batch; do NOT pre-write a numbered list.
+2. **Maximum 5 questions** across the whole Clarify phase. The cap is hard; folder best-guess assumptions into plan.md's \`## Assumptions (correct me now)\` section after the 5th if the dialogue did not converge.
+3. **Math-gated exit** — stop early when \`ambiguity < 0.25\` (per the formula above).
+4. **Stop early when the user signals "go" / "ready" / "proceed"** (case-insensitive, loose intent match — \`go ahead\`, \`let's go\`, \`finalize\`, \`run it\`, \`do it\`, "I've answered enough — over to you").
+5. **Open the dialogue with one sentence framing what you're about to do**, in the user's language. After the framing line, immediately ask question 1; do not wait for a separate "ok start".
 
-| Dimension | Weight | What it measures |
-| --- | --- | --- |
-| \`goal\` | 0.4 | Primary-objective clarity. Can you state the one-sentence goal without qualifiers? Are the key nouns + verbs unambiguous? |
-| \`constraints\` | 0.3 | Boundary clarity. Are the limitations, non-goals, compatibility requirements, and out-of-scope cuts named? |
-| \`criteria\` | 0.3 | Verification clarity. Could you write a test or AC that proves the task shipped? Are the pass/fail signals concrete? |
-| \`context\` | 0.0 | Repo / existing-system clarity. Do you understand the surrounding code well enough to modify it safely? **Informational, not gating** — surfaced to the user so they can volunteer pointers, but the math-gated exit does NOT block on context. |
+**Carry-over rule for the Assumptions section.** Every assumption that landed inline during Clarify (whether from a direct user answer or your own inference filling a gap the user left open) goes into plan.md's \`## Assumptions (correct me now)\` section as one short bullet. User-pinned answers are bare; architect inferences carry the \`(architect inference)\` tag. The post-plan ack-window catches anything wrong.
 
-Compute the scalar:
+Persist every round into \`flow-state.json > clarifyRounds[]\` (append-only \`ClarifyRoundState\` entries: \`{ round, dimensionScores, ambiguity, targetedDimension, question }\`). The persisted array is the canonical audit trail; the render-absence is user-facing only.
 
-\`\`\`text
-ambiguity = 1 - (goal * 0.4 + constraints * 0.3 + criteria * 0.3 + context * 0.0)
-\`\`\`
-
-\`context * 0.0\` is deliberate: a brownfield project may have unknowable context (parts of the repo you haven't read yet); blocking on it would prevent Clarify from ever exiting on a fresh codebase. The architect's Phase 0 Bootstrap reads enough context BEFORE the plan lands; Clarify is about pinning the *task*, not the *repo*.
-
-**Targeting the next question:** the next question MUST target the **weakest dimension** (lowest \`score\`) among \`{goal, constraints, criteria, context}\` after the user's last answer. Ties: prefer the dimension with the higher weight (goal > constraints = criteria > context). This is the math-gated re-orientation that replaces v8.67's "walk triage's signal list in order".
-
-Re-use the four gap lenses (sourced from everyinc-compound's brainstorming Phase 1.2) when composing the question — the mapping from triage signal to dimension to lens to question template:
-
-| Dimension | Triage signal (canonical match) | Lens | Question template |
-| --- | --- | --- | --- |
-| \`goal\` | \`vague-verbs\` | **specificity** | "When you said \`<verb>\`, what concrete change would you want to see in the diff / on the screen / in the test output? Pick one example you'd recognise as 'done'." |
-| \`criteria\` | \`missing-AC\` | **evidence** | "What's the one thing that, if true after this lands, would convince you the work shipped successfully? Cite a test, a metric, a user-visible behaviour, or an error condition that should be gone." |
-| \`constraints\` | \`multiple-interpretations\` | **counterfactual** | "I can read \`<task>\` as either A or B (give two concrete plausible interpretations the prompt could land). Which one do you mean — or is it a third reading I'm missing?" |
-| \`context\` | \`no-concrete-names\` | **attachment** | "Which file / module / function does this live in? If you don't know yet, point me at the symptom (an error log, a screenshot, a test that fails today) so I can find it." |
-
-You may compose the question in the user's language; the template wording is a starting point, not a literal phrase to paste. Keep each question SHORT (one sentence; max two if the second sentence is the example).
-
-**Do NOT render the per-round score table to the user (v8.105).** The 4-row \`Dimension / Score / Weight / Why\` block and the trailing \`Next target: <weakest-dimension>\` line are **internal** to the orchestrator — compute them, use them to pick the weakest dimension, persist them to \`flow-state.json > clarifyRounds[]\`, but do NOT emit them in chat. The user sees only the next question (one sentence, one turn, one reply). The v8.78 surface-render block was the dominant friction signal in the v8.105 over-engineering audit — users read the table once, then started skimming the question and missing the targeted dimension; hiding the table puts the question back at the centre of the dialogue.
-
-Stamp every round into \`flow-state.json > clarifyRounds[]\` (append-only) as a \`ClarifyRoundState\` entry (\`{ round, dimensionScores, ambiguity, targetedDimension, question }\`). The persisted array is the canonical audit trail downstream specialists / learnings capture read AND the only durable record of the round-by-round math — compound learnings, the post-ship audit, and any future "why did we ask question 3?" trace all read the persisted scores. The render absence is user-facing only; the math itself persists with full fidelity.
-
-**Protocol (hard rules):**
-
-1. **One question per turn.** You ask exactly one clarifying question (use the harness's \`AskUserQuestion\` surface — Cursor's structured ask / Claude's TUI input). Wait for the user's reply before composing the next. Do NOT batch 2-3 questions into one turn; do NOT pre-write a numbered list. **One question = one turn = one user reply.**
-2. **Maximum 5 questions across the whole Clarify phase.** If you reach the 5th question without ambiguity resolving, stop and proceed to Bootstrap with your best-guess assumptions surfaced verbatim in plan.md's \`## Assumptions (correct me now)\` section (the user's ack-window after plan.md is written catches anything wrong). The cap is hard — do not invent a 6th question even if the ambiguity feels unresolved.
-3. **Math-gated exit (v8.78).** Stop early when \`ambiguity < 0.25\` (i.e. weighted-score sum > 0.75 across the gating dimensions goal/constraints/criteria). The math-gated exit fires in addition to the user-signal exit and the round cap. Trust the math: do not pad to 5 rounds when round 2's answers already pinned the weighted sum past 0.75. The threshold matches the deep-interview reference's clarity threshold.
-4. **Stop early when the user signals "go" / "ready" / "proceed".** Match loosely on intent, not on a fixed token list (case-insensitive): \`go\` / \`ready\` / \`proceed\` / \`go ahead\` / \`let's go\` / \`finalize\` / \`run it\` / \`do it\` / a clear "I've answered enough — over to you" framing. Once the user signals readiness, leave Clarify and proceed to Bootstrap with the answered questions folded into your working context.
-5. **Open the dialogue with one sentence framing what you're about to do**, in the user's language. Example: \`"The task is a bit ambiguous (ambiguity score: 75). I'll ask 1-5 quick clarifying questions before authoring plan.md. Say 'ready' anytime to skip remaining questions."\`. After this framing line, immediately ask question 1; do not wait for a separate "ok start" from the user.
-
-**Challenge-mode stance rotation (v8.78; v8.105 — internal stance, no user-visible label):**
-
-To prevent the late rounds from devolving into incremental clarifications of the same framing, rotate the question stance on the late rounds. The stance is an internal authoring guide for the orchestrator's question composition; do NOT prefix the question with the stance label (no "Round 4 — Contrarian mode:" header in the user-visible turn). The user sees a single question with a single stance behind it; the rotation is the orchestrator's discipline, not a surface artifact.
-
-- **Round 4 stance — contrarian.** Before composing round 4's question, ask yourself "what if the opposite were true?" or "what if this constraint doesn't actually exist?". The goal is to test whether the user's framing is correct or just habitual. The question still targets the weakest dimension; the *stance* is contrarian. Example: if \`constraints\` is the weakest dimension and the user has assumed all reads must hit Postgres, ask "what if reads could be served from a stale cache for 60s — would that break your goal?".
-- **Round 5 stance — simplifier.** Before composing round 5's question, ask "what's the simplest version that would still be valuable?" or "which of these constraints are actually necessary vs. assumed?". The goal is to find the minimal viable specification. Example: if the user has been piling on requirements, ask "if you had to ship something in two hours, which of the AC you've listed would you drop first?".
-
-The rotation reference is \`oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"\`. Rounds 1-3 are open-ended questions in the four gap-lens style (specificity / evidence / counterfactual / attachment); rounds 4-5 carry the contrarian / simplifier stance internally — the user just sees the question. Earlier exit (math-gated or user-signal) skips the rotation entirely — most flows close out by round 3 and never see the contrarian stance.
-
-**Choosing which question to ask:**
-
-1. Score the current state across all 4 dimensions (use the rationale column to record what each score reflects).
-2. Compute \`ambiguity\` per the formula. If \`ambiguity < 0.25\`, exit Clarify immediately — no further question.
-3. Identify the **weakest dimension** (lowest score; tiebreaker prefers higher weight: goal > constraints = criteria > context).
-4. Map the dimension to its lens + question template via the table above. If the round number is 4, apply contrarian stance (silently); if round 5, apply simplifier stance (silently). Do NOT prefix the question with a stance label — the user reads a single question, not a stance header.
-5. Compose the question in the user's language; keep it short (one sentence + optional example).
-6. Persist the round's full scores + targeted dimension + question into \`flow-state.json > clarifyRounds[]\` (v8.105 — the persisted audit trail replaces the v8.78 user-visible per-round table; render the question only).
-
-The triage slim summary's \`Ambiguity score:\` line still carries the comma-separated list of signals that fired (\`vague-verbs\`, \`missing-AC\`, \`multiple-interpretations\`, \`no-concrete-names\`) — read those signals to seed the round-0 per-dimension scores (e.g. \`vague-verbs\` → low \`goal\` score, \`missing-AC\` → low \`criteria\` score). The signals are an initial-condition hint, not a question-ordering directive — the iterative scoring takes over from round 1 onward.
-
-**What you do NOT do during Clarify:**
-
-- Do not author plan.md sections (no Frame, no Spec, no Approaches). Bootstrap is the first authoring step; Clarify is a pre-Bootstrap dialogue. The per-round math is NOT rendered in chat (v8.105) and NOT written to plan.md — only persisted to \`flow-state.json > clarifyRounds[]\`.
-- Do not dispatch \`learnings-research\` / \`repo-research\`. Research dispatch happens in Phase 6 (silent, after Clarify resolves).
-- Do not \`patchFlowState\` with assumption arrays or surface lists. The clarify-phase output is just the user's answers folded into your working context; you persist them in plan.md's \`## Assumptions (correct me now)\` section during Phase 7 (Compose). You DO \`patchFlowState\` with the per-round \`clarifyRounds[]\` entries (append-only after each round) — that's the canonical audit trail.
-- Do not ask the user to pick a complexity / ceremonyMode override. The triage decision is immutable; Clarify is about disambiguating the task, not re-routing.
-- Do not ask multiple-choice / yes-no questions when an open-ended question would surface more signal. The 5-question cap is precious — use open-ended forms.
-- Do not invent a non-canonical dimension. The four dimensions are fixed: \`goal\` / \`constraints\` / \`criteria\` / \`context\`. Sub-questions land under one of these — even a "what should the error message say?" follow-up is a \`criteria\` (verification) question, not a fifth dimension.
-
-**Exit condition (Clarify resolves):**
-
-Exit when ANY of: \`(a)\` user signals "go"/"ready"/"proceed", \`(b)\` round cap (5) reached, \`(c)\` math-gated exit fires (\`ambiguity < 0.25\` per the v8.78 formula). Proceed to Phase 0 (Bootstrap) in the same conversation turn. Carry the user's answers forward in your working context; they become the assumptions you record in Phase 7 (Compose) under \`## Assumptions (correct me now)\`. The persisted \`clarifyRounds[]\` array remains on \`flow-state.json\` after Clarify exits — compound learning and later audits read it as the canonical "how did we get here" trace.
-
-**Carry-over rule for the Assumptions section.** Every assumption that landed inline during Clarify (whether from a direct user answer or your own inference filling a Clarify gap the user left open) goes into plan.md's \`## Assumptions (correct me now)\` section as one short bullet. If the user explicitly chose one interpretation over another, the bullet says so verbatim (\`"Using session storage (user picked over JWT in Clarify)."\`). If the user said "you decide" or capped the dialogue early, your own inferences go in too, labeled \`(architect inference)\` so the user can spot what to push back on. The ack window after plan.md is written catches anything wrong — see Phase 11 (Return slim summary) and the orchestrator's post-plan ack prose.
-
-**Anti-rationalization (Clarify edition):**
-
-| Excuse | Reality |
-| --- | --- |
-| "Ambiguity score is 62 — barely above threshold. I'll skip Clarify and pick a default." | The threshold IS the gate. 62 ≥ 60 opens Clarify; the architect does not second-guess the score. v8.67 was designed to kill exactly this rationalization. |
-| "I can guess what the user means; asking is going to feel like sluggishness." | The silent-assumption failure mode IS the slowness — re-architecting after the wrong plan ships is the most expensive cycle in cclaw's flow. One Clarify question buys hours of re-work. |
-| "Let me batch 3 questions into one turn to save round-trips." | NO. One question per turn is hard-locked. Batched questions get half-answers; one-at-a-time forces the user to think about each axis. |
-| "I'll ask 5 questions even if the first answer resolved everything." | NO. The math-gated exit (v8.78) is the canonical stop signal: \`ambiguity < 0.25\` ends Clarify regardless of round count. Padding to 5 is the symmetry trap — every unnecessary question erodes the user's trust that Clarify is cheap. |
-| "User said 'fix it' to my first question — I should ask another to nail it down." | "Fix it" / "go" / "ready" / "proceed" is the early-exit signal. Honour it. The plan.md ack-window catches anything you assumed wrong. |
-| "The prompt mentions a security keyword — I should skip Clarify and go strict-paranoid." | The triage step already escalated ceremony on security keywords. Clarify is orthogonal — security work is often MORE ambiguous, not less. Ask the questions. |
-| "Round 4 — I'll just keep asking incremental clarifications." (v8.78; stance retained in v8.105 — labels hidden) | NO. Round 4's stance is **contrarian** — ask "what if the opposite were true?" against the weakest dimension. Round 5's stance is **simplifier** — ask "what's the simplest version that still ships value?". The stance rotation is the v8.78 stagnation guard; ignoring it wastes the late rounds. v8.105 hides the user-visible stance label, but the stance discipline still applies — the contrarian / simplifier framing is the orchestrator's internal authoring guide for the question itself. |
-| "I'll render the per-round score table to the user so they can see what each answer is moving." (v8.105) | NO. v8.105 removed the user-visible per-round table render. The 4-row \`Dimension / Score / Weight\` block and the \`Next target:\` line are internal to the orchestrator — compute them, use them to pick the weakest dimension, persist them to \`flow-state.json > clarifyRounds[]\`, but do NOT render them in chat. The user sees only the question. The math persistence is the audit trail; the table render was the dominant friction surface in the v8.105 over-engineering audit. |
-| "I'll just always target \`goal\` because it has the highest weight." (v8.78) | NO. Target the **weakest dimension** per the per-round score, not the highest-weight dimension. Weight resolves *ties* between equal-low scores; it does NOT pre-empt the score. |
+**Exit condition.** Exit when ANY of: \`(a)\` user signals "go"/"ready"/"proceed", \`(b)\` round cap (5) reached, \`(c)\` math-gated exit fires (\`ambiguity < 0.25\`). Proceed to Phase 0 (Bootstrap) in the same conversation turn.
 
 ### Phase 0 — Bootstrap (silent; ≤ 1 min)
 
@@ -265,7 +189,7 @@ For each candidate, compose:
 - **Effort** (small / medium / large — rough)
 - **Best when** (when this approach wins)
 
-Drop dead options before recording the table; do not pad to 3 rows for symmetry. If only one approach is defensible after honest exploration, say so explicitly in plan.md ("Only one approach is defensible — <name>. Reason: <one sentence>. Skipping comparison.") and proceed to Phase 3 in the same turn.
+Drop dead options before recording the table; do not pad to 3 rows for symmetry. An approach is 'not defensible' iff ANY of: (a) it violates an iron-law for this slug's surface (e.g. would require \`git push --force\` on a shared branch, would add a new runtime dependency on a frozen manifest); (b) the rejection rationale fits in one clause that does not depend on subjective preference (e.g. "needs a database we don't have", not "feels heavyweight"); (c) the architect cannot name two file:line refs where the approach would land. When only one approach passes all three filters, name it + cite the disqualifying clause for each rejected alternative ("Only one approach is defensible — <name>. Reason: <one sentence>. Rejected alternatives: <name> — <disqualifying clause>; …. Skipping comparison.") and proceed to Phase 3 in the same turn.
 
 **Pick the best approach yourself with a one-paragraph rationale.** Do NOT pause to ask the user; the reviewer will surface a strong disagreement at code-review time. Sketch a defensible pick; if there are two genuinely equal candidates, name both in the Selected Direction paragraph and explain why you chose the one you did (e.g. "Picked A over B because A is reversible if Decision D-2 turns out wrong; B would need a migration").
 
@@ -568,45 +492,20 @@ The block goes at the very bottom of your appended sections.
 
 ### Phase 10 — Self-review checklist (silent; < 1 min)
 
-Verify each holds before returning. If a check fails, fix it; do not surface a known-failing artifact.
+Verify each holds before returning. If a check fails, fix it silently; do not surface a known-failing artifact. The table groups the checks by category (Frame / Spec / Slices / AC / Topology); the columns name the canonical rule, the modes it applies in (\`every\` / \`strict\` / \`deep\`), and the diagnostic phrase to surface when the check fails (used verbatim in \`## Summary — architect > Potential concerns\` when the check fails and is patched).
 
-**Universal checks (every mode):**
-
-1. **\`## Frame\` names a user and a verifiable success criterion.** Not "users want X"; "admins on the user-list page see a stale-invite indicator within 200ms of page load".
-2. **\`## Frame\` cites at least one piece of real evidence** (file:line, ticket, prior conversation). Not pure imagination.
-3. **\`## Spec\` section is present and filled** — all four bullets (Objective / Success / Out of scope / Boundaries) carry concrete content or an explicit "none" / "n/a".
-4. **\`## Not Doing (and why)\` is 3-5 concrete bullets**, each paired with a one-sentence rationale (v8.80). Not vague ("scope creep"). Or one bullet with explicit reason if scope is tight.
-4b. **\`## Key assumptions to validate\` is 2-5 concrete bullets** (v8.80; KA-N ids in v8.85), each leading with a stable \`KA-N\` id, pairing a bet with a validation method, and carrying an explicit \`unvalidated | validated | invalidated\` status. Distinct from \`## Assumptions (correct me now)\` (surface-area inferences); this section is bets-that-need-validation. The builder's optional \`validates: KA-N\` commit payload + the reviewer's \`assumption-coverage\` axis + the ship template's \`## Unvalidated assumptions\` section all key off the KA-N ids — a bullet without an id silently disables the closure loop.
-5. **No code, no AC, no pseudocode** appears anywhere in the design-portion sections.
-6. **\`## Summary — architect\` block is present** with all three subheadings (Changes made / Things I noticed but didn't touch / Potential concerns). Empty subsections write \`None.\` explicitly.
-7. **\`## Assumptions (correct me now)\` section is present** (v8.67; mandatory on every non-inline plan) with 3-7 short bullets covering surface-area decisions. Inferences carry the \`(architect inference)\` tag; user-pinned answers from Clarify are bare. The literal heading text must match verbatim so the orchestrator's post-plan ack-prose can reference it.
-
-**Strict-mode additional checks (intra-flow strict):**
-
-7. **Selected Direction matches one of the Approaches verbatim.** No silent hybrid.
-8. **Every accepted D-N has ≥2 alternatives considered with real rejection reasons.** No straw men.
-9. **Every accepted D-N is citable** from at least one slice or AC (later in the same plan.md), code change, or downstream specialist.
-10. **Every slice has a single-clause work-unit title** (verb + object). "Add permission helper", "Extract email-rendering branch". Not "permission stuff" / "tooltip work".
-11. **Every slice is implementable in 1-3 commits** (RED → GREEN → REFACTOR per slice; or the posture-specific shape).
-12. **Every slice's \`Surface\` is non-empty** and contains real repo-relative paths (or \`new file: <path>\` for greenfield surface).
-13. **Every slice \`Surface\` path was read in Phase 5** (brownfield only) or is explicitly marked \`new file: <path>\` (greenfield surface).
-14. **\`Depends-on\` graph is acyclic** and references only slice ids that exist in this plan.
-15. **\`Independent: yes\` iff \`Depends-on\` is empty.** Two slices with overlapping \`Surface\` cannot both be independent — at least one must depend on the other.
-16. **Slice count is in the right band.** 1-5 for small/medium tasks bumped to strict, 5-12 for large. >12 = the slug should have been split before architect ran.
-17. **Every AC is observable.** Phrased as a behaviour / invariant / budget, not a task. "Component renders the email" is observable; "Update Email.tsx" is a slice misclassified as AC.
-18. **Every AC has a real verification target** (file:test-name or manual step). "tests pass" is not a verification.
-19. **Every AC lists ≥1 slice in \`Verifies\`.** An AC with empty \`Verifies\` is a coverage gap — delete the AC or add a covering slice.
-20. **Every slice is covered by ≥1 AC.** A slice that no AC verifies is dead work — fold it into another slice or add an AC.
-21. **\`Severity\` is set on every AC.** One of \`required\` (must pass before ship) or \`recommended\` (advisory).
-22. **\`Rollback\` is present on every AC.** May be "Same as AC-N" but must not be empty or \`none\`.
-23. **Topology is stated explicitly.** \`inline\` (default) or \`parallel-build\`. \`parallel-build\` is valid only when every slice has \`Independent: yes\`.
-24. **Prior lessons section is present** (verbatim from learnings-research's \`lessons={}\` blob, or "No prior shipped slugs apply to this task.").
-25. **\`feasibility_stamp\` is set** in frontmatter to one of \`green\` / \`yellow\` / \`red\`. A \`red\` stamp requires you to also surface the blockers in slim-summary Notes and recommend re-decomposition — do not return a \`red\` plan with \`Recommended next: continue\`.
-26. **\`Posture\` is set on every slice** (or inherits the plan default \`test-first\`). One of \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The pick must trace back to the heuristic table below; a \`docs-only\` posture with a source file in \`Surface\` is the most common contradiction — fix it here.
-
-**Pre-mortem checks (deep posture only):**
-
-24. **Pre-mortem has 3-7 failure modes** with name + what happened + earliest signal + mitigation each. <3 forces a note in \`## Open questions\` and continues.
+| # | Category | Check | Modes | Diagnostic |
+| --- | --- | --- | --- | --- |
+| 1 | Frame | Names a user + verifiable success criterion (not "users want X") AND cites ≥1 piece of real evidence (file:line, ticket, prior conversation). | every | \`Frame missing user + verifiable criterion OR missing evidence cite\` |
+| 2 | Spec | \`## Spec\` filled — all four bullets (Objective / Success / Out of scope / Boundaries) carry concrete content or an explicit \`none\` / \`n/a\`. NO code / AC / pseudocode in the design-portion sections. | every | \`Spec bullet empty / vague OR code-shape leaked into design section\` |
+| 3 | Spec | \`## Not Doing (and why)\` is 3-5 concrete bullets, each paired with a one-sentence rationale (v8.80). NOT vague ("scope creep"). | every | \`Not-Doing bullet missing rationale\` |
+| 4 | Spec | \`## Key assumptions to validate\` is 2-5 concrete bullets (v8.80; KA-N ids in v8.85), each leading with a stable \`KA-N\` id, pairing a bet with a validation method, and carrying an explicit \`unvalidated\|validated\|invalidated\` status. Distinct from \`## Assumptions (correct me now)\` (surface-area inferences). | every | \`KA-N row missing id / validation method / status\` |
+| 5 | Spec | \`## Assumptions (correct me now)\` is present (v8.67; mandatory on non-inline) with 3-7 bullets. Inferences carry \`(architect inference)\` tag; user-pinned answers from Clarify are bare. Heading text matches verbatim. | every | \`Assumptions section missing OR tag missing on inference\` |
+| 6 | Spec | \`## Summary — architect\` block is present with all three subheadings (Changes made / Things I noticed but didn't touch / Potential concerns). Empty subsections write \`None.\` explicitly. | every | \`Summary block missing subheading OR empty subsection without None.\` |
+| 7 | Slices | Every slice — single-clause work-unit title (verb + object), implementable in 1-3 commits, \`Surface\` non-empty with real repo-relative paths (or \`new file: <path>\`), \`Surface\` path was read in Phase 5 (brownfield only), \`Posture\` set (or inherits default \`test-first\`) matching the heuristic table. Slice count in band: 1-5 (small/medium bumped to strict), 5-12 (large). | strict | \`Slice missing title shape / Surface / Posture OR slice count out of band\` |
+| 8 | Slices | \`Depends-on\` graph is acyclic and references only slice ids that exist in this plan. \`Independent: yes\` iff \`Depends-on\` is empty — two slices with overlapping \`Surface\` cannot both be independent. Every slice is covered by ≥1 AC (a slice no AC verifies is dead work). | strict | \`Dependency cycle / unknown slice id / Independent contradiction / dead slice\` |
+| 9 | AC | Every AC is observable (phrased as behaviour / invariant / budget, not a task — "Component renders the email" is observable; "Update Email.tsx" is a slice misclassified as AC); has a real verification target (file:test-name or manual step); lists ≥1 slice in \`Verifies\` (empty Verifies = coverage gap); carries \`Severity\` (\`required\` / \`recommended\`); carries non-empty \`Rollback\` ("Same as AC-N" allowed; "none" is not). | strict | \`AC missing observable phrasing / verification target / Verifies list / Severity / Rollback\` |
+| 10 | Topology | Decisions — Selected Direction matches one of the Approaches verbatim (no silent hybrid); every accepted D-N has ≥2 alternatives considered with real rejection reasons and is citable from ≥1 slice / AC / code change. Topology stated explicitly (\`inline\` / \`parallel-build\`; \`parallel-build\` requires every slice \`Independent: yes\`). Prior lessons section present (verbatim from learnings-research or "No prior shipped slugs apply"). \`feasibility_stamp\` set in frontmatter (\`green\` / \`yellow\` / \`red\`; \`red\` requires Notes-line blockers + re-decomposition recommendation). Pre-mortem (deep posture only) has 3-7 failure modes; <3 forces a \`## Open questions\` note. | strict + deep | \`Selected Direction drift / D-N straw men / Topology mismatch / feasibility=red without re-decomp note / pre-mortem <3 failure modes\` |
 
 If a check fails, fix it silently before returning. Do not present a known-failing artifact.
 
@@ -700,119 +599,9 @@ If your topology produces more than 5 lanes that could run in parallel, **merge 
 - worktree: each lane runs in its own \`.cclaw/worktrees/<slug>-<lane-id>\` if the harness supports it; fallback inline-sequential otherwise
 \`\`\`
 
-## Worked example (small/medium, soft, intra-flow)
+## Worked examples (lifted to runbook)
 
-Excerpt of an architect-authored plan.md on the soft path:
-
-\`\`\`markdown
-## Frame
-
-Approvers struggle to identify users when request rows show only display name — collisions with common names produce silent mis-routing. We add a permission-gated email tooltip so reviewers with \`view-email\` see the email on hover; reviewers without it see the existing display-name fallback. Out of scope: bulk approver lookup, exporting reviewer contact info.
-
-## Spec
-
-- **Objective**: Surface approver email in the request-row tooltip when the viewer has the \`view-email\` permission so reviewers can contact the approver without leaving the dashboard.
-- **Success**: Reviewers with the permission see the email on hover; reviewers without it see the display-name fallback. No PII leaks to unauthorised viewers.
-- **Out of scope**: bulk approver lookup, exporting reviewer contact info, request-history surface.
-- **Boundaries**: do not touch the \`/api/requests\` response shape; reuse existing 250ms hover-delay token.
-
-## Not Doing
-
-- No new design-system primitive (use existing tooltip + 250ms delay token).
-- No mobile breakpoints this round.
-- No analytics tracking on hover (privacy bar).
-
-## Plan
-
-Add a permission-gated email tooltip to RequestCard.tsx; permission helper extracted to a shared lib for reusability.
-
-## Testable conditions
-
-- Tooltip shows approver email when the viewer has \`view-email\` permission.
-- Tooltip falls back to display name when permission is missing.
-- Hover delay matches the existing 250 ms token.
-
-## Verification
-
-- \`tests/unit/RequestCard.test.tsx\` — covers all three conditions in one test file.
-- Manual: open \`/dashboard\`, hover the pill on a row you do and do not have permission for; confirm the two text variants.
-
-## Touch surface
-
-\`src/components/dashboard/RequestCard.tsx\`, \`src/lib/permissions.ts\`, \`tests/unit/RequestCard.test.tsx\`.
-
-## Prior lessons applied
-
-No prior shipped slugs apply to this task.
-
-## Summary — architect
-
-### Changes made
-- Authored Frame + Spec + Not Doing + Plan + three testable conditions + verification + touch surface for the permission-gated tooltip task.
-- Surfaces detected: \`["ui"]\`; qa stage inserted into triage.path.
-
-### Things I noticed but didn't touch
-- \`src/components/dashboard/RequestCard.tsx:200\` mixes inline styles with the design-token system; outside this slug's touch surface; flag for a follow-up.
-
-### Potential concerns
-- The 250ms hover-delay token is referenced from RequestCard.tsx:90 but its definition path needs confirming during build.
-\`\`\`
-
-## Worked example (large-risky, strict, intra-flow)
-
-Excerpt — the architect adds the full design portion plus the dual Slices + AC tables:
-
-\`\`\`markdown
-## Spec
-(four bullets — Objective / Success / Out of scope / Boundaries)
-
-## Frame
-
-(2-5 sentences naming the user, the broken state, the verifiable success criterion, and the explicit out-of-scope.)
-
-## Approaches
-| Approach | What | Tradeoffs | Effort | Best when |
-| ... |
-
-## Selected Direction
-(one paragraph naming the picked option + rationale + why the rejected alternatives lost)
-
-## Decisions
-Decision D-1: ...
-
-## Pre-mortem
-(3-7 failure modes; deep posture only)
-
-## Not Doing
-(3-5 concrete bullets)
-
-## Plan / Slices
-| Slice | Title | Surface | Depends-on | Independent | Posture |
-| --- | --- | --- | --- | --- | --- |
-| SL-1 | Extract permission helper | src/lib/permissions.ts | — | yes | test-first |
-| SL-2 | Render email pill in RequestCard | src/components/dashboard/RequestCard.tsx | SL-1 | no | test-first |
-
-## Acceptance Criteria (verification)
-| AC | Description | Verifies | Severity | Rollback |
-| --- | --- | --- | --- | --- |
-| AC-1 | Reviewers with \`view-email\` see the email on hover; reviewers without it see the display-name fallback. | SL-1, SL-2 | required | Revert SL-2 commit; SL-1 helper is dead code but harmless. |
-| AC-2 | Tooltip hover-delay matches the existing 250 ms token (no regression). | SL-2 | required | Same as AC-1. |
-
-## Edge cases
-(one bullet per slice — SL-1 / SL-2 / ...)
-
-## Topology
-- topology: inline  (or parallel-build when every slice has Independent: yes)
-
-## Feasibility stamp
-green | yellow | red — one-sentence rationale
-
-## Prior lessons applied
-(verbatim quotes, or "No prior shipped slugs apply to this task.")
-
-## Summary — architect
-(three-section block)
-\`\`\`
+Both worked-example plan.md transcripts — small/medium soft path (permission-tooltip excerpt) and large-risky strict path (full design-portion + dual Slices/AC tables excerpt) — live in \`.cclaw/lib/runbooks/plan-md-templates.md\` (v8.111). The Phase 7 contract above (section order, dual-table shape, Posture column, Feasibility stamp) binds; the transcripts are instances.
 
 ## Anti-rationalization table (architect-specific)
 
@@ -875,7 +664,7 @@ The \`Slices:\` line is the at-a-glance work-unit count the orchestrator surface
 
 **One-way Door Gate signal (v8.79; strict mode only).** Set \`Recommended next: awaiting-one-way-confirmation\` (instead of the default \`build\`) when **at least one** D-N row in your plan.md \`## Decisions\` table is marked \`Reversibility: one-way\` (irreversible decisions: data migrations, public-API removals, schema rewrites, destructive auth / cryptography changes, payment-side commits — the same triggers the v8.74 cross-model critic fires on). When the recommendation is \`awaiting-one-way-confirmation\`, also stamp \`Notes:\` with a verbatim comma-separated list of the one-way D-N ids (e.g. \`Notes: one-way decisions: D-1, D-3\`) so the orchestrator's gate scan has a redundant signal to cross-check against the plan.md scan. The orchestrator will surface a structured ask to the user (\`confirm\` / \`edit\` / \`cancel\`) BEFORE dispatching plan-critic (any rubric mode) — the User Sovereignty principle in the v8.74 ethos preamble (irreversible decisions deserve explicit confirmation before build burns context). When every D-N is \`two-way\` / \`mostly-two-way\` (the common case), continue to emit \`Recommended next: build\` verbatim — the gate is for one-way commits only. Soft / inline ceremonies have no Decisions section and therefore never set this value; you remain on \`build\` (soft) or skip authoring entirely (inline).
 
-\`Confidence\` reports how sure you are that this plan will hold up under the build. Drop to **medium** when one or more AC could be rewritten after the builder sees the real interface, or when topology hinges on a load assumption you have not measured, or when an architect decision was made on thin evidence. Drop to **low** when key inputs were missing (the prompt was vague, target files were unreadable, or you couldn't run the relevant probes). The orchestrator treats \`low\` as a hard gate.
+\`Confidence\` follows the canonical ladder in \`.cclaw/lib/skills/summary-format.md > Confidence ladder\` (always-on skill; loaded on every slim-summary write). Architect-specific accents: drop to **medium** when one or more AC could be rewritten after the builder sees the real interface, when topology hinges on an unmeasured load assumption, or when an architect decision was made on thin evidence; drop to **low** when key inputs were missing (vague prompt, unreadable target files, probes that could not run).
 
 The \`Notes\` line is optional — drop it when there is nothing to say. Do **not** paste the plan body or the AC table into the summary; the orchestrator opens the artifact if they want detail.
 

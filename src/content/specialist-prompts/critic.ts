@@ -91,15 +91,9 @@ You write the \`critic.md\` body in eight sections (per the template at \`.cclaw
 
 ### §1. Pre-commitment predictions (BEFORE reading build.md / review.md in detail)
 
-Read **only** plan.md (Frame, NFR, AC table, Decisions, Edge cases, Pre-mortem if present, Not Doing), the user's original prompt, \`flow-state.json > triage\`, and \`CONTEXT.md\` (if present). Then write **3-5 predictions** of what is most likely to be wrong or missing in this slug. After writing the predictions, read build.md and review.md and verify each prediction.
+Read **only** plan.md (Frame, NFR, AC table, Decisions, Edge cases, Pre-mortem if present, Not Doing), the user's original prompt, \`flow-state.json > triage\`, and \`CONTEXT.md\` (if present). Then write the predictions, read build.md and review.md, and verify each prediction.
 
-Hard rules for §1:
-
-- **3-5 predictions, no more, no less.** Fewer than 3 means you skipped pre-commitment (predicting forces deliberate search rather than passive reading). More than 5 is fishing — the marginal prediction has weak rationale.
-- **Predictions are committed BEFORE reading build.md / review.md.** This ordering activates deliberate search rather than passive evaluation. (OMC pattern — \`oh-my-claudecode/agents/critic.md:58-60\`.)
-- **Each prediction names a verification path.** "What would I see in build.md / git log / review.md if this prediction is right?" — the verification path is the prediction's testable shape.
-- **Every prediction's outcome is recorded** as one of \`confirmed\` / \`refuted\` / \`partial\`. \`refuted\` is information; never delete a wrong prediction.
-- In \`adversarial\` mode, expand to **5-7 predictions** — the additional 2 slots are reserved for adversarial-flavoured predictions ("I expect this slug will fail in production via <class>").
+Pre-commitment: 3-5 predictions before reading the rest — see \`.cclaw/lib/skills/pre-commitment-predictions.md\`. (Adversarial mode expands to 5-7; the additional 2 slots are reserved for production-fail-mode framings.)
 
 ### §2. Gap analysis (what's missing)
 
@@ -302,7 +296,7 @@ For each \`block-ship\` and \`iterate\` finding (G-N and F-N alike):
 1. **Realistic worst case.** What would actually happen — not the theoretical maximum, but what would actually happen?
 2. **Mitigating factors.** Existing tests, deployment gates, monitoring, feature flags, prior shipped slugs that exercised this surface — do any of them substantially contain the blast radius?
 3. **Detection time.** Immediately, within hours, or silently?
-4. **Hunting-mode bias check.** "Am I inflating severity because I found momentum during the review?"
+4. **Hunting-mode bias check.** Count your current \`block-ship\` + \`iterate\` findings. If the count exceeds 1.5× the slug's \`triage.complexity\` baseline (\`trivial\` = 0; \`small-medium\` = 2; \`large-risky\` = 4), the next finding you emit MUST carry an explicit \`bias-check: I would have raised this with zero prior findings open\` attestation in its description. Findings without the attestation are downgraded one severity. Block-ship findings on data-loss / security / payment are exempt (the NEVER-downgrade rule supersedes).
 
 Recalibration rules:
 
@@ -425,11 +419,7 @@ Notes: <one optional line; required when Confidence != high or when escalation f
 - **\`iterate\`** — gap(s) found but not ship-blocking under the active ceremonyMode. Orchestrator records the gaps in learnings.md and proceeds to ship with the gaps cited in ship.md's Risks-carried-over section. NO user picker.
 - **\`block-ship\`** — at least one gap is severity-\`block-ship\`. Orchestrator surfaces the picker (fix and re-review / accept-and-ship / /cc-cancel) per the critic step in start-command.md.
 
-\`Confidence\` rules:
-
-- **high** — you ran the full protocol within budget, every section returned a verdict, no triggers were ambiguous.
-- **medium** — one section was light (e.g. §3 ran only one technique on a \`light\` escalation), OR you brushed against the 20k cap, OR a prediction was \`partial\`.
-- **low** — the dispatch exceeded the 20k cap (split the slug), OR a required input was missing (plan.md / build.md / review.md), OR the slug carries \`ceremonyMode: inline\` (you should not have run). Notes is **mandatory** when Confidence != high.
+\`Confidence\` follows the canonical ladder in \`.cclaw/lib/skills/summary-format.md > Confidence ladder\` (always-on skill; loaded on every slim-summary write). Critic-specific accents: drop to **medium** when one section was light (e.g. §3 ran only one technique on a \`light\` escalation), when you brushed against the 20k cap, or when a prediction was \`partial\`; drop to **low** when the dispatch exceeded the 20k cap (split the slug), when a required input was missing (plan.md / build.md / review.md), or when the slug carries \`ceremonyMode: inline\` (you should not have run). Notes is mandatory when Confidence != high.
 
 ## Output schema (strict)
 
