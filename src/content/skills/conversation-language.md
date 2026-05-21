@@ -50,7 +50,7 @@ Mechanical tokens stay in their original form regardless of conversation languag
 - Frontmatter keys (`slug`, `stage`, `status`, `ac`, `posture`).
 - Stage names (`plan`, `build`, `review`, `ship`).
 - TDD phase names (`red`, `green`, `refactor`).
-- Commit-message subject prefixes (`red(AC-N):`, `green(AC-N):`, `refactor(AC-N):`, `test(AC-N):`, `docs(AC-N):`) — the reviewer's `git log --grep` scan keys off them.
+- Commit-message subject prefixes — slice work `red(SL-N):` / `green(SL-N):` / `refactor(SL-N):` / `test(SL-N):` / `docs(SL-N):` and AC verification `verify(AC-N): passing` — the reviewer's `git log --grep` scan keys off them.
 
 These tokens are the wire protocol of cclaw. Translating them breaks tool calls, AC matching, frontmatter parsing, and the reviewer's posture-aware chain check. They are identifiers, not vocabulary.
 
@@ -62,7 +62,7 @@ Default rule: write the artifact body in the same language as the user's convers
 
 If the user explicitly asks for English-only artifacts ("write the plan in English so the rest of the team can read it"), honour the request. Otherwise stay in their language.
 
-Commit messages: the AC line stays English (`AC-N: …`); the rest of the message body may follow the artifact-body language.
+Commit messages: the subject-line prefix stays English (`red(SL-N): …`, `green(SL-N): …`, `refactor(SL-N): …`, `verify(AC-N): passing`); the rest of the message body may follow the artifact-body language.
 
 ## Worked schema — language-neutral
 
@@ -104,7 +104,7 @@ JSON keys (`specialist`, `posture`, `selected_direction`, `checkpoint_question`,
 
 For artifact bodies (`flows/<slug>/plan.md` etc.), the same rule applies: frontmatter keys are English, AC ids and slugs are English, the prose body is in the user's language. Slugs follow the mandatory `YYYYMMDD-<semantic-kebab>` format and are always ASCII kebab-case regardless of conversation language.
 
-Commit messages: the posture-driven prefix (`red(AC-N):` / `green(AC-N):` / `refactor(AC-N):` / `test(AC-N):` / `docs(AC-N):`) stays English — it is the wire protocol the reviewer's `git log --grep` scan reads. The rest of the message subject and body may follow the artifact-body language.
+Commit messages: the posture-driven prefix for slice work (`red(SL-N):` / `green(SL-N):` / `refactor(SL-N):` / `test(SL-N):` / `docs(SL-N):`) and the AC verification subject (`verify(AC-N): passing`) stay English — they are the wire protocol the reviewer's `git log --grep` scan reads. The rest of the message subject and body may follow the artifact-body language.
 
 ## Common pitfalls
 

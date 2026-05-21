@@ -34,12 +34,12 @@ describe("auto-trigger skills — registry + frontmatter contract", () => {
 });
 
 describe("auto-trigger skills — per-skill canonical anchors (ac-discipline + review-discipline + anti-slop)", () => {
-  it("BEHAVIOR — ac-discipline names the v8.40 prompt-only commit-prefix contract (red/green(AC-, git log --grep \"(AC-N):\"); review-discipline names the Five Failure Modes; anti-slop is always-on and bans redundant verification, env shims (@ts-ignore, eslint-disable, process.env.NODE_ENV), and declares its `What this skill does NOT prevent` carve-out", () => {
+  it("BEHAVIOR — ac-discipline names the v8.63+ AC-side contract (`verify(AC-N): passing`, dual-grep with `(SL-N):` for slice work); review-discipline names the Five Failure Modes; anti-slop is always-on and bans redundant verification, env shims (@ts-ignore, eslint-disable, process.env.NODE_ENV), and declares its `What this skill does NOT prevent` carve-out", () => {
     const ac = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "ac-discipline");
     expect(ac).toBeDefined();
-    expect(ac!.body).toContain('git log --grep="(AC-N):"');
-    expect(ac!.body).toContain("red(AC-");
-    expect(ac!.body).toContain("green(AC-");
+    expect(ac!.body).toContain('git log --grep="verify(AC-N):"');
+    expect(ac!.body).toContain('git log --grep="(SL-N):"');
+    expect(ac!.body).toContain("verify(AC-N): passing");
 
     const review = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "review-discipline");
     expect(review).toBeDefined();

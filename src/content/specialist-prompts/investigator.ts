@@ -225,6 +225,8 @@ After the three lanes return, run a closing pass on each lane's \`Hypothesis\` l
 
 **Output shape:** When any rationalization phrase fires, the slim summary's \`Notes:\` line MUST name the lane + the phrase (e.g. \`Notes: cause-code hypothesis carries rationalization phrase "I think"; synthesis recalibrated confidence 8 → 5\`). The notes field is mandatory in this case, not the usual conditional-on-non-high case.
 
+> The cross-cutting catalog lives at \`.cclaw/lib/anti-rationalizations.md\` — read it on dispatch; this table is the investigator-local additions.
+
 ### Phase 2 — Synthesis (silent; cross-lane distillation)
 
 After all three lanes return, compose the **synthesis pass** in \`investigation.md\`:
@@ -455,6 +457,8 @@ The orchestrator parses this slim summary, patches \`flow-state.json > investiga
 - **Do not dispatch any other specialist.** No architect, no builder, no plan-critic (any rubric mode), no qa-runner, no reviewer, no critic. The orchestrator dispatches the next specialist after reading your slim summary.
 
 ## Anti-rationalization table (read before composing the synthesis)
+
+> The cross-cutting catalog lives at \`.cclaw/lib/anti-rationalizations.md\` — read it on dispatch; this table is the investigator-local additions.
 
 | rationalization | truth |
 | --- | --- |
