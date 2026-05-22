@@ -983,7 +983,8 @@ export type RoutingClass = (typeof ROUTING_CLASSES)[number];
  * - `research` (v8.58; rewired to architect in v8.62) — the user wants
  *   to brainstorm/research BEFORE committing to a task. Triage is
  *   skipped (the orchestrator's Hop 1 Detect forks on the `research `
- *   prefix or `--research` flag); only the `architect` specialist runs,
+ *   prefix; v8.112 retired the equivalent flag form). Only the
+ *   `architect` specialist runs,
  *   in its standalone-mode variant (architect dispatches with
  *   `mode: "research"` envelope marker → silent Bootstrap → Frame →
  *   Approaches → Decisions → Pre-mortem → Compose synthesis pass; no
@@ -998,11 +999,10 @@ export const RESEARCH_MODES = ["task", "research"] as const;
 export type ResearchMode = (typeof RESEARCH_MODES)[number];
 
 /**
- * Research depth tier (v8.69). Selected at the research-mode entry
- * point — either explicitly via the `--light` / `--standard` /
- * `--deep-product` flag on `/cc research <topic>`, or auto-classified
- * by the triage sub-agent's `research_depth` heuristic when no flag is
- * present.
+ * Research depth tier (v8.69). Auto-classified by the triage
+ * sub-agent's `research_depth` heuristic from the topic wording at
+ * the research-mode entry point. (v8.112 retired the explicit
+ * depth-override flags; the heuristic is the sole selection path.)
  *
  * - `light` — 2-lens research pass for fast clarification questions
  *   ("which library does X?", "is Y still recommended?", "what does
@@ -1037,11 +1037,10 @@ export type ResearchDepth = (typeof RESEARCH_DEPTHS)[number];
 
 /**
  * Default research depth used when the orchestrator's Detect-hop
- * research-mode fork sees no explicit `--light` / `--standard` /
- * `--deep-product` flag AND no triage `research_depth` classification
- * applies (e.g. legacy research-mode invocations that pre-date the
- * flag, or harnesses that bypass triage entirely). Matches the
- * pre-v8.69 behaviour: 5-lens standard pass.
+ * research-mode fork sees no signal that auto-classification can
+ * latch onto (e.g. legacy research-mode invocations from
+ * pre-classification harnesses, or harnesses that bypass triage
+ * entirely). Matches the pre-v8.69 behaviour: 5-lens standard pass.
  */
 export const DEFAULT_RESEARCH_DEPTH: ResearchDepth = "standard";
 
@@ -1266,9 +1265,10 @@ export type AcMode = CeremonyMode;
  *   on the next `/cc`.
  *
  * Selected by the triage sub-agent (see
- * `src/content/specialist-prompts/triage.ts`); user override flags
- * (`--mode=auto` / `--mode=step`) are accepted for back-compat but both
- * collapse to `auto` (step mode retired in v8.61).
+ * `src/content/specialist-prompts/triage.ts`). v8.112 dropped the
+ * back-compat user-facing run-mode flag surface entirely; the field
+ * is computed deterministically (`auto` on every non-inline path,
+ * `null` on inline).
  */
 export const RUN_MODES = ["step", "auto"] as const;
 export type RunMode = (typeof RUN_MODES)[number];
@@ -1352,8 +1352,8 @@ export interface TriageDecision {
    * architect specialist only, outputs `research.md`, no plan handoff).
    * Pre-v8.58 state files lack this field; readers MUST default to
    * `"task"` on absent. Selected by the orchestrator's Hop 1 Detect
-   * step based on the task prefix / flag (`research ` / `--research`)
-   * — NOT by the triage classification heuristic. Immutable for the
+   * step based on the task prefix (`research `; v8.112 retired the
+   * equivalent flag form) — NOT by the triage classification heuristic. Immutable for the
    * lifetime of the flow (research-mode flows do not flip to task-mode
    * mid-run).
    */
@@ -1613,14 +1613,14 @@ export interface TriageDecision {
    * Research depth tier (v8.69). Set ONLY on research-mode flows
    * (`triage.mode == "research"`); absent on `task` mode. The
    * orchestrator's research-mode fork stamps this field at the same
-   * time it stamps the sentinel triage block — either from the
-   * explicit `--light` / `--standard` / `--deep-product` flag on the
-   * `/cc research <topic>` argument, or from the triage sub-agent's
+   * time it stamps the sentinel triage block, deriving the depth tier
+   * from the topic wording via the triage sub-agent's
    * `research_depth` auto-classification (the standard `/cc <task>`
    * triage gate is bypassed in research mode, so the
    * auto-classification runs as part of the research-mode fork's
-   * Detect step rather than at the triage hop). See
-   * {@link ResearchDepth} for tier semantics.
+   * Detect step rather than at the triage hop). v8.112 retired the
+   * explicit depth-override flags; the auto-classification is the
+   * sole selection path. See {@link ResearchDepth} for tier semantics.
    *
    * Pre-v8.69 research-mode state files lack this field; readers MUST
    * default to {@link DEFAULT_RESEARCH_DEPTH} (`"standard"`) on absent

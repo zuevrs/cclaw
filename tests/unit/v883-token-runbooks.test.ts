@@ -31,7 +31,20 @@ const V8103_BASELINE_CHARS = 50000;
 // v8.102 additive carve-out (patch-mode) folds into the new baseline; no
 // separate budget. New additive headroom is intentionally tight: each
 // future feature add must justify its own per-slug additive_chars bump.
-const V8102_ADDITIVE_CHARS = 0;
+//
+// v8.112 carve-out: +200 chars for the cross-model second-opinion
+// convergence-loop description under `#### critic` (santa-loop contract
+// — trigger set, Critic A + Critic B parallel run, BOTH-pass gate, cap-3
+// rounds, fix-only re-dispatch, criticConvergenceRound /
+// criticCrossModelVerdict flow-state stamping). The full procedure
+// (X-F-N numbering, round shape, merge rules, four-technique scaffold)
+// lives in `agents/critic.md` + the critic runbook — the start-command
+// pointer is intentionally a one-paragraph contract anchor so the
+// orchestrator can wire the dual-verdict ship gate without re-reading
+// the full critic prompt. Per the v8.83 canary's stated intent ("catch
+// re-inlines of lifted runbook bodies"), this is a documented feature
+// add, not a re-inline; the runbook body is unchanged.
+const V8102_ADDITIVE_CHARS = 200;
 
 const LIFTED_RUNBOOKS = ["detect-matrix", "approaches-gate", "one-way-door-gate"] as const;
 

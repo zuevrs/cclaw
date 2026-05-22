@@ -14,7 +14,7 @@ build is a TDD stage. **What changes between modes is the granularity, not wheth
 | ceremony_mode | granularity | enforced by |
 | --- | --- | --- |
 | `inline` (trivial) | optional; one quick check is enough | nothing |
-| `soft` (small/medium) | one TDD cycle per feature: write 1–3 tests that exercise the listed conditions, then implement | reviewer at `/cc-review` |
+| `soft` (small/medium) | one TDD cycle per feature: write 1–3 tests that exercise the listed conditions, then implement | reviewer at the review stage |
 | `strict` (large-risky / security-flagged) | full RED → GREEN → REFACTOR per slice (`SL-N`), then one `verify(AC-N): passing` per AC after all contributing slices land | reviewer ex-post via `git log --grep="(SL-N):"` (slice work) AND `git log --grep="verify(AC-N):"` (AC verification) + `build.md` inspection |
 
 > **Iron Law:** NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST. The RED failure is the spec.

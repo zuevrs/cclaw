@@ -75,7 +75,7 @@ flowchart LR
 | `soft` (default) | small / medium tasks | architect → single TDD cycle → reviewer → critic → ship |
 | `strict` | risky / multi-slice / security / migration | architect → plan-critic gate → per-slice TDD → reviewer (dual-chain) → critic → ship |
 
-Pin a tier explicitly: `/cc --inline <task>` / `/cc --soft <task>` / `/cc --strict <task>`. Triage announces its auto-pick in one line before the first specialist runs, so you can always see the choice and override on the next invocation.
+Triage announces its auto-pick in one line before the first specialist runs, so you can see what was chosen and reframe the task on the next invocation if the tier is wrong. The triage heuristic is the source of truth for the tier; v8.112 retired the per-flow ceremony override flags in favour of trusting the router. Pin via the task wording itself ("just a typo", "small refactor", "auth migration") — the heuristic reads those signals deterministically.
 
 ## Configuration
 

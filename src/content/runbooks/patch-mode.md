@@ -13,7 +13,7 @@ Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy 
 1. **Git-check sub-step** — `.git/` presence; force `ceremonyMode: soft` if absent (does not apply here — patch mode is inline; no git check is run).
 2. **patch-mode fork** — argument starts with `patch `.
 3. **extend-mode fork** — argument starts with `extend `.
-4. **research-mode fork** — argument starts with `research ` OR carries `--research`.
+4. **research-mode fork** — argument starts with `research `.
 5. **Default routes** — fresh / resume / collision / pre-v8 state per the Detect table.
 
 The order matters: `/cc patch <slug> extend <task>` enters patch mode (the trailing `extend` is part of the task text). `/cc extend <slug> patch <task>` enters extend mode (the trailing `patch` is part of the task text). The two forks are mutually exclusive at the Detect layer; the first-matched-wins rule is deterministic.
@@ -181,7 +181,6 @@ The `What changed:` line cites the patch artifact path verbatim plus a one-line 
 - **Argument is `patch <slug> <task>` AND a flow is active (`currentSlug != null`)** — collision case. Surface `Active flow: <slug> (stage: <stage>). Continue with /cc or cancel with /cc-cancel before running /cc patch.` Patch mode does NOT auto-cancel; it lives outside the active-flow lifecycle.
 - **Argument is `patch <slug> --review <task>`** — sets `review_mode: "lite"`; the lite reviewer pass runs after the builder commits (three axes: correctness / readability / edit-discipline).
 - **Argument is `patch <slug> <task>` AND `<slug>` resolves to a shipped slug with `outcome_signal: "reverted"` in `knowledge.jsonl`** — proceed with the patch, but emit a one-line informational note: `parent slug '<slug>' was later reverted — patching a reverted slug is unusual; verify intent.` The user can still ship the patch; the note exists so a reverted parent does not become invisible context.
-- **Argument starts with `patch ` AND a ceremonyMode flag (`--inline` / `--soft` / `--strict`) is also present** — the ceremonyMode flag is IGNORED (patch mode is structurally inline; soft / strict ceremonies don't apply to a 1-2 file post-ship edit). Surface a one-line `patch-mode ignores ceremonyMode flags` note, then proceed.
 - **Argument starts with `patch ` AND `<slug>` matches an active in-flight flow (under `flows/<slug>/`, not `flows/shipped/`)** — surface the `"in-flight"` error: `Slug '<slug>' is still in-flight. Ship it first, then run /cc patch.` Patch is post-ship-only.
 
 ## When NOT to use patch-mode

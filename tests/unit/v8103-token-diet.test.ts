@@ -26,17 +26,28 @@ import {
  * a Contract column pointing at `agents/<id>.md` + relevant runbook.
  */
 
+// v8.112 ceiling relaxation: +200 chars allowed for the documented
+// cross-model convergence-loop (santa-loop) feature add. See
+// `tests/unit/v883-token-runbooks.test.ts > V8102_ADDITIVE_CHARS` for
+// the full justification — the carve-out covers a one-paragraph
+// orchestrator-side contract anchor, NOT a re-inline of any lifted
+// runbook body. Future feature adds must bump this ceiling explicitly.
+const START_COMMAND_BODY_CEILING_CHARS = 50_200;
+
 describe("v8.103 — startup token diet (orchestrator entry compression)", () => {
-  it("START_COMMAND_BODY chars < 50 000 (was ~137 000) — body-level char ceiling", () => {
+  it(`START_COMMAND_BODY chars < ${START_COMMAND_BODY_CEILING_CHARS} (was ~137 000) — body-level char ceiling`, () => {
     expect(
       START_COMMAND_BODY.length,
-      `START_COMMAND_BODY is ${START_COMMAND_BODY.length} chars; expected < 50 000.`
-    ).toBeLessThan(50_000);
+      `START_COMMAND_BODY is ${START_COMMAND_BODY.length} chars; expected < ${START_COMMAND_BODY_CEILING_CHARS}.`
+    ).toBeLessThan(START_COMMAND_BODY_CEILING_CHARS);
   });
 
-  it("renderStartCommand() output chars < 50 000 — rendered-output char ceiling", () => {
+  it(`renderStartCommand() output chars < ${START_COMMAND_BODY_CEILING_CHARS} — rendered-output char ceiling`, () => {
     const out = renderStartCommand();
-    expect(out.length, `renderStartCommand() is ${out.length} chars; expected < 50 000.`).toBeLessThan(50_000);
+    expect(
+      out.length,
+      `renderStartCommand() is ${out.length} chars; expected < ${START_COMMAND_BODY_CEILING_CHARS}.`
+    ).toBeLessThan(START_COMMAND_BODY_CEILING_CHARS);
   });
 
   it("new research-mode runbook exists with Phase 0-4 content + Approaches Gate + lens roster", () => {

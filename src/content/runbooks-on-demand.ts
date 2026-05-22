@@ -665,10 +665,11 @@ When a sub-agent dispatch's slim-summary returns, the orchestrator: (1) patches 
 
 const COMPOUND_REFRESH = `# On-demand runbook — compound refresh + discoverability self-check
 
-Open this runbook **after a compound capture writes a line to \`.cclaw/state/knowledge.jsonl\`**, when either:
+Open this runbook **after a compound capture writes a line to \`.cclaw/state/knowledge.jsonl\`**, when:
 
-- \`knowledge.jsonl\` line count is a multiple of 5 after the new line is appended (compound-refresh trigger), OR
-- The user runs \`/cc-compound-refresh\` manually.
+- \`knowledge.jsonl\` line count is a multiple of 5 after the new line is appended (compound-refresh trigger).
+
+(v8.112 retired the manual stage-shortcut router that previously exposed an on-demand entry point; the 5-line cadence is now the sole trigger.)
 
 For the compound gate itself (does this slug capture learnings?), see start-command's Compound step.
 
@@ -689,7 +690,7 @@ The refresh runs **inline in the orchestrator's context** as the 5th capture fin
 - \`compoundRefreshEvery: 5\` — run every Nth capture; default 5; set to \`0\` to disable.
 - \`compoundRefreshFloor: 10\` — skip refresh until \`knowledge.jsonl\` has ≥10 lines (otherwise the refresh has nothing to dedup against).
 
-Manual trigger: \`/cc-compound-refresh\` — runs the same pass on demand. Useful after large bulk-import of legacy slugs.
+The refresh is implicit on the cadence above; there is no user-facing manual entry point (v8.112 retired the stage-shortcut router that exposed one).
 
 ## Discoverability self-check (T2-12)
 
@@ -1219,7 +1220,7 @@ The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts
 
 1. **Git-check sub-step** — \`.git/\` presence; force \`ceremonyMode: soft\` if absent.
 2. **extend-mode fork** — argument starts with \`extend \`.
-3. **research-mode fork** — argument starts with \`research \` OR carries \`--research\`.
+3. **research-mode fork** — argument starts with \`research \`.
 4. **Default routes** — fresh / resume / collision / pre-v8 state per the Detect table.
 
 The order matters: \`/cc extend <slug> research <topic>\` enters extend mode, not research. The user wanting a research flow that extends a parent runs \`/cc research <topic>\` directly without the \`extend\` prefix.
@@ -1258,7 +1259,7 @@ The slug resolves to a shipped flow with a non-empty \`plan.md\`. Continue with 
 1. **Build a slug for the follow-up flow** — canonical \`YYYYMMDD-<semantic-kebab>\` from the \`<task>\` text. Same naming rules as a standard \`/cc <task>\` (date prefix mandatory; same-day collision suffix \`-2\`, \`-3\`, etc.).
 2. **Stamp \`flow-state.json > parentContext\`** — patch the new flow's state with the resolved \`ParentContext\` (slug + status: "shipped" + optional shippedAt + artifactPaths) via \`patchFlowState\`. This is the single source of truth for the parent linkage; specialists read this field, not \`refines\`.
 3. **Seed \`refines:\` in plan.md frontmatter** — write \`refines: <parent-slug>\` so the legacy v8.58 knowledge-store chain (\`findRefiningChain\`), qa-runner skip rule, plan-critic skip gate, and the architect's Compose-phase ambiguity-score brownfield path keep working unchanged. The two writes (\`parentContext\` + \`refines\`) are kept in sync by the same init code path; user manual edits to plan.md after init are out of scope. \`parent_slug:\` mirrors the pointer (native field); \`parent_slug:\` wins on drift.
-4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`runMode\` / \`surfaces\` on the new triage decision, unless the user passed an explicit override flag.
+4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`runMode\` / \`surfaces\` on the new triage decision (v8.112 retired the per-flow ceremony override flags, so inheritance + escalation heuristic now drive the decision deterministically).
 5. **Proceed to triage announcement → first dispatch.** The new flow runs the same pipeline as a standard \`/cc <task>\` (plan → build → qa? → review → critic → ship). Only the parent-context loading at init is new.
 
 ### \`ok: false\` — error sub-cases
@@ -1280,9 +1281,9 @@ The error message is plain prose, ends the turn, and does NOT consume any of the
 - **Argument is \`extend <slug>\` (slug but no task)** — surface \`extend mode needs a follow-up task description; try '/cc extend <slug> <task>'\`, end the turn.
 - **Argument is \`extend <slug> <task>\` AND a flow is active (\`currentSlug != null\`)** — collision case. Run the standard resume summary + r/s/n picker. On \`n\` (cancel the active flow), dispatch the extend flow as if no flow were active. On \`r\` or \`s\`, the user's choice wins; extend-mode dispatch is deferred until the active flow finalises.
 - **Argument is \`extend <slug> <task>\` AND \`<slug>\` resolves to a shipped slug with \`outcome_signal: "reverted"\` in \`knowledge.jsonl\`** — proceed with extend init, but emit a one-line informational note: \`parent slug '<slug>' was later reverted — proceed only if you understand the revert.\` The user can still ship the follow-up; the note exists so a reverted parent does not become invisible context.
-- **Argument starts with \`extend \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — the explicit flag wins over inheritance (the user knows the new task's complexity better than the parent's classification did). Audit log records \`userOverrode: true\` when the chosen value differs from the parent's value.
-- **Argument starts with \`extend \` AND the \`--mode=auto\` / \`--mode=step\` flag is also present** — the explicit toggle wins over inheritance (same precedence as ceremonyMode flags).
 - **Argument is \`extend <slug> research <topic>\`** — extend mode takes precedence (the research-mode fork below does not fire when the argument begins with \`extend \`). The new flow extends \`<slug>\` and runs a normal task pipeline; the user wanting a research flow that extends a parent should run \`/cc research <topic>\` directly without the extend prefix.
+
+(v8.112 retired the per-flow ceremony override flags and the back-compat run-mode toggles — there is no longer any user-facing override surface at extend init; the triage inheritance + escalation heuristic below is the sole decision path.)
 
 ## Multi-level chaining
 
@@ -1298,10 +1299,11 @@ When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the or
 
 ### Precedence rules (highest → lowest, evaluated in this order)
 
-1. **Explicit override flag from the current \`/cc extend\`** — \`--strict\` / \`--soft\` / \`--inline\` for ceremonyMode. v8.61 retired the user-facing runMode toggle; \`--mode=step\` / \`--mode=auto\` are accepted on the parser but collapse to \`auto\` (legacy back-compat note). Always wins; inheritance is bypassed for that field. Audit log records \`userOverrode: true\` when the chosen value differs from the parent's value.
-2. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the v8.23 no-git auto-downgrade audit shape.
-3. **Parent inheritance** — fields not pinned by (1) or (2) inherit from parent's frontmatter (ceremonyMode + surfaces). \`runMode\` is *not* inherited under v8.61 (always-auto on non-inline; null on inline).
-4. **Router default** — fields not seeded by (1)-(3) fall through to the v8.58 lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
+1. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the v8.23 no-git auto-downgrade audit shape.
+2. **Parent inheritance** — fields not pinned by (1) inherit from parent's frontmatter (ceremonyMode + surfaces). \`runMode\` is *not* inherited under v8.61 (always-auto on non-inline; null on inline).
+3. **Router default** — fields not seeded by (1)-(2) fall through to the v8.58 lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
+
+(v8.112 retired the explicit user-flag layer that used to sit above these three rules; the triage heuristic is now the sole source of truth, and the user influences it via task wording rather than per-flow flags.)
 
 The inheritance is one-way: the new flow's triage values are immutable for its lifetime; changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init. v8.61 retired the v8.34 mid-flight \`runMode\` toggle — runMode is now structurally immutable.
 
@@ -1309,12 +1311,10 @@ The inheritance is one-way: the new flow's triage values are immutable for its l
 
 | user invocation | parent's \`ceremony_mode\` | new flow's \`ceremonyMode\` | new flow's \`runMode\` | rationale |
 | --- | --- | --- | --- | --- |
-| \`/cc extend 20260514-auth-flow add OIDC\` | strict | strict | auto | rule 3 (ceremonyMode inheritance); v8.61 always-auto |
-| \`/cc extend 20260514-auth-flow --soft tighten error copy\` | strict | soft | auto | rule 1 (explicit flag wins on ceremonyMode); v8.61 always-auto |
-| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | strict | auto | rule 2 (escalation heuristic — \`migration\` keyword); v8.61 always-auto |
-| \`/cc extend 20260514-auth-flow --mode=auto tighten error copy\` | strict | strict | auto | rule 1 (parser accepts \`--mode=auto\` for back-compat); v8.61 always-auto |
-| \`/cc extend 20260514-cli-help fix typo\` | inline | inline | (null) | rule 3 (inheritance); inline path has no runMode |
-| \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (router heuristic decides) | auto (unless heuristic picked inline) | rule 4 (router fallthrough) |
+| \`/cc extend 20260514-auth-flow add OIDC\` | strict | strict | auto | rule 2 (ceremonyMode inheritance); v8.61 always-auto |
+| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | strict | auto | rule 1 (escalation heuristic — \`migration\` keyword); v8.61 always-auto |
+| \`/cc extend 20260514-cli-help fix typo\` | inline | inline | (null) | rule 2 (inheritance); inline path has no runMode |
+| \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (router heuristic decides) | auto (unless heuristic picked inline) | rule 3 (router fallthrough) |
 
 The audit log entry for the new flow's triage decision records:
 
@@ -1363,22 +1363,9 @@ Research mode (\`/cc research <topic>\`) supports three depth tiers; the orchest
 | \`standard\` (default) | engineer + product + architecture + history + skeptic (5 lenses) | none | Technical exploration: "evaluate Redis vs in-memory cache for the search endpoint", "should we move auth to JWT?", "what's our story on observability?". The pre-v8.69 default; same 4-phase flow, full coverage of the orthogonal lens dimensions. |
 | \`deep-product\` | 5 lenses | product lens fires Thesis + Adjacent-product probes; skeptic lens fires Durability probe | Greenfield / pivot / shape questions: "should we build a new product around X?", "what if we replace our planning tool with Y?", "evaluate switching from SaaS A to SaaS B". The deep-product probes (sourced from everyinc-compound \`ce-brainstorm\` Phase 1.2) force the lenses to interrogate the implicit product thesis + near-term durability that surface-level lens prose otherwise glosses. |
 
-### Selection — explicit flag (highest priority)
+### Selection — wording-based auto-classification (v8.112: sole selection path)
 
-The user passes one of \`--light\` / \`--standard\` / \`--deep-product\` anywhere in the \`/cc research <topic>\` argument. The flag is parsed out of the argument string before the topic is built. Mutually exclusive flags collapse last-wins with a one-line announcement (\`mutually exclusive depth flags; using --deep-product\`). The flag value is canonical; no auto-classification runs when a flag is present.
-
-Examples:
-
-\`\`\`text
-/cc research --light is fastify still maintained
-/cc research --standard add caching to the search endpoint
-/cc research --deep-product should we replace our calendar with our own
-/cc --research --deep-product evaluate switching from datadog to grafana
-\`\`\`
-
-### Selection — auto-classification (when no flag)
-
-When no \`--light\` / \`--standard\` / \`--deep-product\` flag is present, the orchestrator's research-mode fork auto-classifies the depth from the topic wording. The triage sub-agent's \`research_depth\` heuristic — surfaced in the slim summary's \`Research depth:\` line when triage runs — is NOT consulted directly here (research mode bypasses triage); the orchestrator runs the same wording-based heuristic inline.
+v8.112 retired the per-flow depth-override flags; the depth is now derived deterministically from the topic wording. The orchestrator's research-mode fork auto-classifies the depth at Detect, before any lens dispatch. The triage sub-agent's \`research_depth\` heuristic — surfaced in the slim summary's \`Research depth:\` line when triage runs — is NOT consulted directly here (research mode bypasses triage); the orchestrator runs the same wording-based heuristic inline.
 
 | Topic wording signal | Default depth |
 | --- | --- |
@@ -1476,10 +1463,10 @@ The pass exits when one of:
 ### 5.1 — Light depth, clean self-review
 
 \`\`\`text
-/cc research --light is hono still actively maintained vs fastify
+/cc research is hono still actively maintained vs fastify
 \`\`\`
 
-Detect-hop fork stamps \`research_depth: light\`. Phase 2 dispatches engineer + skeptic only. Both return \`Confidence: high\` findings citing context7 hits for both libraries' v5 / v11 release dates. Phase 3 synthesis converges on "hono is more actively shipped; fastify still has the bigger plugin ecosystem". Self-review:
+Detect-hop fork stamps \`research_depth: light\` (pure clarification wording — \`is X maintained?\`). Phase 2 dispatches engineer + skeptic only. Both return \`Confidence: high\` findings citing context7 hits for both libraries' v5 / v11 release dates. Phase 3 synthesis converges on "hono is more actively shipped; fastify still has the bigger plugin ecosystem". Self-review:
 
 - Placeholder scan: clean.
 - Contradiction scan: clean.
@@ -1491,10 +1478,10 @@ Self-review notes records the one ambiguity fix and the flow finalises.
 ### 5.2 — Deep-product depth, scope drift
 
 \`\`\`text
-/cc --research --deep-product should we build a new internal calendar instead of using google calendar
+/cc research should we build a new internal calendar instead of using google calendar
 \`\`\`
 
-Detect-hop fork stamps \`research_depth: deep-product\`. Phase 2 dispatches all 5 lenses; product + skeptic envelopes carry \`Research depth: deep-product\` so the Thesis / Adjacent-product / Durability probes fire. Phase 3 synthesis drafts a recommendation but drifts into "how to build it" specifics. Self-review's scope-drift scan catches this and rewrites the synthesis to stay on "should we?". Self-review notes records the rewrite.
+Detect-hop fork stamps \`research_depth: deep-product\` (greenfield wording — \`should we build...\`). Phase 2 dispatches all 5 lenses; product + skeptic envelopes carry \`Research depth: deep-product\` so the Thesis / Adjacent-product / Durability probes fire. Phase 3 synthesis drafts a recommendation but drifts into "how to build it" specifics. Self-review's scope-drift scan catches this and rewrites the synthesis to stay on "should we?". Self-review notes records the rewrite.
 
 ## §6 — Anti-rationalization
 
@@ -1538,7 +1525,7 @@ The \`<area>\` argument names which per-lens section the user wants re-run. The 
 | \`synthesis\` / \`recommendation\` / \`recommended-next\` | (re-runs synthesis only; no lens re-dispatch) |
 | \`all\` / \`everything\` | every lens in the depth-tier set |
 
-On \`light\` depth (\`research-engineer\` + \`research-skeptic\` only), \`<area>\` tokens that name lenses NOT in the light set (\`product\` / \`architecture\` / \`history\`) are a no-op with a one-line note ("requested area is skipped on light depth; use \`/cc research <topic>\` again with \`--standard\` to widen coverage"). The state stays at \`awaiting-user-review\`.
+On \`light\` depth (\`research-engineer\` + \`research-skeptic\` only), \`<area>\` tokens that name lenses NOT in the light set (\`product\` / \`architecture\` / \`history\`) are a no-op with a one-line note ("requested area is skipped on light depth; rephrase the topic to invoke standard / deep-product depth (e.g. add an exploration framing) and re-run \`/cc research <topic>\` to widen coverage"). The state stays at \`awaiting-user-review\`.
 
 ### Steps
 
@@ -1837,9 +1824,9 @@ No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug
 4. **Sub-agent dispatch resumes from the same stage.** A build paused mid-RED for AC-3 resumes by dispatching builder for AC-3, not by restarting AC-1.
 5. **Resume after stop-and-report.** \`/cc\` continues from saved \`currentStage\`. For build-failure / reviewer-fix stops, the auto-fix iteration counter is **preserved**.
 
-## §7 — \`runMode\` mid-flight toggle (v8.61 retirement)
+## §7 — \`runMode\` mid-flight toggle (v8.61 retirement; v8.112 removal)
 
-The v8.34 \`/cc --mode=auto\` / \`--mode=step\` toggle is preserved on the parser surface for back-compat (so harness namespace routers that forward the flag don't error), but v8.61 collapsed both values to \`auto\`. \`--mode=step\` emits a one-line \`step-mode retired in v8.61; flow runs auto\` note and otherwise behaves as if the flag were absent. The toggle does not consume task text — \`/cc --mode=auto refactor the auth module\` is still parsed as \`/cc refactor the auth module\`.
+The v8.34 mid-flight run-mode toggle was kept on the parser surface for back-compat through v8.61's step-mode retirement (which collapsed both legacy values to \`auto\`). **v8.112 dropped the parser surface entirely**: there is no \`runMode\` flag on \`/cc\`; harnesses that previously forwarded such a flag through a namespace router lose it cleanly (the router itself was retired in the same release). \`triage.runMode\` is \`"auto"\` on every non-inline path and \`null\` on inline, period.
 
 ## §8 — Anti-rationalization
 
@@ -2018,15 +2005,15 @@ The \`oneWayDoorConfirmation\` field persists for the rest of the flow's lifetim
 
 const RESEARCH_MODE = `# On-demand runbook — research-mode multi-lens flow (v8.65+; v8.103 lift)
 
-The orchestrator opens this runbook whenever the \`/cc\` argument starts with the literal token \`research \` (case-insensitive, exactly one space) OR carries the explicit \`--research\` flag anywhere in the argument string. The runbook is the canonical procedure; \`start-command.ts\` carries only the one-paragraph fork reference + the on-demand-runbooks trigger row.
+The orchestrator opens this runbook whenever the \`/cc\` argument starts with the literal token \`research \` (case-insensitive, exactly one space). v8.112 retired the equivalent flag form; the literal prefix is the sole entry point. The runbook is the canonical procedure; \`start-command.ts\` carries only the one-paragraph fork reference + the on-demand-runbooks trigger row.
 
 ## §1 — Fork detection and slug stamping
 
 When the fork fires:
 
-- Strip the trigger from the task text. The topic that flows into the lenses is the argument WITHOUT \`research \` / \`--research\`.
+- Strip the trigger from the task text. The topic that flows into the lenses is the argument WITHOUT the leading \`research \`.
 - Build a research-mode slug: \`YYYYMMDD-research-<semantic-kebab>\`. The \`-research-\` infix is mandatory; it keeps \`flows/shipped/\` unambiguous and distinguishes research artifacts from task flows.
-- **Skip triage dispatch entirely.** Stamp \`flow-state.json > triage\` with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\` + \`research_depth: <light | standard | deep-product>\` (v8.69; parsed from explicit \`--light\` / \`--standard\` / \`--deep-product\` flag, otherwise auto-classified from topic wording — full mapping in \`runbooks/research-depth-and-self-review.md\`).
+- **Skip triage dispatch entirely.** Stamp \`flow-state.json > triage\` with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\` + \`research_depth: <light | standard | deep-product>\` (v8.69; auto-classified from topic wording — full mapping in \`runbooks/research-depth-and-self-review.md\`. v8.112 retired the explicit depth-override flags).
 - Stamp \`flow-state.json > currentSlug\` with the new slug, \`currentStage: "plan"\` (used purely as a sentinel — research mode has no plan / build / review / critic / ship stages; the field is the only signal that distinguishes "research in flight" from "task in flight" for the v8.61 invocation matrix).
 
 The orchestrator then enters the **multi-lens research flow** — replacing the v8.58/v8.62 architect-standalone-research interim. The flow is four phases (with two intermediate gates at 1.5 and 3.5).
@@ -2137,7 +2124,7 @@ The heuristic is **inclusive**: when in doubt, dispatch the design lens. The len
 Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\` but with the lens-specific shape):
 
 - \`Slug:\` — the research slug.
-- \`Topic:\` — the stripped task text (no \`research \` / \`--research\` prefix, no \`--lens=\` flag, no \`--light\` / \`--standard\` / \`--deep-product\` flag).
+- \`Topic:\` — the stripped task text (no \`research \` prefix, no \`--lens=\` flag).
 - \`Dialogue summary:\` — the 5-15 bullets from Phase 1.
 - \`Framing:\` (v8.76) — the selected framing(s) from the Phase 1.5 Approaches Gate. A string array; each entry is \`<framing-title> — <framing-summary>\` for the framings the user picked (or every framing when the user accepted "all" / the default). Lenses grade their findings against this set rather than the implicit "any framing".
 - \`Project root:\` — absolute path.
@@ -2186,12 +2173,11 @@ The next \`/cc <task>\` invocation on the same project reads the most-recent shi
 ## §9 — Sub-cases
 
 - **Argument is \`research\` alone (no topic)** — surface \`research mode needs a topic; try '/cc research <topic>'\`, end the turn.
-- **Argument starts with \`research \` AND a ceremonyMode flag (\`--inline\` / \`--soft\` / \`--strict\`) is also present** — flags are ignored (research's path is fixed at the multi-lens flow; ceremonyMode doesn't apply). One-line note: \`research mode ignores ceremonyMode flags\`, then proceed.
-- **Research-mode + \`--mode=auto\` / \`--mode=step\`** — toggle dropped with one-line note (research has no stages to chain; the run mode does not apply).
-- **Research-mode + multiple depth flags** (\`--light --deep-product\`) — last-wins with one-line note (\`mutually exclusive depth flags; using --deep-product\`), then proceed.
-- **Research-mode + \`--lens=design\` flag on \`light\` depth** — design lens is structurally not dispatched on light depth (narrow clarifications). Drop the flag with a one-line note (\`design lens not dispatched on light depth; rerun with --standard or --deep-product to include it\`), then proceed with the light-depth 2-lens set.
+- **Research-mode + \`--lens=design\` flag on \`light\` depth** — design lens is structurally not dispatched on light depth (narrow clarifications). Drop the flag with a one-line note (\`design lens not dispatched on light depth; rephrase the topic to land on standard or deep-product depth to include it\`), then proceed with the light-depth 2-lens set.
 - **Research-mode + \`--lens=design\` AND \`--lens=-design\` both present** — last-wins with a one-line note (\`mutually exclusive --lens=design / --lens=-design flags; using <last>\`), then proceed.
 - **Research-mode + unknown \`--lens=<name>\` flag** (e.g. \`--lens=experimental\`) — drop the flag with a one-line note (\`unknown --lens=<name> flag; only --lens=design / --lens=-design accepted in v8.76\`), then proceed with the heuristic-determined lens set.
+
+(v8.112 retired the per-flow ceremony override flags, the research-depth override flags, and the back-compat run-mode toggles; research mode no longer has to absorb their precedence sub-cases.)
 - **User cancels mid-dialogue** — run the cancel runtime, end the turn.
 - **All dispatched lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
 
@@ -2238,7 +2224,7 @@ After the triage sub-agent returns, the orchestrator stamps \`flow-state.json > 
 {"decidedAt":"2026-05-08T12:34:56Z","slug":"<slug>","complexity":"small-medium","ceremonyMode":"soft","userOverrode":false,"autoExecuted":true}
 \`\`\`
 
-\`autoExecuted: true\` is the v8.58+ default (no user-facing ask at triage). \`userOverrode: true\` is stamped only when the user passed an explicit \`--inline\` / \`--soft\` / \`--strict\` flag AND the flag's ceremonyMode differs from the heuristic recommendation; the triage sub-agent reports both values in its slim summary so the orchestrator can stamp the diff.
+\`autoExecuted: true\` is the v8.58+ default (no user-facing ask at triage). v8.112 retired the \`userOverrode: true\` branch — the per-flow ceremony override flags it gated are gone, so the audit log records the heuristic-only decision deterministically.
 
 ## §4 — v8.42 critic-stage insertion rule
 

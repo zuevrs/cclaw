@@ -24,7 +24,7 @@ Fires on `stages: ["build", "review", "ship"]` because the receive-feedback mome
 
 - **Praise** — `What's done well` items from the reviewer. The receiving response to praise is a one-line acknowledgement at most ("noted") OR silence. Treating praise like criticism by running the four-step pattern below is its own anti-pattern (sycophancy-in-reverse).
 - **Hypothesis statements during debug-loop discipline.** When the user is collaborating on a debug-loop ("my top hypothesis is X") and is not naming a defect in your output, the response is the next probe, not the receive-feedback pattern. This skill applies to defect feedback, not to collaborative problem-solving.
-- **Procedural requests** — `/cc show`, `/cc cancel`, `/cc --mode=auto`. These are state-machine instructions, not feedback. The orchestrator handles them mechanically; no analysis pattern fires.
+- **Procedural requests** — `/cc`, `/cc-cancel`, `/cc patch <slug>`. These are state-machine instructions, not feedback. The orchestrator handles them mechanically; no analysis pattern fires.
 - **Inline / trivial flows where no review or critic ran.** Inline flows skip review and critic; the only feedback surface is user-typed prose (which still applies via case #4 above).
 - **`fyi` severity findings.** `fyi` rows are informational; the response is "noted, carried to learnings" — single line, no four-step analysis. The pattern below applies to actionable severities (`critical`, `required`, `consider`, `nit`).
 

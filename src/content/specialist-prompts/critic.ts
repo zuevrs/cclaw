@@ -180,25 +180,69 @@ The \`axis\` value is always \`human-perspective:<lens>\` so downstream readers 
 
 **Gating recap** — lenses are part of \`adversarial\` mode only. In \`gap\` mode (ceremonyMode soft / strict-without-trigger) the lens sweep does NOT run and the §3a-§3d techniques are also skipped. The lenses do NOT activate adversarial mode independently; they ride the existing §8 trigger set. When \`light\` adversarial fires (soft + exactly one trigger) the lens sweep is capped at 3 lenses regardless of slug shape — same as the "ONE technique only" rule for §3a-§3d.
 
-### §3.5. Cross-model second opinion (v8.72 — high-stakes slugs only)
+### §3.5. Cross-model second opinion (v8.72 trigger; v8.112 santa-loop convergence contract — high-stakes slugs only)
 
-A **second adversarial pass via a different model** runs when the dispatch envelope carries \`crossModelCritic: true\`. The orchestrator stamps that field when ANY of the following fire (v8.74 promoted the D-N irreversibility signal from keyword-detection to the explicit \`Reversibility: one-way\` field; keyword detection is kept as a fallback for plans with no \`## Decisions\` section):
+When the dispatch envelope carries \`crossModelCritic: true\`, this section runs the **cross-model convergence loop**: two independent critics walk the same artifacts cold. **Both critics must emit pass** (\`verdict: pass\`) before the slug can ship; up to 3 rounds of fix-only iteration close the gap (cap 3 rounds); non-convergence at the cap is an explicit \`block-ship\`. The contract mirrors affaan-m-ecc's santa-loop ("two independent models must BOTH return NICE") and reuses cclaw's existing cross-model MCP dispatch surface — no new infra. Pre-v8.112 behaviour was a one-shot second opinion (results merged once); v8.112 promotes the cross-model pass to a convergence loop on the same trigger set. Default-path slugs (envelope flag absent) bypass this loop entirely; the §3 single-critic verdict is the sole ship gate.
+
+#### Trigger conditions (envelope flag stamping)
+
+The orchestrator stamps \`crossModelCritic: true\` when ANY of the following fire (v8.74 promoted the D-N irreversibility signal from keyword-detection to the explicit \`Reversibility: one-way\` field; keyword detection is kept as a fallback for plans with no \`## Decisions\` section):
 
 - \`flow-state.json > triage.securityFlag == true\` (the slug touched a sensitive surface and the reviewer's \`security\` axis was already amplified), OR
 - **any \`D-N\` in \`plan.md > ## Decisions\` is marked \`Reversibility: one-way\` (v8.74 — primary trigger)**. The architect stamps \`Reversibility:\` on every D-N per the PLAN_TEMPLATE D-N row; the orchestrator's pre-dispatch parse looks for the literal \`Reversibility: one-way\` line in any D-N block. plan-critic §A blocks ship on a missing field, so by the time critic runs the field is guaranteed present on every D-N when \`## Decisions\` exists; the trigger is a single substring match on the rendered plan.md, OR
 - **keyword fallback** — when \`plan.md\` carries NO \`## Decisions\` section (small strict slugs where Phase 3 was skipped with the "No structural decisions" note; bare bug-fix slugs that authored a soft plan with no D-N machinery), fall back to the v8.72 keyword detection on Blast-radius prose: data loss / data migration / public-API removal / payment / auth / cryptography surface mentioned anywhere in \`plan.md\` body counts as an irreversible signal, OR
-- the user explicitly invoked \`/cc <task> --critic-cross-model\` (the override flag forces the pass regardless of the heuristic and regardless of \`config.critic.cross_model\`).
+- the user explicitly invoked \`/cc <task> --critic-cross-model\` (the explicit user flag forces the pass regardless of the heuristic and regardless of \`config.critic.cross_model\`).
 
-When the envelope flag is set AND a cross-model MCP tool is available in the harness (Codex / Gemini / comparable second-opinion MCP — pattern borrowed from gstack's \`/codex\` skill: "Second opinion via OpenAI Codex. Review, challenge, or consult modes."), the critic dispatches a SECOND adversarial pass that re-runs §3a-§3d on the same diff under a **different model than the one running this dispatch**. The second model never sees the first model's findings — it walks the same artifacts cold so its findings are independent. Findings from the second pass land in \`critic.md > ## Cross-model second opinion\` (sibling section to §3, with its own F-N numbering prefix \`X-F-N\` so the audit trail is unambiguous):
+#### Round shape (each round runs both critics independently)
+
+Every round of the convergence loop runs **two critics in parallel**:
+
+- **Critic A (primary)** — the current critic dispatch (this prompt body); walks §1-§3 + §4-§5 + §6-§7 against \`plan.md\` / \`review.md\` / \`build.md\` cold.
+- **Critic B (cross-model)** — a sibling critic dispatch via the cross-model MCP (\`user-codex\` / \`user-gemini\` / comparable second-opinion MCP — pattern borrowed from gstack's \`/codex\` skill: "Second opinion via OpenAI Codex. Review, challenge, or consult modes."), running on a **different model than Critic A**. The cross-model critic never sees Critic A's findings — it walks the same artifacts cold so its verdict is independent.
+
+Each critic emits a structured verdict using the cclaw severity vocabulary: \`pass\` / \`iterate\` / \`block-ship\` (same vocabulary as the pre-v8.112 one-shot pass). Critic B's findings land under \`critic.md > ## Cross-model second opinion\` with their own \`X-F-N\` numbering prefix to keep the audit trail unambiguous:
 
 \`\`\`text
 | X-F-N | Technique | Trigger | Failure consequence | Severity |
 | --- | --- | --- | --- | --- |
 \`\`\`
 
-The cross-model pass MAY also surface findings under the human-perspective lenses; same axis-tagging rule as §3 (\`axis: human-perspective:<lens>\`), but rows are \`X-F-N\` to mark them as second-opinion.
+Critic B's findings MAY use the human-perspective lenses identically to §3 (\`axis: human-perspective:<lens>\`); rows stay \`X-F-N\` so the convergence-loop audit can attribute each finding to its critic.
 
-**Graceful fallback (mandatory).** When the envelope flag is set BUT no cross-model MCP tool is wired (the harness has no \`user-codex\` / \`user-gemini\` / equivalent MCP server registered, OR the configured tool errored on dispatch), the critic writes ONE line into the \`## Cross-model second opinion\` section verbatim: \`Cross-model unavailable: skipped.\` (no findings, no error trail, no install-layer change required to opt in later). The fallback line is itself the evidence of the attempted pass; the critic does NOT escalate or fail the dispatch on the absence of the MCP. The pass also short-circuits when \`config.critic.cross_model == false\` AND the envelope flag was set ONLY by the heuristic (security_flag / irreversible D-N) — the config knob is the project-level opt-in. The explicit \`--critic-cross-model\` user flag bypasses the config knob (user override wins).
+#### Convergence gate
+
+After both critics have returned for the current round, evaluate the verdict gate:
+
+| Critic A | Critic B | Outcome | Next action |
+| --- | --- | --- | --- |
+| \`pass\` | \`pass\` | **Converged — NICE** | Proceed to §6 / §7 / §8. Ship gate is open (subject to §6 realist check). |
+| \`pass\` | \`iterate\` OR \`block-ship\` | **Diverged — NAUGHTY** | Build merged \`mode: fix-only\` envelope from Critic B's findings; re-dispatch builder; on builder return, re-run round (both critics afresh). |
+| \`iterate\` OR \`block-ship\` | \`pass\` | **Diverged — NAUGHTY** | Build merged \`mode: fix-only\` envelope from Critic A's findings; re-dispatch builder; on builder return, re-run round. |
+| \`iterate\` OR \`block-ship\` | \`iterate\` OR \`block-ship\` | **Diverged — NAUGHTY** | Merge both critics' findings (dedup by file:line + finding shape); re-dispatch builder with the unified set; on builder return, re-run round. |
+
+Either critic's \`block-ship\` is the merged set's \`block-ship\` (severity wins); either critic's \`iterate\` only stays \`iterate\` when neither emitted \`block-ship\`. The §7 verdict line reads \`Round N: Critic A=<pass|iterate|block-ship>, Critic B=<pass|iterate|block-ship>; merged=<converged|diverged>.\`
+
+#### Fix-only re-dispatch envelope (NAUGHTY path)
+
+When the gate fires NAUGHTY, the orchestrator (not the critic) builds the next builder envelope under \`mode: fix-only\`. The envelope carries the merged finding set verbatim — every Critic A finding row PLUS every Critic B \`X-F-N\` row, deduplicated by \`<file:line, finding shape>\` pairs. The builder addresses every flagged finding (no drive-by refactors; \`fix-only\` is the existing builder mode contract — see \`agents/builder.md\` §"fix-only mode"). Single commit per round: \`fix: address critic convergence findings (round N)\`. On builder return, the convergence loop re-runs round N+1 — **fresh dispatches for both critics**; no carry-over context, no memory of previous rounds (anchoring-bias prevention).
+
+#### Round cap and non-convergence handling
+
+The convergence loop is capped at **3 rounds**. Counters live on \`flow-state.json > criticConvergenceRound\` (int; 1 / 2 / 3 progression). If round 3 still diverges, the convergence loop **terminates with verdict \`block-ship\`** and \`note: "cross-model convergence failed"\`. The §7 verdict carries:
+
+\`\`\`text
+Verdict: block-ship
+Reason: cross-model convergence failed after 3 rounds
+Remaining findings (Critic A): <list of F-N still flagged>
+Remaining findings (Critic B): <list of X-F-N still flagged>
+Recommended next: <user-facing prose; either /cc-cancel + reframe; or invoke /cc patch <slug> <targeted-fix> after manual review>
+\`\`\`
+
+The orchestrator stops-and-reports (no auto-iteration past the cap; same contract as the §7 \`block-ship\` path). The user can manually review and either \`/cc-cancel\` the slug or land a \`/cc patch\` against the specific findings — both paths are user-driven; the convergence loop does not auto-escalate further.
+
+#### Graceful fallback (mandatory — preserved verbatim from v8.72/v8.74)
+
+When the envelope flag is set BUT no cross-model MCP tool is wired (the harness has no \`user-codex\` / \`user-gemini\` / equivalent MCP server registered, OR the configured tool errored on dispatch), the critic writes ONE line into the \`## Cross-model second opinion\` section verbatim: \`Cross-model unavailable: skipped.\` (no findings, no error trail, no install-layer change required to opt in later). The fallback line is itself the evidence of the attempted pass; the critic does NOT escalate or fail the dispatch on the absence of the MCP. **In the fallback path, the convergence loop is structurally inert** — only Critic A runs; its verdict is the ship gate (same as the default path); the round counter is not incremented; \`criticConvergenceRound\` is stamped \`0\` to mark the fallback. The pass also short-circuits when \`config.critic.cross_model == false\` AND the envelope flag was set ONLY by the heuristic (security_flag / irreversible D-N) — the config knob is the project-level opt-in. The explicit \`--critic-cross-model\` user flag bypasses the config knob (user override wins).
 
 **Prompt-budget awareness (v8.108 — F-1).** Before dispatching the second-opinion model, the critic estimates the assembled prompt size and compares it against the project's configured second-opinion-model context budget (\`config.critic.cross_model_min_context\`; default 16000 characters ≈ 4k tokens at the 4-chars-per-token estimate). Small-context second-opinion models (local Codex stand-ins, Gemini Nano variants) silently truncate prompts that overflow their context window — silent truncation on a \`securityFlag\` / \`Reversibility: one-way\` dispatch is the highest-stakes failure mode. The critic refuses-and-skips the dispatch (or trims via the priority-drop list below) BEFORE the truncation can fire. Pattern: gsd-v1 #3081 / \`6a5fa591\` (review.max_prompt_tokens with priority-drop ordering + minSet refuse-and-skip).
 
@@ -235,7 +279,7 @@ min-set > budget                        → refuse-and-skip; stamp cross_model_s
 
 The disclosure / skipped fields are FRONTMATTER metadata, not body content — the body still reads as a normal \`## Cross-model second opinion\` section so downstream readers (ship, learnings, compound capture) can grep findings without parsing the disclosure surface.
 
-**Recalibration into the verdict.** Cross-model findings carry the same severity vocabulary (\`block-ship\` / \`iterate\` / \`fyi\`) and feed §6 realist check + §7 verdict rollup the same way §3 findings do. A \`block-ship\` \`X-F-N\` blocks ship; an \`iterate\` \`X-F-N\` is captured in learnings.md. The §7 verdict line "Adversarial findings" reports the combined count (e.g. \`Adversarial findings: 4 total (§3: 3, cross-model: 1); 1 block-ship / 3 iterate / 0 fyi\`). When the cross-model pass returned the \`Cross-model unavailable: skipped\` fallback, §7 verdict's "Cross-model" rollup line reads \`Cross-model: skipped (MCP unavailable)\` and the dispatch carries \`Confidence: medium\` at minimum (one section of the protocol did not run). When the v8.108 budget refuse-and-skip fired, the rollup line reads \`Cross-model: skipped (budget overflow)\` instead; same \`Confidence: medium\` floor.
+**Recalibration into the verdict.** Cross-model findings carry the same severity vocabulary (\`block-ship\` / \`iterate\` / \`fyi\`) and feed §6 realist check + §7 verdict rollup the same way §3 findings do. A \`block-ship\` \`X-F-N\` blocks ship; an \`iterate\` \`X-F-N\` is captured in learnings.md. The §7 verdict line "Adversarial findings" reports the combined count across the round's converged state (e.g. \`Adversarial findings: 4 total (§3: 3, cross-model: 1); 1 block-ship / 3 iterate / 0 fyi\`). When the cross-model pass returned the \`Cross-model unavailable: skipped\` fallback (no MCP wired), §7 verdict's "Cross-model" rollup line reads \`Cross-model: skipped (MCP unavailable)\` and the dispatch carries \`Confidence: medium\` at minimum (one section of the protocol did not run). When the v8.108 budget refuse-and-skip fired, the rollup line reads \`Cross-model: skipped (budget overflow)\` instead; same \`Confidence: medium\` floor. When the v8.112 convergence loop terminated at the round-3 cap without convergence, the rollup line reads \`Cross-model: block-ship (convergence failed after 3 rounds)\` and the verdict carries the unconverged finding sets verbatim per the round-cap stop-and-report block above.
 
 ### §4. Criterion check (are the verifiable plan criteria the right criteria, not are they met?)
 

@@ -1378,7 +1378,8 @@ This slug is referenced from \`.cclaw/knowledge.jsonl\` whenever the compound qu
 
 /**
  * `research.md` template for v8.65 multi-lens research mode
- * (`/cc research <topic>` / `/cc --research <topic>`). The artifact is
+ * (`/cc research <topic>`; v8.112 retired the equivalent flag form).
+ * The artifact is
  * authored by the main-context research orchestrator after the
  * open-ended discovery dialogue completes and all five research lenses
  * (`research-engineer` / `research-product` / `research-architecture`
@@ -1439,9 +1440,9 @@ ship_commit: null
 # the artifact alone.
 lenses: [engineer, product, architecture, history, skeptic, design]
 # v8.69 multi-tier depth (light | standard | deep-product). Stamped by
-# the orchestrator's research-mode fork (parsed from \`--light\` /
-# \`--standard\` / \`--deep-product\` flag, otherwise auto-classified
-# from topic wording — see runbooks/research-depth-and-self-review.md).
+# the orchestrator's research-mode fork (auto-classified from topic
+# wording — see runbooks/research-depth-and-self-review.md; v8.112
+# retired the explicit depth-override flags).
 # Phase 2 lens dispatch reads this field to decide which lenses fire
 # (light = engineer + skeptic; standard = engineer + product +
 # architecture + history + skeptic, +design when the v8.76
@@ -2117,7 +2118,7 @@ export function planTemplateForSlug(slug: string): string {
  *   `YYYYMMDD-research-<semantic-kebab>` per the Detect step's
  *   research-mode fork; the `-research-` infix is mandatory).
  * - `TOPIC-PLACEHOLDER` — the topic line, i.e. the user's
- *   `/cc research <topic>` argument with the `research ` / `--research`
+ *   `/cc research <topic>` argument with the leading `research `
  *   trigger stripped. The orchestrator passes it verbatim so the
  *   user's framing is preserved in the artifact frontmatter.
  * - `GENERATED-AT-PLACEHOLDER` — ISO-8601 timestamp at which the

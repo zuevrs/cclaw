@@ -71,7 +71,8 @@ describe("v8.106 — cleanup (vestigial skills + reviewer trim + dispatch envelo
       ).rejects.toThrow();
     }
 
-    expect(AUTO_TRIGGER_SKILLS.length).toBe(33);
+    // v8.111 added pre-commitment-predictions (→ 33); v8.112 added writing-skills (→ 34).
+    expect(AUTO_TRIGGER_SKILLS.length).toBe(34);
   });
 
   it("AC-2 — the canonical replacement surfaces still carry the lifted logic (triage agent prompt, triage-gate runbook, start-command Detect matrix, architect Bootstrap)", async () => {
