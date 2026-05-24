@@ -1507,7 +1507,7 @@ export interface TriageDecision {
   /**
    * set by the orchestrator when the user picks
    * `[2] accept-and-ship` at the Hop 4.5 block-ship picker (see
-   * `.cclaw/lib/runbooks/critic-stage.md > Verdict handling`). The
+   * `.cclaw/lib/runbooks/critic-steps.md > Verdict handling`). The
    * critic returned `block-ship` and the user chose to ship anyway. The
    * field is a pure audit-trail boolean — downstream readers do not
    * branch on it; it just records that a critic block was overridden
