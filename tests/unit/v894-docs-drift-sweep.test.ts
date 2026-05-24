@@ -46,8 +46,11 @@ const REPO_ROOT = path.resolve(
  *     v8.75 plan-design + v8.82 plan-devex into plan-critic as
  *     rubric modes "design" / "devex"; one specialist, three rubric
  *     modes dispatched via envelope fan-out)
- *   - RUNBOOKS: 23 (on-demand runbooks loaded by trigger from
- *     `runbooks-on-demand.ts`; tripwire added v8.107)
+ *   - RUNBOOKS: 28 (on-demand runbooks loaded by trigger from
+ *     `runbooks-on-demand.ts`; tripwire added v8.107; v8.111 diet
+ *     pass added builder-self-review-gate / builder-tdd-walkthrough /
+ *     parallel-worktree / clarify-protocol / plan-md-templates, lifting
+ *     the count from 23 → 28)
  *   - TRIAGE FIELD-COUNT (bimodal):
  *       sub-agent core decision surface: 5 (complexity / ceremonyMode
  *       / path / runMode / mode)
@@ -60,7 +63,7 @@ const REPO_ROOT = path.resolve(
 const AXES_CANONICAL = 14;
 const LENSES_CANONICAL = 6;
 const SPECIALISTS_CANONICAL = 8;
-const RUNBOOKS_CANONICAL = 23;
+const RUNBOOKS_CANONICAL = 28;
 const TRIAGE_FIELDS_CORE = 5;
 const TRIAGE_FIELDS_AGGREGATE = 8;
 
@@ -191,11 +194,11 @@ const RULES: Rule[] = [
     canonical: SPECIALISTS_CANONICAL,
     noun: "specialists"
   },
-  // Runbooks — `<N> runbook(s)` (v8.107 added — currently 23 on-demand
-  // runbooks dispatched by `runbooks-on-demand.ts`). Catches stale
-  // `13 runbooks` / `16 runbooks` / `18 runbooks` count rows accumulated
-  // across `README.md`, specialist prompts, and start-command pointer
-  // prose.
+  // Runbooks — `<N> runbook(s)` (v8.107 added — currently 28 on-demand
+  // runbooks dispatched by `runbooks-on-demand.ts`; v8.111 lifted the
+  // count from 23 → 28). Catches stale `13 runbooks` / `16 runbooks` /
+  // `18 runbooks` / `23 runbooks` count rows accumulated across
+  // `README.md`, specialist prompts, and start-command pointer prose.
   {
     id: "runbooks-count",
     pattern: /\b(\d+)\s+runbooks?\b/gi,
@@ -351,7 +354,7 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
     });
 
     it(`README declares the runbook count (${RUNBOOKS_CANONICAL} on-demand runbooks)`, () => {
-      expect(README).toMatch(/23 on-demand runbooks/);
+      expect(README).toMatch(/28 on-demand runbooks/);
     });
 
     it("README mentions the research-lens count (six / 6)", () => {
