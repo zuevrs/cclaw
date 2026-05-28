@@ -45,7 +45,6 @@ describe("v8.76 — research-design-lens + approaches-gate wiring", () => {
     expect(RESEARCH_LENS_PROMPTS["research-design"].length).toBeGreaterThan(2000);
     expect(RESEARCH_LENS_TITLES["research-design"]).toBe("Research — Design lens");
     const desc = RESEARCH_LENS_DESCRIPTIONS["research-design"];
-    expect(desc).toContain("v8.76");
     expect(desc).toMatch(/seven-dimension|seven dimensions/u);
     expect(desc).toContain("--lens=design");
     expect(desc).toContain("--lens=-design");

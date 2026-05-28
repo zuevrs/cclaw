@@ -1,6 +1,6 @@
-# Builder self-review gate (v8.111+)
+# Builder self-review gate
 
-The full per-slice / per-AC JSON summary block contract that the builder emits before the orchestrator dispatches the reviewer. Lifted out of `agents/builder.md` in v8.111 to keep the in-prompt anchor short (~6 lines) while preserving the orchestrator-gate semantics (`self_review[].verified` across all blocks gates reviewer dispatch).
+The full per-slice / per-AC JSON summary block contract that the builder emits before the orchestrator dispatches the reviewer. Lifted out of `agents/builder.md` to keep the in-prompt anchor short (~6 lines) while preserving the orchestrator-gate semantics (`self_review[].verified` across all blocks gates reviewer dispatch).
 
 ## Why this gate exists
 

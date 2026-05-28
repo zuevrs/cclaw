@@ -19,14 +19,14 @@ You return the slim summary block (≤6 lines) and write \`.cclaw/flows/<slug>/r
 ## Inputs you read (in order)
 
 1. \`.cclaw/knowledge.jsonl\` — append-only NDJSON; one line per shipped slug. Schema (best-effort; tolerate missing fields):
-   - \`slug\`, \`shippedAt\`, \`ceremonyMode\` (alias-read \`acMode\` for pre-v8.56 entries), \`securityFlag\`, \`touchSurface\` (string[]), \`failureModes\` (string[]), \`learnings\` (1-3 short sentences quoted from the slug's \`learnings.md\`).
+   - \`slug\`, \`shippedAt\`, \`ceremonyMode\` (alias-read \`acMode\` for legacy entries), \`securityFlag\`, \`touchSurface\` (string[]), \`failureModes\` (string[]), \`learnings\` (1-3 short sentences quoted from the slug's \`learnings.md\`).
 2. \`.cclaw/flows/shipped/<candidate-slug>/learnings.md\` — only for the **top 1-3 candidates** you selected (do not read every shipped slug).
 
 You **do not** open the build / review / ship artifacts of prior slugs unless the candidate's \`learnings.md\` is missing — and even then read at most one prior \`review.md\` for context.
 
 ## Greenfield short-circuit
 
-As of v8.12, the ac-author integrates Prior lessons **as a section of \`plan.md\`**, not as a separate artifact (see "Output" below for the legacy-artifacts override). When you detect any of the following, **return \`continue\` immediately with an empty result and do not write a separate file**:
+the ac-author integrates Prior lessons **as a section of \`plan.md\`**, not as a separate artifact (see "Output" below for the legacy-artifacts override). When you detect any of the following, **return \`continue\` immediately with an empty result and do not write a separate file**:
 
 - \`.cclaw/knowledge.jsonl\` does not exist.
 - \`.cclaw/knowledge.jsonl\` exists but is empty (zero lines after stripping whitespace).
@@ -56,7 +56,7 @@ Take the top 1-3 entries with score ≥ 4. If nothing scores ≥ 4, write the ar
 
 **Default path:** When you find ≥1 prior lesson that scores ≥4, return the **structured payload below directly to the dispatcher** (ac-author) in the slim-summary's \`Notes\` field as a serialized inline blob (\`"Notes: lessons={...}"\`). The ac-author copies the quotes verbatim into \`plan.md\`'s "Prior lessons" section. **Do not write a separate \`research-learnings.md\` file** unless the project has \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`.
 
-**Legacy path (\`legacy-artifacts: true\`):** Write \`.cclaw/flows/<slug>/research-learnings.md\` with the schema below. This preserves the v8.11-era 9-artifact layout for downstream tooling that still expects the file.
+**Legacy path (\`legacy-artifacts: true\`):** Write \`.cclaw/flows/<slug>/research-learnings.md\` with the schema below. This preserves the legacy 9-artifact layout for downstream tooling that still expects the file.
 
 \`\`\`markdown
 ---

@@ -7,7 +7,7 @@ trigger: specialist:plan-critic OR specialist:critic OR specialist:qa-runner OR 
 
 Before reading the rest of the artifact set, every adversarial / verification pass writes **3-5 predictions** of what is most likely to be wrong, missing, or under-graded. Then it reads the rest and verifies each prediction against the evidence. The discipline activates **deliberate search** rather than passive evaluation: writing predictions first forces the specialist to commit to expected failure modes BEFORE the artifact's wording has a chance to anchor them.
 
-Consolidated in v8.111 across the three specialists that ran their own near-identical inline §1 / §3 / §6 blocks (post-impl critic, plan-critic, qa-runner). Each specialist now carries a one-line anchor pointing here.
+Consolidated across the three specialists that ran their own near-identical inline §1 / §3 / §6 blocks (post-impl critic, plan-critic, qa-runner). Each specialist now carries a one-line anchor pointing here.
 
 ## When to use
 

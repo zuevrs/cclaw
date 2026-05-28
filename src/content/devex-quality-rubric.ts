@@ -1,23 +1,21 @@
 /**
  * Single source of truth for the six developer-experience (DevEx)
- * dimensions (added in the v8.82 release).
+ * dimensions.
  *
  * One consumer today, one shape ready for two tomorrow:
  *
  * - {@link "src/content/specialist-prompts/plan-critic.ts" | PLAN_CRITIC_PROMPT} —
- *   the pre-build `plan-critic` specialist on `rubricMode: "devex"` dispatches
- *   (v8.82 added the DevEx lens as a standalone `plan-devex` specialist;
- *   v8.104 merged it into `plan-critic` as one of three rubric modes). Walks
- *   plan.md against the six DevEx dimensions when triage detects an SDK / API
+ *   the pre-build `plan-critic` specialist on `rubricMode: "devex"` dispatches.
+ *   Walks plan.md against the six DevEx dimensions when triage detects an SDK / API
  *   / CLI / library / public-interface surface; below-6 grades become `DX-N`
  *   findings appended to plan.md's `## Plan-devex findings` section. Block-
  *   ship on strict at severity ≥ medium.
  *
- * Why one const, not "next slug bakes the rubric into the prompt": the v8.75
+ * Why one const, not "next slug bakes the rubric into the prompt": the
  * design-quality rubric showed that consumers fragment fast — the moment a
  * second surface (post-build reviewer axis, research lens, learnings table)
  * picks up the same vocabulary, the literal table drifts. The lift here is
- * pre-emptive: when a future v8.x adds a reviewer `devex` axis or a
+ * pre-emptive: when a future release adds a reviewer `devex` axis or a
  * `research-devex` lens, they share these helpers and the dimensions
  * cannot drift across surfaces.
  *
@@ -27,7 +25,7 @@
  * lives in the consuming specialist's prompt body. Reference: gstack plan-devex-review
  * SKILL.md lines 1019-1129 (the persona / competitive benchmark / magical
  * moment opening sequence) — cclaw bakes the dimensions into the rubric
- * but keeps the prompt single-shot (no AskUserQuestion pauses — v8.61
+ * but keeps the prompt single-shot (no AskUserQuestion pauses — the
  * always-auto contract).
  */
 
@@ -105,8 +103,7 @@ export const DEVEX_QUALITY_DIMENSIONS: readonly DevexQualityDimension[] = [
 
 /**
  * Render the six-dimension rubric table as the exact markdown the
- * plan-critic prompt (on `rubricMode: "devex"` dispatches; v8.104 merged
- * the former standalone `plan-devex` specialist into plan-critic) embeds.
+ * plan-critic prompt (on `rubricMode: "devex"` dispatches) embeds.
  * Three columns: dimension name, "what it covers", "what a 10 looks like".
  * The leading header + separator are emitted so the consumer can drop
  * the result into the prompt body verbatim.
@@ -126,8 +123,7 @@ export function renderDevexQualityRubricTable(): string {
 /**
  * Canonical AI-slop signals for the DevEx surface. Mirrors the
  * `DESIGN_QUALITY_AI_SLOP_SIGNALS` shape: when ≥2 signals fire on the
- * same plan, plan-critic (on `rubricMode: "devex"` dispatches; v8.104
- * merged the former standalone `plan-devex` specialist into plan-critic)
+ * same plan, plan-critic (on `rubricMode: "devex"` dispatches)
  * emits a single umbrella `DX-N` finding rather than per-signal noise.
  * The signals are intentionally concrete (developer-experience clichés
  * that ship without thought), not vague (good docs / bad docs).

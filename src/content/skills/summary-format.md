@@ -45,7 +45,7 @@ Append exactly this block to the bottom of the artifact you authored. Do not ren
 - if there is nothing, write `None.`.
 ```
 
-The block goes at the very bottom of the artifact, after the body, after any worked examples, after any prior-iteration material. One block per artifact write. The architect now authors the entire plan.md in a single dispatch (v8.62 unified flow), so plan.md carries **one Summary block** — `## Summary — architect` on large-risky / strict (to be explicit about the multi-phase ceremony that ran), or `## Summary` on small-medium / soft.
+The block goes at the very bottom of the artifact, after the body, after any worked examples, after any prior-iteration material. One block per artifact write. The architect now authors the entire plan.md in a single dispatch (unified flow), so plan.md carries **one Summary block** — `## Summary — architect` on large-risky / strict (to be explicit about the multi-phase ceremony that ran), or `## Summary` on small-medium / soft.
 
 ## What goes in each section
 
@@ -69,7 +69,7 @@ Drop `Confidence: low` items here verbatim with a one-line cause. The reviewer c
 
 If there are no real concerns, write `None.` and own it.
 
-## Confidence ladder (v8.111 — canonical across every slim summary)
+## Confidence ladder (canonical across every slim summary)
 
 The `Confidence` line on every post-triage slim summary uses a three-band ladder. The ladder is the same across all specialists; the **accents** (which specific sampled section, which specific brushed cap, which specific missing input dropped you to medium / low) are the specialist's own concern and stay in the specialist body — the canonical ladder below sets the *common* shape every specialist projects onto.
 

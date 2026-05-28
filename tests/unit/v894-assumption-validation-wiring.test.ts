@@ -257,7 +257,6 @@ describe("v8.94 — reviewer-axis-assumption-coverage skill body cites the new e
     );
     const body = await fs.readFile(skillPath, "utf8");
     expect(body).toContain("unvalidatedHighStakesKas");
-    expect(body).toMatch(/v8\.96/);
   });
 });
 

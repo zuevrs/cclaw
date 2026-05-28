@@ -64,7 +64,7 @@ describe("v8.102 — patch-mode wiring", () => {
     // Detect-hop on-demand pointer table carries the patch-mode trigger
     // row alongside the other runbook pointers.
     expect(startCommand).toMatch(
-      /\| `\/cc` argument starts with `patch ` \(v8\.102\+ post-ship micro-edit fork\) \| `patch-mode\.md` \|/u
+      /\| `\/cc` argument starts with `patch ` \(post-ship micro-edit fork\) \| `patch-mode\.md` \|/u
     );
     // The patch-mode fork dispatches builder directly (no triage / no
     // architect / no plan-critic (all three rubric modes — generic /
@@ -137,7 +137,7 @@ describe("v8.102 — patch-mode section contract (builder envelope + triage down
     // patchMode: true flag + the carve-outs (no slice topology, no
     // per-slice review, no verify(AC-N) discipline, no flow-state
     // assumption row flipping) + the patch(<slug>) commit prefix.
-    expect(BUILDER_PROMPT).toMatch(/## Patch-mode flow \(v8\.102/u);
+    expect(BUILDER_PROMPT).toMatch(/## Patch-mode flow \(when envelope carries/u);
     expect(BUILDER_PROMPT).toContain("patchMode: true");
     expect(BUILDER_PROMPT).toMatch(/patch\(<slug>\):/u);
     expect(BUILDER_PROMPT).toMatch(/patch-N\.md|patch-<N>\.md/u);
@@ -178,7 +178,7 @@ describe("v8.102 — patch-mode section contract (builder envelope + triage down
     // pointing at /cc patch as the fast follow-up route.
     const handoffGates = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === "handoff-gates.md");
     expect(handoffGates).toBeDefined();
-    expect(handoffGates?.body).toMatch(/### Post-ship micro-edit hint \(v8\.102\)/u);
+    expect(handoffGates?.body).toMatch(/### Post-ship micro-edit hint/u);
     expect(handoffGates?.body).toContain("/cc patch <slug>");
     expect(handoffGates?.body).toMatch(/fast follow-up without full ceremony/u);
     // The hint is non-coercive — emitted on every clean ship, not a

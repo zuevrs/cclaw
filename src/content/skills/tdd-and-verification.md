@@ -5,7 +5,7 @@ trigger: when stage=build (granularity depends on ceremony_mode — see below); 
 
 # Skill: tdd-and-verification (RED → GREEN → REFACTOR + staged verification gate + refactor safety)
 
-This merged skill covers the full build-stage loop: the test-first cycle (formerly **tdd-cycle**), the staged verification gate that wraps handoffs (formerly **verification-loop**), and the behaviour-preservation rules that govern the REFACTOR step on pure-refactor slugs (formerly **refactor-safety**). v8.63+ split work (slices, `SL-N`) from verification (AC, `verify(AC-N): passing`); this skill teaches both halves in strict mode.
+This merged skill covers the full build-stage loop: the test-first cycle (formerly **tdd-cycle**), the staged verification gate that wraps handoffs (formerly **verification-loop**), and the behaviour-preservation rules that govern the REFACTOR step on pure-refactor slugs (formerly **refactor-safety**). cclaw splits work (slices, `SL-N`) from verification (AC, `verify(AC-N): passing`); this skill teaches both halves in strict mode.
 
 ## tdd-cycle
 
@@ -75,7 +75,7 @@ The reviewer's `git log --grep="^verify(AC-N): passing"` scan reconstructs the A
 
 ## Mandatory gates per slice
 
-All eight gates are reviewer-enforced ex-post (v8.40+; no mechanical commit hook). The builder's `self_review[]` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running `git log --grep="(SL-N):"` (slice work) AND `git log --grep="verify(AC-N):"` (AC verification) against the plan's tables and reading `build.md`.
+All eight gates are reviewer-enforced ex-post (no mechanical commit hook). The builder's `self_review[]` JSON attestation is the pre-reviewer gate the orchestrator inspects; the reviewer is the ex-post gate that verifies the chain by running `git log --grep="(SL-N):"` (slice work) AND `git log --grep="verify(AC-N):"` (AC verification) against the plan's tables and reading `build.md`.
 
 (a) **discovery_complete** — relevant tests / fixtures / helpers / commands cited. *Evidence: Discovery column in build.md slice row.*
 (b) **impact_check_complete** — affected callbacks / state / interfaces / contracts named. *Evidence: Discovery column citations.*
@@ -106,7 +106,7 @@ RIGHT (vertical / tracer bullet):
   verify(AC-2): passing
 ```
 
-Each cycle informs the next. The SL-2 test is shaped by what the SL-1 implementation revealed about the real interface. Tracer-bullet discipline is now prompt-enforced (and reviewer-verified ex-post): committing `red(SL-2): ...` before SL-1's chain has closed (`red(SL-1) → green(SL-1) → refactor(SL-1)`) is an A-N finding the reviewer catches via `git log` ordering, not a hook-rejected commit. (v8.64 parallel-by-default: independent slices in the same topological layer may run concurrently in worktrees; the per-slice chain still has to close in order within each worktree.)
+Each cycle informs the next. The SL-2 test is shaped by what the SL-1 implementation revealed about the real interface. Tracer-bullet discipline is now prompt-enforced (and reviewer-verified ex-post): committing `red(SL-2): ...` before SL-1's chain has closed (`red(SL-1) → green(SL-1) → refactor(SL-1)`) is an A-N finding the reviewer catches via `git log` ordering, not a hook-rejected commit. (parallel-by-default: independent slices in the same topological layer may run concurrently in worktrees; the per-slice chain still has to close in order within each worktree.)
 
 In soft mode the same principle applies at feature granularity: write 1–3 tests for the highest-priority condition, implement, then if more tests are needed for adjacent conditions, write them after you've seen the real shape of the GREEN code.
 
@@ -233,7 +233,7 @@ When reviewer returns `block`, the same TDD cycle applies to the fix:
 
 The slice id stays the same; commit messages cite `F-N` in the subject. The reviewer's git-log scan still keys off the `(SL-N):` prefix (slice work) and the fresh `verify(AC-N): passing` SHA (re-verify); the `fix F-N` token in the subject is what cross-references the review-block finding.
 
-## Posture mapping (v8.36; v8.63 retargeted to per-slice)
+## Posture mapping (retargeted to per-slice)
 
 Every slice in strict mode carries a **`Posture`** column in `plan.md > ## Plan / Slices` — a per-slice annotation that picks the right TDD ceremony. The default is `test-first` (the standard RED → GREEN → REFACTOR cycle); the other five values cover the cases where the standard cycle is structurally absent or actively wrong. The architect sets the posture using the heuristic table in its prompt; the builder reads it and selects the ceremony; the reviewer applies the posture-specific check ex-post via `git log --grep` and the `src/posture-validation.ts` helper.
 
@@ -254,7 +254,7 @@ The reviewer's predicate-as-cross-check: `src/posture-validation.ts:validatePost
 
 ### Bootstrap escape — the only SL-1 exception to RED-before-GREEN
 
-SL-1 of a slug whose first task is installing the test framework itself sets `Posture: bootstrap`; the reviewer accepts a `green(SL-1): ...` commit without a prior `red(SL-1): ...` for that slice only. SL-2+ in the same slug uses the full RED → GREEN → REFACTOR cycle. The legacy `state.buildProfile === "bootstrap"` field is still honoured for in-flight projects whose flow-state predates v8.36 — when set, the reviewer treats every slice as `Posture: bootstrap` regardless of what its row says.
+SL-1 of a slug whose first task is installing the test framework itself sets `Posture: bootstrap`; the reviewer accepts a `green(SL-1): ...` commit without a prior `red(SL-1): ...` for that slice only. SL-2+ in the same slug uses the full RED → GREEN → REFACTOR cycle. The legacy `state.buildProfile === "bootstrap"` field is still honoured for in-flight projects whose flow-state predates the posture system — when set, the reviewer treats every slice as `Posture: bootstrap` regardless of what its row says.
 
 ### Worked examples — picking the posture
 
@@ -275,11 +275,11 @@ The posture mapping above covers every slice the builder will see. Two cases liv
 
 For every other slice, pick a row from the posture mapping above and follow it. There is no third "skip TDD entirely" escape hatch beyond these two — every other "we don't need a test here" instinct maps to **`docs-only`**, **`refactor-only`**, or **`tests-as-deliverable`** posture and gets the corresponding (smaller) ceremony, not zero ceremony.
 
-## Archived-flow back-compat (pre-v8.63)
+## Archived-flow back-compat
 
-Slugs authored before v8.63 used a single `## Acceptance Criteria` table (no `## Plan / Slices`) and keyed the entire TDD chain off `(AC-N)` instead of `(SL-N)` (no separate verify pass). The reviewer auto-detects the archived shape from the absence of `## Plan / Slices` and applies the legacy per-posture recipe (`red(AC-N)` → `green(AC-N)` → `refactor(AC-N)`) directly against the AC token. New strict-mode slugs always carry both tables and split work (`SL-N`) from verification (`verify(AC-N): passing`); do not mix shapes within a single slug.
+Legacy slugs used a single `## Acceptance Criteria` table (no `## Plan / Slices`) and keyed the entire TDD chain off `(AC-N)` instead of `(SL-N)` (no separate verify pass). The reviewer auto-detects the archived shape from the absence of `## Plan / Slices` and applies the legacy per-posture recipe (`red(AC-N)` → `green(AC-N)` → `refactor(AC-N)`) directly against the AC token. New strict-mode slugs always carry both tables and split work (`SL-N`) from verification (`verify(AC-N): passing`); do not mix shapes within a single slug.
 
-## Anti-rationalization table (T2-8, addyosmani pattern; v8.13)
+## Anti-rationalization table (T2-8, addyosmani pattern)
 
 **Cross-cutting rationalizations:** the canonical RED-skipping / REFACTOR-silence / "manual test" rows live in `.cclaw/lib/anti-rationalizations.md` under category `posture-bypass`. The rows below stay here because they are TDD-cycle-specific (suppressing failure, mock vs real DB, slice / AC-named test files, prefix discipline at the per-slice chain). Treat the catalog as the cross-cutting source of truth; treat this table as the cycle-specific deepening.
 

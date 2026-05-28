@@ -1,7 +1,7 @@
 /**
  * Shared cross-cutting anti-rationalization catalog.
  *
- * Before v8.49, cross-cutting rationalizations (e.g. "I'll claim complete now,
+ * Previously, cross-cutting rationalizations (e.g. "I'll claim complete now,
  * the reviewer will catch any gaps", "while I'm here I'll fix the adjacent
  * thing") drifted across specialist prompts and skill `.md` files - each
  * skill carried its own phrasing of the same canonical excuse, and the
@@ -141,7 +141,7 @@ export const SHARED_ANTI_RATIONALIZATIONS: Record<
       rationalization:
         '"I\'ll skip the `verify(AC-N): passing` commit since the slice commits already touched the AC."',
       truth:
-        "The slice commits are the TDD unit; the `verify(AC-N): passing` commit is the atomic AC closure signal (v8.63). The reviewer dual-greps: `(SL-N):` for slice work, `verify(AC-N):` for AC verification. Without the verify commit the AC reads as unclosed even if every slice that contributes to it landed. Stamp one `verify(AC-N): passing` commit per AC once its contributing slices are green."
+        "The slice commits are the TDD unit; the `verify(AC-N): passing` commit is the atomic AC closure signal. The reviewer dual-greps: `(SL-N):` for slice work, `verify(AC-N):` for AC verification. Without the verify commit the AC reads as unclosed even if every slice that contributes to it landed. Stamp one `verify(AC-N): passing` commit per AC once its contributing slices are green."
     },
     {
       rationalization: '"`git add -A` is fine, I know what changed."',

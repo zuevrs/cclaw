@@ -1,10 +1,10 @@
-# Clarify protocol (v8.111+)
+# Clarify protocol
 
-The architect's Phase −1 Clarify inner detail: 4-dimension scoring math, gap-lens table, challenge-mode stance rotation, hide-render decision, and the anti-rationalization table. Lifted out of `agents/architect.md` in v8.111 to keep the in-prompt anchor short (~6 lines) while preserving the math-gated exit semantics.
+The architect's Phase −1 Clarify inner detail: 4-dimension scoring math, gap-lens table, challenge-mode stance rotation, hide-render decision, and the anti-rationalization table. Lifted out of `agents/architect.md` to keep the in-prompt anchor short (~6 lines) while preserving the math-gated exit semantics.
 
 The architect's in-prompt body keeps the **entry condition** (`clarify_opens = (ambiguityScore >= threshold) AND (ceremonyMode != "inline")`), the **one-question-per-turn discipline**, the **early-exit signal set** (user says "ready"/"go"/"proceed"), and the **carry-over rule** for plan.md's `## Assumptions (correct me now)` section. Everything below is the inner machinery the architect references when actually composing each round's question.
 
-## Per-dimension ambiguity scoring (v8.78; v8.105 silent-orchestrator)
+## Per-dimension ambiguity scoring (silent-orchestrator)
 
 After every user answer (including before the FIRST question, on the silent pre-Clarify score), compute four scores in `[0.0, 1.0]` (1.0 = "this dimension is fully clear; no further question needed"):
 
@@ -40,7 +40,7 @@ Re-use the four gap lenses when composing the question — the mapping from tria
 
 You may compose the question in the user's language; the template wording is a starting point, not a literal phrase to paste. Keep each question SHORT (one sentence; max two if the second sentence is the example).
 
-## Challenge-mode stance rotation (v8.78; v8.105 — internal stance, no user-visible label)
+## Challenge-mode stance rotation (internal stance, no user-visible label)
 
 To prevent the late rounds from devolving into incremental clarifications of the same framing, rotate the question stance on the late rounds. The stance is an internal authoring guide for the orchestrator's question composition; do NOT prefix the question with the stance label (no "Round 4 — Contrarian mode:" header in the user-visible turn). The user sees a single question with a single stance behind it; the rotation is the orchestrator's discipline, not a surface artifact.
 
@@ -49,9 +49,9 @@ To prevent the late rounds from devolving into incremental clarifications of the
 
 The rotation reference is `oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"`. Rounds 1-3 are open-ended questions in the four gap-lens style (specificity / evidence / counterfactual / attachment); rounds 4-5 carry the contrarian / simplifier stance internally — the user just sees the question. Earlier exit (math-gated or user-signal) skips the rotation entirely — most flows close out by round 3 and never see the contrarian stance.
 
-## Hide-render rule (v8.105)
+## Hide-render rule
 
-**Do NOT render the per-round score table to the user.** The 4-row `Dimension / Score / Weight / Why` block and the trailing `Next target: <weakest-dimension>` line are **internal** to the orchestrator — compute them, use them to pick the weakest dimension, persist them to `flow-state.json > clarifyRounds[]`, but do NOT emit them in chat. The user sees only the next question (one sentence, one turn, one reply). The v8.78 surface-render block was the dominant friction signal in the v8.105 over-engineering audit — users read the table once, then started skimming the question and missing the targeted dimension; hiding the table puts the question back at the centre of the dialogue.
+**Do NOT render the per-round score table to the user.** The 4-row `Dimension / Score / Weight / Why` block and the trailing `Next target: <weakest-dimension>` line are **internal** to the orchestrator — compute them, use them to pick the weakest dimension, persist them to `flow-state.json > clarifyRounds[]`, but do NOT emit them in chat. The user sees only the next question (one sentence, one turn, one reply). Rendering the table is a dominant friction signal — users read the table once, then start skimming the question and missing the targeted dimension; hiding the table puts the question back at the centre of the dialogue.
 
 Stamp every round into `flow-state.json > clarifyRounds[]` (append-only) as a `ClarifyRoundState` entry (`{ round, dimensionScores, ambiguity, targetedDimension, question }`). The persisted array is the canonical audit trail downstream specialists / learnings capture read AND the only durable record of the round-by-round math — compound learnings, the post-ship audit, and any future "why did we ask question 3?" trace all read the persisted scores. The render absence is user-facing only; the math itself persists with full fidelity.
 
@@ -62,7 +62,7 @@ Stamp every round into `flow-state.json > clarifyRounds[]` (append-only) as a `C
 3. Identify the **weakest dimension** (lowest score; tiebreaker prefers higher weight: goal > constraints = criteria > context).
 4. Map the dimension to its lens + question template via the table above. If the round number is 4, apply contrarian stance (silently); if round 5, apply simplifier stance (silently). Do NOT prefix the question with a stance label — the user reads a single question, not a stance header.
 5. Compose the question in the user's language; keep it short (one sentence + optional example).
-6. Persist the round's full scores + targeted dimension + question into `flow-state.json > clarifyRounds[]` (v8.105 — the persisted audit trail replaces the v8.78 user-visible per-round table; render the question only).
+6. Persist the round's full scores + targeted dimension + question into `flow-state.json > clarifyRounds[]` (the persisted audit trail replaces the user-visible per-round table; render the question only).
 
 The triage slim summary's `Ambiguity score:` line still carries the comma-separated list of signals that fired (`vague-verbs`, `missing-AC`, `multiple-interpretations`, `no-concrete-names`) — read those signals to seed the round-0 per-dimension scores (e.g. `vague-verbs` → low `goal` score, `missing-AC` → low `criteria` score). The signals are an initial-condition hint, not a question-ordering directive — the iterative scoring takes over from round 1 onward.
 
@@ -70,15 +70,15 @@ The triage slim summary's `Ambiguity score:` line still carries the comma-separa
 
 | Excuse | Reality |
 | --- | --- |
-| "Ambiguity score is 62 — barely above threshold. I'll skip Clarify and pick a default." | The threshold IS the gate. 62 ≥ 60 opens Clarify; the architect does not second-guess the score. v8.67 was designed to kill exactly this rationalization. |
+| "Ambiguity score is 62 — barely above threshold. I'll skip Clarify and pick a default." | The threshold IS the gate. 62 ≥ 60 opens Clarify; the architect does not second-guess the score. |
 | "I can guess what the user means; asking is going to feel like sluggishness." | The silent-assumption failure mode IS the slowness — re-architecting after the wrong plan ships is the most expensive cycle in cclaw's flow. One Clarify question buys hours of re-work. |
 | "Let me batch 3 questions into one turn to save round-trips." | NO. One question per turn is hard-locked. Batched questions get half-answers; one-at-a-time forces the user to think about each axis. |
-| "I'll ask 5 questions even if the first answer resolved everything." | NO. The math-gated exit (v8.78) is the canonical stop signal: `ambiguity < 0.25` ends Clarify regardless of round count. Padding to 5 is the symmetry trap — every unnecessary question erodes the user's trust that Clarify is cheap. |
+| "I'll ask 5 questions even if the first answer resolved everything." | NO. The math-gated exit is the canonical stop signal: `ambiguity < 0.25` ends Clarify regardless of round count. Padding to 5 is the symmetry trap — every unnecessary question erodes the user's trust that Clarify is cheap. |
 | "User said 'fix it' to my first question — I should ask another to nail it down." | "Fix it" / "go" / "ready" / "proceed" is the early-exit signal. Honour it. The plan.md ack-window catches anything you assumed wrong. |
 | "The prompt mentions a security keyword — I should skip Clarify and go strict-paranoid." | The triage step already escalated ceremony on security keywords. Clarify is orthogonal — security work is often MORE ambiguous, not less. Ask the questions. |
-| "Round 4 — I'll just keep asking incremental clarifications." (v8.78; stance retained in v8.105 — labels hidden) | NO. Round 4's stance is **contrarian** — ask "what if the opposite were true?" against the weakest dimension. Round 5's stance is **simplifier** — ask "what's the simplest version that still ships value?". The stance rotation is the v8.78 stagnation guard; ignoring it wastes the late rounds. v8.105 hides the user-visible stance label, but the stance discipline still applies — the contrarian / simplifier framing is the orchestrator's internal authoring guide for the question itself. |
-| "I'll render the per-round score table to the user so they can see what each answer is moving." (v8.105) | NO. v8.105 removed the user-visible per-round table render. The 4-row `Dimension / Score / Weight` block and the `Next target:` line are internal to the orchestrator — compute them, use them to pick the weakest dimension, persist them to `flow-state.json > clarifyRounds[]`, but do NOT render them in chat. The user sees only the question. The math persistence is the audit trail; the table render was the dominant friction surface in the v8.105 over-engineering audit. |
-| "I'll just always target `goal` because it has the highest weight." (v8.78) | NO. Target the **weakest dimension** per the per-round score, not the highest-weight dimension. Weight resolves *ties* between equal-low scores; it does NOT pre-empt the score. |
+| "Round 4 — I'll just keep asking incremental clarifications." (stance retained — labels hidden) | NO. Round 4's stance is **contrarian** — ask "what if the opposite were true?" against the weakest dimension. Round 5's stance is **simplifier** — ask "what's the simplest version that still ships value?". The stance rotation is the stagnation guard; ignoring it wastes the late rounds. The user-visible stance label is hidden, but the stance discipline still applies — the contrarian / simplifier framing is the orchestrator's internal authoring guide for the question itself. |
+| "I'll render the per-round score table to the user so they can see what each answer is moving." | NO. The per-round score table is not rendered to the user. The 4-row `Dimension / Score / Weight` block and the `Next target:` line are internal to the orchestrator — compute them, use them to pick the weakest dimension, persist them to `flow-state.json > clarifyRounds[]`, but do NOT render them in chat. The user sees only the question. The math persistence is the audit trail; the table render was the dominant friction surface. |
+| "I'll just always target `goal` because it has the highest weight." | NO. Target the **weakest dimension** per the per-round score, not the highest-weight dimension. Weight resolves *ties* between equal-low scores; it does NOT pre-empt the score. |
 
 ## What the architect's in-prompt body retains
 

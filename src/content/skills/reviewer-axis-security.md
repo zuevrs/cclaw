@@ -1,13 +1,13 @@
 ---
 name: reviewer-axis-security
-trigger: gated reviewer axis. Auto-loads on every reviewer dispatch when `triage.securityFlag == true` (or `plan.md` frontmatter `security_flag: true`). The reviewer still walks a lightweight five-item threat-model on non-flagged slugs; this skill carries the deep rubric + sensitive-change protocol absorbed from the retired `security-reviewer` specialist in v8.62.
+trigger: gated reviewer axis. Auto-loads on every reviewer dispatch when `triage.securityFlag == true` (or `plan.md` frontmatter `security_flag: true`). The reviewer still walks a lightweight five-item threat-model on non-flagged slugs; this skill carries the deep rubric + sensitive-change protocol absorbed from the retired `security-reviewer` specialist.
 ---
 
 # Skill: reviewer-axis-security
 
-Full threat-model checklist, sensitive-change protocol, hard rules, edge cases, and common pitfalls for the reviewer's `security` axis (v8.62 absorbed from `security-reviewer`). Lifted out of `reviewer.ts` in the v8.83 release — the prompt now carries only a 5-line stub pointing here.
+Full threat-model checklist, sensitive-change protocol, hard rules, edge cases, and common pitfalls for the reviewer's `security` axis (absorbed from `security-reviewer`). Lifted out of `reviewer.ts` — the prompt now carries only a 5-line stub pointing here.
 
-v8.62 retired the dedicated `security-reviewer` specialist; its threat-model + sensitive-change protocol absorbs into the reviewer's `security` axis. Run the threat-model checklist + sensitive-change rules below as part of the standard fourteen-axis pass on every iteration. When the dispatch envelope's slug carries `security_flag: true` in `plan.md` frontmatter (or the orchestrator flagged `security_flag: true` in the dispatch envelope) — typically because the diff touches authn / authz / secrets / supply chain / data exposure / sensitive compliance surfaces — give the security axis **extra emphasis**: walk every threat-model item even when the diff looks small, run the sensitive-change rules verbatim, and prefer `required` severity for genuinely unresolved threat-model gaps.
+The dedicated `security-reviewer` specialist is retired; its threat-model + sensitive-change protocol absorbs into the reviewer's `security` axis. Run the threat-model checklist + sensitive-change rules below as part of the standard fourteen-axis pass on every iteration. When the dispatch envelope's slug carries `security_flag: true` in `plan.md` frontmatter (or the orchestrator flagged `security_flag: true` in the dispatch envelope) — typically because the diff touches authn / authz / secrets / supply chain / data exposure / sensitive compliance surfaces — give the security axis **extra emphasis**: walk every threat-model item even when the diff looks small, run the sensitive-change rules verbatim, and prefer `required` severity for genuinely unresolved threat-model gaps.
 
 ## When to use
 
@@ -63,7 +63,7 @@ If you raise any `security`-severity finding (`critical` or `required`), set `pl
 - Findings must reference real files in the diff. Do not generate generic OWASP Top-10 lectures.
 - If you find an active credential, secret, or PII leak in the diff: severity is `critical` (axis=security); the change must not ship until it is resolved.
 - Do not modify the code yourself. Hand fix-only work back to builder.
-- **Iteration cap.** The same hard cap of 5 reviews applies (no separate cap for security work; v8.62 unifies into one reviewer iteration counter).
+- **Iteration cap.** The same hard cap of 5 reviews applies (no separate cap for security work; a single reviewer iteration counter).
 
 ## Common rationalizations
 

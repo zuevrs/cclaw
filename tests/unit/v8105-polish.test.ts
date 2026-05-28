@@ -34,8 +34,8 @@ const PROJECT_ROOT = path.resolve(process.cwd());
 
 describe("v8.105 — anti-slop axis severity capped at consider (reviewer prompt + companion skill)", () => {
   it("reviewer prompt's anti-slop axis row + section both name the cap-at-consider rule", () => {
-    expect(REVIEWER_PROMPT).toMatch(/v8\.105 cap-at-consider/);
-    expect(REVIEWER_PROMPT).toMatch(/Anti-slop axis \(gated;\s*default-on;\s*v8\.86;\s*v8\.105 cap-at-consider\)/);
+    expect(REVIEWER_PROMPT).toMatch(/cap-at-consider/);
+    expect(REVIEWER_PROMPT).toMatch(/Anti-slop axis \(gated;\s*default-on;\s*cap-at-consider\)/);
     expect(REVIEWER_PROMPT).toMatch(
       /severity hard-capped at `consider` regardless of grade/i
     );
@@ -48,7 +48,7 @@ describe("v8.105 — anti-slop axis severity capped at consider (reviewer prompt
   it("anti-slop axis-table row examples assign severity=consider on all four below-6 dimensions (no required / critical leaks)", () => {
     const reviewerLines = REVIEWER_PROMPT.split("\n");
     const antiSlopRow = reviewerLines.find(
-      (l) => l.includes("`anti-slop`") && l.includes("(**gated**)") && l.includes("v8.86")
+      (l) => l.includes("`anti-slop`") && l.includes("(**gated**;") && l.includes("cap-at-consider")
     );
     expect(antiSlopRow, "reviewer.ts must carry an anti-slop axis-table row").toBeDefined();
     expect(antiSlopRow!).toMatch(/speculative-flexibility: 3\/10; severity=consider/);
@@ -66,7 +66,6 @@ describe("v8.105 — anti-slop axis severity capped at consider (reviewer prompt
     );
     expect(skill).toMatch(/cap-at-consider/);
     expect(skill).toMatch(/Every below-6 dimension grade maps to `severity = consider`/);
-    expect(skill).toMatch(/v8\.105 collapses the ramp to a hard cap/);
     expect(skill).toMatch(/3-4\/10\*\*\s*—\s*severity = `consider`/);
     expect(skill).toMatch(/0-2\/10\*\*\s*—\s*severity = `consider`/);
     // The pre-v8.105 ramp is documented as the prior contract, but the
@@ -79,7 +78,7 @@ describe("v8.105 — anti-slop axis severity capped at consider (reviewer prompt
 describe("v8.105 — assumption-coverage axis severity capped at consider", () => {
   it("reviewer prompt's assumption-coverage axis row + section both name the cap-at-consider rule", () => {
     expect(REVIEWER_PROMPT).toMatch(
-      /Assumption-coverage axis \(gated;\s*v8\.85;\s*v8\.105 cap-at-consider\)/
+      /Assumption-coverage axis \(gated;\s*cap-at-consider\)/
     );
     expect(REVIEWER_PROMPT).toMatch(
       /severity hard-capped at `consider` regardless of high-stakes label/i
@@ -112,7 +111,7 @@ describe("v8.105 — assumption-coverage axis severity capped at consider", () =
     // for the reviewer's `assumption-coverage` axis (severity=`required`).'
     // v8.105: axis caps at consider; builder's payload is truly optional.
     expect(BUILDER_PROMPT).toMatch(/The payload is \*\*truly optional\*\*/);
-    expect(BUILDER_PROMPT).toMatch(/v8\.105 — the payload is optional even for high-stakes rows/);
+    expect(BUILDER_PROMPT).toMatch(/The payload is optional even for high-stakes rows/);
     expect(BUILDER_PROMPT).not.toMatch(
       /False-positive `?validates:`? claims are an A-1 finding[^.]*severity=`required`/
     );
@@ -131,7 +130,6 @@ describe("v8.105 — architect Phase −1 Clarify table hidden (math preserved)"
 
   it("architect prompt explicitly forbids rendering the per-round score table to the user", () => {
     expect(ARCHITECT_PROMPT).toMatch(/Do NOT render the per-round score table to the user/);
-    expect(ARCHITECT_PROMPT).toMatch(/v8\.105/);
     expect(ARCHITECT_PROMPT).toMatch(/the math is silent/i);
   });
 
@@ -188,7 +186,6 @@ describe("v8.105 — research-mode runbook Phase 1 Clarify table hidden (math pr
 
   it("research-mode runbook explicitly forbids rendering the per-round score table", () => {
     expect(RESEARCH_MODE_RUNBOOK).toMatch(/Do NOT render the per-round score table to the user/);
-    expect(RESEARCH_MODE_RUNBOOK).toMatch(/v8\.105/);
   });
 
   it("research-mode runbook does NOT carry the literal user-visible per-round table render block", () => {

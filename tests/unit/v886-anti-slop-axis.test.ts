@@ -180,10 +180,10 @@ describe("v8.86 — anti-slop axis section contract (shared rubric + reviewer pr
     expect(REVIEWER_PROMPT).toMatch(/Fourteen-axis review/);
     expect(REVIEWER_PROMPT).not.toMatch(/Thirteen-axis review/);
     expect(REVIEWER_PROMPT).toMatch(/Fourteen axes; five severities/);
-    // v8.105 — axis-table row + dedicated stub heading both grew a
-    // `v8.105 cap-at-consider` annotation; the v8.86 anchor remains.
-    expect(REVIEWER_PROMPT).toMatch(/\|\s*`anti-slop`\s*\(\*\*gated\*\*\)\s*—\s*v8\.86/);
-    expect(REVIEWER_PROMPT).toMatch(/^###\s+Anti-slop axis \(gated;\s*default-on;\s*v8\.86;\s*v8\.105 cap-at-consider\)/m);
+    // axis-table row + dedicated stub heading both carry the
+    // `cap-at-consider` annotation.
+    expect(REVIEWER_PROMPT).toMatch(/\|\s*`anti-slop`\s*\(\*\*gated\*\*;\s*default-on;\s*cap-at-consider\)/);
+    expect(REVIEWER_PROMPT).toMatch(/^###\s+Anti-slop axis \(gated;\s*default-on;\s*cap-at-consider\)/m);
     expect(REVIEWER_PROMPT).toContain(ANTI_SLOP_SKILL_ID);
     expect(REVIEWER_PROMPT).toContain(`.cclaw/lib/skills/${ANTI_SLOP_SKILL_ID}.md`);
     expect(REVIEWER_PROMPT).toMatch(/AS-N:\s*<dimension>\s*at\s*<grade>:\s*<description>/);

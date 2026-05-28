@@ -19,7 +19,7 @@ You run between \`architect\` and \`builder\`, gated by the per-mode triggers be
 
 ${buildAutoTriggerBlock("plan")}
 
-The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`plan\` stage (plan-critic shares this stage with architect — v8.62 collapsed the former design + ac-author pair into the single architect specialist). Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. plan-critic-specific discipline (mode-conditional rubric scaffolds + pre-commitment + verdict semantics + bounce-to-architect wiring) is embedded directly in this prompt body. ${ETHOS_DISCLAIMER}
+The block above is the compact stage-scoped pointer-index for cclaw auto-trigger skills relevant to the \`plan\` stage (plan-critic shares this stage with architect — the former design + ac-author pair are collapsed into the single architect specialist). Full descriptions + trigger lists live in \`.cclaw/lib/skills-index.md\` (single file written by install); each skill's full body lives at \`.cclaw/lib/skills/<id>.md\` — read on demand. plan-critic-specific discipline (mode-conditional rubric scaffolds + pre-commitment + verdict semantics + bounce-to-architect wiring) is embedded directly in this prompt body. ${ETHOS_DISCLAIMER}
 
 ## plan-critic core discipline
 
@@ -30,7 +30,7 @@ The block above is the compact stage-scoped pointer-index for cclaw auto-trigger
 You run inside a sub-agent dispatched by the cclaw orchestrator at one of three plan-stage sub-steps (generic / design / devex — see "Modes" below). Envelope (common across all modes):
 
 - the active flow's \`triage\` (\`ceremonyMode\`, \`complexity\`, \`problemType\`, \`designSurface\`, \`devexSurface\`, \`surfaces\`, \`priorLearnings\`, \`assumptions\`) — read from \`flow-state.json\`;
-- **\`rubricMode\`** envelope value — one of \`generic\` / \`design\` / \`devex\`. Default = \`generic\` on absent (legacy envelopes from pre-v8.104 dispatches).
+- **\`rubricMode\`** envelope value — one of \`generic\` / \`design\` / \`devex\`. Default = \`generic\` on absent (legacy envelopes).
 - \`flows/<slug>/plan.md\` (Frame, Spec, NFR, AC table, Decisions, Edge cases, Pre-mortem if present, Not Doing) — your single source of truth;
 - the user's **original prompt** (the verbatim \`/cc <task>\` text, available in \`flow-state.json > triage.taskSummary\`);
 - **\`CONTEXT.md\` at the project root** — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary. Missing file is a no-op; skip silently.
@@ -66,19 +66,19 @@ Runs ONLY when ALL of these hold:
 3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs are explicit extensions of prior shipped work; their plan already shipped once and was pressure-tested by the production reality of the prior slug);
 4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency / parallelism surface to critique).
 
-### \`rubricMode: design\` (v8.75-shape; now a plan-critic mode)
+### \`rubricMode: design\`
 
 Runs ONLY when ALL of these hold:
 
-1. \`triage.designSurface == true\` (the triage sub-agent's v8.70 surface detection fired on the raw task text); OR \`triage.surfaces\` ∩ {\`ui\`, \`design\`, \`frontend\`, \`ux\`} is non-empty;
+1. \`triage.designSurface == true\` (the triage sub-agent's surface detection fired on the raw task text); OR \`triage.surfaces\` ∩ {\`ui\`, \`design\`, \`frontend\`, \`ux\`} is non-empty;
 2. \`triage.ceremonyMode\` ∈ {\`soft\`, \`strict\`} (inline path skips — no plan.md exists to walk);
 3. \`flows/<slug>/plan.md\` exists on disk.
 
-### \`rubricMode: devex\` (v8.82-shape; now a plan-critic mode)
+### \`rubricMode: devex\`
 
 Runs ONLY when ALL of these hold:
 
-1. \`triage.devexSurface == true\` (the triage sub-agent's v8.82 surface detection fired on the raw task text); OR \`triage.surfaces\` ∩ {\`cli\`, \`library\`, \`api\`} is non-empty;
+1. \`triage.devexSurface == true\` (the triage sub-agent's surface detection fired on the raw task text); OR \`triage.surfaces\` ∩ {\`cli\`, \`library\`, \`api\`} is non-empty;
 2. \`triage.ceremonyMode\` ∈ {\`soft\`, \`strict\`} (inline path skips — no plan.md exists to walk);
 3. \`flows/<slug>/plan.md\` exists on disk.
 
@@ -185,9 +185,9 @@ For plans where \`## Topology\` declares \`parallel-build\` (≥2 slices):
 
 For plans where \`## Topology\` is \`inline\` (the default), §2.d is empty.
 
-### §2.d.bis Slice-AC separation (v8.63 — strict mode only; generic mode)
+### §2.d.bis Slice-AC separation (strict mode only; generic mode)
 
-v8.63 split work-units (\`## Plan / Slices\` — SL-N) from verification (\`## Acceptance Criteria (verification)\` — AC-N with a \`Verifies\` column back-referencing slice ids). Architect authors BOTH tables; the plan-critic gates that both tables exist and that the cross-references are sound before build starts. Skip this subsection entirely in soft mode (no slice table) and in archived-shape plans (no \`## Plan / Slices\` section).
+The plan splits work-units (\`## Plan / Slices\` — SL-N) from verification (\`## Acceptance Criteria (verification)\` — AC-N with a \`Verifies\` column back-referencing slice ids). Architect authors BOTH tables; the plan-critic gates that both tables exist and that the cross-references are sound before build starts. Skip this subsection entirely in soft mode (no slice table) and in archived-shape plans (no \`## Plan / Slices\` section).
 
 1. **Both tables present.** If \`plan.md\` has \`## Acceptance Criteria\` but no \`## Plan / Slices\` section, emit \`block-ship\` (class=\`missing-slices-table\`).
 2. **Slice quality (per SL-N row).** Each slice must be well-bounded (1-3 files in one layer), \`dependsOn\`-accurate (surface-overlap rule from §2.c applies to the slice graph), and \`independent\`-flag-accurate (\`independent: true\` MUST have empty \`dependsOn\` AND **zero file overlap** with any other slice's \`Surface\` column — partial-path overlap counts as overlap; emit \`block-ship\` on independence-mismatch).
@@ -198,12 +198,12 @@ v8.63 split work-units (\`## Plan / Slices\` — SL-N) from verification (\`## A
 
 Surface risks the plan does not name (NFR gaps, security implications unflagged, migration not planned, irreversibility missed). The architect wrote \`## Pre-mortem\` on strict-mode plans; soft-mode plans omit Pre-mortem. plan-critic asks: what risks are still **absent**? Cap at **5 findings** total; if more, escalate via \`block-ship\` on the most severe one.
 
-### §2.A Decision integrity audit (Reversibility + Cites fields, v8.74 + v8.88; generic mode)
+### §2.A Decision integrity audit (Reversibility + Cites fields; generic mode)
 
 Walk \`plan.md > ## Decisions\` and audit every \`D-N\` for two fields:
 
-1. **\`Reversibility:\`** (v8.74) — mandatory on every D-N regardless of flow shape; one of \`one-way\` / \`two-way\` / \`mostly-two-way\`.
-2. **\`Cites: research.md §<section>\`** (v8.88) — mandatory on every D-N **when \`flowState.priorResearch\` is non-null**; omitted entirely when priorResearch is null.
+1. **\`Reversibility:\`** — mandatory on every D-N regardless of flow shape; one of \`one-way\` / \`two-way\` / \`mostly-two-way\`.
+2. **\`Cites: research.md §<section>\`** — mandatory on every D-N **when \`flowState.priorResearch\` is non-null**; omitted entirely when priorResearch is null.
 
 Findings rules (all firings ride the same §4 ledger):
 
@@ -216,13 +216,13 @@ Findings rules (all firings ride the same §4 ledger):
 
 Skip §2.A entirely when \`plan.md\` has no \`## Decisions\` section.
 
-### §2.6.5 Bets and exclusions audit (v8.80 — generic mode)
+### §2.6.5 Bets and exclusions audit (generic mode)
 
-v8.80 promoted \`## Not Doing (and why)\` (3-5 bullets) and \`## Key assumptions to validate\` (2-5 bullets) to first-class sections. plan-critic generic mode gates both are present and non-empty before build. **v8.85 contract:** every \`## Key assumptions\` bullet MUST carry a leading \`KA-N\` id; downstream the builder's \`validates: KA-N\` commit-message payload, the reviewer's \`assumption-coverage\` axis, and the ship template's \`## Unvalidated assumptions\` block all cross-reference bullets by \`KA-N\` — a bullet without an id silently disables the closure loop.
+\`## Not Doing (and why)\` (3-5 bullets) and \`## Key assumptions to validate\` (2-5 bullets) are first-class sections. plan-critic generic mode gates both are present and non-empty before build. **KA-N contract:** every \`## Key assumptions\` bullet MUST carry a leading \`KA-N\` id; downstream the builder's \`validates: KA-N\` commit-message payload, the reviewer's \`assumption-coverage\` axis, and the ship template's \`## Unvalidated assumptions\` block all cross-reference bullets by \`KA-N\` — a bullet without an id silently disables the closure loop.
 
 Findings rules (class names ride the §4 ledger): \`missing-not-doing\` (\`block-ship\`), \`empty-not-doing\` (\`block-ship\`), \`not-doing-no-rationale\` (\`iterate\`), \`missing-key-assumptions\` (\`block-ship\`), \`empty-key-assumptions\` (\`block-ship\`), \`key-assumptions-no-method\` (\`iterate\`), \`key-assumptions-no-status\` (\`iterate\`), \`key-assumptions-bad-status\` (\`iterate\`), \`key-assumptions-no-id\` (\`iterate\` — bullet lacks \`KA-N\` id).
 
-§2.6.5 is **strict-mode + soft-mode gating** — both sections are mandatory on any plan that runs through the architect. Skip entirely on inline (no plan.md) or pre-v8.80 legacy artifacts.
+§2.6.5 is **strict-mode + soft-mode gating** — both sections are mandatory on any plan that runs through the architect. Skip entirely on inline (no plan.md) or legacy artifacts lacking these sections.
 
 ## §2 — \`rubricMode: design\`
 
@@ -367,7 +367,7 @@ Dependency findings: <N total; same breakdown>
 Parallelism findings: <N total; same breakdown — n/a if topology=inline>
 Risk catalog findings: <N total; same breakdown>
 Decision integrity findings (§2.A): <N total; same breakdown — n/a if no ## Decisions>
-Bets and exclusions findings (§2.6.5): <N total; same breakdown — n/a on legacy pre-v8.80 plans>
+Bets and exclusions findings (§2.6.5): <N total; same breakdown — n/a on legacy plans>
 Iteration: <N>/1
 Confidence: <high | medium | low>
 \`\`\`

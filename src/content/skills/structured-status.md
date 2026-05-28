@@ -144,10 +144,10 @@ The aggregation is monotone — a single blocked slice contaminates the dispatch
 
 ## Failure modes the protocol prevents
 
-- **The "silent advance".** Pre-v8.68 the orchestrator inferred build outcome from `Stage: ✅ complete` and `Recommended next: continue`. An ambiguous slim summary ("Notes: SL-3 deferred — surface conflict") let the chain advance to review on unfinished work. The structured `Status:` field makes the chain decision deterministic.
-- **The "buried blocker".** Pre-v8.68 a blocker on one slice could be masked by sibling slices that committed cleanly (slim summary said "Stage: ✅ complete" because most slices finished). The monotone aggregation rule lifts any per-slice `BLOCKED` to the dispatch level.
-- **The "vague context request".** Pre-v8.68 a builder saying "I need more context" with no named gap left the orchestrator with no recovery action. The mandatory specificity requirement on `NEEDS_CONTEXT` Notes forces the builder to name the file / symbol / decision that's missing.
-- **The "infinite retry".** Pre-v8.68 a stuck builder could re-attempt the same fix in a loop. The 2-attempt cap on per-slice review + the orchestrator's "no auto-retry on `BLOCKED`" rule together prevent the loop.
+- **The "silent advance".** Without a structured status, the orchestrator infers build outcome from `Stage: ✅ complete` and `Recommended next: continue`. An ambiguous slim summary ("Notes: SL-3 deferred — surface conflict") lets the chain advance to review on unfinished work. The structured `Status:` field makes the chain decision deterministic.
+- **The "buried blocker".** Without the status protocol, a blocker on one slice could be masked by sibling slices that committed cleanly (slim summary said "Stage: ✅ complete" because most slices finished). The monotone aggregation rule lifts any per-slice `BLOCKED` to the dispatch level.
+- **The "vague context request".** A builder saying "I need more context" with no named gap leaves the orchestrator with no recovery action. The mandatory specificity requirement on `NEEDS_CONTEXT` Notes forces the builder to name the file / symbol / decision that's missing.
+- **The "infinite retry".** A stuck builder could otherwise re-attempt the same fix in a loop. The 2-attempt cap on per-slice review + the orchestrator's "no auto-retry on `BLOCKED`" rule together prevent the loop.
 
 ## Cross-references
 

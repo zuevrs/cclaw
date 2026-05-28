@@ -1,6 +1,6 @@
-# Builder TDD walkthrough (v8.111+)
+# Builder TDD walkthrough
 
-End-to-end bash transcripts for a strict-mode build cycle: per-slice RED → GREEN → REFACTOR plus the post-slice AC verification pass. Lifted out of `agents/builder.md` in v8.111 to free up in-prompt budget; the in-prompt anchor is 3 lines pointing here.
+End-to-end bash transcripts for a strict-mode build cycle: per-slice RED → GREEN → REFACTOR plus the post-slice AC verification pass. Lifted out of `agents/builder.md` to free up in-prompt budget; the in-prompt anchor is 3 lines pointing here.
 
 ## Worked example — full cycle for one slice + AC verification
 

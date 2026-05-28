@@ -284,7 +284,7 @@ describe("v8.58 — lightweight router + research mode section contract (start-c
     expect(body).not.toContain("askUserQuestion(\n  questions:");
 
     // triage prompt
-    expect(TRIAGE_PROMPT).toMatch(/specialist that consumes them|moved out|moved into the specialists/iu);
+    expect(TRIAGE_PROMPT).toMatch(/specialists? that consumes? each field|live in the specialists/iu);
     for (const moved of ["assumptions", "surfaces", "priorLearnings", "interpretationForks"]) {
       expect(TRIAGE_PROMPT).toContain(moved);
     }
@@ -308,10 +308,10 @@ describe("v8.58 — lightweight router + research mode section contract (start-c
     expect(ARCHITECT_PROMPT).toMatch(/insert\s+`"qa"`\s+between\s+`"build"`\s+and\s+`"review"`/u);
     expect(ARCHITECT_PROMPT).toContain("flowState.priorResearch");
     expect(ARCHITECT_PROMPT).toMatch(/priorResearch\.path/u);
-    expect(ARCHITECT_PROMPT).toMatch(/intra-flow `mode: "task"` is the only mode you handle post-v8\.65/u);
+    expect(ARCHITECT_PROMPT).toMatch(/intra-flow `mode: "task"` is the only mode you handle/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/Standalone research \(`triage\.mode == "research"`/u);
     expect(ARCHITECT_PROMPT).toContain("research.md");
-    expect(ARCHITECT_PROMPT).toMatch(/architect no longer handles research-mode dispatch/u);
+    expect(ARCHITECT_PROMPT).toMatch(/architect (?:no longer handles|does not handle) research-mode dispatch/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/Phase 7-research/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/finalises the research flow immediately/u);
     expect(ARCHITECT_PROMPT).toContain("priorResearch");

@@ -1,10 +1,10 @@
-# On-demand runbook — patch-mode entry point (v8.102+; externalised to .md in v8.111)
+# On-demand runbook — patch-mode entry point
 
 The orchestrator opens this runbook **on every `/cc` whose raw argument starts with the literal token `patch ` (case-insensitive, exactly one space)**. The Detect hop fires before the extend-mode and research-mode forks — `patch` always wins. This runbook covers the full patch-mode contract: argument parsing, parent validation, the inline-only ceremony force, the one-commit builder dispatch, and the `patch-N.md` append into the parent's shipped flow dir.
 
 ## Why patch-mode exists (dogfood-driven)
 
-Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy edit on the same surface the parent slug already shipped) routinely cost more ceremony than they deserve under the existing pipeline. The full `/cc <task>` chain dispatches triage → architect → plan-critic (up to three sequential rubric modes: generic / design / devex) → builder → qa? → reviewer → critic → ship — six to ten sub-agent dispatches — even when the change is a 2-line edit to a single file the parent already touched. The v8.59 `/cc extend <slug>` fork reduced the context-loading cost (parent artifacts ride on the envelope) but kept every ceremony stage; the trivial-shape downgrade in triage (v8.102 §1.6) helps when the task signals are clean, but the user still pays the dispatch tax.
+Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy edit on the same surface the parent slug already shipped) routinely cost more ceremony than they deserve under the existing pipeline. The full `/cc <task>` chain dispatches triage → architect → plan-critic (up to three sequential rubric modes: generic / design / devex) → builder → qa? → reviewer → critic → ship — six to ten sub-agent dispatches — even when the change is a 2-line edit to a single file the parent already touched. The `/cc extend <slug>` fork reduces the context-loading cost (parent artifacts ride on the envelope) but keeps every ceremony stage; the trivial-shape downgrade in triage (§1.6) helps when the task signals are clean, but the user still pays the dispatch tax.
 
 `/cc patch <slug> <task>` is the **micro-edit fast path**: a slug that has already shipped gets a follow-up edit with NO triage, NO architect, NO plan-critic (every rubric mode — generic / design / devex), NO qa, NO critic, NO ship gate. The builder dispatches directly with the parent context envelope, writes ONE commit prefixed `patch(<slug>): <message>`, appends a `patch-N.md` artifact next to the parent's shipped `plan.md` / `build.md` (no separate flow dir), and ends. Optional `--review` enables a lite reviewer pass (correctness + readability + edit-discipline axes only) for the user who wants a second pair of eyes on a security-adjacent micro-edit.
 
@@ -14,7 +14,7 @@ Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy 
 2. **patch-mode fork** — argument starts with `patch `.
 3. **extend-mode fork** — argument starts with `extend `.
 4. **research-mode fork** — argument starts with `research `.
-5. **Default routes** — fresh / resume / collision / pre-v8 state per the Detect table.
+5. **Default routes** — fresh / resume / collision / legacy state per the Detect table.
 
 The order matters: `/cc patch <slug> extend <task>` enters patch mode (the trailing `extend` is part of the task text). `/cc extend <slug> patch <task>` enters extend mode (the trailing `patch` is part of the task text). The two forks are mutually exclusive at the Detect layer; the first-matched-wins rule is deterministic.
 
@@ -31,9 +31,9 @@ When the fork fires, parse the argument into two parts:
 
 The slug token is matched verbatim; no fuzzy resolution at this layer (a typo surfaces as `reason: "missing"` from `loadParentContext` and the orchestrator's error message lists the available shipped slugs from `.cclaw/flows/shipped/` directly — first 10 inline; pointer to `ls .cclaw/flows/shipped/` when more).
 
-## Parent validation via `loadParentContext` (REUSED from v8.59)
+## Parent validation via `loadParentContext`
 
-Call `loadParentContext(projectRoot, slug)` from `src/parent-context.ts` — **the SAME helper that backs the v8.59 `/cc extend` fork**. The contract is identical: the slug MUST resolve to a shipped flow with a non-empty `plan.md`. Patch mode reuses every error sub-case verbatim:
+Call `loadParentContext(projectRoot, slug)` from `src/parent-context.ts` — **the SAME helper that backs the `/cc extend` fork**. The contract is identical: the slug MUST resolve to a shipped flow with a non-empty `plan.md`. Patch mode reuses every error sub-case verbatim:
 
 | `reason` | meaning | message template |
 | --- | --- | --- |
@@ -127,7 +127,7 @@ The builder's contract carries a dedicated **Patch-mode flow** section (see `age
 
 The builder's slim summary is the standard six-line shape but the `What changed:` line names the patch artifact path verbatim (`patch-1.md added to flows/shipped/<parent-slug>/`).
 
-## Builder protocol (v8.111 — lifted from `agents/builder.md` to free in-prompt budget)
+## Builder protocol (lifted from `agents/builder.md` to free in-prompt budget)
 
 The builder's full patch-mode flow lives here so the in-prompt anchor in `agents/builder.md` stays short. The contract:
 
@@ -202,6 +202,6 @@ A patch on an `/cc extend`-ed slug also works: the patch targets the EXTENSION s
 
 ## Backwards compatibility
 
-- **Pre-v8.102 state files** never carry `patchMode` in any envelope. Readers default to `false`/absent meaning "standard build flow". Migration is a no-op; the field is opt-in on the builder envelope.
-- **Pre-v8.102 shipped slugs** are valid patch targets. The parent does not need any `patch_*` frontmatter field to be patch-able; the artifact lands in the shipped dir without modifying the parent's existing artifacts.
-- **Pre-v8.102 knowledge-store entries** are not touched by patch mode (the patch is not a separate slug; no new knowledge entry is appended). A patch that materially changes the parent's behaviour SHOULD also be captured via `/cc extend` rather than `/cc patch` — the knowledge-store gate is the user's compass.
+- **Legacy state files** never carry `patchMode` in any envelope. Readers default to `false`/absent meaning "standard build flow". Migration is a no-op; the field is opt-in on the builder envelope.
+- **Legacy shipped slugs** are valid patch targets. The parent does not need any `patch_*` frontmatter field to be patch-able; the artifact lands in the shipped dir without modifying the parent's existing artifacts.
+- **Legacy knowledge-store entries** are not touched by patch mode (the patch is not a separate slug; no new knowledge entry is appended). A patch that materially changes the parent's behaviour SHOULD also be captured via `/cc extend` rather than `/cc patch` — the knowledge-store gate is the user's compass.

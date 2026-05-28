@@ -14,7 +14,7 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 - A strict-mode commit's subject line lacks the \`(AC-N):\` prefix entirely — the reviewer's \`git log --grep\` scan misses it and the AC reads as missing.
 - An AC declared in \`plan.md\` has zero matching commits in the log (the slice was never built or every commit's subject lacks the prefix).
 
-**Underlying mistake.** The TDD cycle was treated as ceremony, not as the contract. The cycle exists so the failing test encodes the AC; skipping or scrambling phases produces an audit trail that nobody can trust. Since v8.40, cclaw retired the mechanical pre-commit gate; the contract is now prompt-enforced (slice-builder writes the right prefix) and reviewer-verified ex-post (\`git log\` inspection per posture).
+**Underlying mistake.** The TDD cycle was treated as ceremony, not as the contract. The cycle exists so the failing test encodes the AC; skipping or scrambling phases produces an audit trail that nobody can trust. cclaw retired the mechanical pre-commit gate; the contract is now prompt-enforced (slice-builder writes the right prefix) and reviewer-verified ex-post (\`git log\` inspection per posture).
 
 **Correction.** Write a failing test first and commit \`git add tests/<path>.test.ts && git commit -m "red(AC-N): <assertion>"\` (test files only — \`git show <SHA> --stat\` must not include production files). Implement the smallest production change that turns it green; commit \`git commit -m "green(AC-N): <minimal impl>"\`. Either commit a real refactor (\`git commit -m "refactor(AC-N): <one-line>"\`) or land an explicit empty marker (\`git commit --allow-empty -m "refactor(AC-N) skipped: <reason>"\`). The reviewer's posture-aware chain check (using \`src/posture-validation.ts:POSTURE_COMMIT_PREFIXES\`) cites this entry whenever the expected sequence is missing or mis-ordered. For \`tests-as-deliverable\` posture the expected commit is \`test(AC-N): ...\`; for \`refactor-only\`, \`refactor(AC-N): ...\`; for \`docs-only\`, \`docs(AC-N): ...\` — see the posture-mapping table in \`tdd-and-verification.md\`.
 
@@ -70,7 +70,7 @@ Patterns we have seen fail. Each entry is a short symptom, the underlying mistak
 
 **Correction.** Multi-run protocol: 20 iterations on first observed failure; escalate to 100 if any failure shows up. Document the iteration count and failure pattern in \`build.md\`. After the fix, re-run N×2 times to verify. The fix must eliminate the failure, not reduce its rate. See the \`debug-and-browser\` skill (debug-loop section, merge of debug-loop + browser-verification), Phase 4.
 
-## Back-compat renumber map (v8.12)
+## Back-compat renumber map
 
-When reading findings from pre-v8.12 slugs: old A-2 maps to new A-1; old A-22 maps to new A-7. Current catalog is A-1 through A-7 only.
+When reading findings from legacy slugs: old A-2 maps to new A-1; old A-22 maps to new A-7. Current catalog is A-1 through A-7 only.
 `;

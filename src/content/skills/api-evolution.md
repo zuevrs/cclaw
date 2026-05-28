@@ -204,7 +204,7 @@ When the architect (Decisions phase) introduces a deprecation:
 
 1. **Identify consumers.** Search the org for callers (`rg` in monorepo, dependency-graph tools across repos, package-registry usage stats).
 2. **Choose the migration cost split.** Either (a) the deprecator ships an adapter that wraps the old surface to use the new one (zero migration cost for consumers, higher cost for the deprecator), OR (b) the deprecator pairs with each consumer's owner to land the migration commit (higher coordination cost, but the new shape is the only shape after the cutover).
-3. **Document the choice as a D-N in `plan.md` `## Decisions`** (legacy: `decisions.md` on pre-v8.14 resumes). "We picked path (a) because there are 47 internal consumers; path (b) would mean 47 PRs across 12 teams."
+3. **Document the choice as a D-N in `plan.md` `## Decisions`** (legacy: `decisions.md` on older resumes). "We picked path (a) because there are 47 internal consumers; path (b) would mean 47 PRs across 12 teams."
 
 A deprecation that names no migration owner and no consumer plan is **F-N | architecture | required | Churn Rule violation**.
 
@@ -220,7 +220,7 @@ phase 3: 100% traffic to new path. Old path is fenced off but still in the codeb
 phase 4: Old path removed.
 ```
 
-Each phase has explicit ship-gate criteria and rollback steps. The Strangler is documented as a multi-D-N block inside `plan.md` `## Decisions` (legacy: `decisions.md` on pre-v8.14 resumes) with the per-phase entry/exit criteria; the orchestrator surfaces "we are in Strangler phase N" in slim summaries until phase 4 ships.
+Each phase has explicit ship-gate criteria and rollback steps. The Strangler is documented as a multi-D-N block inside `plan.md` `## Decisions` (legacy: `decisions.md` on older resumes) with the per-phase entry/exit criteria; the orchestrator surfaces "we are in Strangler phase N" in slim summaries until phase 4 ships.
 
 A migration that jumps from phase 0 to phase 4 in one slug is **F-N | architecture | required | Big-bang migration** (no canary, no rollback).
 

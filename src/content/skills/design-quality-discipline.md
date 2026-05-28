@@ -5,14 +5,14 @@ trigger: design surface detected — auto-on at plan + review stages when triage
 
 # Skill: design-quality-discipline
 
-cclaw's design-quality lens fires twice on any slug whose triage flagged a UI / design / frontend / UX surface: once at plan-time via the **`plan-critic` specialist on a `rubricMode: "design"` dispatch** (v8.104 — absorbed the former v8.75 standalone `plan-design` specialist into `plan-critic` as one of its three rubric modes; walks plan.md against the seven-dimension rubric BEFORE the build runs) and once at review-time via the reviewer's gated **design-quality axis** (v8.70 — walks the rendered diff against the same rubric AFTER the build runs). Both surfaces share a single source of truth: `src/content/design-quality-rubric.ts` exports the seven dimensions, the "what a 10 looks like" anchors, and the AI-slop signal set; both prompts render the same markdown via `renderDesignQualityRubricTable()` / `renderDesignQualityAiSlopChecklist()`.
+cclaw's design-quality lens fires twice on any slug whose triage flagged a UI / design / frontend / UX surface: once at plan-time via the **`plan-critic` specialist on a `rubricMode: "design"` dispatch** (absorbed the former standalone `plan-design` specialist into `plan-critic` as one of its three rubric modes; walks plan.md against the seven-dimension rubric BEFORE the build runs) and once at review-time via the reviewer's gated **design-quality axis** (walks the rendered diff against the same rubric AFTER the build runs). Both surfaces share a single source of truth: `src/content/design-quality-rubric.ts` exports the seven dimensions, the "what a 10 looks like" anchors, and the AI-slop signal set; both prompts render the same markdown via `renderDesignQualityRubricTable()` / `renderDesignQualityAiSlopChecklist()`.
 
 This skill spells out **how to use the rubric well**, regardless of which specialist is reading it. It is auto-on at the `plan` stage (`plan-critic` with `rubricMode: "design"`) and the `review` stage (reviewer with `walkDesignQualityAxis: true`); a missing design surface gate at either stage structurally skips this skill.
 
 ## When to apply
 
-- **`plan-critic` `rubricMode: "design"` dispatch (v8.104; absorbed former v8.75 plan-design):** `triage.designSurface == true` OR `triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅`; AND `triage.ceremonyMode ∈ {soft, strict}`; AND `flows/<slug>/plan.md` exists.
-- **reviewer design-quality axis (v8.70) dispatch:** `triage.designSurface == true` OR `triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅` (no ceremonyMode restriction — runs in inline too via the post-build reviewer when one is dispatched).
+- **`plan-critic` `rubricMode: "design"` dispatch (absorbed former plan-design):** `triage.designSurface == true` OR `triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅`; AND `triage.ceremonyMode ∈ {soft, strict}`; AND `flows/<slug>/plan.md` exists.
+- **reviewer design-quality axis dispatch:** `triage.designSurface == true` OR `triage.surfaces ∩ {ui, design, frontend, ux} ≠ ∅` (no ceremonyMode restriction — runs in inline too via the post-build reviewer when one is dispatched).
 
 ## When NOT to apply
 
@@ -44,8 +44,8 @@ Full "what a 10 looks like" anchors live in `src/content/design-quality-rubric.t
 
 ## Block-ship semantics
 
-- **`plan-critic rubricMode: "design"` strict mode:** any `PD-N` with severity ≥ `medium` blocks ship (the v8.75 block-ship-on-strict floor, preserved across the v8.104 merge). Soft mode surfaces but does not block; ≥2 `high` rows surfaces a stop-and-report status block.
-- **reviewer strict mode:** any `F-N` on the design-quality axis with severity ≥ `required` blocks ship (the v8.70 floor). The reviewer cross-references plan.md `## Plan-design findings` for any `PD-N` row marked `open` — when `plan-critic rubricMode: "design"` carried a finding forward as `open` into the build (the architect's revise loop did NOT address it), the reviewer escalates the matching `F-N` severity by one tier.
+- **`plan-critic rubricMode: "design"` strict mode:** any `PD-N` with severity ≥ `medium` blocks ship (the block-ship-on-strict floor). Soft mode surfaces but does not block; ≥2 `high` rows surfaces a stop-and-report status block.
+- **reviewer strict mode:** any `F-N` on the design-quality axis with severity ≥ `required` blocks ship (the strict-mode floor). The reviewer cross-references plan.md `## Plan-design findings` for any `PD-N` row marked `open` — when `plan-critic rubricMode: "design"` carried a finding forward as `open` into the build (the architect's revise loop did NOT address it), the reviewer escalates the matching `F-N` severity by one tier.
 - **Both modes preserve User Sovereignty:** the user can override via the stop-and-report status block (`/cc` to continue with findings open; `/cc-cancel` to discard). The specialist NEVER silently downgrades a finding to avoid blocking.
 
 ## Hard rules

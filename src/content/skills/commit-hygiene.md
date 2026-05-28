@@ -18,14 +18,14 @@ This merged skill covers both kinds of "what lands in a commit" discipline: how 
 
 ## commit-message-quality
 
-The reviewer's posture-aware chain check keys off the subject-line prefix. The plan-traceability chain only stays usable if every commit's subject is readable AND prefixed correctly. v8.63+ splits the chain in strict mode: slice work uses `(SL-N)` and AC verification uses `verify(AC-N): passing` — the reviewer dual-greps both.
+The reviewer's posture-aware chain check keys off the subject-line prefix. The plan-traceability chain only stays usable if every commit's subject is readable AND prefixed correctly. The chain is split in strict mode: slice work uses `(SL-N)` and AC verification uses `verify(AC-N): passing` — the reviewer dual-greps both.
 
 ## Rules
 
 1. **Imperative voice** — "Add StatusPill component", not "Added" or "Adding".
 2. **Subject ≤72 characters** — long subjects truncate in `git log --oneline` and CI signals.
 3. **Strict-mode subject starts with the posture-driven prefix.** Slice work uses one of `red(SL-N):` / `green(SL-N):` / `refactor(SL-N):` / `refactor(SL-N) skipped:` / `test(SL-N):` / `docs(SL-N):` (pick the prefix from the slice's `Posture` value in `plan.md > ## Plan / Slices`). AC verification uses the fixed subject `verify(AC-N): passing`. The prefix is the contract the reviewer's `git log --grep="(SL-N):"` (slice work) and `git log --grep="verify(AC-N):"` (AC verification) scans read. In soft / inline modes use plain `<feat|fix|refactor|docs>: <one-line>` without a slice or AC id.
-4. **Body when needed** — second-line blank, then a short rationale paragraph and any non-obvious context. Use `-m` for the subject; for multi-line messages use `git commit -F <file>` or repeat `-m` per paragraph. v8.85 — a `verify(AC-N): passing` commit MAY append `validates: KA-N` lines in the body when the verification closes the loop on a `## Key assumptions to validate` row.
+4. **Body when needed** — second-line blank, then a short rationale paragraph and any non-obvious context. Use `-m` for the subject; for multi-line messages use `git commit -F <file>` or repeat `-m` per paragraph. A `verify(AC-N): passing` commit MAY append `validates: KA-N` lines in the body when the verification closes the loop on a `## Key assumptions to validate` row.
 5. **Cite finding ids in fix commits** — `red(SL-1): fix F-2 — separate rejected token` for slice fixes; `verify(AC-3): passing` (with `# re-verify after F-5 fix` in the body) for fresh AC verification after a fix-only loop. The `fix F-N` token in the body or subject is what cross-references the review-block finding at handoff time.
 
 ## Anti-patterns

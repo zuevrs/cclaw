@@ -5,7 +5,7 @@ trigger: before the FIRST `Write` / `Edit` / `MultiEdit` operation a builder per
 
 # Skill: pre-edit-investigation
 
-cclaw's builder is the only specialist that writes code. The most common defect class in builder output is **editing a file before fully understanding its current state** — modifying a function based on a partial read, missing a recent unrelated edit that conflicts with the planned change, breaking an invariant a sibling caller depends on. Each instance produces a fix-only round-trip; cumulatively, it is the largest source of `axis=correctness` findings in the v8.40+ baseline.
+cclaw's builder is the only specialist that writes code. The most common defect class in builder output is **editing a file before fully understanding its current state** — modifying a function based on a partial read, missing a recent unrelated edit that conflicts with the planned change, breaking an invariant a sibling caller depends on. Each instance produces a fix-only round-trip; cumulatively, it is the largest source of `axis=correctness` findings.
 
 This skill installs a fact-forcing gate before the first edit of any file: three mandatory facts must be gathered (recent edits, usage sites, full file read) before the builder may write. Adapted from the GateGuard runtime hook pattern (deny → force → allow), implemented prompt-only because cclaw's removal of mechanical hooks moved this discipline into prompt-level review. The reviewer enforces the rule ex-post via the `edit-discipline` axis from onwards — a slice that lacks pre-edit evidence is flagged at handoff.
 
@@ -174,6 +174,6 @@ The builder bounces back in fix-only mode, runs the probes (≈90 seconds), upda
 
 ## Composition
 
-`stages: ["build"]` — the gate is the builder's discipline. The reviewer reads the Discovery column ex-post via the `edit-discipline` axis introduced in v8.48; the builder writes the column at investigation time. Other specialists (architect, plan-critic, qa-runner, reviewer, critic) do not edit source files — the gate is not relevant to their dispatch.
+`stages: ["build"]` — the gate is the builder's discipline. The reviewer reads the Discovery column ex-post via the `edit-discipline` axis; the builder writes the column at investigation time. Other specialists (architect, plan-critic, qa-runner, reviewer, critic) do not edit source files — the gate is not relevant to their dispatch.
 
 Pairs with `tdd-and-verification.md` (Discovery is also the surface where tdd's discovery-complete + impact-check gates land — same column, complementary content), with `commit-hygiene.md` (the Discovery column anchors the surgical-edit-hygiene check by establishing the file's pre-edit state), and with `anti-slop.md` (reusing prior investigation evidence without a freshness citation is the stale-evidence anti-pattern).

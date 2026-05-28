@@ -46,7 +46,6 @@ describe("v8.84 — not-doing gate wiring (companion skill + AUTO_TRIGGER_SKILLS
     expect(skillBody).toMatch(/architect/i);
     expect(skillBody).toMatch(/## Not Doing \(and why\)/);
     expect(skillBody).toMatch(/plan-critic §6\.5|§6\.5/);
-    expect(skillBody).toMatch(/v8\.80/);
     expect(skillBody).toContain("SD-N: <not-doing item> appears to be implemented despite exclusion");
 
     const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === SCOPE_DRIFT_SKILL_ID);
@@ -156,8 +155,8 @@ describe("v8.84 — not-doing gate section contract (reviewer.ts stub)", () => {
     expect(REVIEWER_PROMPT).toMatch(/scope-drift/);
     expect(REVIEWER_PROMPT).not.toMatch(/Eleven-axis review/);
     expect(REVIEWER_PROMPT).not.toMatch(/Twelve-axis review/);
-    expect(REVIEWER_PROMPT).toMatch(/\|\s*`scope-drift`\s*\(\*\*gated\*\*\)\s*—\s*v8\.84/);
-    expect(REVIEWER_PROMPT).toMatch(/^###\s+Scope-drift axis \(gated;\s*v8\.84\)/m);
+    expect(REVIEWER_PROMPT).toMatch(/\|\s*`scope-drift`\s*\(\*\*gated\*\*\)\s*\|/);
+    expect(REVIEWER_PROMPT).toMatch(/^###\s+Scope-drift axis \(gated\)/m);
     expect(REVIEWER_PROMPT).toContain(SCOPE_DRIFT_SKILL_ID);
     expect(REVIEWER_PROMPT).toContain(`.cclaw/lib/skills/${SCOPE_DRIFT_SKILL_ID}.md`);
     expect(REVIEWER_PROMPT).toMatch(/file path/i);
@@ -167,7 +166,6 @@ describe("v8.84 — not-doing gate section contract (reviewer.ts stub)", () => {
     expect(REVIEWER_PROMPT).toMatch(/## Not Doing \(and why\)/);
     expect(REVIEWER_PROMPT).toContain("SD-N: <not-doing item> appears to be implemented despite exclusion");
     expect(REVIEWER_PROMPT).toMatch(/plan-critic §6\.5/);
-    expect(REVIEWER_PROMPT).toMatch(/v8\.80/);
     expect(REVIEWER_PROMPT).toMatch(/sd=N/);
     expect(REVIEWER_PROMPT).toMatch(/`sd=N` is \*\*only\*\* present when the scope-drift gate fired/);
     expect(REVIEWER_PROMPT).toMatch(/\[sd=N\]/);

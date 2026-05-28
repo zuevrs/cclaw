@@ -1,6 +1,6 @@
-# plan.md worked-example templates (v8.111+)
+# plan.md worked-example templates
 
-Two long-form worked-example transcripts for the architect's `plan.md` authoring: the soft-mode permission-tooltip excerpt and the strict-mode large-risky excerpt. Lifted out of `agents/architect.md` in v8.111 to free in-prompt budget; the in-prompt anchor is 4 lines pointing here.
+Two long-form worked-example transcripts for the architect's `plan.md` authoring: the soft-mode permission-tooltip excerpt and the strict-mode large-risky excerpt. Lifted out of `agents/architect.md` to free in-prompt budget; the in-prompt anchor is 4 lines pointing here.
 
 ## Worked example — small/medium, soft mode, intra-flow
 

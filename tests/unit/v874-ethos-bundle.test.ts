@@ -121,7 +121,6 @@ describe("v8.74 — ethos preamble + reversibility field behavior (plan template
     expect(criticBlock).toMatch(/keyword fallback/i);
     expect(criticBlock).toMatch(/no .*Decisions.* section|without .*Decisions/);
     expect(CRITIC_PROMPT).toMatch(/Reversibility:\s*one-way/);
-    expect(CRITIC_PROMPT).toMatch(/v8\.74/);
     expect(CRITIC_PROMPT).toMatch(/keyword fallback/i);
     expect(CRITIC_PROMPT).toMatch(/Cross-model unavailable: skipped/);
   });

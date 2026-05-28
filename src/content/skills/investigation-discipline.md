@@ -8,7 +8,7 @@ trigger: specialist:investigator | stage:plan | taskShape:debug | task_shape:deb
 
 # Skill: investigation-discipline
 
-Auto-triggers on every investigator dispatch (v8.77+). Codifies the **three-lane discipline** + the **evidence-collection rubric** the investigator specialist applies on every bug-shaped flow (`triage.taskShape == "debug"`). The skill is the canonical authority for "what does an honest investigation look like" — the specialist prompt restates the discipline but defers to this skill on the details (probe shapes, confidence ladder, anti-shotgun-debugging rules).
+Auto-triggers on every investigator dispatch. Codifies the **three-lane discipline** + the **evidence-collection rubric** the investigator specialist applies on every bug-shaped flow (`triage.taskShape == "debug"`). The skill is the canonical authority for "what does an honest investigation look like" — the specialist prompt restates the discipline but defers to this skill on the details (probe shapes, confidence ladder, anti-shotgun-debugging rules).
 
 ## When this skill fires
 
@@ -35,7 +35,7 @@ The investigator dispatches **three parallel hypothesis lanes** on every bug-sha
 
 ## Evidence-collection rubric
 
-Every piece of evidence in a lane's `Evidence collected:` bullet list MUST be one of these five canonical shapes (anything else is "vibes-investigation" — the failure mode the v8.77 release was designed to kill):
+Every piece of evidence in a lane's `Evidence collected:` bullet list MUST be one of these five canonical shapes (anything else is "vibes-investigation" — the failure mode this discipline was designed to kill):
 
 | shape | example | when to use |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ Every piece of evidence in a lane's `Evidence collected:` bullet list MUST be on
 1. **No hand-waving evidence.** "The code looks suspicious" is not evidence — cite the file:line. "Tests have been flaky" is not evidence — cite the failed run's output. "Probably a config issue" is not evidence — cite the config drift OR mark `Confidence: 0` for the lane.
 2. **No paraphrased logs.** When the log line is the evidence, quote it verbatim. Paraphrased log lines lose timing / level / surrounding context the next reader needs.
 3. **No fabricated SHAs.** Every commit SHA cited must be one the investigator actually saw (typically via `git log --oneline -20`). Reviewer's `edit-discipline` axis cross-checks; a fabricated SHA is a `required` finding.
-4. **Counter-evidence is NOT optional on ≥6-confidence lanes.** A lane that claims 7 confidence must list at least one piece of counter-evidence it considered and dismissed (with a reason). High-confidence lanes that skip the counter-evidence step are sycophantic by construction; the v8.77 critic's adversarial pass catches them.
+4. **Counter-evidence is NOT optional on ≥6-confidence lanes.** A lane that claims 7 confidence must list at least one piece of counter-evidence it considered and dismissed (with a reason). High-confidence lanes that skip the counter-evidence step are sycophantic by construction; the critic's adversarial pass catches them.
 
 ## Confidence ladder (0-10 per lane)
 
@@ -151,7 +151,7 @@ A finished `investigation.md` passes the gate iff ALL of these hold:
 
 This skill does NOT fire — and the investigator hop does NOT run — on the following:
 
-- **`triage.taskShape == "build"`** (the default; pre-v8.77 entire-input space) — feature additions, refactors, performance work without a regression claim, doc updates, dependency bumps. Use the standard plan → build → review → critic → ship path. Forcing the investigator on a build task burns 10 minutes of agent budget for no signal (there is no bug to investigate; the three lanes return `Confidence: 0` across the board).
+- **`triage.taskShape == "build"`** (the default) — feature additions, refactors, performance work without a regression claim, doc updates, dependency bumps. Use the standard plan → build → review → critic → ship path. Forcing the investigator on a build task burns 10 minutes of agent budget for no signal (there is no bug to investigate; the three lanes return `Confidence: 0` across the board).
 - **`triage.taskShape == "research"`** — the `/cc research <topic>` entry point already has its own multi-lens specialist roster (`research-engineer` / `research-product` / `research-architecture` / `research-history` / `research-skeptic` / `research-design`) driven by the `research-investigation-skill` body. Layering the bug-shaped investigator on top doubles the dispatch and conflates research with debug discipline.
 - **Trivial typo fixes / lint fixes / formatting-only commits** even when keywords like `fix` appear — the AND gate on the triage side guards against this (no repo-anchored bug evidence; the task is unanchored). If a task slips through (rare false-positive), the synthesis lands on `direct-fix` quickly and the artifact's evidence is minimal (one file:line citation) — the cost is bounded but still wasted.
 - **Production incident-response tasks where the user is mid-page** — the user wants a hotfix NOW, not a 10-minute three-lane investigation. In incident mode the user typically frames the task as a tiny, single-file fix ("fix the null guard at src/api/list.ts:42") so the triage heuristic lands on `ceremonyMode == "inline"` and the entire specialist pipeline (including the investigator) is structurally skipped; the investigator hop is preserved for ceremonyMode ∈ {soft, strict} where the discipline is worth its cost.

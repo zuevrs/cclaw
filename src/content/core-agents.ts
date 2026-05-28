@@ -18,16 +18,16 @@ import { RESEARCH_LENSES } from "../types.js";
  * `activation` controls how the orchestrator invokes the agent:
  *
  * - `on-demand` — dispatched as a sub-agent with an envelope; returns a slim
- *   summary. The classic specialist contract — and, post-v8.62, the ONLY
- *   activation used by any current specialist (v8.62 collapsed the
+ *   summary. The classic specialist contract — and the ONLY
+ *   activation used by any current specialist (collapsed the
  *   `main-context` `design` specialist into the on-demand `architect`).
  * - `main-context` — historically the orchestrator activated the prompt
  *   as a skill it followed itself, opening a multi-turn dialog with the
- *   user in the current conversation. Used only by `design` (v8.14-v8.61)
- *   for collaborative brainstorm + scope + architecture. v8.61 removed
- *   the user-dialogue surface (always-auto, no pickers) and v8.62
- *   removed the `design` specialist entirely (absorbed into `architect`),
- *   so no current specialist activates this way. The value is preserved
+ *   user in the current conversation. Used only by the former `design`
+ *   specialist for collaborative brainstorm + scope + architecture. The
+ *   user-dialogue surface was later removed (always-auto, no pickers) and
+ *   the `design` specialist was absorbed into `architect`, so no current
+ *   specialist activates this way. The value is preserved
  *   in the type for back-compat with any external code that pattern-
  *   matches on it.
  */
@@ -82,7 +82,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["heuristic", "override"],
     description:
-      "v8.61 lightweight router moved to a sub-agent. Decides exactly five fields (complexity, ceremonyMode, path, runMode, mode) for every fresh `/cc <task>` (research-mode and extend-mode flows skip triage — the orchestrator's Detect hop forks before dispatch). Zero-question rule preserved verbatim from v8.58. v8.112 retired the per-flow ceremony override flags and the back-compat run-mode toggles; the heuristic is the sole source of truth at this hop. Auto-downgrades strict to soft when .git/ is absent and stamps downgradeReason: \"no-git\". Returns a slim summary; the orchestrator persists the decision to flow-state.json.",
+      "Lightweight router that runs as a sub-agent. Decides exactly five fields (complexity, ceremonyMode, path, runMode, mode) for every fresh `/cc <task>` (research-mode and extend-mode flows skip triage — the orchestrator's Detect hop forks before dispatch). Zero-question rule preserved. There are no per-flow ceremony override flags or back-compat run-mode toggles; the heuristic is the sole source of truth at this hop. Auto-downgrades strict to soft when .git/ is absent and stamps downgradeReason: \"no-git\". Returns a slim summary; the orchestrator persists the decision to flow-state.json.",
     prompt: SPECIALIST_PROMPTS.triage
   },
   {
@@ -92,7 +92,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["debug"],
     description:
-      "v8.77 debug-branch specialist. Runs read-only diagnostic before architect on bug-shaped flows (triage.taskShape == \"debug\"). Dispatches three parallel hypothesis lanes (cause-code / cause-config / cause-measurement) — each lane returns hypothesis + evidence (file:line refs / log excerpts / command output) + confidence 0-10 + recommended next probe. Synthesises a working root-cause hypothesis and emits a next-step recommendation (direct-fix → builder skip-architect; needs-plan → architect with priorInvestigation; more-investigation → re-dispatch investigator with sharper probe; not-a-bug → reframe to user). Writes investigation.md. No code edits, no plan writing, no commits — strictly read-only. Capped at 2 investigator dispatches per slug (second more-investigation triggers stop-and-report).",
+      "Debug-branch specialist. Runs read-only diagnostic before architect on bug-shaped flows (triage.taskShape == \"debug\"). Dispatches three parallel hypothesis lanes (cause-code / cause-config / cause-measurement) — each lane returns hypothesis + evidence (file:line refs / log excerpts / command output) + confidence 0-10 + recommended next probe. Synthesises a working root-cause hypothesis and emits a next-step recommendation (direct-fix → builder skip-architect; needs-plan → architect with priorInvestigation; more-investigation → re-dispatch investigator with sharper probe; not-a-bug → reframe to user). Writes investigation.md. No code edits, no plan writing, no commits — strictly read-only. Capped at 2 investigator dispatches per slug (second more-investigation triggers stop-and-report).",
     prompt: SPECIALIST_PROMPTS.investigator
   },
   {
@@ -102,7 +102,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["task"],
     description:
-      "v8.62 unified plan-stage specialist; v8.65 trimmed to intra-flow plan authoring only. Absorbs the work that was split pre-v8.62 between `design` (Phase 0/2-6: Bootstrap, Frame, Approaches, Decisions, Pre-mortem, Compose) and `ac-author` (Plan, Spec, AC, Edge cases, Topology, Feasibility, Traceability). Runs as a single on-demand sub-agent — no mid-plan user dialogue (v8.61 always-auto removed all pickers); ambiguity is resolved silently using best judgment. Writes `plan.md` (intra-flow `mode: \"task\"`). Depth scales with ceremonyMode: inline skips, soft writes Plan + Spec + Testable conditions + Verification + Touch surface, strict adds Frame + Approaches + Selected Direction + Decisions + Pre-mortem + Topology + Feasibility + Traceability. Research mode (`/cc research <topic>`) is handled by the v8.65 main-context multi-lens research orchestrator (six parallel lenses: engineer / product / architecture / history / skeptic / design) — the architect is no longer dispatched for research.",
+      "Unified plan-stage specialist, scoped to intra-flow plan authoring only. Absorbs the work formerly split between `design` (Phase 0/2-6: Bootstrap, Frame, Approaches, Decisions, Pre-mortem, Compose) and `ac-author` (Plan, Spec, AC, Edge cases, Topology, Feasibility, Traceability). Runs as a single on-demand sub-agent — no mid-plan user dialogue (always-auto removed all pickers); ambiguity is resolved silently using best judgment. Writes `plan.md` (intra-flow `mode: \"task\"`). Depth scales with ceremonyMode: inline skips, soft writes Plan + Spec + Testable conditions + Verification + Touch surface, strict adds Frame + Approaches + Selected Direction + Decisions + Pre-mortem + Topology + Feasibility + Traceability. Research mode (`/cc research <topic>`) is handled by the main-context multi-lens research orchestrator (six parallel lenses: engineer / product / architecture / history / skeptic / design) — the architect is no longer dispatched for research.",
     prompt: SPECIALIST_PROMPTS.architect
   },
   {
@@ -112,7 +112,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["pre-impl-review"],
     description:
-      "pre-implementation plan-critic. v8.104 unified three pre-impl lenses (plan-critic / plan-design / plan-devex) into a single specialist with a `rubricMode: \"generic\" | \"design\" | \"devex\"` envelope fan-out. Three rubric modes share one prompt body: (1) `generic` (default) — adversarial structural pass on the tight gate {ceremonyMode=strict, complexity!=trivial, problemType!=refines, AC count>=2}: goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + decision-integrity + bets-and-exclusions; (2) `design` — walks plan.md against the seven-dimension design-quality rubric (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) on the design-surface gate {triage.designSurface OR triage.surfaces ∩ {ui, design, frontend, ux}; ceremonyMode ∈ {soft, strict}}, emits PD-N findings appended to plan.md's ## Plan-design findings; (3) `devex` — walks the six-dimension DevEx rubric (Getting Started / API ergonomics / Error messages / Docs / Upgrade path / Measurement) on the devex-surface gate {triage.devexSurface OR triage.surfaces ∩ {cli, library, api}; ceremonyMode ∈ {soft, strict}}, emits DX-N findings appended to plan.md's ## Plan-devex findings. Orchestrator may dispatch up to three times sequentially per slug (generic first, then design, then devex; each independently gated). Verdicts: pass (advance), revise (bounce to architect once — max 1 revise loop per mode), cancel (generic mode only; structural plan defect) or block (design / devex modes; stop-and-report). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
+      "pre-implementation plan-critic. Unifies three pre-impl lenses (plan-critic / plan-design / plan-devex) into a single specialist with a `rubricMode: \"generic\" | \"design\" | \"devex\"` envelope fan-out. Three rubric modes share one prompt body: (1) `generic` (default) — adversarial structural pass on the tight gate {ceremonyMode=strict, complexity!=trivial, problemType!=refines, AC count>=2}: goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + decision-integrity + bets-and-exclusions; (2) `design` — walks plan.md against the seven-dimension design-quality rubric (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) on the design-surface gate {triage.designSurface OR triage.surfaces ∩ {ui, design, frontend, ux}; ceremonyMode ∈ {soft, strict}}, emits PD-N findings appended to plan.md's ## Plan-design findings; (3) `devex` — walks the six-dimension DevEx rubric (Getting Started / API ergonomics / Error messages / Docs / Upgrade path / Measurement) on the devex-surface gate {triage.devexSurface OR triage.surfaces ∩ {cli, library, api}; ceremonyMode ∈ {soft, strict}}, emits DX-N findings appended to plan.md's ## Plan-devex findings. Orchestrator may dispatch up to three times sequentially per slug (generic first, then design, then devex; each independently gated). Verdicts: pass (advance), revise (bounce to architect once — max 1 revise loop per mode), cancel (generic mode only; structural plan defect) or block (design / devex modes; stop-and-report). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
     prompt: SPECIALIST_PROMPTS["plan-critic"]
   },
   {
@@ -122,7 +122,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["build", "fix-only"],
     description:
-      "Renamed from `slice-builder` in v8.62 (AC-as-unit-of-work semantics unchanged — slice/AC separation is v8.63 scope). Implements AC slices and post-review scoped fixes. In strict mode every per-slice work commit carries the v8.63 posture-driven subject-line prefix (red(SL-N): / green(SL-N): / refactor(SL-N):) the reviewer verifies via git log --grep; after slices land the builder writes one verify(AC-N): passing commit per AC (empty diff when slice tests already cover the AC; test-files-only diff when the AC needs broader verification — perf budget, integration, contract).",
+      "Renamed from `slice-builder` (AC-as-unit-of-work semantics unchanged). Implements AC slices and post-review scoped fixes. In strict mode every per-slice work commit carries the posture-driven subject-line prefix (red(SL-N): / green(SL-N): / refactor(SL-N):) the reviewer verifies via git log --grep; after slices land the builder writes one verify(AC-N): passing commit per AC (empty diff when slice tests already cover the AC; test-files-only diff when the AC needs broader verification — perf budget, integration, contract).",
     prompt: SPECIALIST_PROMPTS.builder
   },
   {
@@ -142,7 +142,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["code", "text-review", "integration", "release", "adversarial"],
     description:
-      "Multi-mode reviewer covering code, plan/spec text, integration, release readiness, and adversarial sweeps. v8.62 absorbed the standalone `security-reviewer` specialist — the reviewer's `security` axis now carries the full threat-model + sensitive-change protocol (authn / authz / secrets / supply chain / data exposure). When `security_flag` is set on the dispatch envelope, the reviewer gives the security axis extra emphasis (walks every threat-model item even on small diffs).",
+      "Multi-mode reviewer covering code, plan/spec text, integration, release readiness, and adversarial sweeps. Absorbed the standalone `security-reviewer` specialist — the reviewer's `security` axis now carries the full threat-model + sensitive-change protocol (authn / authz / secrets / supply chain / data exposure). When `security_flag` is set on the dispatch envelope, the reviewer gives the security axis extra emphasis (walks every threat-model item even on small diffs).",
     prompt: SPECIALIST_PROMPTS.reviewer
   },
   {
@@ -185,7 +185,7 @@ export const RESEARCH_AGENTS: ResearchAgent[] = [
  * (\`writeAgentFiles\`, harness asset writers, \`uninstall\`) iterate this
  * list. Specialist-only logic should use {@link SPECIALIST_AGENTS}.
  *
- * v8.65: research lenses are intentionally NOT included here — they
+ * Research lenses are intentionally NOT included here — they
  * install to a separate `.cclaw/lib/research-lenses/` subdirectory via
  * {@link RESEARCH_LENS_AGENTS}. Lenses are not flow specialists; mixing
  * them into `CORE_AGENTS` would pollute the agents/ namespace and risk

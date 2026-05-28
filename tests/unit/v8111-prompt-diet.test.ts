@@ -89,8 +89,7 @@ describe("v8.111 runbook .md files exist and carry the expected sections", () =>
   it("patch-mode.md exists, externalised in v8.111, and carries the lifted builder protocol section", async () => {
     const body = await readFile(path.resolve(RUNBOOK_DIR, "patch-mode.md"));
     expect(body).toMatch(/^# On-demand runbook — patch-mode entry point/m);
-    expect(body).toMatch(/externalised to \.md in v8\.111/);
-    expect(body).toMatch(/Builder protocol \(v8\.111/);
+    expect(body).toMatch(/Builder protocol \(lifted from/);
   });
 });
 

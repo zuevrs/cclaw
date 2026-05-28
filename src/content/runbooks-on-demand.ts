@@ -18,9 +18,9 @@ export interface OnDemandRunbook {
 /**
  * Load a per-runbook markdown body from disk at module-import time.
  *
- * v8.111 introduced the `src/content/runbooks/<id>.md` source layout for
- * the diet pass that lifted long-form prose out of the architect and
- * builder prompts. Mirrors the resolution pattern in
+ * The `src/content/runbooks/<id>.md` source layout holds long-form prose
+ * lifted out of the architect and builder prompts. Mirrors the resolution
+ * pattern in
  * {@link import("./skills.js").readSkill} (`src/content/skills.ts`):
  *
  * - dev / test:  `<repo>/src/content/runbooks-on-demand.ts` →
@@ -53,8 +53,7 @@ function readRunbook(fileName: string): string {
 
 /**
  * Canonical reviewer-dispatch envelope shapes the orchestrator
- * encounters (introduced in v8.96.1; Phase C audit G-2 fix;
- * v8.106 trim to 3 most-common shapes).
+ * encounters.
  *
  * The install pipeline pre-renders the gate-resolved skills slice for
  * each shape (via {@link renderDispatchSkillsIndex}) so the
@@ -62,22 +61,20 @@ function readRunbook(fileName: string): string {
  * per-envelope skills-pointer blocks the orchestrator might need to
  * paste into a live reviewer dispatch envelope.
  *
- * v8.106 — Cached shapes reduced from 9 to 3. Pre-v8.106 the table
- * also included `default-on anti-slop only`, `security-sensitive`,
+ * The cached table covers the top three traffic shapes only. Other
+ * shapes — `default-on anti-slop only`, `security-sensitive`,
  * `NFR-bearing`, `every gate flag set`, and `anti-slop explicitly
- * disabled` shapes; those shapes are now derived on-demand by the
- * orchestrator via the on-disk reviewer.md superset (fall-back rule
- * documented below) — the cached fast-path covers the top three
- * traffic shapes only. The fall-back path is the same
+ * disabled` — are derived on-demand by the orchestrator via the on-disk
+ * reviewer.md superset (fall-back rule documented below). The fall-back
+ * path is the same
  * `buildAutoTriggerBlock(stage, gateEnvelope)` runtime that
  * {@link renderDispatchSkillsIndex} wraps, so semantic correctness is
  * preserved on every envelope shape; the table is a fast-path index,
  * not a closed enum.
  *
- * Phase C audit G-2 fix — production-path caller of
- * `buildAutoTriggerBlock(stage, gateEnvelope)` so the runtime path the
- * v8.83-token-axes work introduced is no longer reachable only from
- * tests.
+ * Production-path caller of
+ * `buildAutoTriggerBlock(stage, gateEnvelope)` so the token-axes runtime
+ * path is reachable from production code, not only from tests.
  */
 const REVIEWER_DISPATCH_ENVELOPES: ReadonlyArray<{
   label: string;
@@ -99,7 +96,7 @@ const REVIEWER_DISPATCH_ENVELOPES: ReadonlyArray<{
       walkAssumptionCoverageAxis: true
     },
     notes:
-      "Canonical strict-mode reviewer dispatch envelope on a post-v8.80 plan that respects plan-critic §6.5 (Not-Doing section non-empty) and v8.85 (Key assumptions to validate section non-empty). edit-discipline always fires in strict / soft per v8.48. Highest-traffic shape across the corpus."
+      "Canonical strict-mode reviewer dispatch envelope on a plan that respects plan-critic §6.5 (Not-Doing section non-empty) and the Key-assumptions-to-validate requirement (section non-empty). edit-discipline always fires in strict / soft. Highest-traffic shape across the corpus."
   },
   {
     label: "UI / design slug — qa-evidence + design-quality stacked on the strict baseline",
@@ -120,7 +117,7 @@ const REVIEWER_DISPATCH_ENVELOPES: ReadonlyArray<{
  * Pre-rendered dispatch-skills-index entries. Computed once at
  * module-import time so `dispatch-skills-index.md`'s body composer is a
  * pure string concatenation; the install pipeline writes the runbook
- * verbatim. Exported so the v8.96.1 tripwire suite
+ * verbatim. Exported so the tripwire suite
  * (`tests/unit/v894-auto-trigger-gate-wiring.test.ts`) can assert
  * per-envelope skill membership without re-deriving the gate filter.
  */
@@ -174,8 +171,8 @@ The orchestrator's dispatch envelope, NOT the on-disk static prompt, is the sour
 
 1. **Construct the reviewer dispatch envelope normally** — \`Stage: review\`, \`Slug: <slug>\`, \`Ceremony mode: <inline | soft | strict>\`, plus the gate flags the orchestrator already stamps per \`start-command.md > Review hop\` (\`securityFlag\`, \`walkDesignQualityAxis\`, \`walkScopeDriftAxis\`, \`walkAssumptionCoverageAxis\`, \`walkAntiSlopAxis\`, \`walkQaEvidenceAxis\`, \`planHasNonFunctional\`, \`editDisciplineActive\`).
 2. **Look up the matching shape below** by comparing the envelope's flag set against the **Envelope flags** JSON in each section. When the envelope is a strict subset of one of the tabulated shapes' flags, use that shape's **Rendered block** verbatim. When the envelope flags don't match any tabulated shape (a rare combination), fall back to: (a) the on-disk \`agents/reviewer.md\` static superset (correct but token-wasteful), OR (b) regenerate the block at orchestrator time by walking the \`AUTO_TRIGGER_SKILLS\` table in \`src/content/skills.ts\` and applying each skill's gate predicate against the envelope.
-3. **Paste the **Rendered block** into the reviewer dispatch envelope** as an \`Active skills (per envelope):\` field, positioned IMMEDIATELY after the required-reads block and BEFORE the inputs/output-contract block (so the sub-agent reads the gate-resolved slice before it interprets \`agents/reviewer.md\`'s superset). The sub-agent treats this field as authoritative; the on-disk \`agents/reviewer.md\` superset is a fall-back hint when the dispatch envelope omits the field entirely (legacy / pre-v8.96.1 envelopes).
-4. **The skill-body claims in \`reviewer-axis-*.md\` are accurate.** v8.96.1 corrected the per-skill \`## When to use\` paragraphs to name "the orchestrator's dispatch envelope carries the \`walkXAxis\` flag" instead of the pre-v8.96.1 fiction "the orchestrator calls \`buildAutoTriggerBlock("review", env)\` at dispatch time". The function is called at INSTALL time, not at dispatch time, and the call happens here (the dispatch-skills-index runbook composer in \`src/content/runbooks-on-demand.ts\`), not from any runtime orchestrator code.
+3. **Paste the **Rendered block** into the reviewer dispatch envelope** as an \`Active skills (per envelope):\` field, positioned IMMEDIATELY after the required-reads block and BEFORE the inputs/output-contract block (so the sub-agent reads the gate-resolved slice before it interprets \`agents/reviewer.md\`'s superset). The sub-agent treats this field as authoritative; the on-disk \`agents/reviewer.md\` superset is a fall-back hint when the dispatch envelope omits the field entirely (legacy envelopes).
+4. **The skill-body claims in \`reviewer-axis-*.md\` are accurate.** The per-skill \`## When to use\` paragraphs name "the orchestrator's dispatch envelope carries the \`walkXAxis\` flag". The function is called at INSTALL time, not at dispatch time, and the call happens here (the dispatch-skills-index runbook composer in \`src/content/runbooks-on-demand.ts\`), not from any runtime orchestrator code.
 
 ## Canonical envelope shapes
 
@@ -183,7 +180,7 @@ ${sections}
 
 ## Fall-back rules
 
-v8.106 — the cached fast-path table above lists the three highest-traffic shapes only (no-flags / strict-baseline / UI+design). Other shapes (security-sensitive, NFR-bearing, every-gate, anti-slop-disabled, default-on-anti-slop-only) derive on-demand via the rules below; semantic correctness is preserved because the on-disk \`agents/reviewer.md\` is the static superset of every gated axis and \`buildAutoTriggerBlock(stage, gateEnvelope)\` is the same runtime the cached entries wrap.
+the cached fast-path table above lists the three highest-traffic shapes only (no-flags / strict-baseline / UI+design). Other shapes (security-sensitive, NFR-bearing, every-gate, anti-slop-disabled, default-on-anti-slop-only) derive on-demand via the rules below; semantic correctness is preserved because the on-disk \`agents/reviewer.md\` is the static superset of every gated axis and \`buildAutoTriggerBlock(stage, gateEnvelope)\` is the same runtime the cached entries wrap.
 
 | envelope condition | what to do |
 | --- | --- |
@@ -193,7 +190,7 @@ v8.106 — the cached fast-path table above lists the three highest-traffic shap
 
 ## Symmetry note for non-reviewer stages
 
-The non-reviewer stages (\`plan\` / \`build\` / \`qa\` / \`triage\` / \`ship\` / \`compound\`) currently have NO stage-scoped skills with a gate predicate — every \`AUTO_TRIGGER_SKILLS\` entry tagged for those stages either rides every dispatch (no gate) or rides via \`stages: ["always"]\` (no stage filter). So the dispatch envelope flags don't affect their rendered block, and the on-disk \`agents/<specialist>.md\` static block is already the precise per-dispatch list for those specialists. This runbook covers the reviewer stage only because the reviewer is the only specialist with gated skills as of v8.96.1. If a future specialist adds gated skills (e.g. a future \`plan-critic\` rubricMode-specific dispatch axis gated on UI-density flags), add a per-stage table here mirroring the reviewer one.
+The non-reviewer stages (\`plan\` / \`build\` / \`qa\` / \`triage\` / \`ship\` / \`compound\`) currently have NO stage-scoped skills with a gate predicate — every \`AUTO_TRIGGER_SKILLS\` entry tagged for those stages either rides every dispatch (no gate) or rides via \`stages: ["always"]\` (no stage filter). So the dispatch envelope flags don't affect their rendered block, and the on-disk \`agents/<specialist>.md\` static block is already the precise per-dispatch list for those specialists. This runbook covers the reviewer stage only because the reviewer is the only specialist with gated skills. If a future specialist adds gated skills (e.g. a future \`plan-critic\` rubricMode-specific dispatch axis gated on UI-density flags), add a per-stage table here mirroring the reviewer one.
 `;
 }
 
@@ -207,13 +204,13 @@ The orchestrator opens this runbook **before authoring any specialist dispatch e
 
 \`\`\`
 Dispatch <specialist>
-─ Required ethos read: .cclaw/lib/cclaw-ethos.md  (cclaw ethos — Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers; the single source of truth for cross-cutting specialist behaviour; v8.74 prepended above the contract so every specialist opens it first)
+─ Required ethos read: .cclaw/lib/cclaw-ethos.md  (cclaw ethos — Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers; the single source of truth for cross-cutting specialist behaviour; prepended above the contract so every specialist opens it first)
 ─ Required first read: .cclaw/lib/agents/<specialist>.md  (your contract — modes, hard rules, output schema, worked examples; do NOT skip)
 ─ Required second read: .cclaw/lib/skills/<wrapper>.md  (your wrapping skill — see "Stage → wrapper" in start-command)
 ─ Stage: <plan | build | review | ship>
 ─ Slug: <slug>
 ─ Ceremony mode: <inline | soft | strict>
-─ Model tier: <fast | balanced | powerful>  (v8.87; harness hint — the orchestrator stamps the specialist's tier from \`config.modelPreferences\` merged onto the v8.87 defaults; harnesses that route on the hint pick the model, others ignore it and fall back to the harness default)
+─ Model tier: <fast | balanced | powerful>  (harness hint — the orchestrator stamps the specialist's tier from \`config.modelPreferences\` merged onto the defaults; harnesses that route on the hint pick the model, others ignore it and fall back to the harness default)
 ─ Pre-flight assumptions: see triage.assumptions in flow-state.json
 ─ Inputs the sub-agent reads after the ethos + contract + wrapper:
     - .cclaw/state/flow-state.json
@@ -230,22 +227,22 @@ Dispatch <specialist>
     - read or modify files outside the slug's touch surface
 \`\`\`
 
-## Model-tier hint (v8.87)
+## Model-tier hint
 
-Every envelope carries a \`Model tier:\` line. The orchestrator computes the tier by merging \`.cclaw/config.yaml > modelPreferences\` onto the v8.87 default policy (see \`src/config.ts > DEFAULT_MODEL_PREFERENCES\`):
+Every envelope carries a \`Model tier:\` line. The orchestrator computes the tier by merging \`.cclaw/config.yaml > modelPreferences\` onto the default policy (see \`src/config.ts > DEFAULT_MODEL_PREFERENCES\`):
 
 | Specialist | Default tier |
 | --- | --- |
-| \`builder\` (formerly \`slice-builder\` pre-v8.62) | \`fast\` |
+| \`builder\` (formerly \`slice-builder\`) | \`fast\` |
 | \`learnings-research\` / \`repo-research\` | \`fast\` |
 | \`triage\` / \`investigator\` / \`architect\` | \`balanced\` |
-| \`plan-critic\` (all three rubric modes — generic / design / devex; v8.104 merged the pre-impl lens surface) | \`balanced\` |
+| \`plan-critic\` (all three rubric modes — generic / design / devex) | \`balanced\` |
 | \`qa-runner\` / \`reviewer\` | \`balanced\` |
 | \`critic\` | \`powerful\` |
 
 Harnesses that support tier-based routing (custom OpenCode profiles, Claude Code agent.toml, etc.) honour the hint; harnesses that don't ignore the line and fall back to their own default model. Tier values are constrained to the literal union \`fast | balanced | powerful\` — anything else is dropped at resolve time and the default tier survives.
 
-The first three reads are non-negotiable. The **ethos read** (v8.74) is prepended one position above the agent contract because the five cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) shape HOW every specialist interprets its own contract — a specialist that reads its agent file without the ethos will silently default to Layer 2 "popular" patterns where the codebase already has a Layer 1 "tried-and-true" answer. The ethos lives at \`.cclaw/lib/cclaw-ethos.md\` (single file, written at install time from \`src/content/ethos.ts\`); specialists do NOT restate the ethos in their own prompt body (v8.74 dedup — the per-specialist Iron-Law restatements that pre-dated this preamble were removed because they drifted across specialists). A sub-agent that skips its contract file will hallucinate its own role definition (we observed this in production — early discovery specialists ran with a 30-line summary instead of their full contract). If the harness has a sub-agent system message, the orchestrator places those three reads as the sub-agent's first instructions; if the harness dispatches via plain "spawn a fresh context", the orchestrator puts them at the top of the inline prompt. Either way, the sub-agent opens \`.cclaw/lib/cclaw-ethos.md\` before \`.cclaw/lib/agents/<specialist>.md\` before doing anything else.
+The first three reads are non-negotiable. The **ethos read** is prepended one position above the agent contract because the five cclaw principles (Boil the Lake / Search Before Building / Surgical Edits / User Sovereignty / 3 knowledge layers) shape HOW every specialist interprets its own contract — a specialist that reads its agent file without the ethos will silently default to Layer 2 "popular" patterns where the codebase already has a Layer 1 "tried-and-true" answer. The ethos lives at \`.cclaw/lib/cclaw-ethos.md\` (single file, written at install time from \`src/content/ethos.ts\`); specialists do NOT restate the ethos in their own prompt body (dedup — the per-specialist Iron-Law restatements that pre-dated this preamble were removed because they drifted across specialists). A sub-agent that skips its contract file will hallucinate its own role definition (we observed this in production — early discovery specialists ran with a 30-line summary instead of their full contract). If the harness has a sub-agent system message, the orchestrator places those three reads as the sub-agent's first instructions; if the harness dispatches via plain "spawn a fresh context", the orchestrator puts them at the top of the inline prompt. Either way, the sub-agent opens \`.cclaw/lib/cclaw-ethos.md\` before \`.cclaw/lib/agents/<specialist>.md\` before doing anything else.
 
 ## Inline-fallback (no sub-agent dispatch support)
 
@@ -333,7 +330,7 @@ Dispatch builder
   - Render an explicit warning to the user in their language naming the cause (e.g., "harness does not support parallel sub-agents — falling back to sequential build, will run AC-1..AC-N one after another"), AND
   - Use the harness's structured ask to surface a single \`accept-fallback\` option (and inform the user they may invoke \`/cc-cancel\` themselves if the loss of parallelism makes the work not worth doing under sequential timing) — the orchestrator must wait for the user's explicit \`accept-fallback\` reply before dispatching the sequential builder. The parallel→sequential decision changes wall-clock substantially; the user gets to make the call.
   - Record the fallback in \`flows/<slug>/build.md\` frontmatter (\`subAgentDispatch: inline-fallback\`, \`fallback_reason: <one-line>\`, \`fallback_accepted_at: <iso>\`) so the reviewer sees it. The fallback is not an error, but it is a visible event with a recorded user-acknowledgement.
-- v8.61 always-auto applies to chained stages; the integration-reviewer ask above still surfaces because a parallel→sequential fallback materially changes wall-clock budgets, and that is a user-visible decision rather than an internal verdict.
+- always-auto applies to chained stages; the integration-reviewer ask above still surfaces because a parallel→sequential fallback materially changes wall-clock budgets, and that is a user-visible decision rather than an internal verdict.
 `;
 
 const FINALIZE = `# On-demand runbook — finalize (ship → shipped)
@@ -372,13 +369,13 @@ The gate **never** auto-rescues — there is no \`accept-unverified-and-finalize
 
 ### Edge cases
 
-- **\`AC verified\` line missing from builder summary** — treat as \`every AC = no\`. The builder is required to emit the line from onwards (see builder prompt § Slim summary). Missing line is a fix-only bounce on the builder itself — the orchestrator dispatches \`builder mode=fix-only\` with a one-line note: "re-emit slim summary with v8.48 \`AC verified\` line".
-- **\`AC verified\` line missing from reviewer summary** — same treatment; the reviewer is required to emit the line from onwards. Bounce dispatches \`reviewer mode=code\` with a one-line note.
+- **\`AC verified\` line missing from builder summary** — treat as \`every AC = no\`. The builder is required to emit the line (see builder prompt § Slim summary). Missing line is a fix-only bounce on the builder itself — the orchestrator dispatches \`builder mode=fix-only\` with a one-line note: "re-emit slim summary with \`AC verified\` line".
+- **\`AC verified\` line missing from reviewer summary** — same treatment; the reviewer is required to emit the line. Bounce dispatches \`reviewer mode=code\` with a one-line note.
 - **builder says \`AC-N=yes\` but reviewer says \`AC-N=no\`** — reviewer wins. The reviewer's downgrade reflects evidence in the ledger; builder's claim is self-reported and the gate respects the second opinion.
 - **builder says \`AC-N=no\` but reviewer says \`AC-N=yes\`** — builder wins. The build couldn't verify itself; reviewer's \`yes\` is a process error (reviewer should have downgraded). Bounce to builder fix-only to close AC-N legitimately, then re-review.
 - **inline ACs intermixed with strict ACs** is structurally impossible — \`ceremonyMode\` is per-flow, not per-criterion. If you observe this in the wild, the flow-state is corrupted; surface and stop.
 
-This gate ships at and adds one network-free check to every finalize step. It exists because the older \`Open findings\` counter was too coarse — a slug could have \`Open findings: 0\` and still ship with an AC that was silently deferred ("AC-3 deferred — follow-up slug"). The per-criterion line forces the deferral to be explicit and forces the orchestrator to ask before letting the gap close silently.
+This gate adds one network-free check to every finalize step. It exists because the older \`Open findings\` counter was too coarse — a slug could have \`Open findings: 0\` and still ship with an AC that was silently deferred ("AC-3 deferred — follow-up slug"). The per-criterion line forces the deferral to be explicit and forces the orchestrator to ask before letting the gap close silently.
 
 ## Steps (in order, in the orchestrator's own context)
 
@@ -389,15 +386,15 @@ This gate ships at and adds one network-free check to every finalize step. It ex
    - \`build.md\` (when present)
    - \`review.md\` (when present)
    - \`ship.md\`
-   - \`decisions.md\` (when present — large-risky only, pre-v8.14 shipped flows)
+   - \`decisions.md\` (when present — large-risky only, legacy shipped flows)
    - \`learnings.md\` (when written by the compound step)
    - \`pre-mortem.md\` (only on \`legacy-artifacts: true\` — default collapses pre-mortem into \`review.md\` as a section)
    - \`research-repo.md\` (when written by repo-research)
    - \`research-learnings.md\` (only on \`legacy-artifacts: true\` — default keeps learnings inline in the architect's slim-summary)
    The word "copy" must not appear in the dispatch envelope or in your own actions. \`cp\` is forbidden here. The active directory must end up empty after the moves.
-4. **Stamp the shipped frontmatter on \`ship.md\`.** As of v8.12, manifest.md is collapsed into \`ship.md\`'s frontmatter. Update \`ship.md\`'s frontmatter to include the final flow signals (snake_case keys per artefact-frontmatter convention): \`slug\`, \`shipped_at\`, \`ceremony_mode\`, \`complexity\`, \`security_flag\`, \`review_iterations\`, \`ac_count\`, \`finalization_mode\`. Body of \`ship.md\` keeps the AC↔commit map (strict) or condition checklist (soft); add an "## Artefact index" section listing the artefacts that ended up in the shipped dir (one bullet per file). Users on the opt-in \`legacy-artifacts: true\` config still get a separate \`manifest.md\` in addition.
+4. **Stamp the shipped frontmatter on \`ship.md\`.** manifest.md is collapsed into \`ship.md\`'s frontmatter. Update \`ship.md\`'s frontmatter to include the final flow signals (snake_case keys per artefact-frontmatter convention): \`slug\`, \`shipped_at\`, \`ceremony_mode\`, \`complexity\`, \`security_flag\`, \`review_iterations\`, \`ac_count\`, \`finalization_mode\`. Body of \`ship.md\` keeps the AC↔commit map (strict) or condition checklist (soft); add an "## Artefact index" section listing the artefacts that ended up in the shipped dir (one bullet per file). Users on the opt-in \`legacy-artifacts: true\` config still get a separate \`manifest.md\` in addition.
 5. **Post-condition check (mandatory).** \`flows/<slug>/\` (the active directory) must be empty. If it is not, you have made a mistake — list the residue, surface it to the user, do NOT continue. The most common cause is mistakenly using \`cp\` instead of \`git mv\`/\`mv\`. Once the active dir is empty, \`rmdir flows/<slug>\` to remove the now-empty directory.
-6. **Promote ADRs (PROPOSED → ACCEPTED).** Scan \`flows/shipped/<slug>/plan.md\` (just moved in step 3; v8.14+ inlines D-N records there) and any legacy \`flows/shipped/<slug>/decisions.md\` (pre-v8.14 shipped flows) for \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` lines. For each found ADR file, edit the frontmatter in place: \`status: PROPOSED\` → \`status: ACCEPTED\`; add \`accepted_at: <iso>\`; add \`accepted_in_slug: <slug>\`; add \`accepted_at_commit: <ship-commit-sha>\`. Commit each promotion with \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. Skip the entire step when no PROPOSED ADR was found. Do NOT promote ADRs the architect did not propose for this slug. See \`.cclaw/lib/skills/documentation-and-adrs.md\` for the full lifecycle (including supersession bookkeeping for ADRs that supersede an earlier ACCEPTED one).
+6. **Promote ADRs (PROPOSED → ACCEPTED).** Scan \`flows/shipped/<slug>/plan.md\` (just moved in step 3; D-N records are inlined there) and any legacy \`flows/shipped/<slug>/decisions.md\` (shipped flows) for \`ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)\` lines. For each found ADR file, edit the frontmatter in place: \`status: PROPOSED\` → \`status: ACCEPTED\`; add \`accepted_at: <iso>\`; add \`accepted_in_slug: <slug>\`; add \`accepted_at_commit: <ship-commit-sha>\`. Commit each promotion with \`docs(adr-NNNN): promote to ACCEPTED via <slug>\`. Skip the entire step when no PROPOSED ADR was found. Do NOT promote ADRs the architect did not propose for this slug. See \`.cclaw/lib/skills/documentation-and-adrs.md\` for the full lifecycle (including supersession bookkeeping for ADRs that supersede an earlier ACCEPTED one).
 7. **Reset flow-state.** Write \`createInitialFlowState\` defaults to \`.cclaw/state/flow-state.json\` (\`currentSlug: null\`, \`currentStage: null\`, \`triage: null\`, \`ac: []\`, \`reviewIterations: 0\`, \`securityFlag: false\`, \`lastSpecialist: null\`). The shipped manifest is the durable record; flow-state is now a clean slot ready for the next \`/cc\`.
 8. **Render the final summary** to the user: one block citing \`shipped/<slug>/ship.md\` (the file that now carries the manifest frontmatter — or \`shipped/<slug>/manifest.md\` on \`legacy-artifacts: true\`), the AC count, any captured learnings, and any ADR ids promoted to \`ACCEPTED\` in step 6.
 
@@ -412,14 +409,14 @@ const CAP_REACHED_RECOVERY = `# On-demand runbook — cap-reached recovery (revi
 
 Open this runbook **only when \`flow-state.json > reviewCounter\` reaches 5** without convergence. For the standard review loop, see \`.cclaw/lib/runbooks/review.md\`.
 
-## Review-cap picker (v8.20+)
+## Review-cap picker
 
 Track the cap with \`flow-state.json > reviewCounter\` (introduced sibling of \`reviewIterations\`; \`reviewIterations\` continues to be the monotonic lifetime counter, \`reviewCounter\` is the cap-budget that the user can extend). Increment \`reviewCounter\` on every reviewer dispatch in parallel with \`reviewIterations\`. flows resumed on start at \`reviewCounter: 0\` even if \`reviewIterations\` already reflects prior dispatches — the cap is a fresh budget on resume.
 
-**When \`reviewCounter\` reaches \`5\`**, do NOT dispatch another reviewer. Stop and report per the v8.61 always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). The reviewer auto-fix loop is capped at 3 iterations by the always-auto matrix; a slug reaching \`reviewCounter == 5\` means a prior \`keep-iterating-anyway\` override (see below) bought two extra rounds and the flow still failed to converge. The status block names the iteration count, the residual blockers, and the canonical recovery options:
+**When \`reviewCounter\` reaches \`5\`**, do NOT dispatch another reviewer. Stop and report per the always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). The reviewer auto-fix loop is capped at 3 iterations by the always-auto matrix; a slug reaching \`reviewCounter == 5\` means a prior \`keep-iterating-anyway\` override (see below) bought two extra rounds and the flow still failed to converge. The status block names the iteration count, the residual blockers, and the canonical recovery options:
 
 1. \`/cc-cancel\` to discard the slug and reapply the cap-reached split-plan below (orchestrator authors the recommended split into \`review.md\`, the user starts the first split slug fresh).
-2. \`/cc\` (continue) after the user edits the diff to address residual findings. Resume re-dispatches reviewer with \`reviewCounter\` reset to 3 (the v8.61 always-auto matrix replaces the legacy \`keep-iterating-anyway\` picker with explicit user re-invocation; the audit-log entry stamped on resume records \`iterationOverride: true\` for telemetry).
+2. \`/cc\` (continue) after the user edits the diff to address residual findings. Resume re-dispatches reviewer with \`reviewCounter\` reset to 3 (the always-auto matrix replaces the legacy \`keep-iterating-anyway\` picker with explicit user re-invocation; the audit-log entry stamped on resume records \`iterationOverride: true\` for telemetry).
 
 The split-plan and architecture severity gates below stay verbatim — they describe the *content* the orchestrator authors into \`review.md\` before the stop-and-report, not the picker mechanics.
 
@@ -434,11 +431,11 @@ When the 5th iteration ends without \`clear\` or \`warn\`, the review **does not
 
 After this block is authored, the orchestrator surfaces a structured ask to the user with the split options (or "discard, re-triage from scratch"). \`/cc-cancel\` remains available as a typed command for nuking the slug.
 
-## Architecture severity gates ship (v8.20+; v8.61 always-auto stop-and-report)
+## Architecture severity gates ship (always-auto stop-and-report)
 
 The reviewer prompt's "Architecture severity priors" rule names a stronger gate: an unresolved finding with \`severity=required\` AND \`axis=architecture\` **gates ship across every ceremonyMode** — not only in \`strict\`. The orchestrator enforces this at the ship gate: when the open ledger contains any \`required + architecture\` row, the always-auto chain stops and reports (per \`runbooks/always-auto-failure-handling.md\`) rather than auto-advancing. The status block names the \`required + architecture\` finding(s) and offers \`/cc\` (continue after the user edits the diff to resolve the architecture finding, or accepts the warning by editing review.md to downgrade the row before resume) or \`/cc-cancel\` (discard). Other \`severity=required\` findings continue to follow the standard ceremonyMode table (gate in strict, carry-over in soft).
 
-Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the orchestrator does NOT auto-advance to ship. The legacy in-chat picker options (\`accept-warns-and-ship\`, \`fix-only\`, \`stay-paused\`) are retired in v8.61 — the user resolves the gate by editing the relevant artifact and re-invoking \`/cc\`, or discards with \`/cc-cancel\`.
+Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the orchestrator does NOT auto-advance to ship. The legacy in-chat picker options (\`accept-warns-and-ship\`, \`fix-only\`, \`stay-paused\`) are retired — the user resolves the gate by editing the relevant artifact and re-invoking \`/cc\`, or discards with \`/cc-cancel\`.
 `;
 
 const ADVERSARIAL_RERUN = `# On-demand runbook — adversarial pre-mortem rerun
@@ -519,7 +516,7 @@ The ship stage uses **parallel fan-out + merge** (the canonical cclaw fan-out). 
 
 Specialists fanned out:
 
-- \`reviewer\` mode=\`release\` — always. Includes the \`security\` axis at full threat-model depth when \`security_flag\` is true (absorbed from the former \`security-reviewer\` specialist in v8.62).
+- \`reviewer\` mode=\`release\` — always. Includes the \`security\` axis at full threat-model depth when \`security_flag\` is true (absorbed from the former \`security-reviewer\` specialist).
 - \`reviewer\` mode=\`adversarial\` — **strict mode only** (see below). Rerun rules in \`adversarial-rerun.md\`.
 
 Inputs: \`.cclaw/flows/<slug>/plan.md\`, build.md, review.md.
@@ -552,9 +549,9 @@ If the user wants to abandon the flow at this point, they type \`/cc-cancel\` (o
 1. The flow has already passed code-mode review + adversarial pre-mortem; cancelling here is unusual.
 2. The shipped artefacts may have already been partially written (manifest-as-frontmatter, learnings.md); cancelling mid-finalize requires a different recovery path than \`/cc-cancel\` from earlier stages.
 
-### Post-ship micro-edit hint (v8.102)
+### Post-ship micro-edit hint
 
-After every successful ship (regardless of finalization mode), the orchestrator surfaces a one-line plain-prose hint pointing the user at the v8.102 patch-mode entry point:
+After every successful ship (regardless of finalization mode), the orchestrator surfaces a one-line plain-prose hint pointing the user at the patch-mode entry point:
 
 > "If you need to adjust this slug after shipping, run \`/cc patch <slug> <description>\` for a fast follow-up without full ceremony."
 
@@ -571,7 +568,7 @@ The hint exists so post-ship "tiny tweak" tasks have a frictionless entry point.
 
 Before the ship gate finalises, the orchestrator dispatches \`reviewer\` mode=\`adversarial\` against the diff produced for this slug. The adversarial reviewer's specific job is to **think like the failure**: how would this break in production a week from now?
 
-As of v8.12, the adversarial sweep appends a \`## Pre-mortem (adversarial)\` section to the same \`flows/<slug>/review.md\`, not a separate file. (Users on \`legacy-artifacts: true\` still get a separate \`pre-mortem.md\` for tooling compat.) The adversarial reviewer treats the pre-mortem as a **scenario exercise** — reasoning backwards from "this shipped and failed, what was it" — and explicitly does NOT write a literal future date in the artefact body. See \`reviewer.ts\` Adversarial mode for the full schema.
+the adversarial sweep appends a \`## Pre-mortem (adversarial)\` section to the same \`flows/<slug>/review.md\`, not a separate file. (Users on \`legacy-artifacts: true\` still get a separate \`pre-mortem.md\` for tooling compat.) The adversarial reviewer treats the pre-mortem as a **scenario exercise** — reasoning backwards from "this shipped and failed, what was it" — and explicitly does NOT write a literal future date in the artefact body. See \`reviewer.ts\` Adversarial mode for the full schema.
 
 Failure classes the adversarial pass MUST consider (mark each as "covered" / "not covered" / "n/a"):
 
@@ -593,7 +590,7 @@ The adversarial reviewer treats every "not covered" as a finding (axis varies; s
 | block | any | block → fix-only loop |
 | clear | warn | warn → render adversarial findings, ask user |
 
-The \`security\` axis is one of the reviewer's fourteen axes (v8.62 absorbed the former \`security-reviewer\` specialist). A \`block\`-severity finding on \`security\` is handled the same as a \`block\` on any other axis — block → fix-only loop. \`security_flag: true\` in plan frontmatter forces the reviewer to walk the security axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) regardless of which surfaces the diff touched.
+The \`security\` axis is one of the reviewer's fourteen axes (absorbed the former \`security-reviewer\` specialist). A \`block\`-severity finding on \`security\` is handled the same as a \`block\` on any other axis — block → fix-only loop. \`security_flag: true\` in plan frontmatter forces the reviewer to walk the security axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) regardless of which surfaces the diff touched.
 
 The adversarial pass runs **once per ship attempt**, not iteratively. If it produces \`block\`-level findings, the orchestrator dispatches \`builder\` mode=\`fix-only\` and re-runs the **regular** reviewer (mode=\`code\`) to confirm the fix; the adversarial pass does not re-run unless the user explicitly requests it (the marginal value drops fast on second run). For the conditional rerun rule on fix-only hot-path commits, see \`adversarial-rerun.md\`.
 
@@ -602,7 +599,7 @@ In \`soft\` mode the adversarial pass is **skipped** by default — the lighter-
 
 const HANDOFF_ARTIFACTS = `# On-demand runbook — handoff artifacts (HANDOFF.json + .continue-here.md)
 
-Open this runbook **after every stage exit** — at the end of plan / build / review / ship. v8.62 unified flow runs the entire plan stage as a single architect dispatch (no Phase 7 sign-off; no Phase 1 Clarify pause); the architect's dispatch return is the stage exit for plan. HANDOFF.json is for resume-across-sessions checkpoints, not for intra-dispatch checkpoints.
+Open this runbook **after every stage exit** — at the end of plan / build / review / ship. The unified flow runs the entire plan stage as a single architect dispatch (no Phase 7 sign-off; no Phase 1 Clarify pause); the architect's dispatch return is the stage exit for plan. HANDOFF.json is for resume-across-sessions checkpoints, not for intra-dispatch checkpoints.
 
 ## Why two files
 
@@ -653,7 +650,7 @@ Open this runbook **after every stage exit** — at the end of plan / build / re
 
 ## Lifecycle
 
-- Each stage exit (or discovery checkpoint) **rewrites both files from scratch** — they are idempotent snapshots, not appended logs. Stale data is the v8.11-era ship.md bug applied to handoff state; the fix is "always re-author".
+- Each stage exit (or discovery checkpoint) **rewrites both files from scratch** — they are idempotent snapshots, not appended logs. Stale data is the ship.md bug applied to handoff state; the fix is "always re-author".
 - \`runCompoundAndShip\` moves both files into \`shipped/<slug>/\` alongside the canonical 7 stages (the T0-10 directory scan handles them automatically). Shipped flows preserve their final HANDOFF.json + .continue-here.md as a record of how the slug ended.
 - \`/cc-cancel\` moves both into \`cancelled/<slug>/\`.
 - The detect step may consult \`HANDOFF.json\` as a fallback when \`flow-state.json\` is missing or unparseable (hardening: file may be deleted by accident, but HANDOFF.json snapshots can rebuild the resume context).
@@ -669,11 +666,11 @@ Open this runbook **after a compound capture writes a line to \`.cclaw/state/kno
 
 - \`knowledge.jsonl\` line count is a multiple of 5 after the new line is appended (compound-refresh trigger).
 
-(v8.112 retired the manual stage-shortcut router that previously exposed an on-demand entry point; the 5-line cadence is now the sole trigger.)
+(retired the manual stage-shortcut router that previously exposed an on-demand entry point; the 5-line cadence is now the sole trigger.)
 
 For the compound gate itself (does this slug capture learnings?), see start-command's Compound step.
 
-## Compound-refresh sub-step (T2-4, everyinc pattern; v8.13)
+## Compound-refresh sub-step (T2-4, everyinc pattern)
 
 Every **5th** capture, the orchestrator runs a **knowledge-refresh** pass over the file. The point: append-only is durable but lossy on signal-to-noise — duplicates accumulate, superseded findings persist, and cross-cutting themes never get consolidated. The refresh applies five actions to the existing entries:
 
@@ -690,7 +687,7 @@ The refresh runs **inline in the orchestrator's context** as the 5th capture fin
 - \`compoundRefreshEvery: 5\` — run every Nth capture; default 5; set to \`0\` to disable.
 - \`compoundRefreshFloor: 10\` — skip refresh until \`knowledge.jsonl\` has ≥10 lines (otherwise the refresh has nothing to dedup against).
 
-The refresh is implicit on the cadence above; there is no user-facing manual entry point (v8.112 retired the stage-shortcut router that exposed one).
+The refresh is implicit on the cadence above; there is no user-facing manual entry point (retired the stage-shortcut router that exposed one).
 
 ## Discoverability self-check (T2-12)
 
@@ -705,17 +702,17 @@ This makes the catalogue discoverable to future agents/humans who don't already 
 The discoverability check runs **once per slug** (only when ship completes), and respects the user's \`never\` choice for the rest of the session.
 `;
 
-const PAUSE_RESUME = `# On-demand runbook — pause and resume mechanics (v8.61 always-auto)
+const PAUSE_RESUME = `# On-demand runbook — pause and resume mechanics (always-auto)
 
 The orchestrator opens this runbook on every stage exit when \`triage.path\` is **non-inline** (i.e., the path contains any of \`plan\` / \`review\` / \`ship\`, not just \`build\`). Inline / trivial paths set \`runMode: null\` and never pause — they skip pause/resume entirely, so they never open this runbook.
 
-v8.61 — the user-facing \`step\` / \`auto\` choice was retired. Every non-inline flow runs **always-auto** end-to-end with no approval pickers at the plan / review / critic gates. The orchestrator chains stages automatically; \`/cc\` is the resume verb that fires only after a stop-and-report status block (see \`runbooks/always-auto-failure-handling.md\` for the failure matrix and the canonical status-block shape). The orchestrator body keeps the orchestrator-wide invariants (\`/cc\` is the only resume verb, \`Confidence: low\` is a hard gate, hard failures route per the always-auto matrix). The full mechanics — including the resume-from-fresh-session rules and the chain-vs-stop decision — live here.
+the user-facing \`step\` / \`auto\` choice was retired. Every non-inline flow runs **always-auto** end-to-end with no approval pickers at the plan / review / critic gates. The orchestrator chains stages automatically; \`/cc\` is the resume verb that fires only after a stop-and-report status block (see \`runbooks/always-auto-failure-handling.md\` for the failure matrix and the canonical status-block shape). The orchestrator body keeps the orchestrator-wide invariants (\`/cc\` is the only resume verb, \`Confidence: low\` is a hard gate, hard failures route per the always-auto matrix). The full mechanics — including the resume-from-fresh-session rules and the chain-vs-stop decision — live here.
 
 ## Always-auto chain rule
 
 After every dispatch returns: (1) render the slim summary to the user (the artifact is on disk for the next stage's sub-agent); (2) re-author \`HANDOFF.json\` + \`.continue-here.md\` (see \`runbooks/handoff-artifacts.md\`); (3) **immediately dispatch the next stage** in \`triage.path\` — no waiting, no approval picker — UNLESS one of the always-auto hard-failure conditions fires (see \`runbooks/always-auto-failure-handling.md\`).
 
-The architect dispatch runs silently as a single on-demand sub-agent (v8.62 unified flow). There is no mid-plan Clarify dialogue and no Phase 7 sign-off pause; the orchestrator chains automatically once the architect's slim summary returns.
+The architect dispatch runs silently as a single on-demand sub-agent (unified flow). There is no mid-plan Clarify dialogue and no Phase 7 sign-off pause; the orchestrator chains automatically once the architect's slim summary returns.
 
 ## Stop-and-report (the only thing that ends the turn)
 
@@ -738,16 +735,16 @@ Resume from a fresh session works because everything is on disk: \`flow-state.js
 \`/cc-cancel\` is the **only** way to discard an active flow; it is never offered as a clickable option in any structured question. The orchestrator surfaces it as plain prose inside the stop-and-report status block ("\`/cc-cancel\` to discard").
 `;
 
-const ALWAYS_AUTO_FAILURE_HANDLING = `# On-demand runbook — always-auto failure handling (v8.61+)
+const ALWAYS_AUTO_FAILURE_HANDLING = `# On-demand runbook — always-auto failure handling
 
-The orchestrator opens this runbook on every chain decision after a specialist returns its slim summary. v8.61 replaces the user-facing \`step\` / \`auto\` choice with a deterministic failure matrix: the flow chains stages automatically until a failure condition fires; on failure the orchestrator either auto-fixes (capped at 3 iterations) or stops immediately and surfaces a stop-and-report status block.
+The orchestrator opens this runbook on every chain decision after a specialist returns its slim summary. A deterministic failure matrix replaces the user-facing \`step\` / \`auto\` choice: the flow chains stages automatically until a failure condition fires; on failure the orchestrator either auto-fixes (capped at 3 iterations) or stops immediately and surfaces a stop-and-report status block.
 
 ## Failure routing matrix (locked)
 
 | Failure | Behaviour |
 | --- | --- |
 | Build failure (\`suite-status: failed\` or compile error) | Auto-fix loop: dispatch \`builder\` in \`fix-only\` mode with the failure context prepended. Cap = 3 iterations. After the 3rd failed iteration, stop and report. |
-| Reviewer \`block\` OR \`Recommended next: fix-only\` with ≥1 \`required\`/\`critical\` finding | Auto-fix loop: dispatch \`builder\` in \`fix-only\` mode with the findings prepended. Cap = 3 iterations. After the 3rd failed iteration, stop and report. The v8.13 hard cap of 5 review/fix iterations still applies; the v8.61 cap of 3 is the tighter of the two. |
+| Reviewer \`block\` OR \`Recommended next: fix-only\` with ≥1 \`required\`/\`critical\` finding | Auto-fix loop: dispatch \`builder\` in \`fix-only\` mode with the findings prepended. Cap = 3 iterations. After the 3rd failed iteration, stop and report. The hard cap of 5 review/fix iterations still applies; the cap of 3 is the tighter of the two. |
 | Critic \`verdict: block-ship\` | **Stop immediately and report.** No auto-iteration — re-running the critic on unchanged code produces the same verdict; the user must edit the diff (or accept the ship as-is) and re-invoke \`/cc\`. |
 | Catastrophic (git operation fail, sub-agent dispatch fail, file I/O fail) | Stop and report. Include the underlying error message in the status block's \`Reason:\` field. |
 | \`Recommended next: cancel\` | Stop and report. The specialist recommended stopping; the user decides whether to \`/cc\` (continue under a follow-up) or \`/cc-cancel\` (discard). |
@@ -799,7 +796,7 @@ The counter increments on every fix-only dispatch and resets when the correspond
 
 Catastrophic failures (git ops fail, sub-agent dispatch fail, file I/O fail) are distinct from "the sub-agent's verdict failed" — they mean the orchestrator itself could not complete a step. Always-auto treats them identically to other stops: write the stop-and-report status block with the underlying error message in \`Reason:\`, end the turn. Do NOT auto-retry catastrophic failures; the user must decide whether the underlying issue (disk full, network down, git index corrupted) is recoverable.
 
-## Builder status protocol (v8.68 — structured status routing)
+## Builder status protocol (structured status routing)
 
 The builder slim summary carries a structured \`Status:\` line from a fixed set: \`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`. The orchestrator routes each status deterministically per the matrix above; this section codifies the surface behaviour. The full skill body lives at \`.cclaw/lib/skills/structured-status.md\`.
 
@@ -860,11 +857,11 @@ Both stages ship together because they catch different problem classes — plan-
 ## Shared cross-stage rules
 
 - **Pre-commitment predictions** are authored BEFORE the rest of the protocol runs (plan-critic §6; post-impl critic §1). Same discipline shape: 3-5 predictions naming verification paths and final outcomes (\`confirmed\` / \`refuted\` / \`partial\`); the discipline activates deliberate search instead of passive reading.
-- **Anti-rationalization pointer.** Both specialists reference the shared \`.cclaw/lib/anti-rationalizations.md\` catalog (v8.49) for cross-cutting rationalizations; only specialist-unique rows live inline in the prompt body.
-- **Iteration cap = 1.** Each specialist dispatches at most twice per slug (iteration 0 + one allowed retry). A third dispatch is structurally forbidden — the orchestrator stops and reports per the v8.61 always-auto failure matrix instead.
+- **Anti-rationalization pointer.** Both specialists reference the shared \`.cclaw/lib/anti-rationalizations.md\` catalog for cross-cutting rationalizations; only specialist-unique rows live inline in the prompt body.
+- **Iteration cap = 1.** Each specialist dispatches at most twice per slug (iteration 0 + one allowed retry). A third dispatch is structurally forbidden — the orchestrator stops and reports per the always-auto failure matrix instead.
 - **Slim summary shape.** Both return a ≤7-line slim summary with \`specialist\`, \`verdict\`, severity-bucketed findings count, \`iteration\`, \`confidence\`, and an optional \`notes\` line (required when confidence != high).
 
-## Pre-implementation pass (plan-critic, v8.51)
+## Pre-implementation pass (plan-critic)
 
 The orchestrator opens this section **on every \`architect\` slim-summary return** when the gate evaluates to true. plan-critic is the pre-implementation adversarial specialist that runs between \`architect\` and \`builder\` on a tight subset of flows. It walks what is **missing or wrong** in the plan itself (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + pre-commitment predictions) rather than the post-impl critic's "did we build the right thing well?" pass. The contract that drives the dispatch lives in \`.cclaw/lib/agents/plan-critic.md\`; this section covers what the orchestrator does *around* the dispatch.
 
@@ -877,7 +874,7 @@ plan-critic runs ONLY when ALL of these hold:
 3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs extend prior shipped work; the parent slug already shipped + survived its post-impl critic).
 4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency surface).
 
-For any other combination, plan-critic is **structurally skipped**. The orchestrator advances directly from architect's slim summary to builder dispatch, as today. The gate is **AND** across all four; the widening dropped the prior \`complexity == "large-risky"\` requirement (reference patterns — chachamaru \`plan_critic\` runs on every Phase 0, gsd-v1 plan-checker runs across complexity tiers — showed cclaw's prior gate was the narrowest in the cohort and likely under-fired on strict small-medium flows; trivial flows still skipped because they have no plan to critique). Further widening any condition is a v8.55+ scope decision, not a within-slug runtime call.
+For any other combination, plan-critic is **structurally skipped**. The orchestrator advances directly from architect's slim summary to builder dispatch, as today. The gate is **AND** across all four; the widening dropped the prior \`complexity == "large-risky"\` requirement (reference patterns — chachamaru \`plan_critic\` runs on every Phase 0, gsd-v1 plan-checker runs across complexity tiers — showed cclaw's prior gate was the narrowest in the cohort and likely under-fired on strict small-medium flows; trivial flows still skipped because they have no plan to critique). Further widening any condition is a scope decision, not a within-slug runtime call.
 
 ### plan-critic dispatch envelope
 
@@ -910,19 +907,19 @@ Dispatch plan-critic
 
 The plan-critic returns one of three verdicts. The orchestrator branches on (verdict, iteration):
 
-| verdict | iteration | \`currentStage\` after | what the orchestrator does (v8.61 always-auto) |
+| verdict | iteration | \`currentStage\` after | what the orchestrator does (always-auto) |
 | --- | --- | --- | --- |
 | \`pass\` | 0 or 1 | \`"plan"\` → advance to \`"build"\` | chain to builder dispatch. \`iterate\` and \`fyi\` rows in plan-critic.md ride along as advisory notes for builder + reviewer to see. |
 | \`revise\` | 0 | stays \`"plan"\`, \`lastSpecialist: "plan-critic"\` | dispatch \`architect\` again, with plan-critic.md §8 hand-off block prepended to the dispatch envelope's \`Inputs\` line. architect updates plan.md, then the orchestrator re-dispatches plan-critic (iteration 1). |
 | \`revise\` | 1 | stays \`"plan"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). The plan-critic revise loop hit the iteration cap; recovery via \`/cc\` (continue under a follow-up after the user edits plan.md or accepts the warnings) or \`/cc-cancel\` (discard). |
 | \`cancel\` | 0 or 1 | stays \`"plan"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). \`cancel\` means the plan is structurally not buildable; recovery via \`/cc\` (continue after re-architecting) or \`/cc-cancel\` (discard). |
 
-**Confidence: low** in the plan-critic's slim summary stops and reports per the v8.61 always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). The plan-critic MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
+**Confidence: low** in the plan-critic's slim summary stops and reports per the always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). The plan-critic MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
 
 ### plan-critic iteration cap enforcement
 
 - \`planCriticIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return.
-- The orchestrator dispatches plan-critic **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`revise\` from iter 0). A third dispatch is structurally not allowed — the orchestrator stops and reports per the v8.61 always-auto failure matrix instead.
+- The orchestrator dispatches plan-critic **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`revise\` from iter 0). A third dispatch is structurally not allowed — the orchestrator stops and reports per the always-auto failure matrix instead.
 - A flow that goes \`revise\` (iter 0) → architect revise → \`revise\` (iter 1) is the canonical "1 revise loop max" path. After the second \`revise\`, the orchestrator emits the stop-and-report status block; the user resumes with \`/cc\` (continue after editing the plan) or \`/cc-cancel\` (discard).
 - A \`cancel\` verdict at any iteration immediately stops and reports (per \`runbooks/always-auto-failure-handling.md\`); iteration does not advance.
 - The iteration cap is independent of \`reviewIterations\` (post-impl review loop) and \`criticIteration\` (post-impl critic). All three counters are tracked separately.
@@ -967,16 +964,16 @@ The plan-critic returns one of three verdicts. The orchestrator branches on (ver
 - Propose alternative approaches. The architect chose; plan-critic catches mistakes in the chosen plan, not relitigates the choice.
 - Emit multi-perspective lens findings (security / a11y / perf as parallel sweeps). That is scope for the post-impl critic; plan-critic stays focused on the five dimensions.
 
-### plan-critic legacy migration (pre-v8.51 \`flow-state.json\`)
+### plan-critic legacy migration (\`flow-state.json\`)
 
 A state file with \`currentStage: "plan"\` AND \`lastSpecialist: "architect"\` AND no \`planCriticVerdict\` field is treated as **pre-plan-critic intermediate**:
 
-- If the slug satisfies the v8.54 gate (ceremonyMode=strict + complexity!=trivial + problemType!=refines + AC count>=2): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.51) detected; plan-critic will run on next /cc.\`) and dispatches plan-critic before advancing to builder.
+- If the slug satisfies the plan-critic gate (ceremonyMode=strict + complexity!=trivial + problemType!=refines + AC count>=2): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state detected; plan-critic will run on next /cc.\`) and dispatches plan-critic before advancing to builder.
 - If the slug does NOT satisfy the gate (any combination that fails any of the four AND-conditions): no migration; plan-critic was structurally never going to run on this slug, advance to builder as today.
 
 The migration is one-pass and idempotent — a slug whose plan-critic has already run shows \`planCriticVerdict\` set, so the legacy branch is never re-entered.
 
-## Post-implementation pass (critic, v8.42)
+## Post-implementation pass (critic)
 
 The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's fourteen axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
 
@@ -1006,19 +1003,19 @@ Mapping fired-triggers count to \`criticEscalation\`:
 
 ### critic cap & rerun rules
 
-- **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — surfacing the critic-cap-reached picker (same shape as the v8.20 5-iteration reviewer cap).
+- **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — surfacing the critic-cap-reached picker (same shape as the 5-iteration reviewer cap).
 - **Re-run trigger:** ONLY when the user picks \`[1] fix and re-review\` at the block-ship picker. The orchestrator re-dispatches \`builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the cap still applies), then re-runs \`critic\` (increments \`criticIteration\`).
 - **Independence:** critic dispatches do NOT increment \`reviewIterations\`. The two counters are independent; the critic-cap-reached picker fires only on a third critic dispatch, even if the reviewer-cap is far from reached.
 
 ### critic verdict handling (slim summary → orchestrator routing)
 
-| critic \`Verdict:\` | \`currentStage\` after | what the orchestrator does (v8.61 always-auto) |
+| critic \`Verdict:\` | \`currentStage\` after | what the orchestrator does (always-auto) |
 | --- | --- | --- |
 | \`pass\` | \`"ship"\` | chain to ship |
 | \`iterate\` | \`"ship"\` | open critic gaps with severity \`iterate\` are copied verbatim into \`ship.md > ## Risks carried over\`; one line to the user ("Critic returned iterate (\<N\> gaps carried over). Continuing to ship.") then chain to ship |
-| \`block-ship\` | stays \`"critic"\` | **stop immediately and report** per the v8.61 always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). No auto-iteration on critic block-ship — re-running the critic on unchanged code produces the same verdict. Recovery via \`/cc\` (continue under a follow-up after editing the diff; consumes the one allowed critic rerun) or \`/cc-cancel\` (discard). Single-line summary cites the \`block-ship\` G-N / F-N anchors verbatim. |
+| \`block-ship\` | stays \`"critic"\` | **stop immediately and report** per the always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). No auto-iteration on critic block-ship — re-running the critic on unchanged code produces the same verdict. Recovery via \`/cc\` (continue under a follow-up after editing the diff; consumes the one allowed critic rerun) or \`/cc-cancel\` (discard). Single-line summary cites the \`block-ship\` G-N / F-N anchors verbatim. |
 
-**Confidence: low** in the critic's slim summary stops and reports per the v8.61 always-auto failure matrix. The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
+**Confidence: low** in the critic's slim summary stops and reports per the always-auto failure matrix. The critic MUST write a non-empty \`Notes:\` line when Confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
 
 ### critic FlowState patches
 
@@ -1050,11 +1047,11 @@ Mapping fired-triggers count to \`criticEscalation\`:
 
 The slug introduces the critic itself. The acceptance criterion (Q4) is that *this* slug runs through *its own* critic stage during review. If the critic returns \`block-ship\` on its own implementation, the orchestrator records the block-ship reason in \`learnings.md\` and the user invokes \`[2] accept-and-ship\` (manual override; \`triage.criticOverride: true\`). The override is documented in the slug's PR body under \`## Critic self-dogfood findings\` per the process checklist. This is a one-time bootstrap exception — every subsequent slug treats \`block-ship\` as a hard gate by default.
 
-### critic legacy migration (pre-v8.42 \`flow-state.json\`)
+### critic legacy migration (\`flow-state.json\`)
 
 A state file with \`currentStage: "review"\` AND \`lastSpecialist: "reviewer"\` AND no \`criticVerdict\` field is treated as **pre-critic intermediate**:
 
-- If the slug directory is \`flows/<slug>/\` (still active, not yet shipped): on the next \`/cc\`, the orchestrator emits the one-line migration note (\`Legacy state (pre-v8.42) detected; the critic stage will run on next /cc.\`) and dispatches critic before advancing to ship.
+- If the slug directory is \`flows/<slug>/\` (still active, not yet shipped): on the next \`/cc\`, the orchestrator emits the one-line migration note (\`Legacy state detected; the critic stage will run on next /cc.\`) and dispatches critic before advancing to ship.
 - If the slug directory is \`flows/shipped/<slug>/\` (post-ship already completed): the state is left alone. The shipped artifact set is immutable; the orchestrator does NOT retroactively run critic on a shipped slug.
 
 The migration is one-pass and idempotent — a slug whose critic has already run shows \`criticVerdict\` set, so the legacy branch is never re-entered.
@@ -1070,11 +1067,11 @@ The migration is one-pass and idempotent — a slug whose critic has already run
 The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see Q2).
 `;
 
-const QA_STAGE = `# On-demand runbook — qa step (v8.52+)
+const QA_STAGE = `# On-demand runbook — qa step
 
 The orchestrator opens this runbook **on every builder GREEN slim-summary return** when the qa gate evaluates to true. \`qa-runner\` is the behavioural-acceptance specialist that runs between \`build\` and \`review\` on UI-touching slugs in non-inline mode. It walks the **rendered page** (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. The contract that drives the dispatch lives in \`.cclaw/lib/agents/qa-runner.md\`; this runbook covers what the orchestrator does *around* the dispatch.
 
-Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires on stop-the-line) and from \`reviewer.md > qa-evidence axis\` (post-qa cross-check that qa.md rows match the diff). The three together close the behavioural-QA gap that pre-v8.52 cclaw only handled implicitly through the reviewer's fourteen-axis pass.
+Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires on stop-the-line) and from \`reviewer.md > qa-evidence axis\` (post-qa cross-check that qa.md rows match the diff). The three together close the behavioural-QA gap that cclaw previously handled only implicitly through the reviewer's fourteen-axis pass.
 
 ## Gating (the three AND conditions — orchestrator enforces deterministically)
 
@@ -1084,9 +1081,9 @@ qa-runner runs ONLY when ALL of these hold:
 2. \`triage.ceremonyMode != "inline"\` (trivial / one-shot slugs skip qa; inline budget cannot afford a structured pass).
 3. \`qaIteration < 1\` (hard cap — a third dispatch is structurally not allowed; the orchestrator surfaces the iterate-cap-reached picker instead).
 
-For any other combination, qa-runner is **structurally skipped**. The orchestrator advances directly from builder's GREEN slim summary to reviewer dispatch, as today. The gate is **AND** across all three; widening any condition (e.g. running qa on \`ceremonyMode: inline\`) is a v8.53+ scope decision, not a within-slug runtime call.
+For any other combination, qa-runner is **structurally skipped**. The orchestrator advances directly from builder's GREEN slim summary to reviewer dispatch, as today. The gate is **AND** across all three; widening any condition (e.g. running qa on \`ceremonyMode: inline\`) is a scope decision, not a within-slug runtime call.
 
-Backwards compat: a pre-v8.52 flow whose \`triage.surfaces\` field is absent reads as \`["other"]\` and skips qa — the orchestrator does not retro-fit qa onto legacy slugs.
+Backwards compat: a legacy flow whose \`triage.surfaces\` field is absent reads as \`["other"]\` and skips qa — the orchestrator does not retro-fit qa onto legacy slugs.
 
 ## Dispatch envelope
 
@@ -1126,19 +1123,19 @@ Dispatch qa-runner
 
 qa-runner returns one of three verdicts. The orchestrator branches on (verdict, iteration):
 
-| verdict | iteration | \`currentStage\` after | what the orchestrator does (v8.61 always-auto) |
+| verdict | iteration | \`currentStage\` after | what the orchestrator does (always-auto) |
 | --- | --- | --- | --- |
 | \`pass\` | 0 or 1 | \`"qa"\` → advance to \`"review"\` | chain to reviewer dispatch. The reviewer's \`qa-evidence\` axis re-reads qa.md and cross-checks each row against the diff. \`fyi\` findings ride along as advisory notes. |
 | \`iterate\` | 0 | stays \`"qa"\`, \`lastSpecialist: "qa-runner"\` | dispatch \`builder\` again in **fix-only** mode, with qa.md §7 hand-off block prepended to the dispatch envelope's \`Inputs\` line. builder addresses each \`required\` finding (RED → GREEN cycle for the failed UI behaviour), then the orchestrator re-runs the build verification cycle and re-dispatches qa-runner (iteration 1). |
 | \`iterate\` | 1 | stays \`"qa"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). The qa iterate loop hit the iteration cap; recovery via \`/cc\` (continue under a follow-up after the user resolves the failed UI behaviour) or \`/cc-cancel\` (discard). |
 | \`blocked\` | 0 or 1 | stays \`"qa"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). \`blocked\` means qa could not actually run (browser tooling unavailable AND manual steps required); recovery via \`/cc\` (continue under a follow-up after the user installs browser tooling or runs the qa.md §4 manual-steps blocks) or \`/cc-cancel\` (discard). |
 
-**Confidence: low** in the qa-runner's slim summary stops and reports per the v8.61 always-auto failure matrix. The qa-runner MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
+**Confidence: low** in the qa-runner's slim summary stops and reports per the always-auto failure matrix. The qa-runner MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
 
 ## Iteration cap enforcement
 
 - \`qaIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return.
-- The orchestrator dispatches qa-runner **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`iterate\` from iter 0). A third dispatch is structurally not allowed — the orchestrator stops and reports per the v8.61 always-auto failure matrix instead.
+- The orchestrator dispatches qa-runner **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`iterate\` from iter 0). A third dispatch is structurally not allowed — the orchestrator stops and reports per the always-auto failure matrix instead.
 - A flow that goes \`iterate\` (iter 0) → builder fix → \`iterate\` (iter 1) is the canonical "1 iterate loop max" path. After the second \`iterate\`, the orchestrator emits the stop-and-report status block; the user resumes with \`/cc\` (continue after editing) or \`/cc-cancel\` (discard).
 - A \`blocked\` verdict at any iteration immediately stops and reports (per \`runbooks/always-auto-failure-handling.md\`); iteration does not advance.
 - The iteration cap is independent of \`reviewIterations\` (post-impl review loop), \`criticIteration\` (post-impl critic), and \`planCriticIteration\` (pre-impl plan-critic). All four counters are tracked separately.
@@ -1154,7 +1151,7 @@ qa-runner returns one of three verdicts. The orchestrator branches on (verdict, 
 }
 \`\`\`
 
-(\`currentStage\` advances to \`"qa"\` because qa is a real stage in the v8.52 \`FLOW_STAGES\` enum, sitting between \`"build"\` and \`"review"\`.)
+(\`currentStage\` advances to \`"qa"\` because qa is a real stage in the \`FLOW_STAGES\` enum, sitting between \`"build"\` and \`"review"\`.)
 
 **After qa-runner returns slim summary (orchestrator has read it, BEFORE user-gate decision):**
 
@@ -1179,7 +1176,7 @@ qa-runner returns one of three verdicts. The orchestrator branches on (verdict, 
 
 ## Reviewer cross-check (qa-evidence axis)
 
-After the qa pass completes (or is overridden), the reviewer's v8.52 \`qa-evidence\` axis cross-checks the artifact against the diff:
+After the qa pass completes (or is overridden), the reviewer's \`qa-evidence\` axis cross-checks the artifact against the diff:
 
 1. **For every AC whose \`touchSurface\` includes a UI file**: the reviewer expects a matching \`qa.md > §4 Per-AC evidence\` row.
 2. **Missing row** → reviewer fires a \`required\` finding (axis: \`qa-evidence\`, severity: \`required\`).
@@ -1200,19 +1197,19 @@ The axis is the 9th explicit axis (10th with the gated \`nfr-compliance\` axis).
 - Silently install Playwright. If the project does not ship Playwright, downgrade to Tier 2 / 3 and surface a \`fyi\` finding recommending a follow-up "add Playwright" slug — do not grow the dependency footprint as a qa side effect.
 - Write findings about code quality. Quality belongs to the reviewer's fourteen-axis pass; qa-runner findings are strictly about behavioural verification of UI rendering.
 
-## Legacy migration (pre-v8.52 \`flow-state.json\`)
+## Legacy migration (\`flow-state.json\`)
 
 A state file with \`currentStage: "build"\` AND \`lastSpecialist: "builder"\` AND no \`qaVerdict\` field is treated as **pre-qa intermediate**:
 
-- If the slug satisfies the v8.52 gate (\`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.ceremonyMode != "inline"\`): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state (pre-v8.52) detected; qa-runner will run on next /cc.\`) and dispatches qa-runner before advancing to reviewer.
+- If the slug satisfies the qa gate (\`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.ceremonyMode != "inline"\`): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state detected; qa-runner will run on next /cc.\`) and dispatches qa-runner before advancing to reviewer.
 - If the slug does NOT satisfy the gate (\`triage.surfaces\` is absent / empty / non-UI, OR \`triage.ceremonyMode == "inline"\`): no migration; qa-runner was structurally never going to run on this slug, advance to reviewer as today. \`triage.surfaces\` absent is treated as \`["other"]\` (the canonical no-QA-gating fallback).
 
 The migration is one-pass and idempotent — a slug whose qa-runner has already run shows \`qaVerdict\` set, so the legacy branch is never re-entered.
 
-For slugs where \`triage.surfaces\` was never populated (the field was added in v8.52 and pre-v8.52 triage prompts did not emit it), the orchestrator does NOT retro-populate the field on read — leaving \`surfaces\` absent is the canonical "this was a pre-v8.52 slug, qa was never on the table" signal. The qa gate evaluates absent-surfaces as the empty list and skips dispatch.
+For slugs where \`triage.surfaces\` was never populated (legacy triage prompts did not emit it), the orchestrator does NOT retro-populate the field on read — leaving \`surfaces\` absent is the canonical "this was a legacy slug, qa was never on the table" signal. The qa gate evaluates absent-surfaces as the empty list and skips dispatch.
 `;
 
-const EXTEND_MODE = `# On-demand runbook — extend-mode entry point (v8.59+)
+const EXTEND_MODE = `# On-demand runbook — extend-mode entry point
 
 The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts with the literal token \`extend \` (case-insensitive, exactly one space)**. The Detect hop fires before the research-mode fork — \`extend\` always wins. This runbook covers the full extend-mode contract: argument parsing, parent validation, slug-init patches, triage inheritance, and the four error sub-cases. Specialist consumption of \`parentContext\` lives further down the orchestrator body under \`### prior-context consumption\`; this runbook does not duplicate that section.
 
@@ -1221,7 +1218,7 @@ The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts
 1. **Git-check sub-step** — \`.git/\` presence; force \`ceremonyMode: soft\` if absent.
 2. **extend-mode fork** — argument starts with \`extend \`.
 3. **research-mode fork** — argument starts with \`research \`.
-4. **Default routes** — fresh / resume / collision / pre-v8 state per the Detect table.
+4. **Default routes** — fresh / resume / collision / legacy state per the Detect table.
 
 The order matters: \`/cc extend <slug> research <topic>\` enters extend mode, not research. The user wanting a research flow that extends a parent runs \`/cc research <topic>\` directly without the \`extend\` prefix.
 
@@ -1258,8 +1255,8 @@ The slug resolves to a shipped flow with a non-empty \`plan.md\`. Continue with 
 
 1. **Build a slug for the follow-up flow** — canonical \`YYYYMMDD-<semantic-kebab>\` from the \`<task>\` text. Same naming rules as a standard \`/cc <task>\` (date prefix mandatory; same-day collision suffix \`-2\`, \`-3\`, etc.).
 2. **Stamp \`flow-state.json > parentContext\`** — patch the new flow's state with the resolved \`ParentContext\` (slug + status: "shipped" + optional shippedAt + artifactPaths) via \`patchFlowState\`. This is the single source of truth for the parent linkage; specialists read this field, not \`refines\`.
-3. **Seed \`refines:\` in plan.md frontmatter** — write \`refines: <parent-slug>\` so the legacy v8.58 knowledge-store chain (\`findRefiningChain\`), qa-runner skip rule, plan-critic skip gate, and the architect's Compose-phase ambiguity-score brownfield path keep working unchanged. The two writes (\`parentContext\` + \`refines\`) are kept in sync by the same init code path; user manual edits to plan.md after init are out of scope. \`parent_slug:\` mirrors the pointer (native field); \`parent_slug:\` wins on drift.
-4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`runMode\` / \`surfaces\` on the new triage decision (v8.112 retired the per-flow ceremony override flags, so inheritance + escalation heuristic now drive the decision deterministically).
+3. **Seed \`refines:\` in plan.md frontmatter** — write \`refines: <parent-slug>\` so the legacy knowledge-store chain (\`findRefiningChain\`), qa-runner skip rule, plan-critic skip gate, and the architect's Compose-phase ambiguity-score brownfield path keep working unchanged. The two writes (\`parentContext\` + \`refines\`) are kept in sync by the same init code path; user manual edits to plan.md after init are out of scope. \`parent_slug:\` mirrors the pointer (native field); \`parent_slug:\` wins on drift.
+4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`runMode\` / \`surfaces\` on the new triage decision (the per-flow ceremony override flags are retired, so inheritance + escalation heuristic now drive the decision deterministically).
 5. **Proceed to triage announcement → first dispatch.** The new flow runs the same pipeline as a standard \`/cc <task>\` (plan → build → qa? → review → critic → ship). Only the parent-context loading at init is new.
 
 ### \`ok: false\` — error sub-cases
@@ -1283,36 +1280,36 @@ The error message is plain prose, ends the turn, and does NOT consume any of the
 - **Argument is \`extend <slug> <task>\` AND \`<slug>\` resolves to a shipped slug with \`outcome_signal: "reverted"\` in \`knowledge.jsonl\`** — proceed with extend init, but emit a one-line informational note: \`parent slug '<slug>' was later reverted — proceed only if you understand the revert.\` The user can still ship the follow-up; the note exists so a reverted parent does not become invisible context.
 - **Argument is \`extend <slug> research <topic>\`** — extend mode takes precedence (the research-mode fork below does not fire when the argument begins with \`extend \`). The new flow extends \`<slug>\` and runs a normal task pipeline; the user wanting a research flow that extends a parent should run \`/cc research <topic>\` directly without the extend prefix.
 
-(v8.112 retired the per-flow ceremony override flags and the back-compat run-mode toggles — there is no longer any user-facing override surface at extend init; the triage inheritance + escalation heuristic below is the sole decision path.)
+(The per-flow ceremony override flags and the back-compat run-mode toggles are retired — there is no longer any user-facing override surface at extend init; the triage inheritance + escalation heuristic below is the sole decision path.)
 
 ## Multi-level chaining
 
-loads the **immediate** parent only. If \`parentContext.slug\` itself has \`refines:\` (its parent has a grandparent), the orchestrator does NOT auto-load the grandparent's artifacts. Specialists may walk the chain on demand via \`findRefiningChain\` in \`src/knowledge-store.ts\` when transitive context is needed (the helper walks parent → grandparent → great-grandparent until it hits a slug with no \`refines:\`). Multi-level auto-loading at orchestrator level is v8.60+ scope; the constraint here keeps the context-loading bounded.
+Extend mode loads the **immediate** parent only. If \`parentContext.slug\` itself has \`refines:\` (its parent has a grandparent), the orchestrator does NOT auto-load the grandparent's artifacts. Specialists may walk the chain on demand via \`findRefiningChain\` in \`src/knowledge-store.ts\` when transitive context is needed (the helper walks parent → grandparent → great-grandparent until it hits a slug with no \`refines:\`). Multi-level auto-loading at orchestrator level is future scope; the constraint here keeps the context-loading bounded.
 
 ## Triage inheritance (fires only when \`parentContext\` is set at flow init)
 
 When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the orchestrator runs an **inheritance sub-step** BEFORE the lightweight router's heuristic classifier. The sub-step reads the parent's shipped \`ship.md\` / \`plan.md\` frontmatter (best-effort; missing fields fall through to the router default) and seeds the new flow's triage with the parent's values:
 
-- \`ceremonyMode\` ← parent's \`ceremony_mode\` (or pre-v8.56 \`ac_mode\`) from plan.md frontmatter, OR the value implied by the parent's ship.md when plan.md frontmatter is absent.
-- \`runMode\` ← v8.61 always-auto; the new flow stamps \`runMode: "auto"\` on every non-inline parent and \`null\` when the parent was inline. The parent's stored \`run_mode\` is ignored (legacy \`step\` parents fold to \`auto\` on extend).
+- \`ceremonyMode\` ← parent's \`ceremony_mode\` (or legacy \`ac_mode\`) from plan.md frontmatter, OR the value implied by the parent's ship.md when plan.md frontmatter is absent.
+- \`runMode\` ← always-auto; the new flow stamps \`runMode: "auto"\` on every non-inline parent and \`null\` when the parent was inline. The parent's stored \`run_mode\` is ignored (legacy \`step\` parents fold to \`auto\` on extend).
 - \`surfaces\` ← parent's \`surfaces\` from plan.md / triage block (when present).
 
 ### Precedence rules (highest → lowest, evaluated in this order)
 
-1. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the v8.23 no-git auto-downgrade audit shape.
-2. **Parent inheritance** — fields not pinned by (1) inherit from parent's frontmatter (ceremonyMode + surfaces). \`runMode\` is *not* inherited under v8.61 (always-auto on non-inline; null on inline).
-3. **Router default** — fields not seeded by (1)-(2) fall through to the v8.58 lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
+1. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the no-git auto-downgrade audit shape.
+2. **Parent inheritance** — fields not pinned by (1) inherit from parent's frontmatter (ceremonyMode + surfaces). \`runMode\` is *not* inherited (always-auto on non-inline; null on inline).
+3. **Router default** — fields not seeded by (1)-(2) fall through to the lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
 
-(v8.112 retired the explicit user-flag layer that used to sit above these three rules; the triage heuristic is now the sole source of truth, and the user influences it via task wording rather than per-flow flags.)
+(The explicit user-flag layer that used to sit above these three rules is retired; the triage heuristic is now the sole source of truth, and the user influences it via task wording rather than per-flow flags.)
 
-The inheritance is one-way: the new flow's triage values are immutable for its lifetime; changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init. v8.61 retired the v8.34 mid-flight \`runMode\` toggle — runMode is now structurally immutable.
+The inheritance is one-way: the new flow's triage values are immutable for its lifetime; changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init. The mid-flight \`runMode\` toggle is retired — runMode is now structurally immutable.
 
 ### Worked examples
 
 | user invocation | parent's \`ceremony_mode\` | new flow's \`ceremonyMode\` | new flow's \`runMode\` | rationale |
 | --- | --- | --- | --- | --- |
-| \`/cc extend 20260514-auth-flow add OIDC\` | strict | strict | auto | rule 2 (ceremonyMode inheritance); v8.61 always-auto |
-| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | strict | auto | rule 1 (escalation heuristic — \`migration\` keyword); v8.61 always-auto |
+| \`/cc extend 20260514-auth-flow add OIDC\` | strict | strict | auto | rule 2 (ceremonyMode inheritance); always-auto |
+| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | strict | auto | rule 1 (escalation heuristic — \`migration\` keyword); always-auto |
 | \`/cc extend 20260514-cli-help fix typo\` | inline | inline | (null) | rule 2 (inheritance); inline path has no runMode |
 | \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (router heuristic decides) | auto (unless heuristic picked inline) | rule 3 (router fallthrough) |
 
@@ -1323,7 +1320,7 @@ The audit log entry for the new flow's triage decision records:
   "decidedAt": "<iso>",
   "ceremonyMode": "strict",
   "runMode": "auto",
-  "rationale": "extend-mode inheritance from 20260514-auth-flow (parent: ceremony_mode=strict; runMode=auto under v8.61 always-auto)",
+  "rationale": "extend-mode inheritance from 20260514-auth-flow (parent: ceremony_mode=strict; runMode=auto under always-auto)",
   "parentSlug": "20260514-auth-flow",
   "inheritanceSource": "parent-frontmatter",
   "userOverrode": false
@@ -1342,14 +1339,14 @@ When \`userOverrode: true\` is recorded, the entry also includes a \`overrideFie
 
 ## Backwards compatibility
 
-- **Pre-v8.59 state files** never carry \`parentContext\`. Readers default to \`null\`/absent meaning "cold-start flow, no parent". Migration is a no-op; the field is opt-in.
-- **Pre-v8.59 shipped slugs** are valid extend targets. Their plan.md may not have a \`parent_slug:\` field; the orchestrator does not write one retroactively. The new flow's \`parentContext.slug\` is the canonical link.
+- **Legacy state files** never carry \`parentContext\`. Readers default to \`null\`/absent meaning "cold-start flow, no parent". Migration is a no-op; the field is opt-in.
+- **Legacy shipped slugs** are valid extend targets. Their plan.md may not have a \`parent_slug:\` field; the orchestrator does not write one retroactively. The new flow's \`parentContext.slug\` is the canonical link.
 - **\`priorResearch\` co-existence.** A \`/cc extend\` flow that also follows a \`/cc research\` ship reads BOTH context sources (the two fields are orthogonal on the FlowState type). Specialists merge the two when both are present; \`priorResearch\` is the bigger / fuzzier context, \`parentContext\` is the tighter / structured one.
 - **Auto-detection deferral.** If a future release ships auto-detection, the entry point in this runbook stays unchanged — auto-detection becomes a second path into the same init code (the explicit \`/cc extend\` slug stays as the primary, unambiguous entry).
 `;
 
 
-const RESEARCH_DEPTH_AND_SELF_REVIEW = `# On-demand runbook — research depth tiers + synthesis self-review (v8.69+)
+const RESEARCH_DEPTH_AND_SELF_REVIEW = `# On-demand runbook — research depth tiers + synthesis self-review
 
 The orchestrator opens this runbook on every \`/cc research <topic>\` flow — once at the Detect-hop research-mode fork (to parse the depth flag / classify the depth) and once at Phase 3 synthesis (to run the self-review pass before \`research.md\` is written). The body of \`/cc\` carries only the one-paragraph pointer; this runbook is the canonical source.
 
@@ -1360,12 +1357,12 @@ Research mode (\`/cc research <topic>\`) supports three depth tiers; the orchest
 | Depth | Lenses dispatched | Extra probes | When to use |
 | --- | --- | --- | --- |
 | \`light\` | \`research-engineer\` + \`research-skeptic\` (2 lenses) | none | Clarification questions: "which library does X?", "is Y still the best practice?", "does our team already use Z?". Fast / cheap turn-around when the user wants a focused technical signal + adversarial check, NOT a full product / market / history scan. |
-| \`standard\` (default) | engineer + product + architecture + history + skeptic (5 lenses) | none | Technical exploration: "evaluate Redis vs in-memory cache for the search endpoint", "should we move auth to JWT?", "what's our story on observability?". The pre-v8.69 default; same 4-phase flow, full coverage of the orthogonal lens dimensions. |
+| \`standard\` (default) | engineer + product + architecture + history + skeptic (5 lenses) | none | Technical exploration: "evaluate Redis vs in-memory cache for the search endpoint", "should we move auth to JWT?", "what's our story on observability?". Same 4-phase flow, full coverage of the orthogonal lens dimensions. |
 | \`deep-product\` | 5 lenses | product lens fires Thesis + Adjacent-product probes; skeptic lens fires Durability probe | Greenfield / pivot / shape questions: "should we build a new product around X?", "what if we replace our planning tool with Y?", "evaluate switching from SaaS A to SaaS B". The deep-product probes (sourced from everyinc-compound \`ce-brainstorm\` Phase 1.2) force the lenses to interrogate the implicit product thesis + near-term durability that surface-level lens prose otherwise glosses. |
 
-### Selection — wording-based auto-classification (v8.112: sole selection path)
+### Selection — wording-based auto-classification (sole selection path)
 
-v8.112 retired the per-flow depth-override flags; the depth is now derived deterministically from the topic wording. The orchestrator's research-mode fork auto-classifies the depth at Detect, before any lens dispatch. The triage sub-agent's \`research_depth\` heuristic — surfaced in the slim summary's \`Research depth:\` line when triage runs — is NOT consulted directly here (research mode bypasses triage); the orchestrator runs the same wording-based heuristic inline.
+The per-flow depth-override flags are retired; the depth is derived deterministically from the topic wording. The orchestrator's research-mode fork auto-classifies the depth at Detect, before any lens dispatch. The triage sub-agent's \`research_depth\` heuristic — surfaced in the slim summary's \`Research depth:\` line when triage runs — is NOT consulted directly here (research mode bypasses triage); the orchestrator runs the same wording-based heuristic inline.
 
 | Topic wording signal | Default depth |
 | --- | --- |
@@ -1381,10 +1378,10 @@ When the wording is ambiguous (e.g. \`add caching\` could be light OR standard),
 The Detect-hop research-mode fork writes the depth into \`flow-state.json > triage.research_depth\` immediately after stamping the sentinel triage block. Phase 2 dispatch reads this field to decide which lenses to dispatch:
 
 - \`light\` → dispatch \`research-engineer\` + \`research-skeptic\` only (2 envelopes; the other three lenses are not dispatched and not marked failed; the \`lenses\` frontmatter array carries only \`[engineer, skeptic]\`).
-- \`standard\` → dispatch all 5 lenses (pre-v8.69 behaviour).
+- \`standard\` → dispatch all 5 lenses (behaviour).
 - \`deep-product\` → dispatch all 5 lenses; the dispatch envelope carries \`Research depth: deep-product\` so product + skeptic lenses fire their extra probes.
 
-## §2 — Synthesis self-review pass (v8.69; Phase 3)
+## §2 — Synthesis self-review pass (Phase 3)
 
 After authoring the per-lens sections + cross-lens \`## Synthesis\` + \`## Recommended next step\` (Phase 3 steps 1-4 in the start-command body), the orchestrator runs a **self-review pass** against the in-memory draft of \`research.md\` BEFORE writing it to disk. The self-review is one main-context pass (NOT a sub-agent dispatch — the orchestrator owns \`research.md\` end-to-end). Source: obra-superpowers brainstorming \"Spec Self-Review\" section.
 
@@ -1494,13 +1491,13 @@ Detect-hop fork stamps \`research_depth: deep-product\` (greenfield wording — 
 | "The recommendation contradicts the skeptic — but it's a really cool plan, I'll keep it." | NO. The contradiction scan exists exactly to catch this. If the skeptic flagged a don't-proceed AND the recommendation says proceed, fix the recommendation. Resolving the contradiction is more important than \"saving the cool plan\". |
 `;
 
-const RESEARCH_REVISION = `# On-demand runbook — research revision loop (v8.71+)
+const RESEARCH_REVISION = `# On-demand runbook — research revision loop
 
 The orchestrator opens this runbook whenever a \`/cc research <topic>\` flow lands at \`research.md\` and the user invokes one of \`/cc research revise <area>\` / \`/cc research push-back <claim>\` / \`/cc research accept\`. The runbook is the canonical procedure; the body of \`/cc\` carries only short pointers.
 
 ## §1 — Lifecycle gate (between Phase 3 synthesis and Phase 4 finalize)
 
-Pre-v8.71 research mode shipped a four-phase straight-line flow (discovery → lens-dispatch → synthesis → finalize). v8.71 inserts an explicit **awaiting-user-review** gate between Phase 3 and Phase 4. The gate exists because reference patterns converged on the user-review surface — obra-superpowers' \`brainstorming/SKILL.md\` calls it the "User Review Gate" and runs it after every brainstorming pass; addyosmani's \`idea-refine/SKILL.md\` codifies divergent → converge → user-pick; everyinc-compound's \`ce-brainstorm/SKILL.md\` Phase 2.5 is a confirmation gate before any artifact ships.
+Research mode runs a four-phase flow (discovery → lens-dispatch → synthesis → finalize) with an explicit **awaiting-user-review** gate between Phase 3 and Phase 4. The gate exists because reference patterns converged on the user-review surface — obra-superpowers' \`brainstorming/SKILL.md\` calls it the "User Review Gate" and runs it after every brainstorming pass; addyosmani's \`idea-refine/SKILL.md\` codifies divergent → converge → user-pick; everyinc-compound's \`ce-brainstorm/SKILL.md\` Phase 2.5 is a confirmation gate before any artifact ships.
 
 The gate is mandatory on every research flow regardless of depth tier (\`light\` / \`standard\` / \`deep-product\`). Phase 3 ends with \`research.md\` on disk + the orchestrator stamping \`flow-state.json > researchState: "awaiting-user-review"\`; the orchestrator then surfaces a one-paragraph prompt in plain prose:
 
@@ -1563,7 +1560,7 @@ The \`<claim>\` argument names a specific claim the user wants the orchestrator 
 
 ## §4 — \`/cc research accept\` — finalize
 
-The terminal sub-command. The orchestrator finalises the flow exactly as the pre-v8.71 Phase 4 finalize ran:
+The terminal sub-command. The orchestrator finalises the flow exactly as Phase 4 finalize does:
 
 1. Append a final entry to \`flow-state.json > revisions[]\` with \`kind: "accept"\`, \`at: <iso-now>\`, \`area: ""\` (empty — accept has no argument), \`lensesRedispatched: []\`, \`change: "User accepted research as final."\`. Append the matching row to \`research.md > ## Revision history\`: \`| <iso> | accept | — | — | User accepted research as final. |\`.
 2. Stamp \`flow-state.json > researchState: "accepted"\` (terminal).
@@ -1593,7 +1590,7 @@ The next \`/cc <task>\` invocation reads the most-recent shipped research slug u
 | \`awaiting-user-review\` | \`/cc research accept\` | \`accepted\` (terminal — finalize fires) |
 | \`revising\` | revision lands + synthesis re-run + \`research.md\` rewritten | \`awaiting-user-review\` |
 
-Pre-v8.71 research-mode flows did not stamp \`researchState\`; resume on a stopped pre-v8.71 flow restarts from Phase 1 (no graceful resume — the field is the only way to track lifecycle position, and absence implies the field was never written).
+Legacy research-mode flows did not stamp \`researchState\`; resume on such a flow restarts from Phase 1 (no graceful resume — the field is the only way to track lifecycle position, and absence implies the field was never written).
 
 ## §6 — Revision history table shape
 
@@ -1618,7 +1615,7 @@ The table is **append-only**: the orchestrator never mutates a prior row (the au
 | "I'll skip the Revision history append on a no-change revise — saves a row." | NO. Every revise / push-back / accept appends a row, even on no-change outcomes. The audit trail is the contract; absent rows are structurally undetectable later. |
 `;
 
-const DEBUG_BRANCH = `# On-demand runbook — debug-branch routing (v8.77+)
+const DEBUG_BRANCH = `# On-demand runbook — debug-branch routing
 
 The orchestrator opens this runbook on every transition from \`triage\` slim-summary return WHEN \`triage.taskShape == "debug"\`, AND on every transition from \`investigator\` slim-summary return to either architect / builder dispatch OR stop-and-report. The runbook is the canonical procedure; the body of \`/cc\` carries only short pointers (the "Debug-branch routing" section + the stage-table row for investigator + the #### investigator stage details section).
 
@@ -1632,7 +1629,7 @@ The gate is **orthogonal to \`triage.complexity\`** — a debug task can be any 
 
 ## §2 — Dispatch envelope for investigator (iteration 0)
 
-The orchestrator builds the dispatch envelope using the shape in \`dispatch-envelope.md\` PLUS the v8.77 investigator-specific fields:
+The orchestrator builds the dispatch envelope using the shape in \`dispatch-envelope.md\` PLUS the investigator-specific fields:
 
 \`\`\`text
 Stage: plan (investigator hop)
@@ -1727,7 +1724,7 @@ priorInvestigation: { path: "flows/<slug>/investigation.md", verdict: "<direct-f
 - **reviewer** — cross-checks the diff against the investigation's cited root cause; flags finding if the diff addresses a different mechanism.
 - **critic** — §3 skeptic question adds "does the fix actually address the cited root cause, or just paper over the symptom?"; cross-references investigation.md in the gap-analysis pass.
 
-The field is required-when-set, absent-when-default; specialists default to "build shape" behaviour when the field is absent (back-compat with pre-v8.77 envelopes).
+The field is required-when-set, absent-when-default; specialists default to "build shape" behaviour when the field is absent (back-compat with legacy envelopes).
 
 ## §7 — Re-dispatch on \`more-investigation\` (iteration 0 → 1)
 
@@ -1740,11 +1737,11 @@ When the verdict is \`more-investigation\` and \`investigatorIteration\` is 0:
 3. The investigator on iteration 1 reads its OWN \`investigation.md\` from iteration 0 (the file is on disk) plus the prior probe field; it carries the prior probe-recommendations forward in each lane's Hypothesis line so the second pass is a sharper probe, not a verbatim re-run.
 4. The second dispatch returns a slim summary; if \`Next step\` is again \`more-investigation\`, trigger §5's iteration-cap stop-and-report.
 
-## §8 — Legacy pre-v8.77 state file migration
+## §8 — Legacy state file migration
 
-Pre-v8.77 \`flow-state.json\` files lack the \`triage.taskShape\` field. The validator (\`src/flow-state.ts > assertTriageOrNull\`) accepts absent \`taskShape\` and treats it as undefined; the orchestrator's gate check (\`triage.taskShape === "debug"\`) is false on absent values, so the investigator hop does NOT fire on legacy flows — they run the pre-v8.77 path verbatim (architect → plan-critic (any rubric mode that gates true)? → builder → qa? → reviewer → critic → ship). No migration is required; the v8.77 wiring is purely additive on the debug branch.
+Legacy \`flow-state.json\` files lack the \`triage.taskShape\` field. The validator (\`src/flow-state.ts > assertTriageOrNull\`) accepts absent \`taskShape\` and treats it as undefined; the orchestrator's gate check (\`triage.taskShape === "debug"\`) is false on absent values, so the investigator hop does NOT fire on legacy flows — they run the legacy path verbatim (architect → plan-critic (any rubric mode that gates true)? → builder → qa? → reviewer → critic → ship). No migration is required; the investigator wiring is purely additive on the debug branch.
 
-When a legacy flow that was originally a bug-shaped task resumes under v8.77, the orchestrator does NOT retroactively dispatch the investigator (the architect's plan.md already exists; rerunning the investigator would be a wasted dispatch). The legacy flow continues to ship under the pre-v8.77 routing; future debug-shaped flows benefit from the investigator hop.
+When a legacy flow that was originally a bug-shaped task resumes, the orchestrator does NOT retroactively dispatch the investigator (the architect's plan.md already exists; rerunning the investigator would be a wasted dispatch). The legacy flow continues to ship under the legacy routing; future debug-shaped flows benefit from the investigator hop.
 
 ## §9 — Anti-rationalization (read before opening this runbook)
 
@@ -1757,13 +1754,13 @@ When a legacy flow that was originally a bug-shaped task resumes under v8.77, th
 | "Investigator's verdict was \`not-a-bug\` but the user clearly thinks it IS a bug — let me dispatch architect anyway." | NO. \`not-a-bug\` requires cited spec / docs / test evidence in the investigator's recommendation paragraph. Surface that evidence to the user verbatim; if the user disagrees, they re-invoke \`/cc\` with a clarified task and the new flow's triage re-classifies. Don't ovoverride the investigator's evidence-backed verdict from the orchestrator. |
 `;
 
-const DETECT_MATRIX = `# On-demand runbook — Detect \`/cc\` invocation matrix (v8.61+)
+const DETECT_MATRIX = `# On-demand runbook — Detect \`/cc\` invocation matrix
 
-The orchestrator opens this runbook on every \`/cc\` / \`/cc <task>\` / \`/cc-cancel\` invocation BEFORE deciding to dispatch. The matrix is the canonical contract; the orchestrator body keeps a short summary pointer (see \`Detect — \`/cc\` invocation matrix (v8.61)\` section in start-command). v8.106 — the former \`skills/flow-resume.md\` reference doc was retired; this runbook + the start-command Detect matrix are the sole resume-contract surfaces.
+The orchestrator opens this runbook on every \`/cc\` / \`/cc <task>\` / \`/cc-cancel\` invocation BEFORE deciding to dispatch. The matrix is the canonical contract; the orchestrator body keeps a short summary pointer (see \`Detect — \`/cc\` invocation matrix\` section in start-command). The former \`skills/flow-resume.md\` reference doc is retired; this runbook + the start-command Detect matrix are the sole resume-contract surfaces.
 
 ## §1 — Active flow detection
 
-Read \`.cclaw/state/flow-state.json\`. A flow is **active** when \`currentSlug != null\`. The finalize step resets \`currentSlug\` to \`null\` after moving artifacts to \`flows/shipped/<slug>/\`; a project that just shipped is back to no-active-flow. Missing / unparseable state initialises empty (treat as fresh / no active flow). Pre-v8 schema versions hard-stop with the migration prompt (see start-command's \`## Detect\` table).
+Read \`.cclaw/state/flow-state.json\`. A flow is **active** when \`currentSlug != null\`. The finalize step resets \`currentSlug\` to \`null\` after moving artifacts to \`flows/shipped/<slug>/\`; a project that just shipped is back to no-active-flow. Missing / unparseable state initialises empty (treat as fresh / no active flow). Legacy schema versions hard-stop with the migration prompt (see start-command's \`## Detect\` table).
 
 ## §2 — Full dispatch matrix (every invocation × every active-flow shape)
 
@@ -1775,8 +1772,8 @@ Read \`.cclaw/state/flow-state.json\`. A flow is **active** when \`currentSlug !
 | \`/cc <task>\` | no | **Start a new flow.** Run the Detect git-check, extend-mode fork, research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent. |
 | \`/cc research <topic>\` | yes | Error (same shape as \`/cc <task>\` + active flow). End the turn. |
 | \`/cc research <topic>\` | no | Start a research-mode flow (see \`runbooks/research-depth-and-self-review.md\`). |
-| \`/cc research go\` (v8.78) | yes (research-mode + \`researchState == "discovery"\`) | Force-exit Phase 1 discovery dialogue (identical to in-prose "ready" signal). Outside that state — error: \`'/cc research go' only fires during research-mode Phase 1 discovery.\` End the turn. |
-| \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (v8.71) | yes (research-mode + \`researchState == "awaiting-user-review"\`) | Route to the matching sub-handler per \`runbooks/research-revision.md\` §2 / §3 / §4. Outside that state — error: \`research revision sub-commands only fire on a research flow at the awaiting-user-review gate.\` End the turn. |
+| \`/cc research go\` | yes (research-mode + \`researchState == "discovery"\`) | Force-exit Phase 1 discovery dialogue (identical to in-prose "ready" signal). Outside that state — error: \`'/cc research go' only fires during research-mode Phase 1 discovery.\` End the turn. |
+| \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` | yes (research-mode + \`researchState == "awaiting-user-review"\`) | Route to the matching sub-handler per \`runbooks/research-revision.md\` §2 / §3 / §4. Outside that state — error: \`research revision sub-commands only fire on a research flow at the awaiting-user-review gate.\` End the turn. |
 | \`/cc extend <slug> <task>\` | yes | Error (same shape). End the turn. |
 | \`/cc extend <slug> <task>\` | no | Start an extend-mode flow (see \`runbooks/extend-mode.md\`). |
 | \`/cc-cancel\` | yes | Run the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state). See \`commands/cc-cancel.md\`. |
@@ -1784,7 +1781,7 @@ Read \`.cclaw/state/flow-state.json\`. A flow is **active** when \`currentSlug !
 
 ## §3 — Plain-prose errors
 
-Every error row above is **plain prose, in the user's language**. NOT a structured ask; NO option list; NO \`[y/n]\` picker. The user re-invokes \`/cc\` or \`/cc-cancel\` from their command palette to recover. \`<slug>\`, \`<stage>\`, and command tokens (e.g. \`/cc\`, \`/cc-cancel\`) stay English (wire protocol); the surrounding sentence renders in the user's language. Resume picker prose (\`[r] resume / [s] save / [n] new\`) is gone — v8.61 retired it.
+Every error row above is **plain prose, in the user's language**. NOT a structured ask; NO option list; NO \`[y/n]\` picker. The user re-invokes \`/cc\` or \`/cc-cancel\` from their command palette to recover. \`<slug>\`, \`<stage>\`, and command tokens (e.g. \`/cc\`, \`/cc-cancel\`) stay English (wire protocol); the surrounding sentence renders in the user's language. Resume picker prose (\`[r] resume / [s] save / [n] new\`) is gone.
 
 ## §4 — The \`/cc\` continue path is silent
 
@@ -1824,9 +1821,9 @@ No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug
 4. **Sub-agent dispatch resumes from the same stage.** A build paused mid-RED for AC-3 resumes by dispatching builder for AC-3, not by restarting AC-1.
 5. **Resume after stop-and-report.** \`/cc\` continues from saved \`currentStage\`. For build-failure / reviewer-fix stops, the auto-fix iteration counter is **preserved**.
 
-## §7 — \`runMode\` mid-flight toggle (v8.61 retirement; v8.112 removal)
+## §7 — \`runMode\` mid-flight toggle (retirement)
 
-The v8.34 mid-flight run-mode toggle was kept on the parser surface for back-compat through v8.61's step-mode retirement (which collapsed both legacy values to \`auto\`). **v8.112 dropped the parser surface entirely**: there is no \`runMode\` flag on \`/cc\`; harnesses that previously forwarded such a flag through a namespace router lose it cleanly (the router itself was retired in the same release). \`triage.runMode\` is \`"auto"\` on every non-inline path and \`null\` on inline, period.
+The mid-flight run-mode toggle is retired: there is no \`runMode\` flag on \`/cc\`; harnesses that previously forwarded such a flag through a namespace router lose it cleanly (the router itself was retired alongside it). \`triage.runMode\` is \`"auto"\` on every non-inline path and \`null\` on inline, period.
 
 ## §8 — Anti-rationalization
 
@@ -1835,10 +1832,10 @@ The v8.34 mid-flight run-mode toggle was kept on the parser surface for back-com
 | "User typed \`/cc <task>\` mid-flight — auto-cancel the active flow and start fresh." | NO. Matrix Row 3 errors and ends the turn; \`/cc-cancel\` is a separate explicit user-typed command. Never pick for them. |
 | "User typed a bare \`/cc\` on a fresh project — surface the start options as a structured picker." | NO. Matrix Row 2 errors in plain prose. The user types \`/cc <task>\` / \`/cc research <topic>\` / \`/cc extend <slug> <task>\` from their command palette. |
 | "Active flow has a stop-and-report block from the last turn — surface a \`Continue or cancel?\` picker on the next \`/cc\`." | NO. \`/cc\` continues silently per Row 1. The stop-and-report block already named \`/cc\` (continue) and \`/cc-cancel\` (discard) in plain prose; the user typed \`/cc\` because they chose continue. |
-| "Schema version is one behind — auto-migrate and continue." | YES if \`schemaVersion >= 2\` (the validator does the migrate on read; matrix Row "\`schemaVersion\` < 3" applies). NO if \`schemaVersion < 2\` (pre-v8) — hard-stop with the migration prompt; do not auto-delete state. |
+| "Schema version is one behind — auto-migrate and continue." | YES if \`schemaVersion >= 2\` (the validator does the migrate on read; matrix Row "\`schemaVersion\` < 3" applies). NO if \`schemaVersion < 2\` — hard-stop with the migration prompt; do not auto-delete state. |
 `;
 
-const APPROACHES_GATE = `# On-demand runbook — Approaches Gate (research Phase 1.5; v8.76+)
+const APPROACHES_GATE = `# On-demand runbook — Approaches Gate (research Phase 1.5)
 
 The orchestrator opens this runbook on every transition from Phase 1 distillation exit to Phase 2 lens dispatch. The Approaches Gate is the canonical procedure; the orchestrator body keeps a short summary pointer (see \`#### Phase 1.5 — approaches gate\` section in start-command).
 
@@ -1885,7 +1882,7 @@ Each framing routes the lens dispatch differently even though the topic text is 
 - **Only one obvious framing emerges from the dialogue** — surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"). The user can pick the variant, accept "all" (both flow), or accept "A" (single). Never fewer than 2 framings; never more than 3.
 - **User picks a framing not on the list** — accept verbatim as a new ad-hoc framing (no validation against the surfaced set), append it as the next-index entry in \`approaches[]\`, stamp \`selectedApproaches\` to point at it, proceed.
 - **User explicitly cancels** ("stop", "never mind", "/cc-cancel") — run the cancel runtime (move the empty \`research.md\` to \`cancelled/<slug>/\`, reset state) and end the turn.
-- **User wants to revise framings mid-research** — use the existing v8.71 \`/cc research push-back <framing>\` machinery (push-back targets a claim; framings ARE claims about the research question). The push-back path treats the cited framing as the area to re-dispatch lenses against; the original \`approaches\` array is NEVER mutated (immutable for audit).
+- **User wants to revise framings mid-research** — use the existing \`/cc research push-back <framing>\` machinery (push-back targets a claim; framings ARE claims about the research question). The push-back path treats the cited framing as the area to re-dispatch lenses against; the original \`approaches\` array is NEVER mutated (immutable for audit).
 
 ## §5 — Phase 2 envelope shape
 
@@ -1912,18 +1909,18 @@ Lens prompts read \`Framing:\` as authoritative scope guidance. Findings are gra
 | "All three framings look the same — collapse to one and proceed." | NO. If 2-3 framings really collapse to one, the dialogue summary is too thin; loop one more Phase 1 round to surface the implicit dimensions, OR surface 2 framings + a stress-test variant ("framing B: what would be true if framing A were wrong?"). |
 `;
 
-const ONE_WAY_DOOR_GATE = `# On-demand runbook — One-way Door Gate (v8.79+)
+const ONE_WAY_DOOR_GATE = `# On-demand runbook — One-way Door Gate
 
 The orchestrator opens this runbook on every architect slim-summary return when \`Recommended next: awaiting-one-way-confirmation\` fires, AND on every \`/cc\` invocation that lands on \`flow-state.json > oneWayDoorConfirmation\` with \`userChoice\` absent. The runbook is the canonical procedure; the orchestrator body keeps a short summary pointer (see \`#### One-way Door Gate\` section in start-command).
 
 ## §1 — Why the gate exists
 
-The v8.74 ethos preamble names **User Sovereignty** as one of the five cross-cutting cclaw principles: irreversible decisions deserve explicit confirmation before build burns context. The architect's \`## Decisions\` table (strict mode) records each D-N's \`Reversibility:\` field — \`two-way\` (cheap to revert), \`mostly-two-way\` (revertible with effort), or \`one-way\` (irreversible at production scale). \`one-way\` D-Ns are the only kind that warrant a user-pause; two-way / mostly-two-way decisions trust the cheap-revert affordance.
+The ethos preamble names **User Sovereignty** as one of the five cross-cutting cclaw principles: irreversible decisions deserve explicit confirmation before build burns context. The architect's \`## Decisions\` table (strict mode) records each D-N's \`Reversibility:\` field — \`two-way\` (cheap to revert), \`mostly-two-way\` (revertible with effort), or \`one-way\` (irreversible at production scale). \`one-way\` D-Ns are the only kind that warrant a user-pause; two-way / mostly-two-way decisions trust the cheap-revert affordance.
 
-The pause is the user-facing analogue of the v8.74 cross-model critic, which ALSO fires on the same \`Reversibility: one-way\` signal — but the cross-model critic runs AFTER the build to give a second adversarial opinion on whether the build delivered on the irreversible commits. The two surfaces are complementary:
+The pause is the user-facing analogue of the cross-model critic, which ALSO fires on the same \`Reversibility: one-way\` signal — but the cross-model critic runs AFTER the build to give a second adversarial opinion on whether the build delivered on the irreversible commits. The two surfaces are complementary:
 
-- v8.79 One-way Door Gate fires BEFORE the build → "do you, the user, accept these irreversible commits as plan-level decisions?"
-- v8.74 cross-model critic fires AFTER the build → "given the user accepted, does a second model agree the build delivers on those decisions?"
+- One-way Door Gate fires BEFORE the build → "do you, the user, accept these irreversible commits as plan-level decisions?"
+- Cross-model critic fires AFTER the build → "given the user accepted, does a second model agree the build delivers on those decisions?"
 
 Neither replaces the other; both run when both gates fire.
 
@@ -1946,7 +1943,7 @@ Soft ceremony writes \`plan.md\` without a Decisions section by default; the gat
 The gate drives three transitions on \`flow-state.json > oneWayDoorConfirmation\` (\`{ decisionIds: string[]; userChoice?: "confirm" | "edit" | "cancel"; confirmedAt?: string }\`):
 
 1. **\`architect-complete\` → \`awaiting-one-way-confirmation\`.** When the architect's slim summary returns \`Recommended next: awaiting-one-way-confirmation\` (architect's signal that the plan contains ≥1 one-way D-N), the orchestrator stamps \`oneWayDoorConfirmation: { decisionIds: ["D-N", "D-M", ...] }\` (with \`userChoice\` absent — the canonical "awaiting user" signal) and surfaces the structured ask. The orchestrator's turn ends here; control returns to the user.
-2. **\`awaiting-one-way-confirmation\` → \`plan-critic\` (or \`builder\` when plan-critic's gate is off).** On \`confirm\`, the orchestrator stamps \`userChoice: "confirm"\` + \`confirmedAt: <iso-now>\`, then proceeds to plan-critic dispatch (or builder, per the existing v8.51 plan-critic gate). The user-confirmed flag persists for the rest of the flow's lifetime; downstream specialists may read it as "the user explicitly accepted the irreversible commits".
+2. **\`awaiting-one-way-confirmation\` → \`plan-critic\` (or \`builder\` when plan-critic's gate is off).** On \`confirm\`, the orchestrator stamps \`userChoice: "confirm"\` + \`confirmedAt: <iso-now>\`, then proceeds to plan-critic dispatch (or builder, per the existing plan-critic gate). The user-confirmed flag persists for the rest of the flow's lifetime; downstream specialists may read it as "the user explicitly accepted the irreversible commits".
 3. **\`awaiting-one-way-confirmation\` → \`architect-revision\` (on \`edit\`) OR \`aborted\` (on \`cancel\`).** On \`edit\`, the orchestrator stamps \`userChoice: "edit"\` and surfaces a stop-and-report status block asking the user to edit \`plan.md\` (typically to soften a one-way classification to mostly-two-way or split the decision into two D-Ns) and re-invoke \`/cc\` once done — the next \`/cc\` re-reads plan.md and re-runs the gate scan. On \`cancel\`, the orchestrator stamps \`userChoice: "cancel"\` and routes to \`/cc-cancel\` (move artifacts to \`cancelled/<slug>/\`, reset state).
 
 ## §5 — Structured ask payload
@@ -1969,7 +1966,7 @@ Choose: confirm | edit | cancel
 
 - \`<count>\` is the integer count of one-way D-Ns the scan found.
 - The bullet list iterates over EVERY one-way D-N in plan order (D-1, D-2, ...) — the orchestrator does not deduplicate, summarise, or drop entries; the user sees the full irreversible-commit set.
-- The \`Rationale:\` line is a one-sentence verbatim copy of the \`Rationale:\` field from the same D-N in \`plan.md\` (per the v8.74 D-N template). When the architect wrote a multi-sentence rationale, truncate at the first sentence and append \`...\` so the ask stays compact (the user can read the full rationale in plan.md if they want detail).
+- The \`Rationale:\` line is a one-sentence verbatim copy of the \`Rationale:\` field from the same D-N in \`plan.md\` (per the D-N template). When the architect wrote a multi-sentence rationale, truncate at the first sentence and append \`...\` so the ask stays compact (the user can read the full rationale in plan.md if they want detail).
 
 The final \`Choose:\` line is the structured ask. Use the harness's \`AskUserQuestion\` surface (Cursor's structured ask / Claude's TUI input) when available; fall back to the prose ask shape when the harness has no structured-ask primitive.
 
@@ -1989,9 +1986,9 @@ The final \`Choose:\` line is the structured ask. Use the harness's \`AskUserQue
 The \`oneWayDoorConfirmation\` field persists for the rest of the flow's lifetime once \`userChoice\` is set. Downstream specialists MAY read it:
 
 - **plan-critic** (every rubric mode — generic / design / devex) — no-op; the gate fires BEFORE this specialist dispatches.
-- **builder** — may surface a one-line note in \`build.md\` frontmatter (\`oneWayConfirmedAt: <iso>\`) for the v8.74 cross-model critic to cross-reference.
+- **builder** — may surface a one-line note in \`build.md\` frontmatter (\`oneWayConfirmedAt: <iso>\`) for the cross-model critic to cross-reference.
 - **reviewer / critic** — cross-check builder's \`build.md\` against the cited one-way D-Ns; flag findings if the build silently deviated from a confirmed irreversible commit.
-- **v8.74 cross-model critic** — explicitly reads \`oneWayDoorConfirmation\` as input ("the user accepted these decisions on <confirmedAt>; do they still hold?").
+- **cross-model critic** — explicitly reads \`oneWayDoorConfirmation\` as input ("the user accepted these decisions on <confirmedAt>; do they still hold?").
 
 ## §8 — Anti-rationalization
 
@@ -2003,9 +2000,9 @@ The \`oneWayDoorConfirmation\` field persists for the rest of the flow's lifetim
 | "Architect's slim summary said \`Recommended next: continue\` but the scan found a one-way D-N — trust the slim summary and skip the gate." | NO. The scan is the source of truth (plan-critic §A guarantees the field is present on every D-N in strict mode). When the slim summary and the scan disagree, the scan wins — and surface the inconsistency as an architect finding for the next iteration. |
 `;
 
-const RESEARCH_MODE = `# On-demand runbook — research-mode multi-lens flow (v8.65+; v8.103 lift)
+const RESEARCH_MODE = `# On-demand runbook — research-mode multi-lens flow
 
-The orchestrator opens this runbook whenever the \`/cc\` argument starts with the literal token \`research \` (case-insensitive, exactly one space). v8.112 retired the equivalent flag form; the literal prefix is the sole entry point. The runbook is the canonical procedure; \`start-command.ts\` carries only the one-paragraph fork reference + the on-demand-runbooks trigger row.
+The orchestrator opens this runbook whenever the \`/cc\` argument starts with the literal token \`research \` (case-insensitive, exactly one space). The equivalent flag form is retired; the literal prefix is the sole entry point. The runbook is the canonical procedure; \`start-command.ts\` carries only the one-paragraph fork reference + the on-demand-runbooks trigger row.
 
 ## §1 — Fork detection and slug stamping
 
@@ -2013,10 +2010,10 @@ When the fork fires:
 
 - Strip the trigger from the task text. The topic that flows into the lenses is the argument WITHOUT the leading \`research \`.
 - Build a research-mode slug: \`YYYYMMDD-research-<semantic-kebab>\`. The \`-research-\` infix is mandatory; it keeps \`flows/shipped/\` unambiguous and distinguishes research artifacts from task flows.
-- **Skip triage dispatch entirely.** Stamp \`flow-state.json > triage\` with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\` + \`research_depth: <light | standard | deep-product>\` (v8.69; auto-classified from topic wording — full mapping in \`runbooks/research-depth-and-self-review.md\`. v8.112 retired the explicit depth-override flags).
-- Stamp \`flow-state.json > currentSlug\` with the new slug, \`currentStage: "plan"\` (used purely as a sentinel — research mode has no plan / build / review / critic / ship stages; the field is the only signal that distinguishes "research in flight" from "task in flight" for the v8.61 invocation matrix).
+- **Skip triage dispatch entirely.** Stamp \`flow-state.json > triage\` with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\` + \`research_depth: <light | standard | deep-product>\` (auto-classified from topic wording — full mapping in \`runbooks/research-depth-and-self-review.md\`. The explicit depth-override flags are retired).
+- Stamp \`flow-state.json > currentSlug\` with the new slug, \`currentStage: "plan"\` (used purely as a sentinel — research mode has no plan / build / review / critic / ship stages; the field is the only signal that distinguishes "research in flight" from "task in flight" for the invocation matrix).
 
-The orchestrator then enters the **multi-lens research flow** — replacing the v8.58/v8.62 architect-standalone-research interim. The flow is four phases (with two intermediate gates at 1.5 and 3.5).
+The orchestrator then enters the **multi-lens research flow**. The flow is four phases (with two intermediate gates at 1.5 and 3.5).
 
 ## §2 — Phase 0 — bootstrap (silent; main-context)
 
@@ -2027,7 +2024,7 @@ The orchestrator (NOT a sub-agent — research mode's discovery dialogue lives i
 3. Read \`README.md\` first paragraph + Architecture / Purpose section for high-level project framing.
 4. Initialise an empty \`.cclaw/flows/<slug>/research.md\` from the \`research\` template (\`.cclaw/lib/templates/research.md\`); the orchestrator will fill it in Phase 3.
 
-## §3 — Phase 1 — iterative open-ended discovery dialogue with per-dimension scoring (main-context; v8.78)
+## §3 — Phase 1 — iterative open-ended discovery dialogue with per-dimension scoring (main-context)
 
 The orchestrator opens the dialogue with the user in plain prose, in the user's language:
 
@@ -2053,13 +2050,13 @@ Compute the scalar:
 ambiguity = 1 - (goal * 0.4 + constraints * 0.3 + criteria * 0.3 + context * 0.0)
 \`\`\`
 
-**Targeting + challenge-mode stance rotation (v8.105 — internal stance, no user-visible label):** the next question MUST target the weakest dimension. The same challenge-mode rotation applies (sourced from \`oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"\`); the stance is an internal authoring guide for the orchestrator's question composition — the user sees a single question with a single stance behind it, not a labelled round header.
+**Targeting + challenge-mode stance rotation (internal stance, no user-visible label):** the next question MUST target the weakest dimension. The same challenge-mode rotation applies (sourced from \`oh-my-claudecode/skills/deep-interview/SKILL.md > "Phase 3: Challenge Agents"\`); the stance is an internal authoring guide for the orchestrator's question composition — the user sees a single question with a single stance behind it, not a labelled round header.
 
 - **Round 4 stance — contrarian.** Ask (silently) "what if the opposite were true?" against the weakest dimension. Tests whether the user's framing is correct or just habitual. (Architect's round 4 is the same stance; for research mode, round 4 may also probe "what if the user is researching the wrong question altogether?").
 - **Round 5 stance — simplifier.** Ask (silently) "what's the simplest version of the question that would still be valuable to answer?". Finds the minimal viable research scope.
 - **Rounds 6-8 (research only).** Continue with open-ended targeting on the weakest dimension; no specific stance injection. The extra rounds exist because research topics genuinely benefit from deeper questioning more often than task-mode Clarify does — but the math-gated exit usually fires before round 6 on focused topics.
 
-**Do NOT render the per-round score table to the user (v8.105).** The 4-row \`Dimension / Score / Weight / Why\` block and the trailing \`Next target: <weakest-dimension>\` line are **internal** to the orchestrator — compute them, use them to pick the weakest dimension, persist them to \`flow-state.json > clarifyRounds[]\`, but do NOT emit them in chat. The user sees only the next question. v8.105 dropped the user-visible render to keep research-mode discovery focused on the question (the v8.78 surface-render block was the dominant friction signal in the v8.105 over-engineering audit; the math itself is preserved). The persisted \`clarifyRounds[]\` array carries the full audit trail for compound learnings + later "why did we ask question 3?" inspection.
+**Do NOT render the per-round score table to the user.** The 4-row \`Dimension / Score / Weight / Why\` block and the trailing \`Next target: <weakest-dimension>\` line are **internal** to the orchestrator — compute them, use them to pick the weakest dimension, persist them to \`flow-state.json > clarifyRounds[]\`, but do NOT emit them in chat. The user sees only the next question. The user-visible render is dropped to keep research-mode discovery focused on the question (rendering the table is a dominant friction signal; the math itself is preserved). The persisted \`clarifyRounds[]\` array carries the full audit trail for compound learnings + later "why did we ask question 3?" inspection.
 
 Stamp every round into \`flow-state.json > clarifyRounds[]\` (append-only) as a \`ClarifyRoundState\` entry (\`{ round, dimensionScores, ambiguity, targetedDimension, question }\`) — the SAME field used by architect Clarify; research-mode flows share the persistence surface.
 
@@ -2068,17 +2065,17 @@ Stamp every round into \`flow-state.json > clarifyRounds[]\` (append-only) as a 
 - Math-gated exit: \`ambiguity < 0.25\`.
 - Round cap: 8 rounds asked.
 - User signals readiness (any of "ready" / "I'm ready" / "go ahead" / "let's go" / "go on" / "proceed" / "finalize" / "explore now" / "dispatch the lenses" / "run the research" / "do it" / "ship it" / a clear "I've said what I know — over to you" framing).
-- **v8.78 — user runs \`/cc research go\`** to force-exit the dialogue. The \`go\` sub-command is treated identically to the in-prose "ready" signal: stop asking, distil, proceed to Phase 1.5 Approaches Gate. \`go\` is the canonical "I trust the orchestrator to dispatch with what I've already said" force-exit; the orchestrator does NOT push back on the user even if \`ambiguity\` is still > 0.25.
+- **User runs \`/cc research go\`** to force-exit the dialogue. The \`go\` sub-command is treated identically to the in-prose "ready" signal: stop asking, distil, proceed to Phase 1.5 Approaches Gate. \`go\` is the canonical "I trust the orchestrator to dispatch with what I've already said" force-exit; the orchestrator does NOT push back on the user even if \`ambiguity\` is still > 0.25.
 
 When the dialogue exits, the orchestrator distils the conversation into a **dialogue summary** — 5-15 bullets capturing what the user told the orchestrator (topic refinement, known constraints, prior attempts, stakeholders, scope edges). The summary is the payload passed to each lens; the lenses do not see the raw dialogue.
 
-The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides for follow-up turns (Cursor's structured-ask, Claude's TUI text input, etc.) but the questions are open-ended (no multiple-choice picker, no "[y/n]" gate) — research-mode discovery is the one cclaw surface where free-form dialogue is the contract. v8.105 — the per-round table is NOT rendered in chat (the user sees only the next question); the round-by-round dimension scores persist silently into \`flow-state.json > clarifyRounds[]\` for audit and compound learnings.
+The orchestrator MAY use any \`AskUserQuestion\` surface the harness provides for follow-up turns (Cursor's structured-ask, Claude's TUI text input, etc.) but the questions are open-ended (no multiple-choice picker, no "[y/n]" gate) — research-mode discovery is the one cclaw surface where free-form dialogue is the contract. The per-round table is NOT rendered in chat (the user sees only the next question); the round-by-round dimension scores persist silently into \`flow-state.json > clarifyRounds[]\` for audit and compound learnings.
 
 If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel"), the orchestrator runs the cancel runtime (move the empty research.md to \`cancelled/<slug>/\`, reset state) and ends the turn.
 
-**Reference patterns:** \`oh-my-claudecode/skills/deep-interview/SKILL.md\` (mathematical scoring + challenge-mode rotation); \`everyinc-compound\` brainstorming Phase 1.2 gap lenses (specificity / evidence / counterfactual / attachment — the same lenses backing the four canonical dimensions); pre-v8.78 research-mode used "as many questions as productive" with no scoring — v8.78 replaces that with the math-gated discipline so research mode stops bleeding rounds when the user has already pinned the question.
+**Reference patterns:** \`oh-my-claudecode/skills/deep-interview/SKILL.md\` (mathematical scoring + challenge-mode rotation); \`everyinc-compound\` brainstorming Phase 1.2 gap lenses (specificity / evidence / counterfactual / attachment — the same lenses backing the four canonical dimensions). The math-gated discipline keeps research mode from bleeding rounds when the user has already pinned the question.
 
-## §4 — Phase 1.5 — approaches gate (v8.76)
+## §4 — Phase 1.5 — approaches gate
 
 Immediately after Phase 1 distillation completes and BEFORE Phase 2 dispatches any lens, the orchestrator runs the **Approaches Gate**: distil 2-3 candidate FRAMINGS of the research question and ask which framing(s) the downstream lenses should carry in their dispatch envelopes. Without the gate, lenses dispatch against an implicit single framing (whatever the orchestrator settled on during dialogue distillation), and downstream findings inherit that framing's blind spots. The gate is the research-mode analogue of the obra-superpowers brainstorming Phase 2-3 ("2-3 approach options before committing") and the addyosmani \`idea-refine\` Phase 1.3 Cluster + Stress-test discipline.
 
@@ -2086,13 +2083,13 @@ A framing is a DIFFERENT framing of the same research question (NOT 2-3 conclusi
 
 **Procedure.** Distil 2-3 framings (\`id\` + 4-8-word \`title\` + one-paragraph \`summary\`); **Stamp \`flow-state.json > approaches\`** as a {@link ResearchApproach}\[\] (\`src/types.ts\`) and \`researchState: "approaches-gate"\`; surface the framings as a bulleted block + picker prompt \`Pick one (e.g. "A" / "B") or accept "all" (every framing flows to every lens — the default).\`; wait for the user's pick (single-letter ids \`A\` / \`A B\` / \`A,B\`, or case-insensitive title substring match, or \`all\` / \`every\` / \`default\` — the silent default is "all", NOT "stop" — the gate is non-coercive); stamp \`flow-state.json > selectedApproaches\` (zero-based indices into \`approaches[]\`); dispatch Phase 2 with the selected framings carried in every lens envelope under the new \`Framing:\` field (string array; one entry per selected framing as \`<title> — <summary>\`).
 
-**Sub-cases.** **Only one obvious framing emerges from the dialogue** — surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"); never fewer than 2 framings, never more than 3. When the user picks a framing not on the list, accept verbatim and append as the next-index entry in \`approaches[]\`. When the user cancels mid-gate ("stop" / "never mind" / "/cc-cancel"), run the cancel runtime and end the turn. Mid-research re-framings route through the existing v8.71 \`/cc research push-back <framing>\` machinery (framings ARE claims about the research question); the original \`approaches[]\` is NEVER mutated (immutable for audit).
+**Sub-cases.** **Only one obvious framing emerges from the dialogue** — surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"); never fewer than 2 framings, never more than 3. When the user picks a framing not on the list, accept verbatim and append as the next-index entry in \`approaches[]\`. When the user cancels mid-gate ("stop" / "never mind" / "/cc-cancel"), run the cancel runtime and end the turn. Mid-research re-framings route through the existing \`/cc research push-back <framing>\` machinery (framings ARE claims about the research question); the original \`approaches[]\` is NEVER mutated (immutable for audit).
 
 Full procedure — picker grammar, sub-cases, the Phase 2 envelope shape, anti-rationalization (silent-pick / collapse / orchestrator-knows-best traps) — lives in \`.cclaw/lib/runbooks/approaches-gate.md\`. Open that runbook on every transition from Phase 1 distillation exit to Phase 2 lens dispatch.
 
 ## §5 — Phase 2 — parallel lens dispatch
 
-When Phase 1.5 (Approaches Gate) clears, the orchestrator **dispatches research lenses in parallel**. The depth tier (\`triage.research_depth\`) controls the base lens set, and a topic's design-signal status conditionally adds the v8.76 design lens:
+When Phase 1.5 (Approaches Gate) clears, the orchestrator **dispatches research lenses in parallel**. The depth tier (\`triage.research_depth\`) controls the base lens set, and a topic's design-signal status conditionally adds the design lens:
 
 - **\`light\` → engineer + skeptic** (2 lenses). Design is NOT added even when the topic touches UI — light-depth dispatches are narrow clarifications ("which library does X?") that don't carry enough framing to ground a design pass. Parenthetical \`*(Skipped on light depth.)*\` marks the absent four below.
 - **\`standard\` (default) → engineer + product + architecture + history + skeptic** (5 lenses by default). When the orchestrator's design-signal heuristic fires (see "Design-signal detection" below), add \`research-design\` for a total of **6 lenses**.
@@ -2102,7 +2099,7 @@ The **explicit user-toggle flags** override the heuristic in either direction:
 
 - \`/cc research --lens=design <topic>\` — **force-include** the design lens on \`standard\` / \`deep-product\` depth even when the heuristic missed (the user knows it's a UI topic; the orchestrator stamps the flag verbatim). Ignored on \`light\` depth with a one-line note (\`design lens not dispatched on light depth; downgraded to standard if you want it included\`).
 - \`/cc research --lens=-design <topic>\` — **force-exclude** the design lens on \`standard\` / \`deep-product\` depth even when the heuristic fired (the topic happens to mention "interface" but the user doesn't want a design pass; rare but valid).
-- Multiple lens-toggle flags are accepted (\`--lens=design --lens=-skeptic\` is a no-op on \`-skeptic\` for now — only \`design\` is force-toggleable; other lenses are gated by depth tier). Future widening (e.g. \`--lens=-product\` to skip the product lens) is v8.77+ scope.
+- Multiple lens-toggle flags are accepted (\`--lens=design --lens=-skeptic\` is a no-op on \`-skeptic\` for now — only \`design\` is force-toggleable; other lenses are gated by depth tier). Future widening (e.g. \`--lens=-product\` to skip the product lens) is deferred.
 
 **Design-signal detection.** The orchestrator's heuristic on \`standard\` / \`deep-product\` depth fires when ANY of:
 
@@ -2119,17 +2116,17 @@ The heuristic is **inclusive**: when in doubt, dispatch the design lens. The len
 - \`research-architecture\` *(Skipped on light depth.)* — surface impact, coupling points, boundaries crossed, scalability considerations, reusable in-repo patterns.
 - \`research-history\` *(Skipped on light depth.)* — prior attempts via \`.cclaw/knowledge.jsonl\` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift.
 - \`research-skeptic\` — failure modes, edge cases, abuse cases, hidden costs, explicit don't-proceed triggers.
-- \`research-design\` *(Skipped on light depth; conditionally added on standard / deep-product depth via the design-signal heuristic or the \`--lens=design\` / \`--lens=-design\` user-toggle flags.)* — UI / UX / positioning / affordances lens (v8.76). Walks the seven-dimension design-quality rubric (shared with the v8.104 plan-critic specialist's \`rubricMode: "design"\` body — former v8.75 standalone \`plan-design\` specialist — and v8.70 reviewer's design-quality axis) at research framing time — grades each dimension for relevance (\`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`), surfaces existing patterns to study (with first-class web search via \`user-exa\` / \`user-context7\`), anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect.
+- \`research-design\` *(Skipped on light depth; conditionally added on standard / deep-product depth via the design-signal heuristic or the \`--lens=design\` / \`--lens=-design\` user-toggle flags.)* — UI / UX / positioning / affordances lens. Walks the seven-dimension design-quality rubric (shared with the plan-critic specialist's \`rubricMode: "design"\` body and the reviewer's design-quality axis) at research framing time — grades each dimension for relevance (\`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`), surfaces existing patterns to study (with first-class web search via \`user-exa\` / \`user-context7\`), anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect.
 
 Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\` but with the lens-specific shape):
 
 - \`Slug:\` — the research slug.
 - \`Topic:\` — the stripped task text (no \`research \` prefix, no \`--lens=\` flag).
 - \`Dialogue summary:\` — the 5-15 bullets from Phase 1.
-- \`Framing:\` (v8.76) — the selected framing(s) from the Phase 1.5 Approaches Gate. A string array; each entry is \`<framing-title> — <framing-summary>\` for the framings the user picked (or every framing when the user accepted "all" / the default). Lenses grade their findings against this set rather than the implicit "any framing".
+- \`Framing:\` — the selected framing(s) from the Phase 1.5 Approaches Gate. A string array; each entry is \`<framing-title> — <framing-summary>\` for the framings the user picked (or every framing when the user accepted "all" / the default). Lenses grade their findings against this set rather than the implicit "any framing".
 - \`Project root:\` — absolute path.
 - \`Active flow state:\` — the sentinel triage block (lenses do not run heuristics on it).
-- \`Research depth:\` — \`triage.research_depth\` (v8.69; \`light\` / \`standard\` / \`deep-product\`); on \`deep-product\` product + skeptic + design fire extra probes, other lenses run identically.
+- \`Research depth:\` — \`triage.research_depth\` (\`light\` / \`standard\` / \`deep-product\`); on \`deep-product\` product + skeptic + design fire extra probes, other lenses run identically.
 - \`Required first read:\` — the lens contract at \`.cclaw/lib/research-lenses/<lens-id>.md\`.
 
 Lenses run independently. The engineer + architecture lenses MAY dispatch \`repo-research\` on brownfield projects (the history lens reads \`.cclaw/knowledge.jsonl\` directly — that's the in-research mirror of \`learnings-research\`, and dispatching \`learnings-research\` from the history lens would be redundant; the design lens does NOT dispatch \`repo-research\` — its surface is design patterns external to or layered atop the repo). Lenses MAY use an MCP web-search tool (\`user-exa\`, \`user-context7\`, or comparable) when one is available; web search is **optional** for engineer / product / architecture / skeptic, **first-class** for design (the design lens treats every pattern claim as needing a URL citation or \`(general pattern; training knowledge)\` tag) — lenses fall back to training knowledge if no tool is wired, and stamp the fallback in their slim summary's \`Notes\` field. Research mode does NOT hard-require MCP web search.
@@ -2148,23 +2145,23 @@ The orchestrator authors \`research.md\` by:
    - Convergence: where 2+ lenses point the same way (e.g. "engineer + product both flag X as the blocker").
    - Divergence: where lenses disagree (e.g. "product says high value, skeptic flags an unmitigated abuse case").
    - The big trade-off space the user / follow-up architect must navigate.
-3a. **Populating the \`## Key assumptions to validate\` section (v8.80; KA-N ids in v8.85).** 2-5 bullets naming **bets** the research rests on — beliefs about user demand, market state, technology behaviour, performance characteristics, or downstream system capability that the lenses absorbed as load-bearing premises rather than as findings. Each bullet leads with a stable \`KA-N\` id (Key Assumption N — \`KA-1\`, \`KA-2\`, ..., monotonically numbered) and pairs the bet with a validation method (benchmark, user research, log query, A/B test, prior-art scan) and a status (\`unvalidated\` on first authoring; \`validated\` / \`invalidated\` once evidence lands). Format: \`- **KA-N** — <assumption>. Validate by: <method>. Status: <unvalidated | validated | invalidated>\`. Distinct from \`## Framings considered\` (those are alternative shapes of the question; this section is the implicit beliefs the framings rely on). The follow-up \`/cc <task>\` flow's architect Bootstrap copies the bullets verbatim — KA-N ids preserved — into \`plan.md > ## Key assumptions to validate\` so the bets carry forward; the builder's optional \`validates: KA-N\` commit payload (v8.85) and the reviewer's \`assumption-coverage\` axis then close the loop on the bets as the build lands.
-3b. **Populating the \`## Not Doing (and why)\` section (v8.80).** 3-5 bullets naming scope explicitly excluded from this research's framing, each paired with a one-sentence rationale. Format: \`- **<scope item>** — <one-sentence reason>\`. Surfaces deliberate non-commitments the lens dispatch and synthesis already implied — adjacent topics deferred to a future research flow, framings dropped at the Approaches Gate, lens findings deliberately not synthesised. The follow-up \`/cc <task>\` flow's architect reads this section as load-bearing scope context — "the research already excluded X for reason Y — do not relitigate it in the plan's \`## Not Doing (and why)\` section". Every research that ships excludes something — name it; every research rests on bets — surface them with validation methods.
-3c. **Composing the \`### Confidence summary\` subsection of \`## Synthesis\` (v8.88).** Each lens now stamps per-finding numeric confidence in its \`### Findings (with confidence)\` block (each \`#### F-N (confidence: 0.0-1.0)\`). The synthesis pass aggregates across lenses in three parts: **weighted averages** per finding-equivalent (weight = 1/lens-count contributing; cite F-N ids inline); **confidence cliffs** (any pair with ≥0.5 spread on the same claim — the highest-signal divergence); **per-lens rollup** (mean confidence per lens, rounded to two decimals). RESEARCH_TEMPLATE pins the full format; emit \`No cross-lens confidence cliffs detected; per-lens means within ±0.15 of each other.\` verbatim when no cliffs exist. Mandatory section — absence is a structural failure for the follow-up \`/cc <task>\` architect Bootstrap, which reads research.md end-to-end as \`priorResearch\` context.
+3a. **Populating the \`## Key assumptions to validate\` section (KA-N ids).** 2-5 bullets naming **bets** the research rests on — beliefs about user demand, market state, technology behaviour, performance characteristics, or downstream system capability that the lenses absorbed as load-bearing premises rather than as findings. Each bullet leads with a stable \`KA-N\` id (Key Assumption N — \`KA-1\`, \`KA-2\`, ..., monotonically numbered) and pairs the bet with a validation method (benchmark, user research, log query, A/B test, prior-art scan) and a status (\`unvalidated\` on first authoring; \`validated\` / \`invalidated\` once evidence lands). Format: \`- **KA-N** — <assumption>. Validate by: <method>. Status: <unvalidated | validated | invalidated>\`. Distinct from \`## Framings considered\` (those are alternative shapes of the question; this section is the implicit beliefs the framings rely on). The follow-up \`/cc <task>\` flow's architect Bootstrap copies the bullets verbatim — KA-N ids preserved — into \`plan.md > ## Key assumptions to validate\` so the bets carry forward; the builder's optional \`validates: KA-N\` commit payload and the reviewer's \`assumption-coverage\` axis then close the loop on the bets as the build lands.
+3b. **Populating the \`## Not Doing (and why)\` section.** 3-5 bullets naming scope explicitly excluded from this research's framing, each paired with a one-sentence rationale. Format: \`- **<scope item>** — <one-sentence reason>\`. Surfaces deliberate non-commitments the lens dispatch and synthesis already implied — adjacent topics deferred to a future research flow, framings dropped at the Approaches Gate, lens findings deliberately not synthesised. The follow-up \`/cc <task>\` flow's architect reads this section as load-bearing scope context — "the research already excluded X for reason Y — do not relitigate it in the plan's \`## Not Doing (and why)\` section". Every research that ships excludes something — name it; every research rests on bets — surface them with validation methods.
+3c. **Composing the \`### Confidence summary\` subsection of \`## Synthesis\`.** Each lens now stamps per-finding numeric confidence in its \`### Findings (with confidence)\` block (each \`#### F-N (confidence: 0.0-1.0)\`). The synthesis pass aggregates across lenses in three parts: **weighted averages** per finding-equivalent (weight = 1/lens-count contributing; cite F-N ids inline); **confidence cliffs** (any pair with ≥0.5 spread on the same claim — the highest-signal divergence); **per-lens rollup** (mean confidence per lens, rounded to two decimals). RESEARCH_TEMPLATE pins the full format; emit \`No cross-lens confidence cliffs detected; per-lens means within ±0.15 of each other.\` verbatim when no cliffs exist. Mandatory section — absence is a structural failure for the follow-up \`/cc <task>\` architect Bootstrap, which reads research.md end-to-end as \`priorResearch\` context.
 4. Composing the \`## Recommended next step\` section. The recommendation is ONE of:
    - **"plan with \`/cc <task>\`"** — research converges on a workable direction; risks are tracked but proceedable. Suggest a concrete kebab-case task description the user can type.
    - **"more research needed (specific area)"** — one or more lenses returned \`Confidence: low\` AND the user gap is concrete (e.g. "need to talk to the data team about the migration window first").
    - **"don't proceed (skeptic blocked: <reason>)"** — the skeptic lens set \`Don't-proceed: yes\` AND no obvious mitigation exists within the topic's scope. Cite the specific trigger.
 5. Stamping frontmatter with \`lenses\` (the depth-determined subset; failed lenses marked \`failed\`), \`research_depth\`, \`generated_at\`.
-6. **Synthesis self-review pass (v8.69)** — BEFORE \`research.md\` lands, walk the draft through four scans (placeholder / contradiction / scope drift / ambiguity); fix inline; record fixes in \`## Synthesis > ### Self-review notes\` (\`No self-review issues found.\` when clean). Full procedure in \`runbooks/research-depth-and-self-review.md\`.
+6. **Synthesis self-review pass** — BEFORE \`research.md\` lands, walk the draft through four scans (placeholder / contradiction / scope drift / ambiguity); fix inline; record fixes in \`## Synthesis > ### Self-review notes\` (\`No self-review issues found.\` when clean). Full procedure in \`runbooks/research-depth-and-self-review.md\`.
 
-## §7 — Phase 3.5 — awaiting user review (v8.71)
+## §7 — Phase 3.5 — awaiting user review
 
 After Phase 3 lands \`research.md\` on disk, the orchestrator stamps \`flow-state.json > researchState: "awaiting-user-review"\` and surfaces the review prompt with three options: \`/cc research revise <area>\` (re-dispatch lens(es) covering \`<area>\` → \`engineer\` / \`product\` / \`architecture\` / \`history\` / \`skeptic\` / \`synthesis\` / \`all\`; cycles state back to \`awaiting-user-review\` after the rewrite); \`/cc research push-back <claim>\` (re-dispatch \`research-skeptic\` plus the authoring lens to challenge the cited claim; same cycle-back); \`/cc research accept\` (terminal — appends \`accept\` row to \`## Revision history\`, stamps \`researchState: "accepted"\`, runs Phase 4 finalize). Each revise / push-back appends a \`ResearchRevision\` entry to \`flow-state.json > revisions[]\` AND a row to \`research.md > ## Revision history\` (canonical audit trail; append-only). Lifecycle states: \`discovery\` → \`lens-dispatch\` → \`synthesis\` → \`awaiting-user-review\` ⇄ \`revising\` → \`accepted\`. Full procedure (parsing, lens-set mapping, fuzzy claim search, failure handling, anti-rationalization) lives in \`runbooks/research-revision.md\`. Reference patterns: obra-superpowers brainstorming User Review Gate, addyosmani idea-refine divergent-then-converge, everyinc-compound ce-brainstorm Phase 2.5 confirmation gate.
 
 ## §8 — Phase 4 — finalize
 
-The orchestrator finalises the flow only after the user invokes \`/cc research accept\` at the Phase 3.5 gate (v8.71+; pre-v8.71 flows finalised straight from Phase 3): \`git mv\` the artifact into \`.cclaw/flows/shipped/<slug>/research.md\` (NO build / review / critic / ship stages — research mode has no implementation pipeline). Reset \`flow-state.json > currentSlug\` to \`null\`. After finalize, surface the **handoff prompt** in plain prose (no structured ask):
+The orchestrator finalises the flow only after the user invokes \`/cc research accept\` at the Phase 3.5 gate (flows finalised straight from Phase 3): \`git mv\` the artifact into \`.cclaw/flows/shipped/<slug>/research.md\` (NO build / review / critic / ship stages — research mode has no implementation pipeline). Reset \`flow-state.json > currentSlug\` to \`null\`. After finalize, surface the **handoff prompt** in plain prose (no structured ask):
 
 > "\`research.md\` is ready at \`.cclaw/flows/shipped/<slug>/research.md\`. Recommended next: <verbatim Phase 3 recommendation>. Ready to plan? Run \`/cc <task>\` and I'll carry the research as \`priorResearch\` context."
 
@@ -2175,18 +2172,18 @@ The next \`/cc <task>\` invocation on the same project reads the most-recent shi
 - **Argument is \`research\` alone (no topic)** — surface \`research mode needs a topic; try '/cc research <topic>'\`, end the turn.
 - **Research-mode + \`--lens=design\` flag on \`light\` depth** — design lens is structurally not dispatched on light depth (narrow clarifications). Drop the flag with a one-line note (\`design lens not dispatched on light depth; rephrase the topic to land on standard or deep-product depth to include it\`), then proceed with the light-depth 2-lens set.
 - **Research-mode + \`--lens=design\` AND \`--lens=-design\` both present** — last-wins with a one-line note (\`mutually exclusive --lens=design / --lens=-design flags; using <last>\`), then proceed.
-- **Research-mode + unknown \`--lens=<name>\` flag** (e.g. \`--lens=experimental\`) — drop the flag with a one-line note (\`unknown --lens=<name> flag; only --lens=design / --lens=-design accepted in v8.76\`), then proceed with the heuristic-determined lens set.
+- **Research-mode + unknown \`--lens=<name>\` flag** (e.g. \`--lens=experimental\`) — drop the flag with a one-line note (\`unknown --lens=<name> flag; only --lens=design / --lens=-design accepted\`), then proceed with the heuristic-determined lens set.
 
-(v8.112 retired the per-flow ceremony override flags, the research-depth override flags, and the back-compat run-mode toggles; research mode no longer has to absorb their precedence sub-cases.)
+(The per-flow ceremony override flags, the research-depth override flags, and the back-compat run-mode toggles are retired; research mode no longer has to absorb their precedence sub-cases.)
 - **User cancels mid-dialogue** — run the cancel runtime, end the turn.
 - **All dispatched lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
 
-The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The v8.76 roster is **six** lenses (engineer / product / architecture / history / skeptic / design). The v8.104 flow roster is **eight** specialists (triage, architect, builder, plan-critic with three rubric modes, qa-runner, reviewer, critic, investigator) — the pre-v8.104 v8.82 ten-specialist roster collapsed plan-design + plan-devex into plan-critic's rubricMode fan-out.
+The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The roster is **six** lenses (engineer / product / architecture / history / skeptic / design). The flow roster is **eight** specialists (triage, architect, builder, plan-critic with three rubric modes, qa-runner, reviewer, critic, investigator) — plan-critic's rubricMode fan-out absorbed the former separate plan-design + plan-devex specialists.
 `;
 
-const TRIAGE_GATE = `# On-demand runbook — Triage hop (orchestrator-side; v8.103 lift)
+const TRIAGE_GATE = `# On-demand runbook — Triage hop (orchestrator-side)
 
-The orchestrator opens this runbook on every fresh \`/cc <task>\` Triage hop (research-mode / extend-mode / patch-mode forks bypass this hop). The runbook is the canonical orchestrator-side procedure — persisted shape, audit-log surface, follow-up-bug detection, prior-context consumption, prior-learnings consumption, and the v8.42 critic-stage insertion rule. The \`triage\` sub-agent's lightweight-router contract still lives in \`.cclaw/lib/agents/triage.md\`; this runbook covers ONLY what the orchestrator does around the dispatch.
+The orchestrator opens this runbook on every fresh \`/cc <task>\` Triage hop (research-mode / extend-mode / patch-mode forks bypass this hop). The runbook is the canonical orchestrator-side procedure — persisted shape, audit-log surface, follow-up-bug detection, prior-context consumption, prior-learnings consumption, and the critic-stage insertion rule. The \`triage\` sub-agent's lightweight-router contract still lives in \`.cclaw/lib/agents/triage.md\`; this runbook covers ONLY what the orchestrator does around the dispatch.
 
 ## §1 — Persisted triage shape
 
@@ -2206,15 +2203,15 @@ After the triage sub-agent returns, the orchestrator stamps \`flow-state.json > 
 }
 \`\`\`
 
-\`runMode\` is \`null\` on inline (\`triage.path == ["build"]\`) and \`"auto"\` everywhere else (v8.61 always-auto — the user-facing \`step\` / \`auto\` choice was retired; the orchestrator no longer branches on this value at plan / review / critic gates). \`mode\` is \`"task"\` on the standard \`/cc <task>\` entry point and \`"research"\` on \`/cc research <topic>\` flows; pre-v8.58 state files lack the field and readers MUST default to \`"task"\`.
+\`runMode\` is \`null\` on inline (\`triage.path == ["build"]\`) and \`"auto"\` everywhere else (always-auto — the user-facing \`step\` / \`auto\` choice was retired; the orchestrator no longer branches on this value at plan / review / critic gates). \`mode\` is \`"task"\` on the standard \`/cc <task>\` entry point and \`"research"\` on \`/cc research <topic>\` flows; legacy state files lack the field and readers MUST default to \`"task"\`.
 
 ## §2 — Migration prose (surfaces, qa, prior-learnings)
 
-**\`triage.surfaces\` is no longer written here.** The surface-detection step that used to live at this Hop moved to the architect (post-v8.62 unified flow): the architect writes the surfaces list to \`flow-state.json\` after authoring \`## Frame\` + \`## Spec\` on either the soft or strict path; the inline path does not write the field (no specialist runs). The qa-runner gate (v8.52) continues to read \`triage.surfaces\` literally — only the WRITER moved. Pre-v8.58 state files that already carry \`triage.surfaces\` from the orchestrator continue to validate unchanged; the value is read as ground truth on resume.
+**\`triage.surfaces\` is no longer written here.** The surface-detection step that used to live at this Hop moved to the architect (unified flow): the architect writes the surfaces list to \`flow-state.json\` after authoring \`## Frame\` + \`## Spec\` on either the soft or strict path; the inline path does not write the field (no specialist runs). The qa-runner gate continues to read \`triage.surfaces\` literally — only the WRITER moved. Legacy state files that already carry \`triage.surfaces\` from the orchestrator continue to validate unchanged; the value is read as ground truth on resume.
 
-**\`triage.path\` no longer includes \`"qa"\` at triage time.** The qa-stage insertion that used to happen at this Hop moved to the architect's surface-write step: when the architect writes \`triage.surfaces\` and the detected surfaces include \`"ui"\` or \`"web"\` AND \`ceremonyMode != "inline"\`, the same write rewrites \`triage.path\` to insert \`"qa"\` between \`"build"\` and \`"review"\`. The qa-runner gate continues to read the rewritten \`triage.path\` at Hop 4.25; only the writer moved. Pre-v8.58 state files whose \`triage.path\` already contains \`"qa"\` validate unchanged.
+**\`triage.path\` no longer includes \`"qa"\` at triage time.** The qa-stage insertion that used to happen at this Hop moved to the architect's surface-write step: when the architect writes \`triage.surfaces\` and the detected surfaces include \`"ui"\` or \`"web"\` AND \`ceremonyMode != "inline"\`, the same write rewrites \`triage.path\` to insert \`"qa"\` between \`"build"\` and \`"review"\`. The qa-runner gate continues to read the rewritten \`triage.path\` at Hop 4.25; only the writer moved. Legacy state files whose \`triage.path\` already contains \`"qa"\` validate unchanged.
 
-**the orchestrator no longer runs a prior-learnings lookup at this Hop.** The v8.18 \`findNearKnowledge\` lookup that used to live between triage persistence and the first dispatch moved into the architect, which dispatches \`learnings-research\` (reads \`knowledge.jsonl\` directly) and queries the store on demand during Decisions / Pre-mortem. Pre-v8.58 state files that carry \`triage.priorLearnings\` continue to be read verbatim by specialists on resume (back-compat); new flows leave the field absent.
+**the orchestrator no longer runs a prior-learnings lookup at this Hop.** The \`findNearKnowledge\` lookup that used to live between triage persistence and the first dispatch moved into the architect, which dispatches \`learnings-research\` (reads \`knowledge.jsonl\` directly) and queries the store on demand during Decisions / Pre-mortem. Legacy state files that carry \`triage.priorLearnings\` continue to be read verbatim by specialists on resume (back-compat); new flows leave the field absent.
 
 ## §3 — Audit log
 
@@ -2224,9 +2221,9 @@ After the triage sub-agent returns, the orchestrator stamps \`flow-state.json > 
 {"decidedAt":"2026-05-08T12:34:56Z","slug":"<slug>","complexity":"small-medium","ceremonyMode":"soft","userOverrode":false,"autoExecuted":true}
 \`\`\`
 
-\`autoExecuted: true\` is the v8.58+ default (no user-facing ask at triage). v8.112 retired the \`userOverrode: true\` branch — the per-flow ceremony override flags it gated are gone, so the audit log records the heuristic-only decision deterministically.
+\`autoExecuted: true\` is the default (no user-facing ask at triage). The \`userOverrode: true\` branch is retired — the per-flow ceremony override flags it gated are gone, so the audit log records the heuristic-only decision deterministically.
 
-## §4 — v8.42 critic-stage insertion rule
+## §4 — critic-stage insertion rule
 
 \`triage.path\` includes the \`"critic"\` stage between \`"review"\` and \`"ship"\` whenever \`ceremonyMode != "inline"\`. On \`ceremonyMode: "inline"\` the path stays \`["build"]\`. See \`runbooks/critic-steps.md\` for the full contract.
 
@@ -2240,18 +2237,18 @@ When extend-mode stamped \`flowState.parentContext\`, specialists treat parent a
 
 ## §7 — prior-learnings consumption (architect owns the lookup; OUTCOME_SIGNAL_MULTIPLIERS)
 
-The v8.18 \`findNearKnowledge\` lookup that used to run at this hop and stamp \`triage.priorLearnings\` is removed from the orchestrator. The architect now owns the lookup:
+The \`findNearKnowledge\` lookup that used to run at this hop and stamp \`triage.priorLearnings\` is removed from the orchestrator. The architect now owns the lookup:
 
 - **soft + strict paths** — \`architect\` dispatches \`learnings-research\` as part of its pre-author research order. The research helper reads \`.cclaw/knowledge.jsonl\` directly, runs the Jaccard + outcome-signal weighting (\`OUTCOME_SIGNAL_MULTIPLIERS\` in \`src/knowledge-store.ts\`), and writes a short markdown summary that the architect folds into \`plan.md\`'s \`## Prior lessons\` section. On strict mode, the architect also queries the store on demand during the Decisions phase to weight D-N options against prior outcomes.
 - **inline path** — no lookup runs (no specialist, no plan, no learnings to fold in).
 
-Pre-v8.58 state files that already carry \`triage.priorLearnings\` are read verbatim by specialists on resume (back-compat); the field stays on the \`TriageDecision\` type as optional + deprecated for one release. The v8.58 router never writes it.
+Legacy state files that already carry \`triage.priorLearnings\` are read verbatim by specialists on resume (back-compat); the field stays on the \`TriageDecision\` type as optional + deprecated for one release. The router never writes it.
 
-\`OUTCOME_SIGNAL_MULTIPLIERS\` is the sorted weighting table (reverted < follow-up-bug < manual-fix < good=unknown) that \`learnings-research\` uses to down-weight prior entries whose \`outcome_signal\` indicates the prior shipment regressed; the canonical values live in \`src/knowledge-store.ts\` and the v8.50 outcome-loop tests pin the ordering.
+\`OUTCOME_SIGNAL_MULTIPLIERS\` is the sorted weighting table (reverted < follow-up-bug < manual-fix < good=unknown) that \`learnings-research\` uses to down-weight prior entries whose \`outcome_signal\` indicates the prior shipment regressed; the canonical values live in \`src/knowledge-store.ts\` and the outcome-loop tests pin the ordering.
 
 ## §8 — No-git auto-downgrade audit trail
 
-The git-check sub-step (Detect hop) runs before this Triage hop dispatches; when \`<projectRoot>/.git/\` is absent the triage sub-agent stamps \`triage.ceremonyMode = "soft"\` regardless of class plus \`triage.downgradeReason = "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences (strict requires per-AC commits; parallel-build needs \`git worktree\`; inline's terminal commit is gracefully suppressed) live in the triage sub-agent contract at \`.cclaw/lib/agents/triage.md > "No-git auto-downgrade"\` (v8.106 — the former \`skills/triage-gate.md\` reference doc was retired; the canonical contract now lives on the triage agent prompt).
+The git-check sub-step (Detect hop) runs before this Triage hop dispatches; when \`<projectRoot>/.git/\` is absent the triage sub-agent stamps \`triage.ceremonyMode = "soft"\` regardless of class plus \`triage.downgradeReason = "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences (strict requires per-AC commits; parallel-build needs \`git worktree\`; inline's terminal commit is gracefully suppressed) live in the triage sub-agent contract at \`.cclaw/lib/agents/triage.md > "No-git auto-downgrade"\` (the former \`skills/triage-gate.md\` reference doc was retired; the canonical contract now lives on the triage agent prompt).
 
 ## §9 — Slug naming
 
@@ -2263,7 +2260,7 @@ Every flow slug uses the format \`YYYYMMDD-<semantic-kebab>\` (UTC date + kebab-
 | --- | --- |
 | "Re-run the orchestrator-side prior-learnings lookup to be safe — the architect might skip it." | NO. The architect's pre-author research order ALWAYS includes \`learnings-research\` on soft + strict; running the lookup at the orchestrator is double-work and risks stamping a stale \`triage.priorLearnings\` value. |
 | "Skip the follow-up-bug helper when the task summary is short." | NO. \`applyFollowUpBugSignals\` is cheap (one JSONL read + a regex scan); skipping it loses the outcome-signal capture for the prior shipped slug. Missing / empty / unreadable file is already a no-op. |
-| "Stamp \`triage.priorLearnings\` for back-compat — old specialists might still read it." | NO. v8.58+ specialists do NOT read \`triage.priorLearnings\` from new flows. Pre-v8.58 state files that already carry the field on disk are read verbatim by specialists on resume (back-compat); the router never writes it for new flows. |
+| "Stamp \`triage.priorLearnings\` for back-compat — old specialists might still read it." | NO. Specialists do NOT read \`triage.priorLearnings\` from new flows. Legacy state files that already carry the field on disk are read verbatim by specialists on resume (back-compat); the router never writes it for new flows. |
 | "Insert \`qa\` into \`triage.path\` here to be safe — the architect might forget." | NO. The qa-stage insertion is the architect's job (post-Frame surface-write step). Pre-empting it at the orchestrator double-writes and risks a stale path when the architect's surface detection lands a different conclusion. |
 `;
 
@@ -2326,7 +2323,7 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "always-auto-failure-handling",
     fileName: "always-auto-failure-handling.md",
-    title: "Always-auto failure handling (v8.61+)",
+    title: "Always-auto failure handling",
     body: ALWAYS_AUTO_FAILURE_HANDLING
   },
   {
@@ -2338,68 +2335,68 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "qa-stage",
     fileName: "qa-stage.md",
-    title: "QA step (v8.52+)",
+    title: "QA step",
     body: QA_STAGE
   },
   {
     id: "extend-mode",
     fileName: "extend-mode.md",
-    title: "Extend-mode entry point (v8.59+)",
+    title: "Extend-mode entry point",
     body: EXTEND_MODE
   },
   {
     id: "patch-mode",
     fileName: "patch-mode.md",
-    title: "Patch-mode entry point (v8.102+ — post-ship micro-edit; externalised in v8.111)",
+    title: "Patch-mode entry point (post-ship micro-edit)",
     body: readRunbook("patch-mode.md")
   },
   {
     id: "research-depth-and-self-review",
     fileName: "research-depth-and-self-review.md",
-    title: "Research depth tiers + synthesis self-review (v8.69+)",
+    title: "Research depth tiers + synthesis self-review",
     body: RESEARCH_DEPTH_AND_SELF_REVIEW
   },
   {
     id: "research-revision",
     fileName: "research-revision.md",
-    title: "Research revision loop (v8.71+ — revise / push-back / accept)",
+    title: "Research revision loop (revise / push-back / accept)",
     body: RESEARCH_REVISION
   },
   {
     id: "debug-branch",
     fileName: "debug-branch.md",
-    title: "Debug-branch routing (v8.77+ — investigator hop + verdict matrix)",
+    title: "Debug-branch routing (investigator hop + verdict matrix)",
     body: DEBUG_BRANCH
   },
   {
     id: "detect-matrix",
     fileName: "detect-matrix.md",
-    title: "Detect /cc invocation matrix (v8.61+)",
+    title: "Detect /cc invocation matrix",
     body: DETECT_MATRIX
   },
   {
     id: "approaches-gate",
     fileName: "approaches-gate.md",
-    title: "Approaches Gate (research Phase 1.5; v8.76+)",
+    title: "Approaches Gate (research Phase 1.5)",
     body: APPROACHES_GATE
   },
   {
     id: "one-way-door-gate",
     fileName: "one-way-door-gate.md",
-    title: "One-way Door Gate (v8.79+)",
+    title: "One-way Door Gate",
     body: ONE_WAY_DOOR_GATE
   },
   {
     id: "dispatch-skills-index",
     fileName: "dispatch-skills-index.md",
     title:
-      "Dispatch skills index (Phase C G-2 fix; v8.96.1) — per-envelope reviewer skill pointers",
+      "Dispatch skills index (Phase C G-2 fix) — per-envelope reviewer skill pointers",
     body: DISPATCH_SKILLS_INDEX
   },
   {
     id: "research-mode",
     fileName: "research-mode.md",
-    title: "Research-mode multi-lens flow (v8.65+; Phase 0-4 + Approaches Gate + revision loop)",
+    title: "Research-mode multi-lens flow (Phase 0-4 + Approaches Gate + revision loop)",
     body: RESEARCH_MODE
   },
   {
@@ -2411,31 +2408,31 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
   {
     id: "builder-self-review-gate",
     fileName: "builder-self-review-gate.md",
-    title: "Builder self-review gate (v8.111+ — JSON summary blocks + 5+3 attestation rules)",
+    title: "Builder self-review gate (JSON summary blocks + 5+3 attestation rules)",
     body: readRunbook("builder-self-review-gate.md")
   },
   {
     id: "builder-tdd-walkthrough",
     fileName: "builder-tdd-walkthrough.md",
-    title: "Builder TDD walkthrough (v8.111+ — full-cycle bash transcripts + REFACTOR-skipped variants)",
+    title: "Builder TDD walkthrough (full-cycle bash transcripts + REFACTOR-skipped variants)",
     body: readRunbook("builder-tdd-walkthrough.md")
   },
   {
     id: "parallel-worktree",
     fileName: "parallel-worktree.md",
-    title: "Parallel worktree dispatch (v8.111+ — v8.73 topological-layer worked example)",
+    title: "Parallel worktree dispatch (topological-layer worked example)",
     body: readRunbook("parallel-worktree.md")
   },
   {
     id: "clarify-protocol",
     fileName: "clarify-protocol.md",
-    title: "Clarify protocol (v8.111+ — architect Phase −1 4-dim scoring + gap lenses + stance rotation + anti-rationalizations)",
+    title: "Clarify protocol (architect Phase −1 4-dim scoring + gap lenses + stance rotation + anti-rationalizations)",
     body: readRunbook("clarify-protocol.md")
   },
   {
     id: "plan-md-templates",
     fileName: "plan-md-templates.md",
-    title: "plan.md worked-example templates (v8.111+ — soft + strict excerpts)",
+    title: "plan.md worked-example templates (soft + strict excerpts)",
     body: readRunbook("plan-md-templates.md")
   }
 ];

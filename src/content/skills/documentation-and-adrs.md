@@ -5,7 +5,7 @@ trigger: when the architect (Compose phase) on a strict / deep posture slug AND 
 
 # Skill: documentation-and-adrs
 
-A repo-wide **Architecture Decision Record (ADR) catalogue** lives at `docs/decisions/`. ADRs outlive flows: D-N records are per-slug (inline in `plan.md` under `## Decisions` for v8.14+ flows; in legacy `decisions.md` for pre-v8.14 shipped slugs) and get archived to `shipped/<slug>/` after the finalize step, but ADRs are durable, repo-scoped, and indexed by sequential numbers. The catalogue is what new contributors and future agents read to understand **why** the codebase looks the way it does.
+A repo-wide **Architecture Decision Record (ADR) catalogue** lives at `docs/decisions/`. ADRs outlive flows: D-N records are per-slug (inline in `plan.md` under `## Decisions` for current flows; in legacy `decisions.md` for older shipped slugs) and get archived to `shipped/<slug>/` after the finalize step, but ADRs are durable, repo-scoped, and indexed by sequential numbers. The catalogue is what new contributors and future agents read to understand **why** the codebase looks the way it does.
 
 ADRs are NOT a replacement for per-slug D-N records — they are the **promoted subset** that has cross-flow durability. The architect (Decisions + Compose phases) writes both: full D-N records in the slug's `plan.md` `## Decisions` section (rationale, alternatives, failure modes, refs); a thinner ADR pointing back to the slug for the long-term catalogue.
 
@@ -130,7 +130,7 @@ The architect does **not** mark the ADR `ACCEPTED` itself — that is the orches
 
 After the compound step and before / during the finalize step:
 
-1. Scan `flows/<slug>/plan.md` (and legacy `flows/<slug>/decisions.md` if present from a pre-v8.14 flow) for any `ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)` line.
+1. Scan `flows/<slug>/plan.md` (and legacy `flows/<slug>/decisions.md` if present from an older flow) for any `ADR: docs/decisions/ADR-NNNN-<slug>.md (PROPOSED)` line.
 2. For each found ADR file, edit in place:
    - `status: PROPOSED` → `status: ACCEPTED`
    - Add `accepted_at: <iso-timestamp>` after `proposed_at`

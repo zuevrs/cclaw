@@ -24,7 +24,7 @@ Three checks per slice in `plan.md > ## Plan / Slices`:
 2. **Surface-bounded** — the `Surface` column lists every file the slice will touch (production + test). The builder enforces this at the diff level: a diff touching files outside `Surface` is a contract violation.
 3. **Dependency-honest** — `Depends-on` lists every other SL-K whose Surface or behaviour this slice reads from. Empty `Depends-on` means the slice is genuinely independent; the architect's `Independent` column derives from `Depends-on.length === 0`.
 
-## Parallel-by-default (v8.64 — strict mode)
+## Parallel-by-default (strict mode)
 
 The builder runs slices in **topologically-ordered layers** rather than strictly sequentially. Each layer is the maximal set of slices whose `Depends-on` is satisfied by the union of every previous layer. The pure utility `src/slice-topology.ts > topologicalLayers()` is the canonical implementation.
 

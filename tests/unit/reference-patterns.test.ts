@@ -22,10 +22,10 @@ describe("reference patterns (v8.12 trimmed set)", () => {
     expect(auth?.body).toContain("sensitive-change");
   });
 
-  it("REFERENCE_PATTERNS_INDEX lists every shipped pattern and notes the v8.12 cleanup", () => {
+  it("REFERENCE_PATTERNS_INDEX lists every shipped pattern and notes the pattern-set cleanup", () => {
     for (const pattern of REFERENCE_PATTERNS) {
       expect(REFERENCE_PATTERNS_INDEX).toContain(pattern.fileName);
     }
-    expect(REFERENCE_PATTERNS_INDEX).toMatch(/v8\.12/u);
+    expect(REFERENCE_PATTERNS_INDEX).toMatch(/Pattern set cleanup/u);
   });
 });

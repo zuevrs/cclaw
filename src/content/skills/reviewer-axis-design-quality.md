@@ -1,11 +1,11 @@
 ---
 name: reviewer-axis-design-quality
-trigger: gated reviewer axis (v8.70). Loads when ANY of three gating conditions hold — `walkDesignQualityAxis: true` on the dispatch envelope, `triage.surfaces` ∩ {`ui`, `design`, `frontend`, `ux`} ≠ ∅, OR the diff's file list contains at least one `*.tsx` / `*.jsx` / `*.vue` / `*.svelte` / `*.astro` / `*.html` / `*.css` / `*.scss` file (fallback heuristic).
+trigger: gated reviewer axis. Loads when ANY of three gating conditions hold — `walkDesignQualityAxis: true` on the dispatch envelope, `triage.surfaces` ∩ {`ui`, `design`, `frontend`, `ux`} ≠ ∅, OR the diff's file list contains at least one `*.tsx` / `*.jsx` / `*.vue` / `*.svelte` / `*.astro` / `*.html` / `*.css` / `*.scss` file (fallback heuristic).
 ---
 
 # Skill: reviewer-axis-design-quality
 
-Full per-dimension grading rubric, AI-slop check, severity ladder, and anti-rationalizations for the reviewer's `design-quality` axis (v8.70+). Lifted out of `reviewer.ts` in the v8.83 release — the prompt now carries only a 5-line stub pointing here.
+Full per-dimension grading rubric, AI-slop check, severity ladder, and anti-rationalizations for the reviewer's `design-quality` axis. Lifted out of `reviewer.ts` — the prompt now carries only a 5-line stub pointing here.
 
 The `design-quality` axis is the visual / interaction / accessibility pass on UI-bearing diffs. It exists to catch **UI slop** — generic AI-generated interfaces, type-system inconsistency, broken hierarchy, missing accessibility — that the other thirteen axes do not surface (correctness validates behaviour, qa-evidence validates rendered AC clauses, architecture validates module boundaries; none of them ask "is this a *good* interface?").
 
@@ -13,11 +13,11 @@ The `design-quality` axis is the visual / interaction / accessibility pass on UI
 
 Pinned to the reviewer's dispatch envelope when ANY of:
 
-1. The dispatch envelope from the orchestrator carries `walkDesignQualityAxis: true` (set by start-command's reviewer dispatch when `triage.designSurface == true` from the v8.70 triage detection).
+1. The dispatch envelope from the orchestrator carries `walkDesignQualityAxis: true` (set by start-command's reviewer dispatch when `triage.designSurface == true` from triage detection).
 2. `flow-state.json > triage.surfaces` includes any of `"ui"` / `"design"` / `"frontend"` / `"ux"` (architect-written via Phase 1 surface detection).
 3. The diff's file list contains at least one file matching `*.tsx` / `*.jsx` / `*.vue` / `*.svelte` / `*.astro` / `*.html` / `*.css` / `*.scss` (fallback heuristic — fires the axis even when triage / architect missed the surface).
 
-The shared rubric source of truth lives in `src/content/design-quality-rubric.ts > DESIGN_QUALITY_DIMENSIONS` + `DESIGN_QUALITY_AI_SLOP_SIGNALS`; the `plan-critic` specialist on `rubricMode: "design"` dispatches consumes the same const against plan.md so the seven dimensions stay in lock-step pre- and post-build (v8.104 merge — former v8.75 standalone `plan-design` specialist is now a `plan-critic` rubric mode).
+The shared rubric source of truth lives in `src/content/design-quality-rubric.ts > DESIGN_QUALITY_DIMENSIONS` + `DESIGN_QUALITY_AI_SLOP_SIGNALS`; the `plan-critic` specialist on `rubricMode: "design"` dispatches consumes the same const against plan.md so the seven dimensions stay in lock-step pre- and post-build (the former standalone `plan-design` specialist is now a `plan-critic` rubric mode).
 
 ## When NOT to apply
 

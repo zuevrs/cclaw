@@ -5,13 +5,13 @@ trigger: devex surface detected — auto-on at the plan stage when triage.devexS
 
 # Skill: devex-quality-discipline
 
-cclaw's developer-experience (DevEx) lens fires once on any slug whose triage flagged an SDK / API / CLI / library / public-interface surface: at plan-time via the **`plan-critic` specialist on a `rubricMode: "devex"` dispatch** (v8.104 — absorbed the former v8.82 standalone `plan-devex` specialist into `plan-critic` as one of its three rubric modes; walks plan.md against a six-dimension DevEx rubric BEFORE the build runs). Single source of truth lives at `src/content/devex-quality-rubric.ts`, exporting the six dimensions, "what a 10 looks like" anchors, and the AI-slop signal set; the prompt renders the same markdown via `renderDevexQualityRubricTable()` / `renderDevexQualityAiSlopChecklist()`.
+cclaw's developer-experience (DevEx) lens fires once on any slug whose triage flagged an SDK / API / CLI / library / public-interface surface: at plan-time via the **`plan-critic` specialist on a `rubricMode: "devex"` dispatch** (absorbed the former standalone `plan-devex` specialist into `plan-critic` as one of its three rubric modes; walks plan.md against a six-dimension DevEx rubric BEFORE the build runs). Single source of truth lives at `src/content/devex-quality-rubric.ts`, exporting the six dimensions, "what a 10 looks like" anchors, and the AI-slop signal set; the prompt renders the same markdown via `renderDevexQualityRubricTable()` / `renderDevexQualityAiSlopChecklist()`.
 
 This skill spells out **how to use the rubric well**. It is auto-on at the `plan` stage (`plan-critic` with `rubricMode: "devex"`); a missing devex surface gate at plan-time structurally skips the dispatch (and this skill).
 
 ## When to apply
 
-- **`plan-critic` `rubricMode: "devex"` dispatch (v8.104; absorbed former v8.82 plan-devex):** `triage.devexSurface == true` OR `triage.surfaces ∩ {cli, library, api} ≠ ∅`; AND `triage.ceremonyMode ∈ {soft, strict}`; AND `flows/<slug>/plan.md` exists.
+- **`plan-critic` `rubricMode: "devex"` dispatch (absorbed former plan-devex):** `triage.devexSurface == true` OR `triage.surfaces ∩ {cli, library, api} ≠ ∅`; AND `triage.ceremonyMode ∈ {soft, strict}`; AND `flows/<slug>/plan.md` exists.
 
 ## When NOT to apply
 
@@ -43,7 +43,7 @@ Full "what a 10 looks like" anchors live in `src/content/devex-quality-rubric.ts
 
 ## Block-ship semantics
 
-- **`plan-critic rubricMode: "devex"` strict mode:** any `DX-N` with severity ≥ `medium` blocks ship (the v8.82 block-ship-on-strict floor, preserved across the v8.104 merge). Soft mode surfaces but does not block; ≥2 `high` rows surfaces a stop-and-report status block.
+- **`plan-critic rubricMode: "devex"` strict mode:** any `DX-N` with severity ≥ `medium` blocks ship (the block-ship-on-strict floor). Soft mode surfaces but does not block; ≥2 `high` rows surfaces a stop-and-report status block.
 - **User Sovereignty preserved:** the user can override via the stop-and-report status block (`/cc` to continue with findings open; `/cc-cancel` to discard). The specialist NEVER silently downgrades a finding to avoid blocking.
 
 ## Hard rules

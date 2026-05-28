@@ -5,7 +5,7 @@ trigger: when authoring or reviewing AC entries; when committing AC verification
 
 # Skill: ac-discipline
 
-This skill covers both AC concerns: the bar for every AC entry (formerly **ac-quality**), and the `verify(AC-N): passing` commit contract that wires AC ↔ verification chain in strict mode (formerly **ac-traceability**). v8.63 split work from verification: slice work (`red(SL-N):` / `green(SL-N):` / `refactor(SL-N):`) lives under `slice-discipline.md`; this skill keys off `AC-N` for the verification pass only.
+This skill covers both AC concerns: the bar for every AC entry (formerly **ac-quality**), and the `verify(AC-N): passing` commit contract that wires AC ↔ verification chain in strict mode (formerly **ac-traceability**). cclaw splits work from verification: slice work (`red(SL-N):` / `green(SL-N):` / `refactor(SL-N):`) lives under `slice-discipline.md`; this skill keys off `AC-N` for the verification pass only.
 
 ## When NOT to apply
 
@@ -43,11 +43,11 @@ Three checks per AC:
 
 You don't. Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it should be a fresh slug.
 
-## ac-traceability (v8.63 — AC verification pass only)
+## ac-traceability (AC verification pass only)
 
 This part of the skill applies only when the active flow's `ceremony_mode` is `strict` (set at the triage gate for large-risky / security-flagged work). In `inline` and `soft` modes there is no per-criterion commit prefix and no AC↔commit chain — see `agents/triage.md` (routing contract) and `runbooks/triage-gate.md` (orchestrator-side Triage procedure) for what each mode does.
 
-In `strict` mode (v8.63+), cclaw separates work from verification:
+In `strict` mode, cclaw separates work from verification:
 
 - **Slice work** (`red(SL-N): …` → `green(SL-N): …` → `refactor(SL-N): …`) is the TDD unit. Slices land in commits keyed by `SL-N`; the reviewer's `git log --grep="(SL-N):" --oneline` reconstructs the slice chain. See `slice-discipline.md` for the slice-side contract.
 - **AC verification** is THIS skill's domain: after every slice in an AC's `Verifies` list lands and the full suite is green on the merged state, the builder stamps one `verify(AC-N): passing` commit per AC. The reviewer's `git log --grep="verify(AC-N):" --oneline` reconstructs the AC chain.
@@ -56,7 +56,7 @@ The two chains are independent; the dual grep is what makes the audit trail reco
 
 ## Rules (strict mode)
 
-1. **One `verify(AC-N): passing` commit per AC, after all slices in `Verifies` land.** Subject MUST be exactly `verify(AC-N): passing` — the reviewer's git-log scan keys off this verbatim. The body MAY include a one-line evidence citation (test file:test-name + suite output line) and the optional `validates: KA-N` payload (v8.85; one line per validated assumption from `## Key assumptions to validate`).
+1. **One `verify(AC-N): passing` commit per AC, after all slices in `Verifies` land.** Subject MUST be exactly `verify(AC-N): passing` — the reviewer's git-log scan keys off this verbatim. The body MAY include a one-line evidence citation (test file:test-name + suite output line) and the optional `validates: KA-N` payload (one line per validated assumption from `## Key assumptions to validate`).
 2. **The verify commit's diff is empty OR test-only.** Production code (`src/**`, `lib/**`, `app/**`) NEVER appears in a verify commit. If the AC cannot pass without a production edit, the responsible slice is incomplete — return to its TDD cycle; do not paper over with a verify commit that secretly ships behaviour.
 3. **Stage only test files (or commit empty).** `git add tests/path/to/ac-coverage.test.ts && git commit -m "verify(AC-N): passing"` when the AC needs a verification target beyond what the slice tests already cover (perf budget, integration scenario, contract assertion); OR `git commit --allow-empty -m "verify(AC-N): passing"` when the slice tests already exercise the AC's observable behaviour. `git add -A` is forbidden — list the test files explicitly.
 4. **The reviewer's ex-post checks at handoff time:**
@@ -67,9 +67,9 @@ The two chains are independent; the dual grep is what makes the audit trail reco
 5. **`build.md > ## AC verification` carries the AC↔SHA row** as the durable record: `| AC-N | Verifies (slices) | Evidence | commit |`. The Evidence cell cites the test file:test-name (or perf/integration target); the commit cell carries the verify SHA.
 6. **The reviewer's final pass (`reviewer mode=release` at ship gate)** verifies the dual chain via `git log --grep="(SL-N):" --oneline` (slice work) AND `git log --grep="verify(AC-N):" --oneline` (AC verification) against the plan's Slices + Acceptance Criteria tables.
 
-## Archived-flow back-compat (pre-v8.63)
+## Archived-flow back-compat
 
-Slugs authored before v8.63 carry only a `## Acceptance Criteria` section (no `## Plan / Slices` table) and used `red(AC-N):` / `green(AC-N):` / `refactor(AC-N):` for AC work (no separate verify pass). The reviewer auto-detects the archived shape from the absence of `## Plan / Slices` in `plan.md` and applies the legacy per-posture recipe directly against the `(AC-N)` token. New strict-mode slugs always carry both tables and key slice work off `(SL-N)` + AC verification off `verify(AC-N): passing`; do not mix the two shapes within a single slug.
+Legacy slugs carry only a `## Acceptance Criteria` section (no `## Plan / Slices` table) and used `red(AC-N):` / `green(AC-N):` / `refactor(AC-N):` for AC work (no separate verify pass). The reviewer auto-detects the archived shape from the absence of `## Plan / Slices` in `plan.md` and applies the legacy per-posture recipe directly against the `(AC-N)` token. New strict-mode slugs always carry both tables and key slice work off `(SL-N)` + AC verification off `verify(AC-N): passing`; do not mix the two shapes within a single slug.
 
 ## In soft / inline modes
 
@@ -98,7 +98,7 @@ AC discipline is the first thing that pressures an agent to "just commit somethi
 | "This AC is part of AC-2, I'll just bundle it under AC-2." | Compound AC fails the smell check — independently committable means one AC per commit. Split into a new AC with its own id; the audit trail and ship-gate need the separation. |
 | "Verification is `tests pass`." | That's a vague verification; the smell check rejects it. Cite a specific test name + file + assertion (`tests/unit/permissions.test.ts: 'hides email when permission is missing'`). |
 | "I'll renumber the ACs after I delete AC-2 — `AC-3` becomes the new `AC-2`." | Don't. The remaining ids stay sequential after compaction; renumbering breaks the reviewer's `git log --grep="verify(AC-N):"` scan for any commit that already cited the old id. |
-| "I'll skip the `verify(AC-N): passing` commit — the slice tests already cover the AC." | The slice commits are the TDD unit; the `verify(AC-N): passing` commit is the atomic AC closure signal (v8.63). Without it the AC reads as unclosed even when every contributing slice landed green. Stamp the verify commit (empty body is fine) so the reviewer's dual grep reconstructs the AC chain. |
+| "I'll skip the `verify(AC-N): passing` commit — the slice tests already cover the AC." | The slice commits are the TDD unit; the `verify(AC-N): passing` commit is the atomic AC closure signal. Without it the AC reads as unclosed even when every contributing slice landed green. Stamp the verify commit (empty body is fine) so the reviewer's dual grep reconstructs the AC chain. |
 | "I'll add AC-13 mid-build because I noticed something needed." | Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it's a follow-up slug. AC-13 mid-flight breaks the build sub-phase's commit budget. |
 | "Refinement of `<old-slug>` so AC-1 starts at AC-13 (continuation)." | Refinement slugs restart at AC-1. The `refines:` frontmatter is the link; the AC numbering does not carry. |
 | "The verification line is 'manual test' for this AC." | A manual step is a verification, but it must be **concrete** — name the click target, the expected observable, and the operator. "I clicked around and it looked fine" is the rationalization the reviewer catches. |

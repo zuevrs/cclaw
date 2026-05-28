@@ -1,22 +1,21 @@
 /**
- * Single source of truth for the four anti-slop dimensions (added in the
- * v8.86 release).
+ * Single source of truth for the four anti-slop dimensions.
  *
  * One consumer today, one shape ready for two tomorrow:
  *
  * - {@link "src/content/specialist-prompts/reviewer.ts" | REVIEWER_PROMPT} —
- *   the v8.86 gated `anti-slop` reviewer axis. Walks the rendered diff
+ *   the gated `anti-slop` reviewer axis. Walks the rendered diff
  *   against the four dimensions and grades each one 0-10 with an
  *   explicit "what a 10 looks like" anchor; below-6 grades become `AS-N`
  *   findings appended to the iteration block's Findings table.
  *   Block-ship on strict at severity ≥ medium.
  *
  * Why one const, not "next slug bakes the rubric into the prompt": the
- * v8.75 design-quality and v8.82 devex-quality rubrics showed that
+ * design-quality and devex-quality rubrics showed that
  * consumers fragment fast — the moment a second surface (pre-build
  * `plan-simplicity` lens, research-anti-slop probe, learnings table)
  * picks up the same vocabulary, the literal table drifts. The lift here
- * is pre-emptive: when a future v8.x adds a builder-side `simplicity`
+ * is pre-emptive: when a future release adds a builder-side `simplicity`
  * check or a `research-anti-slop` lens, they share these helpers and the
  * dimensions cannot drift across surfaces.
  *

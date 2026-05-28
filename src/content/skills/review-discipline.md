@@ -5,7 +5,7 @@ trigger: when reviewer is invoked; when the diff touches authn / authz / secrets
 
 # Skill: review-discipline
 
-The reviewer is the single fourteen-axis quality gate. v8.62 absorbed the former `security-reviewer` specialist into the reviewer's `security` axis, so this skill covers the full reviewer contract — generic fourteen-axis pass plus security threat-modelling — with a shared Findings, axis-walk, and Five Failure Modes contract.
+The reviewer is the single fourteen-axis quality gate. The former `security-reviewer` specialist is absorbed into the reviewer's `security` axis, so this skill covers the full reviewer contract — generic fourteen-axis pass plus security threat-modelling — with a shared Findings, axis-walk, and Five Failure Modes contract.
 
 ## When to use
 
@@ -176,7 +176,7 @@ The reviewer's discipline is the first thing the slug shape pressures an agent t
 
 ## security-axis depth (absorbed from security-reviewer)
 
-v8.62 collapsed the former `security-reviewer` specialist into the reviewer's `security` axis. The reviewer always walks the `security` axis as part of its fourteen-axis pass; the depth scales with detected surfaces.
+The former `security-reviewer` specialist is collapsed into the reviewer's `security` axis. The reviewer always walks the `security` axis as part of its fourteen-axis pass; the depth scales with detected surfaces.
 
 ## Rules
 
