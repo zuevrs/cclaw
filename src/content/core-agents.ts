@@ -15,23 +15,13 @@ import { SPECIALIST_PROMPTS } from "./specialist-prompts/index.js";
 import { RESEARCH_LENSES } from "../types.js";
 
 /**
- * `activation` controls how the orchestrator invokes the agent:
- *
- * - `on-demand` — dispatched as a sub-agent with an envelope; returns a slim
- *   summary. The classic specialist contract — and the ONLY
- *   activation used by any current specialist (collapsed the
- *   `main-context` `design` specialist into the on-demand `architect`).
- * - `main-context` — historically the orchestrator activated the prompt
- *   as a skill it followed itself, opening a multi-turn dialog with the
- *   user in the current conversation. Used only by the former `design`
- *   specialist for collaborative brainstorm + scope + architecture. The
- *   user-dialogue surface was later removed (always-auto, no pickers) and
- *   the `design` specialist was absorbed into `architect`, so no current
- *   specialist activates this way. The value is preserved
- *   in the type for back-compat with any external code that pattern-
- *   matches on it.
+ * `activation` controls how the orchestrator invokes the agent. Every
+ * current specialist and research helper is `on-demand`: dispatched as a
+ * sub-agent with an envelope, returning a slim summary. (The historical
+ * `main-context` multi-turn `design` specialist was absorbed into the
+ * on-demand `architect`.)
  */
-export type AgentActivation = "on-demand" | "main-context";
+export type AgentActivation = "on-demand";
 
 export interface CoreAgent {
   id: InstallableAgentId;
@@ -112,7 +102,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["pre-impl-review"],
     description:
-      "pre-implementation plan-critic. Unifies three pre-impl lenses (plan-critic / plan-design / plan-devex) into a single specialist with a `rubricMode: \"generic\" | \"design\" | \"devex\"` envelope fan-out. Three rubric modes share one prompt body: (1) `generic` (default) — adversarial structural pass on the tight gate {ceremonyMode=strict, complexity!=trivial, problemType!=refines, AC count>=2}: goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + decision-integrity + bets-and-exclusions; (2) `design` — walks plan.md against the seven-dimension design-quality rubric (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) on the design-surface gate {triage.designSurface OR triage.surfaces ∩ {ui, design, frontend, ux}; ceremonyMode ∈ {soft, strict}}, emits PD-N findings appended to plan.md's ## Plan-design findings; (3) `devex` — walks the six-dimension DevEx rubric (Getting Started / API ergonomics / Error messages / Docs / Upgrade path / Measurement) on the devex-surface gate {triage.devexSurface OR triage.surfaces ∩ {cli, library, api}; ceremonyMode ∈ {soft, strict}}, emits DX-N findings appended to plan.md's ## Plan-devex findings. Orchestrator may dispatch up to three times sequentially per slug (generic first, then design, then devex; each independently gated). Verdicts: pass (advance), revise (bounce to architect once — max 1 revise loop per mode), cancel (generic mode only; structural plan defect) or block (design / devex modes; stop-and-report). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
+      "pre-implementation plan-critic. Unifies three pre-impl lenses (plan-critic / plan-design / plan-devex) into a single specialist dispatched ONCE with the active `rubrics` set — a subset of `rubricMode: \"generic\" | \"design\" | \"devex\"`. The three rubric scaffolds share one prompt body and are walked in that single pass: (1) `generic` (default) — adversarial structural pass on the tight gate {ceremonyMode=strict, complexity!=trivial, problemType!=refines, AC count>=2}: goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + decision-integrity + bets-and-exclusions; (2) `design` — walks plan.md against the seven-dimension design-quality rubric (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) on the design-surface gate {triage.designSurface OR triage.surfaces ∩ {ui, design, frontend, ux}; ceremonyMode ∈ {soft, strict}}, emits PD-N findings appended to plan.md's ## Plan-design findings; (3) `devex` — walks the six-dimension DevEx rubric (Getting Started / API ergonomics / Error messages / Docs / Upgrade path / Measurement) on the devex-surface gate {triage.devexSurface OR triage.surfaces ∩ {cli, library, api}; ceremonyMode ∈ {soft, strict}}, emits DX-N findings appended to plan.md's ## Plan-devex findings. Orchestrator dispatches ONCE per slug; the specialist walks every active rubric (generic first, then design, then devex; each independently gated) and returns one merged verdict (worst-of). Sub-verdicts: pass (advance), revise (bounce to architect once — max 1 revise loop per dispatch), cancel (generic; structural plan defect) or block (design / devex; stop-and-report). Read-only on the codebase; no Write/Edit/MultiEdit. Distinct from the post-impl critic (Hop 4.5); both ship together, catch different problem classes.",
     prompt: SPECIALIST_PROMPTS["plan-critic"]
   },
   {

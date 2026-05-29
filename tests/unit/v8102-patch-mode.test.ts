@@ -67,13 +67,12 @@ describe("v8.102 — patch-mode wiring", () => {
       /\| `\/cc` argument starts with `patch ` \(post-ship micro-edit fork\) \| `patch-mode\.md` \|/u
     );
     // The patch-mode fork dispatches builder directly (no triage / no
-    // architect / no plan-critic (all three rubric modes — generic /
-    // design / devex; v8.104 merge) / no qa / no critic / no ship-gate)
-    // per the runbook's contract. start-command.ts carries the concise
-    // dispatch summary; the runbook body documents each skip with
-    // per-specialist bullets.
+    // architect / no plan-critic (all rubrics — generic / design / devex)
+    // / no qa / no critic / no ship-gate) per the runbook's contract.
+    // start-command.ts carries the concise dispatch summary; the runbook
+    // body documents each skip with per-specialist bullets.
     expect(startCommand).toMatch(
-      /skip triage \/ architect \/ plan-critic \(all three rubric modes — generic \/ design \/ devex\) \/ qa \/ critic \/ ship-gate/iu
+      /skip triage \/ architect \/ plan-critic \(all rubrics — generic \/ design \/ devex\) \/ qa \/ critic \/ ship-gate/iu
     );
     // Runbook body carries the per-specialist skip bullets.
     expect(runbook?.body).toMatch(/Skip the triage dispatch entirely/u);

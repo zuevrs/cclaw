@@ -13,7 +13,7 @@ import { createTempProject, removeProject } from "../helpers/temp-project.js";
  *
  * v8.17 teaches the install layer to garbage-collect those orphans:
  * after the write loop, list `.cclaw/lib/skills/*.md`, diff against the
- * expected set (every `AUTO_TRIGGER_SKILLS[i].fileName` + `cclaw-meta.md`),
+ * expected set (every `AUTO_TRIGGER_SKILLS[i].fileName`),
  * and `fs.rm` the unexpected ones. Loud (one progress event per removed
  * file + summary line if N > 0). Surgical (`.md` files only; subdirs,
  * non-`.md` siblings, and anything outside `.cclaw/lib/skills/` survive).
@@ -46,7 +46,6 @@ async function seedOrphan(projectRoot: string, fileName: string): Promise<void> 
 }
 
 const EXPECTED_FILE_NAMES = new Set<string>([
-  "cclaw-meta.md",
   ...AUTO_TRIGGER_SKILLS.map((s) => s.fileName),
 ]);
 
@@ -184,7 +183,7 @@ describe("v8.17 orphan-skill cleanup in .cclaw/lib/skills/", () => {
     const after = await fs.readdir(path.join(project, SKILLS_DIR));
     const filesOnDisk = after.filter((name) => name.endsWith(".md"));
     expect(new Set(filesOnDisk)).toEqual(EXPECTED_FILE_NAMES);
-    expect(filesOnDisk.length).toBe(AUTO_TRIGGER_SKILLS.length + 1);
+    expect(filesOnDisk.length).toBe(AUTO_TRIGGER_SKILLS.length);
   });
 
   it("all 13 v8.16-retired skill files are cleaned in one pass (the v8.15 → v8.17 migration story)", async () => {

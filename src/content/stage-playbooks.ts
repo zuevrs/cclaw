@@ -24,7 +24,7 @@ For anything else, continue with this runbook.
 
 \`.cclaw/lib/templates/plan.md\` is the canonical seed. The orchestrator copies it to \`.cclaw/flows/<slug>/plan.md\` and replaces \`SLUG-PLACEHOLDER\` with the real slug.
 
-If the slug already exists (active or shipped), the orchestrator must instead read the existing artifact and let the user pick **amend / rewrite / refine shipped / resume cancelled / new**. See \`.cclaw/lib/skills/refinement.md\`.
+If the slug already exists (active or shipped), the orchestrator must instead read the existing artifact and let the user pick **amend / rewrite / refine shipped / resume cancelled / new**. See \`.cclaw/lib/skills/plan-authoring.md\` (Refinement decision tree section).
 
 ## 2. Apply pre-flight checks from reference patterns
 
@@ -317,7 +317,7 @@ The orchestrator opens this file before invoking \`reviewer\`.
 | \`release\` | before push when the change is user-visible |
 | \`adversarial\` | at least once for risky / security-sensitive slugs |
 
-The reviewer is a single fourteen-axis specialist (absorbed the former \`security-reviewer\` into the \`security\` axis). When the task or diff touches sensitive surfaces, the reviewer walks the \`security\` axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) inside the same dispatch — no separate sub-agent.
+The reviewer is a single nine-axis specialist (absorbed the former \`security-reviewer\` into the \`security\` axis). When the task or diff touches sensitive surfaces, the reviewer walks the \`security\` axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) inside the same dispatch — no separate sub-agent.
 
 ## 2. Iterate
 

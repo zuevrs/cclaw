@@ -37,8 +37,12 @@ const REPO_ROOT = path.resolve(
  * narrative ("v8.85 added the 13th axis, v8.86 bumped to 14") stays
  * intact.
  *
- * Canonical counts (current as of v8.107):
- *   - REVIEWER AXES: 14 (8 base + 6 gated post-v8.86)
+ * Canonical counts (current as of v8.113):
+ *   - REVIEWER AXES: 9 (6 base + 3 gated). v8.113 simplification folded
+ *     test-quality → correctness, complexity-budget → architecture, and
+ *     scope-drift → edit-discipline (Not-Doing sub-check), and cut the
+ *     advisory-only anti-slop + assumption-coverage axes outright
+ *     (down from the post-v8.86 peak of 14 = 8 base + 6 gated)
  *   - RESEARCH LENSES: 6 (engineer / product / architecture / history
  *     / skeptic / design — design added v8.76)
  *   - SPECIALISTS: 8 (triage / investigator / architect / builder /
@@ -60,7 +64,7 @@ const REPO_ROOT = path.resolve(
  *     are flagged as stale.
  */
 
-const AXES_CANONICAL = 14;
+const AXES_CANONICAL = 9;
 const LENSES_CANONICAL = 6;
 const SPECIALISTS_CANONICAL = 8;
 const RUNBOOKS_CANONICAL = 28;
@@ -343,7 +347,7 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
     );
 
     it(`README declares "${AXES_CANONICAL} axes" in the reviewer phrasing`, () => {
-      expect(README).toMatch(/14 axes/);
+      expect(README).toMatch(/9 axes/);
     });
 
     it(`README declares "${SPECIALISTS_CANONICAL} specialist contracts" (post-v8.107 rewrite phrasing)`, () => {
@@ -368,20 +372,23 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
       expect(hasSix).toBe(true);
     });
 
-    it(`reviewer.ts opens with "Fourteen-axis review"`, () => {
-      expect(REVIEWER_PROMPT).toMatch(/Fourteen-axis review/);
+    it(`reviewer.ts opens with "Nine-axis review"`, () => {
+      expect(REVIEWER_PROMPT).toMatch(/Nine-axis review/);
     });
 
-    it("reviewer.ts does NOT regress its canonical opening to a lower count", () => {
+    it("reviewer.ts does NOT regress its canonical opening to another count", () => {
+      expect(REVIEWER_PROMPT).not.toMatch(/Eight-axis review/);
+      expect(REVIEWER_PROMPT).not.toMatch(/Ten-axis review/);
       expect(REVIEWER_PROMPT).not.toMatch(/Eleven-axis review/);
       expect(REVIEWER_PROMPT).not.toMatch(/Twelve-axis review/);
       expect(REVIEWER_PROMPT).not.toMatch(/Thirteen-axis review/);
+      expect(REVIEWER_PROMPT).not.toMatch(/Fourteen-axis review/);
     });
 
-    it("investigator.ts post-mortem section cites the 14-axis reviewer surface", () => {
-      expect(INVESTIGATOR_PROMPT).toMatch(/14-axis/);
+    it("investigator.ts post-mortem section cites the 9-axis reviewer surface", () => {
+      expect(INVESTIGATOR_PROMPT).toMatch(/9-axis/);
       expect(INVESTIGATOR_PROMPT).not.toMatch(
-        /specific 11-axis finding|specific 12-axis finding|specific 13-axis finding/
+        /specific 11-axis finding|specific 12-axis finding|specific 13-axis finding|specific 14-axis finding/
       );
     });
   });

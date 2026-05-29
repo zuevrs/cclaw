@@ -95,8 +95,9 @@ describe("v8.14/v8.62 discovery-roster migration anchor", () => {
 // auto-trigger skills baseline; slimmed in v8.99 to dangling-ref +
 // trigger tripwires + provenance + count band).
 
+// ac-discipline was itself absorbed into commit-hygiene in the consolidation
+// pass; its provenance snippets are now asserted under commit-hygiene below.
 const MERGED_SKILL_IDS = [
-  "ac-discipline",
   "commit-hygiene",
   "tdd-and-verification",
   "api-evolution",
@@ -121,8 +122,14 @@ const DELETED_SOURCE_IDS = [
 ] as const;
 
 const PROVENANCE_SNIPPETS: Record<(typeof MERGED_SKILL_IDS)[number], string[]> = {
-  "ac-discipline": ["Three checks per AC:", "git log --grep"],
-  "commit-hygiene": ["Surgical Changes", "`git add -A` is forbidden."],
+  // commit-hygiene absorbed surgical-edit-hygiene (v8.16) AND ac-discipline
+  // (consolidation pass) — assert both lineages' load-bearing snippets.
+  "commit-hygiene": [
+    "Surgical Changes",
+    "`git add -A` is forbidden.",
+    "Three checks per AC:",
+    "git log --grep",
+  ],
   "tdd-and-verification": [
     "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST",
     "build/typecheck/lint/test/security",
@@ -199,7 +206,6 @@ describe("v8.16 thematic skills merge", () => {
       cited.add(m[1]!);
     }
     for (const fileName of cited) {
-      if (fileName === "cclaw-meta.md") continue;
       expect(fileNames, `cited \`lib/skills/${fileName}\` must be a live AUTO_TRIGGER_SKILLS entry`).toContain(fileName);
     }
   });

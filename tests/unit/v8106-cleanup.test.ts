@@ -50,7 +50,7 @@ const RETIRED_SKILL_IDS = [
 ] as const;
 
 describe("v8.106 — cleanup (vestigial skills + reviewer trim + dispatch envelopes lazy)", () => {
-  it("AC-1 — the three retired skill ids are no longer in AUTO_TRIGGER_SKILLS, the corresponding .md bodies are deleted, and the registry holds 33 entries (32 + v8.111 pre-commitment-predictions)", async () => {
+  it("AC-1 — the three retired skill ids are no longer in AUTO_TRIGGER_SKILLS, the corresponding .md bodies are deleted, and the registry holds 20 entries (post-consolidation: 9 near-duplicate skills merged into survivors)", async () => {
     for (const id of RETIRED_SKILL_IDS) {
       const entry = AUTO_TRIGGER_SKILLS.find((s) => s.id === id);
       expect(
@@ -71,8 +71,16 @@ describe("v8.106 — cleanup (vestigial skills + reviewer trim + dispatch envelo
       ).rejects.toThrow();
     }
 
-    // v8.111 added pre-commitment-predictions (→ 33); v8.112 added writing-skills (→ 34).
-    expect(AUTO_TRIGGER_SKILLS.length).toBe(34);
+    // v8.111 added pre-commitment-predictions; v8.112 added writing-skills
+    // (peak 32). v8.113 cut the 3 advisory/folded reviewer-axis skills
+    // (anti-slop / assumption-coverage / scope-drift) → 29. The
+    // consolidation pass then merged 9 near-duplicate skills into survivors
+    // (structured-status / completion-discipline / receiving-feedback →
+    // summary-format; ac-discipline / slice-discipline → commit-hygiene;
+    // qa-and-browser → debug-and-browser; pre-edit-investigation →
+    // investigation-discipline; refinement → plan-authoring) and demoted the
+    // writing-skills maintainer doc → 20.
+    expect(AUTO_TRIGGER_SKILLS.length).toBe(20);
   });
 
   it("AC-2 — the canonical replacement surfaces still carry the lifted logic (triage agent prompt, triage-gate runbook, start-command Detect matrix, architect Bootstrap)", async () => {
@@ -139,14 +147,17 @@ describe("v8.106 — cleanup (vestigial skills + reviewer trim + dispatch envelo
     // ...but the cold-dispatch scaffolding (gate condition + load
     // companion skill pointer + canonical finding shape) must stay so
     // a reviewer agent that has not yet loaded the companion knows
-    // what to do.
+    // what to do. v8.113 cut the anti-slop / assumption-coverage axes
+    // and folded scope-drift into edit-discipline, so only the surviving
+    // gated companion pointers remain; the folded scope-drift `SD-N`
+    // finding grammar survives under the edit-discipline axis.
     expect(REVIEWER_PROMPT).toContain("reviewer-axis-design-quality");
-    expect(REVIEWER_PROMPT).toContain("reviewer-axis-anti-slop");
-    expect(REVIEWER_PROMPT).toContain("reviewer-axis-scope-drift");
-    expect(REVIEWER_PROMPT).toContain("reviewer-axis-assumption-coverage");
+    expect(REVIEWER_PROMPT).toContain("reviewer-axis-edit-discipline");
+    expect(REVIEWER_PROMPT).not.toContain("reviewer-axis-anti-slop");
+    expect(REVIEWER_PROMPT).not.toContain("reviewer-axis-scope-drift");
+    expect(REVIEWER_PROMPT).not.toContain("reviewer-axis-assumption-coverage");
     expect(REVIEWER_PROMPT).toMatch(/SD-N:/);
-    expect(REVIEWER_PROMPT).toMatch(/KA-N:/);
-    expect(REVIEWER_PROMPT).toMatch(/AS-N:/);
+    expect(REVIEWER_PROMPT).not.toMatch(/AS-N:/);
   });
 
   it("AC-4 — REVIEWER_DISPATCH_ENVELOPES pre-computed table is shrunk from 9 shapes to ≤3 (no-flags / strict-baseline / UI+design)", async () => {
@@ -183,8 +194,11 @@ describe("v8.106 — cleanup (vestigial skills + reviewer trim + dispatch envelo
   it("AC-5 — the lazy fall-back works: buildAutoTriggerBlock(stage, gateEnvelope) + renderDispatchSkillsIndex still produce a correct block for an envelope shape NOT in the cached three", () => {
     // A shape that v8.106 dropped from the cache:
     // security-sensitive (securityFlag: true on the strict baseline).
+    // walkScopeDriftAxis / walkAssumptionCoverageAxis remain valid
+    // plan-state signals (kept on GateEnvelope) but no longer pin a
+    // companion skill post-v8.113; editDisciplineActive carries the
+    // folded Not-Doing check.
     const securitySensitive: GateEnvelope = {
-      walkAntiSlopAxis: true,
       editDisciplineActive: true,
       walkScopeDriftAxis: true,
       walkAssumptionCoverageAxis: true,
@@ -194,10 +208,11 @@ describe("v8.106 — cleanup (vestigial skills + reviewer trim + dispatch envelo
     const block = buildAutoTriggerBlock("review", securitySensitive);
     expect(block, "fall-back block should be non-empty").toBeTruthy();
     expect(block).toContain("reviewer-axis-security");
-    expect(block).toContain("reviewer-axis-anti-slop");
     expect(block).toContain("reviewer-axis-edit-discipline");
-    expect(block).toContain("reviewer-axis-scope-drift");
-    expect(block).toContain("reviewer-axis-assumption-coverage");
+    // Retired/folded axes never pin a companion skill anymore.
+    expect(block).not.toContain("reviewer-axis-anti-slop");
+    expect(block).not.toContain("reviewer-axis-scope-drift");
+    expect(block).not.toContain("reviewer-axis-assumption-coverage");
     // The companion skill that should NOT pin for this envelope.
     expect(block).not.toContain("reviewer-axis-design-quality");
 

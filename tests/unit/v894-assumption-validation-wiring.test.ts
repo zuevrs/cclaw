@@ -249,14 +249,16 @@ describe("v8.94 — GateEnvelope carries the unvalidatedHighStakesKas field", ()
   });
 });
 
-describe("v8.94 — reviewer-axis-assumption-coverage skill body cites the new envelope field", () => {
-  it("AC-12 — the on-disk skill body names `unvalidatedHighStakesKas` (the v8.96 envelope field)", async () => {
+describe("v8.113 — reviewer-axis-assumption-coverage skill is retired", () => {
+  it("AC-12 — the on-disk skill body is deleted (the advisory assumption-coverage axis was cut; `unvalidatedHighStakesKas` is still carried by GateEnvelope per AC-11)", async () => {
     const skillPath = path.join(
       PROJECT_ROOT,
       "src/content/skills/reviewer-axis-assumption-coverage.md"
     );
-    const body = await fs.readFile(skillPath, "utf8");
-    expect(body).toContain("unvalidatedHighStakesKas");
+    await expect(
+      fs.access(skillPath),
+      "reviewer-axis-assumption-coverage.md should be deleted"
+    ).rejects.toThrow();
   });
 });
 

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
 import { CCLAW_VERSION, RUNTIME_ROOT } from "./constants.js";
-import { HARNESS_IDS, type HarnessId, type SpecialistId } from "./types.js";
+import { HARNESS_IDS, type HarnessId } from "./types.js";
 
 /**
  * Per-specialist model preference (T3-2, v8.13). Maps each cclaw specialist
@@ -24,21 +24,15 @@ import { HARNESS_IDS, type HarnessId, type SpecialistId } from "./types.js";
 export type ModelTier = "fast" | "balanced" | "powerful";
 
 /**
- * Canonical immutable list of model-tier literal values. Exposed as a
- * `const` array so tests can sweep the union without restating the
- * literal triple. Mirrors the {@link ModelTier} union exactly.
- */
-export const MODEL_TIERS = ["fast", "balanced", "powerful"] as const;
-
-/**
- * Per-specialist model-tier preferences. v8.87 ships defaults for every
- * live specialist id in {@link SPECIALISTS} plus the two read-only
- * research helpers (`learnings-research` / `repo-research`); a handful
- * of legacy keys (pre-v8.62 ids) are kept so existing user
- * `.cclaw/config.yaml` files don't fail validation after upgrade.
+ * Per-specialist model-tier preferences. Optional typed home for the
+ * `.cclaw/config.yaml > modelPreferences` block: each live specialist id
+ * (plus the two read-only research helpers `learnings-research` /
+ * `repo-research`) maps to a {@link ModelTier} hint. Every field is
+ * optional; absent fields fall back to the harness default.
  *
- * Every field is optional; absent fields fall back to
- * {@link DEFAULT_MODEL_PREFERENCES} via {@link resolveModelPreferences}.
+ * The orchestrator (LLM) reads the default policy plus this override from
+ * the mirrored `## Model-tier hint` table in the `dispatch-envelope`
+ * runbook, not via a TypeScript reader.
  */
 export interface ModelPreferences {
   // --- v8.62+ live specialists (from `SPECIALISTS` in `types.ts`). ---
@@ -54,201 +48,8 @@ export interface ModelPreferences {
   // --- Read-only research helpers (not in `SPECIALISTS`, but dispatched). ---
   "learnings-research"?: ModelTier;
   "repo-research"?: ModelTier;
-
-  /**
-   * Legacy specialist ids retired by v8.62 — kept so users with existing
-   * `.cclaw/config.yaml` files don't see schema-validation errors after
-   * upgrading.
-   *
-   * - `slice-builder` → renamed to {@link ModelPreferences.builder} (v8.62).
-   * - `design` / `ac-author` → absorbed into {@link ModelPreferences.architect}
-   *   (v8.62 unified flow retired the discovery sub-phase).
-   * - `security-reviewer` → absorbed into {@link ModelPreferences.reviewer}'s
-   *   `security` axis (v8.62; full threat-model + sensitive-change protocol
-   *   moved into the reviewer prompt).
-   * - `brainstormer` → removed v8.14.
-   * - `planner` → renamed to `ac-author` v8.14–v8.27, then absorbed into
-   *   `architect` v8.62.
-   * - `plan-design` / `plan-devex` → merged into `plan-critic` v8.104 (the
-   *   three pre-impl lenses now ride one specialist via the
-   *   `rubricMode: "generic" | "design" | "devex"` envelope fan-out; the
-   *   tier hint applies to all three modes equally).
-   *
-   * The resolver does NOT collapse legacy keys onto live keys — if a user
-   * config carries `slice-builder: powerful` and the upgrade renamed the
-   * specialist to `builder`, the live-key default wins. To migrate, the
-   * user re-types the value under the live key. The legacy fields exist
-   * only so the YAML still parses.
-   */
-  "slice-builder"?: ModelTier;
-  design?: ModelTier;
-  "ac-author"?: ModelTier;
-  "security-reviewer"?: ModelTier;
-  brainstormer?: ModelTier;
-  planner?: ModelTier;
-  "plan-design"?: ModelTier;
-  "plan-devex"?: ModelTier;
 }
 
-/**
- * Specialist ids (live + research helpers) that {@link DEFAULT_MODEL_PREFERENCES}
- * carries an explicit tier for. Tighter than `keyof ModelPreferences` because
- * the legacy keys are not part of the default mapping.
- */
-export type ModelPreferenceKey =
-  | SpecialistId
-  | "learnings-research"
-  | "repo-research";
-
-/**
- * Default model-tier policy shipped with v8.87. Reference: obra's
- * `subagent-driven-development` model-selection block — fast tiers run
- * the cheap, fast, high-throughput cycles (slice-builder cycles,
- * research helpers); powerful runs the deep adversarial work; everything
- * else runs at the balanced mid-tier.
- *
- * Specialists are identified by their v8.62 live ids (the v8.13-era
- * `slice-builder` alias is back-compat only — its tier intent is
- * inherited by `builder`).
- *
- * The mapping is FROZEN at construction so test mutations can't
- * silently corrupt the default at the module level.
- *
- * ## Two-source-of-truth pattern (v8.87 + v8.94)
- *
- * The cclaw orchestrator's LLM consumer reads this policy via a mirrored
- * markdown table in the on-demand `dispatch-envelope` runbook (see
- * `## Model-tier hint (v8.87)` in
- * {@link ../content/runbooks-on-demand.ts}). That runbook table is the
- * LLM-facing canonical source — when the orchestrator stamps the
- * `Model tier:` line on a dispatch envelope, it looks at the runbook
- * table, not at this TypeScript constant.
- *
- * This TS constant exists for FUTURE programmatic callers that need to
- * resolve a tier without going through the LLM — e.g. a CI harness that
- * pre-validates `.cclaw/config.yaml > modelPreferences`, or a future
- * non-LLM dispatcher. As of v8.94 no production module imports
- * {@link resolveModelPreferences} or {@link modelTierFor}; the helpers
- * are intentionally kept available so the next caller doesn't re-derive
- * the policy from scratch.
- *
- * The two surfaces (this constant + the runbook table) are pinned to
- * identical values by the `tests/unit/v894-model-tier-sync.test.ts`
- * tripwire. Editing one without the other fails the build.
- */
-export const DEFAULT_MODEL_PREFERENCES: Readonly<
-  Record<ModelPreferenceKey, ModelTier>
-> = Object.freeze({
-  // fast — short-context, high-throughput cycles.
-  builder: "fast",
-  "learnings-research": "fast",
-  "repo-research": "fast",
-
-  // balanced — routine mid-tier specialists.
-  triage: "balanced",
-  investigator: "balanced",
-  architect: "balanced",
-  "plan-critic": "balanced",
-  "qa-runner": "balanced",
-  reviewer: "balanced",
-
-  // powerful — adversarial / high-stakes review.
-  critic: "powerful"
-});
-
-/**
- * Merge user-supplied {@link ModelPreferences} (from `.cclaw/config.yaml`)
- * onto {@link DEFAULT_MODEL_PREFERENCES}. User entries override defaults
- * field-by-field; absent fields keep their default. Values that don't
- * match {@link MODEL_TIERS} (typos, wrong types) are silently dropped so
- * the default tier survives — out-of-range tiers are a config error, not
- * a runtime crash.
- *
- * The result is always a `Required<Record<ModelPreferenceKey, ModelTier>>`
- * so downstream readers never have to handle the absent case.
- *
- * Audience: programmatic callers that need to resolve the merged tier
- * policy without prompting the LLM. The production orchestrator does NOT
- * call this — it reads the policy via the mirrored runbook table in
- * `runbooks-on-demand.ts` (see {@link DEFAULT_MODEL_PREFERENCES} for the
- * two-source-of-truth rationale). The two surfaces are pinned to
- * identical values by `tests/unit/v894-model-tier-sync.test.ts`, so this
- * helper stays usable for future callers (e.g. a CI validator that
- * pre-checks `.cclaw/config.yaml > modelPreferences` against the policy)
- * without diverging from what the LLM reads.
- */
-export function resolveModelPreferences(
-  config: CclawConfig | null | undefined
-): Record<ModelPreferenceKey, ModelTier> {
-  const merged: Record<ModelPreferenceKey, ModelTier> = {
-    ...DEFAULT_MODEL_PREFERENCES
-  };
-  const user = config?.modelPreferences;
-  if (!user || typeof user !== "object") return merged;
-  for (const key of Object.keys(DEFAULT_MODEL_PREFERENCES) as ModelPreferenceKey[]) {
-    const raw = (user as Record<string, unknown>)[key];
-    if (typeof raw === "string" && (MODEL_TIERS as readonly string[]).includes(raw)) {
-      merged[key] = raw as ModelTier;
-    }
-  }
-  return merged;
-}
-
-/**
- * Resolve the tier for one specialist id, applying the v8.62 legacy-alias
- * collapse for `slice-builder` → `builder`. Returns `undefined` if the
- * specialist isn't covered by the default policy AND the user hasn't
- * overridden it (so dispatchers can omit the hint and fall back to the
- * harness default).
- *
- * The collapse rule: a user config that still uses the v8.13-era
- * `slice-builder` key is read as a `builder` override ONLY when no
- * explicit `builder` key is set. An explicit `builder` value always
- * wins, even when both are present.
- *
- * Audience: same as {@link resolveModelPreferences} — programmatic
- * callers that need a single specialist's tier without round-tripping
- * through the LLM. As of v8.94 the production orchestrator stamps the
- * tier via the runbook-table mirror in `runbooks-on-demand.ts`, not by
- * calling this helper. The TS surface and the runbook table are pinned
- * by `tests/unit/v894-model-tier-sync.test.ts`, so adopting this helper
- * later (e.g. for a non-LLM dispatcher) needs no policy re-derivation.
- */
-export function modelTierFor(
-  specialist: ModelPreferenceKey | "slice-builder",
-  config: CclawConfig | null | undefined
-): ModelTier | undefined {
-  const resolved = resolveModelPreferences(config);
-  if (specialist === "slice-builder") {
-    const user = config?.modelPreferences as
-      | Record<string, unknown>
-      | undefined;
-    const explicitBuilder = user?.["builder"];
-    if (
-      typeof explicitBuilder === "string" &&
-      (MODEL_TIERS as readonly string[]).includes(explicitBuilder)
-    ) {
-      return explicitBuilder as ModelTier;
-    }
-    const legacy = user?.["slice-builder"];
-    if (
-      typeof legacy === "string" &&
-      (MODEL_TIERS as readonly string[]).includes(legacy)
-    ) {
-      return legacy as ModelTier;
-    }
-    return resolved.builder;
-  }
-  return resolved[specialist as ModelPreferenceKey];
-}
-
-/**
- * design phase tunables. Optional block in `.cclaw/config.yaml`;
- * every field is independently optional and falls back to a documented
- * default when absent. The block exists so the ambiguity-threshold
- * knob has a typed home (we do NOT want orchestrator prompts reaching
- * for free-form `unknown` keys).
- */
 /**
  * Pre-plan clarify-phase tunables (v8.67). Optional block in
  * `.cclaw/config.yaml`; every field is independently optional and
@@ -390,90 +191,6 @@ export interface CclawConfig {
    * can land here without churning the top-level schema.
    */
   critic?: CriticConfig;
-}
-
-/**
- * Default pre-plan clarify-threshold used when
- * `.cclaw/config.yaml > clarify.ambiguity_threshold` is absent or
- * out-of-range. Integer in `[0, 100]`; mirrors the v8.67 spec's
- * default of 60 (triage scores >= 60 open the architect's Clarify
- * phase on non-inline paths).
- */
-export const DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD = 60;
-
-/**
- * read the configured pre-plan clarify threshold with the documented
- * fallback. Returns {@link DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD} when
- * the config is absent, the `clarify` block is missing, the field is
- * absent, or the configured value is not a finite number in
- * `[0, 100]`. Out-of-range values fall back silently at read time;
- * downstream specialists may surface a one-line note when they
- * notice the misconfig.
- */
-export function clarifyAmbiguityThresholdOf(
-  config: CclawConfig | null | undefined
-): number {
-  const raw = config?.clarify?.ambiguity_threshold;
-  if (typeof raw !== "number" || !Number.isFinite(raw)) {
-    return DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD;
-  }
-  if (raw < 0 || raw > 100) return DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD;
-  return raw;
-}
-
-/**
- * Default for `critic.cross_model` when the knob is absent or not a
- * boolean. Exposed as a const so tests + orchestrator readers share the
- * canonical value. v8.72 ships the knob OFF — opt-in by design so a
- * harness without an MCP cross-model tool wired doesn't surface the
- * "Cross-model unavailable: skipped" fallback on every critic dispatch.
- */
-export const DEFAULT_CRITIC_CROSS_MODEL = false;
-
-/**
- * Read the configured `critic.cross_model` knob with the documented
- * fallback. Returns {@link DEFAULT_CRITIC_CROSS_MODEL} (`false`) when
- * the config is absent, the `critic` block is missing, the field is
- * absent, or the value is not a boolean. The orchestrator combines
- * this value with the high-stakes detection + the `--critic-cross-model`
- * CLI flag to decide whether to stamp `crossModelCritic: true` in the
- * critic dispatch envelope.
- */
-export function criticCrossModelOf(config: CclawConfig | null | undefined): boolean {
-  const raw = config?.critic?.cross_model;
-  if (typeof raw !== "boolean") return DEFAULT_CRITIC_CROSS_MODEL;
-  return raw;
-}
-
-/**
- * Default for `critic.cross_model_min_context` when the knob is absent
- * or out-of-range. 16000 characters (~4k tokens at the 4-chars/token
- * estimate) — sized for the smallest second-opinion model context
- * window seen in the wild. v8.108 (F-1): pre-dispatch prompt-budget
- * check; the critic trims via priority-drop OR refuse-and-skip the
- * cross-model pass when the assembled prompt would silently truncate.
- */
-export const DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT = 16000;
-
-/**
- * Read the configured `critic.cross_model_min_context` knob with the
- * documented fallback. Returns
- * {@link DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT} when the config is
- * absent, the `critic` block is missing, the field is absent, or the
- * value is not a finite positive number. Negative / zero / non-finite
- * inputs silently fall back to the default — a misconfigured budget
- * would otherwise refuse every cross-model dispatch, which is louder
- * than a sane default and a one-line note in critic.md.
- */
-export function criticCrossModelMinContextOf(
-  config: CclawConfig | null | undefined
-): number {
-  const raw = config?.critic?.cross_model_min_context;
-  if (typeof raw !== "number" || !Number.isFinite(raw)) {
-    return DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT;
-  }
-  if (raw <= 0) return DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT;
-  return raw;
 }
 
 export function createDefaultConfig(harnesses: HarnessId[] = ["cursor"]): CclawConfig {

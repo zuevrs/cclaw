@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT,
-  criticCrossModelMinContextOf
-} from "../../src/config.js";
 import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/index.js";
 
 /**
@@ -21,61 +17,9 @@ import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/index.js";
  * The dispatch itself is LLM-executed (the critic specialist runs in a
  * sub-agent and reads these instructions verbatim from the prompt
  * body), so the tests below are tripwires on the prompt body's
- * declarations + the config helper's runtime contract — the same
- * shape as v8.72's existing cross-model gate tests in
- * `critic-specialist.test.ts`.
+ * declarations — the same shape as v8.72's existing cross-model gate
+ * tests in `critic-specialist.test.ts`.
  */
-
-describe("v8.108 F-1 — critic.cross_model_min_context config knob", () => {
-  it("BEHAVIOR — DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT is 16000 (chars; ~4k tokens at 4-chars/token) and criticCrossModelMinContextOf returns the default on absent/missing/invalid input, honours a positive number override, and rejects ≤0 / non-finite back to the default", () => {
-    expect(DEFAULT_CRITIC_CROSS_MODEL_MIN_CONTEXT).toBe(16000);
-
-    expect(criticCrossModelMinContextOf(null)).toBe(16000);
-    expect(criticCrossModelMinContextOf(undefined)).toBe(16000);
-    expect(criticCrossModelMinContextOf({} as never)).toBe(16000);
-    expect(criticCrossModelMinContextOf({ critic: {} } as never)).toBe(16000);
-    expect(
-      criticCrossModelMinContextOf({ critic: { cross_model: true } } as never)
-    ).toBe(16000);
-
-    expect(
-      criticCrossModelMinContextOf({
-        critic: { cross_model_min_context: 200000 }
-      } as never)
-    ).toBe(200000);
-    expect(
-      criticCrossModelMinContextOf({
-        critic: { cross_model_min_context: 32000 }
-      } as never)
-    ).toBe(32000);
-
-    expect(
-      criticCrossModelMinContextOf({
-        critic: { cross_model_min_context: 0 }
-      } as never)
-    ).toBe(16000);
-    expect(
-      criticCrossModelMinContextOf({
-        critic: { cross_model_min_context: -50 }
-      } as never)
-    ).toBe(16000);
-    expect(
-      criticCrossModelMinContextOf({
-        critic: { cross_model_min_context: Number.NaN }
-      } as never)
-    ).toBe(16000);
-    expect(
-      criticCrossModelMinContextOf({
-        critic: { cross_model_min_context: Number.POSITIVE_INFINITY }
-      } as never)
-    ).toBe(16000);
-    expect(
-      criticCrossModelMinContextOf({
-        critic: { cross_model_min_context: "16000" as unknown as number }
-      } as never)
-    ).toBe(16000);
-  });
-});
 
 describe("v8.108 F-1 — critic prompt declares pre-dispatch budget awareness in §3.5", () => {
   const sectionIdx = CRITIC_PROMPT.indexOf("§3.5. Cross-model second opinion");

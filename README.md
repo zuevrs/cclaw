@@ -2,7 +2,7 @@
 
 **A multi-stage planning + review harness for coding agents.**
 
-Drops `/cc` into Claude Code, Cursor, OpenCode, and Codex. Every task flows through `triage → plan → build → review → critic → ship`. Two reviewers run in series — a read-only walk over 14 axes, then an adversarial critic that falsifies what the reviewer cleared. Independent slices run in parallel worktrees. Sub-agents stay isolated; the orchestrator keeps the slug's history. Always-auto: no "approve this?" pickers between stages. Resume with `/cc`, discard with `/cc-cancel`.
+Drops `/cc` into Claude Code, Cursor, OpenCode, and Codex. Every task flows through `triage → plan → build → review → critic → ship`. Two reviewers run in series — a read-only walk over 9 axes, then an adversarial critic that falsifies what the reviewer cleared. Independent slices run in parallel worktrees. Sub-agents stay isolated; the orchestrator keeps the slug's history. Always-auto: no "approve this?" pickers between stages. Resume with `/cc`, discard with `/cc-cancel`.
 
 ## Install
 
@@ -88,7 +88,7 @@ Triage announces its auto-pick in one line before the first specialist runs, so 
 | `compoundRefreshEvery` | `5` | Run the compound-refresh sub-step every Nth capture (T2-4 everyinc). Set to `0` to disable. |
 | `compoundRefreshFloor` | `10` | Minimum `knowledge.jsonl` entries the floor gate requires before compound-refresh fires. Belt-and-braces with `compoundRefreshEvery`. |
 | `captureLearningsBypass` | `false` | Skip the learnings hard-stop structured-ask in CI / autonomous pipelines that can't surface an interruption. |
-| `modelPreferences.<specialist>` | per-specialist (see `src/config.ts` `DEFAULT_MODEL_PREFERENCES`) | Tier hint (`fast` / `balanced` / `powerful`) passed through to the harness's model router on dispatch. |
+| `modelPreferences.<specialist>` | per-specialist | Tier hint (`fast` / `balanced` / `powerful`) passed through to the harness's model router on dispatch. |
 | `clarify.ambiguity_threshold` | `60` | `triage.ambiguityScore >= this` AND `ceremonyMode != "inline"` opens the architect's Clarify phase before Bootstrap. Integer in `[0, 100]`. |
 | `critic.cross_model` | `false` | Opt-in second adversarial critic pass via a different model through an available MCP cross-model tool (Codex / Gemini / etc.) on high-stakes slugs. |
 | `critic.cross_model_min_context` | `16000` | Minimum char budget the second-opinion model needs before the critic dispatches; below this the critic refuse-and-skip path fires (v8.108 §3.5 priority-drop). |
@@ -117,7 +117,7 @@ The runtime is < 1 KLOC; behaviour lives in prompt content under `src/content/`.
 
 - [`src/content/start-command.ts`](src/content/start-command.ts) — orchestrator body (detect, dispatch, ship, compound)
 - [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 8 specialist contracts (`triage`, `investigator`, `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`)
-- [`src/content/skills/`](src/content/skills/) — 34 auto-trigger skills loaded per stage
+- [`src/content/skills/`](src/content/skills/) — 32 auto-trigger skills loaded per stage
 - [`src/content/research-lenses/`](src/content/research-lenses/) — 6 research lenses dispatched on `/cc research`
 - [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 28 on-demand runbooks loaded by trigger
 - [`src/content/artifact-templates.ts`](src/content/artifact-templates.ts) — plan / build / qa / review / critic / ship templates

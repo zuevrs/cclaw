@@ -23,7 +23,7 @@ Stages: `plan` (plan-critic dispatch), `review` (post-impl critic dispatch), `qa
 
 - **Triage** — the router's job is to classify, not to enumerate failure modes. Pre-commitment predictions would slow the dispatch without surfacing actionable signal.
 - **Builder** — the builder TDDs against the AC; the RED test IS the prediction (a structured "this case should fail until I implement it"). Adding a parallel `## Pre-commitment predictions` section inside builder.ts would double-write the same discipline against a different surface.
-- **Reviewer** — the reviewer walks the fourteen-axis pass; that IS the structured walk. Pre-commitment predictions would compete with the per-axis findings table rather than augment it.
+- **Reviewer** — the reviewer walks the nine-axis pass; that IS the structured walk. Pre-commitment predictions would compete with the per-axis findings table rather than augment it.
 - **Ship synthesis / compound layer** — both are after-the-fact aggregations, not adversarial passes.
 
 ## Hard rules
@@ -75,4 +75,4 @@ Each prediction's outcome is recorded inline in the §1 / §3 / §6 block:
 
 ## Cross-references
 
-The discipline is sourced from the **OMC pattern** (`oh-my-claudecode/agents/critic.md:58-60`) — "predicting forces deliberate search rather than passive reading" — and dovetails with cclaw's existing **structured-status** discipline (every adversarial pass emits a structured verdict; pre-commitment predictions are the structured *input* into that verdict). The §7 verdict's "Predictions:" line is the canonical aggregation surface; downstream specialists (plan-critic, post-impl critic, qa-runner) read it as input to their own §1 / §3 / §6 passes.
+The discipline is sourced from the **OMC pattern** (`oh-my-claudecode/agents/critic.md:58-60`) — "predicting forces deliberate search rather than passive reading" — and dovetails with cclaw's existing **summary-format** status discipline (every adversarial pass emits a structured verdict; pre-commitment predictions are the structured *input* into that verdict). The §7 verdict's "Predictions:" line is the canonical aggregation surface; downstream specialists (plan-critic, post-impl critic, qa-runner) read it as input to their own §1 / §3 / §6 passes.

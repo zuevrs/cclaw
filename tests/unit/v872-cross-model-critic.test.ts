@@ -9,12 +9,7 @@ import {
   START_COMMAND_BODY,
   renderStartCommand
 } from "../../src/content/start-command.js";
-import {
-  DEFAULT_CRITIC_CROSS_MODEL,
-  criticCrossModelOf,
-  type CclawConfig,
-  type CriticConfig
-} from "../../src/config.js";
+import { type CclawConfig, type CriticConfig } from "../../src/config.js";
 
 /**
  * v8.72 — Cross-model second opinion in critic. Slimmed in v8.99
@@ -25,7 +20,7 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..
 const CRITIC_TEMPLATE_BODY = ARTIFACT_TEMPLATES.find((t) => t.id === "critic")!.body;
 
 describe("v8.72 — cross-model critic wiring (config knob + CLI flag + version)", () => {
-  it("WIRING — CriticConfig accepts cross_model: boolean; CclawConfig admits a critic block; DEFAULT_CRITIC_CROSS_MODEL = false (opt-in by design); criticCrossModelOf returns default on null/undefined/missing-critic/missing-cross_model/non-boolean input and the configured value when set explicitly; CLI src/cli.ts HELP_NOTES documents --critic-cross-model + 'Cross-model unavailable: skipped' + 'critic.cross_model'; package.json ≥8.72 + CHANGELOG carries v8.72+ entry with cross-model + --critic-cross-model + MCP citations", async () => {
+  it("WIRING — CriticConfig accepts cross_model: boolean; CclawConfig admits a critic block; CLI src/cli.ts HELP_NOTES documents --critic-cross-model + 'Cross-model unavailable: skipped' + 'critic.cross_model'; package.json ≥8.72 + CHANGELOG carries v8.72+ entry with cross-model + --critic-cross-model + MCP citations", async () => {
     // Config knob
     const a: CriticConfig = { cross_model: false };
     const b: CriticConfig = { cross_model: true };
@@ -40,45 +35,6 @@ describe("v8.72 — cross-model critic wiring (config knob + CLI flag + version)
       critic: { cross_model: true }
     };
     expect(cfgFull.critic?.cross_model).toBe(true);
-    expect(DEFAULT_CRITIC_CROSS_MODEL).toBe(false);
-    expect(criticCrossModelOf(null)).toBe(DEFAULT_CRITIC_CROSS_MODEL);
-    expect(criticCrossModelOf(undefined)).toBe(DEFAULT_CRITIC_CROSS_MODEL);
-    expect(
-      criticCrossModelOf({ version: "8.72.0", flowVersion: "8", harnesses: ["cursor"] })
-    ).toBe(DEFAULT_CRITIC_CROSS_MODEL);
-    expect(
-      criticCrossModelOf({
-        version: "8.72.0",
-        flowVersion: "8",
-        harnesses: ["cursor"],
-        critic: {}
-      })
-    ).toBe(DEFAULT_CRITIC_CROSS_MODEL);
-    expect(
-      criticCrossModelOf({
-        version: "8.72.0",
-        flowVersion: "8",
-        harnesses: ["cursor"],
-        critic: { cross_model: true }
-      })
-    ).toBe(true);
-    expect(
-      criticCrossModelOf({
-        version: "8.72.0",
-        flowVersion: "8",
-        harnesses: ["cursor"],
-        critic: { cross_model: false }
-      })
-    ).toBe(false);
-    expect(
-      criticCrossModelOf({
-        version: "8.72.0",
-        flowVersion: "8",
-        harnesses: ["cursor"],
-        // @ts-expect-error — intentional bad input
-        critic: { cross_model: "true" }
-      })
-    ).toBe(DEFAULT_CRITIC_CROSS_MODEL);
 
     // CLI HELP_NOTES
     const cliBody = await fs.readFile(path.join(REPO_ROOT, "src/cli.ts"), "utf8");

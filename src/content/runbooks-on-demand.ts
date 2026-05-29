@@ -62,9 +62,8 @@ function readRunbook(fileName: string): string {
  * paste into a live reviewer dispatch envelope.
  *
  * The cached table covers the top three traffic shapes only. Other
- * shapes — `default-on anti-slop only`, `security-sensitive`,
- * `NFR-bearing`, `every gate flag set`, and `anti-slop explicitly
- * disabled` — are derived on-demand by the orchestrator via the on-disk
+ * shapes — `security-sensitive`, `NFR-bearing`, and `every gate flag
+ * set` — are derived on-demand by the orchestrator via the on-disk
  * reviewer.md superset (fall-back rule documented below). The fall-back
  * path is the same
  * `buildAutoTriggerBlock(stage, gateEnvelope)` runtime that
@@ -85,31 +84,25 @@ const REVIEWER_DISPATCH_ENVELOPES: ReadonlyArray<{
     label: "no flags — empty envelope",
     envelope: {},
     notes:
-      "Every surface-driven gated axis filtered out (qa-evidence / design-quality / security / nfr-compliance / edit-discipline / scope-drift / assumption-coverage). Anti-slop still fires per the default-on contract (`walkAntiSlopAxis !== false` — `undefined` opens the gate). Reviewer renders correctness / test-quality / readability / architecture / complexity-budget / perf / always-on stage skills plus the anti-slop axis. Only fires in practice on doc-only ceremony=soft slugs or as the structural baseline when the orchestrator has not yet stamped surface-driven flags."
+      "Every surface-driven gated axis filtered out (qa-evidence / design-quality / security / nfr-compliance / edit-discipline). Reviewer renders the six base axes (correctness / readability / architecture / security / perf / edit-discipline) plus the always-on stage skills; no gated-axis companion-skill pointers are pinned. Only fires in practice on doc-only ceremony=soft slugs or as the structural baseline when the orchestrator has not yet stamped surface-driven flags."
   },
   {
-    label: "strict-mode baseline — anti-slop + edit-discipline + scope-drift + assumption-coverage",
+    label: "strict-mode baseline — edit-discipline",
     envelope: {
-      walkAntiSlopAxis: true,
-      editDisciplineActive: true,
-      walkScopeDriftAxis: true,
-      walkAssumptionCoverageAxis: true
+      editDisciplineActive: true
     },
     notes:
-      "Canonical strict-mode reviewer dispatch envelope on a plan that respects plan-critic §6.5 (Not-Doing section non-empty) and the Key-assumptions-to-validate requirement (section non-empty). edit-discipline always fires in strict / soft. Highest-traffic shape across the corpus."
+      "Canonical strict-mode reviewer dispatch envelope on a plan that respects plan-critic §6.5 (Not-Doing section non-empty). edit-discipline always fires in strict / soft and now carries the folded Not-Doing scope-drift cross-reference. (The orchestrator may also stamp `walkScopeDriftAxis` / `walkAssumptionCoverageAxis` as plan-state signals for the Not-Doing fold + assumption-validation subsystem, but neither pins an additional companion skill.) Highest-traffic shape across the corpus."
   },
   {
     label: "UI / design slug — qa-evidence + design-quality stacked on the strict baseline",
     envelope: {
-      walkAntiSlopAxis: true,
       editDisciplineActive: true,
-      walkScopeDriftAxis: true,
-      walkAssumptionCoverageAxis: true,
       walkQaEvidenceAxis: true,
       walkDesignQualityAxis: true
     },
     notes:
-      "Strict-mode UI slug — `triage.surfaces` ∩ {ui, web} ≠ ∅ AND `triage.designSurface == true`. The two surface-driven gates ride on top of the strict-mode baseline. Other shapes (security-sensitive, NFR-bearing, every-gate, anti-slop-disabled) derive on-demand via the on-disk reviewer.md static superset fall-back path; see the fall-back rules table below."
+      "Strict-mode UI slug — `triage.surfaces` ∩ {ui, web} ≠ ∅ AND `triage.designSurface == true`. The two surface-driven gates ride on top of the strict-mode baseline. Other shapes (security-sensitive, NFR-bearing, every-gate) derive on-demand via the on-disk reviewer.md static superset fall-back path; see the fall-back rules table below."
   }
 ];
 
@@ -161,15 +154,9 @@ function renderDispatchSkillsIndexRunbook(): string {
 
 The orchestrator opens this runbook when authoring any reviewer dispatch envelope (and, by extension, any specialist dispatch whose target stage carries gated axis skills).
 
-## Why this runbook exists
-
-The on-disk \`.cclaw/lib/agents/<specialist>.md\` files embed a STATIC skills-pointer block produced at install time by \`buildAutoTriggerBlock(stage)\` (single-arg). That block is the SUPERSET of every stage-scoped skill — including all eight reviewer-stage gated axes (\`qa-evidence\` / \`design-quality\` / \`security\` / \`nfr-compliance\` / \`edit-discipline\` / \`scope-drift\` / \`assumption-coverage\` / \`anti-slop\`). The static block does NOT know about the per-dispatch envelope flags the orchestrator computes from triage / plan state — so a reviewer sub-agent reading only \`agents/reviewer.md\` would treat every gated axis as in-scope, regardless of whether the gate actually fires for THIS slug.
-
-The orchestrator's dispatch envelope, NOT the on-disk static prompt, is the source of truth for which gated axes fire on THIS dispatch. The envelope carries the live \`walkXAxis: true | false\` flags; this runbook is the pre-rendered table of which skill pointers belong on the reviewer for each canonical envelope shape.
-
 ## How to use this runbook
 
-1. **Construct the reviewer dispatch envelope normally** — \`Stage: review\`, \`Slug: <slug>\`, \`Ceremony mode: <inline | soft | strict>\`, plus the gate flags the orchestrator already stamps per \`start-command.md > Review hop\` (\`securityFlag\`, \`walkDesignQualityAxis\`, \`walkScopeDriftAxis\`, \`walkAssumptionCoverageAxis\`, \`walkAntiSlopAxis\`, \`walkQaEvidenceAxis\`, \`planHasNonFunctional\`, \`editDisciplineActive\`).
+1. **Construct the reviewer dispatch envelope normally** — \`Stage: review\`, \`Slug: <slug>\`, \`Ceremony mode: <inline | soft | strict>\`, plus the gate flags the orchestrator already stamps per \`start-command.md > Review hop\` (\`securityFlag\`, \`walkDesignQualityAxis\`, \`walkScopeDriftAxis\`, \`walkAssumptionCoverageAxis\`, \`walkQaEvidenceAxis\`, \`planHasNonFunctional\`, \`editDisciplineActive\`).
 2. **Look up the matching shape below** by comparing the envelope's flag set against the **Envelope flags** JSON in each section. When the envelope is a strict subset of one of the tabulated shapes' flags, use that shape's **Rendered block** verbatim. When the envelope flags don't match any tabulated shape (a rare combination), fall back to: (a) the on-disk \`agents/reviewer.md\` static superset (correct but token-wasteful), OR (b) regenerate the block at orchestrator time by walking the \`AUTO_TRIGGER_SKILLS\` table in \`src/content/skills.ts\` and applying each skill's gate predicate against the envelope.
 3. **Paste the **Rendered block** into the reviewer dispatch envelope** as an \`Active skills (per envelope):\` field, positioned IMMEDIATELY after the required-reads block and BEFORE the inputs/output-contract block (so the sub-agent reads the gate-resolved slice before it interprets \`agents/reviewer.md\`'s superset). The sub-agent treats this field as authoritative; the on-disk \`agents/reviewer.md\` superset is a fall-back hint when the dispatch envelope omits the field entirely (legacy envelopes).
 4. **The skill-body claims in \`reviewer-axis-*.md\` are accurate.** The per-skill \`## When to use\` paragraphs name "the orchestrator's dispatch envelope carries the \`walkXAxis\` flag". The function is called at INSTALL time, not at dispatch time, and the call happens here (the dispatch-skills-index runbook composer in \`src/content/runbooks-on-demand.ts\`), not from any runtime orchestrator code.
@@ -180,12 +167,12 @@ ${sections}
 
 ## Fall-back rules
 
-the cached fast-path table above lists the three highest-traffic shapes only (no-flags / strict-baseline / UI+design). Other shapes (security-sensitive, NFR-bearing, every-gate, anti-slop-disabled, default-on-anti-slop-only) derive on-demand via the rules below; semantic correctness is preserved because the on-disk \`agents/reviewer.md\` is the static superset of every gated axis and \`buildAutoTriggerBlock(stage, gateEnvelope)\` is the same runtime the cached entries wrap.
+the cached fast-path table above lists the three highest-traffic shapes only (no-flags / strict-baseline / UI+design). Other shapes (security-sensitive, NFR-bearing, every-gate) derive on-demand via the rules below; semantic correctness is preserved because the on-disk \`agents/reviewer.md\` is the static superset of every gated axis and \`buildAutoTriggerBlock(stage, gateEnvelope)\` is the same runtime the cached entries wrap.
 
 | envelope condition | what to do |
 | --- | --- |
 | matches one of the three cached shapes above | use that shape's **Rendered block** verbatim |
-| every gate flag is unset / \`false\` AND \`walkAntiSlopAxis\` is not explicitly \`true\` | use the **no flags — empty envelope** section; expect zero gated-axis pointers in the rendered block |
+| every gate flag is unset / \`false\` | use the **no flags — empty envelope** section; expect zero gated-axis pointers in the rendered block |
 | envelope carries a combination not in the cached three | fall back to the on-disk \`agents/reviewer.md\` static superset (token-wasteful but correct — the reviewer sub-agent reads the superset as a hint when no \`Active skills (per envelope):\` field is set); OR derive the block at orchestrator time by walking \`AUTO_TRIGGER_SKILLS\` in \`src/content/skills.ts\` and applying each skill's gate predicate against the envelope (this is what \`buildAutoTriggerBlock(stage, gateEnvelope)\` does internally) |
 
 ## Symmetry note for non-reviewer stages
@@ -229,14 +216,14 @@ Dispatch <specialist>
 
 ## Model-tier hint
 
-Every envelope carries a \`Model tier:\` line. The orchestrator computes the tier by merging \`.cclaw/config.yaml > modelPreferences\` onto the default policy (see \`src/config.ts > DEFAULT_MODEL_PREFERENCES\`):
+Every envelope carries a \`Model tier:\` line. The orchestrator computes the tier by merging \`.cclaw/config.yaml > modelPreferences\` onto the per-specialist default policy below:
 
 | Specialist | Default tier |
 | --- | --- |
 | \`builder\` (formerly \`slice-builder\`) | \`fast\` |
 | \`learnings-research\` / \`repo-research\` | \`fast\` |
 | \`triage\` / \`investigator\` / \`architect\` | \`balanced\` |
-| \`plan-critic\` (all three rubric modes — generic / design / devex) | \`balanced\` |
+| \`plan-critic\` (single dispatch, all rubrics — generic / design / devex) | \`balanced\` |
 | \`qa-runner\` / \`reviewer\` | \`balanced\` |
 | \`critic\` | \`powerful\` |
 
@@ -448,10 +435,6 @@ Open this runbook **only at ship gate after a fix-only loop landed commits that 
 - a fix-only loop has landed at least one commit since that adversarial run, AND
 - the diff of those fix-only commits intersects the file:line set named in the prior adversarial findings.
 
-## Why this rerun matters
-
-The principle: a fix to an adversarially-flagged hot path is itself a hot-path change, and the original adversarial pass cannot have foreseen the fix. The marginal value of "re-look at the fix" exceeds the cost of one more adversarial pass when (and only when) the fix lands on a previously-flagged hot path.
-
 ## Behaviour when the trigger fires
 
 When the trigger fires, the ship-gate parallel fan-out includes \`reviewer mode=adversarial\` again (alongside release + security if applicable). When it does not fire, adversarial runs once per slug as before.
@@ -560,7 +543,7 @@ The hint mechanics:
 - **One line, plain prose** in the user's language (the mechanical tokens \`/cc patch\`, \`<slug>\`, and \`<description>\` stay English — they're the wire protocol).
 - **Always emitted** on a clean ship — every finalization mode (merge / open-PR / push-only / discard-local / no-vcs) surfaces the same hint. The hint is non-coercive informational text; it does NOT block, does NOT add a structured ask, does NOT consume an iteration of the chain.
 - **Substitute \`<slug>\` for the just-shipped slug** when rendering the hint to the user — the literal slug (\`20260514-auth-flow\`) lands in the prose so the user can copy-paste the suggestion verbatim. \`<description>\` stays as a placeholder.
-- **Patch-mode trade-off**: patch-mode skips triage, architect, plan-critic (all three rubric modes — generic / design / devex), qa, critic, and the ship-gate ask. The full runbook (\`runbooks/patch-mode.md\`) names the four "when NOT to use patch-mode" conditions (≥3 files, new AC, schema/migration/auth/public-API wording, full reviewer pass needed); the user reaches for \`/cc extend\` instead in those cases.
+- **Patch-mode trade-off**: patch-mode skips triage, architect, plan-critic (all rubrics — generic / design / devex), qa, critic, and the ship-gate ask. The full runbook (\`runbooks/patch-mode.md\`) names the four "when NOT to use patch-mode" conditions (≥3 files, new AC, schema/migration/auth/public-API wording, full reviewer pass needed); the user reaches for \`/cc extend\` instead in those cases.
 
 The hint exists so post-ship "tiny tweak" tasks have a frictionless entry point. Dogfooded slugs routinely paid the full ceremony cost on 2-line follow-ups; surfacing the patch-mode option immediately after ship is the cheapest place to teach the user the fork exists.
 
@@ -590,7 +573,7 @@ The adversarial reviewer treats every "not covered" as a finding (axis varies; s
 | block | any | block → fix-only loop |
 | clear | warn | warn → render adversarial findings, ask user |
 
-The \`security\` axis is one of the reviewer's fourteen axes (absorbed the former \`security-reviewer\` specialist). A \`block\`-severity finding on \`security\` is handled the same as a \`block\` on any other axis — block → fix-only loop. \`security_flag: true\` in plan frontmatter forces the reviewer to walk the security axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) regardless of which surfaces the diff touched.
+The \`security\` axis is one of the reviewer's nine axes (absorbed the former \`security-reviewer\` specialist). A \`block\`-severity finding on \`security\` is handled the same as a \`block\` on any other axis — block → fix-only loop. \`security_flag: true\` in plan frontmatter forces the reviewer to walk the security axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) regardless of which surfaces the diff touched.
 
 The adversarial pass runs **once per ship attempt**, not iteratively. If it produces \`block\`-level findings, the orchestrator dispatches \`builder\` mode=\`fix-only\` and re-runs the **regular** reviewer (mode=\`code\`) to confirm the fix; the adversarial pass does not re-run unless the user explicitly requests it (the marginal value drops fast on second run). For the conditional rerun rule on fix-only hot-path commits, see \`adversarial-rerun.md\`.
 
@@ -600,10 +583,6 @@ In \`soft\` mode the adversarial pass is **skipped** by default — the lighter-
 const HANDOFF_ARTIFACTS = `# On-demand runbook — handoff artifacts (HANDOFF.json + .continue-here.md)
 
 Open this runbook **after every stage exit** — at the end of plan / build / review / ship. The unified flow runs the entire plan stage as a single architect dispatch (no Phase 7 sign-off; no Phase 1 Clarify pause); the architect's dispatch return is the stage exit for plan. HANDOFF.json is for resume-across-sessions checkpoints, not for intra-dispatch checkpoints.
-
-## Why two files
-
-\`HANDOFF.json\` is what the orchestrator's resume step reads to rebuild dispatch context; \`.continue-here.md\` is what the user reads to remember what they were doing — possibly days later when they reopen a stale flow. The dot-prefix on \`.continue-here.md\` keeps it out of casual file-listing noise but keeps it readable when the user grep's for "continue".
 
 ## HANDOFF.json schema
 
@@ -752,8 +731,8 @@ The orchestrator opens this runbook on every chain decision after a specialist r
 | plan-critic \`verdict: cancel\` OR \`verdict: revise\` after iter 1 | Stop and report. The plan-critic believes the plan is structurally broken (cancel) or the revise loop hit the iteration cap (revise iter 1). |
 | qa-runner \`verdict: blocked\` OR \`verdict: iterate\` after iter 1 | Stop and report. Browser tooling unavailable / manual steps required (blocked) or qa iterate loop hit the iteration cap (iterate iter 1). |
 | reviewer \`status: cap-reached\` (5th review/fix iteration without convergence) | Stop and report. See \`runbooks/cap-reached-recovery.md\` for the split-plan procedure. |
-| builder \`Status: NEEDS_CONTEXT\` | **Stop and report.** The builder identified a specific missing input (file, symbol, decision the plan doesn't pin) and self-rescue didn't close the gap. Status block surfaces the \`Notes:\` line verbatim so the user can see exactly what is missing. On \`/cc\` continue, the orchestrator re-dispatches the builder with the new context (typically the user edited \`CONTEXT.md\` or \`plan.md > ## Assumptions\` between the stop and the resume). No auto-retry — re-running on unchanged inputs produces the same status. See \`.cclaw/lib/skills/structured-status.md\` for the per-slice loop + aggregation rule. |
-| builder \`Status: BLOCKED\` | **Stop and report.** The builder hit an unresolvable obstacle (per-slice review failed its 2-attempt cap, posture mismatch, dependency cycle, surface conflict). Status block surfaces the \`Notes:\` line verbatim PLUS the builder's recommended resolution from a fixed set: \`provide more context\` / \`break the slice smaller\` / \`escalate to architect\` / \`accept and ship as-is\`. Orchestrator does NOT auto-retry. On \`/cc\` continue, the orchestrator resumes with the resolution applied (typically a \`plan.md\` edit, an architect re-dispatch, or a context addition). See \`.cclaw/lib/skills/structured-status.md\` § "BLOCKED" for triggering conditions. |
+| builder \`Status: NEEDS_CONTEXT\` | **Stop and report.** The builder identified a specific missing input (file, symbol, decision the plan doesn't pin) and self-rescue didn't close the gap. Status block surfaces the \`Notes:\` line verbatim so the user can see exactly what is missing. On \`/cc\` continue, the orchestrator re-dispatches the builder with the new context (typically the user edited \`CONTEXT.md\` or \`plan.md > ## Assumptions\` between the stop and the resume). No auto-retry — re-running on unchanged inputs produces the same status. See \`.cclaw/lib/skills/summary-format.md\` (Part II — Builder status protocol) for the per-slice loop + aggregation rule. |
+| builder \`Status: BLOCKED\` | **Stop and report.** The builder hit an unresolvable obstacle (per-slice review failed its 2-attempt cap, posture mismatch, dependency cycle, surface conflict). Status block surfaces the \`Notes:\` line verbatim PLUS the builder's recommended resolution from a fixed set: \`provide more context\` / \`break the slice smaller\` / \`escalate to architect\` / \`accept and ship as-is\`. Orchestrator does NOT auto-retry. On \`/cc\` continue, the orchestrator resumes with the resolution applied (typically a \`plan.md\` edit, an architect re-dispatch, or a context addition). See \`.cclaw/lib/skills/summary-format.md\` § "BLOCKED" for triggering conditions. |
 | builder \`Status: DONE_WITH_CONCERNS\` | **Proceed AND log.** The builder landed the work and the per-slice reviews passed, but the builder flagged forward-looking risks. Orchestrator appends a \`## Concerns\` section to \`build.md\` (one bullet per concern, copied verbatim from the slim summary's \`Notes:\` line + the build.md \`## Summary > Potential concerns\` bullets) and chains to the next stage. The reviewer reads \`## Concerns\` as additional finding seeds. No stop fires; the user sees the concerns in the slim summary. |
 
 ## Stop-and-report status block (uniform shape)
@@ -798,12 +777,12 @@ Catastrophic failures (git ops fail, sub-agent dispatch fail, file I/O fail) are
 
 ## Builder status protocol (structured status routing)
 
-The builder slim summary carries a structured \`Status:\` line from a fixed set: \`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`. The orchestrator routes each status deterministically per the matrix above; this section codifies the surface behaviour. The full skill body lives at \`.cclaw/lib/skills/structured-status.md\`.
+The builder slim summary carries a structured \`Status:\` line from a fixed set: \`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`. The orchestrator routes each status deterministically per the matrix above; this section codifies the surface behaviour. The full skill body lives at \`.cclaw/lib/skills/summary-format.md\` (Part II — Builder status protocol).
 
 ### Per-status orchestrator behaviour (deterministic)
 
 - **\`DONE\`** — chain to the next stage automatically. The slim summary surfaces verbatim to the user. No extra orchestrator action.
-- **\`DONE_WITH_CONCERNS\`** — append a \`## Concerns\` section to \`.cclaw/flows/<slug>/build.md\` (one bullet per concern, sourced from the slim summary's \`Notes:\` line + the build.md \`## Summary > Potential concerns\` bullets); chain to the next stage. The reviewer reads \`## Concerns\` as additional finding seeds. The aggregation invariant is monotone (see \`structured-status.md\` § "Aggregation rule"): if the dispatch-level Status is \`DONE_WITH_CONCERNS\`, at least one per-slice block flagged a concern.
+- **\`DONE_WITH_CONCERNS\`** — append a \`## Concerns\` section to \`.cclaw/flows/<slug>/build.md\` (one bullet per concern, sourced from the slim summary's \`Notes:\` line + the build.md \`## Summary > Potential concerns\` bullets); chain to the next stage. The reviewer reads \`## Concerns\` as additional finding seeds. The aggregation invariant is monotone (see \`summary-format.md\` § "Status protocol — aggregation rule"): if the dispatch-level Status is \`DONE_WITH_CONCERNS\`, at least one per-slice block flagged a concern.
 - **\`NEEDS_CONTEXT\`** — emit the canonical stop-and-report status block (per the "Stop-and-report status block" shape above) with \`Reason: Builder NEEDS_CONTEXT — <Notes line verbatim>\`. The block surfaces the specific missing input (file, symbol, decision) in plain prose for the user. End the turn. On \`/cc\` continue, the orchestrator re-dispatches the builder with the new context in the envelope (typically the user edited \`CONTEXT.md\` or \`plan.md > ## Assumptions\` between the stop and the resume). On \`/cc-cancel\`, the cancel runtime runs as usual.
 - **\`BLOCKED\`** — emit the canonical stop-and-report status block with \`Reason: Builder BLOCKED — <Notes line verbatim>\`. The block ALSO surfaces the builder's recommended resolution as plain prose. End the turn. The orchestrator does NOT auto-retry; re-running the builder on unchanged inputs produces the same \`BLOCKED\` verdict. Recovery is \`/cc\` continue (after the user applies the recommended resolution — typically a \`plan.md\` edit, an architect re-dispatch, or a context addition) or \`/cc-cancel\` (discard).
 
@@ -863,39 +842,47 @@ Both stages ship together because they catch different problem classes — plan-
 
 ## Pre-implementation pass (plan-critic)
 
-The orchestrator opens this section **on every \`architect\` slim-summary return** when the gate evaluates to true. plan-critic is the pre-implementation adversarial specialist that runs between \`architect\` and \`builder\` on a tight subset of flows. It walks what is **missing or wrong** in the plan itself (goal coverage / granularity / dependency accuracy / parallelism feasibility / risk catalog + pre-commitment predictions) rather than the post-impl critic's "did we build the right thing well?" pass. The contract that drives the dispatch lives in \`.cclaw/lib/agents/plan-critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+The orchestrator opens this section **on every \`architect\` slim-summary return** when the gate evaluates to true. plan-critic is the pre-implementation adversarial specialist that runs between \`architect\` and \`builder\` on a tight subset of flows. It walks what is **missing or wrong** in the plan itself rather than the post-impl critic's "did we build the right thing well?" pass. plan-critic carries up to three **rubric scaffolds** — \`generic\` (structural plan shape), \`design\` (visual / accessibility / interaction), \`devex\` (SDK / API / CLI / library). The orchestrator computes the active \`rubrics\` set (each rubric independently gated, below) and dispatches plan-critic **ONCE**; the specialist walks every active rubric in one pass and returns ONE merged verdict (worst-of). The contract lives in \`.cclaw/lib/agents/plan-critic.md\`; this section covers what the orchestrator does *around* the single dispatch.
 
-### plan-critic gating (the four AND conditions — orchestrator enforces deterministically)
+### plan-critic gating (per-rubric gates; the dispatch fires when ANY rubric is active)
 
-plan-critic runs ONLY when ALL of these hold:
+The orchestrator computes the active \`rubrics\` set deterministically, then dispatches plan-critic ONCE iff the set is non-empty. Each rubric is independently gated:
+
+**\`generic\` rubric** (default; structural plan-shape audit) — active when ALL four hold:
 
 1. \`triage.ceremonyMode == "strict"\` (soft / inline plans don't carry the granularity surface to critique).
 2. \`triage.complexity != "trivial"\` (trivial flows have no plan stage; small-medium and large-risky plans are both eligible).
-3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs extend prior shipped work; the parent slug already shipped + survived its post-impl critic).
+3. \`triage.problemType\` ≠ \`"refines"\` (refines slugs extend prior shipped work; the parent already shipped + survived its post-impl critic).
 4. AC count ≥ 2 (a single-AC plan has no internal granularity / dependency surface).
 
-For any other combination, plan-critic is **structurally skipped**. The orchestrator advances directly from architect's slim summary to builder dispatch, as today. The gate is **AND** across all four; the widening dropped the prior \`complexity == "large-risky"\` requirement (reference patterns — chachamaru \`plan_critic\` runs on every Phase 0, gsd-v1 plan-checker runs across complexity tiers — showed cclaw's prior gate was the narrowest in the cohort and likely under-fired on strict small-medium flows; trivial flows still skipped because they have no plan to critique). Further widening any condition is a scope decision, not a within-slug runtime call.
+**\`design\` rubric** (visual / accessibility / interaction lens) — active when (\`triage.designSurface == true\` OR \`triage.surfaces\` ∩ {\`ui\`, \`design\`, \`frontend\`, \`ux\`} ≠ ∅) AND \`ceremonyMode ∈ {soft, strict}\` AND plan.md exists.
+
+**\`devex\` rubric** (SDK / API / CLI / library lens) — active when (\`triage.devexSurface == true\` OR \`triage.surfaces\` ∩ {\`cli\`, \`library\`, \`api\`} ≠ ∅) AND \`ceremonyMode ∈ {soft, strict}\` AND plan.md exists.
+
+When the active set is empty, plan-critic is **structurally skipped** — the orchestrator advances directly from architect's slim summary to builder dispatch. Widening any gate is a scope decision, not a within-slug runtime call.
 
 ### plan-critic dispatch envelope
 
 \`\`\`
 Dispatch plan-critic
-─ Required first read: .cclaw/lib/agents/plan-critic.md  (your contract — gate, 5-dimension protocol, verdict, slim summary)
+─ Required first read: .cclaw/lib/agents/plan-critic.md  (your contract — per-rubric gates, rubric protocol, merged verdict, slim summary)
 ─ Required second read: .cclaw/lib/anti-rationalizations.md  (catalog; the prompt body cites it)
 ─ Stage: plan-critic
 ─ Slug: <slug>
-─ Ceremony mode: strict  (gate enforces; always strict)
-─ AC count: <N>    (from plan.md frontmatter; ≥2 by gate)
-─ Iteration: <0 | 1>  (0 on first dispatch; 1 on the one allowed revise loop)
-─ Findings to address (iteration 1 only): <verbatim §8 hand-off block from the iter-0 plan-critic.md>
+─ Rubrics: [<active subset of generic / design / devex>]  (the set whose gates fired; non-empty by definition)
+─ Ceremony mode: <soft | strict>  (generic requires strict; design / devex allow soft)
+─ AC count: <N>    (from plan.md frontmatter; ≥2 when generic is active)
+─ Iteration: <0 | 1>  (0 on first dispatch; 1 on the one allowed revise loop — per dispatch, not per rubric)
+─ Findings to address (iteration 1 only): <verbatim §4 hand-off blocks of every non-passing rubric, concatenated generic → design → devex>
 ─ Inputs the sub-agent reads after the contract + catalog:
     - .cclaw/state/flow-state.json (triage)
     - .cclaw/flows/<slug>/plan.md (Frame, Spec, NFR, AC, Decisions, Pre-mortem, Topology)
     - .cclaw/lib/templates/plan-critic.md
     - CONTEXT.md at the project root, if it exists
 ─ Output contract:
-    - .cclaw/flows/<slug>/plan-critic.md (single-shot — overwrite on re-dispatch, no append-only ledger)
-    - return a slim summary block (≤7 lines)
+    - .cclaw/flows/<slug>/plan-critic.md (generic rubric — single-shot, overwrite on re-dispatch)
+    - append-only ## Plan-design findings / ## Plan-devex findings sections in plan.md (design / devex rubrics, when active)
+    - return a slim summary block (≤7 lines, one merged verdict across the active rubrics)
     - DO NOT mutate flow-state.json — only the orchestrator touches it
 ─ Forbidden:
     - edit plan.md / build.md / review.md / source / tests
@@ -903,25 +890,26 @@ Dispatch plan-critic
     - exceed 7k tokens (input + output combined; itself a finding when approached)
 \`\`\`
 
-### plan-critic verdict handling (slim summary → orchestrator routing)
+### plan-critic verdict handling (merged slim summary → orchestrator routing)
 
-The plan-critic returns one of three verdicts. The orchestrator branches on (verdict, iteration):
+The single dispatch returns ONE **merged verdict** — the worst-of across the active rubrics' sub-verdicts (\`cancel\` > \`block\` > \`revise\` > \`pass\`). The orchestrator branches on (merged verdict, iteration):
 
-| verdict | iteration | \`currentStage\` after | what the orchestrator does (always-auto) |
+| merged verdict | iteration | \`currentStage\` after | what the orchestrator does (always-auto) |
 | --- | --- | --- | --- |
-| \`pass\` | 0 or 1 | \`"plan"\` → advance to \`"build"\` | chain to builder dispatch. \`iterate\` and \`fyi\` rows in plan-critic.md ride along as advisory notes for builder + reviewer to see. |
-| \`revise\` | 0 | stays \`"plan"\`, \`lastSpecialist: "plan-critic"\` | dispatch \`architect\` again, with plan-critic.md §8 hand-off block prepended to the dispatch envelope's \`Inputs\` line. architect updates plan.md, then the orchestrator re-dispatches plan-critic (iteration 1). |
-| \`revise\` | 1 | stays \`"plan"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). The plan-critic revise loop hit the iteration cap; recovery via \`/cc\` (continue under a follow-up after the user edits plan.md or accepts the warnings) or \`/cc-cancel\` (discard). |
-| \`cancel\` | 0 or 1 | stays \`"plan"\` | stop and report (per \`runbooks/always-auto-failure-handling.md\`). \`cancel\` means the plan is structurally not buildable; recovery via \`/cc\` (continue after re-architecting) or \`/cc-cancel\` (discard). |
+| \`pass\` | 0 or 1 | \`"plan"\` → advance to \`"build"\` | chain to builder dispatch. \`iterate\` / \`fyi\` / \`low\` rows ride along as advisory notes for builder + reviewer. |
+| \`revise\` | 0 | stays \`"plan"\`, \`lastSpecialist: "plan-critic"\` | dispatch \`architect\` again, with every non-passing rubric's §4 hand-off block (concatenated generic → design → devex) prepended to the envelope \`Inputs\` line. architect updates plan.md, then the orchestrator re-dispatches plan-critic ONCE more (iteration 1, same \`rubrics\` set). |
+| \`revise\` | 1 | stays \`"plan"\` | stop and report (\`runbooks/always-auto-failure-handling.md\`). The revise loop hit the iteration cap; recovery via \`/cc\` (continue after the user edits plan.md or accepts the warnings) or \`/cc-cancel\` (discard). |
+| \`block\` | 0 or 1 | stays \`"plan"\` | stop and report. A \`design\` / \`devex\` rubric returned \`block\` (coherence failure that blocks ship); recovery via \`/cc\` (continue after re-architecting) or \`/cc-cancel\` (discard). |
+| \`cancel\` | 0 or 1 | stays \`"plan"\` | stop and report. The \`generic\` rubric found the plan structurally not buildable; recovery via \`/cc\` (continue after re-architecting) or \`/cc-cancel\` (discard). |
 
-**Confidence: low** in the plan-critic's slim summary stops and reports per the always-auto failure matrix (\`runbooks/always-auto-failure-handling.md\`). The plan-critic MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
+**Confidence: low** in the plan-critic's slim summary stops and reports per the always-auto failure matrix. The plan-critic MUST write a non-empty \`notes:\` line when confidence is not \`high\`; the orchestrator surfaces the Notes verbatim in the status block.
 
 ### plan-critic iteration cap enforcement
 
-- \`planCriticIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return.
-- The orchestrator dispatches plan-critic **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on \`revise\` from iter 0). A third dispatch is structurally not allowed — the orchestrator stops and reports per the always-auto failure matrix instead.
+- \`planCriticIteration\` starts at 0 (initial dispatch about to fire) and increments to 1 after the first slim-summary return. The counter is **per dispatch** — one value for the whole \`rubrics\` set, not per rubric.
+- The orchestrator dispatches plan-critic **at most twice per slug**: once at iteration 0, optionally once at iteration 1 (only on a \`revise\` merged verdict from iter 0). A third dispatch is structurally not allowed — the orchestrator stops and reports per the always-auto failure matrix instead.
 - A flow that goes \`revise\` (iter 0) → architect revise → \`revise\` (iter 1) is the canonical "1 revise loop max" path. After the second \`revise\`, the orchestrator emits the stop-and-report status block; the user resumes with \`/cc\` (continue after editing the plan) or \`/cc-cancel\` (discard).
-- A \`cancel\` verdict at any iteration immediately stops and reports (per \`runbooks/always-auto-failure-handling.md\`); iteration does not advance.
+- A \`cancel\` or \`block\` merged verdict at any iteration immediately stops and reports (per \`runbooks/always-auto-failure-handling.md\`); iteration does not advance.
 - The iteration cap is independent of \`reviewIterations\` (post-impl review loop) and \`criticIteration\` (post-impl critic). All three counters are tracked separately.
 
 ### plan-critic FlowState patches
@@ -944,38 +932,20 @@ The plan-critic returns one of three verdicts. The orchestrator branches on (ver
   "currentStage": "plan",
   "lastSpecialist": "plan-critic",
   "planCriticIteration": <0 if first dispatch returning; 1 if second dispatch returning>,
-  "planCriticVerdict": "pass | revise | cancel",
+  "planCriticVerdict": "pass | revise | block | cancel",
   "planCriticDispatchedAt": "<iso timestamp>"
 }
 \`\`\`
 
 **After pass verdict (advance to build):** \`currentStage\` advances to \`"build"\`. The plan-critic fields stay; they are immutable for the rest of the flow.
 
-**After revise verdict (iter 0, bounce to architect):** \`currentStage\` stays \`"plan"\`; \`lastSpecialist\` is patched back to \`"architect"\` only after architect's revise dispatch returns its slim summary. plan-critic.md stays on disk; architect's next dispatch reads it.
+**After revise verdict (iter 0, bounce to architect):** \`currentStage\` stays \`"plan"\`; \`lastSpecialist\` is patched back to \`"architect"\` only after architect's revise dispatch returns its slim summary. The active rubrics' artifacts (plan-critic.md + plan.md's design / devex sections) stay on disk; architect's next dispatch reads them.
 
-**After cancel verdict / revise-cap picker resolution:** the user's pick drives the next state transition (\`/cc-cancel\` clears the flow; \`[re-architect]\` resets the plan stage and re-dispatches the architect with the plan-critic findings prepended to its envelope; \`[accept-warnings-and-proceed]\` advances to builder despite the \`revise\` verdict). The plan-critic fields stay verbatim as the audit trail.
-
-### What plan-critic CANNOT do (read this before authoring the envelope)
-
-- Edit any source file (\`src/**\`, \`tests/**\`, \`.cclaw/state/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\`. The only file plan-critic writes is \`.cclaw/flows/<slug>/plan-critic.md\`.
-- Commit, push, rebase, or merge. plan-critic owns no git operations.
-- Dispatch other specialists. Composition is the orchestrator's job.
-- Exceed 7k input+output tokens. Approaching the cap is itself a finding (\`confidence: low\`, recommend split).
-- Propose alternative approaches. The architect chose; plan-critic catches mistakes in the chosen plan, not relitigates the choice.
-- Emit multi-perspective lens findings (security / a11y / perf as parallel sweeps). That is scope for the post-impl critic; plan-critic stays focused on the five dimensions.
-
-### plan-critic legacy migration (\`flow-state.json\`)
-
-A state file with \`currentStage: "plan"\` AND \`lastSpecialist: "architect"\` AND no \`planCriticVerdict\` field is treated as **pre-plan-critic intermediate**:
-
-- If the slug satisfies the plan-critic gate (ceremonyMode=strict + complexity!=trivial + problemType!=refines + AC count>=2): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state detected; plan-critic will run on next /cc.\`) and dispatches plan-critic before advancing to builder.
-- If the slug does NOT satisfy the gate (any combination that fails any of the four AND-conditions): no migration; plan-critic was structurally never going to run on this slug, advance to builder as today.
-
-The migration is one-pass and idempotent — a slug whose plan-critic has already run shows \`planCriticVerdict\` set, so the legacy branch is never re-entered.
+**After cancel / block verdict / revise-cap picker resolution:** the user's pick drives the next state transition (\`/cc-cancel\` clears the flow; \`[re-architect]\` resets the plan stage and re-dispatches the architect with the plan-critic findings prepended to its envelope; \`[accept-warnings-and-proceed]\` advances to builder despite the \`revise\` verdict). The plan-critic fields stay verbatim as the audit trail.
 
 ## Post-implementation pass (critic)
 
-The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's fourteen axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's nine axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
 
 ### critic ceremonyMode gating (Q1, no flag exposed)
 
@@ -1004,7 +974,7 @@ Mapping fired-triggers count to \`criticEscalation\`:
 ### critic cap & rerun rules
 
 - **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — surfacing the critic-cap-reached picker (same shape as the 5-iteration reviewer cap).
-- **Re-run trigger:** ONLY when the user picks \`[1] fix and re-review\` at the block-ship picker. The orchestrator re-dispatches \`builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the cap still applies), then re-runs \`critic\` (increments \`criticIteration\`).
+- **Block-ship picker (two options):** \`[1] fix and re-review\` re-dispatches \`builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the cap still applies), then re-runs \`critic\` (increments \`criticIteration\`). \`[2] accept-and-ship\` is the manual override: the orchestrator records the block-ship reason in \`learnings.md\` and proceeds to ship.
 - **Independence:** critic dispatches do NOT increment \`reviewIterations\`. The two counters are independent; the critic-cap-reached picker fires only on a third critic dispatch, even if the reviewer-cap is far from reached.
 
 ### critic verdict handling (slim summary → orchestrator routing)
@@ -1043,35 +1013,13 @@ Mapping fired-triggers count to \`criticEscalation\`:
 
 **After ship begins (user approved continue or auto-chain fired):** \`currentStage\` advances to \`"ship"\`. The critic fields stay; they are immutable for the rest of the flow.
 
-### Q4 dogfood — when this is the implementation slug
-
-The slug introduces the critic itself. The acceptance criterion (Q4) is that *this* slug runs through *its own* critic stage during review. If the critic returns \`block-ship\` on its own implementation, the orchestrator records the block-ship reason in \`learnings.md\` and the user invokes \`[2] accept-and-ship\` (manual override; \`triage.criticOverride: true\`). The override is documented in the slug's PR body under \`## Critic self-dogfood findings\` per the process checklist. This is a one-time bootstrap exception — every subsequent slug treats \`block-ship\` as a hard gate by default.
-
-### critic legacy migration (\`flow-state.json\`)
-
-A state file with \`currentStage: "review"\` AND \`lastSpecialist: "reviewer"\` AND no \`criticVerdict\` field is treated as **pre-critic intermediate**:
-
-- If the slug directory is \`flows/<slug>/\` (still active, not yet shipped): on the next \`/cc\`, the orchestrator emits the one-line migration note (\`Legacy state detected; the critic stage will run on next /cc.\`) and dispatches critic before advancing to ship.
-- If the slug directory is \`flows/shipped/<slug>/\` (post-ship already completed): the state is left alone. The shipped artifact set is immutable; the orchestrator does NOT retroactively run critic on a shipped slug.
-
-The migration is one-pass and idempotent — a slug whose critic has already run shows \`criticVerdict\` set, so the legacy branch is never re-entered.
-
-### What the critic CANNOT do (read this before authoring the envelope)
-
-- Edit any source file (\`src/**\`, \`tests/**\`, \`.cclaw/state/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\`.
-- Commit, push, rebase, or merge. The critic owns no git operations.
-- Dispatch other specialists. Composition is the orchestrator's job.
-- Exceed 20k input+output tokens. Approaching the cap is itself a finding (\`Confidence: low\`, recommend split).
-- Re-walk the reviewer's fourteen axes. The critic reads \`review.md > ## Findings\` as already-walked context and spends its budget on the *delta* (predictions / gaps / goal-backward / adversarial).
-
-The only file the critic writes is \`.cclaw/flows/<slug>/critic.md\` (single-shot per dispatch; a rerun overwrites in place — no append-only ledger, see Q2).
 `;
 
 const QA_STAGE = `# On-demand runbook — qa step
 
 The orchestrator opens this runbook **on every builder GREEN slim-summary return** when the qa gate evaluates to true. \`qa-runner\` is the behavioural-acceptance specialist that runs between \`build\` and \`review\` on UI-touching slugs in non-inline mode. It walks the **rendered page** (Playwright > browser-MCP > manual) and emits one evidence row per UI-tagged AC. The contract that drives the dispatch lives in \`.cclaw/lib/agents/qa-runner.md\`; this runbook covers what the orchestrator does *around* the dispatch.
 
-Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires on stop-the-line) and from \`reviewer.md > qa-evidence axis\` (post-qa cross-check that qa.md rows match the diff). The three together close the behavioural-QA gap that cclaw previously handled only implicitly through the reviewer's fourteen-axis pass.
+Distinct from \`debug-and-browser.md\` (live-system diagnostic discipline, fires on stop-the-line) and from \`reviewer.md > qa-evidence axis\` (post-qa cross-check that qa.md rows match the diff). The three together close the behavioural-QA gap that cclaw previously handled only implicitly through the reviewer's nine-axis pass.
 
 ## Gating (the three AND conditions — orchestrator enforces deterministically)
 
@@ -1090,7 +1038,7 @@ Backwards compat: a legacy flow whose \`triage.surfaces\` field is absent reads 
 \`\`\`
 Dispatch qa-runner
 ─ Required first read: .cclaw/lib/agents/qa-runner.md  (your contract — gate, browser-tool hierarchy, evidence rubric, verdict semantics, slim summary)
-─ Required second read: .cclaw/lib/skills/qa-and-browser.md  (the cross-cutting QA discipline; tier definitions, evidence requirements, anti-rationalizations)
+─ Required second read: .cclaw/lib/skills/debug-and-browser.md  (the cross-cutting QA discipline — its "QA acceptance discipline" section: tier definitions, evidence requirements, anti-rationalizations)
 ─ Stage: qa
 ─ Slug: <slug>
 ─ Ceremony mode: <strict | soft>  (gate enforces non-inline; inline is structurally impossible here)
@@ -1186,27 +1134,6 @@ After the qa pass completes (or is overridden), the reviewer's \`qa-evidence\` a
 
 The axis is the 9th explicit axis (10th with the gated \`nfr-compliance\` axis). The reviewer's slim-summary axes counter includes \`qae=N\` for the qa-evidence finding count.
 
-## What qa-runner CANNOT do (read this before authoring the envelope)
-
-- Edit any production source file (\`src/**\`) or the body of \`plan.md\` / \`build.md\` / \`review.md\` / \`flow-state.json\`. The only files qa-runner writes are: \`.cclaw/flows/<slug>/qa.md\`, screenshots under \`.cclaw/flows/<slug>/qa-assets/\`, and (optionally) Playwright specs under \`tests/e2e/<slug>-<ac>.spec.ts\` — and the last only when the project already ships Playwright.
-- Author production-code fixes for failed UI ACs. builder owns production fixes; qa-runner surfaces failures in §5 Findings + §7 Hand-off and lets the orchestrator dispatch builder.
-- Commit, push, rebase, or merge. qa-runner owns no git operations except the implicit commit that lands the Playwright spec it authored (if any) — the builder picks that up at the next iterate cycle.
-- Dispatch other specialists. Composition is the orchestrator's job.
-- Exceed 10k input+output tokens. Approaching the cap is itself a finding (\`confidence: low\`, recommend split).
-- Pretend qa ran when it could not. \`blocked\` is the right verdict when browser tools are unavailable; never write \`pass\` against an AC you could not actually verify.
-- Silently install Playwright. If the project does not ship Playwright, downgrade to Tier 2 / 3 and surface a \`fyi\` finding recommending a follow-up "add Playwright" slug — do not grow the dependency footprint as a qa side effect.
-- Write findings about code quality. Quality belongs to the reviewer's fourteen-axis pass; qa-runner findings are strictly about behavioural verification of UI rendering.
-
-## Legacy migration (\`flow-state.json\`)
-
-A state file with \`currentStage: "build"\` AND \`lastSpecialist: "builder"\` AND no \`qaVerdict\` field is treated as **pre-qa intermediate**:
-
-- If the slug satisfies the qa gate (\`triage.surfaces\` includes \`ui\` or \`web\` AND \`triage.ceremonyMode != "inline"\`): on the next \`/cc\`, the orchestrator emits a one-line migration note (\`Legacy state detected; qa-runner will run on next /cc.\`) and dispatches qa-runner before advancing to reviewer.
-- If the slug does NOT satisfy the gate (\`triage.surfaces\` is absent / empty / non-UI, OR \`triage.ceremonyMode == "inline"\`): no migration; qa-runner was structurally never going to run on this slug, advance to reviewer as today. \`triage.surfaces\` absent is treated as \`["other"]\` (the canonical no-QA-gating fallback).
-
-The migration is one-pass and idempotent — a slug whose qa-runner has already run shows \`qaVerdict\` set, so the legacy branch is never re-entered.
-
-For slugs where \`triage.surfaces\` was never populated (legacy triage prompts did not emit it), the orchestrator does NOT retro-populate the field on read — leaving \`surfaces\` absent is the canonical "this was a legacy slug, qa was never on the table" signal. The qa gate evaluates absent-surfaces as the empty list and skips dispatch.
 `;
 
 const EXTEND_MODE = `# On-demand runbook — extend-mode entry point
@@ -2116,7 +2043,7 @@ The heuristic is **inclusive**: when in doubt, dispatch the design lens. The len
 - \`research-architecture\` *(Skipped on light depth.)* — surface impact, coupling points, boundaries crossed, scalability considerations, reusable in-repo patterns.
 - \`research-history\` *(Skipped on light depth.)* — prior attempts via \`.cclaw/knowledge.jsonl\` + git log, lessons learned, outcome signals (reverted / manual-fix / follow-up-bug counts), directional drift.
 - \`research-skeptic\` — failure modes, edge cases, abuse cases, hidden costs, explicit don't-proceed triggers.
-- \`research-design\` *(Skipped on light depth; conditionally added on standard / deep-product depth via the design-signal heuristic or the \`--lens=design\` / \`--lens=-design\` user-toggle flags.)* — UI / UX / positioning / affordances lens. Walks the seven-dimension design-quality rubric (shared with the plan-critic specialist's \`rubricMode: "design"\` body and the reviewer's design-quality axis) at research framing time — grades each dimension for relevance (\`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`), surfaces existing patterns to study (with first-class web search via \`user-exa\` / \`user-context7\`), anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect.
+- \`research-design\` *(Skipped on light depth; conditionally added on standard / deep-product depth via the design-signal heuristic or the \`--lens=design\` / \`--lens=-design\` user-toggle flags.)* — UI / UX / positioning / affordances lens. Walks the seven-dimension design-quality rubric (shared with the plan-critic's \`design\` rubric and the reviewer's design-quality axis) at research framing time — grades each dimension for relevance (\`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`), surfaces existing patterns to study (with first-class web search via \`user-exa\` / \`user-context7\`), anti-patterns to avoid (incl. canonical AI-slop signals), and open design questions for the follow-up architect.
 
 Each lens receives the same envelope (build per \`runbooks/dispatch-envelope.md\` but with the lens-specific shape):
 
@@ -2178,7 +2105,7 @@ The next \`/cc <task>\` invocation on the same project reads the most-recent shi
 - **User cancels mid-dialogue** — run the cancel runtime, end the turn.
 - **All dispatched lenses return \`Confidence: low\` (catastrophic — topic too abstract)** — synthesis section says so plainly; recommended next is "more research needed (refine the topic first, e.g. <one suggestion>)".
 
-The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The roster is **six** lenses (engineer / product / architecture / history / skeptic / design). The flow roster is **eight** specialists (triage, architect, builder, plan-critic with three rubric modes, qa-runner, reviewer, critic, investigator) — plan-critic's rubricMode fan-out absorbed the former separate plan-design + plan-devex specialists.
+The multi-lens research mode is intentionally separate from the standard \`/cc <task>\` flow — research lenses are NOT in the \`SPECIALISTS\` array; they live in \`RESEARCH_LENSES\` (\`src/types.ts\`) and install to \`.cclaw/lib/research-lenses/\`. The roster is **six** lenses (engineer / product / architecture / history / skeptic / design). The flow roster is **eight** specialists (triage, architect, builder, plan-critic with three rubric scaffolds walked in one dispatch, qa-runner, reviewer, critic, investigator) — plan-critic's single-dispatch rubric set absorbed the former separate plan-design + plan-devex specialists.
 `;
 
 const TRIAGE_GATE = `# On-demand runbook — Triage hop (orchestrator-side)

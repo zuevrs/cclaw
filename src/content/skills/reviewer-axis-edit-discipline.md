@@ -7,7 +7,7 @@ trigger: every reviewer iteration in `strict` or `soft` ceremonyMode — the edi
 
 Full rubric, evidence-collection guidance, and severity matrix for the reviewer's `edit-discipline` axis (split slice work + AC verification; parallel-by-default safety net). Lifted out of `reviewer.ts` — the prompt now carries only a 5-line stub pointing here.
 
-The `edit-discipline` axis is the ex-post enforcement of the plan's `Touch surface` declarations and the builder's `pre-edit-investigation` gate. Two distinct sub-checks, two distinct findings shapes, codified below.
+The `edit-discipline` axis is the ex-post enforcement of the plan's `Touch surface` declarations and the builder's `investigation-discipline` pre-edit gate. Two distinct sub-checks, two distinct findings shapes, codified below.
 
 ## When to use
 
@@ -40,6 +40,25 @@ A file that appears in a slice's commit diff but is NOT in the slice's `Surface`
 
 A Discovery cell missing any of the three probes — without the explicit `new-file` token — is an **edit-discipline finding (severity=iterate)**. Cite the AC id, the missing probe, and the path. Recommended fix: builder bounces in fix-only mode, runs the missing probe, appends the citation to the Discovery cell, and re-commits the AC row (the build.md row is append-only, so the fix is a new row reference, not an edit-in-place).
 
+**Sub-check 3 — Not-Doing scope-drift cross-reference (folded from the retired `scope-drift` axis).** The former `scope-drift` axis is retired; its essential check folds here as the ex-post enforcement of the plan's `## Not Doing (and why)` declarations. `## Not Doing (and why)` is a first-class plan-template section and plan-critic §6.5 gates ship on the section being non-empty (3-5 bullets naming explicit scope exclusions with one-sentence rationale). Run this sub-check whenever `flows/<slug>/plan.md` carries a non-empty `## Not Doing (and why)` section (the orchestrator stamps `walkScopeDriftAxis: true` as the plan-state signal; legacy plans without the section and inline ceremonies skip).
+
+Read `plan.md > ## Not Doing (and why)` and enumerate every bullet (shape: `- **<scope item>** — <one-sentence reason>.`). Parse the bold-token `<scope item>` and scan the shipped diff (`git diff <plan-commit>..HEAD`), `## Plan / Slices`, and `## Acceptance Criteria (verification)` for evidence the item was implemented via the **four-signal match rubric**:
+
+1. **File-path match** — the diff touches a file whose path maps to the scope item (`caching layer` → `src/cache/**`, `src/lib/cache.ts`).
+2. **Symbol / identifier match** — the diff introduces a top-level export / class / function / component whose name maps to the scope item (`webhook delivery retries` → `retryWebhook` / `WebhookRetryQueue`).
+3. **AC / Slice-text match** — an AC summary or Slice title references the scope item verbatim or near-verbatim.
+4. **Commit-message match** — a commit subject in `git log --grep="<scope-item-token>" --oneline` cites the scope item by name.
+
+A match on ANY of the four signals is a finding filed as `SD-N: <not-doing item> appears to be implemented despite exclusion` (the `SD-` prefix is the scope-drift mnemonic inside the reviewer's `F-N` ledger; recorded with `axis=edit-discipline`). Cite the matching evidence (file:line / plan.md anchor / commit SHA). Severity grading by signal strength (0-10 scale, named in the finding description):
+
+- **0-3** — weak signal (single commit-keyword or a weakly-mapping symbol). Severity = `consider`; author may push back with a citation that the match is coincidental (downgrade to `fyi` only with the citation).
+- **4-6** — medium signal (two of the four categories match, unambiguous mapping). Severity = `required`; blocks ship in strict.
+- **7-10** — strong signal (three or more categories match; a fresh agent would read the diff as the implementation). Severity = `required` (blocks strict AND soft); on `triage.complexity == "critical"` escalates one tier to `critical`.
+
+**Acknowledged-reversal exception.** A scope-drift signal is NOT a blocking finding when the plan explicitly acknowledges the reversal — either the Not-Doing bullet itself was amended (`- **<scope item>** — was originally excluded; <reason for re-including>.`) OR a `## Open questions` / `## Decisions` row names the reversal verbatim. When acknowledged, emit a `fyi` finding noting the in-flight reversal (so compound captures it as a learnings row); `fyi` never blocks ship.
+
+**Plan-amendment alternative.** When the diff legitimately needed the excluded scope (the architect's Not-Doing call was wrong), the canonical fix is a **plan amendment** — architect bounces with `task: plan-amend`, edits the Not-Doing bullet (removes it OR rewrites the rationale to acknowledge the inclusion), and the plan-amend commit closes the `SD-N` finding with a citation to the plan.md edit. Silently leaving the drift open and shipping anyway is exactly the rationalization this sub-check exists to catch. This closes the Not-Doing enforcement loop: plan-critic §6.5 gates that the section is authored; this sub-check gates that the build respects its exclusions.
+
 ## Common rationalizations
 
 Cross-cutting rows for completion / verification / edit-discipline / commit-discipline / posture-bypass live in `.cclaw/lib/anti-rationalizations.md` — read once on dispatch; the three rows below are edit-discipline-axis-specific to this gate:
@@ -57,6 +76,8 @@ Cross-cutting rows for completion / verification / edit-discipline / commit-disc
 - A non-fresh file in `build.md`'s Discovery cell with fewer than three probes cited (and no `new-file` token) — severity=iterate.
 - A `new-file` token in build.md's Discovery cell on a file whose `git log --oneline -1 -- <path>` returns a non-empty SHA — severity=required. Fresh-file claims must be verifiable.
 - Three or more open `edit-discipline` rows on a single slug — collapse the rows under a single umbrella finding "build is drifting from declared scope" (severity=required, axis=edit-discipline) until the architect re-authors the surface declarations.
+- A `## Not Doing (and why)` bullet whose `<scope item>` matches the diff on three or more of the four signal categories (file path + symbol + AC text + commit message) — `SD-N`, severity=required immediately (strong signal); a dedicated new file for the excluded item is the strongest possible signal.
+- An `SD-N` scope-drift signal present in the diff with NO `## Open questions` / `## Decisions` acknowledgement AND no plan-amend commit — the silent-reversal path; severity=required (axis=edit-discipline).
 
 ## Worked example
 

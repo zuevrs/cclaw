@@ -65,16 +65,18 @@ describe("v8.68 — builder prompt declares the per-slice review surface", () =>
   });
 });
 
-describe("v8.68 — structured-status skill exists and is wired into AUTO_TRIGGER_SKILLS", () => {
-  it("structured-status skill is wired into AUTO_TRIGGER_SKILLS with stage='build'", () => {
-    const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "structured-status");
+describe("v8.68 — builder status protocol is wired into AUTO_TRIGGER_SKILLS (absorbed by summary-format)", () => {
+  it("summary-format skill (which absorbed structured-status) is wired into AUTO_TRIGGER_SKILLS and rides every stage", () => {
+    const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "summary-format");
     expect(skill).toBeDefined();
-    expect(skill?.fileName).toBe("structured-status.md");
-    expect(skill?.stages).toContain("build");
+    expect(skill?.fileName).toBe("summary-format.md");
+    expect(skill?.stages).toContain("always");
+    // structured-status was folded in; it is no longer a standalone skill.
+    expect(AUTO_TRIGGER_SKILLS.find((s) => s.id === "structured-status")).toBeUndefined();
   });
 
-  it("structured-status skill body declares the four statuses + monotone aggregation rule", () => {
-    const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "structured-status")!;
+  it("summary-format skill body declares the four statuses + monotone aggregation rule (absorbed from structured-status)", () => {
+    const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "summary-format")!;
     for (const status of BUILDER_STATUSES) {
       expect(skill.body).toContain(`### \`${status}\``);
     }

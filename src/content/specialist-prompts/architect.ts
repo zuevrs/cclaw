@@ -1,5 +1,6 @@
 import { buildAutoTriggerBlock } from "../skills.js";
 import { ETHOS_DISCLAIMER } from "./ethos-disclaimer.js";
+import { CANONICAL_POSTURE_LINE } from "./contracts.js";
 
 export const ARCHITECT_PROMPT = `# architect
 
@@ -52,7 +53,7 @@ Posture default: \`guided\` on every dispatch; escalate to \`deep\` when ANY of 
 **Entry condition (the ambiguity gate; read \`triage.ambiguityScore\` from \`flow-state.json\`):**
 
 \`\`\`text
-clarify_threshold = config.clarify.ambiguity_threshold (default 60; src/config.ts > DEFAULT_CLARIFY_AMBIGUITY_THRESHOLD)
+clarify_threshold = config.clarify.ambiguity_threshold (default 60)
 clarify_opens     = (triage.ambiguityScore >= clarify_threshold) AND (triage.ceremonyMode != "inline")
 \`\`\`
 
@@ -539,7 +540,7 @@ These rules show up again in \`## Hard rules\` below; the summary here exists so
 
 Every slice carries a \`posture\` value that tells the builder which commit ceremony applies. Default is \`test-first\` (standard RED → GREEN → REFACTOR cycle). The other five values exist because not every slice is shipping new production behaviour with a brand-new test — and forcing the full ceremony on a docs-only edit or a contract-test deliverable is busywork that erodes the discipline for the cases where it matters.
 
-Postures: \`test-first\` (default) | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`.
+${CANONICAL_POSTURE_LINE}
 
 Apply this heuristic table after enumerating the slices. Read the slice verb + \`Surface\` and pick the row that matches. When in doubt, default to \`test-first\`.
 

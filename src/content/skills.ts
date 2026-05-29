@@ -72,31 +72,31 @@ export interface GateEnvelope {
   editDisciplineActive?: boolean;
   /**
    * `flows/<slug>/plan.md` carries a non-empty `## Not Doing (and why)`
-   * section. Drives whether the `reviewer-axis-scope-drift` skill is
-   * pinned to the reviewer dispatch envelope. Always true
-   * on non-inline ceremonies (plan-critic §6.5 already gates ship on
-   * the section being non-empty), but legacy archived plans and the
-   * inline path skip the gate. The scope-drift axis is the post-build
-   * half of the Not-Doing enforcement (plan-critic gates the section's
-   * presence; the reviewer's scope-drift axis gates the build's
-   * compliance with its exclusions).
+   * section. Retained as the Not-Doing plan-state signal: the dedicated
+   * `scope-drift` reviewer axis is **retired** — its check folds into
+   * the `reviewer-axis-edit-discipline` skill (Sub-check 3, the
+   * four-signal Not-Doing cross-reference). Always true on non-inline
+   * ceremonies (plan-critic §6.5 already gates ship on the section being
+   * non-empty), but legacy archived plans and the inline path skip the
+   * signal. plan-critic gates the section's presence; the folded
+   * edit-discipline sub-check gates the build's compliance with its
+   * exclusions.
    */
   walkScopeDriftAxis?: boolean;
   /**
    * `flows/<slug>/plan.md > ## Key assumptions to validate` carries
-   * ≥1 bullet with a `KA-N` id (stable assumption-row id).
-   * Drives whether the `reviewer-axis-assumption-coverage` skill is
-   * pinned to the reviewer dispatch envelope. The orchestrator sets
-   * the flag when it detects the section at dispatch time; legacy
-   * plans with no section at all, legacy plans whose bullets lack the
-   * `KA-N` id, and inline ceremonies skip the gate.
-   *
-   * The assumption-coverage axis is the post-build half of the
-   * Key-assumptions-to-validate enforcement loop: plan-critic §6.5
-   * gates the section's presence;
-   * the reviewer's assumption-coverage axis gates that every
-   * high-stakes KA-N row has a closing `verify(AC-*): passing` commit
-   * carrying a `validates: KA-N` payload before ship.
+   * ≥1 bullet with a `KA-N` id (stable assumption-row id). Retained as
+   * the assumption-validation plan-state signal: the dedicated
+   * `assumption-coverage` reviewer axis is **retired** (it was
+   * advisory-only / cap-at-consider and never blocked ship), but the
+   * surrounding assumption-validation subsystem survives — the builder's
+   * `validates: KA-N` commit payload still flips matching rows via the
+   * flow-state validator (`src/assumption-validation.ts`), and
+   * unvalidated high-stakes rows still surface in ship.md
+   * `## Unvalidated assumptions`. The orchestrator sets the flag when it
+   * detects the section at dispatch time; legacy plans with no section,
+   * plans whose bullets lack the `KA-N` id, and inline ceremonies skip
+   * the signal.
    */
   walkAssumptionCoverageAxis?: boolean;
   /**
@@ -110,44 +110,30 @@ export interface GateEnvelope {
    * reflects the latest row statuses, including any flips landed by
    * `verify(AC-*): passing` commits in the current build range).
    *
-   * The list lets the `reviewer-axis-assumption-coverage` companion
-   * skill directly cross-check each id against the build range
-   * without re-parsing plan.md — the skill walks the supplied list
-   * and emits one `KA-N: not validated by any commit despite
-   * high-stakes label` finding per id (severity=`required`,
-   * class=`assumption-unvalidated-high-stakes`). Non-high-stakes
-   * unvalidated rows continue to surface in the ship.md
-   * `## Unvalidated assumptions` section but don't escalate beyond
-   * `consider` severity.
+   * The list lets the orchestrator surface each unvalidated high-stakes
+   * id directly in ship.md `## Unvalidated assumptions` without
+   * re-parsing plan.md — one `KA-N: not validated by any commit despite
+   * high-stakes label` row per id. Non-high-stakes unvalidated rows
+   * continue to surface in the same section but never escalate beyond
+   * user acknowledgement.
    *
    * Optional + back-compat: legacy dispatch envelopes lack the
    * field; readers MUST default to `[]` / absent. An absent field
-   * forces the skill to re-parse plan.md itself (legacy behaviour;
-   * still correct, just slower); a present field is the fast path.
-   * Empty array means "the gate fired but no high-stakes row
-   * remained unvalidated" — the skill then runs Sub-check 4
-   * (ship-handoff structural check) only.
+   * forces a re-parse of plan.md (legacy behaviour; still correct, just
+   * slower); a present field is the fast path. Empty array means "the
+   * gate fired but no high-stakes row remained unvalidated".
    */
   unvalidatedHighStakesKas?: ReadonlyArray<string>;
   /**
-   * Anti-slop gate. The fourteenth reviewer axis (`anti-slop`)
-   * is **default-on**: the orchestrator stamps the flag as `true` on
-   * every reviewer dispatch unless the user or a project config
-   * explicitly disables it via `walkAntiSlopAxis: false`. Unlike the
-   * five surface-driven gates (qa-evidence / design-quality
-   * / security / nfr-compliance / scope-drift / assumption-coverage),
-   * this gate is NOT keyed on plan content or triage surface — the
-   * Karpathy "Simplicity First" principle is checked once per slug
-   * regardless of what the slug touches. Structurally skipped only on
-   * `ceremonyMode: inline` (no review.md at all) and on
-   * structurally-empty diffs (single-character typo fixes).
-   *
-   * The gate predicate honours the default-on contract:
-   * `env.walkAntiSlopAxis !== false` (i.e. `true` and `undefined`
-   * both open the gate; only an explicit `false` closes it). This
-   * mirrors how the other gated axes phrase their predicates as
-   * `env.<flag> === true` but flipped so the default state is
-   * always-fires rather than never-fires.
+   * Retained for back-compat only — the gated `anti-slop` reviewer axis
+   * is **retired** (it was advisory-only / cap-at-consider and never
+   * blocked ship, so cutting it changes no ship decision). No skill
+   * gates on this flag anymore; the separate always-on `anti-slop` stage
+   * skill (id `anti-slop`, the redundant-verification / silent-skip
+   * guard) rides every dispatch independently and is unaffected. The
+   * field persists because existing reviewer dispatch envelopes and
+   * gate-wiring fixtures still set `walkAntiSlopAxis`; readers may
+   * ignore it. Historically default-on (`walkAntiSlopAxis !== false`).
    */
   walkAntiSlopAxis?: boolean;
 }
@@ -199,13 +185,16 @@ export interface AutoTriggerSkill {
  * Load a per-skill markdown body from disk at module-import time.
  *
  * split the 24 inline template literals out of this file into
- * `src/content/skills/<id>.md`. merged 13 of those source files
- * into 6 thematic groups (ac-discipline, commit-hygiene,
- * tdd-and-verification, api-evolution, review-discipline,
- * debug-and-browser), leaving 17 skill bodies on disk. Each
- * `.md` is the single editable source of truth; this loader pulls them
- * back in so `AUTO_TRIGGER_SKILLS[i].body` keeps the same string
- * contract for `install.ts` and the test suite.
+ * `src/content/skills/<id>.md`, then progressively consolidated
+ * near-duplicate clusters into survivor skills (commit-hygiene absorbed
+ * ac-discipline + slice-discipline; summary-format absorbed
+ * structured-status + completion-discipline + receiving-feedback;
+ * debug-and-browser absorbed qa-and-browser; investigation-discipline
+ * absorbed pre-edit-investigation; plan-authoring absorbed refinement),
+ * leaving 20 skill bodies on disk. Each `.md` is the single editable
+ * source of truth; this loader pulls them back in so
+ * `AUTO_TRIGGER_SKILLS[i].body` keeps the same string contract for
+ * `install.ts` and the test suite.
  *
  * Resolution mirrors the pattern in `src/constants.ts > readCclawVersion`:
  *
@@ -241,34 +230,10 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "plan-authoring",
     fileName: "plan-authoring.md",
-    description: "Auto-applies whenever the agent edits .cclaw/flows/<slug>/plan.md.",
-    triggers: ["edit:.cclaw/flows/*/plan.md", "create:.cclaw/flows/*/plan.md"],
-    stages: ["plan"],
-    body: readSkill("plan-authoring.md")
-  },
-  {
-    id: "ac-discipline",
-    fileName: "ac-discipline.md",
-    description: "merge of ac-quality + ac-traceability (split + skill-side completion — slice work prefixes (red(SL-N): / green(SL-N): / refactor(SL-N):) live under slice-discipline; this skill teaches the AC-side contract). Three-check rubric for every AC entry (observable / independently committable / verifiable) AND the per-AC `verify(AC-N): passing` commit the reviewer verifies ex-post via `git log --grep=\"verify(AC-N):\"` (test-only or empty diff; never touches production code). AC-quality always-on for AC authoring; the verification chain is active only when ceremony_mode=strict, no chain enforced in soft / inline modes.",
-    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:architect", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ceremony_mode:strict"],
-    stages: ["plan", "build", "review"],
-    body: readSkill("ac-discipline.md")
-  },
-  {
-    id: "slice-discipline",
-    fileName: "slice-discipline.md",
-    description: "Companion to ac-discipline for the slice side of the slice / AC separation. Three-check rubric for every slice entry (atomic / surface-bounded / dependency-honest) AND the posture-driven commit-prefix contract (red(SL-N): / green(SL-N): / refactor(SL-N): / test(SL-N): / docs(SL-N):) the reviewer verifies ex-post via git log --grep. Slice quality always-on for slice authoring; slice-traceability active only when ceremony_mode=strict.",
-    triggers: ["edit:.cclaw/flows/*/plan.md", "specialist:architect", "specialist:builder", "specialist:reviewer:text-review", "before:git-commit", "before:git-push", "ceremony_mode:strict"],
-    stages: ["plan", "build", "review"],
-    body: readSkill("slice-discipline.md")
-  },
-  {
-    id: "refinement",
-    fileName: "refinement.md",
-    description: "Activates when /cc detects an existing plan match.",
-    triggers: ["existing-plan-detected"],
+    description: "Auto-applies whenever the agent edits .cclaw/flows/<slug>/plan.md. Absorbs the refinement decision tree (amend / rewrite / refine-shipped / new) — fires at the Detect matrix when /cc detects an existing plan match (active or shipped).",
+    triggers: ["edit:.cclaw/flows/*/plan.md", "create:.cclaw/flows/*/plan.md", "existing-plan-detected"],
     stages: ["triage", "plan"],
-    body: readSkill("refinement.md")
+    body: readSkill("plan-authoring.md")
   },
   {
     id: "parallel-build",
@@ -279,39 +244,9 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     body: readSkill("parallel-build.md")
   },
   {
-    id: "design-quality-discipline",
-    fileName: "design-quality-discipline.md",
-    description:
-      "shared discipline for the seven-dimension design-quality rubric (the plan-design specialist is merged into `plan-critic` with `rubricMode: \"design\"`) (visual hierarchy / type system / color / spacing / interaction affordances / accessibility WCAG AA / responsive) consumed by both the pre-build `plan-critic` specialist on `rubricMode: \"design\"` dispatches (walks plan.md) and the post-build reviewer's gated `design-quality` axis (walks the rendered diff). Single source of truth for the rubric lives in `src/content/design-quality-rubric.ts`; this skill spells out HOW to grade (pre-commitment predictions, severity ladder with accessibility one-tier escalation, AI-slop umbrella, block-ship semantics) regardless of which specialist is reading. Auto-on at plan + review stages when triage detects a UI / design / frontend / UX surface.",
-    triggers: [
-      "design-surface:true",
-      "specialist:plan-critic",
-      "specialist:reviewer",
-      "stage:plan",
-      "stage:review",
-      "diff:tsx|jsx|vue|svelte|astro|html|css|scss"
-    ],
-    stages: ["plan", "review"],
-    body: readSkill("design-quality-discipline.md")
-  },
-  {
-    id: "devex-quality-discipline",
-    fileName: "devex-quality-discipline.md",
-    description:
-      "shared discipline for the six-dimension developer-experience (DevEx) rubric (the plan-devex specialist is merged into `plan-critic` with `rubricMode: \"devex\"`) (getting started / API ergonomics / error messages / docs / upgrade path / measurement) consumed by the pre-build `plan-critic` specialist on `rubricMode: \"devex\"` dispatches (walks plan.md). Single source of truth for the rubric lives in `src/content/devex-quality-rubric.ts`; this skill spells out HOW to grade (pre-commitment predictions, severity ladder with getting-started one-tier escalation, upgrade-path cap on breaking changes, AI-slop umbrella, block-ship semantics). Auto-on at plan stage when triage detects an SDK / API / CLI / library / public-interface surface.",
-    triggers: [
-      "devex-surface:true",
-      "specialist:plan-critic",
-      "stage:plan",
-      "diff:index.ts|cli.ts|openapi|swagger|.proto|.d.ts|.pyi"
-    ],
-    stages: ["plan"],
-    body: readSkill("devex-quality-discipline.md")
-  },
-  {
     id: "review-discipline",
     fileName: "review-discipline.md",
-    description: "merge of review-loop + security-review. The unified flow absorbs the former `security-reviewer` specialist into reviewer's `security` axis — the skill now wraps every reviewer invocation with the shared Findings table, fourteen-axis pass (incl. the absorbed full threat-model coverage on the security axis), Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
+    description: "merge of review-loop + security-review. The unified flow absorbs the former `security-reviewer` specialist into reviewer's `security` axis — the skill now wraps every reviewer invocation with the shared Findings table, nine-axis pass (incl. the absorbed full threat-model coverage on the security axis), Five Failure Modes, and (for sensitive diffs) the five-item threat-model checklist.",
     triggers: ["specialist:reviewer", "security-flag:true", "diff:auth|secrets|supply-chain|pii"],
     stages: ["review"],
     body: readSkill("review-discipline.md")
@@ -335,9 +270,9 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "commit-hygiene",
     fileName: "commit-hygiene.md",
-    description: "merge of commit-message-quality + surgical-edit-hygiene (skill-side completion of the slice/AC split). Enforces commit-message conventions AND the always-on rules for builder commits: posture-driven subject-line prefix in strict mode — slice work `red(SL-N):` / `green(SL-N):` / `refactor(SL-N):` / `test(SL-N):` / `docs(SL-N):`, AC verification `verify(AC-N): passing`; no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
-    triggers: ["always-on", "specialist:builder", "before:git-commit"],
-    stages: ["build", "ship"],
+    description: "merge of commit-message-quality + surgical-edit-hygiene + ac-discipline (ac-quality + ac-traceability) + slice-discipline (slice-quality + slice-traceability) — the single commit-contract skill. Enforces commit-message conventions AND the always-on rules for builder commits: posture-driven subject-line prefix in strict mode — slice work `red(SL-N):` / `green(SL-N):` / `refactor(SL-N):` / `test(SL-N):` / `docs(SL-N):`, AC verification `verify(AC-N): passing`; no drive-by edits to adjacent comments / formatting / imports; remove only orphans your changes created; mention pre-existing dead code under Summary. Carries the slice 3-check (atomic / surface-bounded / dependency-honest) + AC 3-check (observable / independently committable / verifiable) authoring rubrics, the SL↔AC mapping, parallel-by-default topology, and reviewer finding templates for A-4 (drive-by) and A-5 (deleted pre-existing dead code).",
+    triggers: ["always-on", "specialist:builder", "before:git-commit", "edit:.cclaw/flows/*/plan.md", "specialist:architect", "specialist:reviewer:text-review", "before:git-push", "ceremony_mode:strict"],
+    stages: ["plan", "build", "review", "ship"],
     body: readSkill("commit-hygiene.md")
   },
   {
@@ -367,14 +302,29 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "summary-format",
     fileName: "summary-format.md",
-    description: "Standard three-section ## Summary block (Changes made / Things I noticed but didn't touch / Potential concerns) appended to every authored artifact. Forces specialists to surface scope-creep candidates and forward-looking risks instead of silently fixing-while-nearby.",
+    description: "cclaw's single status & completion authority. Standard three-section ## Summary block (Changes made / Things I noticed but didn't touch / Potential concerns) appended to every authored artifact + the canonical Confidence ladder; PLUS the builder status enum DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED with monotone aggregation (absorbed structured-status); the completion-discipline evidence gate + forbidden-phrase list — no done/ready/looks-good without fresh evidence (absorbed completion-discipline); and the receiving-feedback four-step response pattern (restate / classify / plan / evidence) + forbidden-phrase list (absorbed receiving-feedback). Forces specialists to surface scope-creep candidates, emit a machine-readable status, verify before claiming done, and respond to findings with structure instead of sycophancy.",
     triggers: [
       "always-on",
       "edit:.cclaw/flows/*/plan.md",
       "edit:.cclaw/flows/*/build.md",
       "edit:.cclaw/flows/*/review.md",
       "edit:.cclaw/flows/*/ship.md",
-      "edit:.cclaw/flows/*/learnings.md"
+      "edit:.cclaw/flows/*/learnings.md",
+      "stage:build",
+      "specialist:builder",
+      "before:slim-summary",
+      "before:Recommended-next-continue",
+      "before:findings-row-close",
+      "before:ship-stamp",
+      "stage-exit:any",
+      "ceremony_mode:strict",
+      "ceremony_mode:soft",
+      "input:review.md",
+      "input:critic.md",
+      "input:reviewer-security-axis-findings",
+      "input:user-feedback",
+      "mode:fix-only",
+      "ship-gate:findings"
     ],
     stages: ["always"],
     body: readSkill("summary-format.md")
@@ -399,39 +349,25 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
   {
     id: "debug-and-browser",
     fileName: "debug-and-browser.md",
-    description: "merge of debug-loop + browser-verification. Two diagnostic loops on a running system, sharing the 'hypothesis before probe' protocol. debug-loop: 3-5 ranked hypotheses, ten-rung loop ladder cheapest first, tagged debug logs, multi-run protocol, 'no seam' is itself a finding. browser-verification: DevTools-driven five-check pass (console hygiene / network / a11y / layout / perf) with browser content treated as untrusted data.",
+    description: "merge of debug-loop + browser-verification + qa-and-browser. Diagnostic loops on a running system sharing the 'hypothesis before probe' protocol (3-5 ranked hypotheses, ten-rung loop ladder cheapest first, tagged debug logs, multi-run protocol, 'no seam' is itself a finding) + the DevTools five-check pass (console hygiene / network / a11y / layout / perf) with browser content treated as untrusted data + the qa-runner's acceptance discipline: browser tool hierarchy (Playwright > browser-MCP > manual), one-evidence-per-UI-AC rubric, 3-5 pre-commitment predictions before verification, manual-step fallback, verdict semantics (pass / iterate (max 1) / blocked). The browser-MCP detection ladder + untrusted-data rule are authored once; the reviewer cross-checks the qa artifact via the qa-evidence axis.",
     triggers: [
       "stop-the-line",
       "specialist:builder:fix-only",
       "task:bug-fix",
       "test-failed-unclear-reason",
       "ceremony_mode:strict",
-      "touch-surface:ui",
-      "diff:tsx|jsx|vue|svelte|html|css",
-      "specialist:builder",
-      "specialist:reviewer"
-    ],
-    stages: ["build", "review"],
-    body: readSkill("debug-and-browser.md")
-  },
-  {
-    id: "qa-and-browser",
-    fileName: "qa-and-browser.md",
-    description: "acceptance-discipline sibling of debug-and-browser. Drives the qa-runner specialist's per-UI-AC verification on the qa stage. Browser tool hierarchy (Playwright > browser-MCP > manual), one-evidence-per-UI-AC rubric, 3-5 pre-commitment predictions before verification, manual-step fallback when no browser tools available. Verdict semantics: pass / iterate (max 1) / blocked (browser tools unavailable AND manual user step required). Reviewer cross-checks the artifact via the qa-evidence axis.",
-    triggers: [
-      "stage:qa",
-      "specialist:qa-runner",
-      "triage.surfaces:ui",
-      "triage.surfaces:web",
-      "ceremony_mode:strict",
       "ceremony_mode:soft",
       "touch-surface:ui",
       "diff:tsx|jsx|vue|svelte|html|css",
       "specialist:builder",
-      "specialist:reviewer"
+      "specialist:reviewer",
+      "stage:qa",
+      "specialist:qa-runner",
+      "triage.surfaces:ui",
+      "triage.surfaces:web"
     ],
     stages: ["build", "qa", "review"],
-    body: readSkill("qa-and-browser.md")
+    body: readSkill("debug-and-browser.md")
   },
   {
     id: "api-evolution",
@@ -449,65 +385,6 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     ],
     stages: ["plan", "review"],
     body: readSkill("api-evolution.md")
-  },
-  {
-    id: "completion-discipline",
-    fileName: "completion-discipline.md",
-    description: "Iron Law concentrating verification-before-completion. No `✅ complete` slim summary, no `Recommended next: continue`, no Findings row close, no `ship.md > status: shipped` without paired fresh evidence (command + exit code + log lines, OR test output, OR git-log proof, OR file:line citation). Bans the sycophantic completion vocabulary (`should work`, `looks good`, `probably works`, `I think this is done`). Always-on across every specialist and every stage; the reviewer's Verification story table, slice-builder's self_review[], and orchestrator's per-criterion verified flag are all enforcement surfaces deferring to this skill.",
-    triggers: [
-      "always-on",
-      "before:slim-summary",
-      "before:Recommended-next-continue",
-      "before:findings-row-close",
-      "before:ship-stamp",
-      "stage-exit:any"
-    ],
-    stages: ["always"],
-    body: readSkill("completion-discipline.md")
-  },
-  {
-    id: "receiving-feedback",
-    fileName: "receiving-feedback.md",
-    description: "anti-sycophancy guard for receiving review.md findings, critic.md gaps, reviewer security-axis findings (absorbed the former `security-reviewer` specialist into reviewer's security axis), and user-named defects. Bans the bare-acknowledgement vocabulary (`good point`, `you're right`, `let me address that`, `I see your concern`, `great catch`). Installs the four-step response pattern: restate the finding in own words → classify against the ship gate (block-ship / iterate / fyi) → declare a plan (fix / push-back-with-evidence / accept-warning) → cite evidence. Fires on build (fix-only), review (re-iteration), and ship (pre-merge sweep).",
-    triggers: [
-      "input:review.md",
-      "input:critic.md",
-      "input:reviewer-security-axis-findings",
-      "input:user-feedback",
-      "mode:fix-only",
-      "ship-gate:findings"
-    ],
-    stages: ["build", "review", "ship"],
-    body: readSkill("receiving-feedback.md")
-  },
-  {
-    id: "pre-edit-investigation",
-    fileName: "pre-edit-investigation.md",
-    description: "GateGuard-style fact-forcing gate that triggers before the builder's FIRST Write/Edit/MultiEdit operation on a file. Mandatory three probes before editing: (1) `git log --oneline -10 -- <path>` for recent edits, (2) `rg \"<symbol>\" --type <lang>` for usage sites, (3) full file read (not just the edit window). Investigation evidence lands in build.md's Discovery column; the reviewer's `edit-discipline` axis (axis #8) flags missing or partial Discovery as severity=required. Exceptions: fresh files with no history, RED-phase test file edits, post-format passes.",
-    triggers: [
-      "before:Write",
-      "before:Edit",
-      "before:MultiEdit",
-      "specialist:builder",
-      "stage:build",
-      "first-edit-of-file"
-    ],
-    stages: ["build"],
-    body: readSkill("pre-edit-investigation.md")
-  },
-  {
-    id: "structured-status",
-    fileName: "structured-status.md",
-    description: "Builder status protocol. Every builder slim summary (strict mode: one per slice + one dispatch-level; soft mode: one for the feature) carries one of four canonical statuses — DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED — that the orchestrator routes deterministically (DONE = proceed; DONE_WITH_CONCERNS = log to build.md `## Concerns` + proceed; NEEDS_CONTEXT = stop and report with specific missing input; BLOCKED = stop and report with recommended resolution). Aggregation across slices is monotone (any BLOCKED contaminates the dispatch). Mirrors the obra-superpowers subagent-driven-development implementer status protocol.",
-    triggers: [
-      "stage:build",
-      "specialist:builder",
-      "before:slim-summary",
-      "ceremony_mode:strict",
-      "ceremony_mode:soft"
-    ],
-    stages: ["build"],
-    body: readSkill("structured-status.md")
   },
   {
     id: "pre-commitment-predictions",
@@ -530,14 +407,20 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     id: "investigation-discipline",
     fileName: "investigation-discipline.md",
     description:
-      "Debug-branch discipline. Auto-triggers on every investigator dispatch (taskShape:debug). Codifies the three-lane fan-out (cause-code / cause-config / cause-measurement — MECE; all three always run), the five canonical evidence shapes (file:line citation / command output excerpt / log excerpt / commit SHA / config snippet), the 0-10 lane confidence ladder (and how the synthesis derives the artifact-level high|medium|low from it), the anti-shotgun-debugging rules (no fix proposals inline; one root cause per synthesis; hypothesis before probe), and the next-step-recommendation rubric (direct-fix | needs-plan | more-investigation | not-a-bug — each with a hard gate). Reuses pre-edit-investigation.md's three canonical probe shapes for the cause-code lane.",
+      "Debug-branch discipline + builder pre-edit gate. Auto-triggers on every investigator dispatch (taskShape:debug) AND before the builder's FIRST Write/Edit/MultiEdit on any file. Codifies the three-lane fan-out (cause-code / cause-config / cause-measurement — MECE; all three always run), the five canonical evidence shapes (file:line citation / command output excerpt / log excerpt / commit SHA / config snippet), the 0-10 lane confidence ladder (and how the synthesis derives the artifact-level high|medium|low from it), the anti-shotgun-debugging rules (no fix proposals inline; one root cause per synthesis; hypothesis before probe), and the next-step-recommendation rubric (direct-fix | needs-plan | more-investigation | not-a-bug — each with a hard gate). Also absorbs the builder pre-edit investigation gate (pre-edit-investigation): the fact-forcing three-probe gate (git log / rg / full-file read) before the first edit, enforced ex-post by the reviewer's edit-discipline axis. The three canonical probe shapes are authored once and shared by the cause-code lane and the builder edit gate.",
     triggers: [
       "specialist:investigator",
       "stage:plan",
       "taskShape:debug",
-      "task_shape:debug"
+      "task_shape:debug",
+      "before:Write",
+      "before:Edit",
+      "before:MultiEdit",
+      "specialist:builder",
+      "stage:build",
+      "first-edit-of-file"
     ],
-    stages: ["triage", "plan"],
+    stages: ["triage", "plan", "build"],
     body: readSkill("investigation-discipline.md")
   },
   {
@@ -634,70 +517,6 @@ export const AUTO_TRIGGER_SKILLS: AutoTriggerSkill[] = [
     stages: ["review"],
     gate: (env) => env.walkDesignQualityAxis === true,
     body: readSkill("reviewer-axis-design-quality.md")
-  },
-  {
-    id: "reviewer-axis-scope-drift",
-    fileName: "reviewer-axis-scope-drift.md",
-    description:
-      "Gated reviewer axis (Not-Doing gate). Full Not-Doing cross-reference protocol, four-signal match rubric (file path / symbol / AC-or-slice text / commit message), severity grading (0-3 weak/consider; 4-6 medium/required; 7-10 strong/required; +1 tier on critical-complexity slugs), acknowledged-reversal exception, plan-amendment alternative, and anti-rationalizations for the `scope-drift` axis. Loads only when the gate fires (`walkScopeDriftAxis: true` on the dispatch envelope, set when `plan.md > ## Not Doing (and why)` is non-empty — always true since plan-critic §6.5 blocks ship on empty). Closes the Not-Doing enforcement loop: plan-critic ensures the section is authored; the reviewer's scope-drift axis ensures the build respects its exclusions. reviewer.ts retains a 5-line stub pointing here.",
-    triggers: [
-      "specialist:reviewer",
-      "stage:review",
-      "axis:scope-drift",
-      "walkScopeDriftAxis:true",
-      "plan.notDoing:non-empty"
-    ],
-    stages: ["review"],
-    gate: (env) => env.walkScopeDriftAxis === true,
-    body: readSkill("reviewer-axis-scope-drift.md")
-  },
-  {
-    id: "reviewer-axis-assumption-coverage",
-    fileName: "reviewer-axis-assumption-coverage.md",
-    description:
-      "Gated reviewer axis (cap-at-consider). Full per-KA-N row cross-check protocol (validates: payload scan + false-positive guard + unknown-id payload + ship-handoff sub-check) and anti-rationalizations for the `assumption-coverage` axis. Loads only when the gate fires (`walkAssumptionCoverageAxis: true` on the dispatch envelope, set when `plan.md > ## Key assumptions to validate` carries ≥1 bullet with a `KA-N` id). Severity is hard-capped at `consider` regardless of the row's high-stakes label; the axis surfaces every sub-check's finding into review.md and ship.md `## Unvalidated assumptions` but never blocks ship. Builder's `validates: KA-N` commit-message payload is truly optional under the cap — it remains the canonical closure signal that flips matching rows to `validated` via the flow-state validator (`src/assumption-validation.ts`), but a high-stakes row shipping with zero validating commits is no longer a ship-blocking finding. The ship template's `## Unvalidated assumptions` section is the user-acknowledgement gate. reviewer.ts retains a 5-line stub pointing here.",
-    triggers: [
-      "specialist:reviewer",
-      "stage:review",
-      "axis:assumption-coverage",
-      "walkAssumptionCoverageAxis:true",
-      "plan.keyAssumptions:KA-N-ids-present"
-    ],
-    stages: ["review"],
-    gate: (env) => env.walkAssumptionCoverageAxis === true,
-    body: readSkill("reviewer-axis-assumption-coverage.md")
-  },
-  {
-    id: "reviewer-axis-anti-slop",
-    fileName: "reviewer-axis-anti-slop.md",
-    description:
-      "Gated reviewer axis (cap-at-consider). Full four-dimension 0-10 grading protocol (senior-test / speculative-flexibility / single-use-abstraction / orphan-cleanup-discipline), AS-N finding shape, and anti-rationalizations for the `anti-slop` axis. The cclaw projection of Andrej Karpathy's \"Simplicity First\" principle (forrestchang/andrej-karpathy-skills > CLAUDE.md): minimum code that solves the problem; nothing speculative; no abstractions for single-use code; no flexibility that wasn't requested. Default-on gate — fires on every reviewer iteration unless explicitly disabled via `walkAntiSlopAxis: false` on the dispatch envelope. Structurally skipped only on `ceremonyMode: inline` and structurally-empty diffs. Severity is hard-capped at `consider` regardless of grade (no more 3-4/10 → required; no more ≤2/10 → critical-escalation); anti-slop findings still surface in review.md + learnings.md but the axis never blocks ship. reviewer.ts retains a 5-line stub pointing here.",
-    triggers: [
-      "specialist:reviewer",
-      "stage:review",
-      "axis:anti-slop",
-      "walkAntiSlopAxis:default-on"
-    ],
-    stages: ["review"],
-    gate: (env) => env.walkAntiSlopAxis !== false,
-    body: readSkill("reviewer-axis-anti-slop.md")
-  },
-  {
-    id: "writing-skills",
-    fileName: "writing-skills.md",
-    description:
-      "Meta-skill (obra-superpowers `writing-skills` namesake). Teaches HOW to write, register, and validate a new cclaw skill. Fires when an agent is about to edit `src/content/skills/` or `src/content/skills.ts` OR receives a `task:add-skill` framing. Codifies (a) the three-lane taxonomy (inline prompt block vs runbook vs skill — promote only when the discipline genuinely crosses ≥3 specialist surfaces); (b) the mandatory frontmatter + body section template; (c) the registration schema in `AUTO_TRIGGER_SKILLS` (id / fileName / description / triggers / stages / optional gate); (d) the RED → GREEN → REFACTOR validation cycle adapted to cclaw subagent dispatch (RED = baseline subagent fails the discipline; GREEN = skill body + registration → subagent passes; REFACTOR = adversarial rationalising probes close every loophole); (e) the four canonical loophole-checking probes (unlisted carve-out / trigger-doesn't-match / vague HOW / excuse-not-in-table); (f) three cite-back reference patterns (`tdd-and-verification` / `anti-slop` / `pre-commitment-predictions`). Net-new content; replaces nothing.",
-    triggers: [
-      "task:add-skill",
-      "before:edit src/content/skills/",
-      "before:edit src/content/skills.ts",
-      "edit:src/content/skills/*",
-      "edit:src/content/skills.ts",
-      "stage:plan",
-      "stage:build"
-    ],
-    stages: ["plan", "build"],
-    body: readSkill("writing-skills.md")
   }
 ];
 

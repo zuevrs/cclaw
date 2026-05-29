@@ -16,7 +16,7 @@ import { BUILDER_PROMPT } from "../../src/content/specialist-prompts/builder.js"
  */
 
 describe("v8.19 skill-windowing wiring (data shape + canonical stage mapping)", () => {
-  it("WIRING — AUTO_TRIGGER_SKILLS ships ≥17 entries with unique fileNames + non-empty bodies, every skill carries a stages array drawn from the known AutoTriggerStage union, and the canonical per-skill stage mapping is intact (v8.106 retired triage-gate / flow-resume / pre-flight-assumptions reference-only skills; conversation-language/anti-slop/summary-format=always; plan-authoring=plan; ac-discipline=plan+build+review; tdd-and-verification=build+review+ship; commit-hygiene=build+ship; review-discipline=review; documentation-and-adrs=plan+ship; api-evolution=plan+review; refinement=triage+plan)", () => {
+  it("WIRING — AUTO_TRIGGER_SKILLS ships ≥17 entries with unique fileNames + non-empty bodies, every skill carries a stages array drawn from the known AutoTriggerStage union, and the canonical per-skill stage mapping is intact (v8.106 retired triage-gate / flow-resume / pre-flight-assumptions reference-only skills; conversation-language/anti-slop/summary-format=always; plan-authoring=triage+plan; tdd-and-verification=build+review+ship; commit-hygiene=plan+build+review+ship; review-discipline=review; documentation-and-adrs=plan+ship; api-evolution=plan+review; investigation-discipline=triage+plan+build; consolidation pass merged 9 near-dupes into survivors)", () => {
     expect(AUTO_TRIGGER_SKILLS.length).toBeGreaterThanOrEqual(17);
 
     const fileNames = AUTO_TRIGGER_SKILLS.map((s) => s.fileName);
@@ -42,14 +42,13 @@ describe("v8.19 skill-windowing wiring (data shape + canonical stage mapping)", 
       "conversation-language": ["always"],
       "anti-slop": ["always"],
       "summary-format": ["always"],
-      "plan-authoring": ["plan"],
-      "ac-discipline": ["plan", "build", "review"],
+      "plan-authoring": ["triage", "plan"],
       "tdd-and-verification": ["build", "review", "ship"],
-      "commit-hygiene": ["build", "ship"],
+      "commit-hygiene": ["plan", "build", "review", "ship"],
       "review-discipline": ["review"],
       "documentation-and-adrs": ["plan", "ship"],
       "api-evolution": ["plan", "review"],
-      "refinement": ["triage", "plan"]
+      "investigation-discipline": ["triage", "plan", "build"]
     };
     for (const [id, want] of Object.entries(expected)) {
       expect(stagesById(id), `${id} stages drift`).toEqual(want);
@@ -74,7 +73,7 @@ describe("v8.19 skill-windowing behavior (buildAutoTriggerBlock filter + always-
 
     // triage-stage filter (v8.106 — triage-gate / flow-resume / pre-flight-assumptions retired)
     const triageBlock = buildAutoTriggerBlock("triage");
-    for (const s of ["**refinement**", "**conversation-language**", "**anti-slop**", "**summary-format**"]) {
+    for (const s of ["**plan-authoring**", "**conversation-language**", "**anti-slop**", "**summary-format**"]) {
       expect(triageBlock).toContain(s);
     }
     for (const s of ["**commit-hygiene**", "**review-discipline**", "**tdd-and-verification**", "**parallel-build**"]) {
@@ -83,10 +82,10 @@ describe("v8.19 skill-windowing behavior (buildAutoTriggerBlock filter + always-
 
     // review-stage filter
     const reviewBlock = buildAutoTriggerBlock("review");
-    for (const s of ["**review-discipline**", "**ac-discipline**", "**tdd-and-verification**", "**anti-slop**"]) {
+    for (const s of ["**review-discipline**", "**commit-hygiene**", "**tdd-and-verification**", "**anti-slop**"]) {
       expect(reviewBlock).toContain(s);
     }
-    for (const s of ["**plan-authoring**", "**refinement**"]) {
+    for (const s of ["**plan-authoring**", "**ambiguity-discipline**"]) {
       expect(reviewBlock).not.toContain(s);
     }
 

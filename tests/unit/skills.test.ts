@@ -10,12 +10,12 @@ import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
  */
 
 describe("auto-trigger skills — registry + frontmatter contract", () => {
-  it("WIRING — AUTO_TRIGGER_SKILLS ships at least the six core skills (plan-authoring, ac-discipline, refinement, parallel-build, review-discipline, tdd-and-verification); every skill body starts with `---\\n` frontmatter and carries name: + trigger: headers; conversation-language + anti-slop are both `always-on`", () => {
+  it("WIRING — AUTO_TRIGGER_SKILLS ships at least the six core skills (plan-authoring, commit-hygiene, investigation-discipline, parallel-build, review-discipline, tdd-and-verification); every skill body starts with `---\\n` frontmatter and carries name: + trigger: headers; conversation-language + anti-slop are both `always-on`", () => {
     const ids = AUTO_TRIGGER_SKILLS.map((skill) => skill.id);
     for (const expected of [
       "plan-authoring",
-      "ac-discipline",
-      "refinement",
+      "commit-hygiene",
+      "investigation-discipline",
       "parallel-build",
       "review-discipline",
       "tdd-and-verification"
@@ -33,9 +33,9 @@ describe("auto-trigger skills — registry + frontmatter contract", () => {
   });
 });
 
-describe("auto-trigger skills — per-skill canonical anchors (ac-discipline + review-discipline + anti-slop)", () => {
-  it("BEHAVIOR — ac-discipline names the v8.63+ AC-side contract (`verify(AC-N): passing`, dual-grep with `(SL-N):` for slice work); review-discipline names the Five Failure Modes; anti-slop is always-on and bans redundant verification, env shims (@ts-ignore, eslint-disable, process.env.NODE_ENV), and declares its `What this skill does NOT prevent` carve-out", () => {
-    const ac = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "ac-discipline");
+describe("auto-trigger skills — per-skill canonical anchors (commit-hygiene + review-discipline + anti-slop)", () => {
+  it("BEHAVIOR — commit-hygiene (which absorbed ac-discipline) names the v8.63+ AC-side contract (`verify(AC-N): passing`, dual-grep with `(SL-N):` for slice work); review-discipline names the Five Failure Modes; anti-slop is always-on and bans redundant verification, env shims (@ts-ignore, eslint-disable, process.env.NODE_ENV), and declares its `What this skill does NOT prevent` carve-out", () => {
+    const ac = AUTO_TRIGGER_SKILLS.find((entry) => entry.id === "commit-hygiene");
     expect(ac).toBeDefined();
     expect(ac!.body).toContain('git log --grep="verify(AC-N):"');
     expect(ac!.body).toContain('git log --grep="(SL-N):"');

@@ -33,7 +33,7 @@ Pinned to the reviewer's dispatch envelope when `flows/<slug>/plan.md` carries a
 
 **Finding shape.** Every nfr-compliance finding carries the NFR row text verbatim in the description plus the file:line of the violation. Example: `F-7 nfr-compliance/required — src/api/search.ts:88 — NFR row "performance: p95 < 250ms on /api/search" — new ranking pass adds a synchronous embedding lookup; no benchmark commit landed and the build log shows no perf row. Recommend: run the existing benchmark harness (npm run bench:search) and either land a numbers row OR refactor to async lookup.`
 
-**Slim counter exclusion.** `nfr-compliance` is intentionally excluded from the slim-summary axes counter (`c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N`) — it is a gated axis; when it fires, name the violated NFR row inline in the `What changed` line instead.
+**Slim counter exclusion.** `nfr-compliance` is intentionally excluded from the slim-summary axes counter (`c=N r=N a=N s=N p=N ed=N qae=N dq=N`) — it is a gated axis; when it fires, name the violated NFR row inline in the `What changed` line instead.
 
 ## Common rationalizations
 

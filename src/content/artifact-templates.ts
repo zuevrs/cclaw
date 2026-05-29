@@ -132,7 +132,7 @@ _The relative paths use \`../shipped/<parent-slug>/\` to walk from the active \`
 
 ## Assumptions (correct me now)
 
-_(Architect. Mandatory on every non-inline plan. 3-7 short bullets covering the surface-area decisions a senior reviewer would ratify (which interpretation was chosen, which library / storage / approach picked when multiple were plausible, which scope edge was assumed). Bullets pinned by a Clarify user-answer are bare; bullets from architect-silent inferences carry the literal \`(architect inference)\` tag so the user can spot what to push back on. After plan.md is written the orchestrator emits an ack-window prose pointing the user at THIS section by name — read it before continuing, edit in place to correct, or \`/cc-cancel\` and restart with a clearer task. This is the user's last cheap moment to steer; the build dispatches as soon as \`/cc\` continues.)_
+_(Architect. Mandatory on non-inline plans. 3-7 bullets covering surface-area decisions (interpretation / library / storage / scope edge); silent inferences carry the literal \`(architect inference)\` tag.)_
 
 - _Assumption 1 — one short clause naming the decision (e.g. "Use session storage, not JWT"). Bare when the user answered in Clarify._
 - _Assumption 2 — \`(architect inference)\` tag when not user-pinned (e.g. "Cache TTL = 60s for the search endpoint (architect inference)")._
@@ -140,23 +140,19 @@ _(Architect. Mandatory on every non-inline plan. 3-7 short bullets covering the 
 
 ## Key assumptions to validate
 
-_(Architect: Phase 7.5 — Bets and exclusions. 2-5 bullets naming **bets** the plan rests on — beliefs about latency budgets, user behaviour, market state, downstream system behaviour, performance under load, etc. — that would invalidate the plan if wrong. **Distinct from \`## Assumptions (correct me now)\`**: that section is surface-area inferences (which library / storage / approach the architect picked when multiple were plausible); this section is bets-that-need-validation (the latency budget assumption, the user-behaviour assumption, the market-state assumption). Each bullet pairs the bet with a validation method and an explicit status — \`unvalidated\` on first authoring, \`validated\` / \`invalidated\` once evidence lands.)_
-
-_(each bullet carries a stable \`KA-N\` id (Key Assumption N) as the leading bold token so the builder, reviewer, and ship template can cross-reference rows by id. The builder's \`verify(AC-N): passing\` commits MAY carry a \`validates: KA-N\` payload in the commit message body — when present, the flow-state validator flips the matching KA-N row's status to \`validated\` and stamps the commit SHA, closing the loop on the assumption. \`KA-1\` is mandatory on the first bullet; numbering is monotonic. The reviewer's \`assumption-coverage\` axis (gated when this section is non-empty) cross-checks that every high-stakes KA-N row has at least one validating commit before ship.)_
+_(Architect Phase 7.5. 2-5 bets that would invalidate the plan if wrong (distinct from the surface-area \`## Assumptions\` above). Each bullet leads with a stable \`KA-N\` id and pairs the bet with a validation method + \`unvalidated | validated | invalidated\` status. The builder's \`verify(AC-N): passing\` commits may carry a \`validates: KA-N\` payload to flip the row to validated.)_
 
 - **KA-1** — _\`<assumption>\`_. Validate by: _\`<method — benchmark, log query, user interview, A/B test, prod metric scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
 - **KA-2** — _\`<assumption>\`_. Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
 
 ## Spec
 
-_(mandatory on every plan.md (strict and soft). Four bullets capture the requirement-side contract that AC alone do not carry: intent + scope + non-goals + per-slug constraints. Always authored by the architect; on strict-mode plans the Frame phase adds NFR rows alongside this section. Each bullet MUST be filled — write "none" or "n/a" when genuinely nothing applies; \`<TBD>\` or empty values are not acceptable. Existing legacy plans without this section continue to work; the section appears only on newer plans.)_
+_(Mandatory on every plan (strict + soft). Four bullets: intent + scope + non-goals + per-slug constraints. Fill each — write "none" / "n/a" when nothing applies; \`<TBD>\` / empty values are not acceptable.)_
 
 - **Objective**: _what we are building and why, in one short line._
 - **Success**: _how we know it is done — high-level indicators (e.g. "users can rename a task without losing comments"), NOT the AC bullets below._
 - **Out of scope**: _explicit non-goals derived from triage + framing. Write "none" if not applicable._
 - **Boundaries**: _per-slug "ask first" / "never do" notes layered on top of the iron-laws (e.g. "do not break public API", "preserve current cache keys"). Write "none" when iron-laws cover it._
-
-The reviewer's existing axes (correctness, architecture, complexity-budget) implicitly cover the Spec section — a build that does not match the recorded Objective is a \`correctness\` finding; scope creep past \`Out of scope\` is an \`architecture\` or \`complexity-budget\` finding. No new reviewer axis is introduced; the 7-axis (+ gated NFR) count is stable.
 
 ## Frame
 
@@ -164,7 +160,7 @@ _(Architect: Frame. 2-5 sentences: what is broken or missing today, who feels it
 
 ## Non-functional
 
-_(Architect: Frame, strict mode only. Authored when the slug is product-grade tier OR carries irreversibility — e.g. data-migration, public API, auth/payment surface, performance hot-path. Soft-mode plans skip the Frame phase and therefore have no NFR section. Optional and may be entirely absent on legacy plans. When the slug has no NFR concerns, write "none specified" inline against each axis rather than dropping the section — explicit "none" beats implicit silence for the reviewer's \`nfr-compliance\` axis gate.)_
+_(Architect Frame, strict only. Authored on product-grade or irreversible slugs. When no NFR concerns, write "none specified" against each axis rather than dropping rows — the reviewer's \`nfr-compliance\` gate reads explicit "none".)_
 
 - **performance:** _budgets (p50/p95/p99 latency, throughput, memory, bundle KB) or "none specified"._
 - **compatibility:** _browser / runtime / Node / OS / dependency-version constraints, or "none"._
@@ -186,13 +182,11 @@ _(Architect: Approaches closing paragraph when Approaches exists; cites the pick
 
 ## Decisions
 
-_(Architect: Decisions, strict mode only. One D-N row per decision. Each row is independently citable. Replaces the separate \`decisions.md\` file from legacy flows; on \`legacy-artifacts: true\` the separate file is still emitted.)_
+_(Architect Decisions, strict only. One D-N row per decision; each independently citable.)_
 
-- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. Reversibility: _one-way | two-way | mostly-two-way_. ADR: _none | proposed | promoted (path)_. Cites: _research.md §<section> — name the lens / synthesis section that grounds this D-N (e.g. \`research.md §Engineer lens > Implementation paths\`, \`research.md §Synthesis > Confidence summary\`); 1-3 \`§\` citations per D-N. Field is **mandatory when \`flowState.priorResearch\` is non-null** (the architect Bootstrap loaded a prior \`/cc research <topic>\` flow's research.md as context); OMIT the entire \`Cites:\` field when no priorResearch is loaded (cold-start \`/cc <task>\` with no research handoff)._
+- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. Reversibility: _one-way | two-way | mostly-two-way_. ADR: _none | proposed | promoted (path)_. Cites: _research.md §<section> (1-3 § cites; include only when priorResearch was loaded, else omit the field)_.
 
-_(\`Reversibility\` is **mandatory** on every D-N. Pick \`one-way\` for irreversible-or-effectively-so (data migration, public-API removal, schema rewrite, destructive auth/cryptography, payment commit); \`two-way\` for cheaply-reversible (feature flag, internal-API behind compat shim, behaviour tweak behind kill switch); \`mostly-two-way\` for the middle ground (schema column add, new dependency, UI surface shipped to users). plan-critic §A blocks ship on a missing field; the critic's §3.5 cross-model second opinion auto-fires on any \`one-way\` D-N regardless of \`triage.securityFlag\`.)_
-
-_(\`Cites: research.md §<section>\` is **mandatory on every D-N when the architect Bootstrap loaded \`flowState.priorResearch\`** — i.e. the follow-up \`/cc <task>\` flow that consumed a prior research handoff. Each D-N must cite at least one section of \`research.md\` that grounded the choice; this is the cite-back that closes the research-→-plan loop. plan-critic §A emits a \`block-ship\` finding (class=\`decision-missing-research-cite\`) on any D-N missing the field when priorResearch was loaded. On cold-start flows (priorResearch null) the field is OMITTED entirely — plan-critic §A treats the absence as expected and emits no finding.)_
+_(\`Reversibility\` is mandatory on every D-N: \`one-way\` / \`two-way\` / \`mostly-two-way\`. \`Cites: research.md §<section>\` is mandatory on every D-N when priorResearch was loaded, omitted entirely on cold-start. plan-critic §A blocks ship on a missing Reversibility field or a missing Cites (class=\`decision-missing-research-cite\`).)_
 
 ## Pre-mortem
 
@@ -202,14 +196,14 @@ _(Architect: Pre-mortem, strict mode only. 2-4 ways this plan could fail; each l
 
 ## Not Doing (and why)
 
-_(Architect: Phase 7.5 — Bets and exclusions. 3-5 bullets naming scope explicitly excluded from this slug, each paired with a one-sentence rationale. Every plan that ships excludes something — name it. The \`## Not Doing\` section is first-class: it demands the \`(and why)\` rationale alongside each non-commitment so the user / reviewer / future-archaeologist can audit the choice rather than guess it.)_
+_(Architect Phase 7.5. 3-5 excluded scope items, each with a one-sentence \`(and why)\` rationale.)_
 
 - **\`<scope item>\`** — _\`<one-sentence reason for excluding it from this slug>\`._
 - **\`<scope item>\`** — _\`<one-sentence reason — separate slug, out of triage scope, deferred, deliberate non-goal, ...>\`._
 
 ## Plan / Slices
 
-_(Architect-authored, strict mode only. Slices are work units — HOW we build. Each row is one unit of work the builder TDDs against; commit prefix \`<type>(SL-N): ...\`. The AC table below is the verification side — HOW we know it works. **The two are distinct concepts.** Do not mix work and verification in a single table.)_
+_(Architect, strict only. Slices are work units (HOW we build); commit prefix \`<type>(SL-N): ...\`. The AC table below is verification (HOW we know). Keep them distinct — do not mix work and verification in one table.)_
 
 | Slice | Title | Surface | Depends-on | Independent | Posture |
 | --- | --- | --- | --- | --- | --- |
@@ -311,7 +305,7 @@ security_flag: false
 
 ## Extends
 
-_(present only when this flow was initialised via \`/cc extend <slug> <task>\`. The architect (Bootstrap) authors this section verbatim from \`flowState.parentContext\` on soft flows. Drop the entire section on cold-start \`/cc <task>\` flows. Format is identical to the strict PLAN_TEMPLATE — \`refines: <parent-slug>\` line + parent decision summary + bulleted artifact links. See PLAN_TEMPLATE comment for the exact shape.)_
+_(Present only on \`/cc extend <slug> <task>\` flows; drop on cold-start. Format identical to the strict PLAN_TEMPLATE \`## Extends\` — see that section for the exact shape.)_
 
 ## Assumptions (correct me now)
 
@@ -327,7 +321,7 @@ _(AC author authors this. One short paragraph describing the change end-to-end. 
 
 ## Spec
 
-_(mandatory. Four bullets capturing the requirement-side contract. Each bullet MUST be filled — "none" or "n/a" are acceptable when genuinely nothing applies; \`<TBD>\` and empty values are not. The architect authors this on small-medium (soft) plans.)_
+_(Mandatory. Four bullets: intent + scope + non-goals + per-slug constraints. Fill each — "none" / "n/a" acceptable; \`<TBD>\` / empty values are not.)_
 
 - **Objective**: _what we are building and why, in one short line._
 - **Success**: _how we know it is done — high-level indicators, NOT the testable conditions below._
@@ -358,7 +352,7 @@ _(Files the builder is allowed to modify. Used by reviewer to flag scope creep.)
 
 ## Notes
 
-_(Optional. The architect's Approaches / Decisions / Pre-mortem phases do NOT run for soft-mode (small/medium) flows; if you discover the work needs structural decisions, alternative comparison, or threat modelling mid-flight, surface back to the orchestrator and ask to re-triage as strict so the architect's full Frame → Compose pass can run.)_
+_(Optional. Approaches / Decisions / Pre-mortem don't run in soft mode; if the work needs structural decisions, alternative comparison, or threat modelling, surface back and ask to re-triage as strict.)_
 
 ## Summary
 
@@ -537,7 +531,7 @@ zero_block_streak: 0
 
 # Review — SLUG-PLACEHOLDER
 
-This is the review log. \`reviewer\` (the fourteen-axis reviewer, with security threat-modelling absorbed from the former \`security-reviewer\`) appends findings here. The loop is producer ↔ critic: iteration N proposes findings, \`builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-discipline skill).
+This is the review log. \`reviewer\` (the nine-axis reviewer, with security threat-modelling absorbed from the former \`security-reviewer\`) appends findings here. The loop is producer ↔ critic: iteration N proposes findings, \`builder\` (mode=fix-only) closes them, iteration N+1 re-checks. The loop ends when the convergence detector fires (see review-discipline skill).
 
 ## Run summary
 
@@ -1182,7 +1176,7 @@ _(List any \`warn\`-severity ledger rows from \`flows/SLUG-PLACEHOLDER/review.md
 
 ## Unvalidated assumptions
 
-_(assumption-validation lite. List every \`KA-N\` row from \`plan.md > ## Key assumptions to validate\` whose status is still \`unvalidated\` at ship time. The reviewer's \`assumption-coverage\` axis already gated \`required\`-severity findings on high-stakes rows; this section surfaces the **remaining** unmeasured bets so the user signs off on shipping with them open. A row reaches this section when no \`verify(AC-N): passing\` commit in the build range carried a \`validates: KA-N\` payload AND the row's status was never manually flipped to \`validated\` / \`invalidated\` in plan.md. Format mirrors the plan-template row shape so the user can scan plan.md and ship.md side-by-side. When every KA-N row was validated, write the literal "All key assumptions validated." line and drop the bulleted list.)_
+_(List every \`KA-N\` row from \`plan.md > ## Key assumptions to validate\` still \`unvalidated\` at ship time — the remaining unmeasured bets the user signs off on. When every KA-N row was validated, write the literal "All key assumptions validated." line below and drop the bulleted list.)_
 
 - **KA-N** — _\`<assumption>\`_. Validate by: _\`<method>\`_. Status: \`unvalidated\` at ship time.
 
@@ -1500,9 +1494,7 @@ _(Research orchestrator: Phase 1 distillation. 5-15 bullets capturing what the u
 
 ## Framings considered
 
-_(Approaches Gate — Phase 1.5, between Phase 1 dialogue and Phase 2 lens dispatch. The orchestrator surfaces 2-3 candidate framings of the research question and the user picks one or more (or accepts "all" — the default; every framing flows to every lens). Each framing changes WHICH dimensions every lens emphasises; the same topic carries a different shape under different framings. Mirrors \`flow-state.json > approaches\` and \`selectedApproaches\` verbatim; immutable for audit (re-framings happen via \`/cc research push-back <framing>\`, not by mutating this list)._
-
-_The downstream lenses receive the selected framings in their dispatch envelope under the new \`Framing:\` field and grade their findings against that set rather than against the implicit "any framing".)_
+_(Approaches Gate (Phase 1.5). The orchestrator surfaces 2-3 candidate framings; the user picks one or more (or accepts "all" — the default). Mirrors \`flow-state.json > approaches\` / \`selectedApproaches\`; re-frame via \`/cc research push-back <framing>\`. Lenses receive the selected set under their \`Framing:\` dispatch field.)_
 
 | id | title | summary | selected |
 | --- | --- | --- | --- |
@@ -1512,14 +1504,14 @@ _(2-3 framings stamped at the Approaches Gate. "All selected" is the canonical d
 
 ## Key assumptions to validate
 
-_(Research orchestrator: Phase 3 synthesis. 2-5 bullets naming **bets** the research rests on — beliefs about user demand, market state, technology behaviour, performance characteristics, or downstream system capability that the lenses absorbed as load-bearing premises rather than as findings. Distinct from \`## Framings considered\` (those are alternative shapes of the question itself, picked by the user); this section is the implicit beliefs the framings rely on. The follow-up \`/cc <task>\` flow's architect Bootstrap reads this section verbatim into the \`## Key assumptions to validate\` block of \`plan.md\` so the bets carry forward as load-bearing context. Each bullet carries a stable \`KA-N\` id as the leading bold token; the follow-up plan.md preserves the ids so a \`validates: KA-N\` builder commit can later flip the matching row to \`validated\`.)_
+_(Phase 3 synthesis. 2-5 bets the research rests on (distinct from \`## Framings considered\`). Each leads with a stable \`KA-N\` id + validation method + status; the follow-up \`/cc <task>\` architect copies these verbatim into plan.md's \`## Key assumptions to validate\`.)_
 
 - **KA-1** — _\`<assumption>\`_. Validate by: _\`<method — benchmark, user research, log query, A/B test, prior-art scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
 - **KA-2** — _\`<assumption>\`_. Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
 
 ## Engineer lens
 
-_(Pasted verbatim from \`research-engineer\` lens's findings block. Sections: Findings (with confidence) (3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Feasibility (overall + 5 sub-axes) / Implementation paths (2-3 candidates with effort + trade-offs) / Blockers (with severity) / Risks during implementation / Rough effort.)_
+_(Pasted verbatim from the \`research-engineer\` lens findings block; the lens prompt defines the section set.)_
 
 ### Findings (with confidence)
 
@@ -1571,7 +1563,7 @@ _(first-class web search dispatch. Inline citations the engineer lens used to gr
 
 ## Product lens
 
-_(Pasted verbatim from \`research-product\` lens's findings block. Sections: Findings (with confidence) (3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / User value (overall + 3 sub-axes) / Who benefits (primary + secondary) / Alternatives (always including "do nothing") / Market / domain context / Open product questions.)_
+_(Pasted verbatim from the \`research-product\` lens findings block; the lens prompt defines the section set.)_
 
 ### Findings (with confidence)
 
@@ -1638,7 +1630,7 @@ _(first-class web search dispatch. Citations the product lens used: MCP web-sear
 
 ## Architecture lens
 
-_(Pasted verbatim from \`research-architecture\` lens's findings block. Sections: Findings (with confidence) (3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Surface impact / Coupling points / Boundaries affected / Scalability considerations / Reusable patterns.)_
+_(Pasted verbatim from the \`research-architecture\` lens findings block; the lens prompt defines the section set.)_
 
 ### Findings (with confidence)
 

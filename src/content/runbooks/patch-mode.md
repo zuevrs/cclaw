@@ -4,7 +4,7 @@ The orchestrator opens this runbook **on every `/cc` whose raw argument starts w
 
 ## Why patch-mode exists (dogfood-driven)
 
-Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy edit on the same surface the parent slug already shipped) routinely cost more ceremony than they deserve under the existing pipeline. The full `/cc <task>` chain dispatches triage → architect → plan-critic (up to three sequential rubric modes: generic / design / devex) → builder → qa? → reviewer → critic → ship — six to ten sub-agent dispatches — even when the change is a 2-line edit to a single file the parent already touched. The `/cc extend <slug>` fork reduces the context-loading cost (parent artifacts ride on the envelope) but keeps every ceremony stage; the trivial-shape downgrade in triage (§1.6) helps when the task signals are clean, but the user still pays the dispatch tax.
+Post-ship "tiny tweak" tasks (rename a label, polish error copy, tighten a copy edit on the same surface the parent slug already shipped) routinely cost more ceremony than they deserve under the existing pipeline. The full `/cc <task>` chain dispatches triage → architect → plan-critic (single dispatch; active rubrics from generic / design / devex) → builder → qa? → reviewer → critic → ship — six to ten sub-agent dispatches — even when the change is a 2-line edit to a single file the parent already touched. The `/cc extend <slug>` fork reduces the context-loading cost (parent artifacts ride on the envelope) but keeps every ceremony stage; the trivial-shape downgrade in triage (§1.6) helps when the task signals are clean, but the user still pays the dispatch tax.
 
 `/cc patch <slug> <task>` is the **micro-edit fast path**: a slug that has already shipped gets a follow-up edit with NO triage, NO architect, NO plan-critic (every rubric mode — generic / design / devex), NO qa, NO critic, NO ship gate. The builder dispatches directly with the parent context envelope, writes ONE commit prefixed `patch(<slug>): <message>`, appends a `patch-N.md` artifact next to the parent's shipped `plan.md` / `build.md` (no separate flow dir), and ends. Optional `--review` enables a lite reviewer pass (correctness + readability + edit-discipline axes only) for the user who wants a second pair of eyes on a security-adjacent micro-edit.
 
@@ -190,7 +190,7 @@ Patch-mode is the **micro-edit** fast path. The user should reach for `/cc exten
 - the change touches ≥3 files (the patch artifact's `Files touched` line is intentionally short — bigger surfaces warrant the full ceremony);
 - the change adds a new AC (the parent's AC table is frozen; new behavioural assertions need an architect pass to add D-N + AC-N);
 - the change carries schema / migration / public-API / payment / auth wording (security-adjacent edges always escalate; patch-mode has no plan-critic / critic / adversarial pass to catch the regression);
-- the user wants a full reviewer pass (patch-mode's lite reviewer covers three axes only; the full fourteen-axis pass requires `/cc extend`).
+- the user wants a full reviewer pass (patch-mode's lite reviewer covers three axes only; the full nine-axis pass requires `/cc extend`).
 
 The orchestrator does NOT auto-detect these escape conditions — that's the user's call. Patch-mode trusts the user's framing; the runbook documents the guardrails.
 

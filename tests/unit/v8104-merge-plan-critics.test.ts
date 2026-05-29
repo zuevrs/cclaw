@@ -175,30 +175,35 @@ describe("v8.104 — CORE_AGENTS describes plan-critic with three rubric modes",
   });
 });
 
-describe("v8.104 — orchestrator gates plan-critic up to 3 times per slug (sequential generic → design → devex)", () => {
-  it("start-command's stage→specialist table carries three plan-critic gate rows (one per rubricMode)", () => {
-    // Per-mode gate rows. The stage→specialist table renders rubricMode
-    // as the envelope value inline; each row keys off the rubricMode the
-    // orchestrator stamps on that dispatch.
-    expect(START_COMMAND_BODY).toMatch(/rubricMode: "generic"/u);
-    expect(START_COMMAND_BODY).toMatch(/rubricMode: "design"/u);
-    expect(START_COMMAND_BODY).toMatch(/rubricMode: "devex"/u);
+describe("orchestrator dispatches plan-critic ONCE per slug (single dispatch, active rubrics set — no sequential 3× fan-out)", () => {
+  it("start-command's stage→specialist table carries a single plan-critic row keyed on the `rubrics` envelope set", () => {
+    // The collapsed dispatch carries the active rubric subset inline as a
+    // `rubrics: [...]` envelope — not one row per rubricMode.
+    expect(START_COMMAND_BODY).toMatch(/rubrics: \[/u);
+    // All three rubric scaffolds are still named (none were dropped).
+    expect(START_COMMAND_BODY).toMatch(/\bgeneric\b/u);
+    expect(START_COMMAND_BODY).toMatch(/\bdesign\b/u);
+    expect(START_COMMAND_BODY).toMatch(/\bdevex\b/u);
+    // The retired per-dispatch fan-out literal is gone.
+    expect(START_COMMAND_BODY).not.toMatch(/rubricMode: "(generic|design|devex)"/u);
   });
 
-  it("orchestrator's plan-critic block (#### plan-critic) names the three rubric modes + sequential ordering", () => {
+  it("orchestrator's plan-critic block (#### plan-critic) describes a single dispatch returning ONE merged verdict (no sequential 3× fan-out)", () => {
     const idx = START_COMMAND_BODY.indexOf("#### plan-critic");
     expect(idx).toBeGreaterThan(0);
     const block = START_COMMAND_BODY.slice(idx, idx + 8000);
-    // Each mode's gate is enumerated in the per-stage block.
-    expect(block).toMatch(/`rubricMode: generic`/u);
-    expect(block).toMatch(/`rubricMode: design`/u);
-    expect(block).toMatch(/`rubricMode: devex`/u);
-    // Up to three dispatches per slug, sequential (never parallel).
-    expect(block).toMatch(/up to three times/iu);
-    expect(block).toMatch(/sequentially|sequential/iu);
+    // One dispatch covering the active rubric set.
+    expect(block).toMatch(/single dispatch|one dispatch|ONCE/iu);
+    expect(block).toMatch(/merged verdict|worst-of/iu);
+    // The three rubrics are still individually described inside the block.
+    expect(block).toMatch(/`generic`/u);
+    expect(block).toMatch(/`design`/u);
+    expect(block).toMatch(/`devex`/u);
+    // The retired sequential fan-out language is gone.
+    expect(block).not.toMatch(/up to three times/iu);
   });
 
-  it("orchestrator's design + devex gates fire on the surface flags (triage.designSurface / triage.devexSurface) in soft + strict ceremony", () => {
+  it("orchestrator's design + devex rubric gates fire on the surface flags (triage.designSurface / triage.devexSurface) in soft + strict ceremony", () => {
     // designSurface gate
     expect(START_COMMAND_BODY).toContain("triage.designSurface");
     expect(START_COMMAND_BODY).toMatch(
@@ -211,15 +216,14 @@ describe("v8.104 — orchestrator gates plan-critic up to 3 times per slug (sequ
     );
   });
 
-  it("orchestrator preserves the per-mode flow-state field names (planCritic* / planDesign* / planDevex*)", () => {
-    // Generic mode keeps the v8.51 / v8.103 fields.
+  it("orchestrator stamps ONE plan-critic flow-state triple (per-rubric verdict fields collapsed away)", () => {
+    // The single dispatch carries one verdict triple regardless of how
+    // many rubrics ran.
     expect(START_COMMAND_BODY).toContain("planCriticVerdict");
     expect(START_COMMAND_BODY).toContain("planCriticIteration");
-    // Design + devex modes keep their legacy field names so downstream
-    // readers / pre-v8.104 state files don't need to migrate.
-    expect(START_COMMAND_BODY).toContain("planDesignVerdict");
-    expect(START_COMMAND_BODY).toContain("planDesignFindingsCount");
-    expect(START_COMMAND_BODY).toContain("planDevexVerdict");
-    expect(START_COMMAND_BODY).toContain("planDevexFindingsCount");
+    expect(START_COMMAND_BODY).toContain("planCriticDispatchedAt");
+    // The retired per-rubric verdict fields are no longer stamped.
+    expect(START_COMMAND_BODY).not.toContain("planDesignVerdict");
+    expect(START_COMMAND_BODY).not.toContain("planDevexVerdict");
   });
 });

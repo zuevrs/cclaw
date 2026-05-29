@@ -5,7 +5,7 @@ trigger: before every git commit produced inside an active cclaw flow; always-on
 
 # Skill: commit-hygiene
 
-This merged skill covers both kinds of "what lands in a commit" discipline: how the message reads (formerly **commit-message-quality**) and what changes are allowed inside the commit's diff (formerly **surgical-edit-hygiene**).
+This merged skill covers every kind of "what lands in a commit" discipline: how the message reads (formerly **commit-message-quality**), what changes are allowed inside the commit's diff (formerly **surgical-edit-hygiene**), the slice 3-check authoring rubric + slice↔commit traceability (absorbed from `slice-discipline`), and the AC 3-check authoring rubric + `verify(AC-N): passing` traceability (absorbed from `ac-discipline`). The posture-driven commit-prefix contract — `red(SL-N):` / `green(SL-N):` / `refactor(SL-N):` for slice work, `verify(AC-N): passing` for AC verification — is authored ONCE in the `commit-message-quality` section below; the slice / AC sections add the authoring rubrics, the SL↔AC mapping, and the reviewer's ex-post chain checks.
 
 ## When NOT to apply
 
@@ -202,3 +202,192 @@ The drive-by reflex and the dead-code-cleanup reflex are how scope discipline br
 ## Composition
 
 This skill is **always-on** for builder and for any specialist that produces a commit (which today means builder only — architect, plan-critic, qa-runner, reviewer, critic do not commit code). The reviewer reads this skill at the top of every iteration and uses the finding templates above verbatim.
+
+---
+
+# Slice discipline — authoring + traceability (absorbed `slice-discipline`)
+
+cclaw separates **work** from **verification** in plan.md. Slices (SL-N) are the work units the builder runs TDD cycles against; acceptance criteria (AC-N) live in a separate table and are verified after every slice in their `Verifies` list has landed. This section covers the slice side of that split; the AC side is the **AC discipline** section below.
+
+## slice-quality
+
+Three checks per slice in `plan.md > ## Plan / Slices`:
+
+1. **Atomic** — implementing this slice is one coherent TDD cycle (one RED test, one minimal GREEN, one REFACTOR consideration). A slice whose RED test would have to assert three unrelated behaviours is a compound slice; split it.
+2. **Surface-bounded** — the `Surface` column lists every file the slice will touch (production + test). The builder enforces this at the diff level: a diff touching files outside `Surface` is a contract violation.
+3. **Dependency-honest** — `Depends-on` lists every other SL-K whose Surface or behaviour this slice reads from. Empty `Depends-on` means the slice is genuinely independent; the architect's `Independent` column derives from `Depends-on.length === 0`.
+
+## Parallel-by-default (strict mode)
+
+The builder runs slices in **topologically-ordered layers** rather than strictly sequentially. Each layer is the maximal set of slices whose `Depends-on` is satisfied by the union of every previous layer. The pure utility `src/slice-topology.ts > topologicalLayers()` is the canonical implementation.
+
+- **Slices marked `Independent: yes` (empty `Depends-on`) run in PARALLEL within their layer.** The builder dispatches one sub-builder per slice via the harness's parallel sub-agent primitive; each sub-builder runs RED → GREEN → REFACTOR for its assigned slice only and returns to the parent. Tasks with N truly independent slices finish in the time of the longest slice, not Σ(slice times).
+- **Slices with `Depends-on: SL-K, ...` block on their predecessors.** They land in a later layer than every named predecessor. Linear chains (each slice depending on the previous) collapse back to the historical sequential shape — one slice per layer, no parallelism.
+- **Single-slice layers run inline in the parent builder.** Small tasks (one slice total) pay zero parallelism overhead — the topology returns one layer of one slice and the builder runs it directly with no Task dispatch.
+
+The user-facing outcome: small tasks stay small, large tasks become as fast as their longest slice. Plan-critic §4b is the safety gate — a slice with `Independent: yes` whose `Surface` overlaps another slice's `Surface` is `block-ship` (class=`independence-mismatch`); without that gate, parallel sub-builders would race on the shared file.
+
+**Implication for slice authoring.** When the architect drafts the slice table, treat `Independent: yes` as a load-bearing promise: it commits the builder to parallel dispatch. The promise is testable by inspection — every file in this slice's `Surface` MUST be absent from every other slice's `Surface`. If you find an overlap, either narrow `Surface` (true independence) or add `Depends-on: SL-K` (forces a sequential layer ordering).
+
+## slice smell check
+
+| smell | example | rewrite |
+| --- | --- | --- |
+| compound slice | "implement the helper AND wire the UI" | split into SL-1 (helper) + SL-2 (UI calls helper) |
+| Surface omits test files | `Surface: src/lib/permissions.ts` (but the slice adds a new test) | `Surface: src/lib/permissions.ts, tests/unit/permissions.test.ts` |
+| missing dependency | SL-3 reads from SL-1's new export but `Depends-on: —` | `Depends-on: SL-1` |
+| dependency on later slice | SL-1's `Depends-on: SL-3` | reorder so prerequisite slices have lower ids |
+| Surface drift between rows | SL-1 says `Surface: src/lib/a.ts`; SL-2 also touches `src/lib/a.ts` without declaring it | SL-2 adds `src/lib/a.ts` to its Surface and a `Depends-on: SL-1` row |
+| vague title | "more code" | "extract `hasViewEmail` helper from inline ternary in RequestCard" |
+
+## slice numbering
+
+- Slice ids start at `SL-1` and are sequential within a slug.
+- Refinement slugs restart at `SL-1` even when they refine a slug that had `SL-1..SL-9`.
+- Do not reuse a slice id within the same slug; if you delete a slice (architect-side, before the build stage runs), the remaining ids stay sequential after compaction.
+
+## When to add a slice mid-flight
+
+You don't. Adding slices during build is scope creep. Either the new work fits an existing slice (possibly with an expanded `Surface` row authored by the architect via a fresh dispatch), or it is a follow-up slug.
+
+## slice-traceability (strict mode only)
+
+In `strict` mode, cclaw has one mandatory gate for slice work: every commit produced inside `/cc` for a slice references exactly one slice via a posture-driven subject-line prefix (authored once in the `commit-message-quality` section above), and the slice ↔ commit chain is reconstructible by anyone who runs `git log --grep="(SL-N):" --oneline`.
+
+The reviewer's ex-post checks at handoff time (beyond the message-shape rules above):
+
+- **Slice declared in plan.md.** `SL-N` cited in a commit must exist in the active plan; an unknown SL-N is an A-N finding.
+- **Posture-appropriate sequence.** For `test-first` / `characterization-first` postures, `green(SL-N)` must follow a `red(SL-N)` in git-log order; for `refactor-only`, only `refactor(SL-N)` is expected; for `tests-as-deliverable`, only `test(SL-N)`; for `docs-only`, only `docs(SL-N)`. See `src/posture-validation.ts:POSTURE_COMMIT_PREFIXES` for the canonical mapping.
+- **RED stages test files only.** `git show <red-SHA> --stat` for a `test-first` / `characterization-first` slice must list test files only; mixing in production files is an A-1 finding (severity=required, axis=correctness).
+- **Diff matches Surface.** Every file in the slice's commits must appear in the slice's `Surface` row of `plan.md`. Drive-by edits outside `Surface` are A-4 (severity `consider` → `required`).
+
+The builder appends the slice ↔ SHA row to `flows/<slug>/build.md` under `## Slice cycles` as the durable record; the row's `commits` column carries the SHA(s). The reviewer's final pass (`reviewer mode=release` at ship gate) verifies the chain is complete via `git log --grep="(SL-N):" --oneline` against the plan's Slices list.
+
+## Slice ↔ AC mapping
+
+Each slice's commits land first; AC verification commits land after. The architect authors the back-reference in the `Verifies` column of `## Acceptance Criteria (verification)`: every AC lists which slices verify it, and conversely every slice can be back-traced by reading which AC rows reference it.
+
+- **Every slice MUST be referenced by at least one AC's `Verifies` column.** A slice that no AC verifies is dead work; plan-critic catches this.
+- **Every AC's `Verifies` list MUST contain at least one slice.** An AC with no slice covering it is unverifiable; plan-critic catches this.
+- **Slices and AC NEVER share commits.** Slice commits (`red(SL-N):` / `green(SL-N):` / `refactor(SL-N):`) carry production + test code. AC verify commits (`verify(AC-N): passing`) MUST NOT touch production code — they either carry test-only additions for verification beyond what the slice tests already cover, OR they are empty markers when the slice tests already cover the AC.
+
+## Slice work in soft / inline modes
+
+- In **soft mode** the builder runs one TDD cycle for the whole feature and commits with a plain `git commit -m "<feat|fix|...>: <one-line>"`. There is no `red(SL-N)` / `green(SL-N)` / `refactor(SL-N)` prefix and no slice table — the slice ↔ commit chain only exists in strict mode.
+- In **inline mode** there is no slice or AC table at all; the orchestrator handled the trivial path directly with a single commit.
+
+## When you accidentally committed without the per-slice prefix (strict mode only)
+
+- Reviewer's `git log --grep="(SL-N):"` scan misses the commit; the slice reads as missing.
+- Two options:
+  - **Amend the most recent commit** with `git commit --amend -m "red(SL-N): <description>"` (only safe when the commit has not been pushed and is the most recent — the builder controls the working tree).
+  - **Re-author as a fixup commit** with the correct prefix: `git commit --allow-empty -m "red(SL-N): re-record subject for <original-SHA>"` followed by the actual missing-content commit. The empty marker preserves the audit trail and the reviewer's scan reconstructs the slice's chain.
+- Surface the mis-prefix as a Notes line in the slim summary; the reviewer treats it as a `consider`-severity finding (axis=readability) when amended cleanly, and `required` (axis=correctness) when the chain is left broken.
+
+## Slice discipline — common rationalizations
+
+**Cross-cutting rationalizations:** the canonical commit-prefix / amend-after-push / bundling rows live in `.cclaw/lib/anti-rationalizations.md` under category `commit-discipline`. The rows below stay here because they cover slice-discipline-specific framings (bundling-under-SL-2, vague Surface, mid-build slice addition, dependency misclaim); the catalog covers the cross-cutting commit-chain prose.
+
+| rationalization | truth |
+| --- | --- |
+| "This work is part of SL-2, I'll just bundle it under SL-2." | Compound slice fails the smell check — atomic means one TDD cycle per slice. Split into a new slice with its own id; the audit trail and the reviewer's diff-vs-Surface check need the separation. |
+| "I'll skip the `red(SL-N): ...` prefix this once — the message is self-explanatory." | The reviewer's git-log scan keys off the prefix. Without `(SL-N):` in the subject line, the commit is invisible to the chain check and the slice reads as missing. Amend the message or write a fixup commit; do not leave the chain broken. |
+| "I'll add SL-7 mid-build because I noticed something needed." | Adding slices during build is scope creep. Either the new work fits an existing slice (architect-side revision of `Surface`), or it is a follow-up slug. SL-7 mid-flight breaks the build sub-phase's commit budget and the parallel-dispatch contract. |
+| "Refinement of `<old-slug>` so SL-1 starts at SL-8 (continuation)." | Refinement slugs restart at SL-1. The `refines:` frontmatter is the link; the slice numbering does not carry. |
+| "I'll claim SL-3 is `Independent: yes` even though it reads from SL-1's export." | Independence means `Depends-on.length === 0`. Reading from another slice's export is a dependency; declare it. Plan-critic catches mis-claimed independence at architect handoff. |
+| "I'll renumber the slices after I delete SL-2 — `SL-3` becomes the new `SL-2`." | Don't. The remaining ids stay sequential after compaction; renumbering breaks the reviewer's `git log --grep="(SL-N):"` scan for any commit that already cited the old id. |
+| "I'll mix the slice's RED test and the AC's verify test in one commit." | Slices and AC NEVER share commits. The slice's RED test goes in `red(SL-N): ...`; the AC's verify test (when needed) goes in `verify(AC-N): passing` as a separate commit. The split is enforced by message prefix. |
+| "I touched a file outside `Surface` but it was a one-line fix." | Drive-by edits are A-4 (severity `consider` → `required` depending on size). Add the file to the slice's `Surface` (architect-side) OR list it under `## Summary → Things I noticed but didn't touch` and leave it for a follow-up slug. |
+
+---
+
+# AC discipline — authoring + verification (absorbed `ac-discipline`)
+
+This section covers both AC concerns: the bar for every AC entry (formerly **ac-quality**), and the `verify(AC-N): passing` commit contract that wires the AC ↔ verification chain in strict mode (formerly **ac-traceability**). cclaw splits work from verification: slice work (`red(SL-N):` / `green(SL-N):` / `refactor(SL-N):`) lives in the Slice discipline section above; this section keys off `AC-N` for the verification pass only.
+
+## ac-quality
+
+Three checks per AC:
+
+1. **Observable** — a user, test, or operator can tell whether it is satisfied without reading the diff.
+2. **Independently committable** — a single commit covering only this AC is meaningful.
+3. **Verifiable** — there is an explicit verification line (test name, manual step, or command).
+
+## AC smell check
+
+| smell | example | rewrite |
+| --- | --- | --- |
+| sub-task | "implement the helper" | "search returns BM25-ranked results for queries with multiple terms" |
+| vague verification | "tests pass" | "verified by tests/unit/search.test.ts: 'returns BM25-ranked hits'" |
+| internal detail | "refactor the cache" | "cache hit rate >90% on the dashboard repaint scenario" |
+| compound AC | "build the page and add analytics" | split into two AC |
+
+## AC numbering
+
+- AC ids start at `AC-1` and are sequential.
+- Refinement slugs restart at `AC-1` even when they refine a slug that had AC-1..AC-12.
+- Do not reuse an AC id within the same slug; if you delete an AC, the remaining ids stay sequential after compaction.
+
+## When to add an AC mid-flight
+
+You don't. Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it should be a fresh slug.
+
+## ac-traceability (AC verification pass only)
+
+This part applies only when the active flow's `ceremony_mode` is `strict` (set at the triage gate for large-risky / security-flagged work). In `inline` and `soft` modes there is no per-criterion commit prefix and no AC↔commit chain — see `agents/triage.md` (routing contract) and `runbooks/triage-gate.md` (orchestrator-side Triage procedure) for what each mode does.
+
+In `strict` mode, cclaw separates work from verification:
+
+- **Slice work** (`red(SL-N): …` → `green(SL-N): …` → `refactor(SL-N): …`) is the TDD unit. Slices land in commits keyed by `SL-N`; the reviewer's `git log --grep="(SL-N):" --oneline` reconstructs the slice chain. See the Slice discipline section above for the slice-side contract.
+- **AC verification** is THIS section's domain: after every slice in an AC's `Verifies` list lands and the full suite is green on the merged state, the builder stamps one `verify(AC-N): passing` commit per AC. The reviewer's `git log --grep="verify(AC-N):" --oneline` reconstructs the AC chain.
+
+The two chains are independent; the dual grep is what makes the audit trail reconstructible by anyone who runs git log against the build range.
+
+### Rules (strict mode)
+
+1. **One `verify(AC-N): passing` commit per AC, after all slices in `Verifies` land.** Subject MUST be exactly `verify(AC-N): passing` — the reviewer's git-log scan keys off this verbatim. The body MAY include a one-line evidence citation (test file:test-name + suite output line) and the optional `validates: KA-N` payload (one line per validated assumption from `## Key assumptions to validate`).
+2. **The verify commit's diff is empty OR test-only.** Production code (`src/**`, `lib/**`, `app/**`) NEVER appears in a verify commit. If the AC cannot pass without a production edit, the responsible slice is incomplete — return to its TDD cycle; do not paper over with a verify commit that secretly ships behaviour.
+3. **Stage only test files (or commit empty).** `git add tests/path/to/ac-coverage.test.ts && git commit -m "verify(AC-N): passing"` when the AC needs a verification target beyond what the slice tests already cover (perf budget, integration scenario, contract assertion); OR `git commit --allow-empty -m "verify(AC-N): passing"` when the slice tests already exercise the AC's observable behaviour. `git add -A` is forbidden — list the test files explicitly.
+4. **The reviewer's ex-post checks at handoff time:**
+   - **AC declared in plan.md.** `AC-N` cited in a verify commit must exist in `plan.md > ## Acceptance Criteria (verification)`.
+   - **One verify commit per AC.** A duplicate `verify(AC-N): passing` commit for the same AC is A-1 (axis=correctness); a fresh re-verify after a fix-only edit is a new commit, not an amend of the prior verify.
+   - **Verify after slices.** A `verify(AC-N): passing` commit landed BEFORE every slice in its `Verifies` list landed is A-1 (severity=required).
+   - **Production-code freedom.** `git show --stat <verify(AC-N) SHA>` MUST be empty OR list test files only; a production-code touch in a verify commit is A-1 (severity=critical, axis=correctness).
+5. **`build.md > ## AC verification` carries the AC↔SHA row** as the durable record: `| AC-N | Verifies (slices) | Evidence | commit |`. The Evidence cell cites the test file:test-name (or perf/integration target); the commit cell carries the verify SHA.
+6. **The reviewer's final pass (`reviewer mode=release` at ship gate)** verifies the dual chain via `git log --grep="(SL-N):" --oneline` (slice work) AND `git log --grep="verify(AC-N):" --oneline` (AC verification) against the plan's Slices + Acceptance Criteria tables.
+
+## Archived-flow back-compat
+
+Legacy slugs carry only a `## Acceptance Criteria` section (no `## Plan / Slices` table) and used `red(AC-N):` / `green(AC-N):` / `refactor(AC-N):` for AC work (no separate verify pass). The reviewer auto-detects the archived shape from the absence of `## Plan / Slices` in `plan.md` and applies the legacy per-posture recipe directly against the `(AC-N)` token. New strict-mode slugs always carry both tables and key slice work off `(SL-N)` + AC verification off `verify(AC-N): passing`; do not mix the two shapes within a single slug.
+
+## AC work in soft / inline modes
+
+- In **soft mode** the builder runs one TDD cycle for the whole feature and commits with a plain `git commit -m "<feat|fix|...>: <one-line>"`. There is no `verify(AC-N): passing` commit and no AC↔commit chain — the verification chain only exists in strict mode.
+- In **inline mode** there is no AC table at all; the orchestrator handled the trivial path directly with a single commit.
+- A soft-mode plan has bullet-list testable conditions, not numbered AC IDs. There is no `AC-N` to reference.
+- A single TDD cycle covers the whole feature; you do not run RED → GREEN → REFACTOR per condition.
+- Ship gate is a single reviewer pass ("all listed conditions verified"), not an AC-by-AC ledger.
+
+## When you accidentally committed without the verify prefix (strict mode only)
+
+- Reviewer's `git log --grep="verify(AC-N):"` scan misses the commit; the AC reads as unclosed.
+- Two options:
+  - **Amend the most recent commit** with `git commit --amend -m "verify(AC-N): passing"` (only safe when the commit has not been pushed and is the most recent — the builder controls the working tree).
+  - **Re-author as a fixup commit** with the correct prefix: `git commit --allow-empty -m "verify(AC-N): passing"` after the mis-prefixed original. The empty marker preserves the audit trail and the reviewer's scan reconstructs the AC's chain via the fixup.
+- Surface the mis-prefix as a Notes line in the slim summary; the reviewer treats it as a `consider`-severity finding (axis=readability) when amended cleanly, and `required` (axis=correctness) when the chain is left broken.
+
+## AC discipline — common rationalizations
+
+**Cross-cutting rationalizations:** the canonical commit-prefix / amend-after-push / bundling rows live in `.cclaw/lib/anti-rationalizations.md` under category `commit-discipline`. The rows below stay here because they cover AC-discipline-specific framings (bundling-under-AC-2, vague verification, mid-build AC addition, refinement renumbering, verify-commit purity); the catalog covers the cross-cutting commit-chain prose.
+
+| rationalization | truth |
+| --- | --- |
+| "This AC is part of AC-2, I'll just bundle it under AC-2." | Compound AC fails the smell check — independently committable means one AC per commit. Split into a new AC with its own id; the audit trail and ship-gate need the separation. |
+| "Verification is `tests pass`." | That's a vague verification; the smell check rejects it. Cite a specific test name + file + assertion (`tests/unit/permissions.test.ts: 'hides email when permission is missing'`). |
+| "I'll renumber the ACs after I delete AC-2 — `AC-3` becomes the new `AC-2`." | Don't. The remaining ids stay sequential after compaction; renumbering breaks the reviewer's `git log --grep="verify(AC-N):"` scan for any commit that already cited the old id. |
+| "I'll skip the `verify(AC-N): passing` commit — the slice tests already cover the AC." | The slice commits are the TDD unit; the `verify(AC-N): passing` commit is the atomic AC closure signal. Without it the AC reads as unclosed even when every contributing slice landed green. Stamp the verify commit (empty body is fine) so the reviewer's dual grep reconstructs the AC chain. |
+| "I'll add AC-13 mid-build because I noticed something needed." | Adding AC during build is scope creep. Either the new work fits an existing AC (no new id), or it's a follow-up slug. AC-13 mid-flight breaks the build sub-phase's commit budget. |
+| "Refinement of `<old-slug>` so AC-1 starts at AC-13 (continuation)." | Refinement slugs restart at AC-1. The `refines:` frontmatter is the link; the AC numbering does not carry. |
+| "The verification line is 'manual test' for this AC." | A manual step is a verification, but it must be **concrete** — name the click target, the expected observable, and the operator. "I clicked around and it looked fine" is the rationalization the reviewer catches. |
+| "I'll inline the AC's text in the diff comment so the reviewer can see it." | The AC lives in `plan.md`, not in source comments. The reviewer reads the plan; inlining the AC text bloats the production diff with quoted plan prose. |
+| "The verify(AC-N) commit needs a small production fix to actually pass — I'll just slip it in." | NO. The verify commit is test-only or empty by contract; production-code touch is A-1 critical (axis=correctness). If the AC won't pass on the merged state, the responsible slice is incomplete — return to its TDD cycle (`red(SL-K): …` → `green(SL-K): …` → `refactor(SL-K): …`), then re-emit `verify(AC-N): passing` as a fresh commit. |
