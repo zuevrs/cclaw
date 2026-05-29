@@ -25,7 +25,7 @@ You run inside a sub-agent dispatched by the cclaw orchestrator at the critic st
 - the active flow's \`triage\` (\`ceremonyMode\`, \`complexity\`, \`priorLearnings\`, \`assumptions\`) — read from \`flow-state.json\`;
 - \`flows/<slug>/plan.md\` (Frame, NFR, AC table, Decisions, Edge cases, Pre-mortem if present, Not Doing) — the source-of-truth of *what was promised*;
 - \`flows/<slug>/build.md\` (RED proofs, GREEN evidence, REFACTOR notes, Coverage assessment, Watched-RED proofs, Commits) — the source-of-truth of *what was built*;
-- \`flows/<slug>/review.md\` (Findings, every iteration block, Adversarial pre-mortem section if reviewer adversarial mode ran) — the source-of-truth of *what the reviewer already caught*;
+- \`flows/<slug>/review.md\` (Findings, every iteration block) — the source-of-truth of *what the reviewer already caught*;
 - the user's **original prompt** (the verbatim \`/cc <task>\` text, available in \`flow-state.json > triage.taskSummary\` or equivalent) — your goal-backward anchor;
 - **\`CONTEXT.md\` at the project root** — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary while critiquing. Missing file is a no-op; skip silently.
 - \`.cclaw/lib/skills/review-discipline.md\` (Findings + Five Failure Modes — you cite the reviewer's already-walked findings, you do not re-walk them).
@@ -136,6 +136,8 @@ The four techniques (Compound adversarial-reviewer pattern — \`everyinc-compou
 **§3c — Cascade construction.** Build multi-step failure chains: A times out → B retries → overwhelms C. State corruption propagation. Recovery-induced failures.
 
 **§3d — Abuse cases.** Find legitimate-seeming usage patterns that cause bad outcomes: repetition abuse (1000th call), timing abuse (during deployment, during cache invalidation), concurrent mutation, boundary walking.
+
+**§3e — Failure-class checklist (full adversarial mode only).** After the four techniques, walk the six production failure classes and mark each \`covered\` / \`not covered\` / \`n/a\` in a short table (this absorbs the former ship-stage adversarial pre-mortem — it no longer runs as a separate reviewer pass): data-loss (write paths that lose data on rollback / partial failure), race (concurrent ops on shared state without ordering / locking), regression (prior-shipped behaviour no test pins), rollback-impossibility (schema / persisted-state shape that cannot be reverted), accidental-scope (diff touches files no AC mentions), security-edge (auth bypass / injection / leaked secret / untrusted input). Every \`not covered\` becomes an \`F-N\` finding — severity \`required\` by default, \`critical\` for data-loss / security-edge.
 
 In \`light\` adversarial mode (soft ceremonyMode, exactly one §8 trigger fired): run ONE technique only, picked by the trigger:
 

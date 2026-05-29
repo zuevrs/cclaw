@@ -71,7 +71,6 @@ The orchestrator body keeps only the always-needed hops. Open the matching runbo
 | every reviewer-stage exit before the reviewer dispatch | \`handoff-gates.md\` (self-review section) |
 | every builder GREEN return when \`triage.surfaces\` ∩ {\`ui\`, \`web\`} ≠ ∅ AND \`ceremonyMode != "inline"\` (qa gate) | \`qa-stage.md\` |
 | \`reviewCounter\` reaches 5 without convergence | \`cap-reached-recovery.md\` |
-| fix-only commits intersect a prior adversarial finding | \`adversarial-rerun.md\` |
 | stage ship (every ship attempt) | \`handoff-gates.md\` (ship-gate section) |
 | every stage exit when \`triage.path != ["build"]\` (always-auto pause-resume) | \`pause-resume.md\` |
 | every chain decision after a slim summary returns (always-auto matrix) | \`always-auto-failure-handling.md\` |
@@ -208,7 +207,7 @@ Every specialist's full gate / inputs / output / slim-summary shape / verdict ro
 | \`qa\` | \`qa-runner\` *(gated)* | \`triage.surfaces\` ∩ {ui, web} ≠ ∅ AND \`ceremonyMode != "inline"\` | \`browser-verify\` | debug-and-browser | \`agents/qa-runner.md\` + \`runbooks/qa-stage.md\` | no (gate forbids \`inline\`) |
 | \`review\` | \`reviewer\` | every non-inline path | \`code\` (default) or \`integration\` (after parallel-build) | review-discipline, anti-slop | \`agents/reviewer.md\` + \`runbooks/review.md\` (+ \`runbooks/dispatch-skills-index.md\` for per-envelope gate slice) | no (always sub-agent) |
 | \`critic\` | \`critic\` | ceremonyMode=\`strict\`, OR \`soft\` + risk trigger (securityFlag / one-way D-N) | \`gap\` (default, soft-risk + strict-no-trigger) or \`adversarial\` (strict + §8 trigger fires) | — (self-contained) | \`agents/critic.md\` + \`runbooks/critic-steps.md\` ("Post-implementation pass") | no (skipped on \`inline\` + plain \`soft\`) |
-| \`ship\` | \`reviewer\` (mode=release) + \`reviewer\` (mode=adversarial, strict) | every ship attempt | parallel fan-out, then merge | release-checklist | \`agents/reviewer.md\` + \`runbooks/handoff-gates.md\` ("Pre-ship dispatch gate") + \`runbooks/adversarial-rerun.md\` on rerun trigger | no (always sub-agent) |
+| \`ship\` | \`reviewer\` (mode=release) | every ship attempt | single dispatch | release-checklist | \`agents/reviewer.md\` + \`runbooks/handoff-gates.md\` ("Pre-ship dispatch gate") | no (always sub-agent) |
 
 The wrapper-skill column is what you put in the dispatch envelope's "Required second read" line. If multiple wrappers apply (architect reads both \`plan-authoring.md\` and \`source-driven.md\` in strict mode), list both — sub-agent reads them in order.
 
@@ -272,7 +271,7 @@ Every specialist's full gate / inputs / output / slim-summary / verdict routing 
 
 #### ship
 
-\`agents/reviewer.md\` (mode=release) + \`agents/reviewer.md\` (mode=adversarial, strict) + \`runbooks/handoff-gates.md\`. Parallel fan-out (release + adversarial reviewer in strict). Structured user ask for finalization mode (merge / open-PR / push-only / discard-local / no-vcs); \`Cancel\` is NEVER an option (user invokes \`/cc-cancel\` out-of-band). The ship-gate ask is the ONLY user-facing structured ask on the always-auto path. Conditional adversarial rerun → \`runbooks/adversarial-rerun.md\`.
+\`agents/reviewer.md\` (mode=release) + \`runbooks/handoff-gates.md\`. Structured user ask for finalization mode (merge / open-PR / push-only / discard-local / no-vcs); \`Cancel\` is NEVER an option (user invokes \`/cc-cancel\` out-of-band). The ship-gate ask is the ONLY user-facing structured ask on the always-auto path. (The adversarial pre-mortem now lives in the \`critic\` post-implementation pass, not a separate ship-stage reviewer.)
 
 ## Pause and resume
 
@@ -296,7 +295,7 @@ Always dispatch the \`triage\` sub-agent on a fresh \`/cc <task>\` (when no exte
 
 ## Available specialists + research helpers
 
-The Stage → specialist mapping table above names every specialist + its gate; full contracts (modes, hard rules, output schema) live at \`agents/<id>.md\` and load on dispatch. The **reviewer** is multi-mode (\`code\` / \`text-review\` / \`integration\` / \`release\` / \`adversarial\`) and carries the security pass on its \`security\` axis (it absorbed the standalone security-reviewer); the **triage** sub-agent runs exactly once per fresh \`/cc <task>\` (research-mode + extend-mode forks skip it). Eight-specialist roster: ${SPECIALIST_IDS}. **Research helpers** (${RESEARCH_HELPER_IDS}) are NOT in \`SPECIALISTS\` — they are dispatched by \`architect\` BEFORE it authors its artifact and never become \`lastSpecialist\` / appear in \`triage.path\`.
+The Stage → specialist mapping table above names every specialist + its gate; full contracts (modes, hard rules, output schema) live at \`agents/<id>.md\` and load on dispatch. The **reviewer** is multi-mode (\`code\` / \`text-review\` / \`integration\` / \`release\`) and carries the security pass on its \`security\` axis (it absorbed the standalone security-reviewer); the **triage** sub-agent runs exactly once per fresh \`/cc <task>\` (research-mode + extend-mode forks skip it). Eight-specialist roster: ${SPECIALIST_IDS}. **Research helpers** (${RESEARCH_HELPER_IDS}) are NOT in \`SPECIALISTS\` — they are dispatched by \`architect\` BEFORE it authors its artifact and never become \`lastSpecialist\` / appear in \`triage.path\`.
 
 ## Skills attached
 

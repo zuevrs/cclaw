@@ -425,28 +425,6 @@ The reviewer prompt's "Architecture severity priors" rule names a stronger gate:
 Concretely: when the reviewer's slim summary marks \`ship_gate: architecture\` (set whenever a \`required + architecture\` row is open), the orchestrator does NOT auto-advance to ship. The legacy in-chat picker options (\`accept-warns-and-ship\`, \`fix-only\`, \`stay-paused\`) are retired — the user resolves the gate by editing the relevant artifact and re-invoking \`/cc\`, or discards with \`/cc-cancel\`.
 `;
 
-const ADVERSARIAL_RERUN = `# On-demand runbook — adversarial pre-mortem rerun
-
-Open this runbook **only at ship gate after a fix-only loop landed commits that touched lines previously flagged by an adversarial review**.
-
-## Rerun trigger condition (computed at ship gate)
-
-- The last adversarial iteration produced ≥1 finding with \`severity: required | critical\`, AND
-- a fix-only loop has landed at least one commit since that adversarial run, AND
-- the diff of those fix-only commits intersects the file:line set named in the prior adversarial findings.
-
-## Behaviour when the trigger fires
-
-When the trigger fires, the ship-gate parallel fan-out includes \`reviewer mode=adversarial\` again (alongside release + security if applicable). When it does not fire, adversarial runs once per slug as before.
-
-Record the rerun reason in \`review.md\`: \`Adversarial reran because fix-only commits <SHA1>, <SHA2> touched lines previously flagged in F-3 and F-7\`.
-
-## Limits
-
-- The rerun runs **once per ship attempt**, not iteratively. If the rerun itself produces \`block\`-level findings, the orchestrator dispatches \`builder\` mode=\`fix-only\` and re-runs the **regular** reviewer (mode=\`code\`) to confirm the fix; the adversarial pass does not rerun again unless the user explicitly requests it.
-- In \`soft\` mode the adversarial pass (and its rerun) are skipped by default — the lighter-weight regular reviewer is enough for small/medium work. The user can opt in with \`/cc <task> --adversarial\` if they want the extra sweep regardless.
-`;
-
 const HANDOFF_GATES = `# On-demand runbook — handoff gates (self-review before reviewer, ship before push)
 
 Open this runbook on **two** pre-handoff inspections:
@@ -493,20 +471,17 @@ In parallel-build the gate runs **per slice**: a slice whose self-review fails b
 
 ## Pre-ship dispatch gate (ship-gate)
 
-### Ship-stage parallel fan-out
+### Ship-stage reviewer dispatch
 
-The ship stage uses **parallel fan-out + merge** (the canonical cclaw fan-out). Dispatch all specialists in the same message; merge their summaries in your context.
-
-Specialists fanned out:
+The ship stage dispatches a single reviewer:
 
 - \`reviewer\` mode=\`release\` — always. Includes the \`security\` axis at full threat-model depth when \`security_flag\` is true (absorbed from the former \`security-reviewer\` specialist).
-- \`reviewer\` mode=\`adversarial\` — **strict mode only** (see below). Rerun rules in \`adversarial-rerun.md\`.
 
 Inputs: \`.cclaw/flows/<slug>/plan.md\`, build.md, review.md.
 
-**Shared diff context (single parse pass).** Before the parallel dispatch, run \`git diff --stat <plan-base>..HEAD\` and \`git diff --name-only <plan-base>..HEAD\` once in the orchestrator's context. Pass the parsed shape (touched files list, additions/deletions per file, total LOC delta) to **every** parallel reviewer in the dispatch envelope under a \`Shared diff:\` block. Each reviewer reads its own filtered subset (release-mode reads everything; adversarial-mode skims for hot paths; release-mode's security-axis sweep prioritises files matching sensitive patterns when \`security_flag\` is true). This avoids two independent \`git diff\` calls and two independent file-list parses — savings: 1-2 seconds per ship + ~1-2K tokens × 2 (diff parse boilerplate). The reviewers still independently \`git show <SHA>\` per finding to read commit-level context; only the aggregated diff shape is shared.
+**Shared diff context (single parse pass).** Before the dispatch, run \`git diff --stat <plan-base>..HEAD\` and \`git diff --name-only <plan-base>..HEAD\` once in the orchestrator's context. Pass the parsed shape (touched files list, additions/deletions per file, total LOC delta) to the reviewer in the dispatch envelope under a \`Shared diff:\` block. The release-mode reviewer reads everything; its security-axis sweep prioritises files matching sensitive patterns when \`security_flag\` is true. The reviewer still independently \`git show <SHA>\` per finding to read commit-level context; only the aggregated diff shape is shared.
 
-Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan. As of the adversarial reviewer's pre-mortem section is appended to \`review.md\` (no separate \`pre-mortem.md\` file unless \`legacy-artifacts: true\`).
+Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan.
 
 After ship, run the compound learning gate.
 
@@ -529,7 +504,7 @@ askUserQuestion(
 \`\`\`
 
 If the user wants to abandon the flow at this point, they type \`/cc-cancel\` (out-of-band of the structured ask). The orchestrator does not pre-offer that as a clickable option, because:
-1. The flow has already passed code-mode review + adversarial pre-mortem; cancelling here is unusual.
+1. The flow has already passed code-mode review + the critic's pre-mortem; cancelling here is unusual.
 2. The shipped artefacts may have already been partially written (manifest-as-frontmatter, learnings.md); cancelling mid-finalize requires a different recovery path than \`/cc-cancel\` from earlier stages.
 
 ### Post-ship micro-edit hint
@@ -547,37 +522,16 @@ The hint mechanics:
 
 The hint exists so post-ship "tiny tweak" tasks have a frictionless entry point. Dogfooded slugs routinely paid the full ceremony cost on 2-line follow-ups; surfacing the patch-mode option immediately after ship is the cheapest place to teach the user the fork exists.
 
-### Adversarial pre-mortem (strict mode only)
-
-Before the ship gate finalises, the orchestrator dispatches \`reviewer\` mode=\`adversarial\` against the diff produced for this slug. The adversarial reviewer's specific job is to **think like the failure**: how would this break in production a week from now?
-
-the adversarial sweep appends a \`## Pre-mortem (adversarial)\` section to the same \`flows/<slug>/review.md\`, not a separate file. (Users on \`legacy-artifacts: true\` still get a separate \`pre-mortem.md\` for tooling compat.) The adversarial reviewer treats the pre-mortem as a **scenario exercise** — reasoning backwards from "this shipped and failed, what was it" — and explicitly does NOT write a literal future date in the artefact body. See \`reviewer.ts\` Adversarial mode for the full schema.
-
-Failure classes the adversarial pass MUST consider (mark each as "covered" / "not covered" / "n/a"):
-
-- **data-loss** — write paths that could lose user data on rollback or partial failure;
-- **race** — concurrent operations on shared state without locking / ordering guarantees;
-- **regression** — prior-shipped behaviour an existing test does not pin;
-- **rollback impossibility** — schema migration / persisted state shape that cannot be reverted;
-- **accidental scope** — diff touches files no AC mentions;
-- **security-edge** — auth bypass, injection, leaked secret in logs, untrusted input.
-
-The adversarial reviewer treats every "not covered" as a finding (axis varies; severity \`required\` by default, escalated to \`critical\` for data-loss / security-edge). Findings go into the existing Findings table in \`review.md\`; the same file gets a \`## Pre-mortem (adversarial)\` section summarising the adversarial pass's reasoning so the user can read a one-page rationale. (On \`legacy-artifacts: true\` the section is mirrored into a standalone \`pre-mortem.md\` for downstream tooling.)
-
 ### Ship-gate decision matrix
 
-| reviewer:release (incl. security axis) | reviewer:adversarial | gate |
-| --- | --- | --- |
-| clear | clear | clear → ship may proceed |
-| clear | block | block → fix-only loop or user override |
-| block | any | block → fix-only loop |
-| clear | warn | warn → render adversarial findings, ask user |
+| reviewer:release (incl. security axis) | gate |
+| --- | --- |
+| clear | clear → ship may proceed |
+| block | block → fix-only loop |
 
 The \`security\` axis is one of the reviewer's nine axes (absorbed the former \`security-reviewer\` specialist). A \`block\`-severity finding on \`security\` is handled the same as a \`block\` on any other axis — block → fix-only loop. \`security_flag: true\` in plan frontmatter forces the reviewer to walk the security axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) regardless of which surfaces the diff touched.
 
-The adversarial pass runs **once per ship attempt**, not iteratively. If it produces \`block\`-level findings, the orchestrator dispatches \`builder\` mode=\`fix-only\` and re-runs the **regular** reviewer (mode=\`code\`) to confirm the fix; the adversarial pass does not re-run unless the user explicitly requests it (the marginal value drops fast on second run). For the conditional rerun rule on fix-only hot-path commits, see \`adversarial-rerun.md\`.
-
-In \`soft\` mode the adversarial pass is **skipped** by default — the lighter-weight regular reviewer is enough for small/medium work. The user can opt in with \`/cc <task> --adversarial\` if they want the extra sweep regardless.
+The adversarial pre-mortem is no longer part of the ship gate — it runs earlier, in the \`critic\` post-implementation pass (strict, or soft + risk trigger). See \`critic-steps.md\`.
 `;
 
 const HANDOFF_ARTIFACTS = `# On-demand runbook — handoff artifacts (HANDOFF.json + .continue-here.md)
@@ -1384,38 +1338,17 @@ The pass exits when one of:
 
 ## §5 — Worked examples
 
-### 5.1 — Light depth, clean self-review
-
-\`\`\`text
-/cc research is hono still actively maintained vs fastify
-\`\`\`
-
-Detect-hop fork stamps \`research_depth: light\` (pure clarification wording — \`is X maintained?\`). Phase 2 dispatches engineer + skeptic only. Both return \`Confidence: high\` findings citing context7 hits for both libraries' v5 / v11 release dates. Phase 3 synthesis converges on "hono is more actively shipped; fastify still has the bigger plugin ecosystem". Self-review:
-
-- Placeholder scan: clean.
-- Contradiction scan: clean.
-- Scope drift scan: clean.
-- Ambiguity scan: recommended-next was \"plan with /cc add-hono-experiment\" which could mean two things — tightened to \"plan with /cc add-hono-side-by-side-prototype\".
-
-Self-review notes records the one ambiguity fix and the flow finalises.
-
-### 5.2 — Deep-product depth, scope drift
-
-\`\`\`text
-/cc research should we build a new internal calendar instead of using google calendar
-\`\`\`
-
-Detect-hop fork stamps \`research_depth: deep-product\` (greenfield wording — \`should we build...\`). Phase 2 dispatches all 5 lenses; product + skeptic envelopes carry \`Research depth: deep-product\` so the Thesis / Adjacent-product / Durability probes fire. Phase 3 synthesis drafts a recommendation but drifts into "how to build it" specifics. Self-review's scope-drift scan catches this and rewrites the synthesis to stay on "should we?". Self-review notes records the rewrite.
+- **Light depth, clean self-review** — \`/cc research is hono still actively maintained vs fastify\` stamps \`research_depth: light\` (clarification wording), dispatches engineer + skeptic only, synthesis converges; the only self-review fix is an ambiguity tighten (recommended-next \`add-hono-experiment\` → \`add-hono-side-by-side-prototype\`).
+- **Deep-product depth, scope drift** — \`/cc research should we build a new internal calendar instead of using google calendar\` stamps \`research_depth: deep-product\` (greenfield wording), fires the Thesis / Adjacent-product / Durability probes; the scope-drift scan catches a synthesis that drifted into "how to build it" and re-anchors it on "should we?".
 
 ## §6 — Anti-rationalization
 
 | rationalization | truth |
 | --- | --- |
-| "Self-review found one placeholder — I'll just leave it; the user will probably fill it in." | NO. Placeholders are structural failures. The self-review pass exists to fix them BEFORE \`research.md\` lands; passing them through means the next flow's architect reads a degraded artifact. Fix inline or escalate via re-dispatch. |
-| "Light depth means I can skip the self-review pass too." | NO. Light depth dispatches fewer lenses, but the synthesis self-review still runs. A 2-lens synthesis can drift, contradict, or carry placeholders just like a 5-lens synthesis. |
-| "Deep-product depth fired all the probes — surely the synthesis is comprehensive." | The probes give MORE material to surface (durability, thesis, adjacent product); they do NOT replace the self-review pass. More material = more surface for contradictions or scope drift. Run the self-review the same way. |
-| "I'll skip writing Self-review notes when it's clean — saves a few lines." | NO. The notes section is part of the research.md contract (the template carries it); writing \"No self-review issues found.\" verbatim is the canonical empty state. The follow-up architect reads the absence of the section as a structural failure. |
-| "The recommendation contradicts the skeptic — but it's a really cool plan, I'll keep it." | NO. The contradiction scan exists exactly to catch this. If the skeptic flagged a don't-proceed AND the recommendation says proceed, fix the recommendation. Resolving the contradiction is more important than \"saving the cool plan\". |
+| "Self-review found a placeholder — leave it; the user will fill it in." | NO. Placeholders are structural failures; fix inline or escalate via re-dispatch BEFORE \`research.md\` lands. |
+| "Light depth means I can skip the self-review pass." | NO. Fewer lenses still produce a synthesis that can drift, contradict, or carry placeholders. The self-review runs at every depth. |
+| "I'll skip Self-review notes when clean — saves a few lines." | NO. \`No self-review issues found.\` verbatim is the canonical empty state; the follow-up architect reads an absent section as a structural failure. |
+| "The recommendation contradicts the skeptic — but it's a cool plan, keep it." | NO. The contradiction scan exists to catch exactly this; if the skeptic flagged don't-proceed, fix the recommendation. |
 `;
 
 const RESEARCH_REVISION = `# On-demand runbook — research revision loop
@@ -2004,15 +1937,11 @@ If the user explicitly cancels mid-dialogue ("stop", "never mind", "/cc-cancel")
 
 ## §4 — Phase 1.5 — approaches gate
 
-Immediately after Phase 1 distillation completes and BEFORE Phase 2 dispatches any lens, the orchestrator runs the **Approaches Gate**: distil 2-3 candidate FRAMINGS of the research question and ask which framing(s) the downstream lenses should carry in their dispatch envelopes. Without the gate, lenses dispatch against an implicit single framing (whatever the orchestrator settled on during dialogue distillation), and downstream findings inherit that framing's blind spots. The gate is the research-mode analogue of the obra-superpowers brainstorming Phase 2-3 ("2-3 approach options before committing") and the addyosmani \`idea-refine\` Phase 1.3 Cluster + Stress-test discipline.
+Immediately after Phase 1 distillation and BEFORE Phase 2 dispatches any lens, the orchestrator runs the **Approaches Gate**: distil 2-3 candidate FRAMINGS of the research question (a framing is a DIFFERENT framing of the same question — NOT 2-3 conclusions or implementation candidates; each routes the lens dispatch differently) and ask which framing(s) the lenses should carry. Without the gate, lenses inherit an implicit single framing's blind spots. Reference patterns: obra-superpowers brainstorming Phase 2-3 ("2-3 approach options before committing") + addyosmani \`idea-refine\` Phase 1.3 Cluster + Stress-test.
 
-A framing is a DIFFERENT framing of the same research question (NOT 2-3 conclusions, NOT 2-3 implementation candidates). Worked example for "add caching to the search endpoint" — **framing A: caching as infra primitive** (Redis / in-memory / HTTP cache; engineer lens leans hardest), **framing B: caching as search-quality lever** (what we cache, invalidation, when to bust; product + engineer split the load, skeptic centres on stale-data abuse cases), **framing C: caching as organizational gate** (ownership / on-call; product + history + skeptic lead). Each framing routes the lens dispatch differently even though the topic text is identical.
+Stamp \`flow-state.json > approaches\` (a \`ResearchApproach[]\`, \`src/types.ts\`) + \`researchState: "approaches-gate"\`; surface the framings + picker prompt \`Pick one (e.g. "A" / "B") or accept "all" (every framing flows to every lens — the default).\`; on the user's pick (single-letter ids, case-insensitive title substring, or \`all\` / \`default\` — the silent default is "all", the gate is non-coercive) stamp \`selectedApproaches\` (zero-based indices into \`approaches[]\`) and dispatch Phase 2 carrying the selected framings under each lens envelope's \`Framing:\` field. Mid-research re-framings route through \`/cc research push-back <framing>\` (\`approaches[]\` is never mutated).
 
-**Procedure.** Distil 2-3 framings (\`id\` + 4-8-word \`title\` + one-paragraph \`summary\`); **Stamp \`flow-state.json > approaches\`** as a {@link ResearchApproach}\[\] (\`src/types.ts\`) and \`researchState: "approaches-gate"\`; surface the framings as a bulleted block + picker prompt \`Pick one (e.g. "A" / "B") or accept "all" (every framing flows to every lens — the default).\`; wait for the user's pick (single-letter ids \`A\` / \`A B\` / \`A,B\`, or case-insensitive title substring match, or \`all\` / \`every\` / \`default\` — the silent default is "all", NOT "stop" — the gate is non-coercive); stamp \`flow-state.json > selectedApproaches\` (zero-based indices into \`approaches[]\`); dispatch Phase 2 with the selected framings carried in every lens envelope under the new \`Framing:\` field (string array; one entry per selected framing as \`<title> — <summary>\`).
-
-**Sub-cases.** **Only one obvious framing emerges from the dialogue** — surface that framing PLUS one stress-test variant ("framing B: what would be true if we were wrong about framing A?"); never fewer than 2 framings, never more than 3. When the user picks a framing not on the list, accept verbatim and append as the next-index entry in \`approaches[]\`. When the user cancels mid-gate ("stop" / "never mind" / "/cc-cancel"), run the cancel runtime and end the turn. Mid-research re-framings route through the existing \`/cc research push-back <framing>\` machinery (framings ARE claims about the research question); the original \`approaches[]\` is NEVER mutated (immutable for audit).
-
-Full procedure — picker grammar, sub-cases, the Phase 2 envelope shape, anti-rationalization (silent-pick / collapse / orchestrator-knows-best traps) — lives in \`.cclaw/lib/runbooks/approaches-gate.md\`. Open that runbook on every transition from Phase 1 distillation exit to Phase 2 lens dispatch.
+Full procedure — picker grammar, sub-cases, the Phase 2 envelope shape, anti-rationalization — lives in \`runbooks/approaches-gate.md\`. Open it on every transition from Phase 1 distillation exit to Phase 2 lens dispatch.
 
 ## §5 — Phase 2 — parallel lens dispatch
 
@@ -2216,12 +2145,6 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     fileName: "cap-reached-recovery.md",
     title: "Cap-reached recovery",
     body: CAP_REACHED_RECOVERY
-  },
-  {
-    id: "adversarial-rerun",
-    fileName: "adversarial-rerun.md",
-    title: "Adversarial pre-mortem rerun",
-    body: ADVERSARIAL_RERUN
   },
   {
     id: "handoff-gates",

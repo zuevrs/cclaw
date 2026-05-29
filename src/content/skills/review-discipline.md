@@ -9,7 +9,7 @@ The reviewer is the single nine-axis quality gate. The former `security-reviewer
 
 ## When to use
 
-Invoked at the start of every `reviewer` dispatch. Auto-applies the deeper threat-model checklist when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (the reviewer escalates the `security` axis depth regardless of `security_flag`). The Findings and nine-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, `release`, and `adversarial` modes; the security threat-model checklist sits inline in the `security` axis when triggered.
+Invoked at the start of every `reviewer` dispatch. Auto-applies the deeper threat-model checklist when the diff touches `authn` / `authz` / secrets / supply chain / data exposure surfaces (the reviewer escalates the `security` axis depth regardless of `security_flag`). The Findings and nine-axis / Five Failure Modes contract apply uniformly across `code`, `text-review`, `integration`, and `release` modes; the security threat-model checklist sits inline in the `security` axis when triggered.
 
 ## When NOT to apply
 

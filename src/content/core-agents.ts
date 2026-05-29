@@ -130,9 +130,9 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     kind: "specialist",
     title: "Reviewer",
     activation: "on-demand",
-    modes: ["code", "text-review", "integration", "release", "adversarial"],
+    modes: ["code", "text-review", "integration", "release"],
     description:
-      "Multi-mode reviewer covering code, plan/spec text, integration, release readiness, and adversarial sweeps. Absorbed the standalone `security-reviewer` specialist — the reviewer's `security` axis now carries the full threat-model + sensitive-change protocol (authn / authz / secrets / supply chain / data exposure). When `security_flag` is set on the dispatch envelope, the reviewer gives the security axis extra emphasis (walks every threat-model item even on small diffs).",
+      "Multi-mode reviewer covering code, plan/spec text, integration, and release readiness. Absorbed the standalone `security-reviewer` specialist — the reviewer's `security` axis now carries the full threat-model + sensitive-change protocol (authn / authz / secrets / supply chain / data exposure). When `security_flag` is set on the dispatch envelope, the reviewer gives the security axis extra emphasis (walks every threat-model item even on small diffs).",
     prompt: SPECIALIST_PROMPTS.reviewer
   },
   {

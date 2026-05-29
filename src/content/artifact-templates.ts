@@ -1425,28 +1425,15 @@ last_specialist: null
 refines: null
 shipped_at: null
 ship_commit: null
-# List of research lenses that returned findings for this slug.
-# Canonical order: engineer, product, architecture, history, skeptic.
-# Any lens whose dispatch timed out / errored is marked \`failed\` in
-# this list rather than dropped, so coverage gaps are auditable from
-# the artifact alone.
+# Lenses that returned findings (canonical order). A timed-out / errored
+# lens is marked \`failed\` here rather than dropped, so coverage gaps stay
+# auditable from the artifact alone.
 lenses: [engineer, product, architecture, history, skeptic, design]
-# Multi-tier depth (light | standard | deep-product). Stamped by
-# the orchestrator's research-mode fork (auto-classified from topic
-# wording — see runbooks/research-depth-and-self-review.md).
-# Phase 2 lens dispatch reads this field to decide which lenses fire
-# (light = engineer + skeptic; standard = engineer + product +
-# architecture + history + skeptic, +design when the
-# design-signal heuristic fires or --lens=design forces include;
-# deep-product = same set with extra Thesis / Adjacent-product /
-# Durability probes folded into product + skeptic + design envelopes).
+# Depth tier (light | standard | deep-product), auto-classified from the
+# topic wording at the research-mode fork. Drives Phase 2 lens dispatch —
+# see runbooks/research-depth-and-self-review.md.
 research_depth: standard
-# Back-compat: the legacy ambiguity score frontmatter fields are kept
-# (null by default) so downstream readers that branch on these stay
-# compatible. The multi-lens orchestrator does not author these
-# directly; the synthesis pass may opt to compute one based on the
-# coverage of the five lenses, but the field stays null unless a
-# future surface re-introduces the procedural gate.
+# Legacy ambiguity-score fields, kept null for back-compat readers.
 ambiguity_score: null
 ambiguity_dimensions: null
 ambiguity_threshold: null
@@ -1454,37 +1441,21 @@ ambiguity_threshold: null
 
 # Research — SLUG-PLACEHOLDER
 
-> Topic: **TOPIC-PLACEHOLDER**.
->
-> This artifact is the output of a \`/cc research <topic>\` flow — the
-> main-context research orchestrator's multi-lens pass.
->
-> Flow shape (4 phases):
->
-> 1. **Discovery dialogue** (open-ended; no question cap; the
->    orchestrator runs in main context so the user can iterate
->    freely). The dialogue summary lives in the next section.
-> 2. **Parallel lens dispatch.** Five research lenses run in parallel
->    after the user signals "ready / go ahead": engineer (technical
->    feasibility), product (user value + alternatives), architecture
->    (system fit + coupling + boundaries), history (prior attempts via
->    \`.cclaw/knowledge.jsonl\` + git log), skeptic (failure modes +
->    abuse cases).
-> 3. **Synthesis.** The orchestrator pastes each lens's findings block
->    verbatim under the corresponding per-lens section, then composes
->    the cross-lens synthesis section.
-> 4. **Finalize.** No build / review / critic / ship stages run; the
->    flow finalises to \`.cclaw/flows/shipped/<slug>/research.md\`.
->
-> Optional handoff: the next \`/cc <task>\` invocation on this project
-> reads the most-recent shipped research slug and stamps it into
-> \`flow-state.json > priorResearch\` so the follow-up flow's architect
-> Bootstrap reads carry this research (per-lens findings + synthesis +
-> recommendation) as Frame / Approaches / Decisions context.
+> Topic: **TOPIC-PLACEHOLDER**. Output of a \`/cc research <topic>\` flow — the main-context multi-lens orchestrator (discovery dialogue → Approaches Gate → parallel lens dispatch → synthesis → finalize; no build / review / ship stages). Full procedure: \`runbooks/research-mode.md\`. The follow-up \`/cc <task>\` flow reads this artifact end-to-end as \`priorResearch\` context (stamped into \`flow-state.json > priorResearch\`).
+
+## Finding-stub shape (referenced by every lens below)
+
+Every \`## <lens> lens\` section opens with a \`### Findings (with confidence)\` block — 3-7 findings, each shaped:
+
+#### F-1 (confidence: _0.0-1.0_)
+
+_<one-sentence lens finding>_
+
+_(Repeat \`#### F-2\`, \`#### F-3\`… per lens as the findings warrant. The Synthesis \`### Confidence summary\` aggregates every lens's F-N numbers — do NOT re-define this stub inside each lens; just list that lens's findings.)_
 
 ## Discovery dialogue summary
 
-_(Research orchestrator: Phase 1 distillation. 5-15 bullets capturing what the user told the orchestrator during the open-ended dialogue — topic refinement, known constraints, prior attempts, stakeholders, scope edges. The dispatched lenses see THIS summary (not the raw dialogue) as their shared envelope payload.)_
+_(Phase 1 distillation — 5-15 bullets of what the user told the orchestrator (topic refinement, constraints, prior attempts, stakeholders, scope edges). The dispatched lenses see THIS summary, not the raw dialogue, as their shared envelope payload.)_
 
 - _bullet 1: what the user knows / wants_
 - _bullet 2: what the user explicitly DOESN'T know yet_
@@ -1494,225 +1465,148 @@ _(Research orchestrator: Phase 1 distillation. 5-15 bullets capturing what the u
 
 ## Framings considered
 
-_(Approaches Gate (Phase 1.5). The orchestrator surfaces 2-3 candidate framings; the user picks one or more (or accepts "all" — the default). Mirrors \`flow-state.json > approaches\` / \`selectedApproaches\`; re-frame via \`/cc research push-back <framing>\`. Lenses receive the selected set under their \`Framing:\` dispatch field.)_
+_(Approaches Gate, Phase 1.5 — see runbooks/approaches-gate.md. The orchestrator surfaces 2-3 candidate framings; the user picks one or more (default "all" — every framing flows to every lens). Mirrors \`flow-state.json > approaches\` / \`selectedApproaches\`; re-frame via \`/cc research push-back <framing>\`. Lenses receive the selected set under their \`Framing:\` dispatch field.)_
 
 | id | title | summary | selected |
 | --- | --- | --- | --- |
-| _<A | kebab-slug>_ | _<4-8 words>_ | _<one-paragraph: what question this framing makes load-bearing, what gets de-emphasised, which downstream lens dispatches see the biggest shape change>_ | _<✅ if user picked / accepted "all"; ❌ otherwise>_ |
-
-_(2-3 framings stamped at the Approaches Gate. "All selected" is the canonical default — every framing carries forward into every lens envelope. A single-framing pick is the deliberate-narrowing case: the user accepted one framing and dropped the others.)_
+| _<A | kebab-slug>_ | _<4-8 words>_ | _<what this framing makes load-bearing, what it de-emphasises, which lens dispatch shifts most>_ | _<✅ if picked / "all"; ❌ otherwise>_ |
 
 ## Key assumptions to validate
 
-_(Phase 3 synthesis. 2-5 bets the research rests on (distinct from \`## Framings considered\`). Each leads with a stable \`KA-N\` id + validation method + status; the follow-up \`/cc <task>\` architect copies these verbatim into plan.md's \`## Key assumptions to validate\`.)_
+_(Phase 3 synthesis. 2-5 bets the research rests on (distinct from \`## Framings considered\`). Each leads with a stable \`KA-N\` id + validation method + status; the follow-up \`/cc <task>\` architect copies these verbatim into plan.md.)_
 
 - **KA-1** — _\`<assumption>\`_. Validate by: _\`<method — benchmark, user research, log query, A/B test, prior-art scan, runbook page, ...>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
 - **KA-2** — _\`<assumption>\`_. Validate by: _\`<method>\`_. Status: _\`<unvalidated | validated | invalidated>\`_.
 
 ## Engineer lens
 
-_(Pasted verbatim from the \`research-engineer\` lens findings block; the lens prompt defines the section set.)_
+_(Pasted verbatim from the \`research-engineer\` lens; opens with the finding-stub shape above.)_
 
 ### Findings (with confidence)
 
-_(distilled top-level findings from the engineer lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. The orchestrator's Confidence-summary subsection of the Synthesis block below aggregates these across lenses with weighted averaging and surfaces cross-lens spread (≥0.5 between two lenses on the same finding-equivalent).)_
-
-#### F-1 (confidence: _0.0-1.0_)
-
-_<one-sentence engineer-lens finding>_
-
-#### F-2 (confidence: _0.0-1.0_)
-
-_<one-sentence engineer-lens finding>_
-
-#### F-3 (confidence: _0.0-1.0_)
-
-_<one-sentence engineer-lens finding>_
+_(This lens's \`#### F-N (confidence: 0.0-1.0)\` findings.)_
 
 ### Feasibility
 
-- **Overall:** _<high | medium | low | unknown> — one-line rationale_
-- **Technology fit:** _<high | medium | low | unknown> — one-line rationale_
-- **Skills required:** _<high | medium | low | unknown> — one-line rationale_
-- **Time horizon:** _<small | medium | large | unknown> — one-line rationale_
-- **Reversibility:** _<high | medium | low | unknown> — one-line rationale_
-- **Verification path:** _<one-line description>_
+- **Overall / Technology fit / Skills required / Time horizon / Reversibility:** _<high | medium | low | unknown> each — one-line rationale_.
+- **Verification path:** _<one line>_.
 
 ### Implementation paths
 
-1. _<path-name>_ — _<one-sentence description>_. Effort: _<small | medium | large>_. Pro: _<one bullet>_. Con: _<one bullet>_.
-2. _<path-name>_ — ...
+1. _<path-name>_ — _<one-sentence>_. Effort: _<small | medium | large>_. Pro / Con: _<one each>_.
 
 ### Blockers
 
-- _<blocker-name>_ (severity: _<hard | soft>_) — _<one-sentence description>_.
+- _<blocker>_ (severity: _<hard | soft>_) — _<one line>_.
 
 ### Risks (during implementation)
 
-- _<risk-name>_ — _<one-sentence description>_.
+- _<risk>_ — _<one line>_.
 
 ### Rough effort
 
-_<one-sentence size estimate, ranged not point>_
+_<one-sentence ranged estimate (not a point)>_.
 
 ### Sources
 
-_(first-class web search dispatch. Inline citations the engineer lens used to ground the findings: MCP web-search hits (\`user-exa\`), library-doc hits (\`user-context7\`), \`<path:line>\` references for in-repo evidence, plus the optional MCP fallback note when no web tool was available — fall-back to training knowledge is stamped here so the user / follow-up architect can audit the recency of each claim.)_
+_(First-class web search: \`user-exa\` / \`user-context7\` hits, \`path:line\` for in-repo evidence, or a training-knowledge fallback note when no web tool was available.)_
 
-- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
+- _<source>_ — _<one line>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
 
 ## Product lens
 
-_(Pasted verbatim from the \`research-product\` lens findings block; the lens prompt defines the section set.)_
+_(Pasted verbatim from the \`research-product\` lens.)_
 
 ### Findings (with confidence)
 
-_(distilled top-level findings from the product lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
-
-#### F-1 (confidence: _0.0-1.0_)
-
-_<one-sentence product-lens finding>_
-
-#### F-2 (confidence: _0.0-1.0_)
-
-_<one-sentence product-lens finding>_
-
-#### F-3 (confidence: _0.0-1.0_)
-
-_<one-sentence product-lens finding>_
+_(This lens's \`#### F-N (confidence: 0.0-1.0)\` findings.)_
 
 ### User value
 
-- **Overall:** _<high | medium | low | unknown> — one-line rationale_
-- **Impact magnitude:** _<high | medium | low | unknown> — one-line rationale_
-- **Audience size:** _<broad | narrow | single | unknown> — one-line rationale_
-- **Urgency:** _<high | medium | low | unknown> — one-line rationale_
+- **Overall / Impact magnitude / Urgency:** _<high | medium | low | unknown> each — one-line rationale_. **Audience size:** _<broad | narrow | single | unknown>_.
 
 ### Who benefits
 
-- _<actor / role>_ _(primary | secondary)_ — _<one-line description of how they benefit>_.
+- _<actor / role>_ _(primary | secondary)_ — _<one line>_.
 
 ### Alternatives considered
 
-1. _<alternative name>_ — Pro: _<one bullet>_. Con: _<one bullet>_.
-2. _<alternative name>_ — ...
-
-_(Always include "do nothing / status quo" as one alternative.)_
+1. _<alternative>_ — Pro / Con: _<one each>_. _(Always include "do nothing / status quo".)_
 
 ### Market / domain context
 
-- _<bullet 1: common pattern or prior art>_.
+- _<common pattern or prior art>_.
 
 ### Open product questions
 
-- _<question 1>_.
+- _<question>_.
 
-### Product thesis _(deep-product depth only)_
+### Product thesis + adjacent product _(deep-product depth only)_
 
-_(fired when \`research_depth: deep-product\`. The Thesis probe forces the lens to surface the implicit product hypothesis: what change in user behaviour / market position the proposed work assumes, what would have to be true for the change to land, and what evidence (real or sought) supports the thesis. Skip this subsection on \`light\` / \`standard\` depth.)_
-
-- **Implicit thesis:** _<one-sentence statement of the product hypothesis the work assumes>_.
-- **What must be true:** _<2-3 conditions the world / market / users must already satisfy for the work to deliver value>_.
-- **Evidence the lens found:** _<bullets citing market data, user research, internal usage signals>_.
-
-### Adjacent product _(deep-product depth only)_
-
-_(fired when \`research_depth: deep-product\`. The Adjacent-product probe forces the lens to scan adjacent product surfaces / categories the topic could absorb or fragment, plus the second-order product implications the surface-level findings missed.)_
-
-- **Adjacent surface:** _<product-or-feature-name>_ — _<one-line description; what already exists nearby>_. Implication: _<why this matters for the topic>_.
-- **Cannibalisation / synergy risk:** _<one bullet>_.
+- **Implicit thesis / what must be true / evidence:** _<the product hypothesis the work assumes, the 2-3 conditions it needs, the supporting market / usage evidence>_.
+- **Adjacent surface + cannibalisation / synergy risk:** _<a nearby product surface the topic could absorb or fragment, plus the second-order risk>_.
 
 ### Sources
 
-_(first-class web search dispatch. Citations the product lens used: MCP web-search hits (\`user-exa\`), context7 library / framework docs, market-data references, plus the optional MCP fallback note when no web tool was available.)_
-
-- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
+- _<source>_ — _<one line>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
 
 ## Architecture lens
 
-_(Pasted verbatim from the \`research-architecture\` lens findings block; the lens prompt defines the section set.)_
+_(Pasted verbatim from the \`research-architecture\` lens.)_
 
 ### Findings (with confidence)
 
-_(distilled top-level findings from the architecture lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
-
-#### F-1 (confidence: _0.0-1.0_)
-
-_<one-sentence architecture-lens finding>_
-
-#### F-2 (confidence: _0.0-1.0_)
-
-_<one-sentence architecture-lens finding>_
-
-#### F-3 (confidence: _0.0-1.0_)
-
-_<one-sentence architecture-lens finding>_
+_(This lens's \`#### F-N (confidence: 0.0-1.0)\` findings.)_
 
 ### Surface impact
 
-- _<surface-name>_ (direction: _<reads | writes | both>_, severity: _<shallow | moderate | deep>_) — _<one-line description; cite \`path:line\` when grounded in repo>_.
+- _<surface>_ (direction: _<reads | writes | both>_, severity: _<shallow | moderate | deep>_) — _<one line; cite \`path:line\`>_.
 
 ### Coupling points
 
-- _<coupling-description>_ (direction: _<new-dependency | tighter-coupling | looser-coupling>_, risk: _<high | medium | low>_) — _<one-line description>_.
+- _<coupling>_ (_<new-dependency | tighter-coupling | looser-coupling>_, risk: _<high | medium | low>_) — _<one line>_.
 
 ### Boundaries affected
 
-- _<boundary-name>_ (crossing: _<adds-crossing | changes-crossing | removes-crossing>_) — _<one-line implication>_.
+- _<boundary>_ (crossing: _<adds | changes | removes>_) — _<one-line implication>_.
 
 ### Scalability considerations
 
-- _<bullet 1>_
+- _<bullet>_
 
 ### Reusable patterns / precedents
 
-- _<pattern-name>_ — already used at \`<path:line>\`. _<one-line description>_.
+- _<pattern>_ — already used at \`<path:line>\`. _<one line>_.
 
 ### Sources
 
-_(first-class web search dispatch. Citations the architecture lens used: \`<path:line>\` for in-repo evidence, MCP web-search hits (\`user-exa\`) for architectural patterns / postmortems / tradeoff write-ups, context7 framework docs, plus the optional MCP fallback note when no web tool was available.)_
-
-- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
+- _<source>_ — _<one line>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
 
 ## History lens
 
-_(Pasted verbatim from \`research-history\` lens's findings block. Sections: Findings (with confidence) (3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Prior attempts / Lessons learned / Outcome signals from .cclaw/knowledge.jsonl / Git-archaeology highlights / Continuity / drift.)_
+_(Pasted verbatim from the \`research-history\` lens. Memory-only — web search is OUT of scope; citations are project-local.)_
 
 ### Findings (with confidence)
 
-_(distilled top-level findings from the history lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
-
-#### F-1 (confidence: _0.0-1.0_)
-
-_<one-sentence history-lens finding>_
-
-#### F-2 (confidence: _0.0-1.0_)
-
-_<one-sentence history-lens finding>_
-
-#### F-3 (confidence: _0.0-1.0_)
-
-_<one-sentence history-lens finding>_
+_(This lens's \`#### F-N (confidence: 0.0-1.0)\` findings.)_
 
 ### Prior attempts
 
-- \`<slug-or-sha>\` (date: _<date>_, outcome: _<shipped | reverted | manual-fix | follow-up-bug | abandoned | unknown>_) — _<one-line description>_. Cite: \`<knowledge.jsonl:line>\` | \`<git-ref>\`.
+- \`<slug-or-sha>\` (date, outcome: _<shipped | reverted | manual-fix | follow-up-bug | abandoned | unknown>_) — _<one line>_. Cite: \`<knowledge.jsonl:line>\` | \`<git-ref>\`.
 
 ### Lessons learned
 
 > **From slug \`<prior-slug>\`** (\`shippedAt: <iso>\`): _<verbatim quote from learnings.md:line>_
 
-**Why this applies here:** _<one short bullet>_
+**Why this applies here:** _<one bullet>_
 
 ### Outcome signals (from .cclaw/knowledge.jsonl)
 
-- \`reverted\`: _<count>_
-- \`manual-fix\`: _<count>_
-- \`follow-up-bug\`: _<count>_
+- \`reverted\` / \`manual-fix\` / \`follow-up-bug\`: _<counts>_.
 
 ### Git-archaeology highlights
 
-- \`<short-sha>\` (date: _<date>_) — _<subject line>_. Why notable: _<one short bullet>_.
+- \`<short-sha>\` (date) — _<subject line>_. Why notable: _<one bullet>_.
 
 ### Continuity / drift
 
@@ -1720,82 +1614,51 @@ _<1-2 sentences naming the directional arc, OR "No directional drift observed in
 
 ### Sources
 
-_(citations the history lens used. Web search is OUT of scope for this lens (memory-only); the citations here are project-local: \`.cclaw/knowledge.jsonl\` line references, \`learnings.md\` paths, git refs.)_
-
-- _<source-name>_ — _<one-line description>_. _(\`knowledge.jsonl:line\` | \`learnings.md:line\` | \`<git-ref>\`)_
+- _<source>_ — _<one line>_. _(\`knowledge.jsonl:line\` | \`learnings.md:line\` | \`<git-ref>\`)_
 
 ## Skeptic lens
 
-_(Pasted verbatim from \`research-skeptic\` lens's findings block. Sections: Findings (with confidence) (3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Failure modes (likelihood × impact) / Edge cases / Abuse cases / Hidden costs / Don't-proceed triggers.)_
+_(Pasted verbatim from the \`research-skeptic\` lens.)_
 
 ### Findings (with confidence)
 
-_(distilled top-level findings from the skeptic lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
-
-#### F-1 (confidence: _0.0-1.0_)
-
-_<one-sentence skeptic-lens finding>_
-
-#### F-2 (confidence: _0.0-1.0_)
-
-_<one-sentence skeptic-lens finding>_
-
-#### F-3 (confidence: _0.0-1.0_)
-
-_<one-sentence skeptic-lens finding>_
+_(This lens's \`#### F-N (confidence: 0.0-1.0)\` findings.)_
 
 ### Failure modes
 
-- _<failure-mode-name>_ (likelihood: _<high | medium | low>_, impact: _<high | medium | low>_) — _<one-line description>_. Earliest signal: _<one short clause>_.
+- _<failure-mode>_ (likelihood / impact: _<high | medium | low>_) — _<one line>_. Earliest signal: _<clause>_.
 
 ### Edge cases
 
-- _<edge-case-name>_ — _<one-line description; what scenario, what must hold>_.
+- _<edge-case>_ — _<one line>_.
 
 ### Abuse cases
 
-- _<abuse-case-name>_ — _<one-line description; what an adversary tries, what they gain>_.
+- _<abuse-case>_ — _<one line; what an adversary tries, what they gain>_.
 
 ### Hidden costs
 
-- _<cost-name>_ — _<one-line description; what gets paid post-ship that isn't in the effort estimate>_.
+- _<cost>_ — _<one line; what gets paid post-ship that isn't in the effort estimate>_.
 
 ### Don't-proceed triggers (if any)
 
-- _<trigger-name>_ — _<one-line description; what was found, why it should block proceeding>_.
+- _<trigger>_ — _<one line; what was found, why it should block proceeding>_.
 
 ### Durability probe _(deep-product depth only)_
 
-_(fired when \`research_depth: deep-product\`. The Durability probe forces the skeptic lens to project the topic 6-18 months out: which assumptions decay first, which adversarial scenarios become more likely as the product matures, and which signals would tell the team early. Skip this subsection on \`light\` / \`standard\` depth.)_
-
-- **Decay vector:** _<assumption-or-component>_ — _<one-line description; what specifically erodes in 6-18 months>_. Earliest signal: _<one short clause>_.
-- **Maturing adversarial scenario:** _<one bullet; an abuse case that is unlikely on day 1 but probable as user / data / surface scale>_.
+- **Decay vector + maturing adversarial scenario:** _<what erodes in 6-18 months + earliest signal; plus an abuse case that grows as user / data / surface scale>_.
 
 ### Sources
 
-_(first-class web search dispatch. Citations the skeptic lens used: postmortem writeups via \`user-exa\`, vulnerability databases / advisories, abuse-case literature, durability case studies, plus the optional MCP fallback note when no web tool was available.)_
-
-- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
+- _<source>_ — _<one line>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | training-knowledge fallback)_
 
 ## research-design — Design dimensions
 
-_(added by the new \`research-design\` lens. Dispatched on \`standard\` / \`deep-product\` depth when the topic touches UI / UX / positioning / affordances (orchestrator heuristic + the \`--lens=design\` / \`--lens=-design\` user-toggle flags). Pasted verbatim from \`research-design\` lens's findings block. Sections: Findings (with confidence) (3-7 numbered findings with per-finding numeric confidence 0.0-1.0) / Design dimensions implicated (all seven dimensions, each graded \`load-bearing\` / \`relevant\` / \`tangential\` / \`out-of-scope\`) / Existing patterns to study (2-5 entries with citations) / Adjacent design surfaces (deep-product depth only) / Anti-patterns to avoid (including canonical AI-slop signals) / Open design questions. The rubric is the SAME seven-dimension rubric the plan-critic specialist's \`rubricMode: "design"\` body and the reviewer's design-quality axis use — single source of truth at \`src/content/design-quality-rubric.ts\`. When the lens was NOT dispatched (light depth, or the topic missed the design-signal heuristic and the user did not force-include via \`--lens=design\`), this section is omitted from research.md entirely; the absence is auditable from the frontmatter \`lenses\` list._
+_(Added by the \`research-design\` lens. Dispatched on \`standard\` / \`deep-product\` depth when the topic touches UI / UX / positioning / affordances (design-signal heuristic + \`--lens=design\` / \`--lens=-design\` toggles). Same seven-dimension rubric as the plan-critic \`design\` mode and the reviewer's design-quality axis — SSOT: \`src/content/design-quality-rubric.ts\`. OMITTED entirely when the lens did not dispatch (light depth, or the heuristic missed and the user did not pass \`--lens=design\`); the absence is auditable from the frontmatter \`lenses\` list.)_
 
 ### Findings (with confidence)
 
-_(distilled top-level findings from the design lens, each carrying a numeric confidence \`0.0\`-\`1.0\`. Aggregated by the orchestrator's synthesis pass into a Confidence-summary subsection of the Synthesis block below.)_
-
-#### F-1 (confidence: _0.0-1.0_)
-
-_<one-sentence design-lens finding>_
-
-#### F-2 (confidence: _0.0-1.0_)
-
-_<one-sentence design-lens finding>_
-
-#### F-3 (confidence: _0.0-1.0_)
-
-_<one-sentence design-lens finding>_
+_(This lens's \`#### F-N (confidence: 0.0-1.0)\` findings.)_
 
 ### Design dimensions implicated
 
@@ -1809,86 +1672,70 @@ _<one-sentence design-lens finding>_
 
 ### Existing patterns to study
 
-1. _<pattern-name>_ _(dimension: <one of the seven>)_ — _<what's good>_. Study: _<what specifically>_. Source: _<URL or \`(general pattern; training knowledge)\` tag>_.
+1. _<pattern>_ _(dimension)_ — _<what's good>_. Study: _<what specifically>_. Source: _<URL or \`(general pattern; training knowledge)\`>_.
 
 ### Adjacent design surfaces _(deep-product depth only)_
 
-1. _<adjacent-surface-name>_ — _<one-line description of the nearby problem + its design shape>_. Why this matters here: _<one-line>_.
+1. _<adjacent-surface>_ — _<nearby problem + its design shape>_. Why this matters here: _<one line>_.
 
 ### Anti-patterns to avoid
 
-1. _<anti-pattern-name>_ _(dimension: <one of the seven>)_ — Why this topic is prone to it: _<one-line citing dialogue / framing>_. _(Optional citation.)_
+1. _<anti-pattern>_ _(dimension)_ — Why this topic is prone to it: _<one line>_. _(Optional citation.)_
 
 ### Open design questions
 
-1. _<question>_ _(dimension: <one of the seven>)_ — Why it's open: _<one-line>_.
+1. _<question>_ _(dimension)_ — Why it's open: _<one line>_.
 
 ### Sources
 
-_(first-class web search dispatch on the design lens. Citations the design lens used: design-system tours via \`user-exa\` / \`user-context7\` (shadcn, Radix, Material 3), pattern critiques, accessibility-spec references, plus the optional MCP fallback note when no web tool was available. Pattern claims without URL citations carry the literal \`(general pattern; training knowledge)\` tag.)_
-
-- _<source-name>_ — _<one-line description>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | \`(general pattern; training knowledge)\`)_
+- _<source>_ — _<one line>_. _(\`user-exa\` | \`user-context7\` | \`path:line\` | \`(general pattern; training knowledge)\`)_
 
 ## Synthesis
 
-_(Research orchestrator: Phase 3 cross-lens distillation. 3-7 paragraphs covering:_
-
-- _**Convergence** — where 2+ lenses point the same way (e.g. "engineer + product both flag X as the blocker"; "history + skeptic both surface the schema-migration failure mode")._
-- _**Divergence** — where lenses disagree (e.g. "product says high value; skeptic flags an unmitigated abuse case"; "engineer says small effort; architecture flags deep surface impact")._
-- _**Trade-off space** — the big trade-off(s) the user / follow-up architect must navigate. Frame as concrete choices, not as abstract concerns._
-- _**Confidence and coverage** — note any lens that returned \`Confidence: low\` or was marked \`failed\` in the lenses frontmatter; the synthesis pass should be honest about coverage gaps._
-
-_The synthesis is the orchestrator's own work — NOT a verbatim paste from any lens. The five per-lens sections above carry the lens-authored content; this section is where the orchestrator does the cross-lens reasoning the user came to research for.)_
+_(Phase 3 cross-lens distillation — 3-7 paragraphs of the orchestrator's OWN reasoning (not a verbatim lens paste). Cover: **Convergence** (where 2+ lenses point the same way), **Divergence** (where lenses disagree), **Trade-off space** (the concrete choice the user / follow-up architect must navigate), and **Confidence / coverage** (call out any lens marked \`failed\` or returning low confidence).)_
 
 ### Confidence summary
 
-_(orchestrator-authored aggregation of the per-lens \`### Findings (with confidence)\` blocks. Every dispatched lens now stamps each finding with a numeric \`#### F-N (confidence: 0.0-1.0)\` rating; the synthesis pass walks all per-lens findings and folds them into three subsections below. Mandatory section — when no cliffs are detected and aggregation is not meaningful, write the literal string \`No cross-lens confidence cliffs detected; per-lens means within ±0.15 of each other.\` verbatim. Absence of this section is a structural failure for the follow-up \`/cc <task>\` flow's architect, which reads \`research.md\` end-to-end as \`priorResearch\` context.)_
+_(Orchestrator aggregation of the per-lens \`### Findings (with confidence)\` blocks — three parts below. Mandatory section: when no cliffs exist and aggregation is not meaningful, write \`No cross-lens confidence cliffs detected; per-lens means within ±0.15 of each other.\` verbatim. Absence is a structural failure for the follow-up \`/cc <task>\` architect.)_
 
-**Weighted averages** _(per finding-equivalent — claims the orchestrator judged similar across 2+ lenses; weight = 1/lens-count contributing; cite contributing F-N ids inline)_:
+**Weighted averages** _(per finding-equivalent; weight = 1/contributing-lens-count; cite F-N ids inline)_:
 
-- _\`<one-line claim>\` — weighted avg \`0.65\` across engineer F-2 (0.9) + skeptic F-1 (0.4); 2 lenses, weight 0.5 each._
-- _\`<one-line claim>\` — ..._
+- _\`<claim>\` — weighted avg \`0.65\` across engineer F-2 (0.9) + skeptic F-1 (0.4)._
 
-**Confidence cliffs** _(≥0.5 spread between any two lenses on the same finding-equivalent — the highest-signal divergence; surfaces here, not under the prose Divergence paragraph above)_:
+**Confidence cliffs** _(≥0.5 spread between two lenses on the same claim — the highest-signal divergence; write "None detected." when no pair crosses 0.5)_:
 
-- **Cliff:** _\`<one-line claim>\` — engineer F-2 (0.9) vs. skeptic F-1 (0.2); spread 0.7. \`<one-line note on what the disagreement implies for the follow-up architect>\`._
-- _(0-N cliffs. Write "None detected." verbatim when no pair crosses the 0.5 threshold.)_
+- **Cliff:** _\`<claim>\` — engineer F-2 (0.9) vs. skeptic F-1 (0.2); spread 0.7. \`<what it implies for the follow-up architect>\`._
 
-**Per-lens rollup** _(mean confidence across each lens's findings, rounded to two decimals)_:
+**Per-lens rollup** _(mean confidence per lens, two decimals; omit the design row when the design lens did not dispatch)_:
 
-- **engineer:** mean _0.65_ across _N_ findings _(F-1..F-N)_.
-- **product:** mean _0.70_ across _N_ findings _(F-1..F-N)_.
-- **architecture:** mean _0.55_ across _N_ findings _(F-1..F-N)_.
-- **history:** mean _0.80_ across _N_ findings _(F-1..F-N)_.
-- **skeptic:** mean _0.45_ across _N_ findings _(F-1..F-N)_.
-- **design:** mean _0.60_ across _N_ findings _(F-1..F-N)_. _(Omit this row when design lens did not dispatch — light depth, or design-signal heuristic did not fire and user did not pass \`--lens=design\`.)_
+- **engineer / product / architecture / history / skeptic / design:** mean _<0.00>_ across _<N>_ findings.
 
 ### Self-review notes
 
-_(output of the synthesis self-review pass. Before \`research.md\` is written to disk, the orchestrator walks the draft through four scans (placeholder / contradiction / scope drift / ambiguity — see \`runbooks/research-depth-and-self-review.md\`) and fixes findings inline. This subsection records what got cleaned up. On a clean draft, write \`No self-review issues found.\` verbatim — the absence of this subsection is a structural failure for the follow-up \`/cc <task>\` flow's architect, which reads \`research.md\` end-to-end as \`priorResearch\` context.)_
+_(Output of the synthesis self-review pass — placeholder / contradiction / scope-drift / ambiguity scans (see runbooks/research-depth-and-self-review.md). One bullet per fix, OR the literal \`No self-review issues found.\` when clean. Absence of this subsection is a structural failure for the follow-up architect.)_
 
-- _<one bullet per fix the self-review applied; example: "Filled \`<TBD>\` in Engineer > Implementation paths > path 2 con (lifted from lens slim-summary Notes line)."; example: "Reframed Synthesis paragraph 2 — original drifted toward 'how to migrate' but topic was 'should we migrate'."; example: "Removed contradiction: synthesis claimed convergence on Redis but product lens listed Redis as a 'do nothing' alternative pro; restated as divergence."; OR the literal string "No self-review issues found." when all four scans returned clean.>_
+- _<one bullet per fix, or "No self-review issues found.">_
 
 ## Not Doing (and why)
 
-_(Research orchestrator: Phase 3 synthesis. 3-5 bullets naming scope explicitly excluded from this research's framing, each paired with a one-sentence rationale. Surfaces deliberate non-commitments the lens dispatch and synthesis already implied — adjacent topics deferred to a future research flow, framings dropped at the Approaches Gate, lens findings deliberately not synthesised. The follow-up \`/cc <task>\` flow's architect reads this section as load-bearing scope context: "the research already excluded X for reason Y — do not relitigate it in the plan's \`## Not Doing (and why)\` section".)_
+_(Phase 3 synthesis. 3-5 bullets naming scope explicitly excluded from this research's framing, each with a one-sentence rationale (separate research topic, framing dropped at the Approaches Gate, lens-level out-of-scope, adjacent surface deferred). The follow-up \`/cc <task>\` architect reads this as load-bearing scope context — do not relitigate it in the plan's \`## Not Doing (and why)\`.)_
 
-- **\`<scope item>\`** — _\`<one-sentence reason — separate research topic, framing dropped at Approaches Gate, lens-level out-of-scope, adjacent surface deferred, ...>\`._
+- **\`<scope item>\`** — _\`<one-sentence reason>\`._
 - **\`<scope item>\`** — _\`<one-sentence reason>\`._
 
 ## Recommended next step
 
-_(Research orchestrator: Phase 3 final recommendation. EXACTLY ONE of the three options below — the user reads this and decides what \`/cc\` invocation to run next.)_
+_(Phase 3 final recommendation — EXACTLY ONE of the three below. The user reads this and decides what \`/cc\` to run next.)_
 
-- **plan with \`/cc <task>\`** — _Research converges on a workable direction; risks are tracked but proceedable. Suggest a concrete kebab-case task description the user can type. Example: "plan with \`/cc add-redis-cache-to-search-endpoint\`"._
-- **more research needed (specific area)** — _One or more lenses returned \`Confidence: low\` AND the user gap is concrete. Name the specific area that needs more research. Example: "more research needed (data team needs to confirm the migration window before architecture path can be picked)"._
-- **don't proceed (skeptic blocked: <reason>)** — _The skeptic lens set \`Don't-proceed: yes\` AND no obvious mitigation exists within the topic's scope. Cite the specific trigger. Example: "don't proceed (skeptic blocked: irreversible data migration with no backup strategy in scope)"._
+- **plan with \`/cc <task>\`** — research converges on a workable, proceedable direction; suggest a concrete kebab-case task (e.g. "plan with \`/cc add-redis-cache-to-search-endpoint\`").
+- **more research needed (specific area)** — a lens returned \`Confidence: low\` AND the gap is concrete; name the specific area.
+- **don't proceed (skeptic blocked: <reason>)** — the skeptic set \`Don't-proceed: yes\` with no in-scope mitigation; cite the trigger.
 
-After research finalises, the orchestrator surfaces a plain-prose handoff prompt: "\`research.md\` is ready at \`.cclaw/flows/shipped/<slug>/research.md\`. Recommended next: _<verbatim recommendation>_. To plan, run \`/cc <task>\` and I'll carry the research as \`priorResearch\` context."
+After finalize, the orchestrator surfaces a plain-prose handoff naming the verbatim recommendation + the \`research.md\` path.
 
 ## Revision history
 
-_(append-only audit trail of \`/cc research revise <area>\` / \`/cc research push-back <claim>\` / \`/cc research accept\` invocations. The orchestrator mirrors \`flow-state.json > revisions[]\` verbatim into this table; new rows append on each invocation, prior rows are NEVER mutated. The terminal \`accept\` row closes out the table. On a fresh research flow with zero revisions before accept, this table contains exactly one row (the accept entry); the heading still ships in the template so readers always find it. Full procedure for the revision loop lives in \`runbooks/research-revision.md\`.)_
+_(Append-only audit trail of \`/cc research revise <area>\` / \`/cc research push-back <claim>\` / \`/cc research accept\`. Mirrors \`flow-state.json > revisions[]\` verbatim; new rows append, prior rows are NEVER mutated (append-only). A fresh flow with zero revisions before accept has exactly one row (the accept entry). Full procedure: \`runbooks/research-revision.md\`.)_
 
 | timestamp | kind | area / claim | lenses re-dispatched | change |
 | --- | --- | --- | --- | --- |

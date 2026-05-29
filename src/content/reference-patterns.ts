@@ -31,7 +31,7 @@ The user asks for "login", "OAuth", "passkeys", "MFA", "SSO", "session lifetime"
 - \`design\` (Phase 4 — Decisions, Phase 5 — Pre-mortem) — always, even if the change feels additive. Record auth/secrets/wire-format decisions as inline D-N rows in \`plan.md\`.
 - \`security-reviewer\` mode=\`threat-model\` — always.
 - \`security-reviewer\` mode=\`sensitive-change\` — at code-review time on the diff.
-- \`reviewer\` mode=\`adversarial\` — at least once, looking for the case the author is biased to miss.
+- \`critic\` — at least once, looking for the case the author is biased to miss.
 
 ## Common pitfalls
 
@@ -62,7 +62,7 @@ The user asks to "harden", "fix CVE", "rotate keys", "tighten CSP", "patch SSRF"
 
 - \`security-reviewer\` mode=\`threat-model\` always.
 - \`security-reviewer\` mode=\`sensitive-change\` on the diff.
-- \`reviewer\` mode=\`adversarial\` — second pair of eyes on the regression test (does it actually exercise the threat?).
+- \`critic\` — second pair of eyes on the regression test (does it actually exercise the threat?).
 
 ## Common pitfalls
 
