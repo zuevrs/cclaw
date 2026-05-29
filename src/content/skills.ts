@@ -9,10 +9,10 @@ import { fileURLToPath } from "node:url";
  * inside each specialist prompt.
  *
  * - `triage`   — detect + triage steps (gate + persistence)
- * - `plan`     — design + ac-author (preflight / dispatch)
- * - `build`    — slice-builder (dispatch)
+ * - `plan`     — architect (preflight / dispatch)
+ * - `build`    — builder (dispatch)
  * - `qa`       — qa-runner (on-demand; UI surfaces only)
- * - `review`   — reviewer / security-reviewer (dispatch)
+ * - `review`   — reviewer (dispatch)
  * - `ship`     — reviewer release + compound-and-ship
  * - `compound` — runCompoundAndShip's knowledge write loop
  * - `always`   — relevant at every step; rendered into every stage block.
