@@ -221,6 +221,47 @@ describe("flow-state", () => {
     ).toThrow(/triage\.assumptions entries must be strings/);
   });
 
+  it("B3 — validates triage.designSurface / devexSurface + investigator state fields (schema-drift close)", () => {
+    const base = {
+      schemaVersion: 3 as const,
+      currentSlug: "x",
+      currentStage: null,
+      ac: [],
+      lastSpecialist: null,
+      startedAt: "2026-05-07T00:00:00Z",
+      reviewIterations: 0,
+      securityFlag: false
+    };
+    const validTriage: TriageDecision = {
+      complexity: "small-medium",
+      ceremonyMode: "soft",
+      path: ["plan", "build", "review", "ship"],
+      rationale: "x",
+      decidedAt: "2026-05-07T00:00:00Z"
+    };
+    expect(() =>
+      assertFlowStateV82({ ...base, triage: { ...validTriage, designSurface: true, devexSurface: false } })
+    ).not.toThrow();
+    expect(() =>
+      assertFlowStateV82({ ...base, triage: { ...validTriage, designSurface: "yes" as never } })
+    ).toThrow(/triage\.designSurface must be a boolean/);
+    expect(() =>
+      assertFlowStateV82({
+        ...base,
+        triage: validTriage,
+        investigatorVerdict: "needs-plan",
+        investigatorIteration: 1,
+        investigatorDispatchedAt: "2026-05-07T00:00:00Z"
+      })
+    ).not.toThrow();
+    expect(() =>
+      assertFlowStateV82({ ...base, triage: validTriage, investigatorVerdict: "bogus" as never })
+    ).toThrow(/Invalid investigatorVerdict/);
+    expect(() =>
+      assertFlowStateV82({ ...base, triage: validTriage, investigatorIteration: 2 })
+    ).toThrow(/investigatorIteration must be 0 or 1/);
+  });
+
   it("validates triage.interpretationForks is array-of-strings or null", () => {
     const base = {
       schemaVersion: 3 as const,

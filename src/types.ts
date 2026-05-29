@@ -672,6 +672,13 @@ export interface TriageDecision {
    * only. Readers default to `false` on absent; immutable for the lifetime.
    */
   devexSurface?: boolean;
+  /**
+   * Design surface flag set by triage's design-detection step and read by the
+   * plan-critic `design` rubric gate + the qa-runner visual gate. `true` when the
+   * task touches UI/design/frontend/UX surface; `false` otherwise. Readers default
+   * to `false` on absent; immutable for the lifetime. Mirror of {@link devexSurface}.
+   */
+  designSurface?: boolean;
 }
 
 /**

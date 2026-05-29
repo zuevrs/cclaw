@@ -1,6 +1,7 @@
 import {
   CEREMONY_MODES,
   FLOW_STAGES,
+  INVESTIGATOR_NEXT_STEPS,
   ONE_WAY_DOOR_CHOICES,
   POSTURES,
   RESEARCH_LENSES,
@@ -17,6 +18,7 @@ import {
   type CriticEscalation,
   type CriticVerdict,
   type FlowStage,
+  type InvestigatorNextStep,
   type OneWayDoorChoice,
   type OneWayDoorConfirmation,
   type PlanCriticVerdict,
@@ -94,6 +96,11 @@ function isResearchLens(value: unknown): value is ResearchLensId {
 /** Narrow check for {@link TaskShape}; validates `triage.taskShape` on read (default `"build"` when absent). */
 function isTaskShape(value: unknown): value is TaskShape {
   return typeof value === "string" && (TASK_SHAPES as readonly string[]).includes(value);
+}
+
+/** Narrow check for {@link InvestigatorNextStep}; validates `investigatorVerdict` on read. */
+function isInvestigatorNextStep(value: unknown): value is InvestigatorNextStep {
+  return typeof value === "string" && (INVESTIGATOR_NEXT_STEPS as readonly string[]).includes(value);
 }
 
 const RESEARCH_REVISION_KINDS = ["revise", "push-back", "accept"] as const;
@@ -189,6 +196,16 @@ export interface FlowStateV82 {
    * exercised.
    */
   qaEvidenceTier?: QaEvidenceTier | null;
+  /**
+   * Verdict from the latest investigator (debug-branch): one of `direct-fix` /
+   * `needs-plan` / `more-investigation` / `not-a-bug`. Absence = the investigator
+   * hop did not run (non-debug flow). See {@link InvestigatorNextStep}.
+   */
+  investigatorVerdict?: InvestigatorNextStep;
+  /** Counts investigator dispatches; hard-capped at 1 (initial + one `more-investigation` rerun). Optional, default `0`. */
+  investigatorIteration?: number;
+  /** ISO timestamp of the latest investigator dispatch; telemetry. Absent = never ran. */
+  investigatorDispatchedAt?: string;
   /** Triage decision for the active flow; `null` while none running. Persisted so resume never re-prompts. */
   triage: TriageDecision | null;
   /**
@@ -574,6 +591,12 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
       `Invalid triage.taskShape: ${String(triage.taskShape)} (expected "build" | "debug" | "research" | absent)`
     );
   }
+  if (triage.designSurface !== undefined && typeof triage.designSurface !== "boolean") {
+    throw new Error("triage.designSurface must be a boolean or absent");
+  }
+  if (triage.devexSurface !== undefined && typeof triage.devexSurface !== "boolean") {
+    throw new Error("triage.devexSurface must be a boolean or absent");
+  }
 }
 
 /**
@@ -706,6 +729,25 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     !isQaEvidenceTier(state.qaEvidenceTier)
   ) {
     throw new Error(`Invalid qaEvidenceTier: ${String(state.qaEvidenceTier)}`);
+  }
+  if (
+    state.investigatorVerdict !== undefined &&
+    !isInvestigatorNextStep(state.investigatorVerdict)
+  ) {
+    throw new Error(`Invalid investigatorVerdict: ${String(state.investigatorVerdict)}`);
+  }
+  if (state.investigatorIteration !== undefined) {
+    if (typeof state.investigatorIteration !== "number" || state.investigatorIteration < 0) {
+      throw new Error("flow-state.investigatorIteration must be a non-negative number when present");
+    }
+    if (state.investigatorIteration > 1) {
+      throw new Error(
+        `flow-state.investigatorIteration must be 0 or 1 when present (one more-investigation cap); saw ${state.investigatorIteration}`
+      );
+    }
+  }
+  if (state.investigatorDispatchedAt !== undefined && typeof state.investigatorDispatchedAt !== "string") {
+    throw new Error("flow-state.investigatorDispatchedAt must be a string or absent");
   }
   if (typeof state.securityFlag !== "boolean") {
     throw new Error("flow-state.securityFlag must be a boolean");
