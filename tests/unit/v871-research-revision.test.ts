@@ -127,7 +127,6 @@ describe("v8.71 — research revision loop behavior (validators accept/reject + 
         path: ["plan"],
         rationale: "research-mode entry point",
         decidedAt: "2026-05-17T19:00:00Z",
-        runMode: null,
         mode: "research",
         research_depth: "standard"
       },

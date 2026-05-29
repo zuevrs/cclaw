@@ -9,12 +9,10 @@ import {
   isCeremonyMode,
   isFlowStage,
   isRoutingClass,
-  isRunMode,
   isSpecialist,
-  migrateFlowState,
-  runModeOf
+  migrateFlowState
 } from "../../src/flow-state.js";
-import { RUN_MODES, type TriageDecision } from "../../src/types.js";
+import { type TriageDecision } from "../../src/types.js";
 
 describe("flow-state", () => {
   it("uses schema version 3 (cclaw 8.2)", () => {
@@ -140,14 +138,6 @@ describe("flow-state", () => {
     expect(isRoutingClass("micro")).toBe(false);
   });
 
-  it("isRunMode matches step / auto and rejects garbage", () => {
-    expect(RUN_MODES).toEqual(["step", "auto"]);
-    expect(isRunMode("step")).toBe(true);
-    expect(isRunMode("auto")).toBe(true);
-    expect(isRunMode("autopilot")).toBe(false);
-    expect(isRunMode(undefined)).toBe(false);
-  });
-
   it("v8.62 — isSpecialist accepts the seven unified-flow specialists and rejects every retired id (design / ac-author / slice-builder / security-reviewer) plus research helpers", () => {
     for (const live of [
       "triage",
@@ -174,24 +164,6 @@ describe("flow-state", () => {
       expect(isSpecialist(retired)).toBe(false);
     }
     expect(isSpecialist(undefined)).toBe(false);
-  });
-
-  it("v8.61 — runModeOf collapses every input to `auto` (always-auto retirement of step/auto choice)", () => {
-    expect(runModeOf(null)).toBe("auto");
-    expect(runModeOf(undefined)).toBe("auto");
-    const triageWithoutRunMode: TriageDecision = {
-      complexity: "small-medium",
-      ceremonyMode: "soft",
-      path: ["plan", "build", "review", "ship"],
-      rationale: "x",
-      decidedAt: "2026-05-07T00:00:00Z",
-      userOverrode: false
-    };
-    expect(runModeOf(triageWithoutRunMode)).toBe("auto");
-    expect(runModeOf({ ...triageWithoutRunMode, runMode: "auto" })).toBe("auto");
-    // Pre-v8.61 state files carrying `runMode: "step"` still validate but are
-    // collapsed to "auto" by the helper (orchestrator no longer branches on the field).
-    expect(runModeOf({ ...triageWithoutRunMode, runMode: "step" })).toBe("auto");
   });
 
   it("assumptionsOf returns [] for null / undefined / missing field; otherwise the verbatim list", () => {

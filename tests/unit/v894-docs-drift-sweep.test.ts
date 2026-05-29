@@ -50,26 +50,26 @@ const REPO_ROOT = path.resolve(
  *     v8.75 plan-design + v8.82 plan-devex into plan-critic as
  *     rubric modes "design" / "devex"; one specialist, three rubric
  *     modes dispatched via envelope fan-out)
- *   - RUNBOOKS: 28 (on-demand runbooks loaded by trigger from
+ *   - RUNBOOKS: 27 (on-demand runbooks loaded by trigger from
  *     `runbooks-on-demand.ts`; tripwire added v8.107; v8.111 diet
  *     pass added builder-self-review-gate / builder-tdd-walkthrough /
  *     parallel-worktree / clarify-protocol / plan-md-templates, lifting
- *     the count from 23 → 28)
+ *     the count from 23 → 28; later retiring adversarial-rerun → 27)
  *   - TRIAGE FIELD-COUNT (bimodal):
- *       sub-agent core decision surface: 5 (complexity / ceremonyMode
- *       / path / runMode / mode)
- *       orchestrator-stamped aggregate: 8 (core 5 + taskShape /
+ *       sub-agent core decision surface: 4 (complexity / ceremonyMode
+ *       / path / mode)
+ *       orchestrator-stamped aggregate: 7 (core 4 + taskShape /
  *       designSurface / devexSurface)
- *     The tripwire accepts both labels; mid-numbers (6/7/9/10-field)
+ *     The tripwire accepts both labels; mid-numbers (5/6/8/9/10-field)
  *     are flagged as stale.
  */
 
 const AXES_CANONICAL = 9;
 const LENSES_CANONICAL = 6;
 const SPECIALISTS_CANONICAL = 8;
-const RUNBOOKS_CANONICAL = 28;
-const TRIAGE_FIELDS_CORE = 5;
-const TRIAGE_FIELDS_AGGREGATE = 8;
+const RUNBOOKS_CANONICAL = 27;
+const TRIAGE_FIELDS_CORE = 4;
+const TRIAGE_FIELDS_AGGREGATE = 7;
 
 const WORD_TO_NUMBER: Record<string, number> = {
   one: 1,
@@ -358,7 +358,7 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
     });
 
     it(`README declares the runbook count (${RUNBOOKS_CANONICAL} on-demand runbooks)`, () => {
-      expect(README).toMatch(/28 on-demand runbooks/);
+      expect(README).toMatch(/27 on-demand runbooks/);
     });
 
     it("README mentions the research-lens count (six / 6)", () => {
@@ -403,20 +403,22 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
       "utf8"
     );
 
-    it(`triage sub-agent contract pins "exactly five fields" as the core decision surface (count = ${TRIAGE_FIELDS_CORE})`, () => {
-      expect(TRIAGE_PROMPT).toMatch(/exactly five fields/i);
+    it(`triage sub-agent contract pins "exactly four fields" as the core decision surface (count = ${TRIAGE_FIELDS_CORE})`, () => {
+      expect(TRIAGE_PROMPT).toMatch(/exactly four fields/i);
     });
 
-    it(`orchestrator stamps the aggregated "eight-field" decision (count = ${TRIAGE_FIELDS_AGGREGATE})`, () => {
-      expect(START_COMMAND).toMatch(/eight-field/);
+    it(`orchestrator stamps the aggregated "seven-field" decision (count = ${TRIAGE_FIELDS_AGGREGATE})`, () => {
+      expect(START_COMMAND).toMatch(/seven-field/);
     });
 
-    it("no stale mid-band field-count claim (6/7/9/10-field) outside historical context in start-command.ts", () => {
+    it("no stale field-count claim (5/6/8/9/10-field) outside historical context in start-command.ts", () => {
       const STALE_FIELD_LABELS = [
+        "five-field decision",
+        "5-field decision",
         "six-field decision",
         "6-field decision",
-        "seven-field decision",
-        "7-field decision",
+        "eight-field decision",
+        "8-field decision",
         "nine-field decision",
         "9-field decision",
         "ten-field decision",

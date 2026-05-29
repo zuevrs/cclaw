@@ -25,7 +25,7 @@ interface SpecialistContract {
 
 const CONTRACTS: Record<string, SpecialistContract> = {
   triage: {
-    sections: ["The five-field decision", "Output schema"],
+    sections: ["The four-field decision", "Output schema"],
     tokens: ["ceremonyMode", "ambiguityScore"]
   },
   architect: {

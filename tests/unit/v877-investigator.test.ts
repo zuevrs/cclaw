@@ -79,7 +79,6 @@ describe("v8.77 — investigator behavior (end-to-end debug-branch routing)", ()
         complexity: "small-medium" as const,
         ceremonyMode: "soft" as const,
         path: ["plan", "build", "review", "critic", "ship"] as const,
-        runMode: "auto" as const,
         mode: "task" as const,
         rationale: "debug task — bug shape",
         decidedAt: "2026-05-17T12:00:00Z",

@@ -7,7 +7,6 @@ import {
   RESEARCH_MODES,
   RESEARCH_STATES,
   ROUTING_CLASSES,
-  RUN_MODES,
   SPECIALISTS,
   SURFACES,
   TASK_SHAPES,
@@ -33,7 +32,6 @@ import {
   type ResearchRevision,
   type ResearchState,
   type RoutingClass,
-  type RunMode,
   type SliceId,
   type SliceState,
   type SpecialistId,
@@ -297,10 +295,6 @@ export function isCeremonyMode(value: unknown): value is CeremonyMode {
 /** @deprecated — use {@link isCeremonyMode}. Alias kept for old import sites. */
 export const isAcMode = isCeremonyMode;
 
-export function isRunMode(value: unknown): value is RunMode {
-  return typeof value === "string" && (RUN_MODES as readonly string[]).includes(value);
-}
-
 /** Narrow check for the (now single) discovery specialist `architect`; new state-validation paths should use {@link isSpecialist}. */
 export function isDiscoverySpecialist(value: unknown): value is "architect" {
   return value === "architect";
@@ -371,8 +365,7 @@ function inferTriageFromLegacy(state: {
     path: ["plan", "build", "review", "ship"],
     rationale: "Auto-migrated from cclaw 8.0/8.1 flow-state (no triage recorded; preserved as strict).",
     decidedAt: state.startedAt,
-    userOverrode: false,
-    runMode: "auto"
+    userOverrode: false
   };
 }
 
@@ -499,9 +492,6 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   ) {
     throw new Error("triage.userOverrode must be a boolean or absent");
   }
-  if (triage.runMode !== undefined && triage.runMode !== null && !isRunMode(triage.runMode)) {
-    throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
-  }
   // mode: which entry point started the flow; old files lack it (default "task").
   if (triage.mode !== undefined && !isResearchMode(triage.mode)) {
     throw new Error(`Invalid triage.mode: ${String(triage.mode)} (expected "task" or "research" or absent)`);
@@ -594,14 +584,6 @@ export function assumptionsOf(triage: TriageDecision | null | undefined): readon
   const value = triage?.assumptions;
   if (value === null || value === undefined) return [];
   return value;
-}
-
-/**
- * Read a triage decision's runMode. The `step`/`auto` choice was retired; always
- * returns `"auto"` (folding null/undefined/"step") so call sites read one value.
- */
-export function runModeOf(_triage: TriageDecision | null | undefined): RunMode {
-  return "auto";
 }
 
 /**

@@ -72,7 +72,7 @@ export const SPECIALIST_AGENTS: SpecialistAgent[] = [
     activation: "on-demand",
     modes: ["heuristic", "override"],
     description:
-      "Lightweight router that runs as a sub-agent. Decides exactly five fields (complexity, ceremonyMode, path, runMode, mode) for every fresh `/cc <task>` (research-mode and extend-mode flows skip triage — the orchestrator's Detect hop forks before dispatch). Zero-question rule preserved. There are no per-flow ceremony override flags or back-compat run-mode toggles; the heuristic is the sole source of truth at this hop. Auto-downgrades strict to soft when .git/ is absent and stamps downgradeReason: \"no-git\". Returns a slim summary; the orchestrator persists the decision to flow-state.json.",
+      "Lightweight router that runs as a sub-agent. Decides exactly four fields (complexity, ceremonyMode, path, mode) for every fresh `/cc <task>` (research-mode and extend-mode flows skip triage — the orchestrator's Detect hop forks before dispatch). Zero-question rule preserved. There are no per-flow ceremony override flags; the heuristic is the sole source of truth at this hop. Auto-downgrades strict to soft when .git/ is absent and stamps downgradeReason: \"no-git\". Returns a slim summary; the orchestrator persists the decision to flow-state.json.",
     prompt: SPECIALIST_PROMPTS.triage
   },
   {

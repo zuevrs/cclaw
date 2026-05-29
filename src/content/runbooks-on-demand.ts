@@ -637,7 +637,7 @@ The discoverability check runs **once per slug** (only when ship completes), and
 
 const PAUSE_RESUME = `# On-demand runbook — pause and resume mechanics (always-auto)
 
-The orchestrator opens this runbook on every stage exit when \`triage.path\` is **non-inline** (i.e., the path contains any of \`plan\` / \`review\` / \`ship\`, not just \`build\`). Inline / trivial paths set \`runMode: null\` and never pause — they skip pause/resume entirely, so they never open this runbook.
+The orchestrator opens this runbook on every stage exit when \`triage.path\` is **non-inline** (i.e., the path contains any of \`plan\` / \`review\` / \`ship\`, not just \`build\`). Inline / trivial paths (\`triage.path == ["build"]\`) never pause — they skip pause/resume entirely, so they never open this runbook.
 
 the user-facing \`step\` / \`auto\` choice was retired. Every non-inline flow runs **always-auto** end-to-end with no approval pickers at the plan / review / critic gates. The orchestrator chains stages automatically; \`/cc\` is the resume verb that fires only after a stop-and-report status block (see \`runbooks/always-auto-failure-handling.md\` for the failure matrix and the canonical status-block shape). The orchestrator body keeps the orchestrator-wide invariants (\`/cc\` is the only resume verb, \`Confidence: low\` is a hard gate, hard failures route per the always-auto matrix). The full mechanics — including the resume-from-fresh-session rules and the chain-vs-stop decision — live here.
 
@@ -1137,7 +1137,7 @@ The slug resolves to a shipped flow with a non-empty \`plan.md\`. Continue with 
 1. **Build a slug for the follow-up flow** — canonical \`YYYYMMDD-<semantic-kebab>\` from the \`<task>\` text. Same naming rules as a standard \`/cc <task>\` (date prefix mandatory; same-day collision suffix \`-2\`, \`-3\`, etc.).
 2. **Stamp \`flow-state.json > parentContext\`** — patch the new flow's state with the resolved \`ParentContext\` (slug + status: "shipped" + optional shippedAt + artifactPaths) via \`patchFlowState\`. This is the single source of truth for the parent linkage; specialists read this field, not \`refines\`.
 3. **Seed \`refines:\` in plan.md frontmatter** — write \`refines: <parent-slug>\` so the legacy knowledge-store chain (\`findRefiningChain\`), qa-runner skip rule, plan-critic skip gate, and the architect's Compose-phase ambiguity-score brownfield path keep working unchanged. The two writes (\`parentContext\` + \`refines\`) are kept in sync by the same init code path; user manual edits to plan.md after init are out of scope. \`parent_slug:\` mirrors the pointer (native field); \`parent_slug:\` wins on drift.
-4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`runMode\` / \`surfaces\` on the new triage decision (the per-flow ceremony override flags are retired, so inheritance + escalation heuristic now drive the decision deterministically).
+4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`surfaces\` on the new triage decision (the per-flow ceremony override flags are retired, so inheritance + escalation heuristic now drive the decision deterministically).
 5. **Proceed to triage announcement → first dispatch.** The new flow runs the same pipeline as a standard \`/cc <task>\` (plan → build → qa? → review → critic → ship). Only the parent-context loading at init is new.
 
 ### \`ok: false\` — error sub-cases
@@ -1172,27 +1172,26 @@ Extend mode loads the **immediate** parent only. If \`parentContext.slug\` itsel
 When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the orchestrator runs an **inheritance sub-step** BEFORE the lightweight router's heuristic classifier. The sub-step reads the parent's shipped \`ship.md\` / \`plan.md\` frontmatter (best-effort; missing fields fall through to the router default) and seeds the new flow's triage with the parent's values:
 
 - \`ceremonyMode\` ← parent's \`ceremony_mode\` (or legacy \`ac_mode\`) from plan.md frontmatter, OR the value implied by the parent's ship.md when plan.md frontmatter is absent.
-- \`runMode\` ← always-auto; the new flow stamps \`runMode: "auto"\` on every non-inline parent and \`null\` when the parent was inline. The parent's stored \`run_mode\` is ignored (legacy \`step\` parents fold to \`auto\` on extend).
 - \`surfaces\` ← parent's \`surfaces\` from plan.md / triage block (when present).
 
 ### Precedence rules (highest → lowest, evaluated in this order)
 
 1. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the no-git auto-downgrade audit shape.
-2. **Parent inheritance** — fields not pinned by (1) inherit from parent's frontmatter (ceremonyMode + surfaces). \`runMode\` is *not* inherited (always-auto on non-inline; null on inline).
+2. **Parent inheritance** — fields not pinned by (1) inherit from parent's frontmatter (ceremonyMode + surfaces).
 3. **Router default** — fields not seeded by (1)-(2) fall through to the lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
 
 (The explicit user-flag layer that used to sit above these three rules is retired; the triage heuristic is now the sole source of truth, and the user influences it via task wording rather than per-flow flags.)
 
-The inheritance is one-way: the new flow's triage values are immutable for its lifetime; changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init. The mid-flight \`runMode\` toggle is retired — runMode is now structurally immutable.
+The inheritance is one-way: the new flow's triage values are immutable for its lifetime; changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init.
 
 ### Worked examples
 
-| user invocation | parent's \`ceremony_mode\` | new flow's \`ceremonyMode\` | new flow's \`runMode\` | rationale |
-| --- | --- | --- | --- | --- |
-| \`/cc extend 20260514-auth-flow add OIDC\` | strict | strict | auto | rule 2 (ceremonyMode inheritance); always-auto |
-| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | strict | auto | rule 1 (escalation heuristic — \`migration\` keyword); always-auto |
-| \`/cc extend 20260514-cli-help fix typo\` | inline | inline | (null) | rule 2 (inheritance); inline path has no runMode |
-| \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (router heuristic decides) | auto (unless heuristic picked inline) | rule 3 (router fallthrough) |
+| user invocation | parent's \`ceremony_mode\` | new flow's \`ceremonyMode\` | rationale |
+| --- | --- | --- | --- |
+| \`/cc extend 20260514-auth-flow add OIDC\` | strict | strict | rule 2 (ceremonyMode inheritance) |
+| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | strict | rule 1 (escalation heuristic — \`migration\` keyword) |
+| \`/cc extend 20260514-cli-help fix typo\` | inline | inline | rule 2 (inheritance) |
+| \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (router heuristic decides) | rule 3 (router fallthrough) |
 
 The audit log entry for the new flow's triage decision records:
 
@@ -1200,8 +1199,7 @@ The audit log entry for the new flow's triage decision records:
 {
   "decidedAt": "<iso>",
   "ceremonyMode": "strict",
-  "runMode": "auto",
-  "rationale": "extend-mode inheritance from 20260514-auth-flow (parent: ceremony_mode=strict; runMode=auto under always-auto)",
+  "rationale": "extend-mode inheritance from 20260514-auth-flow (parent: ceremony_mode=strict)",
   "parentSlug": "20260514-auth-flow",
   "inheritanceSource": "parent-frontmatter",
   "userOverrode": false
@@ -1675,17 +1673,13 @@ No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug
 
 ## §6 — Resume rules (immutable triage, restored last-specialist context)
 
-1. **Triage is fully immutable.** A resumed flow keeps its \`ceremonyMode\`, \`complexity\`, \`path\`, \`runMode\`, and \`mode\`. The user does not re-pick. To change any, the answer is \`/cc-cancel\` and start fresh.
+1. **Triage is fully immutable.** A resumed flow keeps its \`ceremonyMode\`, \`complexity\`, \`path\`, and \`mode\`. The user does not re-pick. To change any, the answer is \`/cc-cancel\` and start fresh.
 2. **Last-specialist context restored** by reading \`flows/<slug>/<stage>.md\`. The orchestrator does not summarise from memory.
 3. **Time gate.** If \`flow-state.json > startedAt\` is >7 days ago, surface a one-line warning ("flow is stale — verify scope still applies") on the next chained stage's slim summary; never block resume.
 4. **Sub-agent dispatch resumes from the same stage.** A build paused mid-RED for AC-3 resumes by dispatching builder for AC-3, not by restarting AC-1.
 5. **Resume after stop-and-report.** \`/cc\` continues from saved \`currentStage\`. For build-failure / reviewer-fix stops, the auto-fix iteration counter is **preserved**.
 
-## §7 — \`runMode\` mid-flight toggle (retirement)
-
-The mid-flight run-mode toggle is retired: there is no \`runMode\` flag on \`/cc\`; harnesses that previously forwarded such a flag through a namespace router lose it cleanly (the router itself was retired alongside it). \`triage.runMode\` is \`"auto"\` on every non-inline path and \`null\` on inline, period.
-
-## §8 — Anti-rationalization
+## §7 — Anti-rationalization
 
 | excuse | reality |
 | --- | --- |
@@ -1870,7 +1864,7 @@ When the fork fires:
 
 - Strip the trigger from the task text. The topic that flows into the lenses is the argument WITHOUT the leading \`research \`.
 - Build a research-mode slug: \`YYYYMMDD-research-<semantic-kebab>\`. The \`-research-\` infix is mandatory; it keeps \`flows/shipped/\` unambiguous and distinguishes research artifacts from task flows.
-- **Skip triage dispatch entirely.** Stamp \`flow-state.json > triage\` with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`runMode: null\` + \`rationale: "research-mode entry point"\` + \`research_depth: <light | standard | deep-product>\` (auto-classified from topic wording — full mapping in \`runbooks/research-depth-and-self-review.md\`. The explicit depth-override flags are retired).
+- **Skip triage dispatch entirely.** Stamp \`flow-state.json > triage\` with sentinel values: \`mode: "research"\` + \`complexity: "large-risky"\` + \`ceremonyMode: "strict"\` + \`path: ["plan"]\` + \`rationale: "research-mode entry point"\` + \`research_depth: <light | standard | deep-product>\` (auto-classified from topic wording — full mapping in \`runbooks/research-depth-and-self-review.md\`. The explicit depth-override flags are retired).
 - Stamp \`flow-state.json > currentSlug\` with the new slug, \`currentStage: "plan"\` (used purely as a sentinel — research mode has no plan / build / review / critic / ship stages; the field is the only signal that distinguishes "research in flight" from "task in flight" for the invocation matrix).
 
 The orchestrator then enters the **multi-lens research flow**. The flow is four phases (with two intermediate gates at 1.5 and 3.5).
@@ -2043,7 +2037,7 @@ The orchestrator opens this runbook on every fresh \`/cc <task>\` Triage hop (re
 
 ## §1 — Persisted triage shape
 
-After the triage sub-agent returns, the orchestrator stamps \`flow-state.json > triage\` with the eight-field decision plus the audit fields. The persisted shape:
+After the triage sub-agent returns, the orchestrator stamps \`flow-state.json > triage\` with the seven-field decision plus the audit fields. The persisted shape:
 
 \`\`\`json
 {
@@ -2053,13 +2047,12 @@ After the triage sub-agent returns, the orchestrator stamps \`flow-state.json > 
     "path": ["plan", "build", "review", "critic", "ship"],
     "mode": "task",
     "rationale": "3 modules, ~150 LOC, no auth touch.",
-    "decidedAt": "2026-05-08T12:34:56Z",
-    "runMode": "auto"
+    "decidedAt": "2026-05-08T12:34:56Z"
   }
 }
 \`\`\`
 
-\`runMode\` is \`null\` on inline (\`triage.path == ["build"]\`) and \`"auto"\` everywhere else (always-auto — the user-facing \`step\` / \`auto\` choice was retired; the orchestrator no longer branches on this value at plan / review / critic gates). \`mode\` is \`"task"\` on the standard \`/cc <task>\` entry point and \`"research"\` on \`/cc research <topic>\` flows; legacy state files lack the field and readers MUST default to \`"task"\`.
+Always-auto: every non-inline path chains immediately at plan / review / critic gates; inline (\`triage.path == ["build"]\`) never pauses. \`mode\` is \`"task"\` on the standard \`/cc <task>\` entry point and \`"research"\` on \`/cc research <topic>\` flows; legacy state files lack the field and readers MUST default to \`"task"\`.
 
 ## §2 — Migration prose (surfaces, qa, prior-learnings)
 

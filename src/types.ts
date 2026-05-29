@@ -548,23 +548,12 @@ export const AC_MODES = CEREMONY_MODES;
 export type AcMode = CeremonyMode;
 
 /**
- * How aggressively the orchestrator advances the flow. The user-facing
- * `step`/`auto` choice was retired; every non-inline flow runs `auto`
- * end-to-end (hard failures route through the always-auto failure matrix), and
- * inline paths write `null`. `auto` is the only writeable value on non-inline
- * paths; `step` is accepted on read for back-compat and treated as `auto`.
- * Computed deterministically (no user-facing flag).
- */
-export const RUN_MODES = ["step", "auto"] as const;
-export type RunMode = (typeof RUN_MODES)[number];
-
-/**
  * Decision recorded at the triage gate that opens every flow; persisted so
  * resumes never re-trigger triage. Triage is a lightweight router — new writes
- * carry only the routing fields (complexity / ceremonyMode / path / runMode /
- * mode). The classification fields below are soft-deprecated (kept optional so
- * old state files validate); their work moved to the architect. The qa-gate
- * still reads `triage.surfaces` literally — only that field's writer moved.
+ * carry only the routing fields (complexity / ceremonyMode / path / mode). The
+ * classification fields below are soft-deprecated (kept optional so old state
+ * files validate); their work moved to the architect. The qa-gate still reads
+ * `triage.surfaces` literally — only that field's writer moved.
  */
 export interface TriageDecision {
   complexity: RoutingClass;
@@ -585,12 +574,6 @@ export interface TriageDecision {
    * optional so old state files validate.
    */
   userOverrode?: boolean;
-  /**
-   * `"auto"` on non-inline paths, `null` on inline. The `step`/`auto` choice was
-   * retired; pre-existing `runMode: "step"` still validates but runs as `auto`.
-   * Optional so older state files validate.
-   */
-  runMode?: RunMode | null;
   /**
    * Flow mode: `"task"` (default) or `"research"` (standalone architect, outputs
    * `research.md`). Set by the Hop 1 Detect step from the task prefix, not the

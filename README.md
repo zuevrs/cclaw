@@ -119,7 +119,7 @@ The runtime is < 1 KLOC; behaviour lives in prompt content under `src/content/`.
 - [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 8 specialist contracts (`triage`, `investigator`, `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`)
 - [`src/content/skills/`](src/content/skills/) — 32 auto-trigger skills loaded per stage
 - [`src/content/research-lenses/`](src/content/research-lenses/) — 6 research lenses dispatched on `/cc research`
-- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 28 on-demand runbooks loaded by trigger
+- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 27 on-demand runbooks loaded by trigger
 - [`src/content/artifact-templates.ts`](src/content/artifact-templates.ts) — plan / build / qa / review / critic / ship templates
 - [`src/content/anti-rationalizations.ts`](src/content/anti-rationalizations.ts) — cross-cutting rebuttal catalog
 - [`CHANGELOG.md`](CHANGELOG.md) — release history with every flag, gate, rubric, and version

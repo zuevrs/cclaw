@@ -72,7 +72,6 @@ describe("v8.76 — research-design-lens + approaches-gate wiring", () => {
         mode: "research",
         rationale: "research-mode entry point",
         decidedAt: "2026-05-17T12:00:00Z",
-        runMode: null,
         research_depth: "standard"
       },
       reviewIterations: 0,
