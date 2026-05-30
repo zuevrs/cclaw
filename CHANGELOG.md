@@ -1,5 +1,34 @@
 # Changelog
 
+## 8.114.0 - 2026-05-30
+
+### Changed (entry-point consolidation — 5 `/cc` shapes → 3)
+
+- **`/cc patch <slug> <task>` + `/cc extend <slug> <task>` collapsed into a single `/cc <slug> <task>` refine.** A leading shipped-slug token (canonical `YYYYMMDD-<kebab>` that resolves under `.cclaw/flows/shipped/`) IS the refine signal — there is no `patch`/`extend` keyword. The orchestrator stamps `parentContext`, dispatches `triage` with the parent attached, and **triage picks the ceremony**: a trivial-shape follow-up downgrades to `inline` and lands as the old patch-mode (one `patch(<slug>):` commit + `patch-N.md` next to the parent, no new slug); anything larger keeps the inherited soft/strict ceremony and runs the full follow-up arc (`refines:` child slug + `## Extends` + plan → build → review → critic → ship). Both paths already shared `loadParentContext`; the skip-everything-vs-full-ceremony decision is now a router output, not a user keyword.
+- **`patch-N.md` preserved.** Trivial post-ship edits keep their dedicated artifact (numbered `patch-N.md` in the parent's shipped dir) so micro-edit attribution survives the consolidation — the inline path is behaviourally identical to the retired patch-mode; only the entry point changed.
+- **Triage §1.6 trivial-shape downgrade broadened.** Previously fired only when the parent shipped `strict`; now fires on a `soft` or `strict` parent (the old patch-mode worked on any shipped slug regardless of its mode). The four-AND gate (≤2 file refs, no schema words, no AC additions, single concrete verb) is unchanged; `downgradeReason` renamed `extend-mode-trivial-shape` → `refine-trivial-shape`.
+
+### Affected surfaces
+
+- **New runbook** `src/content/runbooks/refine-mode.md` — the unified Detect-hop procedure (slug detection + argument parsing, parent validation via `loadParentContext`, the two ceremony branches, the `patch-N.md` artifact + `patchMode: true` builder envelope, triage inheritance, multi-level chaining). Replaces the deleted `src/content/runbooks/patch-mode.md` and the inline `EXTEND_MODE` constant.
+- **`src/content/runbooks-on-demand.ts`** — `ON_DEMAND_RUNBOOKS` drops the `extend-mode` + `patch-mode` entries and gains one `refine-mode` entry (count 27 → 26); the `EXTEND_MODE` constant is removed; `DETECT_MATRIX` + `TRIAGE_GATE` + the `HANDOFF_GATES` post-ship hint are rewritten for the slug-token fork; the dead `findRefiningChain` reference is scrubbed.
+- **`src/content/start-command.ts`** — the two `### Detect — patch-mode fork` / `### Detect — extend-mode fork` sections collapse into one `### Detect — refine-mode fork`; invocation matrix, on-demand pointer table, triage dispatch note, trivial-sibling paragraph, always-ask + roster notes, and the critic-stage recovery hint all updated.
+- **Specialists** — `triage.ts` (§1.6 + inheritance + anti-rationalization rewritten for refine-mode; the triage-runs-in-refine path made internally consistent), `builder.ts` (Patch-mode flow docs re-pointed at `refine-mode.md`), `architect.ts` / `reviewer.ts` / `critic.ts` / `investigator.ts` / `core-agents.ts` (keyword scrub; `parentContext` / `refines` semantics preserved).
+- **`src/parent-context.ts`** — error messages + module docs reference `/cc <slug> <task>` instead of `/cc extend`; helper behaviour unchanged.
+- **`src/cli.ts > HELP_NOTES`** — the two subcommand rows collapse into one `/cc <slug> <task>` row; `--review` help re-scoped to the refine inline path.
+- **`src/install.ts`** — `extend-mode.md` + `patch-mode.md` added to `RETIRED_RUNBOOK_FILES` so the orphan cleaner removes them on upgrade.
+- **`src/content/artifact-templates.ts`**, **`src/flow-state.ts`** — `## Extends` template prose + `parentContext` JSDoc reference the refine entry point.
+
+### Tests / docs
+
+- `tests/unit/v8102-patch-mode.test.ts` rewritten for the refine-mode INLINE path; `tests/unit/v859-continuation.test.ts` rewritten for the refine-mode FULL path; `cli.test.ts`, `v8111-prompt-diet.test.ts`, `v8103-token-diet.test.ts`, `v883-token-runbooks.test.ts`, `v8109-list-shipped-slugs-order.test.ts` updated; `scripts/smoke-init.mjs` asserts the single `refine-mode.md` and that the retired keyword runbooks are gone.
+- `tests/unit/v894-docs-drift-sweep.test.ts > RUNBOOKS_CANONICAL` bumped 27 → 26 in lockstep with the README count row.
+- `README.md` — the "Use" section now lists three entry shapes; the mermaid flow, the ceremony table `inline` row, and the on-demand runbook count (27 → 26) are updated.
+
+### User-facing migration
+
+`/cc patch <slug> …` and `/cc extend <slug> …` no longer parse as keywords. Run `/cc <slug> <task>` instead (the slug is the first token); triage routes a tiny tweak to the same single-commit patch the old `/cc patch` produced, and a larger follow-up to the same full arc the old `/cc extend` produced. Re-installing cclaw mirrors `refine-mode.md` and removes the retired `extend-mode.md` / `patch-mode.md` runbooks.
+
 ## 8.113.0 - 2026-05-24
 
 ### Fixed (find-and-fix sweep — 3 bugs across 2 axes)

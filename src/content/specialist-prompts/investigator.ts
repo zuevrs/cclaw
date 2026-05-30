@@ -57,7 +57,7 @@ The mode is intentionally fixed — collapsing to "one lane is enough" or "skip 
 
 Read stack/conventions silently. This phase produces no user-facing output and flows directly into Phase 1 in the same turn.
 
-1. Read \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.ceremonyMode\`, \`triage.surfaces\` (when present), \`triage.taskShape\` (MUST be \`"debug"\` — defensive read; if not, return slim summary with \`Confidence: low\` + \`Notes: "investigator dispatched on non-debug shape (saw: <value>); orchestrator gate misfire — re-route via triage"\` and the orchestrator stops-and-reports), \`flowState.parentContext\` (when present — debug-shape flows on extend-mode read the parent's plan as additional context).
+1. Read \`.cclaw/state/flow-state.json\`. Note: \`triage.complexity\`, \`triage.ceremonyMode\`, \`triage.surfaces\` (when present), \`triage.taskShape\` (MUST be \`"debug"\` — defensive read; if not, return slim summary with \`Confidence: low\` + \`Notes: "investigator dispatched on non-debug shape (saw: <value>); orchestrator gate misfire — re-route via triage"\` and the orchestrator stops-and-reports), \`flowState.parentContext\` (when present — a debug-shape refine reads the parent's plan as additional context).
 2. Read \`.cclaw/flows/<slug>/investigation.md\` (likely empty body, just frontmatter).
 3. Read \`CONTEXT.md\` at project root if it exists; treat the body as shared project vocabulary while investigating.
 4. Read repo signals: project root file tree (one \`ls\` or \`Glob "*"\`), \`README.md\` first paragraph + Architecture section, top-level manifest (\`package.json\` / \`pyproject.toml\` / \`go.mod\` / \`Cargo.toml\`) — name, dependency list at a glance, test runner command.

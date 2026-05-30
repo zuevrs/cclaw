@@ -220,7 +220,7 @@ export interface FlowStateV82 {
   } | null;
   /**
    * Pointer to a prior **shipped** slug whose artifacts load as task context; set
-   * on `/cc extend`, cleared at ship (`artifactPaths.plan` mandatory). Default
+   * on a refine (`/cc <slug> <task>`), cleared at ship (`artifactPaths.plan` mandatory). Default
    * `null`/absent; orthogonal to {@link priorResearch}.
    */
   parentContext?: ParentContext | null;
@@ -260,7 +260,7 @@ export interface FlowStateV82 {
 }
 
 /**
- * Pointer to a parent shipped slug, set on `/cc extend`. See
+ * Pointer to a parent shipped slug, set on a refine (`/cc <slug> <task>`). See
  * {@link FlowStateV82.parentContext}. `status` is a string union so the validator
  * can widen without a schema bump (today only `"shipped"`).
  */
@@ -273,7 +273,7 @@ export interface ParentContext {
 
 /**
  * Pre-derived absolute paths to a parent's shipped artifacts. `plan` is mandatory
- * (the `/cc extend` gate); the rest are optional. Specialists `await exists(path)`
+ * (the refine gate); the rest are optional. Specialists `await exists(path)`
  * before reading — a missing artifact is a no-op skip, not an error.
  */
 export interface ParentArtifactPaths {
@@ -329,7 +329,7 @@ export function isLegacyDiscoverySpecialist(
 
 /**
  * Recognise the legacy `planner` id so {@link rewriteLegacyPlanner} can reset
- * `lastSpecialist` to `null`. See {@link LEGACY_PLANNER_ID}.
+ * `lastSpecialist` to `null`.
  */
 export function isLegacyPlanner(value: unknown): value is "planner" {
   return value === "planner";
@@ -1060,8 +1060,7 @@ function rewriteLegacyDiscoverySpecialist(
 
 /**
  * Rewrite `lastSpecialist: "planner"` to `null` so an old state file resumes
- * cleanly. Runs on every read; shipped artifacts are not rewritten. See
- * {@link LEGACY_PLANNER_ID}.
+ * cleanly. Runs on every read; shipped artifacts are not rewritten.
  */
 function rewriteLegacyPlanner(
   raw: Record<string, unknown>

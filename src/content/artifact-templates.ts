@@ -85,7 +85,7 @@ ac:
 last_specialist: null
 refines: null
 # parent_slug mirrors the orchestrator-level pointer set when the
-# flow was initialised via /cc extend <slug> <task>. The orchestrator's
+# flow was initialised as a refine via /cc <slug> <task>. The orchestrator's
 # Detect hop seeds this field at slug-init when flowState.parentContext is
 # set; architect Bootstrap (when run) confirms the value. Distinct from
 # the refines: field above: refines is the legacy/manual link
@@ -115,7 +115,7 @@ ambiguity_threshold: null
 
 ## Extends
 
-_(present only when this flow was initialised via \`/cc extend <slug> <task>\`. The architect (Bootstrap) authors this section verbatim from \`flowState.parentContext\`. Drop the entire section on cold-start \`/cc <task>\` flows. Format:_
+_(present only when this flow was initialised as a soft/strict refine via \`/cc <slug> <task>\`. The architect (Bootstrap) authors this section verbatim from \`flowState.parentContext\`. Drop the entire section on cold-start \`/cc <task>\` flows. Format:_
 
 _\`refines: <parent-slug>\` (shipped \`<parent.shippedAt>\` if known). Parent decision summary: one-line synthesis of the highest-blast-radius D-N from the parent's plan.md, or "see parent's plan for context" when no decisions were recorded._
 
@@ -305,7 +305,7 @@ security_flag: false
 
 ## Extends
 
-_(Present only on \`/cc extend <slug> <task>\` flows; drop on cold-start. Format identical to the strict PLAN_TEMPLATE \`## Extends\` — see that section for the exact shape.)_
+_(Present only on soft/strict refine flows (\`/cc <slug> <task>\`); drop on cold-start. Format identical to the strict PLAN_TEMPLATE \`## Extends\` — see that section for the exact shape.)_
 
 ## Assumptions (correct me now)
 
@@ -2033,7 +2033,7 @@ export interface ExtendsSectionInput {
    * Relative path to the parent's plan.md, e.g.
    * `../shipped/20260514-auth-flow/plan.md`. Always rendered (the
    * `plan` artifact is mandatory; its presence was the validation
-   * gate at `/cc extend`).
+   * gate at the refine entry (`/cc <slug> <task>`)).
    */
   planRelativePath: string;
 }

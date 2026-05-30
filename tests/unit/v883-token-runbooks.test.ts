@@ -28,7 +28,7 @@ import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 // additive headroom.
 const V8103_BASELINE_CHARS = 50000;
 
-// v8.102 additive carve-out (patch-mode) folds into the new baseline; no
+// v8.102 additive carve-out (the refine-mode inline path) folds into the new baseline; no
 // separate budget. New additive headroom is intentionally tight: each
 // future feature add must justify its own per-slug additive_chars bump.
 //

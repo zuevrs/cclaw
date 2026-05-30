@@ -11,9 +11,9 @@ import { SPECIALIST_PROMPTS } from "../../src/content/specialist-prompts/index.j
  * consolidation tripwires.
  *
  * Asserts:
- *  - Each of the 6 v8.111-touched runbook .md files exists (5 new + extended
- *    patch-mode), carries the expected sections, and is registered in
- *    `ON_DEMAND_RUNBOOKS`.
+ *  - Each of the 6 v8.111-touched runbook .md files exists (5 new + the
+ *    unified refine-mode, which folded patch-mode in v8.113), carries the
+ *    expected sections, and is registered in `ON_DEMAND_RUNBOOKS`.
  *  - The 4 lift sites in `builder.ts` carry the new short anchor (regex match
  *    for the pointer-line to the runbook) and DO NOT carry the long-form
  *    content the runbook now owns.
@@ -86,9 +86,9 @@ describe("v8.111 runbook .md files exist and carry the expected sections", () =>
     expect(body).toMatch(/Worked example — large-risky, strict mode/);
   });
 
-  it("patch-mode.md exists, externalised in v8.111, and carries the lifted builder protocol section", async () => {
-    const body = await readFile(path.resolve(RUNBOOK_DIR, "patch-mode.md"));
-    expect(body).toMatch(/^# On-demand runbook — patch-mode entry point/m);
+  it("refine-mode.md exists (v8.113 — folds the former patch-mode + extend-mode), and carries the lifted builder protocol section", async () => {
+    const body = await readFile(path.resolve(RUNBOOK_DIR, "refine-mode.md"));
+    expect(body).toMatch(/^# On-demand runbook — refine-mode entry point/m);
     expect(body).toMatch(/Builder protocol \(lifted from/);
   });
 });
@@ -100,7 +100,7 @@ describe("v8.111 runbooks register in ON_DEMAND_RUNBOOKS", () => {
     "parallel-worktree",
     "clarify-protocol",
     "plan-md-templates",
-    "patch-mode"
+    "refine-mode"
   ];
 
   for (const id of expectedRunbookIds) {
@@ -134,10 +134,12 @@ describe("v8.111 builder.ts lift anchors (A.1-A.4)", () => {
     expect(builder).not.toMatch(/\[master a1b2c3d\] red\(SL-1\)/);
   });
 
-  it("A.2 — patch-mode anchor (lifted from L753-805)", () => {
-    expect(builder).toMatch(/patch-mode\.md/);
-    const patchModeMentions = (builder.match(/patch-mode\.md/g) ?? []).length;
-    expect(patchModeMentions, "patch-mode.md should still be referenced at least once").toBeGreaterThanOrEqual(1);
+  it("A.2 — patch-mode anchor now points at the unified refine-mode.md (v8.113)", () => {
+    expect(builder).toMatch(/refine-mode\.md/);
+    const refineModeMentions = (builder.match(/refine-mode\.md/g) ?? []).length;
+    expect(refineModeMentions, "refine-mode.md should still be referenced at least once").toBeGreaterThanOrEqual(1);
+    // The deleted patch-mode.md runbook should no longer be referenced.
+    expect(builder).not.toMatch(/patch-mode\.md/);
   });
 
   it("A.1 — self-review-gate anchor (lifted from L878-963)", () => {

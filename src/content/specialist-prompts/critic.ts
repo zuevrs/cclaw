@@ -236,10 +236,10 @@ Verdict: block-ship
 Reason: cross-model second opinion diverged
 Remaining findings (Critic A): <list of F-N still flagged>
 Remaining findings (Critic B): <list of X-F-N still flagged>
-Recommended next: <user-facing prose; either /cc-cancel + reframe; or invoke /cc patch <slug> <targeted-fix> after manual review>
+Recommended next: <user-facing prose; either /cc-cancel + reframe; or invoke /cc <slug> <targeted-fix> after manual review>
 \`\`\`
 
-The orchestrator stops-and-reports (same contract as the §7 \`block-ship\` path). The user manually reviews and either \`/cc-cancel\`s the slug or lands a \`/cc patch\` against the specific findings — both paths are user-driven.
+The orchestrator stops-and-reports (same contract as the §7 \`block-ship\` path). The user manually reviews and either \`/cc-cancel\`s the slug or lands a \`/cc <slug> <targeted-fix>\` refine against the specific findings — both paths are user-driven.
 
 #### Graceful fallback (mandatory)
 

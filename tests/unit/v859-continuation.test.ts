@@ -1,7 +1,9 @@
 /**
- * v8.59 — Continuation flow (/cc extend <slug>). Slimmed in v8.99
- * test-slim-down A2 to one WIRING + one BEHAVIOR + one SECTION CONTRACT
- * test (preserves the on-disk loadParentContext + findNearKnowledge
+ * v8.59 — Continuation flow, now the refine-mode FULL path
+ * (`/cc <slug> <task>` where triage keeps soft/strict ceremony; the
+ * `/cc extend` keyword was folded into the unified refine fork in
+ * v8.113). One WIRING + one BEHAVIOR + one SECTION CONTRACT test
+ * (preserves the on-disk loadParentContext + listShippedSlugs
  * integration coverage that catches the bulk of regressions).
  */
 import fs from "node:fs/promises";
@@ -50,7 +52,7 @@ async function seedShippedParent(
 }
 
 describe("v8.59 — continuation wiring (types + helpers + runbook + plan templates)", () => {
-  it("WIRING — FlowStateV82 accepts/validates parentContext, PARENT_ARTIFACT_FILE_NAMES re-exports the canonical file names, plan templates declare parent_slug:null + ## Extends placeholder, and extend-mode.md is registered in ON_DEMAND_RUNBOOKS", () => {
+  it("WIRING — FlowStateV82 accepts/validates parentContext, PARENT_ARTIFACT_FILE_NAMES re-exports the canonical file names, plan templates declare parent_slug:null + ## Extends placeholder, and refine-mode.md is registered in ON_DEMAND_RUNBOOKS", () => {
     const base: FlowStateV82 = {
       schemaVersion: 3,
       currentSlug: CHILD_SLUG,
@@ -103,9 +105,12 @@ describe("v8.59 — continuation wiring (types + helpers + runbook + plan templa
     expect(planSoft).toMatch(/^parent_slug: null$/mu);
     expect(planSoft).toMatch(/^## Extends$/mu);
 
-    const runbook = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === "extend-mode.md");
+    const runbook = ON_DEMAND_RUNBOOKS.find((r) => r.fileName === "refine-mode.md");
     expect(runbook).toBeDefined();
     expect(runbook?.body).toMatch(/^# On-demand runbook — /m);
+    // The full refine path mints a `refines:` child slug + ## Extends.
+    expect(runbook?.body).toMatch(/Refine path/u);
+    expect(runbook?.body).toContain("refines: <parent-slug>");
   });
 });
 
@@ -217,7 +222,7 @@ describe("v8.59 — continuation behavior (loadParentContext + listShippedSlugs 
 });
 
 describe("v8.59 — continuation section contract (specialist prompts + ## Extends + start-command Detect fork)", () => {
-  it("SECTION CONTRACT — renderExtendsSection emits the canonical ## Extends block, architect/reviewer/critic prompts wire flowState.parentContext, and start-command body carries the Detect-hop extend-mode fork + prior-context consumption pointer", async () => {
+  it("SECTION CONTRACT — renderExtendsSection emits the canonical ## Extends block, architect/reviewer/critic prompts wire flowState.parentContext, and start-command body carries the Detect-hop refine-mode fork + prior-context consumption pointer", async () => {
     const out = renderExtendsSection({
       parentSlug: PARENT_SLUG,
       shippedAt: "2026-05-14T12:00:00Z",
@@ -256,11 +261,15 @@ describe("v8.59 — continuation section contract (specialist prompts + ## Exten
     expect(CRITIC_PROMPT).toContain("parentContext");
 
     const body = renderStartCommand();
-    expect(body).toMatch(/### Detect — extend-mode fork/u);
-    expect(body).toContain("runbooks/extend-mode.md");
+    expect(body).toMatch(/### Detect — refine-mode fork/u);
+    expect(body).toContain("runbooks/refine-mode.md");
     expect(body).toContain("loadParentContext");
     expect(body).toMatch(/immediate.{0,30}parent/iu);
-    expect(body).toContain("findRefiningChain");
+    // The unified fork dispatches triage WITH the resolved parentContext
+    // (the old extend-mode dispatched triage too; only the keyword went).
+    expect(body).toMatch(/dispatch the `triage` sub-agent/u);
+    // findRefiningChain was deleted; no prompt should reference it.
+    expect(body).not.toContain("findRefiningChain");
 
     // v8.103 — prior-context consumption detail moved to runbooks/triage-gate.md.
     const { ON_DEMAND_RUNBOOKS } = await import("../../src/content/runbooks-on-demand.js");

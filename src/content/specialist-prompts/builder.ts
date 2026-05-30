@@ -667,10 +667,10 @@ The persisted source of truth is \`flow-state.json > builderEnvelope.defenseInDe
 
 ## Patch-mode flow (when envelope carries \`patchMode: true\`)
 
-The full patch-mode contract — envelope shape, 6-step protocol, what-you-DO-NOT-do list, hard rules, slim-summary shape — lives in \`.cclaw/lib/runbooks/patch-mode.md > ## Builder protocol\`. Anchor:
+The full patch-mode contract — envelope shape, 6-step protocol, what-you-DO-NOT-do list, hard rules, slim-summary shape — lives in \`.cclaw/lib/runbooks/refine-mode.md > ## Micro-edit (patch) path\`. The orchestrator reaches this flow when a refine (a \`/cc <slug> <task>\`) is downgraded to \`ceremonyMode: inline\` by triage. Anchor:
 
 - **Envelope shape**: \`patchMode: true\` + parent's \`plan.md\` (FROZEN — do NOT re-author) + patch task text + target \`patch-N.md\` path inside the parent's shipped flow dir. Slug is the PARENT slug; patch-mode does NOT mint a new slug.
-- **Single-commit rule (One commit only)**: ONE commit with prefix \`patch(<slug>): <one-line message>\`. Multiple commits = contract violation; the task should run under \`/cc extend\` for the full ceremony.
+- **Single-commit rule (One commit only)**: ONE commit with prefix \`patch(<slug>): <one-line message>\`. Multiple commits = contract violation; the task is not a micro-edit and should run as a soft/strict refine (full ceremony).
 - **No-slice / no-AC contract**: **No slice topology**, **No per-slice review loop**, **No \`verify(AC-N): passing\` discipline**, **No flow-state assumption row flipping**, no \`build.md\` write, no \`refines:\` frontmatter mutation. The parent's plan IS the contract.
 - **Finalize-step ownership**: the single commit IS the finalize step; patch-mode SKIPS the ship-gate structured ask. The user runs \`git push\` / \`gh pr create\` manually. The orchestrator-level lite reviewer pass (when \`--review\` is set) runs AFTER the commit lands.
 - **Slim-summary shape**: emit \`Stage: build (patch-mode)  ✅ complete\` + standard six-line summary; \`What changed:\` names the \`patch-N.md\` path verbatim + commit short-SHA.

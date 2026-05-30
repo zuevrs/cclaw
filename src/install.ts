@@ -672,7 +672,8 @@ const RETIRED_LIB_DIRS: readonly string[] = ["examples", "research", "recovery"]
  * retired on-demand runbook files. Earlier installs wrote these
  * under `.cclaw/lib/runbooks/`. merged or lifted their content
  * into surviving runbooks (handoff-gates.md, critic-steps.md, plan.md
- * "Path: small/medium" / "Path: large-risky" sections). The orphan
+ * "Path: small/medium" / "Path: large-risky" sections; extend-mode.md
+ * + patch-mode.md folded into the unified refine-mode.md). The orphan
  * cleaner removes the stale `.md` files on upgrade.
  */
 const RETIRED_RUNBOOK_FILES: readonly string[] = [
@@ -681,7 +682,9 @@ const RETIRED_RUNBOOK_FILES: readonly string[] = [
   "discovery.md",
   "plan-small-medium.md",
   "critic-stage.md",
-  "plan-critic-stage.md"
+  "plan-critic-stage.md",
+  "extend-mode.md",
+  "patch-mode.md"
 ];
 
 async function removeRetiredLibDirs(

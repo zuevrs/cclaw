@@ -509,18 +509,18 @@ If the user wants to abandon the flow at this point, they type \`/cc-cancel\` (o
 
 ### Post-ship micro-edit hint
 
-After every successful ship (regardless of finalization mode), the orchestrator surfaces a one-line plain-prose hint pointing the user at the patch-mode entry point:
+After every successful ship (regardless of finalization mode), the orchestrator surfaces a one-line plain-prose hint pointing the user at the refine entry point:
 
-> "If you need to adjust this slug after shipping, run \`/cc patch <slug> <description>\` for a fast follow-up without full ceremony."
+> "If you need to adjust this slug after shipping, run \`/cc <slug> <description>\` — triage picks the ceremony (a tiny tweak lands as a single-commit patch, anything larger runs the full refine)."
 
 The hint mechanics:
 
-- **One line, plain prose** in the user's language (the mechanical tokens \`/cc patch\`, \`<slug>\`, and \`<description>\` stay English — they're the wire protocol).
+- **One line, plain prose** in the user's language (the mechanical tokens \`/cc\`, \`<slug>\`, and \`<description>\` stay English — they're the wire protocol).
 - **Always emitted** on a clean ship — every finalization mode (merge / open-PR / push-only / discard-local / no-vcs) surfaces the same hint. The hint is non-coercive informational text; it does NOT block, does NOT add a structured ask, does NOT consume an iteration of the chain.
 - **Substitute \`<slug>\` for the just-shipped slug** when rendering the hint to the user — the literal slug (\`20260514-auth-flow\`) lands in the prose so the user can copy-paste the suggestion verbatim. \`<description>\` stays as a placeholder.
-- **Patch-mode trade-off**: patch-mode skips triage, architect, plan-critic (all rubrics — generic / design / devex), qa, critic, and the ship-gate ask. The full runbook (\`runbooks/patch-mode.md\`) names the four "when NOT to use patch-mode" conditions (≥3 files, new AC, schema/migration/auth/public-API wording, full reviewer pass needed); the user reaches for \`/cc extend\` instead in those cases.
+- **Refine trade-off**: when triage downgrades the follow-up to inline it skips architect, plan-critic (all rubrics — generic / design / devex), qa, critic, and the ship-gate ask (single commit + \`patch-N.md\` next to the parent). Tasks that touch ≥3 files, add a new AC, or carry schema/migration/auth/public-API wording will NOT downgrade — they run the full soft/strict refine with its review + critic passes. Full procedure in \`runbooks/refine-mode.md\`.
 
-The hint exists so post-ship "tiny tweak" tasks have a frictionless entry point. Dogfooded slugs routinely paid the full ceremony cost on 2-line follow-ups; surfacing the patch-mode option immediately after ship is the cheapest place to teach the user the fork exists.
+The hint exists so post-ship "tiny tweak" tasks have a frictionless entry point. Dogfooded slugs routinely paid the full ceremony cost on 2-line follow-ups; surfacing the refine option immediately after ship is the cheapest place to teach the user the fork exists.
 
 ### Ship-gate decision matrix
 
@@ -1090,141 +1090,6 @@ The axis is the 9th explicit axis (10th with the gated \`nfr-compliance\` axis).
 
 `;
 
-const EXTEND_MODE = `# On-demand runbook — extend-mode entry point
-
-The orchestrator opens this runbook **on every \`/cc\` whose raw argument starts with the literal token \`extend \` (case-insensitive, exactly one space)**. The Detect hop fires before the research-mode fork — \`extend\` always wins. This runbook covers the full extend-mode contract: argument parsing, parent validation, slug-init patches, triage inheritance, and the four error sub-cases. Specialist consumption of \`parentContext\` lives further down the orchestrator body under \`### prior-context consumption\`; this runbook does not duplicate that section.
-
-## Trigger evaluation order (Detect hop)
-
-1. **Git-check sub-step** — \`.git/\` presence; force \`ceremonyMode: soft\` if absent.
-2. **extend-mode fork** — argument starts with \`extend \`.
-3. **research-mode fork** — argument starts with \`research \`.
-4. **Default routes** — fresh / resume / collision / legacy state per the Detect table.
-
-The order matters: \`/cc extend <slug> research <topic>\` enters extend mode, not research. The user wanting a research flow that extends a parent runs \`/cc research <topic>\` directly without the \`extend\` prefix.
-
-## Argument parsing
-
-When the fork fires, parse the argument into two parts:
-
-- \`<slug>\` — the **first whitespace-separated token** after \`extend \`. Cases:
-  - Empty (argument is exactly \`extend\` with no remainder) → sub-case "no slug".
-  - Present but no follow-up text → sub-case "no task".
-  - Present + remainder → continue to validation.
-
-- \`<task>\` — the **remainder of the argument string** after the slug, trimmed. Must be non-empty for the fork to proceed.
-
-The slug token is matched verbatim; no fuzzy resolution at this layer (a typo surfaces as \`reason: "missing"\` from \`loadParentContext\` and the orchestrator's error message lists the available shipped slugs from \`.cclaw/flows/shipped/\` directly — first 10 inline; pointer to \`ls .cclaw/flows/shipped/\` when more).
-
-## Parent validation via \`loadParentContext\`
-
-Call \`loadParentContext(projectRoot, slug)\` from \`src/parent-context.ts\`. The helper returns a discriminated union:
-
-\`\`\`typescript
-type ParentContextResolution =
-  | { ok: true; context: ParentContext }
-  | { ok: false; reason: ParentContextErrorReason; slug: string; message: string };
-
-type ParentContextErrorReason = "in-flight" | "cancelled" | "missing" | "corrupted";
-\`\`\`
-
-The orchestrator branches on \`ok\`:
-
-### \`ok: true\` — happy path
-
-The slug resolves to a shipped flow with a non-empty \`plan.md\`. Continue with extend-mode initialisation:
-
-1. **Build a slug for the follow-up flow** — canonical \`YYYYMMDD-<semantic-kebab>\` from the \`<task>\` text. Same naming rules as a standard \`/cc <task>\` (date prefix mandatory; same-day collision suffix \`-2\`, \`-3\`, etc.).
-2. **Stamp \`flow-state.json > parentContext\`** — patch the new flow's state with the resolved \`ParentContext\` (slug + status: "shipped" + optional shippedAt + artifactPaths) via \`patchFlowState\`. This is the single source of truth for the parent linkage; specialists read this field, not \`refines\`.
-3. **Seed \`refines:\` in plan.md frontmatter** — write \`refines: <parent-slug>\` so the legacy knowledge-store chain (\`findRefiningChain\`), qa-runner skip rule, plan-critic skip gate, and the architect's Compose-phase ambiguity-score brownfield path keep working unchanged. The two writes (\`parentContext\` + \`refines\`) are kept in sync by the same init code path; user manual edits to plan.md after init are out of scope. \`parent_slug:\` mirrors the pointer (native field); \`parent_slug:\` wins on drift.
-4. **Run the triage inheritance sub-step** — see "Triage inheritance" below. The sub-step reads the parent's \`ship.md\` / \`plan.md\` frontmatter and seeds \`ceremonyMode\` / \`surfaces\` on the new triage decision (the per-flow ceremony override flags are retired, so inheritance + escalation heuristic now drive the decision deterministically).
-5. **Proceed to triage announcement → first dispatch.** The new flow runs the same pipeline as a standard \`/cc <task>\` (plan → build → qa? → review → critic → ship). Only the parent-context loading at init is new.
-
-### \`ok: false\` — error sub-cases
-
-Surface the resolution's \`message\` field verbatim to the user and end the turn. The validator distinguishes four failure modes:
-
-| \`reason\` | meaning | message template |
-| --- | --- | --- |
-| \`"in-flight"\` | slug is still active under \`flows/<slug>/\` | \`Slug '<slug>' is still in-flight (active under flows/<slug>/). Ship it first, then run /cc extend.\` |
-| \`"cancelled"\` | slug was cancelled (under \`flows/cancelled/<slug>/\`) | \`Slug '<slug>' was cancelled (under flows/cancelled/<slug>/, never shipped). Pass a shipped slug.\` |
-| \`"corrupted"\` | shipped dir exists but \`plan.md\` is missing | \`Shipped slug '<slug>' is corrupted (plan.md missing under flows/shipped/<slug>/). Cannot use as parent context.\` |
-| \`"missing"\` | slug not found under \`flows/\` or \`flows/shipped/\` or \`flows/cancelled/\` | \`Unknown slug '<slug>'. Available shipped slugs: <slug1>, <slug2>, ....\` (or \`No shipped slugs found in .cclaw/flows/shipped/.\` when empty; truncated to 10 + \`Full list: 'ls .cclaw/flows/shipped/'.\` when >10) |
-
-The error message is plain prose, ends the turn, and does NOT consume any of the user's quota of clarifying questions (the lightweight router from still asks zero questions; extend mode does not change that contract).
-
-## Sub-cases — argument shapes that the parser must handle
-
-- **Argument is \`extend\` alone (no slug, no task)** — surface \`extend mode needs a parent slug; try '/cc extend <slug> <task>'\`, end the turn.
-- **Argument is \`extend <slug>\` (slug but no task)** — surface \`extend mode needs a follow-up task description; try '/cc extend <slug> <task>'\`, end the turn.
-- **Argument is \`extend <slug> <task>\` AND a flow is active (\`currentSlug != null\`)** — collision case. Run the standard resume summary + r/s/n picker. On \`n\` (cancel the active flow), dispatch the extend flow as if no flow were active. On \`r\` or \`s\`, the user's choice wins; extend-mode dispatch is deferred until the active flow finalises.
-- **Argument is \`extend <slug> <task>\` AND \`<slug>\` resolves to a shipped slug with \`outcome_signal: "reverted"\` in \`knowledge.jsonl\`** — proceed with extend init, but emit a one-line informational note: \`parent slug '<slug>' was later reverted — proceed only if you understand the revert.\` The user can still ship the follow-up; the note exists so a reverted parent does not become invisible context.
-- **Argument is \`extend <slug> research <topic>\`** — extend mode takes precedence (the research-mode fork below does not fire when the argument begins with \`extend \`). The new flow extends \`<slug>\` and runs a normal task pipeline; the user wanting a research flow that extends a parent should run \`/cc research <topic>\` directly without the extend prefix.
-
-(The per-flow ceremony override flags and the back-compat run-mode toggles are retired — there is no longer any user-facing override surface at extend init; the triage inheritance + escalation heuristic below is the sole decision path.)
-
-## Multi-level chaining
-
-Extend mode loads the **immediate** parent only. If \`parentContext.slug\` itself has \`refines:\` (its parent has a grandparent), the orchestrator does NOT auto-load the grandparent's artifacts. Specialists may walk the chain on demand via \`findRefiningChain\` in \`src/knowledge-store.ts\` when transitive context is needed (the helper walks parent → grandparent → great-grandparent until it hits a slug with no \`refines:\`). Multi-level auto-loading at orchestrator level is future scope; the constraint here keeps the context-loading bounded.
-
-## Triage inheritance (fires only when \`parentContext\` is set at flow init)
-
-When the Detect-hop extend-mode fork stamped \`flowState.parentContext\`, the orchestrator runs an **inheritance sub-step** BEFORE the lightweight router's heuristic classifier. The sub-step reads the parent's shipped \`ship.md\` / \`plan.md\` frontmatter (best-effort; missing fields fall through to the router default) and seeds the new flow's triage with the parent's values:
-
-- \`ceremonyMode\` ← parent's \`ceremony_mode\` (or legacy \`ac_mode\`) from plan.md frontmatter, OR the value implied by the parent's ship.md when plan.md frontmatter is absent.
-- \`surfaces\` ← parent's \`surfaces\` from plan.md / triage block (when present).
-
-### Precedence rules (highest → lowest, evaluated in this order)
-
-1. **Escalation heuristic** — when the new \`<task>\` text matches an escalation pattern (\`security\` / \`auth\` / \`migration\` / \`schema\` / \`payment\` / \`gdpr\` / \`pci\`) AND the parent was \`soft\` or \`inline\`, escalate to \`strict\` for the new flow. One-line note to user: \`extend escalating <parent-mode> → strict (security-related keyword in task)\`. Mirrors the no-git auto-downgrade audit shape.
-2. **Parent inheritance** — fields not pinned by (1) inherit from parent's frontmatter (ceremonyMode + surfaces).
-3. **Router default** — fields not seeded by (1)-(2) fall through to the lightweight router's heuristic classifier (same code path as a standard \`/cc <task>\` flow).
-
-(The explicit user-flag layer that used to sit above these three rules is retired; the triage heuristic is now the sole source of truth, and the user influences it via task wording rather than per-flow flags.)
-
-The inheritance is one-way: the new flow's triage values are immutable for its lifetime; changing them mid-flow requires \`/cc-cancel\` + a fresh \`/cc\`. The parent's values are never re-read after extend init.
-
-### Worked examples
-
-| user invocation | parent's \`ceremony_mode\` | new flow's \`ceremonyMode\` | rationale |
-| --- | --- | --- | --- |
-| \`/cc extend 20260514-auth-flow add OIDC\` | strict | strict | rule 2 (ceremonyMode inheritance) |
-| \`/cc extend 20260514-auth-flow add SAML migration\` | soft | strict | rule 1 (escalation heuristic — \`migration\` keyword) |
-| \`/cc extend 20260514-cli-help fix typo\` | inline | inline | rule 2 (inheritance) |
-| \`/cc extend 20260514-old-slug refactor\` (where parent's plan.md frontmatter is absent) | (unknown) | (router heuristic decides) | rule 3 (router fallthrough) |
-
-The audit log entry for the new flow's triage decision records:
-
-\`\`\`json
-{
-  "decidedAt": "<iso>",
-  "ceremonyMode": "strict",
-  "rationale": "extend-mode inheritance from 20260514-auth-flow (parent: ceremony_mode=strict)",
-  "parentSlug": "20260514-auth-flow",
-  "inheritanceSource": "parent-frontmatter",
-  "userOverrode": false
-}
-\`\`\`
-
-When \`userOverrode: true\` is recorded, the entry also includes a \`overrideField\` array (e.g. \`["ceremonyMode"]\`) so audit consumers can tell which field was explicitly flagged vs. which was inherited.
-
-## What the orchestrator does NOT do at extend init
-
-- **Auto-load grandparent artifacts.** immediate-parent-only; multi-level traversal is opt-in via \`findRefiningChain\` from specialists.
-- **Auto-detect extend intent from task text.** ships the explicit \`/cc extend <slug>\` entry point only. Auto-detection (recognising "extend feature X" / "continue X" / "after slug Y" in a plain \`/cc <task>\`) is deferred to a future release — the lightweight router is zero-question by default and adding a combined-form ask ("Looks like you're extending <slug>. Use parent context? [y/n]") would conflict with that contract. The deferred decision is recorded in \`.cclaw/flows/v859-continuation/design.md\` under "Decisions > D-7: auto-detection deferred".
-- **Re-read parent state during the flow.** \`parentContext\` is stamped once at init and treated as immutable. If the parent's artifacts change after extend init (the parent is unshipped, re-shipped, or modified out-of-band), the new flow's view is stale and that is by design — specialists read the paths via \`await exists(path)\` and treat missing as a no-op skip.
-- **Validate task overlap with the parent.** The orchestrator does not check whether the \`<task>\` text is coherent with the parent's scope; that's the architect's job (Bootstrap reads parent plan.md and surfaces the "Building on prior decisions" framing inline in \`plan.md\`).
-- **Walk the knowledge store.** \`findNearKnowledge\` still runs at the specialist that consumes the result (the \`architect\` during Bootstrap on soft; the \`architect\` during Bootstrap and Decisions on strict). When \`parentContext\` is set, the lookup augments rather than replaces; the parent's \`learnings.md\` rides alongside the global knowledge-store top-3 picks.
-
-## Backwards compatibility
-
-- **Legacy state files** never carry \`parentContext\`. Readers default to \`null\`/absent meaning "cold-start flow, no parent". Migration is a no-op; the field is opt-in.
-- **Legacy shipped slugs** are valid extend targets. Their plan.md may not have a \`parent_slug:\` field; the orchestrator does not write one retroactively. The new flow's \`parentContext.slug\` is the canonical link.
-- **\`priorResearch\` co-existence.** A \`/cc extend\` flow that also follows a \`/cc research\` ship reads BOTH context sources (the two fields are orthogonal on the FlowState type). Specialists merge the two when both are present; \`priorResearch\` is the bigger / fuzzier context, \`parentContext\` is the tighter / structured one.
-- **Auto-detection deferral.** If a future release ships auto-detection, the entry point in this runbook stays unchanged — auto-detection becomes a second path into the same init code (the explicit \`/cc extend\` slug stays as the primary, unambiguous entry).
-`;
-
-
 const RESEARCH_DEPTH_AND_SELF_REVIEW = `# On-demand runbook — research depth tiers + synthesis self-review
 
 The orchestrator opens this runbook on every \`/cc research <topic>\` flow — once at the Detect-hop research-mode fork (to parse the depth flag / classify the depth) and once at Phase 3 synthesis (to run the self-review pass before \`research.md\` is written). The body of \`/cc\` carries only the one-paragraph pointer; this runbook is the canonical source.
@@ -1625,15 +1490,15 @@ Read \`.cclaw/state/flow-state.json\`. A flow is **active** when \`currentSlug !
 | Invocation | Active flow? | Behaviour |
 | --- | --- | --- |
 | \`/cc\` (no args) | yes | **Continue silently.** Jump back into the saved \`currentStage\`, dispatch the next specialist (or chain the next auto-step). No picker, no resume summary. The user sees the next slim summary directly. |
-| \`/cc\` (no args) | no | Error in plain prose, in the user's language: \`No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug> <task>.\` End the turn. |
+| \`/cc\` (no args) | no | Error in plain prose, in the user's language: \`No active flow. Start with /cc <task>, /cc <slug> <task> (refine a shipped slug), or /cc research <topic>.\` End the turn. |
 | \`/cc <task>\` | yes | Error in plain prose, in the user's language: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` End the turn. Do NOT auto-cancel or queue the new task. |
-| \`/cc <task>\` | no | **Start a new flow.** Run the Detect git-check, extend-mode fork, research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent. |
+| \`/cc <task>\` | no | **Start a new flow.** Run the Detect git-check, refine-mode fork (first token is a shipped slug), research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent. |
 | \`/cc research <topic>\` | yes | Error (same shape as \`/cc <task>\` + active flow). End the turn. |
 | \`/cc research <topic>\` | no | Start a research-mode flow (see \`runbooks/research-depth-and-self-review.md\`). |
 | \`/cc research go\` | yes (research-mode + \`researchState == "discovery"\`) | Force-exit Phase 1 discovery dialogue (identical to in-prose "ready" signal). Outside that state — error: \`'/cc research go' only fires during research-mode Phase 1 discovery.\` End the turn. |
 | \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` | yes (research-mode + \`researchState == "awaiting-user-review"\`) | Route to the matching sub-handler per \`runbooks/research-revision.md\` §2 / §3 / §4. Outside that state — error: \`research revision sub-commands only fire on a research flow at the awaiting-user-review gate.\` End the turn. |
-| \`/cc extend <slug> <task>\` | yes | Error (same shape). End the turn. |
-| \`/cc extend <slug> <task>\` | no | Start an extend-mode flow (see \`runbooks/extend-mode.md\`). |
+| \`/cc <slug> <task>\` (first token is a shipped slug) | yes | Error (same shape as \`/cc <task>\` + active flow). End the turn. |
+| \`/cc <slug> <task>\` (first token is a shipped slug) | no | Start a refine-mode flow (see \`runbooks/refine-mode.md\`); \`triage\` picks the ceremony (inline micro-edit vs soft/strict refine). |
 | \`/cc-cancel\` | yes | Run the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state). See \`commands/cc-cancel.md\`. |
 | \`/cc-cancel\` | no | Error: \`No active flow to cancel.\` End the turn. |
 
@@ -1668,7 +1533,7 @@ Active flow: 20260515-auth-cleanup (stage: review). Continue with /cc. Cancel wi
 \`\`\`text
 > /cc
 
-No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug> <task>.
+No active flow. Start with /cc <task>, /cc <slug> <task> (refine a shipped slug), or /cc research <topic>.
 \`\`\`
 
 ## §6 — Resume rules (immutable triage, restored last-specialist context)
@@ -1684,7 +1549,7 @@ No active flow. Start with /cc <task>, /cc research <topic>, or /cc extend <slug
 | excuse | reality |
 | --- | --- |
 | "User typed \`/cc <task>\` mid-flight — auto-cancel the active flow and start fresh." | NO. Matrix Row 3 errors and ends the turn; \`/cc-cancel\` is a separate explicit user-typed command. Never pick for them. |
-| "User typed a bare \`/cc\` on a fresh project — surface the start options as a structured picker." | NO. Matrix Row 2 errors in plain prose. The user types \`/cc <task>\` / \`/cc research <topic>\` / \`/cc extend <slug> <task>\` from their command palette. |
+| "User typed a bare \`/cc\` on a fresh project — surface the start options as a structured picker." | NO. Matrix Row 2 errors in plain prose. The user types \`/cc <task>\` / \`/cc <slug> <task>\` (refine) / \`/cc research <topic>\` from their command palette. |
 | "Active flow has a stop-and-report block from the last turn — surface a \`Continue or cancel?\` picker on the next \`/cc\`." | NO. \`/cc\` continues silently per Row 1. The stop-and-report block already named \`/cc\` (continue) and \`/cc-cancel\` (discard) in plain prose; the user typed \`/cc\` because they chose continue. |
 | "Schema version is one behind — auto-migrate and continue." | YES if \`schemaVersion >= 2\` (the validator does the migrate on read; matrix Row "\`schemaVersion\` < 3" applies). NO if \`schemaVersion < 2\` — hard-stop with the migration prompt; do not auto-delete state. |
 `;
@@ -2033,7 +1898,7 @@ The multi-lens research mode is intentionally separate from the standard \`/cc <
 
 const TRIAGE_GATE = `# On-demand runbook — Triage hop (orchestrator-side)
 
-The orchestrator opens this runbook on every fresh \`/cc <task>\` Triage hop (research-mode / extend-mode / patch-mode forks bypass this hop). The runbook is the canonical orchestrator-side procedure — persisted shape, audit-log surface, follow-up-bug detection, prior-context consumption, prior-learnings consumption, and the critic-stage insertion rule. The \`triage\` sub-agent's lightweight-router contract still lives in \`.cclaw/lib/agents/triage.md\`; this runbook covers ONLY what the orchestrator does around the dispatch.
+The orchestrator opens this runbook on every fresh \`/cc <task>\` Triage hop (the research-mode fork bypasses this hop; refine-mode — a leading shipped-slug token — DOES dispatch triage, with the resolved \`parentContext\` attached to the envelope). The runbook is the canonical orchestrator-side procedure — persisted shape, audit-log surface, follow-up-bug detection, prior-context consumption, prior-learnings consumption, and the critic-stage insertion rule. The \`triage\` sub-agent's lightweight-router contract still lives in \`.cclaw/lib/agents/triage.md\`; this runbook covers ONLY what the orchestrator does around the dispatch.
 
 ## §1 — Persisted triage shape
 
@@ -2080,9 +1945,9 @@ Always-auto: every non-inline path chains immediately at plan / review / critic 
 
 Immediately after triage persistence, call \`applyFollowUpBugSignals(projectRoot, triage.taskSummary, <iso-now>)\` (in \`src/outcome-detection.ts\`). The helper reads \`.cclaw/knowledge.jsonl\`, scans \`taskSummary\` for slug-cased references to prior shipped slugs paired with a bug keyword (\`bug\` / \`fix\` / \`broken\` / \`regression\` / \`crash\` / \`hotfix\` / \`hot-fix\` / \`revert\` / \`rollback\`), and stamps \`outcome_signal: "follow-up-bug"\` on every match. Both signals (slug-cased reference AND bug keyword) are required so refinement / rephrase tasks that mention a prior without bug intent don't false-positive. Missing / empty / unreadable file is a no-op. Sister capture paths (\`reverted\`, \`manual-fix\`) run at compound time — see \`runbooks/compound-refresh.md\` and \`runCompoundAndShip\`. The follow-up-bug helper writes to \`.cclaw/knowledge.jsonl\` (telemetry on shipped entries); it does NOT write to \`flow-state.json > triage.priorLearnings\` (that field is no longer populated by the router; see §7 below).
 
-## §6 — prior-context consumption (extend-mode)
+## §6 — prior-context consumption (refine-mode)
 
-When extend-mode stamped \`flowState.parentContext\`, specialists treat parent artifacts as load-bearing context (lazy \`await exists\` reads; missing = no-op). Per-specialist contracts: \`architect\` Bootstrap reads parent's \`## Spec\` / \`## Decisions\` / \`## Selected Direction\` and surfaces inheritance bullets in soft mode; on strict mode the architect's Plan-tier write authors the mandatory \`## Extends\` section in plan.md. \`reviewer\` adds a parent-contradictions cross-check; \`critic\` §3 adds a skeptic question on parent decisions. The field is orthogonal to \`priorResearch\` and may co-exist on a single flow. Full per-specialist read patterns live in each specialist's contract; orchestrator-side dispatch + triage-inheritance lives in \`runbooks/extend-mode.md\`.
+When refine-mode stamped \`flowState.parentContext\`, specialists treat parent artifacts as load-bearing context (lazy \`await exists\` reads; missing = no-op). Per-specialist contracts: \`architect\` Bootstrap reads parent's \`## Spec\` / \`## Decisions\` / \`## Selected Direction\` and surfaces inheritance bullets in soft mode; on strict mode the architect's Plan-tier write authors the mandatory \`## Extends\` section in plan.md. \`reviewer\` adds a parent-contradictions cross-check; \`critic\` §3 adds a skeptic question on parent decisions. The field is orthogonal to \`priorResearch\` and may co-exist on a single flow. (On the inline micro-edit path the builder reads the parent plan directly and no architect/reviewer/critic runs.) Full per-specialist read patterns live in each specialist's contract; orchestrator-side dispatch + triage-inheritance lives in \`runbooks/refine-mode.md\`.
 
 ## §7 — prior-learnings consumption (architect owns the lookup; OUTCOME_SIGNAL_MULTIPLIERS)
 
@@ -2182,16 +2047,10 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     body: QA_STAGE
   },
   {
-    id: "extend-mode",
-    fileName: "extend-mode.md",
-    title: "Extend-mode entry point",
-    body: EXTEND_MODE
-  },
-  {
-    id: "patch-mode",
-    fileName: "patch-mode.md",
-    title: "Patch-mode entry point (post-ship micro-edit)",
-    body: readRunbook("patch-mode.md")
+    id: "refine-mode",
+    fileName: "refine-mode.md",
+    title: "Refine-mode entry point (refine a shipped slug; triage picks ceremony)",
+    body: readRunbook("refine-mode.md")
   },
   {
     id: "research-depth-and-self-review",

@@ -29,10 +29,7 @@ import { execFileSync } from "node:child_process";
 const { AUTO_TRIGGER_SKILLS } = await import(
   new URL("../dist/content/skills.js", import.meta.url).href
 );
-const EXPECTED_SKILL_FILES = [
-  ...AUTO_TRIGGER_SKILLS.map((s) => s.fileName),
-  "cclaw-meta.md"
-].sort();
+const EXPECTED_SKILL_FILES = [...AUTO_TRIGGER_SKILLS.map((s) => s.fileName)].sort();
 
 const tempDir = mkdtempSync(join(tmpdir(), "cclaw-smoke-"));
 
@@ -260,7 +257,7 @@ try {
     .sort();
   for (const onDisk of skillsOnDisk) {
     if (!EXPECTED_SKILL_FILES.includes(onDisk)) {
-      throw new Error(`smoke check failed: unexpected skill file ${onDisk} after init — not in AUTO_TRIGGER_SKILLS ∪ {cclaw-meta.md}`);
+      throw new Error(`smoke check failed: unexpected skill file ${onDisk} after init — not in AUTO_TRIGGER_SKILLS`);
     }
   }
   for (const runbook of ["plan.md", "build.md", "review.md", "ship.md"]) {
@@ -293,72 +290,39 @@ try {
   if (!existsSync(join(tempDir, ".cclaw", "lib", "runbooks", "qa-stage.md"))) {
     throw new Error("smoke check failed: v8.52 qa-stage.md runbook missing after init");
   }
-  // v8.59 — `extend-mode.md` on-demand runbook was added alongside the
-  // new `/cc extend <slug>` continuation-flow entry point. The runbook
-  // is lazy-loaded by the orchestrator on every `/cc` whose argument
-  // starts with `extend ` (case-insensitive, exactly one space); it
-  // covers the full Detect-hop procedure (argument parsing, parent
-  // validation via `loadParentContext`, slug-init patches for
-  // `parentContext` + `refines:` + `parent_slug:`, triage-inheritance
-  // precedence rules, the seven argument sub-cases, multi-level chaining
-  // policy, and worked examples). Install writes the file unconditionally;
-  // it is only consumed on extend-mode dispatches.
-  const extendModeRunbook = join(tempDir, ".cclaw", "lib", "runbooks", "extend-mode.md");
-  if (!existsSync(extendModeRunbook)) {
-    throw new Error("smoke check failed: v8.59 extend-mode.md runbook missing after init");
+  // v8.113 — `extend-mode.md` + `patch-mode.md` were folded into a single
+  // `refine-mode.md` on-demand runbook. A leading shipped-slug token in
+  // `/cc <slug> <task>` IS the refine signal; triage picks the ceremony
+  // (inline micro-edit vs soft/strict full refine). The runbook covers the
+  // full Detect-hop procedure: slug detection + argument parsing, parent
+  // validation via `loadParentContext`, the `parentContext` / `refines:` /
+  // `parent_slug:` slug-init writes, the inline micro-edit (patch) path
+  // (`patchMode: true` builder envelope + `patch-N.md` artifact +
+  // `patch(<slug>):` commit), and the full refine path. Install writes the
+  // file unconditionally; it is only consumed on refine dispatches.
+  const refineModeRunbook = join(tempDir, ".cclaw", "lib", "runbooks", "refine-mode.md");
+  if (!existsSync(refineModeRunbook)) {
+    throw new Error("smoke check failed: v8.113 refine-mode.md runbook missing after init");
   }
-  const extendModeBody = readFileSync(extendModeRunbook, "utf8");
-  if (!extendModeBody.startsWith("# On-demand runbook —")) {
-    throw new Error("smoke check failed: v8.59 extend-mode.md must open with the canonical `# On-demand runbook —` heading");
-  }
-  for (const reason of ["in-flight", "cancelled", "missing", "corrupted"]) {
-    if (!extendModeBody.includes(reason)) {
-      throw new Error(`smoke check failed: v8.59 extend-mode.md must document the ParentContextErrorReason \`${reason}\``);
-    }
-  }
-  if (!extendModeBody.includes("loadParentContext")) {
-    throw new Error("smoke check failed: v8.59 extend-mode.md must reference the loadParentContext validator");
-  }
-  if (!extendModeBody.includes("parentContext")) {
-    throw new Error("smoke check failed: v8.59 extend-mode.md must reference the flow-state.json > parentContext field");
-  }
-  if (!extendModeBody.includes("refines:")) {
-    throw new Error("smoke check failed: v8.59 extend-mode.md must reference the legacy `refines:` frontmatter for back-compat with knowledge-store");
-  }
-  // v8.102 — `patch-mode.md` on-demand runbook was added alongside the new
-  // `/cc patch <slug> <task>` post-ship micro-edit entry point. The runbook
-  // is lazy-loaded by the orchestrator on every `/cc` whose argument
-  // starts with `patch ` (case-insensitive, exactly one space); it covers
-  // the full Detect-hop procedure (argument parsing, parent validation
-  // via the reused `loadParentContext` helper, the skip-everything
-  // dispatch shape, the `patch-N.md` artifact, the builder envelope's
-  // `patchMode: true` flag, and multi-level chaining). Install writes
-  // the file unconditionally; it is only consumed on patch-mode
-  // dispatches.
-  const patchModeRunbook = join(tempDir, ".cclaw", "lib", "runbooks", "patch-mode.md");
-  if (!existsSync(patchModeRunbook)) {
-    throw new Error("smoke check failed: v8.102 patch-mode.md runbook missing after init");
-  }
-  const patchModeBody = readFileSync(patchModeRunbook, "utf8");
-  if (!patchModeBody.startsWith("# On-demand runbook —")) {
-    throw new Error("smoke check failed: v8.102 patch-mode.md must open with the canonical `# On-demand runbook —` heading");
-  }
-  if (!patchModeBody.includes("loadParentContext")) {
-    throw new Error("smoke check failed: v8.102 patch-mode.md must reference the reused loadParentContext validator (the v8.59 helper)");
+  const refineModeBody = readFileSync(refineModeRunbook, "utf8");
+  if (!refineModeBody.startsWith("# On-demand runbook —")) {
+    throw new Error("smoke check failed: v8.113 refine-mode.md must open with the canonical `# On-demand runbook —` heading");
   }
   for (const reason of ["in-flight", "cancelled", "missing", "corrupted"]) {
-    if (!patchModeBody.includes(reason)) {
-      throw new Error(`smoke check failed: v8.102 patch-mode.md must document the ParentContextErrorReason \`${reason}\``);
+    if (!refineModeBody.includes(reason)) {
+      throw new Error(`smoke check failed: v8.113 refine-mode.md must document the ParentContextErrorReason \`${reason}\``);
     }
   }
-  if (!patchModeBody.includes("patchMode")) {
-    throw new Error("smoke check failed: v8.102 patch-mode.md must reference the builder envelope's `patchMode` flag");
+  for (const token of ["loadParentContext", "parentContext", "refines:", "patchMode", "patch-N.md", "patch("]) {
+    if (!refineModeBody.includes(token)) {
+      throw new Error(`smoke check failed: v8.113 refine-mode.md must reference \`${token}\``);
+    }
   }
-  if (!patchModeBody.includes("patch-N.md")) {
-    throw new Error("smoke check failed: v8.102 patch-mode.md must reference the `patch-N.md` artifact shape");
-  }
-  if (!patchModeBody.includes("patch(")) {
-    throw new Error("smoke check failed: v8.102 patch-mode.md must document the `patch(<slug>):` commit prefix");
+  // The retired keyword runbooks must NOT be present after a clean init.
+  for (const retired of ["extend-mode.md", "patch-mode.md"]) {
+    if (existsSync(join(tempDir, ".cclaw", "lib", "runbooks", retired))) {
+      throw new Error(`smoke check failed: retired runbook ${retired} should not be present after v8.113`);
+    }
   }
   // v8.12 trimmed reference patterns 8 → 2.
   for (const pattern of ["auth-flow.md", "security-hardening.md"]) {

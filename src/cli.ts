@@ -83,8 +83,7 @@ via the /cc command, not in this CLI. There is no \`cclaw plan\`,
 /cc subcommand patterns (inside your harness, after install):
   /cc <task>                       Fresh slug — triage → plan → build → review → critic → ship.
   /cc research <topic>             Multi-lens research mode; emits research.md, no build.
-  /cc patch <slug> <task>          Post-ship micro-edit (v8.102): inline ceremony, single commit, parent context reused.
-  /cc extend <slug> <task>         Full follow-up arc on a shipped slug; parent's plan / build / learnings load as context.
+  /cc <slug> <task>                Refine a shipped slug (first token is the slug); triage picks the ceremony — a tiny tweak lands as a single-commit patch (patch-N.md next to the parent), anything larger runs the full refine with the parent's plan / build / learnings as context.
   /cc                              Resume the active flow.
   /cc-cancel                       Discard the active flow.
 
@@ -104,11 +103,11 @@ infer; everything else now flows from the heuristic + task wording:
                                        project-wide via
                                        \`critic.cross_model: true\` in
                                        \`.cclaw/config.yaml\`.
-  --review                             /cc patch only: enable the lite
-                                       reviewer pass (correctness,
-                                       readability, edit-discipline
-                                       axes only) after the patch
-                                       commit lands.
+  --review                             refine inline path only: enable
+                                       the lite reviewer pass
+                                       (correctness, readability,
+                                       edit-discipline axes only) after
+                                       the patch commit lands.
   --lens=design / --lens=-design       research mode only: force-include
                                        or force-exclude the v8.76
                                        design lens, overriding the

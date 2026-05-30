@@ -97,8 +97,7 @@ describe("v8.103 — startup token diet (orchestrator entry compression)", () =>
       "triage-gate",
       "debug-branch",
       "one-way-door-gate",
-      "extend-mode",
-      "patch-mode"
+      "refine-mode"
     ]) {
       expect(ON_DEMAND_RUNBOOKS_INDEX_SECTION).toContain(`${id}.md`);
     }

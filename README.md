@@ -21,7 +21,7 @@ Supported harnesses: `claude` (`CLAUDE.md` or `.claude/`), `cursor` (`.cursor/`)
 
 ## Use
 
-Four entry shapes share the `/cc` surface:
+Three entry shapes share the `/cc` surface:
 
 ```bash
 # 1. Ship a code change end-to-end.
@@ -32,13 +32,12 @@ Four entry shapes share the `/cc` surface:
 # Dispatches up to 6 research lenses in parallel; synthesises research.md.
 /cc research storage strategy for shared agent memory
 
-# 3. Post-ship micro-edit on a shipped slug.
-# Skips triage / plan-critic / critic; single commit, parent context reused.
-/cc patch 20260514-auth-flow rename loginUser to authenticateUser
-
-# 4. Full follow-up arc on a shipped slug.
-# Parent's plan / build / learnings load as context for the new flow.
-/cc extend 20260514-auth-flow add SAML login
+# 3. Refine a shipped slug — the first token IS the slug.
+# Triage picks the ceremony: a tiny tweak lands as a single-commit patch
+# (patch-N.md next to the parent, no new slug); anything larger runs the
+# full follow-up arc with the parent's plan / build / learnings as context.
+/cc 20260514-auth-flow rename loginUser to authenticateUser
+/cc 20260514-auth-flow add SAML login
 
 # Cancel the active flow.
 /cc-cancel
@@ -54,10 +53,8 @@ Slim summaries land in chat under `## Triage`, `## Plan`, `## Build`, `## Review
 flowchart LR
  U[user] -->|"/cc &lt;task&gt;"| T[triage]
  U -->|"/cc research &lt;topic&gt;"| RES[research orchestrator]
- U -->|"/cc patch &lt;slug&gt;"| PT[load parent context]
- U -->|"/cc extend &lt;slug&gt;"| EX[load parent context]
- EX --> T
- PT --> B
+ U -->|"/cc &lt;slug&gt; &lt;task&gt;"| PT[load parent context]
+ PT --> T
  T --> AR[architect]
  AR --> PC[plan-critic gate]
  PC --> B[builder]
@@ -71,7 +68,7 @@ flowchart LR
 
 | Mode | When triage picks it | Pipeline |
 |------|---------------------|----------|
-| `inline` | trivial edits — typo, comment, one-line fix; also auto-set on `/cc patch` | one commit, no plan |
+| `inline` | trivial edits — typo, comment, one-line fix; also auto-set when triage downgrades a refine (`/cc <slug> <task>`) to a post-ship patch | one commit, no plan |
 | `soft` (default) | small / medium tasks | architect → single TDD cycle → reviewer → critic → ship |
 | `strict` | risky / multi-slice / security / migration | architect → plan-critic gate → per-slice TDD → reviewer (dual-chain) → critic → ship |
 
@@ -119,7 +116,7 @@ The runtime is < 1 KLOC; behaviour lives in prompt content under `src/content/`.
 - [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 8 specialist contracts (`triage`, `investigator`, `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`)
 - [`src/content/skills/`](src/content/skills/) — 32 auto-trigger skills loaded per stage
 - [`src/content/research-lenses/`](src/content/research-lenses/) — 6 research lenses dispatched on `/cc research`
-- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 27 on-demand runbooks loaded by trigger
+- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 26 on-demand runbooks loaded by trigger
 - [`src/content/artifact-templates.ts`](src/content/artifact-templates.ts) — plan / build / qa / review / critic / ship templates
 - [`src/content/anti-rationalizations.ts`](src/content/anti-rationalizations.ts) — cross-cutting rebuttal catalog
 - [`CHANGELOG.md`](CHANGELOG.md) — release history with every flag, gate, rubric, and version

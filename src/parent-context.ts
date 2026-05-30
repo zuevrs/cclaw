@@ -1,8 +1,8 @@
 /**
- * parent-context resolver for the `/cc extend <slug>` entry point.
+ * parent-context resolver for the refine entry point (`/cc <slug> <task>`).
  *
- * The orchestrator's Detect hop accepts `/cc extend <slug> <task>` as a
- * new fresh-flow entry point that initialises the new slug with a
+ * The orchestrator's Detect hop treats a leading shipped-slug token in
+ * `/cc <slug> <task>` as a refine entry point that initialises the new slug with a
  * structured pointer at a previously-shipped parent slug. This module
  * owns the **validation** (does the named slug exist + is it shipped +
  * does it have plan.md?) and the **artifact-path resolution** (which
@@ -119,7 +119,7 @@ export async function loadParentContext(
       ok: false,
       reason: "missing",
       slug,
-      message: `extend mode needs a parent slug; try '/cc extend <slug> <task>'`
+      message: `refine mode needs a parent slug; try '/cc <slug> <task>'`
     };
   }
   const shippedDir = shippedArtifactDir(projectRoot, slug);
@@ -154,7 +154,7 @@ export async function loadParentContext(
       reason: "in-flight",
       slug,
       message:
-        `Slug '${slug}' is still in-flight (active under flows/${slug}/). Ship it first, then run /cc extend.`
+        `Slug '${slug}' is still in-flight (active under flows/${slug}/). Ship it first, then refine it with /cc <slug> <task>.`
     };
   }
 
@@ -189,7 +189,7 @@ export async function loadParentContext(
  * read the parent's `ship.md > frontmatter.shipped_at` field
  * as a best-effort lookup. Returns `null` on any failure (missing
  * ship.md, unreadable file, missing frontmatter, missing field,
- * non-string value). Never throws — the orchestrator's `/cc extend`
+ * non-string value). Never throws — the orchestrator's refine
  * validator MUST be resilient to legacy shipped slugs that lack
  * `ship.md` (pre-v8.12) or carry sparse frontmatter.
  */
@@ -250,7 +250,7 @@ async function resolveArtifactPaths(
  * filtered to entries whose name begins with the canonical date
  * prefix (`YYYYMMDD-`). Used by the orchestrator's Detect hop to
  * (a) sanity-check that the project has any shipped slugs at all
- * before suggesting `/cc extend`, and (b) optionally surface
+ * before suggesting a refine, and (b) optionally surface
  * nearest-neighbour suggestions in the `"missing"` error message.
  *
  * Returns `[]` when:
@@ -281,7 +281,7 @@ export async function listShippedSlugs(projectRoot: string): Promise<string[]> {
   // convention so reverse-alphabetical sort is reverse-chronological;
   // the "showing 10 of N" sample in the unknown-slug error message
   // now surfaces the 10 most-recent slugs (the ones users are most
-  // likely to be reaching for via `/cc extend`) instead of the 10
+  // likely to be reaching for via `/cc <slug> <task>`) instead of the 10
   // oldest. Tied prefixes (same-day slugs) fall back to
   // reverse-lexicographic on the topic suffix.
   slugs.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
