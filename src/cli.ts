@@ -41,39 +41,13 @@ import { HARNESS_IDS, type CliContext, type HarnessId } from "./types.js";
 const TAGLINE = "harness-first flow toolkit for coding agents";
 
 /**
- * `cclaw` is TUI-first. The canonical invocation is
- * `npx cclaw-cli@latest` (no args), which opens a top-level menu with a
- * smart default highlight based on whether `.cclaw/config.yaml` exists.
- *
- * The bare subcommand surface (`cclaw init`, `cclaw sync`, …) was
- * dropped in v8.29 — those error out and point at the no-arg
- * invocation. The `--non-interactive` flag is the escape hatch for
- * CI / scripts / piped input.
- *
- * `cclaw --non-interactive sync` and `cclaw --non-interactive
- * upgrade` were collapsed into `cclaw --non-interactive install`.
- * Under the hood, all three previously called `syncCclaw()` /
- * `upgradeCclaw()` (themselves thin wrappers around the same idempotent
- * installer with orphan cleanup). The non-interactive surface now
- * matches the code path: ONE installer (`install`), the read-only
- * commands (`knowledge`, `version`, `help`), and `uninstall`.
- *
- * the TUI menu finishes the collapse: rows are now just
- * `Install` / `Uninstall` / `Quit`. `Sync` and `Upgrade` were intent
- * aliases that confused the picture (three rows, one behaviour);
- * `Install` now carries both readings via its description
- * ("first-time setup OR idempotent reapply"). `Browse knowledge` and
- * `Show version` were moved off the menu — power users invoke them as
- * `cclaw --non-interactive knowledge` / `cclaw --version`. also
- * fixes a perceptible-on-slow-terminals double-render of the 6-line
- * Unicode logo: the no-arg TUI path used to emit the banner above the
- * menu AND again inside the action dispatcher; the second emission is
- * gone (the original banner stays in scrollback while menu rows are
- * erased, so the install progress flows under the banner the operator
- * already saw).
- *
- * `--help` / `-h` / `--version` / `-v` are preserved as flags regardless
- * of mode (standard CLI convention).
+ * `cclaw` is TUI-first: bare `cclaw` (or `npx cclaw-cli@latest`) opens a
+ * top-level menu (Install / Uninstall / Quit). `--non-interactive` is the
+ * escape hatch for CI / scripts: ONE installer (`install`), the read-only
+ * commands (`knowledge`, `version`, `help`), and `uninstall`. Bare
+ * subcommands (`cclaw init`, `cclaw sync`, …) error and point at one of
+ * those two surfaces. `--help` / `-h` / `--version` / `-v` work as flags
+ * in any mode.
  */
 const HELP_USAGE = `Usage:
   cclaw                                     # open the TUI menu (interactive default)

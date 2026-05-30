@@ -1,19 +1,16 @@
 /**
- * v8.56 — `acMode` → `ceremonyMode` rename, with a one-release legacy alias on
- * read.
+ * v8.56 — `acMode` → `ceremonyMode` rename. The runtime on-read migration is
+ * the live contract; the one-release type aliases (`AC_MODES` / `AcMode`) were
+ * removed once their deprecation window closed.
  *
  * These tripwires lock the safe-rename contract:
  *   1. The canonical surface (constant, type, field) uses the v8.56 name.
  *   2. A `flow-state.json` written by a pre-v8.56 cclaw (with `triage.acMode`)
  *      is migrated on read into a v8.56-shaped triage carrying
  *      `triage.ceremonyMode` and no residual `acMode` field.
- *   3. The legacy `AC_MODES` / `AcMode` exports survive at runtime as
- *      deprecated re-exports so downstream importers compile during the
- *      one-release deprecation window.
  *
- * If this test ever fails, the rename has either drifted (canonical name
- * regressed) or the legacy alias has been removed before its grace period —
- * both are user-visible regressions.
+ * If this test ever fails, the rename has drifted (canonical name regressed)
+ * or the on-read migration broke — both are user-visible regressions.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -21,28 +18,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { FLOW_STATE_REL_PATH } from "../../src/constants.js";
 import { migrateFlowState } from "../../src/flow-state.js";
 import { readFlowState } from "../../src/run-persistence.js";
-import {
-  AC_MODES,
-  CEREMONY_MODES,
-  type AcMode,
-  type CeremonyMode
-} from "../../src/types.js";
+import { CEREMONY_MODES, type CeremonyMode } from "../../src/types.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
 describe("v8.56 — canonical names", () => {
   it("CEREMONY_MODES enumerates the three canonical modes (inline | soft | strict)", () => {
     expect(CEREMONY_MODES).toEqual(["inline", "soft", "strict"]);
-  });
-
-  it("AC_MODES legacy alias re-exports the same triple (one-release back-compat)", () => {
-    expect(AC_MODES).toEqual(CEREMONY_MODES);
-  });
-
-  it("AcMode legacy alias is assignment-compatible with CeremonyMode", () => {
-    const fromCeremony: CeremonyMode = "strict";
-    const asLegacy: AcMode = fromCeremony;
-    const backToCeremony: CeremonyMode = asLegacy;
-    expect(backToCeremony).toBe("strict");
   });
 });
 

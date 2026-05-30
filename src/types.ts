@@ -125,22 +125,6 @@ export const LEGACY_SPECIALIST_IDS = [
 export type LegacySpecialistId = (typeof LEGACY_SPECIALIST_IDS)[number];
 
 /**
- * @deprecated — use {@link LEGACY_SPECIALIST_IDS}. Re-export kept so old import
- * sites type-check; the entry name-collides with the current `architect`
- * specialist, so new code MUST NOT use it.
- */
-export const LEGACY_DISCOVERY_SPECIALISTS = ["brainstormer"] as const;
-export type LegacyDiscoverySpecialistId = (typeof LEGACY_DISCOVERY_SPECIALISTS)[number];
-
-/**
- * Canonical legacy id for the original `planner` specialist (later `ac-author`,
- * now `architect`). Kept for permissive validators that may still encounter it
- * in very old `flow-state.json` files (`lastSpecialist` is a permissive string).
- */
-export const LEGACY_PLANNER_ID = "planner" as const;
-export type LegacyPlannerId = typeof LEGACY_PLANNER_ID;
-
-/**
  * Read-only research helpers the `architect` dispatches before writing its
  * artifact (live repo signals; prior cclaw lessons). Not in {@link SpecialistId}:
  * they never become `lastSpecialist`, are not a stage, and can only be
@@ -261,12 +245,6 @@ export type Surface = (typeof SURFACES)[number];
 export type PlanCriticVerdict = "pass" | "revise" | "cancel" | "block";
 
 /**
- * @deprecated — plan-design merged into plan-critic `rubricMode: "design"`;
- * branch on {@link PlanCriticVerdict}. Alias kept so old readers type-check.
- */
-export type PlanDesignVerdict = "pass" | "revise" | "block";
-
-/**
  * Severity of a `PD-N` plan-design finding (no `critical` tier at plan-time):
  * `low` = dimension 5/10 (advisory); `medium` = 4/10, or accessibility ≤ 5, or
  * strict-mode AI-slop (blocks in strict); `high` = ≤ 3/10, or accessibility ≤ 2
@@ -274,12 +252,6 @@ export type PlanDesignVerdict = "pass" | "revise" | "block";
  * writes use one of the three values.
  */
 export type PlanDesignSeverity = "low" | "medium" | "high";
-
-/**
- * @deprecated — plan-devex merged into plan-critic `rubricMode: "devex"`;
- * branch on {@link PlanCriticVerdict}. Alias kept so old readers type-check.
- */
-export type PlanDevexVerdict = "pass" | "revise" | "block";
 
 /**
  * Severity of a `DX-N` plan-devex finding; mirrors {@link PlanDesignSeverity}
@@ -540,12 +512,6 @@ export interface ResearchApproach {
  */
 export const CEREMONY_MODES = ["inline", "soft", "strict"] as const;
 export type CeremonyMode = (typeof CEREMONY_MODES)[number];
-
-/** @deprecated — use {@link CEREMONY_MODES}. Re-export kept so old import sites type-check. */
-export const AC_MODES = CEREMONY_MODES;
-
-/** @deprecated — use {@link CeremonyMode}. Alias kept so old import sites type-check. */
-export type AcMode = CeremonyMode;
 
 /**
  * Decision recorded at the triage gate that opens every flow; persisted so

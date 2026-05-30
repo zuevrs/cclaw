@@ -57,7 +57,6 @@ describe("content hygiene — no dead config keys", () => {
    */
   const CONFIG_KEYS = [
     "flowVersion",
-    "legacyArtifacts",
     "modelPreferences",
     "compoundRefreshEvery",
     "compoundRefreshFloor",

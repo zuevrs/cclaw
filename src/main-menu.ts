@@ -1,28 +1,12 @@
 /**
- * top-level TUI menu for `cclaw` invoked with no args.
+ * Top-level TUI menu for `cclaw` invoked with no args.
  *
- * Mirrors the `harness-prompt.ts` pattern: a pure-state reducer
- * (`applyMenuKey`), a pure-render frame builder (`renderMenuFrame`), and
- * a thin raw-mode TTY runner (`runMainMenu`) wrapped around them. Tests
- * never spin up a real TTY — they exercise the reducer + render
- * directly via the unit-test entry points.
+ * Mirrors `harness-prompt.ts`: a pure reducer (`applyMenuKey`), a pure
+ * render builder (`renderMenuFrame`), and a thin raw-mode TTY runner
+ * (`runMainMenu`). Tests exercise the reducer + render directly, no TTY.
  *
- * The menu is single-shot: the operator picks one action, that action
- * runs to completion, and the process exits. The menu does NOT re-open
- * after each action. Rationale: every action either (a) writes to the
- * project (`install` / `uninstall`) or (b) quits. After (a) the
- * operator's next intent is "look at the output and decide", not "pick
- * something else from the menu". Re-opening after a write would also
- * re-render the banner over the install progress lines, which is ugly.
- *
- * collapsed from 7 actions to 3 (`install` / `uninstall` /
- * `quit`). `sync` and `upgrade` were functionally aliases for `install`
- * (all three routed through the same idempotent installer with orphan
- * cleanup); the intent-naming benefit didn't justify the cognitive
- * overhead of three near-identical rows that did the same thing.
- * `knowledge` and `version` were read-only utilities power users invoke
- * via `cclaw --non-interactive knowledge` / `cclaw --version`; surfacing
- * them in the TUI added noise without a write-side use case.
+ * Single-shot: the operator picks one action (`install` / `uninstall` /
+ * `quit`), it runs to completion, and the process exits.
  */
 
 import process from "node:process";
@@ -47,11 +31,9 @@ const MENU_DESCRIPTIONS: Record<MenuAction, string> = {
 export interface MenuState {
   cursor: number;
   /**
-   * Whether `.cclaw/config.yaml` exists. Drives the smart-default hint
-   * line above the menu rows. Both states land the cursor on `install`
-   * (collapse): on a fresh project `install` is first-time setup,
-   * on an installed project `install` is the idempotent reapply that
-   * used to be called `sync` / `upgrade`. The same row, two readings.
+   * Whether `.cclaw/config.yaml` exists. Drives only the smart-default
+   * hint line above the rows; the cursor lands on `install` either way
+   * (first-time setup on a fresh project, idempotent reapply otherwise).
    */
   installed: boolean;
 }
@@ -64,12 +46,7 @@ export interface MenuUpdate {
 }
 
 /**
- * Build the initial menu state. The cursor always lands on `install`:
- * on a fresh project it's first-time setup, on an existing install it's
- * the idempotent reapply (the collapse renamed sync/upgrade to
- * install at the CLI surface; finishes the rename at the TUI
- * surface). The `installed` flag drives only the smart-default hint
- * line above the menu rows — the row itself is the same in both cases.
+ * Build the initial menu state with the cursor on `install`.
  */
 export function createMenuState(installed: boolean): MenuState {
   const cursor = MENU_ACTIONS.indexOf("install");
@@ -144,11 +121,8 @@ export function renderMenuFrame(state: MenuState, options: RenderMenuOptions): s
   }
 
   lines.push("");
-  // Hotkey range stays in sync with MENU_ACTIONS.length so future tweaks
-  // to the action list don't leave the legend stale (lesson:
-  // hardcoded `1-7` survived the collapse and lied to users until
-  // someone noticed). 3 actions → "1-3"; if the menu grows again the
-  // legend updates automatically.
+  // Hotkey range derives from MENU_ACTIONS.length so the legend never
+  // goes stale when the action list changes.
   const numberRange = `1-${MENU_ACTIONS.length}`;
   lines.push(
     colorize(

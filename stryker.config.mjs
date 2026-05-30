@@ -11,7 +11,6 @@ const config = {
     "src/flow-state.ts",
     "src/cli.ts",
     "src/install.ts",
-    "src/orchestrator-routing.ts",
     "src/harness-prompt.ts"
   ],
   vitest: {

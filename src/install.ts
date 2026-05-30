@@ -430,19 +430,16 @@ async function cleanupOrphanRunbooks(
   );
 }
 
-async function writeTemplates(projectRoot: string, legacyArtifacts: boolean): Promise<void> {
+async function writeTemplates(projectRoot: string): Promise<void> {
   for (const template of ARTIFACT_TEMPLATES) {
-    if (template.id === "decisions" && !legacyArtifacts) {
-      continue;
-    }
     const target = path.join(projectRoot, LIB_ROOT, "templates", template.fileName);
     await writeFileSafe(target, template.body);
   }
-  if (!legacyArtifacts) {
-    const decisionsLegacyPath = path.join(projectRoot, LIB_ROOT, "templates", "decisions.md");
-    if (await exists(decisionsLegacyPath)) {
-      await fs.rm(decisionsLegacyPath, { force: true });
-    }
+  // `decisions.md` is no longer a template — D-N rows live inline in
+  // `plan.md > ## Decisions`. Remove a stale copy from an older install.
+  const decisionsLegacyPath = path.join(projectRoot, LIB_ROOT, "templates", "decisions.md");
+  if (await exists(decisionsLegacyPath)) {
+    await fs.rm(decisionsLegacyPath, { force: true });
   }
   await writeFileSafe(
     path.join(projectRoot, LIB_ROOT, "templates", "iron-laws.md"),
@@ -881,11 +878,8 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     await cleanupOrphanSkills(projectRoot, emit);
   }
 
-  const legacyArtifacts = Boolean(config.legacyArtifacts);
-  await writeTemplates(projectRoot, legacyArtifacts);
-  const templateCount = legacyArtifacts
-    ? ARTIFACT_TEMPLATES.length + 1
-    : ARTIFACT_TEMPLATES.length; // -1 decisions.md skipped, +1 iron-laws.md added
+  await writeTemplates(projectRoot);
+  const templateCount = ARTIFACT_TEMPLATES.length + 1; // +1 iron-laws.md
   emit("Wrote templates", `${templateCount} templates → .cclaw/lib/templates/`);
 
   await writeStageRunbooks(projectRoot);
