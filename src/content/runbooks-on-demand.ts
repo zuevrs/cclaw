@@ -1634,7 +1634,7 @@ The orchestrator opens this runbook on every architect slim-summary return when 
 
 ## §1 — Why the gate exists
 
-The ethos preamble names **User Sovereignty** as one of the five cross-cutting cclaw principles: irreversible decisions deserve explicit confirmation before build burns context. The architect's \`## Decisions\` table (strict mode) records each D-N's \`Reversibility:\` field — \`two-way\` (cheap to revert), \`mostly-two-way\` (revertible with effort), or \`one-way\` (irreversible at production scale). \`one-way\` D-Ns are the only kind that warrant a user-pause; two-way / mostly-two-way decisions trust the cheap-revert affordance.
+The ethos preamble names **User Sovereignty** as one of the five cross-cutting cclaw principles: irreversible decisions deserve explicit confirmation before build burns context. The architect's \`## Decisions\` table (strict mode) records each D-N's \`Reversibility:\` field — \`two-way\` (reversible, cheaply or with friction) or \`one-way\` (irreversible at production scale). \`one-way\` D-Ns are the only kind that warrant a user-pause; two-way decisions trust the cheap-revert affordance.
 
 ## §2 — Gate scan
 
@@ -1656,7 +1656,7 @@ The gate drives three transitions on \`flow-state.json > oneWayDoorConfirmation\
 
 1. **\`architect-complete\` → \`awaiting-one-way-confirmation\`.** When the architect's slim summary returns \`Recommended next: awaiting-one-way-confirmation\` (architect's signal that the plan contains ≥1 one-way D-N), the orchestrator stamps \`oneWayDoorConfirmation: { decisionIds: ["D-N", "D-M", ...] }\` (with \`userChoice\` absent — the canonical "awaiting user" signal) and surfaces the structured ask. The orchestrator's turn ends here; control returns to the user.
 2. **\`awaiting-one-way-confirmation\` → \`plan-critic\` (or \`builder\` when plan-critic's gate is off).** On \`confirm\`, the orchestrator stamps \`userChoice: "confirm"\` + \`confirmedAt: <iso-now>\`, then proceeds to plan-critic dispatch (or builder, per the existing plan-critic gate). The user-confirmed flag persists for the rest of the flow's lifetime; downstream specialists may read it as "the user explicitly accepted the irreversible commits".
-3. **\`awaiting-one-way-confirmation\` → \`architect-revision\` (on \`edit\`) OR \`aborted\` (on \`cancel\`).** On \`edit\`, the orchestrator stamps \`userChoice: "edit"\` and surfaces a stop-and-report status block asking the user to edit \`plan.md\` (typically to soften a one-way classification to mostly-two-way or split the decision into two D-Ns) and re-invoke \`/cc\` once done — the next \`/cc\` re-reads plan.md and re-runs the gate scan. On \`cancel\`, the orchestrator stamps \`userChoice: "cancel"\` and routes to \`/cc-cancel\` (move artifacts to \`cancelled/<slug>/\`, reset state).
+3. **\`awaiting-one-way-confirmation\` → \`architect-revision\` (on \`edit\`) OR \`aborted\` (on \`cancel\`).** On \`edit\`, the orchestrator stamps \`userChoice: "edit"\` and surfaces a stop-and-report status block asking the user to edit \`plan.md\` (typically to soften a one-way classification to two-way or split the decision into two D-Ns) and re-invoke \`/cc\` once done — the next \`/cc\` re-reads plan.md and re-runs the gate scan. On \`cancel\`, the orchestrator stamps \`userChoice: "cancel"\` and routes to \`/cc-cancel\` (move artifacts to \`cancelled/<slug>/\`, reset state).
 
 ## §5 — Structured ask payload
 

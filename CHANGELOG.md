@@ -1,5 +1,25 @@
 # Changelog
 
+## 8.118.0 - 2026-05-31
+
+### Changed (Phase E, safe slice — reversibility 3 → 2)
+
+- **The `Reversibility` field on each Decision (D-N) drops from three values to two — `one-way` / `two-way`.** The retired `mostly-two-way` ("reversible with friction") collapses into `two-way`: only `one-way` is load-bearing (the One-way Door Gate scans `plan.md` for a `Reversibility: one-way` D-N and pauses for confirmation), and nothing ever branched on the `two-way` vs `mostly-two-way` distinction — both passed the gate silently. The gate, plan-critic's Reversibility audit, and the critic's risk trigger are unchanged: **zero enforcement lost**. Old plan prose carrying `mostly-two-way` still passes the gate scan (it only matches `one-way`).
+
+### Affected surfaces
+
+- **`src/types.ts`** — `Reversibility = "one-way" | "two-way"` (was three values); JSDoc documents the fold. `Decision.reversibility` unchanged. No runtime validator / parser branches on the enum, so the change is back-compat by construction.
+- **Prompts / templates** — the architect's Reversibility rubric (the `mostly-two-way` bullet's examples folded into `two-way`), plan-critic's mandatory-field list, the `plan.md` template's D-N row + parenthetical, and the One-way Door Gate runbook prose all list two values.
+- **`v874-ethos-bundle.test.ts`** — the type assertion + plan-template / architect-prompt `mostly-two-way` checks updated to the two-value enum.
+
+### Scope note
+
+- This is the **safe slice** of blueprint Phase E. The bolder cuts — `complexity → ceremonyMode` and reviewer modes 4 → 2 — are deliberately **not** done here: `complexity` branches through the triage / plan-critic / builder gates, so collapsing it risks the review/gate teeth. Deferred pending an explicit call.
+
+### Verification
+
+- build + 882 tests + smoke green.
+
 ## 8.117.0 - 2026-05-31
 
 ### Changed (Phase D — builder: postures 6 → 3)

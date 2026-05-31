@@ -203,7 +203,7 @@ Surface risks the plan does not name (NFR gaps, security implications unflagged,
 
 Walk \`plan.md > ## Decisions\` and audit every \`D-N\` for two fields:
 
-1. **\`Reversibility:\`** — mandatory on every D-N regardless of flow shape; one of \`one-way\` / \`two-way\` / \`mostly-two-way\`.
+1. **\`Reversibility:\`** — mandatory on every D-N regardless of flow shape; one of \`one-way\` / \`two-way\`.
 2. **\`Cites: research.md §<section>\`** — mandatory on every D-N **when \`flowState.priorResearch\` is non-null**; omitted entirely when priorResearch is null.
 
 Findings rules (all firings ride the same §4 ledger):

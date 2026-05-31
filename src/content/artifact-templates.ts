@@ -184,9 +184,9 @@ _(Architect: Approaches closing paragraph when Approaches exists; cites the pick
 
 _(Architect Decisions, strict only. One D-N row per decision; each independently citable.)_
 
-- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. Reversibility: _one-way | two-way | mostly-two-way_. ADR: _none | proposed | promoted (path)_. Cites: _research.md §<section> (1-3 § cites; include only when priorResearch was loaded, else omit the field)_.
+- **D-1 — _short title_** — Context: _why this is a decision, not a default_. Options: _A / B / C with one-line tradeoff each_. Pick: _A_. Rationale: _why A over B, C in this slug_. Blast radius: _what changes if D-1 is reversed_. Reversibility: _one-way | two-way_. ADR: _none | proposed | promoted (path)_. Cites: _research.md §<section> (1-3 § cites; include only when priorResearch was loaded, else omit the field)_.
 
-_(\`Reversibility\` is mandatory on every D-N: \`one-way\` / \`two-way\` / \`mostly-two-way\`. \`Cites: research.md §<section>\` is mandatory on every D-N when priorResearch was loaded, omitted entirely on cold-start. plan-critic §A blocks ship on a missing Reversibility field or a missing Cites (class=\`decision-missing-research-cite\`).)_
+_(\`Reversibility\` is mandatory on every D-N: \`one-way\` / \`two-way\`. \`Cites: research.md §<section>\` is mandatory on every D-N when priorResearch was loaded, omitted entirely on cold-start. plan-critic §A blocks ship on a missing Reversibility field or a missing Cites (class=\`decision-missing-research-cite\`).)_
 
 ## Pre-mortem
 

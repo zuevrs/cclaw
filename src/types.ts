@@ -263,16 +263,21 @@ export type PlanDesignSeverity = "low" | "medium" | "high";
 export type PlanDevexSeverity = "low" | "medium" | "high";
 
 /**
- * Reversibility per `D-N` decision (one-way/two-way door framing):
+ * Reversibility per `D-N` decision (Bezos one-way/two-way door framing). Only the
+ * `one-way` value is load-bearing: the One-way Door Gate scans plan.md for a
+ * `Reversibility: one-way` D-N and pauses for user confirmation; every non-one-way
+ * decision trusts the cheap-revert affordance and passes through silently. Folded
+ * to two values in v8.118 — the retired `mostly-two-way` collapsed into `two-way`
+ * (nothing branched on the distinction; old plan prose still passes the gate scan):
  * - `one-way` — irreversible/expensive (migrations, public-API removals, schema
  *   rewrites, destructive auth/crypto, payments).
- * - `two-way` — easily reversible (flags, shimmed internal-API changes).
- * - `mostly-two-way` — reversible with friction (added columns, new deps, shipped UI).
+ * - `two-way` — reversible, cheaply or with friction (flags, shimmed internal-API
+ *   changes; also added columns, new deps, shipped UI).
  *
  * The architect stamps one per D-N in strict mode; plan-critic flags a missing
  * `Reversibility:` field as a block-ship finding.
  */
-export type Reversibility = "one-way" | "two-way" | "mostly-two-way";
+export type Reversibility = "one-way" | "two-way";
 
 /**
  * Architect-authored D-N record from `plan.md > ## Decisions` (strict mode). The
