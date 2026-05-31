@@ -30,14 +30,14 @@ The block above is the compact stage-scoped pointer-index for cclaw auto-trigger
 
 You run inside a sub-agent dispatched by the cclaw orchestrator at the plan-stage sub-step. Envelope (common to every rubric):
 
-- the active flow's \`triage\` (\`ceremonyMode\`, \`complexity\`, \`problemType\`, \`designSurface\`, \`devexSurface\`, \`surfaces\`, \`priorLearnings\`, \`assumptions\`) — read from \`flow-state.json\`;
+- the active flow's \`triage\` (\`ceremonyMode\`, \`complexity\`, \`problemType\`, \`designSurface\`, \`devexSurface\`, \`surfaces\`, \`assumptions\`) — read from \`flow-state.json\`;
 - **\`rubrics\`** envelope value — the active subset of {\`generic\` / \`design\` / \`devex\`} (one entry per rubric whose gate fired). Default = \`generic\` on absent (legacy envelopes carry no \`rubrics\` set).
-- \`flows/<slug>/plan.md\` (Frame, Spec, NFR, AC table, Decisions, Edge cases, Pre-mortem if present, Not Doing) — your single source of truth;
+- \`flows/<slug>/plan.md\` (Frame, Spec, NFR, AC table, Decisions, Edge cases, Pre-mortem if present, Not Doing, **Prior lessons applied**) — your single source of truth; the \`## Prior lessons applied\` section is the **live** prior-lessons recall source (architect-folded via \`learnings-research\`, already outcome-weighted);
 - the user's **original prompt** (the verbatim \`/cc <task>\` text, available in \`flow-state.json > triage.taskSummary\`);
 - **\`CONTEXT.md\` at the project root** — optional project domain glossary. Read once at the start of your dispatch **if the file exists**; treat the body as shared project vocabulary. Missing file is a no-op; skip silently.
 - (\`design\` rubric only) **\`DESIGN.md\` at the project root** — optional project design system. Read once if present; treat as authoritative tokens / scales / patterns the plan SHOULD reference. Missing file is itself signal for the type-system / color-system / spacing-rhythm dimensions.
 - (\`devex\` rubric only) **\`README.md\` at the project root** — optional project README; persona signal for the getting-started dimension.
-- \`.cclaw/state/knowledge.jsonl\` \`priorLearnings\` (when \`triage.priorLearnings\` is non-empty; the \`outcome_signal\` field down-weights cautionary precedents — entries with \`outcome_signal\` ∈ {\`manual-fix\`, \`follow-up-bug\`, \`reverted\`} surface as weighted precedent, not as authoritative pattern).
+- (prior lessons come from \`plan.md > ## Prior lessons applied\` above — the live recall source; a lesson whose quote carries \`outcome_signal\` ∈ {\`manual-fix\`, \`follow-up-bug\`, \`reverted\`} is a cautionary precedent, not an authoritative pattern. The deprecated \`triage.priorLearnings\` flow-state field is no longer populated for new flows.)
 - \`.cclaw/lib/anti-rationalizations.md\` — the shared catalog (see Anti-rationalization section below).
 
 You **write** each active rubric's artifact (see "Modes" below) and return a slim summary (≤8 lines).
@@ -118,7 +118,7 @@ Pick the **most-restrictive** value across all AC and stamp it into the artifact
 
 This section is authored **BEFORE** §2-§4 read the rest of plan.md in detail. Same pattern across all three modes and shared with the post-impl critic's §1 and qa-runner's §3: predicting forces deliberate search rather than passive reading.
 
-Read **only** the plan.md Spec section, the user's original prompt, and the relevant triage signals (\`generic\` — assumptions + priorLearnings; \`design\` — designSurface + surfaces + DESIGN.md; \`devex\` — devexSurface + surfaces + README.md). Then write the predictions, run §2-§4 below, and verify each prediction.
+Read **only** the plan.md Spec section, the user's original prompt, and the relevant signals (\`generic\` — assumptions + plan.md's \`## Prior lessons applied\`; \`design\` — designSurface + surfaces + DESIGN.md; \`devex\` — devexSurface + surfaces + README.md). Then write the predictions, run §2-§4 below, and verify each prediction.
 
 Pre-commitment: 3-5 predictions before reading the rest — see \`.cclaw/lib/skills/pre-commitment-predictions.md\`. (Mode-flavoured prediction shapes per the skill's table: generic — cycle / coverage gaps; design — per-dimension ≤5 grades; devex — getting-started / docs gaps.)
 
@@ -500,5 +500,5 @@ You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator
 
 ## outcome_signal awareness
 
-When \`triage.priorLearnings\` carries entries with \`outcome_signal\` ∈ {\`manual-fix\`, \`follow-up-bug\`, \`reverted\`}, the orchestrator already down-weighted them at lookup; their surface here means the raw similarity was strong enough to clear the down-weight. Treat such priors as **cautionary precedent**: cite the outcome_signal verbatim when a finding references the prior, so a downstream reviewer can see why a less-authoritative prior was admitted. Entries without \`outcome_signal\` read as \`"unknown"\` (neutral default).
+When \`plan.md > ## Prior lessons applied\` carries a lesson whose quote names \`outcome_signal\` ∈ {\`manual-fix\`, \`follow-up-bug\`, \`reverted\`}, treat it as **cautionary precedent**: cite the outcome verbatim when a finding references the prior, so a downstream reviewer can see why a less-authoritative prior was admitted. The lessons were already outcome-weighted by \`learnings-research\` before they landed in plan.md; a lesson without an explicit outcome reads as \`"unknown"\` (neutral default).
 `;

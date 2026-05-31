@@ -20,11 +20,11 @@ The block above is the compact stage-scoped pointer-index for cclaw auto-trigger
 
 You run inside a sub-agent dispatched by the cclaw orchestrator at the qa stage. Envelope:
 
-- the active flow's \`triage\` (\`ceremonyMode\`, \`complexity\`, \`surfaces\`, \`assumptions\`, \`priorLearnings\`) — read from \`flow-state.json\`. The \`surfaces\` field is the key gate; you read it first.
+- the active flow's \`triage\` (\`ceremonyMode\`, \`complexity\`, \`surfaces\`, \`assumptions\`) — read from \`flow-state.json\`. The \`surfaces\` field is the key gate; you read it first.
 - \`flows/<slug>/plan.md\` — AC table with \`touchSurface\` + per-criterion verification cues;
 - \`flows/<slug>/build.md\` — the GREEN evidence the builder captured, including any Playwright spec the builder pre-committed under \`tests/e2e/\`;
 - \`flows/<slug>/qa.md\` from the prior dispatch (when \`qaIteration == 1\` and you are running the at-most-one rerun) — your slim summary returned \`iterate\` last time; the orchestrator re-dispatches you with the same envelope plus the prior qa.md inline.
-- \`.cclaw/state/knowledge.jsonl\` \`priorLearnings\` when \`triage.priorLearnings\` is non-empty (cautionary precedents — entries with \`outcome_signal\` ∈ {\`manual-fix\`, \`follow-up-bug\`, \`reverted\`} surface as down-weighted precedent, useful for predicting which UI AC is most likely to regress);
+- \`plan.md > ## Prior lessons applied\` — the **live** prior-lessons recall source (architect-folded via \`learnings-research\`, already outcome-weighted). Lessons whose quote carries \`outcome_signal\` ∈ {\`manual-fix\`, \`follow-up-bug\`, \`reverted\`} are cautionary precedents, useful for predicting which UI AC is most likely to regress. (The deprecated \`triage.priorLearnings\` flow-state field is no longer populated for new flows.)
 - \`.cclaw/lib/anti-rationalizations.md\` — the shared catalog (see Anti-rationalization section below).
 - \`.cclaw/lib/skills/debug-and-browser.md\` — the cross-cutting QA discipline lives in its "QA acceptance discipline" section (browser tool hierarchy, evidence rubric, verdict semantics). Read it for the canonical contract; do not duplicate its prose in qa.md.
 
@@ -257,5 +257,5 @@ You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator
 
 ## outcome_signal awareness
 
-When \`triage.priorLearnings\` carries entries with \`outcome_signal\` ∈ {\`manual-fix\`, \`follow-up-bug\`, \`reverted\`}, the orchestrator already down-weighted them at lookup; their surface here means the raw similarity was strong enough to clear the down-weight. Treat such priors as **cautionary precedent for the predictions block**: a prior UI slug that shipped with \`manual-fix\` outcome_signal is a high-likelihood prediction target ("the previous toast slug needed a manual patch the day after ship; predict the same failure mode here"). Entries without \`outcome_signal\` read as \`"unknown"\` (neutral default).
+When \`plan.md > ## Prior lessons applied\` carries a lesson whose quote names \`outcome_signal\` ∈ {\`manual-fix\`, \`follow-up-bug\`, \`reverted\`}, treat it as **cautionary precedent for the predictions block**: a prior UI slug that shipped with a \`manual-fix\` outcome is a high-likelihood prediction target ("the previous toast slug needed a manual patch the day after ship; predict the same failure mode here"). The lessons were already outcome-weighted by \`learnings-research\` before they landed in plan.md; a lesson without an explicit outcome reads as \`"unknown"\` (neutral default).
 `;

@@ -202,6 +202,18 @@ Notes: <required when Status != DONE>
 
 `Notes:` is **mandatory** when `Status != DONE`. The orchestrator surfaces the Notes verbatim in the stop-and-report status block (for `NEEDS_CONTEXT` / `BLOCKED`) or in `build.md > ## Concerns` (for `DONE_WITH_CONCERNS`). Empty `Notes:` on a non-`DONE` status is itself a fix-only bounce — the orchestrator dispatches the builder back with `mode: "fix-only"` and instructions to populate the Notes.
 
+## Recalled-priors (optional — reviewer / critic only)
+
+The reviewer and critic recall prior lessons from `plan.md > ## Prior lessons applied` (the live recall source the architect folds in at plan time via `learnings-research`). When a prior lesson is the **load-bearing** reason for a finding's severity (reviewer) or a §2 gap (critic), the dispatch appends ONE optional line to its slim summary:
+
+```
+Recalled-priors: <slug>[, <slug> ...]
+```
+
+- **Omit the line entirely when no prior was load-bearing** — the common case. An empty `Recalled-priors:` reads the same as omitting it. Never list a prior you merely *read*; only one your finding actually leans on.
+- The slugs are the shipped-slug ids the lesson quotes name (copied verbatim by the architect from `shipped/<slug>/learnings.md`).
+- The orchestrator reads this line at **compound** time and increments `recall_count` + sets `last_recalled_at` on each cited `.cclaw/knowledge.jsonl` entry — the usage signal that makes the store *compounding* (frequently-recalled lessons survive the compound-refresh; never-recalled cautionary noise is pruned). It also renders a one-clause "reused a prior lesson from `<slug>`" note on that stage's cockpit line (start-command `### Cockpit render`) — the one place the knowledge store is made visible to the user mid-flow.
+
 ## Per-slice status inside JSON `self_review` blocks (strict mode)
 
 Each per-slice JSON `self_review` block (one per slice, per the builder prompt's "Strict-mode summary block" section) gains a field `status` carrying the per-slice status:

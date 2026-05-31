@@ -120,6 +120,23 @@ export interface KnowledgeEntry {
    * has its current value, e.g. `"revert detected on a1b2c3d"`.
    */
   outcome_signal_source?: string;
+  /**
+   * usage telemetry — how many times this entry has been recalled as a
+   * **load-bearing prior** by a downstream quality gate (reviewer /
+   * critic) on a later flow. The compound step increments it at ship
+   * time from the `Recalled-priors:` field of the flow's review.md /
+   * critic.md slim summaries (see start-command's Compound step). This
+   * is what makes the store *compounding* rather than merely append-only:
+   * a lesson with a rising `recall_count` and a non-negative outcome keeps
+   * paying off (the compound-refresh keeps it and may promote it); a
+   * cautionary entry that ages out at `recall_count: 0` is pruning fodder.
+   * Optional; legacy entries omit it (reads as `0` / never recalled).
+   */
+  recall_count?: number;
+  /**
+   * ISO 8601 timestamp of the most recent {@link recall_count} stamp.
+   */
+  last_recalled_at?: string;
 }
 
 export class KnowledgeStoreError extends Error {}
@@ -169,6 +186,19 @@ function assertEntry(value: unknown): asserts value is KnowledgeEntry {
   }
   if (entry.outcome_signal_source !== undefined && typeof entry.outcome_signal_source !== "string") {
     throw new KnowledgeStoreError("Knowledge entry `outcome_signal_source` must be a string when present.");
+  }
+  if (
+    entry.recall_count !== undefined &&
+    (typeof entry.recall_count !== "number" ||
+      !Number.isInteger(entry.recall_count) ||
+      entry.recall_count < 0)
+  ) {
+    throw new KnowledgeStoreError(
+      "Knowledge entry `recall_count` must be a non-negative integer when present."
+    );
+  }
+  if (entry.last_recalled_at !== undefined && typeof entry.last_recalled_at !== "string") {
+    throw new KnowledgeStoreError("Knowledge entry `last_recalled_at` must be a string when present.");
   }
 }
 
