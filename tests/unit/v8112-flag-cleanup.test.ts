@@ -6,7 +6,6 @@ import { renderStartCommand } from "../../src/content/start-command.js";
 import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { TRIAGE_PROMPT } from "../../src/content/specialist-prompts/triage.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
-import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/critic.js";
 
 /**
  * v8.112 — Flag / command-shape cleanup tripwire.
@@ -204,19 +203,5 @@ describe("writing-skills meta-skill is demoted (maintainer doc, not an end-user 
       readFile(path.resolve(SRC_ROOT, "content", "skills", "writing-skills.md")),
       "writing-skills.md should be deleted (demoted to a maintainer doc, not an installed end-user skill)"
     ).rejects.toThrow();
-  });
-});
-
-describe("critic §3.5 cross-model is a one-shot two-critic gate (no fix-and-rerun loop)", () => {
-  it("critic prompt's cross-model section documents the one-shot second-opinion contract", () => {
-    // One-shot contract: both critics walk the artifacts once; both must PASS; divergence => block-ship.
-    expect(CRITIC_PROMPT).toMatch(/one-shot[\s\S]{0,40}second opinion/iu);
-    expect(CRITIC_PROMPT).toMatch(/(both|each) critic[s]? must (PASS|pass|emit pass)/iu);
-    expect(CRITIC_PROMPT).toMatch(/(divergence|diverged)[\s\S]{0,60}block-ship/iu);
-    // No automatic fix-and-rerun loop: the prompt explicitly forbids it.
-    expect(CRITIC_PROMPT).toMatch(/no automatic fix-and-rerun loop|does NOT auto-iterate|no fix-only re-run/iu);
-    expect(CRITIC_PROMPT).toMatch(/cross-model second opinion diverged/iu);
-    // The graceful fallback for missing MCP tool stays intact.
-    expect(CRITIC_PROMPT).toMatch(/Cross-model unavailable: skipped/u);
   });
 });

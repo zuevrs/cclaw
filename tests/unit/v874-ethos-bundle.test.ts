@@ -82,8 +82,8 @@ describe("v8.74 — ethos preamble + reversibility field wiring", () => {
   });
 });
 
-describe("v8.74 — ethos preamble + reversibility field behavior (plan template / architect / plan-critic / critic / cross-model trigger)", () => {
-  it("BEHAVIOR — plan template carries `## Decisions` with D-N + Reversibility three-value enum (mandatory + plan-critic §A); architect prompt populates Reversibility on every D-N + cross-references the v8.74 cross-model critic auto-fire on one-way; plan-critic declares §A Decision integrity (Reversibility audit) with three finding classes (decision-missing-reversibility / decision-bad-reversibility / decision-overstated-reversibility), block-ship verdict + verdict-block exposes count + skips §A when no Decisions; start-command #### critic block + critic §3.5 prompt name the Reversibility:one-way primary trigger + keyword fallback + cross-model unavailable graceful fallback", () => {
+describe("v8.74 — ethos preamble + reversibility field behavior (plan template / architect / plan-critic / critic)", () => {
+  it("BEHAVIOR — plan template carries `## Decisions` with D-N + Reversibility three-value enum (mandatory + plan-critic §A); architect prompt populates Reversibility on every D-N + points one-way D-Ns at the One-way Door Gate; plan-critic declares §A Decision integrity (Reversibility audit) with three finding classes (decision-missing-reversibility / decision-bad-reversibility / decision-overstated-reversibility), block-ship verdict + verdict-block exposes count + skips §A when no Decisions; start-command #### critic block + critic prompt name the Reversibility:one-way risk trigger", () => {
     const planTemplate = ARTIFACT_TEMPLATES.find((t) => t.id === "plan")!;
     const body = planTemplate.body;
     const decisionsIdx = body.indexOf("## Decisions");
@@ -101,7 +101,7 @@ describe("v8.74 — ethos preamble + reversibility field behavior (plan template
     expect(ARCHITECT_PROMPT).toMatch(/`one-way`/);
     expect(ARCHITECT_PROMPT).toMatch(/`two-way`/);
     expect(ARCHITECT_PROMPT).toMatch(/`mostly-two-way`/);
-    expect(ARCHITECT_PROMPT).toMatch(/critic.*cross-model.*one-way|one-way.*cross-model/i);
+    expect(ARCHITECT_PROMPT).toMatch(/One-way Door Gate/);
 
     expect(PLAN_CRITIC_PROMPT).toMatch(/§2\.A\s+Decision integrity/);
     expect(PLAN_CRITIC_PROMPT).toMatch(/decision-missing-reversibility/);
@@ -116,13 +116,8 @@ describe("v8.74 — ethos preamble + reversibility field behavior (plan template
     const criticIdx = START_COMMAND_BODY.indexOf("#### critic");
     expect(criticIdx).toBeGreaterThan(0);
     const criticBlock = START_COMMAND_BODY.slice(criticIdx, criticIdx + 4000);
-    expect(criticBlock).toMatch(/crossModelCritic/);
     expect(criticBlock).toMatch(/Reversibility:\s*one-way/);
-    expect(criticBlock).toMatch(/keyword fallback/i);
-    expect(criticBlock).toMatch(/no .*Decisions.* section|without .*Decisions/);
     expect(CRITIC_PROMPT).toMatch(/Reversibility:\s*one-way/);
-    expect(CRITIC_PROMPT).toMatch(/keyword fallback/i);
-    expect(CRITIC_PROMPT).toMatch(/Cross-model unavailable: skipped/);
   });
 });
 

@@ -619,9 +619,6 @@ escalation_triggers: []                       # list of trigger strings — see 
 verdict: pending                              # pending | pass | iterate | block-ship
 token_budget_used: 0                          # orchestrator stamps this from the sub-agent return
 critic_iteration: 1                           # 1 on first dispatch; only ever 2 on a single rerun (hard cap)
-cross_model_skipped_reason: none              # §3.5 — none | budget | unavailable | other (stamped when the second-opinion dispatch refused or was unreachable)
-cross_model_trim_disclosure: none             # §3.5 — none | applied — see priority-drop log (stamped when the dispatched prompt was trimmed)
-priority_drop_log: []                         # §3.5 — list of trimmed sections in canonical order (priorLearnings → researchExcerpts → plan.md → review.md); empty when no trim fired
 ---
 
 # Critic — SLUG-PLACEHOLDER
@@ -683,16 +680,6 @@ _(Skipped in gap mode unless escalation fires. Emitted in full in adversarial mo
 | F-N | Pattern | Trigger | Bad outcome | Severity |
 | --- | --- | --- | --- | --- |
 | F-4 | _e.g. "user submits same form rapidly"_ | _e.g. "no debounce, no idempotency key"_ | _e.g. "duplicate orders created"_ | _block-ship / iterate / fyi_ |
-
-## Cross-model second opinion
-
-_(fires when the dispatch envelope carries \`crossModelCritic: true\`. Triggered automatically on high-stakes slugs (\`triage.securityFlag\` or irreversible D-N) OR when the user invoked \`/cc --critic-cross-model\`. Re-runs §3a-§3d via a second model through an available MCP cross-model tool (Codex / Gemini / comparable). Each row is independent of §3 — the second model never sees the first model's findings. \`X-F-N\` numbering marks rows as second-opinion.)_
-
-_(Graceful fallback: when no cross-model MCP tool is wired, write exactly one line: \`Cross-model unavailable: skipped.\` — no findings, no error trail, no install-layer change required.)_
-
-| X-F-N | Technique | Trigger | Failure consequence | Severity |
-| --- | --- | --- | --- | --- |
-| X-F-1 | _assumption-violation / composition / cascade / abuse / human-perspective:<lens>_ | _e.g. "second model flagged that the cache key path silently truncates on Unicode boundary"_ | _e.g. "lookup miss for users whose query happens to land on a multi-byte boundary"_ | _block-ship / iterate / fyi_ |
 
 ## 4. Criterion check (are the verifiable plan criteria the right criteria, not are they met?)
 

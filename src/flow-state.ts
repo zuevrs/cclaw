@@ -163,14 +163,6 @@ export interface FlowStateV82 {
   /** Escalation from the latest critic (`none`/`light`/`full`); telemetry / compound-learning audit. */
   criticEscalation?: CriticEscalation;
   /**
-   * Cross-model second-opinion marker: `0` = single critic; `1` = one-shot second
-   * opinion ran (writes never exceed `1`; legacy `2`/`3` tolerated). The
-   * post-critic gate branches `>= 1` vs `0`. Optional, default `0`.
-   */
-  criticConvergenceRound?: number;
-  /** Critic B (cross-model) verdict on the latest round; same vocab as {@link criticVerdict}; absent when the loop did not run. */
-  criticCrossModelVerdict?: CriticVerdict;
-  /**
    * Verdict from the latest plan-critic: `pass` → builder; `revise` → one
    * architect loop; `cancel` → picker. Absence = not run (branch on presence +
    * value, never absence-as-pass).
@@ -663,25 +655,6 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
   }
   if (state.criticEscalation !== undefined && !isCriticEscalation(state.criticEscalation)) {
     throw new Error(`Invalid criticEscalation: ${String(state.criticEscalation)}`);
-  }
-  if (state.criticConvergenceRound !== undefined) {
-    if (
-      typeof state.criticConvergenceRound !== "number" ||
-      state.criticConvergenceRound < 0 ||
-      state.criticConvergenceRound > 3
-    ) {
-      throw new Error(
-        "flow-state.criticConvergenceRound must be an integer in [0, 3] when present"
-      );
-    }
-  }
-  if (
-    state.criticCrossModelVerdict !== undefined &&
-    !isCriticVerdict(state.criticCrossModelVerdict)
-  ) {
-    throw new Error(
-      `Invalid criticCrossModelVerdict: ${String(state.criticCrossModelVerdict)}`
-    );
   }
   if (
     state.planCriticVerdict !== undefined &&

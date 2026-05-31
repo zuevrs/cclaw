@@ -88,21 +88,9 @@ via the /cc command, not in this CLI. There is no \`cclaw plan\`,
   /cc-cancel                       Discard the active flow.
 
 Per-flow flags (parsed by the /cc orchestrator inside the harness,
-NOT by this CLI). v8.112 cleaned this surface to the three flags
-that toggle behaviour the triage heuristic structurally can't
-infer; everything else now flows from the heuristic + task wording:
-  --critic-cross-model                 force a cross-model convergence
-                                       loop in critic via MCP (v8.74
-                                       trigger; v8.112 convergence
-                                       contract — both critics must
-                                       PASS or up to 3 rounds run).
-                                       Graceful fallback:
-                                       \`Cross-model unavailable: skipped\`
-                                       is written when no MCP tool is
-                                       wired. Default off; opt in
-                                       project-wide via
-                                       \`critic.cross_model: true\` in
-                                       \`.cclaw/config.yaml\`.
+NOT by this CLI). The two flags below toggle behaviour the triage
+heuristic structurally can't infer; everything else now flows from
+the heuristic + task wording:
   --review                             refine inline path only: enable
                                        the lite reviewer pass
                                        (correctness, readability,

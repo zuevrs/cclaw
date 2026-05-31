@@ -140,7 +140,7 @@ describe("v8.79 — one-way door gate behavior (orchestrator routes the gate)", 
 });
 
 describe("v8.79 — one-way door gate section contract (architect prompt + structured-ask payload)", () => {
-  it("SECTION CONTRACT — architect prompt declares `awaiting-one-way-confirmation` as the new Recommended next variant tied to ≥1 D-N Reversibility: one-way, names the v8.79 gate + User Sovereignty rationale + the v8.74 cross-model critic as post-build counterpart, and continues to emit `Recommended next: build` for two-way decisions; structured-ask payload (lifted to runbooks/one-way-door-gate.md in v8.103) renders header + D-N bullet list (title / Reversibility / Rationale) + count line + User Sovereignty + Choose: line", () => {
+  it("SECTION CONTRACT — architect prompt declares `awaiting-one-way-confirmation` as the new Recommended next variant tied to ≥1 D-N Reversibility: one-way, names the v8.79 gate + User Sovereignty rationale, and continues to emit `Recommended next: build` for two-way decisions; structured-ask payload (lifted to runbooks/one-way-door-gate.md in v8.103) renders header + D-N bullet list (title / Reversibility / Rationale) + count line + User Sovereignty + Choose: line", () => {
     expect(ARCHITECT_PROMPT).toMatch(/awaiting-one-way-confirmation/);
     expect(ARCHITECT_PROMPT).toMatch(/Reversibility:\s*one-way/);
     expect(ARCHITECT_PROMPT).toMatch(/at least one/i);
@@ -148,7 +148,6 @@ describe("v8.79 — one-way door gate section contract (architect prompt + struc
     expect(ARCHITECT_PROMPT).toMatch(/two-way/);
     expect(ARCHITECT_PROMPT).toMatch(/Recommended next:\s*(<build|build)/);
     expect(ARCHITECT_PROMPT).toMatch(/User Sovereignty/);
-    expect(ARCHITECT_PROMPT).toMatch(/cross-model/i);
 
     const gateRunbook = ON_DEMAND_RUNBOOKS.find((r) => r.id === "one-way-door-gate")?.body ?? "";
     expect(gateRunbook).toMatch(/##\s*One-way door detected/);

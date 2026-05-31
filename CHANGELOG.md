@@ -1,5 +1,31 @@
 # Changelog
 
+## 8.115.0 - 2026-05-30
+
+### Removed (review arm trim — cross-model critic retired)
+
+- **The opt-in cross-model "second opinion" critic is gone.** The critic's §3.5 two-critic gate (Critic A + Critic B run in parallel through an MCP cross-model tool, BOTH-pass ship gate, divergence → block-ship) is removed. The single adversarial critic (§1–§8, force-stance opening, `gap` / `adversarial` modes, escalation triggers) is unchanged and remains the ship gate — no teeth lost. The **One-way Door Gate** (the user-facing pause before build on `Reversibility: one-way` D-Ns) is untouched; it was previously documented as the cross-model critic's post-build counterpart and now stands alone.
+
+### Affected surfaces
+
+- **`src/content/specialist-prompts/critic.ts`** — the entire `### §3.5. Cross-model second opinion` section (trigger conditions, two-critic shape, agreement gate, non-convergence handling, graceful fallback, prompt-budget guard, trim-vs-skip tree) is deleted. The §1–§8 protocol + verdict enum (`pass` / `iterate` / `block-ship`) are unchanged; the `soft`-gate `Reversibility: one-way` / `securityFlag` risk trigger stays.
+- **`src/config.ts`** — the `CriticConfig` interface and the `critic?: CriticConfig` field (`cross_model`, `cross_model_min_context`) are removed from `CclawConfig`.
+- **`src/flow-state.ts`** — the `criticConvergenceRound` + `criticCrossModelVerdict` fields, their JSDoc, and their read-time validation are removed. `oneWayDoorConfirmation` (One-way Door Gate state) is untouched.
+- **`src/cli.ts`** — the `--critic-cross-model` flag is dropped from `--help`.
+- **`src/types.ts`** — the `Reversibility: one-way` / `Decision` JSDoc no longer reference the cross-model auto-fire; they point at the One-way Door Gate.
+- **`src/content/start-command.ts`**, **`src/content/specialist-prompts/architect.ts`**, **`src/content/artifact-templates.ts`**, **`src/content/runbooks-on-demand.ts`** — cross-model prose, the `## Cross-model second opinion` `critic.md` template section + its frontmatter slots (`cross_model_skipped_reason`, `cross_model_trim_disclosure`, `priority_drop_log`), and the `lastSpecialist` telemetry fields are scrubbed; the One-way Door Gate runbook drops its "complementary to the cross-model critic" prose.
+- **`src/content/skills/conversation-language.md`** — the stale `--critic-cross-model` flag example is replaced with `--review`.
+
+### Tests / docs
+
+- Deleted `tests/unit/v872-cross-model-critic.test.ts`, `tests/unit/v8108-cross-model-budget.test.ts`, `tests/unit/v8109-critic-template-frontmatter.test.ts` (all asserted the removed surface). `critic-specialist.test.ts`, `v874-ethos-bundle.test.ts`, `v879-one-way-door-gate.test.ts`, `v8109-readme-config-table.test.ts`, `v8112-flag-cleanup.test.ts`, `content-hygiene.test.ts` updated to drop cross-model assertions while keeping the surviving reversibility / single-critic checks.
+- `v883-token-runbooks.test.ts` + `v8103-token-diet.test.ts` — the +200 cross-model carve-out is reclaimed (additive headroom back to `0`; start-command ceiling back to the v8.103 baseline of 50,000 chars).
+- `README.md` — the `## Configuration` table + example YAML drop the `critic.cross_model` / `critic.cross_model_min_context` rows.
+
+### User-facing migration
+
+The `--critic-cross-model` flag and the `critic.cross_model` / `critic.cross_model_min_context` config knobs no longer exist; remove them from `.cclaw/config.yaml` (unknown keys are ignored, so stale configs keep working). High-stakes slugs still get the full adversarial critic and, on irreversible decisions, the One-way Door Gate pause before build.
+
 ## 8.114.0 - 2026-05-30
 
 ### Changed (entry-point consolidation — 5 `/cc` shapes → 3)

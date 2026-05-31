@@ -1636,13 +1636,6 @@ The orchestrator opens this runbook on every architect slim-summary return when 
 
 The ethos preamble names **User Sovereignty** as one of the five cross-cutting cclaw principles: irreversible decisions deserve explicit confirmation before build burns context. The architect's \`## Decisions\` table (strict mode) records each D-N's \`Reversibility:\` field — \`two-way\` (cheap to revert), \`mostly-two-way\` (revertible with effort), or \`one-way\` (irreversible at production scale). \`one-way\` D-Ns are the only kind that warrant a user-pause; two-way / mostly-two-way decisions trust the cheap-revert affordance.
 
-The pause is the user-facing analogue of the cross-model critic, which ALSO fires on the same \`Reversibility: one-way\` signal — but the cross-model critic runs AFTER the build to give a second adversarial opinion on whether the build delivered on the irreversible commits. The two surfaces are complementary:
-
-- One-way Door Gate fires BEFORE the build → "do you, the user, accept these irreversible commits as plan-level decisions?"
-- Cross-model critic fires AFTER the build → "given the user accepted, does a second model agree the build delivers on those decisions?"
-
-Neither replaces the other; both run when both gates fire.
-
 ## §2 — Gate scan
 
 After the architect's slim summary returns (with \`Recommended next: awaiting-one-way-confirmation\` if the gate fires, or any other value otherwise) AND before plan-critic (any rubric mode) / builder dispatch:
@@ -1705,9 +1698,8 @@ The final \`Choose:\` line is the structured ask. Use the harness's \`AskUserQue
 The \`oneWayDoorConfirmation\` field persists for the rest of the flow's lifetime once \`userChoice\` is set. Downstream specialists MAY read it:
 
 - **plan-critic** (every rubric mode — generic / design / devex) — no-op; the gate fires BEFORE this specialist dispatches.
-- **builder** — may surface a one-line note in \`build.md\` frontmatter (\`oneWayConfirmedAt: <iso>\`) for the cross-model critic to cross-reference.
+- **builder** — may surface a one-line note in \`build.md\` frontmatter (\`oneWayConfirmedAt: <iso>\`) for the critic to cross-reference.
 - **reviewer / critic** — cross-check builder's \`build.md\` against the cited one-way D-Ns; flag findings if the build silently deviated from a confirmed irreversible commit.
-- **cross-model critic** — explicitly reads \`oneWayDoorConfirmation\` as input ("the user accepted these decisions on <confirmedAt>; do they still hold?").
 
 ## §8 — Anti-rationalization
 

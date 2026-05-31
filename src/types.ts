@@ -265,7 +265,7 @@ export type PlanDevexSeverity = "low" | "medium" | "high";
 /**
  * Reversibility per `D-N` decision (one-way/two-way door framing):
  * - `one-way` — irreversible/expensive (migrations, public-API removals, schema
- *   rewrites, destructive auth/crypto, payments). Auto-fires the cross-model critic.
+ *   rewrites, destructive auth/crypto, payments).
  * - `two-way` — easily reversible (flags, shimmed internal-API changes).
  * - `mostly-two-way` — reversible with friction (added columns, new deps, shipped UI).
  *
@@ -277,7 +277,7 @@ export type Reversibility = "one-way" | "two-way" | "mostly-two-way";
 /**
  * Architect-authored D-N record from `plan.md > ## Decisions` (strict mode). The
  * markdown body is authoritative; this interface lets readers (plan-critic,
- * the critic cross-model trigger, learnings) type-check the fields they consume.
+ * the critic, learnings) type-check the fields they consume.
  */
 export interface Decision {
   id: string;

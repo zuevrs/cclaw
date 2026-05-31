@@ -26,13 +26,11 @@ import {
  * a Contract column pointing at `agents/<id>.md` + relevant runbook.
  */
 
-// v8.112 ceiling relaxation: +200 chars allowed for the documented
-// cross-model convergence-loop (santa-loop) feature add. See
-// `tests/unit/v883-token-runbooks.test.ts > V8102_ADDITIVE_CHARS` for
-// the full justification — the carve-out covers a one-paragraph
-// orchestrator-side contract anchor, NOT a re-inline of any lifted
-// runbook body. Future feature adds must bump this ceiling explicitly.
-const START_COMMAND_BODY_CEILING_CHARS = 50_200;
+// v8.112 added +200 chars of slack for the cross-model convergence-loop
+// (santa-loop) contract anchor; that feature was retired in v8.115, so the
+// ceiling is reclaimed to the v8.103 baseline. Future feature adds must bump
+// this ceiling explicitly rather than reusing the retired carve-out.
+const START_COMMAND_BODY_CEILING_CHARS = 50_000;
 
 describe("v8.103 — startup token diet (orchestrator entry compression)", () => {
   it(`START_COMMAND_BODY chars < ${START_COMMAND_BODY_CEILING_CHARS} (was ~137 000) — body-level char ceiling`, () => {

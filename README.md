@@ -87,16 +87,11 @@ Triage announces its auto-pick in one line before the first specialist runs, so 
 | `captureLearningsBypass` | `false` | Skip the learnings hard-stop structured-ask in CI / autonomous pipelines that can't surface an interruption. |
 | `modelPreferences.<specialist>` | per-specialist | Tier hint (`fast` / `balanced` / `powerful`) passed through to the harness's model router on dispatch. |
 | `clarify.ambiguity_threshold` | `60` | `triage.ambiguityScore >= this` AND `ceremonyMode != "inline"` opens the architect's Clarify phase before Bootstrap. Integer in `[0, 100]`. |
-| `critic.cross_model` | `false` | Opt-in second adversarial critic pass via a different model through an available MCP cross-model tool (Codex / Gemini / etc.) on high-stakes slugs. |
-| `critic.cross_model_min_context` | `16000` | Minimum char budget the second-opinion model needs before the critic dispatches; below this the critic refuse-and-skip path fires (v8.108 §3.5 priority-drop). |
 
 Example:
 
 ```yaml
 harnesses: [claude, cursor]
-critic:
-  cross_model: false # opt-in second adversarial pass via a different model (MCP)
-  cross_model_min_context: 16000 # v8.108 — refuse-and-skip below this budget
 clarify:
   ambiguity_threshold: 60 # default; lower = more Clarify, higher = less
 modelPreferences:

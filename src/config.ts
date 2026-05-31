@@ -46,26 +46,6 @@ export interface ClarifyConfig {
   ambiguity_threshold?: number;
 }
 
-/**
- * Critic phase tunables (`.cclaw/config.yaml > critic`).
- */
-export interface CriticConfig {
-  /**
-   * Allow the critic to run a second adversarial pass via a different model
-   * (through an available MCP cross-model tool) on high-stakes slugs.
-   * Default `false`; gracefully skips with a one-line note when no MCP tool
-   * is wired.
-   */
-  cross_model?: boolean;
-  /**
-   * Minimum context budget (in chars; ~4 chars/token) the second-opinion
-   * model must support before the cross-model dispatch fires without
-   * trimming. Over budget: priority-drop trim, then refuse-and-skip if the
-   * minimum set still overflows (never blocks ship). Default `16000`.
-   */
-  cross_model_min_context?: number;
-}
-
 export interface CclawConfig {
   version: string;
   flowVersion: "8";
@@ -87,8 +67,6 @@ export interface CclawConfig {
   captureLearningsBypass?: boolean;
   /** Pre-plan clarify-phase tunables. */
   clarify?: ClarifyConfig;
-  /** Critic phase tunables. */
-  critic?: CriticConfig;
 }
 
 export function createDefaultConfig(harnesses: HarnessId[] = ["cursor"]): CclawConfig {

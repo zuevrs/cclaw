@@ -61,9 +61,7 @@ describe("content hygiene — no dead config keys", () => {
     "compoundRefreshEvery",
     "compoundRefreshFloor",
     "captureLearningsBypass",
-    "ambiguity_threshold",
-    "cross_model",
-    "cross_model_min_context"
+    "ambiguity_threshold"
   ];
 
   const srcDir = path.resolve(repoRoot, "src");
