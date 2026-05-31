@@ -316,6 +316,10 @@ The orchestrator opens this file before invoking \`reviewer\`.
 
 The reviewer is a single nine-axis specialist (absorbed the former \`security-reviewer\` into the \`security\` axis). When the task or diff touches sensitive surfaces, the reviewer walks the \`security\` axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) inside the same dispatch — no separate sub-agent.
 
+## 1a. Optional parallel-review fan-out (size-gated)
+
+On a **large strict** diff — \`triage.ceremonyMode == "strict"\` AND (≥ 12 changed files OR ≥ 400 changed lines) AND ≥ 2 disjoint file clusters AND sub-agent dispatch + git both available — the orchestrator MAY fan the \`code\` review out into **≤ 5 partition reviewers** (one per cohesive file cluster), then **merge** their findings into one \`review.md\` iteration and run the mandatory integration + Five Failure Modes pass. The \`security\` axis is always reviewed across the **whole** diff, never per-partition. A partitioned iteration counts as **one** against the §3 cap. On any smaller diff — or when dispatch / git is unavailable — review stays a single sequential reviewer (the default), and that fallback is silent, not an error. Full gate + partition + dispatch + merge + fallback: \`runbooks/parallel-review.md\`.
+
 ## 2. Iterate
 
 Each iteration appends a block to \`.cclaw/flows/<slug>/review.md\`:
