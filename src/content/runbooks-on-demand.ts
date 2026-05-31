@@ -487,17 +487,28 @@ After ship, run the compound learning gate.
 
 ### Ship-gate user ask (finalization mode)
 
-When the ship gate is passed (Victory Detector green) and finalization is required, the orchestrator surfaces a structured ask to the user. The options are the five \`finalization_mode\` enum values; **\`Cancel\` is NOT one of them**. \`/cc-cancel\` remains the explicit user-typed command for discarding a flow; structured asks for finalization MUST NOT include a "Cancel" row, because choosing "Cancel" mid-finalization leaves shipped artefacts in a half-moved state with no defined recovery.
+When the ship gate is passed (Victory Detector green) and finalization is required, the orchestrator surfaces a structured ask to the user. First it **infers the recommended finalization from repo signals** — read once, in the orchestrator's own context, before building the ask:
+
+| Repo signal | Recommended default |
+| --- | --- |
+| no \`.git/\` (or \`triage.downgradeReason: "no-git"\`) | \`no-vcs\` |
+| git, no \`origin\` remote | \`merge\` (local merge into base) |
+| git + remote + \`gh\` CLI available + a PR/CI convention (\`.github/workflows/\` present OR open PRs exist) | \`open-PR\` |
+| git + remote, no PR convention | \`push-only\` |
+
+The ask still lists all five \`finalization_mode\` enum values (full power retained), but the inferred one is surfaced **first and labelled "(recommended)"** with a one-clause "why" — so the common case is a single confirming tap, not a cold pick from five. **\`Cancel\` is NOT one of them**. \`/cc-cancel\` remains the explicit user-typed command for discarding a flow; structured asks for finalization MUST NOT include a "Cancel" row, because choosing "Cancel" mid-finalization leaves shipped artefacts in a half-moved state with no defined recovery.
 
 \`\`\`
 askUserQuestion(
-  prompt: <one sentence in the user's language stating: ship gate passed, choose how to finalize the slug, list expected behaviour for git mode (or "no-vcs detected" for the no-vcs path)>,
+  prompt: <one sentence in the user's language stating: ship gate passed; the recommended finalization is <inferred mode> because <one-clause repo-signal reason>; choose how to finalize the slug>,
   options: [
-    <option label conveying: merge into base branch locally, verify clean merge, record the merged SHA>,
-    <option label conveying: open a PR with structured body (gh pr create), record the URL>,
-    <option label conveying: push the branch upstream and stop (git push -u origin HEAD), keep open for later review>,
-    <option label conveying: discard the branch locally — requires typed confirmation in the next turn>,
-    <option label conveying: no VCS available, record a manual handoff target and rollback owner>
+    <the inferred-default option, listed FIRST, label suffixed "(recommended)" + its expected git behaviour>,
+    <the remaining four finalization_mode options, in enum order, each with its expected behaviour:
+       merge into base branch locally (verify clean merge, record merged SHA) /
+       open a PR with structured body (gh pr create, record URL) /
+       push the branch upstream and stop (git push -u origin HEAD) /
+       discard the branch locally — requires typed confirmation next turn /
+       no VCS available — record a manual handoff target and rollback owner>
   ],
   multiSelect: false
 )
@@ -643,7 +654,7 @@ the user-facing \`step\` / \`auto\` choice was retired. Every non-inline flow ru
 
 ## Always-auto chain rule
 
-After every dispatch returns: (1) render the slim summary to the user (the artifact is on disk for the next stage's sub-agent); (2) re-author \`HANDOFF.json\` + \`.continue-here.md\` (see \`runbooks/handoff-artifacts.md\`); (3) **immediately dispatch the next stage** in \`triage.path\` — no waiting, no approval picker — UNLESS one of the always-auto hard-failure conditions fires (see \`runbooks/always-auto-failure-handling.md\`).
+After every dispatch returns: (1) render the **cockpit line** to the user — a plain-language digest of the slim summary, never the raw envelope (see start-command \`### Cockpit render\`: stage label not specialist, no axis tokens / \`AC-N\` / SHAs / ceremony; the full artifact is on disk for the next stage's sub-agent and for any user who wants the detail); (2) re-author \`HANDOFF.json\` + \`.continue-here.md\` (see \`runbooks/handoff-artifacts.md\`); (3) **immediately dispatch the next stage** in \`triage.path\` — no waiting, no approval picker — UNLESS one of the always-auto hard-failure conditions fires (see \`runbooks/always-auto-failure-handling.md\`).
 
 The architect dispatch runs silently as a single on-demand sub-agent (unified flow). There is no mid-plan Clarify dialogue and no Phase 7 sign-off pause; the orchestrator chains automatically once the architect's slim summary returns.
 
@@ -656,7 +667,7 @@ The orchestrator ends its turn ONLY when a hard-failure condition fires (per the
 Every slim summary carries a \`Confidence: high | medium | low\` line — a quality signal for the dispatch that just returned, not a prediction of the next stage:
 
 - \`high\` — chain to next stage normally.
-- \`medium\` — render the summary inline ("medium — see Notes"); chain anyway. The \`Notes:\` line is required when confidence is medium.
+- \`medium\` — render the cockpit line inline with a "— medium confidence, see Notes" suffix; chain anyway. The \`Notes:\` line is required when confidence is medium.
 - \`low\` — **hard gate.** Stop chaining and surface the stop-and-report status block (per \`runbooks/always-auto-failure-handling.md\`) with the specialist's \`Notes\` verbatim. User reads, decides, and recovers via \`/cc\` (continue under a follow-up) or \`/cc-cancel\` (discard).
 
 A specialist returning \`Confidence: low\` MUST write a non-empty \`Notes:\` line explaining the dimension that drove confidence down (missing input, unverified citation, partial coverage). Repeated low-confidence on the same stage is a routing signal: re-triage with a richer path or split the slug rather than re-dispatching the same specialist.
@@ -687,7 +698,7 @@ The orchestrator opens this runbook on every chain decision after a specialist r
 | reviewer \`status: cap-reached\` (5th review/fix iteration without convergence) | Stop and report. See \`runbooks/cap-reached-recovery.md\` for the split-plan procedure. |
 | builder \`Status: NEEDS_CONTEXT\` | **Stop and report.** The builder identified a specific missing input (file, symbol, decision the plan doesn't pin) and self-rescue didn't close the gap. Status block surfaces the \`Notes:\` line verbatim so the user can see exactly what is missing. On \`/cc\` continue, the orchestrator re-dispatches the builder with the new context (typically the user edited \`CONTEXT.md\` or \`plan.md > ## Assumptions\` between the stop and the resume). No auto-retry — re-running on unchanged inputs produces the same status. See \`.cclaw/lib/skills/summary-format.md\` (Part II — Builder status protocol) for the per-slice loop + aggregation rule. |
 | builder \`Status: BLOCKED\` | **Stop and report.** The builder hit an unresolvable obstacle (per-slice review failed its 2-attempt cap, posture mismatch, dependency cycle, surface conflict). Status block surfaces the \`Notes:\` line verbatim PLUS the builder's recommended resolution from a fixed set: \`provide more context\` / \`break the slice smaller\` / \`escalate to architect\` / \`accept and ship as-is\`. Orchestrator does NOT auto-retry. On \`/cc\` continue, the orchestrator resumes with the resolution applied (typically a \`plan.md\` edit, an architect re-dispatch, or a context addition). See \`.cclaw/lib/skills/summary-format.md\` § "BLOCKED" for triggering conditions. |
-| builder \`Status: DONE_WITH_CONCERNS\` | **Proceed AND log.** The builder landed the work and the per-slice reviews passed, but the builder flagged forward-looking risks. Orchestrator appends a \`## Concerns\` section to \`build.md\` (one bullet per concern, copied verbatim from the slim summary's \`Notes:\` line + the build.md \`## Summary > Potential concerns\` bullets) and chains to the next stage. The reviewer reads \`## Concerns\` as additional finding seeds. No stop fires; the user sees the concerns in the slim summary. |
+| builder \`Status: DONE_WITH_CONCERNS\` | **Proceed AND log.** The builder landed the work and the per-slice reviews passed, but the builder flagged forward-looking risks. Orchestrator appends a \`## Concerns\` section to \`build.md\` (one bullet per concern, copied verbatim from the slim summary's \`Notes:\` line + the build.md \`## Summary > Potential concerns\` bullets) and chains to the next stage. The reviewer reads \`## Concerns\` as additional finding seeds. No stop fires; the user sees the concerns in the cockpit line. |
 
 ## Stop-and-report status block (uniform shape)
 
@@ -1489,7 +1500,7 @@ Read \`.cclaw/state/flow-state.json\`. A flow is **active** when \`currentSlug !
 
 | Invocation | Active flow? | Behaviour |
 | --- | --- | --- |
-| \`/cc\` (no args) | yes | **Continue silently.** Jump back into the saved \`currentStage\`, dispatch the next specialist (or chain the next auto-step). No picker, no resume summary. The user sees the next slim summary directly. |
+| \`/cc\` (no args) | yes | **Continue silently.** Jump back into the saved \`currentStage\`, dispatch the next specialist (or chain the next auto-step). No picker, no resume summary. The user sees the next cockpit line directly. |
 | \`/cc\` (no args) | no | Error in plain prose, in the user's language: \`No active flow. Start with /cc <task>, /cc <slug> <task> (refine a shipped slug), or /cc research <topic>.\` End the turn. |
 | \`/cc <task>\` | yes | Error in plain prose, in the user's language: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` End the turn. Do NOT auto-cancel or queue the new task. |
 | \`/cc <task>\` | no | **Start a new flow.** Run the Detect git-check, refine-mode fork (first token is a shipped slug), research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent. |
@@ -1508,7 +1519,7 @@ Every error row above is **plain prose, in the user's language**. NOT a structur
 
 ## §4 — The \`/cc\` continue path is silent
 
-When \`/cc\` (no args) lands on an active flow, the orchestrator continues silently — no announcement, no slim-summary regen, no "Resuming \`<slug>\`…" line. The user sees the next specialist's slim summary (or the chained stage's output) directly. If they want context they can read \`.cclaw/flows/<slug>/.continue-here.md\` directly, or read the most recent stage's artifact under \`.cclaw/flows/<slug>/\`.
+When \`/cc\` (no args) lands on an active flow, the orchestrator continues silently — no announcement, no slim-summary regen, no "Resuming \`<slug>\`…" line. The user sees the next cockpit line (or the chained stage's output) directly. If they want context they can read \`.cclaw/flows/<slug>/.continue-here.md\` directly, or read the most recent stage's artifact under \`.cclaw/flows/<slug>/\`.
 
 ## §5 — Worked examples (render in user's language; tokens stay English)
 

@@ -106,18 +106,18 @@ Do not auto-delete state. Do not hand-edit the JSON.
 
 \`/cc\` invocations resolve through a **deterministic dispatch matrix**; the orchestrator never asks "resume or start?". The four canonical shapes:
 
-- \`/cc\` (no args) + active flow → **Continue silently** from the saved \`currentStage\`; no picker, no resume summary. The user sees the next specialist's slim summary directly.
+- \`/cc\` (no args) + active flow → **Continue silently** from the saved \`currentStage\`; no picker, no resume summary. The user sees the next cockpit line directly (see \`### Cockpit render\`).
 - \`/cc\` (no args) + no active flow → Error: \`No active flow. Start with /cc <task>, /cc <slug> <task> (refine a shipped slug), or /cc research <topic>.\` End the turn.
 - \`/cc <task>\` + active flow → Error: \`Active flow: <slug> (stage: <stage>). Continue with /cc. Cancel with /cc-cancel.\` Do NOT auto-cancel or queue. \`/cc research <topic>\` and \`/cc <slug> <task>\` (refine; first token is a shipped slug) follow the same active-flow / no-active-flow shape — error on active flow, start the respective forked flow otherwise.
 - \`/cc <task>\` + no active flow → **Start a new flow** (run Detect git-check, refine-mode fork, research-mode fork in that order; if none fire, dispatch the \`triage\` sub-agent). \`/cc-cancel\` errors symmetrically when there is no active flow (\`No active flow to cancel.\`); on an active flow it runs the \`/cc-cancel\` runtime (move artifacts to \`cancelled/<slug>/\`, reset state).
 
 The research-mode sub-commands route through their state-gated sub-handlers — \`/cc research go\` (force-exit Phase 1 discovery; identical to the in-prose "ready" signal), \`/cc research revise <area>\` / \`push-back <claim>\` / \`accept\` (routed per \`runbooks/research-revision.md\` §2 / §3 / §4). Out-of-state invocations error in plain prose and end the turn.
 
-Errors are **plain prose, in the user's language** (not structured asks; no option list, no \`[y/n]\` picker). User re-invokes \`/cc\` or \`/cc-cancel\` to recover. \`<slug>\`, \`<stage>\`, and command tokens stay English (wire protocol); the surrounding sentence renders in the user's language. The \`/cc\` continue path is **silent** — the user sees the next specialist's slim summary directly. Full matrix (every invocation × active-flow shape, the research-state-gated sub-commands, plain-prose error templates, worked examples, anti-rationalization) lives in \`.cclaw/lib/runbooks/detect-matrix.md\` (sole resume contract).
+Errors are **plain prose, in the user's language** (not structured asks; no option list, no \`[y/n]\` picker). User re-invokes \`/cc\` or \`/cc-cancel\` to recover. \`<slug>\`, \`<stage>\`, and command tokens stay English (wire protocol); the surrounding sentence renders in the user's language. The \`/cc\` continue path is **silent** — the user sees the next cockpit line directly (see \`### Cockpit render\`). Full matrix (every invocation × active-flow shape, the research-state-gated sub-commands, plain-prose error templates, worked examples, anti-rationalization) lives in \`.cclaw/lib/runbooks/detect-matrix.md\` (sole resume contract).
 
 ### Detect — git-check sub-step
 
-Before dispatching triage, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), the triage sub-agent will force \`triage.ceremonyMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns. The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences live in \`runbooks/triage-gate.md\` § "No-git auto-downgrade audit trail".
+Before dispatching triage, check \`<projectRoot>/.git/\`. If absent (plain working tree, no init, deleted out-of-band), the triage sub-agent will force \`triage.ceremonyMode\` to \`soft\` regardless of class and stamp \`triage.downgradeReason: "no-git"\` as the audit trail. The orchestrator surfaces a one-sentence warning to the user after the triage sub-agent returns (plain language — say there's no git repo so the flow runs with lighter rigor; do **not** name the internal \`soft\` ceremony value, per \`### Cockpit render\`). The downgrade is one-way for the flow's lifetime; running \`git init\` mid-flight does not re-upgrade. Rationale + downstream consequences live in \`runbooks/triage-gate.md\` § "No-git auto-downgrade audit trail".
 
 ### Detect — refine-mode fork
 
@@ -227,6 +227,21 @@ ${SUMMARY_RETURN_EXAMPLE}
 
 The orchestrator reads only this; the full artifact stays in \`.cclaw/flows/<slug>/<stage>.md\` for the next stage's sub-agent.
 
+### Cockpit render (slim summary → user)
+
+The slim summary above is the **machine envelope** — the orchestrator reads it for routing and it lands verbatim in the artifact. It is **not** what the user reads. After each dispatch, render exactly ONE **cockpit line** to the user: a faithful, plain-language digest of the envelope the sub-agent just returned (never fabricated or summarised from memory). Shape:
+
+\`\`\`
+<stage label> <state> — <what changed, in plain words>. <one next-action>
+\`\`\`
+
+- **Stage label, never the specialist.** Map the internal specialist to the stage word the user already knows: \`plan\` (architect / plan-critic), \`build\` (builder), \`checks\` (qa-runner), \`review\` (reviewer / critic), \`ship\` (release reviewer). Never surface \`architect\` / \`plan-critic\` / \`qa-runner\` / \`critic\` / \`reviewer\` / \`investigator\` to the user — those are engine-internal roles.
+- **Plain words, no engine tokens.** Strip the axis counter (\`c=N r=N a=N …\`), \`AC-N\` / \`SL-N\` / \`D-N\` ids, commit SHAs, posture names, and the raw \`Recommended next\` enum. Examples: "AC-1, AC-2 verified; SL-1, SL-2 implemented" → "2 acceptance checks pass"; \`Recommended next: review-pause\` → "fixing the review findings"; \`continue\` → "moving on to <next stage>".
+- **No ceremony label.** Never name \`inline\` / \`soft\` / \`strict\` to the user — the ceremony dial is internal. The user experiences it as *how much happens*, not as a word to learn.
+- **One next-action, in plain prose.** Translate the routing decision: auto-chaining ("moving on to review…"), a stop ("stopped — <reason>; \`/cc\` to continue, \`/cc-cancel\` to discard"), or the ship-gate ask. Only the command tokens (\`/cc\`, \`/cc-cancel\`, slug, paths) stay English.
+- **Confidence** surfaces only when not \`high\` (append "— low confidence, see below", then the stop-and-report block carries the \`Notes\` verbatim).
+- **The detail is one file away.** AC-ids, axes, SHAs, posture, and ceremony all live in \`flows/<slug>/<stage>.md\` + \`flow-state.json\`. A user who wants the full picture opens the artifact; the cockpit stays calm by default. This is the engine/cockpit split: the engine keeps every bit of its power, the user reads a flat surface.
+
 ### Stage details
 
 Every specialist's full gate / inputs / output / slim-summary / verdict routing / iteration caps / flow-state patches lives in \`agents/<id>.md\` and the linked runbook from the Stage→specialist mapping table above. Open both BEFORE dispatching; the orchestrator never replicates specialist-internal contracts. The pointers below are jump-references only — every detail lives on disk.
@@ -271,7 +286,7 @@ Every specialist's full gate / inputs / output / slim-summary / verdict routing 
 
 #### ship
 
-\`agents/reviewer.md\` (mode=\`code\`, release sweep — commit-chain completeness / release notes / breaking changes / CHANGELOG staleness) + \`runbooks/handoff-gates.md\`. Structured user ask for finalization mode (merge / open-PR / push-only / discard-local / no-vcs); \`Cancel\` is NEVER an option (user invokes \`/cc-cancel\` out-of-band). The ship-gate ask is the ONLY user-facing structured ask on the always-auto path. (The adversarial pre-mortem now lives in the \`critic\` post-implementation pass, not a separate ship-stage reviewer.)
+\`agents/reviewer.md\` (mode=\`code\`, release sweep — commit-chain completeness / release notes / breaking changes / CHANGELOG staleness) + \`runbooks/handoff-gates.md\`. The ship-gate ask is the ONLY user-facing structured ask on the always-auto path. The orchestrator **infers the most likely finalization from repo signals** (no git → \`no-vcs\`; git but no remote → \`merge\` locally; remote + \`gh\` + a PR/CI convention → \`open-PR\`; remote without a PR convention → \`push-only\`) and presents it as the **recommended default**, with the other \`finalization_mode\` values (merge / open-PR / push-only / discard-local / no-vcs) available in the same ask. \`Cancel\` is NEVER an option (user invokes \`/cc-cancel\` out-of-band). (The adversarial pre-mortem now lives in the \`critic\` post-implementation pass, not a separate ship-stage reviewer.)
 
 ## Pause and resume
 
@@ -291,7 +306,7 @@ After the compound step, the orchestrator (never a sub-agent) finalises the slug
 
 ## Always-ask rules
 
-Always dispatch the \`triage\` sub-agent on a fresh \`/cc <task>\` (when no refine-mode / research-mode fork fires); never auto-advance past a hard failure (build / reviewer-critical after 3 auto-fix iterations; critic block-ship / catastrophic / \`Confidence: low\` / \`Recommended next: cancel\` immediate); the **ship-gate is the only structured ask left** — always ask before \`git push\` or PR creation with explicit options (merge / open-PR / push-only / discard-local / no-vcs); \`/cc-cancel\` is never a clickable option (lives in plain prose inside the stop-and-report block); always show the slim summary back to the user (do not summarise from memory); render slim summaries + status blocks in the user's conversation language (mechanical tokens — \`AC-N\`, \`/cc\`, slugs, paths, frontmatter keys, mode names — stay English); finalize is **never delegated to a sub-agent**; the Per-criterion verified gate runs before finalize; every dispatch envelope lists \`cclaw-ethos.md\` as the **Required ethos read** above \`agents/<specialist>.md\` (first agent-contract read) + wrapper skill (second).
+Always dispatch the \`triage\` sub-agent on a fresh \`/cc <task>\` (when no refine-mode / research-mode fork fires); never auto-advance past a hard failure (build / reviewer-critical after 3 auto-fix iterations; critic block-ship / catastrophic / \`Confidence: low\` / \`Recommended next: cancel\` immediate); the **ship-gate is the only structured ask left** — always get explicit confirmation before \`git push\` or PR creation, leading with the repo-inferred **recommended default** (the other finalization modes — merge / open-PR / push-only / discard-local / no-vcs — stay available in the same ask); \`/cc-cancel\` is never a clickable option (lives in plain prose inside the stop-and-report block); always render the **cockpit line** to the user (faithful to the slim summary the sub-agent returned; never fabricate or summarise from memory — see \`### Cockpit render\`); render cockpit lines + status blocks in the user's conversation language (mechanical tokens — \`AC-N\`, \`/cc\`, slugs, paths, frontmatter keys, mode names — stay English); finalize is **never delegated to a sub-agent**; the Per-criterion verified gate runs before finalize; every dispatch envelope lists \`cclaw-ethos.md\` as the **Required ethos read** above \`agents/<specialist>.md\` (first agent-contract read) + wrapper skill (second).
 
 ## Available specialists + research helpers
 

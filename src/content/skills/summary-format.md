@@ -164,7 +164,7 @@ Each status carries a precise meaning, a triggering condition the builder checks
 
 **Triggering condition.** All `DONE` conditions met AND the builder's `## Summary > Potential concerns` section has ≥1 non-empty bullet that is forward-looking (not "I noticed but didn't touch", which is past-tense and lives in its own section).
 
-**Orchestrator handler.** Proceed AND log the concerns. Append a `## Concerns` section to `build.md` (one bullet per concern, copied verbatim from the slim summary's `Notes:` line and the `## Summary > Potential concerns` bullets in `build.md`). The reviewer reads `## Concerns` as additional finding seeds. The always-auto chain continues; the user sees the concerns in the slim summary but no stop fires.
+**Orchestrator handler.** Proceed AND log the concerns. Append a `## Concerns` section to `build.md` (one bullet per concern, copied verbatim from the slim summary's `Notes:` line and the `## Summary > Potential concerns` bullets in `build.md`). The reviewer reads `## Concerns` as additional finding seeds. The always-auto chain continues; the user sees the concerns in the cockpit line but no stop fires.
 
 ### `NEEDS_CONTEXT`
 
