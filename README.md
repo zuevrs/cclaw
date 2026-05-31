@@ -47,7 +47,7 @@ Slim summaries land in chat under `## Triage`, `## Plan`, `## Build`, `## Review
 
 ## How it works
 
-`triage` picks the ceremony tier from the task shape and dispatches the first specialist. Each specialist runs in isolation, writes one artifact, returns one slim summary; the orchestrator forwards the slug's history but nothing else. After build, two reviewers run in series — a read-only `reviewer` walks 14 quality axes, then an adversarial `critic` falsifies what the reviewer cleared (separate contexts, separate artifacts). On UI / SDK surfaces, `plan-critic` gates the plan against a design or DevEx rubric *before* build burns context. Bug reports route through an `investigator` ahead of `architect`. Shipped slugs emit `learnings.md`; future plans read prior lessons through `knowledge.jsonl` before authoring.
+`triage` picks the ceremony tier from the task shape and dispatches the first specialist. Each specialist runs in isolation, writes one artifact, returns one slim summary; the orchestrator forwards the slug's history but nothing else. After build, two reviewers run in series — a read-only `reviewer` walks 9 quality axes, then an adversarial `critic` falsifies what the reviewer cleared (separate contexts, separate artifacts). On UI / SDK surfaces, `plan-critic` gates the plan against a design or DevEx rubric *before* build burns context. Bug reports route through an `investigator` ahead of `architect`. Shipped slugs emit `learnings.md`; future plans read prior lessons through `knowledge.jsonl` before authoring.
 
 ```mermaid
 flowchart LR

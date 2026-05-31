@@ -1,5 +1,32 @@
 # Changelog
 
+## 8.120.0 - 2026-05-31
+
+### Changed (always-auto consistency scrub — docs/prose ↔ behavior)
+
+- **Every stale "user picker" reference is purged from the specialist prompts, runbooks, artifact templates, and type docs — they now describe the `stop-and-report` recovery the orchestrator has actually shipped since always-auto landed.** The interactive in-chat pickers (block-ship, plan-critic cancel / revise-cap, qa-runner blocked / iterate-cap, review-cap, critic-cap) were retired when the flow went always-auto: the orchestrator stops on a hard failure, writes a plain-prose status block, and the user resumes with `/cc` (or discards with `/cc-cancel`). The prose now matches. **No power lost** — every former picker arm stays reachable: fix-and-re-review (edit the diff → `/cc`), accept-and-ship (`/cc`, recorded as `criticOverride`), re-architect (edit `plan.md` → `/cc`), accept-warnings-and-proceed, proceed-without-qa-evidence — all via artifact-edit + resume, the canonical always-auto pattern.
+- **Two stale plan-stage gates removed from `stage-playbooks.ts`** — the "always surface the topology and ask the user to confirm" line (the architect declares `topology` in `plan.md`; always-auto does not pause for it) and the "user has approved the plan (explicit ok; never proceed without it)" hand-off bullet (there is no plan-approval gate — the ack window is the `## Assumptions (correct me now)` section, overridable by editing `plan.md` + `/cc`).
+
+### Also (drift / dead-code sweep, committed earlier on this branch)
+
+- **README quality-axis count `14` → `9`** (the canonical count pinned by `v894-docs-drift-sweep`; the prose had drifted).
+- **Dead `complexity == "critical"` escalation clause removed** from `reviewer-axis-edit-discipline.md` — `critical` is not a valid `RoutingClass` value, so the branch never fired.
+- **`CeremonyMode` JSDoc corrected** — "selected at triage (user can override)" → "immutable for the flow" (per-flow ceremony override flags were retired in v8.112).
+
+### Why this is safe
+
+- Pure content + JSDoc-comment change. No runtime TypeScript branches on any of the rewritten prose; no enum, validator, or switch changed. The `block-ship` / `cancel` / `blocked` verdicts and their caps (`criticIteration`, `planCriticIteration`, `qaIteration`, `reviewCounter`) are untouched — only the human-readable description of what happens at a cap / verdict was corrected to `stop-and-report`.
+
+### Affected surfaces
+
+- **Specialist prompts** — `critic.ts`, `plan-critic.ts`, `qa-runner.ts`, `reviewer.ts` (block-ship / cancel / revise-cap / blocked / iterate-cap / architecture ship-gate verdict prose).
+- **Runbooks / templates** — `runbooks-on-demand.ts` (review-cap, critic-cap, plan-critic + qa FlowState resume prose), `artifact-templates.ts` (plan-critic + qa template verdict legends + registry descriptions), `core-agents.ts` (qa-runner roster line), `stage-playbooks.ts` (topology + plan-approval gates), `reviewer-axis-qa-evidence.md` (skip-qa override).
+- **Type docs** — `types.ts` (`CriticVerdict`, `QaVerdict`, `PlanCriticVerdict`, `criticOverride`) + `flow-state.ts` (`reviewCounter`, `criticIteration`, `criticVerdict`, `planCriticVerdict`, `qaVerdict`) JSDoc now say `stop-and-report`.
+
+### Verification
+
+- build + 882 tests + smoke green.
+
 ## 8.119.0 - 2026-05-31
 
 ### Changed (Phase E, safe slice — reviewer modes 4 → 2)

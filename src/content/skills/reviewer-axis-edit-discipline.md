@@ -53,7 +53,7 @@ A match on ANY of the four signals is a finding filed as `SD-N: <not-doing item>
 
 - **0-3** — weak signal (single commit-keyword or a weakly-mapping symbol). Severity = `consider`; author may push back with a citation that the match is coincidental (downgrade to `fyi` only with the citation).
 - **4-6** — medium signal (two of the four categories match, unambiguous mapping). Severity = `required`; blocks ship in strict.
-- **7-10** — strong signal (three or more categories match; a fresh agent would read the diff as the implementation). Severity = `required` (blocks strict AND soft); on `triage.complexity == "critical"` escalates one tier to `critical`.
+- **7-10** — strong signal (three or more categories match; a fresh agent would read the diff as the implementation). Severity = `required` (blocks strict AND soft).
 
 **Acknowledged-reversal exception.** A scope-drift signal is NOT a blocking finding when the plan explicitly acknowledges the reversal — either the Not-Doing bullet itself was amended (`- **<scope item>** — was originally excluded; <reason for re-including>.`) OR a `## Open questions` / `## Decisions` row names the reversal verbatim. When acknowledged, emit a `fyi` finding noting the in-flight reversal (so compound captures it as a learnings row); `fyi` never blocks ship.
 

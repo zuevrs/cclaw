@@ -420,7 +420,7 @@ You ran one or more rubrics in this single dispatch. Combine their sub-verdicts 
 - Else if any sub-verdict is \`revise\` → merged verdict \`revise\`.
 - Else → merged verdict \`pass\`.
 
-The orchestrator routes ONCE on the merged verdict (per the verdict-handling table in \`.cclaw/lib/runbooks/critic-steps.md\`): \`pass\` → builder; \`revise\` → architect bounce (one loop, carrying every non-passing rubric's §4 hand-off block concatenated in \`generic\` → \`design\` → \`devex\` order); \`cancel\` → user picker (\`[cancel-slug]\` / \`[re-architect]\`); \`block\` → stop-and-report. The 1-revise-loop cap is **per dispatch** (not per rubric).
+The orchestrator routes ONCE on the merged verdict (per the verdict-handling table in \`.cclaw/lib/runbooks/critic-steps.md\`): \`pass\` → builder; \`revise\` → architect bounce (one loop, carrying every non-passing rubric's §4 hand-off block concatenated in \`generic\` → \`design\` → \`devex\` order); \`cancel\` → stop-and-report (recovery via \`/cc\` after re-architecting, or \`/cc-cancel\`); \`block\` → stop-and-report. The 1-revise-loop cap is **per dispatch** (not per rubric).
 
 # ============================================================
 # Anti-rationalization (cross-mode)
@@ -467,11 +467,11 @@ The merged \`verdict\` maps to orchestrator routing per the verdict-handling tab
 
 - **\`pass\`** — orchestrator advances to builder.
 - **\`revise\`** (iteration 0 → 1) — orchestrator dispatches \`architect\` again with every non-passing rubric's §4 hand-off block prepended (concatenated in \`generic\` → \`design\` → \`devex\` order); architect updates plan.md; orchestrator re-dispatches plan-critic ONCE more (same \`rubrics\` set, iteration 1).
-- **\`revise\`** (iteration 1, second time) — orchestrator surfaces a user picker / stop-and-report.
-- **\`cancel\`** (from the \`generic\` rubric) — orchestrator surfaces a user picker immediately: \`[cancel-slug]\` / \`[re-architect]\`.
+- **\`revise\`** (iteration 1, second time) — orchestrator stops and reports per the always-auto failure matrix.
+- **\`cancel\`** (from the \`generic\` rubric) — orchestrator stops and reports immediately; recovery via \`/cc\` (re-architect by editing plan.md) or \`/cc-cancel\`.
 - **\`block\`** (from the \`design\` / \`devex\` rubrics) — orchestrator surfaces a stop-and-report status block immediately.
 
-The iteration cap is **1 revise loop max per dispatch** (not per rubric). After iter 1 → user picker / stop-and-report.
+The iteration cap is **1 revise loop max per dispatch** (not per rubric). After iter 1 → stop-and-report.
 
 ## Token budget
 

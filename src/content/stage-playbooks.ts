@@ -59,7 +59,7 @@ AC that fail any of the three checks are not real AC. Reject them or rewrite the
 3. No AC depends on the output of another AC in the same wave.
 4. The slug fits in **≤5 parallel slices** (slice = 1+ AC sharing a touchSurface). If architect produces more than 5 slices, merge thinner slices into fatter ones — never generate "wave 2".
 
-The orchestrator must not silently choose \`parallel-build\`. Always surface the topology and ask the user to confirm. See \`.cclaw/lib/skills/parallel-build.md\` for the worktree dispatch pattern and the silent fallback to \`inline\` when the harness does not support sub-agent dispatch.
+The architect declares \`topology\` in plan.md; the orchestrator does not pause to ask the user to confirm it (always-auto). See \`.cclaw/lib/skills/parallel-build.md\` for the worktree dispatch pattern and the silent fallback to \`inline\` when the harness does not support sub-agent dispatch.
 
 ## 6. Hand-off
 
@@ -68,7 +68,7 @@ Plan-stage ends when:
 - frontmatter is filled in (slug, stage, status=active, ac with ids and pending statuses, last_specialist, refines, security_flag),
 - AC table in the body matches the frontmatter,
 - traceability block lists \`AC-N → commit pending\` for every AC,
-- the user has approved the plan (an explicit "ok"; never proceed without it).
+- plan.md is complete and internally consistent — the orchestrator then chains to build automatically (always-auto; there is no plan-approval gate — the ack window is the \`## Assumptions (correct me now)\` section, which the user can override by editing plan.md and re-running \`/cc\`).
 
 Then the orchestrator transitions to build-stage.
 

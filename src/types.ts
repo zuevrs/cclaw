@@ -161,8 +161,8 @@ export type InstallableAgentId = SpecialistId | ResearchAgentId | ResearchLensId
 
 /**
  * Critic slim-summary verdict driving Hop 4.5 routing: `pass` → ship; `iterate`
- * → ship with gaps carried to `ship.md`; `block-ship` → pause for the
- * block-ship picker.
+ * → ship with gaps carried to `ship.md`; `block-ship` → stop and report
+ * (recovery via `/cc`).
  */
 export type CriticVerdict = "pass" | "iterate" | "block-ship";
 
@@ -194,7 +194,7 @@ export type BuilderStatus = (typeof BUILDER_STATUSES)[number];
 /**
  * qa-runner verdict at the qa stage (gate: surfaces includes `"ui"`/`"web"` AND
  * `ceremonyMode != "inline"`): `pass` → review; `iterate` → bounce to builder
- * (cap 1 via `qaIteration`); `blocked` → qa could not run, surface picker.
+ * (cap 1 via `qaIteration`); `blocked` → qa could not run, stop and report.
  * Distinct from {@link CriticVerdict} / {@link PlanCriticVerdict}.
  */
 export type QaVerdict = "pass" | "iterate" | "blocked";
@@ -239,7 +239,7 @@ export type Surface = (typeof SURFACES)[number];
  * (`cancel` > `block` > `revise` > `pass`); `generic` mode emits
  * `pass`/`revise`/`cancel`, `design`/`devex` modes emit `pass`/`revise`/`block`.
  * Routing: `pass` → builder; `revise` → bounce to architect, re-dispatch once
- * (1 loop max per mode); `cancel`/`block` → picker / stop-and-report. Distinct
+ * (1 loop max per mode); `cancel`/`block` → stop and report. Distinct
  * from {@link CriticVerdict} (post-impl, has `block-ship`).
  */
 export type PlanCriticVerdict = "pass" | "revise" | "cancel" | "block";
@@ -526,8 +526,10 @@ export interface ResearchApproach {
  * - `strict` — large/risky/security; AC IDs with posture-driven commit prefixes
  *   the reviewer verifies ex-post via `git log --grep="(AC-N):"`.
  *
- * Selected at triage (user can override). Legacy `triage.acMode` is hoisted to
- * `ceremonyMode` on read by {@link rewriteLegacyAcMode}.
+ * Selected at triage; immutable for the flow (the triage heuristic is the
+ * source of truth — per-flow ceremony override flags were retired in v8.112).
+ * Legacy `triage.acMode` is hoisted to `ceremonyMode` on read by
+ * {@link rewriteLegacyAcMode}.
  */
 export const CEREMONY_MODES = ["inline", "soft", "strict"] as const;
 export type CeremonyMode = (typeof CEREMONY_MODES)[number];
@@ -609,8 +611,8 @@ export interface TriageDecision {
    */
   downgradeReason?: string | null;
   /**
-   * `true` when the user picked `accept-and-ship` at the Hop 4.5 block-ship
-   * picker (critic block overridden). Audit-only; stamped once, never cleared;
+   * `true` when the user accepts a Hop 4.5 block-ship gap as-is via `/cc`
+   * (accept-and-ship; critic block overridden). Audit-only; stamped once, never cleared;
    * the validator rejects `null` (absent = no override).
    * @deprecated — relocated to the audit-log telemetry surface; kept optional.
    */

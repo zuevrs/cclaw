@@ -16,7 +16,7 @@ Load this skill when the reviewer dispatch envelope carries `walkQaEvidenceAxis:
 ## When NOT to apply
 
 - The qa gate did not fire (no UI / web surface, or `ceremonyMode: inline`) — the axis is structurally skipped; emit zero findings; note "qa-evidence: skipped (no qa gate)" in the iteration block. The skill is not pinned to the dispatch envelope.
-- The qa gate fired but the user picked `[skip-qa]` at the blocked picker — the axis fires a single `fyi` finding citing the user override and stops; do not synthesize per-criterion findings on top of the user's deliberate skip.
+- The qa gate fired but the user chose to proceed without qa-evidence (the skip-qa recovery on the blocked stop-and-report) — the axis fires a single `fyi` finding citing the user override and stops; do not synthesize per-criterion findings on top of the user's deliberate skip.
 - The qa gate fired and the qa-runner returned `iterate` (currently iterating with builder fix-only) — the axis is **deferred** to the next reviewer iteration after qa-runner re-runs; emit zero findings this iteration, note "qa-evidence: deferred (qa iterate in flight)".
 - A slug whose triage flagged design-only surfaces (`{design, frontend, ux}`) without `ui` / `web` — the `design-quality` axis covers the visual / interaction pass; do not double-charge findings under qa-evidence.
 

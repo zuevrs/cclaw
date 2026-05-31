@@ -851,8 +851,8 @@ Confidence rationale: <one line; required when Confidence != high>
 **Verdict rules:**
 
 - **\`pass\`** — no \`block-ship\`-severity findings; minor \`iterate\` or \`fyi\` rows are OK. Plan is buildable; orchestrator advances to builder.
-- **\`revise\`** — at least one \`iterate\`-severity finding (AND zero \`block-ship\` rows). Bounce to architect for ONE revision cycle (max). Iteration 0 → 1; if a second plan-critic dispatch ALSO returns \`revise\`, the orchestrator surfaces a user picker.
-- **\`cancel\`** — at least one \`block-ship\`-severity finding (or a §3 cycle, or a §1 goal-coverage gap that requires re-architect). Surface a user picker immediately: \`[cancel-slug]\` / \`[re-architect]\`.
+- **\`revise\`** — at least one \`iterate\`-severity finding (AND zero \`block-ship\` rows). Bounce to architect for ONE revision cycle (max). Iteration 0 → 1; if a second plan-critic dispatch ALSO returns \`revise\`, the orchestrator stops and reports (always-auto).
+- **\`cancel\`** — at least one \`block-ship\`-severity finding (or a §3 cycle, or a §1 goal-coverage gap that requires re-architect). Stop and report immediately; recovery via \`/cc\` (re-architect by editing plan.md) or \`/cc-cancel\`.
 
 ## §8. Hand-off
 
@@ -999,14 +999,14 @@ Confidence rationale: <one line; required when Confidence != high>
 **Verdict rules:**
 
 - **\`pass\`** — every UI AC has \`Status: pass\`; no \`required\` findings. Orchestrator advances to review. The reviewer's \`qa-evidence\` axis re-reads this artifact.
-- **\`iterate\`** — at least one UI AC has \`Status: fail\` AND the §5 \`Recommended fix\` column articulates what would make it pass. Orchestrator bounces to builder with §7 Hand-off as additional context. Hard-capped at one iterate (\`qaIteration: 0 → 1\`); a second iterate surfaces the user picker.
-- **\`blocked\`** — browser tools unavailable AND at least one UI AC requires manual user action; OR every UI AC has \`Status: pending-user\` with \`evidence_tier: manual\`. Orchestrator surfaces the user picker (\`proceed-without-qa-evidence\` / \`pause-for-manual-qa\` / \`skip-qa\`).
+- **\`iterate\`** — at least one UI AC has \`Status: fail\` AND the §5 \`Recommended fix\` column articulates what would make it pass. Orchestrator bounces to builder with §7 Hand-off as additional context. Hard-capped at one iterate (\`qaIteration: 0 → 1\`); a second iterate stops and reports (always-auto).
+- **\`blocked\`** — browser tools unavailable AND at least one UI AC requires manual user action; OR every UI AC has \`Status: pending-user\` with \`evidence_tier: manual\`. Orchestrator stops and reports (always-auto); recovery via \`/cc\` (run the manual qa steps, or edit qa.md to proceed without qa-evidence) or \`/cc-cancel\`.
 
 ## §7. Hand-off
 
 _(For \`iterate\`: cite each \`required\` finding by F-N + AC + recommended fix. builder reads this verbatim when re-dispatched in fix-only mode.)_
 
-_(For \`blocked\`: cite the picker arm the user should pick and what manual step they must run; OR what blocker must be lifted before qa can re-run.)_
+_(For \`blocked\`: cite the recovery path the user should take and what manual step they must run; OR what blocker must be lifted before qa can re-run.)_
 
 _(For \`pass\`: write \`No hand-off required; proceed to review.\`)_
 
@@ -1014,9 +1014,9 @@ _(For \`pass\`: write \`No hand-off required; proceed to review.\`)_
 
 - _F-1 (AC-3) → wire up the \`useToast()\` hook in \`src/components/InviteForm.tsx:42\`; rerun build, then re-dispatch qa-runner (iteration 1)._
 
-### For blocked verdict — user picker context
+### For blocked verdict — recovery context
 
-- _No browser tools available; manual steps for AC-3 require a logged-in user session. Recommend the user pick \`[pause-for-manual-qa]\` and follow the §4 manual steps; once confirmed, the orchestrator stamps \`Status: pass\` on AC-3 and flips verdict to \`pass\`._
+- _No browser tools available; manual steps for AC-3 require a logged-in user session. Recommend the user run the §4 manual steps, then \`/cc\`; once confirmed, the orchestrator stamps \`Status: pass\` on AC-3 and flips verdict to \`pass\`._
 
 ## Summary — qa-runner
 
@@ -1884,8 +1884,8 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   { id: "build-soft", fileName: "build-soft.md", description: "Soft-mode build log (single-cycle summary, plain git commit).", body: BUILD_TEMPLATE_SOFT },
   { id: "review", fileName: "review.md", description: "Review template with iteration table, findings table, and Five Failure Modes pass.", body: REVIEW_TEMPLATE },
   { id: "critic", fileName: "critic.md", description: "critic template — critic step falsificationist pass. Frontmatter (slug, stage=critic, posture_inherited, ceremony_mode, mode, predictions_made, gaps_found, escalation_level, verdict). Body: pre-commitment predictions, gap analysis, adversarial findings (gap mode skips), Criterion check, goal-backward verification, realist check, verdict, summary. Single-shot — re-dispatch overwrites.", body: CRITIC_TEMPLATE },
-  { id: "plan-critic", fileName: "plan-critic.md", description: "plan-critic template — pre-implementation adversarial pass between architect and builder. Frontmatter (slug, stage=plan-critic, posture_inherited, ceremony_mode, ac_count, dispatched_at, iteration, predictions_made, findings, verdict). Body: goal coverage, granularity, dependency accuracy, parallelism feasibility, risk catalog, pre-commitment predictions, verdict (pass | revise | cancel), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed revise loop. Verdict: pass (advance to builder), revise (bounce to architect once), cancel (user picker).", body: PLAN_CRITIC_TEMPLATE },
-  { id: "qa", fileName: "qa.md", description: "qa-runner template — behavioural-QA pass for UI surfaces between build and review. Frontmatter (slug, stage=qa, specialist=qa-runner, dispatched_at, iteration, surfaces, evidence_tier, ui_acs_total/pass/fail/pending, predictions_made, findings, verdict). Body: surfaces under QA, browser tool detection, §3 pre-commitment predictions (3-5), per-criterion evidence (one block per UI-tagged AC with Status pass/fail/pending-user), findings (failures only), verdict (pass | iterate | blocked), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed iterate loop. Verdict: pass (advance to review), iterate (bounce to builder once), blocked (user picker — browser tools unavailable AND manual steps required).", body: QA_TEMPLATE },
+  { id: "plan-critic", fileName: "plan-critic.md", description: "plan-critic template — pre-implementation adversarial pass between architect and builder. Frontmatter (slug, stage=plan-critic, posture_inherited, ceremony_mode, ac_count, dispatched_at, iteration, predictions_made, findings, verdict). Body: goal coverage, granularity, dependency accuracy, parallelism feasibility, risk catalog, pre-commitment predictions, verdict (pass | revise | cancel), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed revise loop. Verdict: pass (advance to builder), revise (bounce to architect once), cancel (stop-and-report).", body: PLAN_CRITIC_TEMPLATE },
+  { id: "qa", fileName: "qa.md", description: "qa-runner template — behavioural-QA pass for UI surfaces between build and review. Frontmatter (slug, stage=qa, specialist=qa-runner, dispatched_at, iteration, surfaces, evidence_tier, ui_acs_total/pass/fail/pending, predictions_made, findings, verdict). Body: surfaces under QA, browser tool detection, §3 pre-commitment predictions (3-5), per-criterion evidence (one block per UI-tagged AC with Status pass/fail/pending-user), findings (failures only), verdict (pass | iterate | blocked), hand-off, summary. Single-shot — re-dispatch overwrites on the 1 allowed iterate loop. Verdict: pass (advance to review), iterate (bounce to builder once), blocked (stop-and-report — browser tools unavailable AND manual steps required).", body: QA_TEMPLATE },
   { id: "ship", fileName: "ship.md", description: "Ship notes template with AC↔commit map, push/PR section, release notes paragraph.", body: SHIP_TEMPLATE },
   { id: "decisions", fileName: "decisions.md", description: "Legacy decision-record template (D-N entries). Current flows inline D-N rows in plan.md > ## Decisions; this template is only installed when legacy-artifacts: true.", body: DECISIONS_TEMPLATE },
   { id: "learnings", fileName: "learnings.md", description: "Compound learning capture template with belief/outcome/follow-up sections.", body: LEARNINGS_TEMPLATE },
