@@ -187,7 +187,7 @@ export function renderWelcome(options: WelcomeOptions): string {
   const heading = colorize("cyan", "Welcome to cclaw", useColor);
   const intro = colorize(
     "dim",
-    "We'll set up `.cclaw/` (state · hooks · flows · lib) and wire your harness's commands · agents · skills · hooks.",
+    "We'll set up `.cclaw/` (state · flows · lib — the shared brain) and wire your harness with the `/cc` command + ambient rules.",
     useColor
   );
   const next = colorize(

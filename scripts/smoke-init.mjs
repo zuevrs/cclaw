@@ -426,6 +426,16 @@ try {
   if (!cursorRulesBody.includes("/cc <task description>")) {
     throw new Error("smoke check failed: v8.55 .cursor/rules/cclaw.mdc must carry the /cc activation pointer");
   }
+  // v8.123 — lean harness footprint. A harness dir carries only commands +
+  // the ambient rules file; the specialist / lens / skill contracts live
+  // ONLY in the shared brain at `.cclaw/lib/`. A fresh init must NOT create
+  // the per-harness `agents/` or `skills/cclaw/` mirror.
+  if (existsSync(join(tempDir, ".cursor", "agents"))) {
+    throw new Error("smoke check failed: v8.123 lean install must NOT create .cursor/agents/ (contracts live in .cclaw/lib/agents/)");
+  }
+  if (existsSync(join(tempDir, ".cursor", "skills", "cclaw"))) {
+    throw new Error("smoke check failed: v8.123 lean install must NOT create .cursor/skills/cclaw/ (skills live in .cclaw/lib/skills/)");
+  }
   if (!existsSync(join(tempDir, ".gitignore"))) {
     throw new Error("smoke check failed: .gitignore not created by init");
   }
@@ -579,6 +589,50 @@ try {
     );
   }
 
+  // v8.123 — harness-mirror migration. Pre-v8.123 installs mirrored every
+  // specialist + research lens into `<harness>/agents/` and every skill
+  // into `<harness>/skills/cclaw/`. The lean install retires the mirror;
+  // an upgrade must sweep the stale copies (one `Removed mirrored agent`
+  // event per agent/lens file, one `Removed mirrored skills` event per
+  // skills dir) and tidy the now-empty dirs, while leaving a user-authored
+  // sibling agent untouched.
+  const mirrorAgentsDir = join(tempDir, ".cursor", "agents");
+  const mirrorSkillsDir = join(tempDir, ".cursor", "skills", "cclaw");
+  mkdirSync(mirrorAgentsDir, { recursive: true });
+  mkdirSync(mirrorSkillsDir, { recursive: true });
+  // a specialist, a research lens, and a skill — the three families the
+  // pre-v8.123 mirror copied into the harness dir.
+  writeFileSync(join(mirrorAgentsDir, "builder.md"), "---\nname: builder\n---\nstale mirror\n", "utf8");
+  writeFileSync(join(mirrorAgentsDir, "research-engineer.md"), "---\nname: research-engineer\n---\nstale mirror\n", "utf8");
+  writeFileSync(join(mirrorSkillsDir, "tdd-and-verification.md"), "stale mirror skill\n", "utf8");
+  // a user-authored sibling agent the sweep must preserve (keeps the
+  // `.cursor/agents/` dir alive on purpose).
+  writeFileSync(join(mirrorAgentsDir, "my-custom-agent.md"), "user owned\n", "utf8");
+  const mirrorOut = String(
+    execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
+  );
+  for (const stale of ["builder.md", "research-engineer.md"]) {
+    if (existsSync(join(mirrorAgentsDir, stale))) {
+      throw new Error(`smoke check failed: v8.123 mirror migration did not remove .cursor/agents/${stale} on install`);
+    }
+  }
+  if (existsSync(mirrorSkillsDir)) {
+    throw new Error("smoke check failed: v8.123 mirror migration did not remove .cursor/skills/cclaw/ on install");
+  }
+  if (!existsSync(join(mirrorAgentsDir, "my-custom-agent.md"))) {
+    throw new Error("smoke check failed: v8.123 mirror migration must preserve a user-authored sibling agent (.cursor/agents/my-custom-agent.md)");
+  }
+  if (!mirrorOut.includes("Removed mirrored agent") || !mirrorOut.includes("builder.md")) {
+    throw new Error(`smoke check failed: v8.123 mirror migration did not print "Removed mirrored agent — .cursor/agents/builder.md" on install; got:\n${mirrorOut}`);
+  }
+  if (!mirrorOut.includes("Removed mirrored skills") || !mirrorOut.includes(".cursor/skills/cclaw")) {
+    throw new Error(`smoke check failed: v8.123 mirror migration did not print "Removed mirrored skills — .cursor/skills/cclaw" on install; got:\n${mirrorOut}`);
+  }
+  // Clean up the user-authored sibling so the later uninstall assertions
+  // (which expect a clean .cursor/) stay valid.
+  rmSync(join(mirrorAgentsDir, "my-custom-agent.md"), { force: true });
+  rmSync(mirrorAgentsDir, { recursive: true, force: true });
+
   // Re-run install to assert idempotency: zero orphan output on a clean install.
   const idempotentOut = String(
     execFileSync("node", [cli, "--non-interactive", "install"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] })
@@ -594,6 +648,9 @@ try {
   }
   if (idempotentOut.includes("Removed retired agent")) {
     throw new Error(`smoke check failed: v8.62 retired-agent cleanup should be idempotent (zero retired-agent events on a clean install); got:\n${idempotentOut}`);
+  }
+  if (idempotentOut.includes("Removed mirrored agent") || idempotentOut.includes("Removed mirrored skills")) {
+    throw new Error(`smoke check failed: v8.123 harness-mirror migration should be idempotent (zero mirror events on a clean install); got:\n${idempotentOut}`);
   }
   // v8.37 — `sync` / `upgrade` non-interactive commands were collapsed
   // into `install`. The retired names now exit 1 with a migration hint;

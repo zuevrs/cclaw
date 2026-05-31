@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { initCclaw, syncCclaw } from "../../src/install.js";
-import { CORE_AGENTS } from "../../src/content/core-agents.js";
+import { HARNESS_LAYOUT_TABLE, initCclaw, syncCclaw } from "../../src/install.js";
 import { HARNESS_IDS, type HarnessId } from "../../src/types.js";
 import { createTempProject, removeProject } from "../helpers/temp-project.js";
 
@@ -85,19 +84,29 @@ async function assertHarnessFootprint(
 ): Promise<void> {
   const selectedSet = new Set(selected);
   for (const harness of HARNESS_IDS) {
+    const agentsDir = HARNESS_TO_AGENTS_DIR[harness];
+    const skillsDir = HARNESS_TO_SKILLS_DIR[harness];
+    const rulesPath = HARNESS_LAYOUT_TABLE[harness].rules.path;
     if (selectedSet.has(harness)) {
       for (const fileName of ["cc.md", "cc-cancel.md"]) {
         const stat = await fs.stat(path.join(project, HARNESS_TO_COMMANDS_DIR[harness], fileName));
         expect(stat.isFile(), `${harness} should have ${fileName}`).toBe(true);
       }
-      for (const agent of CORE_AGENTS) {
-        const stat = await fs.stat(
-          path.join(project, HARNESS_TO_AGENTS_DIR[harness], `${agent.id}.md`)
-        );
-        expect(stat.isFile(), `${harness} should have agents/${agent.id}.md`).toBe(true);
-      }
-      const skillsEntries = await fs.readdir(path.join(project, HARNESS_TO_SKILLS_DIR[harness]));
-      expect(skillsEntries.length, `${harness} skills dir should not be empty`).toBeGreaterThan(0);
+      // v8.123 lean install — the ambient rules file is the ONLY other
+      // cclaw-owned harness asset besides the two slash-commands.
+      const rulesStat = await fs.stat(path.join(project, rulesPath));
+      expect(rulesStat.isFile(), `${harness} should have rules ${rulesPath}`).toBe(true);
+      // The per-harness specialist / lens / skill mirror is RETIRED: the
+      // brain lives only in `.cclaw/lib/`. Neither dir may exist on a
+      // lean install (this is the tripwire the v8.123 slug locks).
+      await expect(
+        fs.access(path.join(project, agentsDir)),
+        `${harness} must NOT have a per-harness agents dir (v8.123 lean install — brain lives in .cclaw/lib)`
+      ).rejects.toBeTruthy();
+      await expect(
+        fs.access(path.join(project, skillsDir)),
+        `${harness} must NOT have skills/cclaw (v8.123 lean install — brain lives in .cclaw/lib)`
+      ).rejects.toBeTruthy();
       // v8.40: hooks config files are NOT written for any harness.
       await expect(
         fs.access(path.join(project, RETIRED_HARNESS_HOOK_FILES[harness])),
@@ -110,14 +119,16 @@ async function assertHarnessFootprint(
           `${harness} must NOT have ${fileName} when not selected`
         ).rejects.toBeTruthy();
       }
-      for (const agent of CORE_AGENTS) {
-        await expect(
-          fs.access(path.join(project, HARNESS_TO_AGENTS_DIR[harness], `${agent.id}.md`)),
-          `${harness} must NOT have agents/${agent.id}.md when not selected`
-        ).rejects.toBeTruthy();
-      }
       await expect(
-        fs.access(path.join(project, HARNESS_TO_SKILLS_DIR[harness])),
+        fs.access(path.join(project, rulesPath)),
+        `${harness} must NOT have rules ${rulesPath} when not selected`
+      ).rejects.toBeTruthy();
+      await expect(
+        fs.access(path.join(project, agentsDir)),
+        `${harness} must NOT have an agents dir when not selected`
+      ).rejects.toBeTruthy();
+      await expect(
+        fs.access(path.join(project, skillsDir)),
         `${harness} skills/cclaw dir must NOT exist when not selected`
       ).rejects.toBeTruthy();
       await expect(
