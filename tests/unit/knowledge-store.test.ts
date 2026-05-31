@@ -74,6 +74,28 @@ describe("knowledge-store — read-side helpers consumed by cli.ts", () => {
     await expect(readKnowledgeLog(project)).rejects.toBeInstanceOf(KnowledgeStoreError);
   });
 
+  it("readKnowledgeLog round-trips the recall usage counter (recall_count + last_recalled_at)", async () => {
+    project = await createTempProject();
+    await ensureRuntimeRoot(project);
+    const entry = baseEntry({ slug: "gamma", recall_count: 3, last_recalled_at: "2026-05-30T12:00:00Z" });
+    await writeLog(project, [entry]);
+    const entries = await readKnowledgeLog(project);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.recall_count).toBe(3);
+    expect(entries[0]!.last_recalled_at).toBe("2026-05-30T12:00:00Z");
+  });
+
+  it("readKnowledgeLog rejects a negative or non-integer recall_count", async () => {
+    project = await createTempProject();
+    await ensureRuntimeRoot(project);
+    const target = knowledgeLogPath(project);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    for (const bad of [-1, 1.5]) {
+      await fs.writeFile(target, `${JSON.stringify(baseEntry({ recall_count: bad }))}\n`, "utf8");
+      await expect(readKnowledgeLog(project)).rejects.toBeInstanceOf(KnowledgeStoreError);
+    }
+  });
+
   it("matchesProblemType surfaces absent / null problemType only under the `knowledge` filter", () => {
     const absent = baseEntry();
     const nulled = baseEntry({ problemType: null });

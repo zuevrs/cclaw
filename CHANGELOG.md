@@ -1,5 +1,41 @@
 # Changelog
 
+## 8.124.0 - 2026-05-31
+
+### Changed (invisible compounding memory — the tool remembers and checks)
+
+- **The four quality gates now recall prior lessons from the live source.** `reviewer`, `critic`, `qa-runner`, and `plan-critic` read prior lessons from `plan.md > ## Prior lessons applied` — the section the architect folds in at plan time via the `learnings-research` helper (which reads `.cclaw/state/knowledge.jsonl`). Previously these four prompts pointed at `flow-state.json > triage.priorLearnings`, a field that is **no longer populated for new flows** — so the recall was silently dead. This repoints them at the one place the lessons actually live. No new dispatch, no extra tokens: the data was already in `plan.md`.
+- **A recalled lesson can raise severity.** The reviewer treats a surfaced prior as a *prior when judging severity* (ignoring a known cautionary lesson can elevate a finding); the critic treats a high density of recalled cautionary lessons as a §2 trigger. Lessons are cited by slug, never copy-pasted verbatim.
+
+### Added (the compounding half of the loop)
+
+- **`KnowledgeEntry` now tracks usage: `recall_count` + `last_recalled_at`** (`src/knowledge-store.ts`). Both optional and back-compat (legacy entries read as `recall_count: 0` / never recalled); validated as a non-negative integer + ISO string.
+- **`Recalled-priors:` slim-summary field** (reviewer / critic only). When a prior lesson is the *load-bearing* reason for a finding, the dispatch appends one optional `Recalled-priors: <slug>[, <slug>]` line. Omitted in the common case (no prior was load-bearing). Documented in `summary-format.md`.
+- **The orchestrator stamps usage at compound time** (ship runbook §7): the same write pass that appends the new `knowledge.jsonl` entry (at `recall_count: 0`) increments `recall_count` + sets `last_recalled_at` on each slug named in the flow's `Recalled-priors` lines. A missing line / missing target is a no-op (a recall never creates an entry).
+- **Compound-refresh gained a recall-aware prune (action 6).** Never-recalled cautionary entries (`recall_count: 0` + cautionary `outcome_signal` + aged past the floor) are marked `pruned-low-signal` (scored `-2`, still findable); rising-`recall_count` non-cautionary entries are protected and preferred in the top-3 (recall breaks ties above raw recency). This is what makes the store *compound* rather than merely accumulate.
+
+### User sees
+
+- **One new cockpit clause** when a gate leans on a remembered lesson: "…reused a prior lesson from `<slug>`". That single clause is the only mid-flow glimpse of the knowledge store — proof the tool remembers across flows and checks new work against past mistakes, without loading the user with a wall of recall text.
+
+### Why this is safe / scoped
+
+- **No runtime behavior is forced** — recall is advisory (a prior can raise severity, never auto-fail), the slim field is optional, and stamping is a no-op when absent.
+- **Token budgets honored** — `start-command` carries only terse pointers (49 758 / 50 000 chars); the full stamping procedure lives in the ship runbook (`stage-playbooks.ts`) and the field contract in `summary-format.md`. The dead-reference scrub of `outcome-detection.ts` / `applyFollowUpBugSignals` in runbook bodies is intentionally **deferred** (pinned verbatim by `v8103-token-diet` canaries; out of scope for this change).
+
+### Affected surfaces
+
+- `src/knowledge-store.ts` (+ `tests/unit/knowledge-store.test.ts`) — schema + validation + round-trip tests for the two new fields.
+- `src/content/specialist-prompts/{reviewer,critic,qa-runner,plan-critic}.ts` — recall repointed to `plan.md > ## Prior lessons applied`; reviewer + critic emit `Recalled-priors:`.
+- `src/content/start-command.ts` — cockpit reuse clause + terse compound-stamp pointer.
+- `src/content/stage-playbooks.ts` — ship runbook §7 carries the full usage-stamp procedure.
+- `src/content/runbooks-on-demand.ts` — compound-refresh action 6 (recall-aware prune).
+- `src/content/skills/summary-format.md` — `Recalled-priors` field contract.
+
+### Verification
+
+- build + 884 tests + smoke green.
+
 ## 8.123.0 - 2026-05-31
 
 ### Changed (lean install — one brain, one command per harness)

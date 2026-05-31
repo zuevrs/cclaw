@@ -240,6 +240,7 @@ The slim summary above is the **machine envelope** — the orchestrator reads it
 - **No ceremony label.** Never name \`inline\` / \`soft\` / \`strict\` to the user — the ceremony dial is internal. The user experiences it as *how much happens*, not as a word to learn.
 - **One next-action, in plain prose.** Translate the routing decision: auto-chaining ("moving on to review…"), a stop ("stopped — <reason>; \`/cc\` to continue, \`/cc-cancel\` to discard"), or the ship-gate ask. Only the command tokens (\`/cc\`, \`/cc-cancel\`, slug, paths) stay English.
 - **Confidence** surfaces only when not \`high\` (append "— low confidence, see below", then the stop-and-report block carries the \`Notes\` verbatim).
+- **Prior-lesson reuse** — when a reviewer / critic slim summary carries a \`Recalled-priors: <slug>\` line, append ONE clause to that cockpit line ("…reused a prior lesson from \`<slug>\`"). Contract: \`summary-format.md\`.
 - **The detail is one file away.** AC-ids, axes, SHAs, posture, and ceremony all live in \`flows/<slug>/<stage>.md\` + \`flow-state.json\`. A user who wants the full picture opens the artifact; the cockpit stays calm by default. This is the engine/cockpit split: the engine keeps every bit of its power, the user reads a flat surface.
 
 ### Stage details
@@ -298,7 +299,7 @@ The flow chains stages automatically until a failure condition fires; on failure
 
 ## Compound (automatic)
 
-After ship, dispatch the learnings sub-agent on any compound signal (non-trivial decision recorded by architect; review needed ≥3 iterations; reviewer \`security\` axis flagged) — writes \`flows/<slug>/learnings.md\` + appends \`.cclaw/knowledge.jsonl\`; otherwise honour the **learnings hard-stop** (ship runbook §7a) via stop-and-report. The 4-condition heuristic is the sole gate. \`runCompoundAndShip\` then runs two outcome-loop capture paths (**revert** scan stamps prior slugs \`outcome_signal: "reverted"\`; **manual-fix** 24h-window fix-commit scan over the current slug's \`touchSurface\` stamps \`outcome_signal: "manual-fix"\`); the third path (**follow-up-bug**) fires at Triage. Every 5th capture MAY trigger the compound-refresh sub-step — full procedure in \`runbooks/compound-refresh.md\`.
+After ship, dispatch the learnings sub-agent on any compound signal (non-trivial decision recorded by architect; review needed ≥3 iterations; reviewer \`security\` axis flagged) — writes \`flows/<slug>/learnings.md\` + appends \`.cclaw/knowledge.jsonl\`; otherwise honour the **learnings hard-stop** (ship runbook §7a) via stop-and-report. The 4-condition heuristic is the sole gate. \`runCompoundAndShip\` then runs two outcome-loop capture paths (**revert** scan stamps prior slugs \`outcome_signal: "reverted"\`; **manual-fix** 24h-window fix-commit scan over the current slug's \`touchSurface\` stamps \`outcome_signal: "manual-fix"\`); the third path (**follow-up-bug**) fires at Triage. The same pass also stamps prior-lesson \`recall_count\` for slugs named in the flow's \`Recalled-priors\` lines (ship runbook §7). Every 5th capture MAY trigger the compound-refresh sub-step — full procedure in \`runbooks/compound-refresh.md\`.
 
 ## Finalize (ship-finalize: move active artifacts to shipped/)
 
