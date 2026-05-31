@@ -610,36 +610,24 @@ async function removeRetiredTemplateFiles(
   }
 }
 
+/**
+ * v8.123 — lean harness footprint. A harness directory carries exactly
+ * three cclaw-owned files: the two slash-commands (`cc.md`,
+ * `cc-cancel.md`) and the ambient rules file (`.cursor/rules/cclaw.mdc`
+ * or `.harness/cclaw-rules.md`). The specialist contracts, research
+ * lenses, and auto-trigger skills live ONLY in the shared brain at
+ * `.cclaw/lib/` — every `/cc` dispatch already reads from there
+ * (`.cclaw/lib/agents/<id>.md`, `lib/research-lenses/`, `lib/skills/`),
+ * so the per-harness mirror was a pure duplicate that only ever fed the
+ * harness's native picker UI (Cursor's `/agents`, Claude's agent
+ * picker). cclaw's one-command flow never routes through those pickers,
+ * so the mirror is retired; {@link removeHarnessMirror} sweeps it from
+ * projects upgrading off a pre-v8.123 install.
+ */
 async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): Promise<void> {
   await ensureDir(path.join(projectRoot, layout.commandsDir));
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc.md"), renderStartCommand());
   await writeFileSafe(path.join(projectRoot, layout.commandsDir, "cc-cancel.md"), renderCancelCommand());
-
-  await ensureDir(path.join(projectRoot, layout.agentsDir));
-  for (const agent of CORE_AGENTS) {
-    await writeFileSafe(
-      path.join(projectRoot, layout.agentsDir, `${agent.id}.md`),
-      renderAgentMarkdown(agent)
-    );
-  }
-
-  // Mirror the research lens contracts into the harness's agents
-  // namespace so harnesses that surface contracts in their UI (Cursor's
-  // /agents picker, Claude's agent picker) can route the lens dispatches
-  // through the same surface as the flow specialists. The lenses keep
-  // their `kind: research-lens` frontmatter discriminator so harness UIs
-  // can group them separately if desired.
-  for (const lens of RESEARCH_LENS_AGENTS) {
-    await writeFileSafe(
-      path.join(projectRoot, layout.agentsDir, `${lens.id}.md`),
-      renderResearchLensMarkdown(lens)
-    );
-  }
-
-  await ensureDir(path.join(projectRoot, layout.skillsDir));
-  for (const skill of AUTO_TRIGGER_SKILLS) {
-    await writeFileSafe(path.join(projectRoot, layout.skillsDir, skill.fileName), skill.body);
-  }
 
   // wrapped in its native format (Cursor MDC vs plain markdown) at its
   // namespaced path. Idempotent: re-running install overwrites the
@@ -649,6 +637,66 @@ async function writeHarnessAssets(projectRoot: string, layout: HarnessLayout): P
     path.join(projectRoot, layout.rules.path),
     rulesBodyFor(layout)
   );
+}
+
+/**
+ * v8.123 — sweep the retired per-harness agent / lens / skill mirror
+ * from a project installed by a pre-v8.123 cclaw. The shared brain
+ * (`.cclaw/lib/`) is the single source of truth for dispatch; the
+ * harness `agents/` + `skills/cclaw/` copies were redundant. This
+ * removes every cclaw-owned file from those dirs and tidies the dirs
+ * when they end up empty, while leaving user-authored siblings (a
+ * hand-written `.cursor/agents/my-agent.md`, a `.cursor/skills/other/`)
+ * untouched.
+ *
+ * Removed per harness:
+ *   - `<agentsDir>/<specialist>.md` for every {@link CORE_AGENTS} id
+ *   - `<agentsDir>/<lens>.md` for every {@link RESEARCH_LENS_AGENTS} id
+ *   - the whole `<skillsDir>` (`.harness/skills/cclaw/`) directory —
+ *     it is a cclaw-namespaced subdir, safe to remove wholesale
+ *
+ * Idempotent and loud: emits one `Removed mirrored agent` event per
+ * agent/lens file and one `Removed mirrored skills` event per skills
+ * dir; on a clean (already-lean) install it emits nothing. Retired
+ * specialist files (`design.md` etc.) are handled separately by
+ * {@link removeRetiredAgentFiles} so the two sweeps don't overlap.
+ */
+async function removeHarnessMirror(
+  projectRoot: string,
+  layout: HarnessLayout,
+  emit: (step: string, detail?: string) => void
+): Promise<void> {
+  const agentsDir = path.join(projectRoot, layout.agentsDir);
+  const mirroredIds = [
+    ...CORE_AGENTS.map((agent) => agent.id),
+    ...RESEARCH_LENS_AGENTS.map((lens) => lens.id)
+  ];
+  for (const id of mirroredIds) {
+    const target = path.join(agentsDir, `${id}.md`);
+    if (await exists(target)) {
+      await fs.rm(target, { force: true });
+      emit("Removed mirrored agent", `${layout.agentsDir}/${id}.md`);
+    }
+  }
+  // Tidy the harness agents dir only when cclaw left it empty; a
+  // user-authored agent sibling keeps the directory alive.
+  if (await exists(agentsDir)) {
+    const remaining = await fs.readdir(agentsDir).catch(() => [] as string[]);
+    if (remaining.length === 0) await fs.rm(agentsDir, { recursive: true, force: true });
+  }
+
+  const skillsDir = path.join(projectRoot, layout.skillsDir);
+  if (await exists(skillsDir)) {
+    await fs.rm(skillsDir, { recursive: true, force: true });
+    emit("Removed mirrored skills", layout.skillsDir);
+    // Tidy the `.harness/skills/` parent when cclaw's `cclaw/` subdir
+    // was its only inhabitant; leave it if the user has other skills.
+    const skillsParent = path.dirname(skillsDir);
+    if (await exists(skillsParent)) {
+      const remaining = await fs.readdir(skillsParent).catch(() => [] as string[]);
+      if (remaining.length === 0) await fs.rm(skillsParent, { recursive: true, force: true });
+    }
+  }
 }
 
 /**
@@ -915,8 +963,9 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
 
   for (const harness of harnesses) {
     await writeHarnessAssets(projectRoot, HARNESS_LAYOUTS[harness]);
+    await removeHarnessMirror(projectRoot, HARNESS_LAYOUTS[harness], emit);
   }
-  emit("Wired harnesses", `${harnesses.join(", ")} → commands · agents · skills · rules`);
+  emit("Wired harnesses", `${harnesses.join(", ")} → commands · rules (brain in .cclaw/lib)`);
 
   if (options.skipOrphanCleanup) {
     emit(

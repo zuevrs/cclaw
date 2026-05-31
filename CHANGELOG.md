@@ -1,5 +1,32 @@
 # Changelog
 
+## 8.123.0 - 2026-05-31
+
+### Changed (lean install — one brain, one command per harness)
+
+- **A harness directory now carries exactly three cclaw-owned files: `commands/cc.md`, `commands/cc-cancel.md`, and the ambient rules file (`.cursor/rules/cclaw.mdc` or `.harness/cclaw-rules.md`).** Previously every install *also* mirrored all 7 specialist contracts + 6 research lenses into `<harness>/agents/*.md` and every auto-trigger skill into `<harness>/skills/cclaw/*.md` — ~33 files per harness, duplicated verbatim from the shared brain. Those copies only ever fed the harness's native picker UI (Cursor's `/agents`, Claude's agent picker), which cclaw's one-command `/cc` flow never routes through: **every dispatch already reads the contract from `.cclaw/lib/agents/<id>.md` / `lib/research-lenses/` / `lib/skills/`** (~140 references across the prompt corpus, zero references to a harness path). The mirror was pure duplication.
+- **The brain is untouched.** `.cclaw/lib/` remains the single source of truth — agents, lenses, skills, templates, runbooks, patterns all still install there exactly as before. Only the redundant per-harness *copy* is retired.
+- **User sees**: a harness footprint of 3 files instead of ~33; a clearer mental model ("one brain in `.cclaw/lib/`, one command per harness"); a faster `install` / re-sync (no per-harness fan-out write); and a smaller diff when cclaw assets are committed to a repo. The welcome card now states the model plainly ("set up `.cclaw/` … wire your harness with the `/cc` command + ambient rules").
+
+### Migration (upgrades clean themselves up)
+
+- **`install` / `sync` sweeps the retired mirror** from any project installed by a pre-8.123 cclaw: it removes every cclaw-owned `<harness>/agents/<specialist|lens>.md` and the whole `<harness>/skills/cclaw/` dir, then tidies those dirs **only when cclaw left them empty** — a user-authored sibling agent (`.cursor/agents/my-agent.md`) or a non-cclaw skills folder is preserved. Loud + idempotent: one `Removed mirrored agent` event per file, one `Removed mirrored skills` event per dir; zero events on an already-lean install.
+
+### Why this is safe
+
+- **Dispatch never read the mirror.** Verified across the whole content corpus: specialist/lens/skill references resolve to `.cclaw/lib/…`; no runbook, start-command, or specialist prompt points at a `<harness>/agents` or `skills/cclaw` path.
+- **Uninstall is unchanged** — it already scrubbed the harness agents/lenses/skills dirs, so pre- and post-8.123 installs both uninstall to a clean tree.
+
+### Affected surfaces
+
+- **`install.ts`** — `writeHarnessAssets` slimmed to commands + rules; new `removeHarnessMirror` migration sweep wired into the per-harness loop; the "Wired harnesses" progress detail now reads `commands · rules (brain in .cclaw/lib)`.
+- **`ui.ts`** — welcome card intro no longer advertises per-harness agents/skills/hooks.
+- **Tests + smoke** — harness-isolation tripwire now asserts the mirror is **absent** (commands + rules present); `install-deep` asserts contracts live in `.cclaw/lib/agents/`; smoke adds a fresh-init negative check + a mirror-migration check (plant → sweep → preserve user sibling) + idempotency guard.
+
+### Verification
+
+- build + 882 tests + smoke green.
+
 ## 8.122.0 - 2026-05-31
 
 ### Added (deeper triage inference — give the router eyes on the repo)

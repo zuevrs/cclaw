@@ -55,6 +55,9 @@ describe("install", () => {
     const retiredAgents = ["design.md", "ac-author.md", "slice-builder.md", "security-reviewer.md"];
     const libAgentsDir = path.join(project, ".cclaw", "lib", "agents");
     const cursorAgentsDir = path.join(project, ".cursor", "agents");
+    // v8.123 — lean install no longer creates `.cursor/agents/`; recreate
+    // it here so we can plant the pre-v8.62 stale files the sweep targets.
+    await fs.mkdir(cursorAgentsDir, { recursive: true });
     for (const fileName of retiredAgents) {
       await fs.writeFile(path.join(libAgentsDir, fileName), `---\nname: ${fileName}\n---\nstale\n`, "utf8");
       await fs.writeFile(path.join(cursorAgentsDir, fileName), `---\nname: ${fileName}\n---\nstale\n`, "utf8");
@@ -105,8 +108,14 @@ describe("install", () => {
     expect(result.installedHarnesses).toEqual(["cursor"]);
     const cc = await fs.readFile(path.join(project, ".cursor", "commands", "cc.md"), "utf8");
     expect(cc).toContain("/cc");
-    const architect = await fs.readFile(path.join(project, ".cursor", "agents", "architect.md"), "utf8");
+    // v8.123 — specialist contracts live ONLY in the shared brain, never
+    // mirrored under the harness dir.
+    const architect = await fs.readFile(
+      path.join(project, ".cclaw", "lib", "agents", "architect.md"),
+      "utf8"
+    );
     expect(architect).toContain("architect");
+    await expect(fs.access(path.join(project, ".cursor", "agents"))).rejects.toBeTruthy();
   });
 
   it("auto-detects multiple harnesses when several markers exist", async () => {
