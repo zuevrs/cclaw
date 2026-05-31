@@ -1,5 +1,29 @@
 # Changelog
 
+## 8.121.0 - 2026-05-31
+
+### Changed (surface cleanup — separate the engine from the cockpit)
+
+- **The orchestrator now renders a one-line "cockpit" digest to the user instead of dumping the raw slim-summary envelope.** The slim summary is unchanged as the **machine envelope** (orchestrator routing + the durable artifact); what the *user* reads is now a faithful plain-language line — stage label (not the specialist), what changed in plain words, and one next-action. The engine keeps every bit of detail (axis counters, `AC-N` / `SL-N` ids, commit SHAs, posture, `ceremonyMode`) in `flows/<slug>/<stage>.md` + `flow-state.json`; the user reads a flat surface and opens the artifact only if they want the full picture. This is the **simple AND powerful** split — power lives in the engine, simplicity lives in the surface, and they stop fighting:
+  - **No specialist names** (`architect` / `plan-critic` / `qa-runner` / `critic` / `reviewer` / `investigator`) leak to the user — each maps to the stage word the user already knows (`plan` / `build` / `checks` / `review` / `ship`).
+  - **No engine tokens** in the cockpit line — the axis counter (`c=N r=N …`), `AC-N` / `SL-N` / `D-N` ids, commit SHAs, posture names, and the raw `Recommended next` enum are translated to plain prose.
+  - **No ceremony label** — `inline` / `soft` / `strict` is never named to the user (the no-git downgrade warning now explains "lighter rigor" without the internal value).
+- **The ship-gate now infers a recommended default from repo signals** instead of cold-asking five options. The orchestrator reads the repo once (git? remote? `gh` + a PR/CI convention?) and surfaces the most likely `finalization_mode` first, labelled "(recommended)" with a one-clause why — the other four stay in the same ask. Full power retained (all five modes), fewer decisions in the common case.
+
+### Why this is safe
+
+- Pure content change. The slim-summary envelope contract, the `finalization_mode` enum, every verdict / cap, and all routing logic are untouched — only the orchestrator's **user-facing rendering** of them changed. Engine behavior is byte-for-byte identical; only what the user reads is simpler. `inline` / `soft` / `strict` still appear in the orchestrator body (the engine's routing vocabulary) — they are just no longer surfaced in the cockpit.
+
+### Affected surfaces
+
+- **`start-command.ts`** — new `### Cockpit render` rule (single source of truth for the digest); the always-ask + Detect-matrix render directives repointed from "show the slim summary" → "render the cockpit line"; ship-stage + always-ask ship-gate prose now describe the inferred default; the no-git warning reinforced (no ceremony label).
+- **`runbooks-on-demand.ts`** — always-auto chain render step, confidence-medium render, detect-matrix resume lines, and the ship-gate user-ask block (added the repo-signal → default inference table + "(recommended)" labelling).
+- **`summary-format.md`** — concerns-render wording aligned to "cockpit line".
+
+### Verification
+
+- build + 882 tests + smoke green.
+
 ## 8.120.0 - 2026-05-31
 
 ### Changed (always-auto consistency scrub — docs/prose ↔ behavior)
