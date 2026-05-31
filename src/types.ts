@@ -526,8 +526,10 @@ export interface ResearchApproach {
  * - `strict` — large/risky/security; AC IDs with posture-driven commit prefixes
  *   the reviewer verifies ex-post via `git log --grep="(AC-N):"`.
  *
- * Selected at triage (user can override). Legacy `triage.acMode` is hoisted to
- * `ceremonyMode` on read by {@link rewriteLegacyAcMode}.
+ * Selected at triage; immutable for the flow (the triage heuristic is the
+ * source of truth — per-flow ceremony override flags were retired in v8.112).
+ * Legacy `triage.acMode` is hoisted to `ceremonyMode` on read by
+ * {@link rewriteLegacyAcMode}.
  */
 export const CEREMONY_MODES = ["inline", "soft", "strict"] as const;
 export type CeremonyMode = (typeof CEREMONY_MODES)[number];
