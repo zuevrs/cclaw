@@ -222,7 +222,7 @@ describe("v8.58 — lightweight router + research mode behavior (research templa
     ).toBeUndefined();
     const triagePromptBody = TRIAGE_PROMPT;
     expect(triagePromptBody).toMatch(/routing|router|five-field decision/iu);
-    expect(triagePromptBody).toMatch(/complexity[\s\S]+ceremonyMode[\s\S]+path[\s\S]+runMode[\s\S]+mode/u);
+    expect(triagePromptBody).toMatch(/complexity[\s\S]+ceremonyMode[\s\S]+path[\s\S]+mode/u);
     expect(triagePromptBody).toMatch(/heuristic is the sole source of truth|heuristic-driven/iu);
     expect(triagePromptBody).toMatch(/research-mode/iu);
     expect(triagePromptBody).toMatch(/zero[- ]question/iu);
@@ -253,7 +253,7 @@ describe("v8.58 — lightweight router + research mode behavior (research templa
 });
 
 describe("v8.58 — lightweight router + research mode section contract (start-command + triage + architect prompts)", () => {
-  it("SECTION CONTRACT — start-command body declares triage as 'lightweight router' with EXACTLY five fields (complexity / ceremonyMode / path / runMode / mode), documents the `/cc research` entry-point fork + sentinel triage block + priorResearch handoff prompt + qa-stage surface gating, and rejects the legacy v8.14-v8.57 combined-form ask; triage prompt owns the moved-out classification surface (assumptions / surfaces / priorLearnings / interpretationForks) + override flags + zero-question rule; architect prompt absorbs Bootstrap-phase assumption capture + Frame-phase interpretation forks / surface detection / qa-stage path rewrite + learnings-research dispatch + flowState.priorResearch consumption + drops v8.58 two-mode `## Activation modes` (research is now the orchestrator's multi-lens fork). v8.103 — lightweight-router prose and the research-mode 4-phase detail moved to runbooks/triage-gate.md and runbooks/research-mode.md; start-command keeps the one-paragraph pointers and the sentinel triage block.", async () => {
+  it("SECTION CONTRACT — start-command body declares triage as 'lightweight router' with EXACTLY four fields (complexity / ceremonyMode / path / mode), documents the `/cc research` entry-point fork + sentinel triage block + priorResearch handoff prompt + qa-stage surface gating, and rejects the legacy v8.14-v8.57 combined-form ask; triage prompt owns the moved-out classification surface (assumptions / surfaces / priorLearnings / interpretationForks) + override flags + zero-question rule; architect prompt absorbs Bootstrap-phase assumption capture + Frame-phase interpretation forks / surface detection / qa-stage path rewrite + learnings-research dispatch + flowState.priorResearch consumption + drops v8.58 two-mode `## Activation modes` (research is now the orchestrator's multi-lens fork). v8.103 — lightweight-router prose and the research-mode 4-phase detail moved to runbooks/triage-gate.md and runbooks/research-mode.md; start-command keeps the one-paragraph pointers and the sentinel triage block.", async () => {
     const body = renderStartCommand();
     const { ON_DEMAND_RUNBOOKS } = await import("../../src/content/runbooks-on-demand.js");
     const triageRunbook = ON_DEMAND_RUNBOOKS.find((r) => r.id === "triage-gate");
@@ -265,7 +265,7 @@ describe("v8.58 — lightweight router + research mode section contract (start-c
 
     // v8.103 — start-command keeps high-level pointers; per-field detail moved to the triage-gate runbook.
     expect(triageBody).toMatch(/lightweight router|router/iu);
-    for (const field of ["complexity", "ceremonyMode", "path", "runMode", "mode"]) {
+    for (const field of ["complexity", "ceremonyMode", "path", "mode"]) {
       expect(triageBody).toContain(field);
     }
     expect(body).toMatch(/research-mode (entry point|fork)/iu);
@@ -284,7 +284,7 @@ describe("v8.58 — lightweight router + research mode section contract (start-c
     expect(body).not.toContain("askUserQuestion(\n  questions:");
 
     // triage prompt
-    expect(TRIAGE_PROMPT).toMatch(/specialist that consumes them|moved out|moved into the specialists/iu);
+    expect(TRIAGE_PROMPT).toMatch(/specialists? that consumes? each field|live in the specialists/iu);
     for (const moved of ["assumptions", "surfaces", "priorLearnings", "interpretationForks"]) {
       expect(TRIAGE_PROMPT).toContain(moved);
     }
@@ -308,10 +308,10 @@ describe("v8.58 — lightweight router + research mode section contract (start-c
     expect(ARCHITECT_PROMPT).toMatch(/insert\s+`"qa"`\s+between\s+`"build"`\s+and\s+`"review"`/u);
     expect(ARCHITECT_PROMPT).toContain("flowState.priorResearch");
     expect(ARCHITECT_PROMPT).toMatch(/priorResearch\.path/u);
-    expect(ARCHITECT_PROMPT).toMatch(/intra-flow `mode: "task"` is the only mode you handle post-v8\.65/u);
+    expect(ARCHITECT_PROMPT).toMatch(/intra-flow `mode: "task"` is the only mode you handle/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/Standalone research \(`triage\.mode == "research"`/u);
     expect(ARCHITECT_PROMPT).toContain("research.md");
-    expect(ARCHITECT_PROMPT).toMatch(/architect no longer handles research-mode dispatch/u);
+    expect(ARCHITECT_PROMPT).toMatch(/architect (?:no longer handles|does not handle) research-mode dispatch/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/Phase 7-research/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/finalises the research flow immediately/u);
     expect(ARCHITECT_PROMPT).toContain("priorResearch");

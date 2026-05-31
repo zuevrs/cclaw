@@ -4,6 +4,7 @@ import { activeArtifactPath } from "./artifact-paths.js";
 import { exists, writeFileSafe } from "./fs-utils.js";
 import {
   POSTURES,
+  RETIRED_POSTURES,
   type AcceptanceCriterionState,
   type ArtifactStatus,
   type DiscoverySpecialistId,
@@ -83,7 +84,11 @@ export function parseArtifact(raw: string, sourcePath?: string): ParsedArtifact 
       if (!entry || typeof entry !== "object") continue;
       if (!("posture" in entry)) continue;
       const posture = entry.posture;
-      if (typeof posture !== "string" || !(POSTURES as readonly string[]).includes(posture)) {
+      const known =
+        typeof posture === "string" &&
+        ((POSTURES as readonly string[]).includes(posture) ||
+          (RETIRED_POSTURES as readonly string[]).includes(posture));
+      if (!known) {
         const rawId = entry.id;
         const id = typeof rawId === "string" ? rawId : "<AC>";
         throw new FrontmatterError(

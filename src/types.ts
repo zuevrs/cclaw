@@ -1,28 +1,8 @@
 /**
- * `critic` stage inserted between `review` and `ship`. The critic
- * runs at Hop 4.5 (after the reviewer returns `clear`/`warn`, before the
- * ship gate begins) and writes `critic.md`. The stage value is gated by
- * `ceremonyMode`: `inline` skips critic entirely; `soft` runs critic in
- * `gap` mode; `strict` runs the full critic protocol with adversarial
- * escalation per the trigger set in `.cclaw/lib/agents/critic.md`.
- *
- * Legacy migration: pre-v8.42 state files where `currentStage == "review"`
- * AND `lastSpecialist == "reviewer"` AND no `criticVerdict` field is set
- * are auto-treated as legacy-pre-critic on the next `/cc` — the
- * orchestrator dispatches critic before advancing to ship. See
- * `src/flow-state.ts` for the migration shape.
- */
-/**
- * Canonical ordered set of stage tokens the orchestrator may emit in
- * `triage.path` and {@link FlowState.currentStage}. The order also defines
- * the canonical run sequence (each stage's `currentStage` mark is
- * legal only after every prior stage's preconditions are met).
- *
- * adds `"qa"` between `build` and `review`. It is the only stage
- * the orchestrator dispatches conditionally: only when
- * `triage.surfaces` includes `"ui"` or `"web"` AND `ceremonyMode != "inline"`.
- * Non-UI slugs skip directly from `build` to `review`, preserving the
- * pre-v8.52 path verbatim.
+ * Canonical ordered stage set the orchestrator emits in `triage.path` and
+ * {@link FlowState.currentStage}; the order is also the canonical run sequence.
+ * `qa` is conditional (`triage.surfaces` includes `"ui"`/`"web"` AND
+ * `ceremonyMode != "inline"`); `critic` runs at Hop 4.5 between review and ship.
  */
 export const FLOW_STAGES = ["plan", "build", "qa", "review", "critic", "ship"] as const;
 export type FlowStage = (typeof FLOW_STAGES)[number];
@@ -31,78 +11,19 @@ export const HARNESS_IDS = ["claude", "cursor", "opencode", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 /**
- * v8.62: `design` (the v8.14 multi-turn brainstormer) and `ac-author`
- * (the v8.28 plan author) collapsed into a single `architect` specialist
- * that runs as an **on-demand** sub-agent (no mid-plan user dialogue —
- * v8.61 always-auto removed every picker). The `plan` stage's
- * discovery surface is now just `architect`; there is no `design then
- * ac-author` chain. The reason for collapsing: v8.61 already deleted
- * `design`'s sign-off picker (Phase 7) and clarify dialogue (Phase 1);
- * a "main-context coordinator" specialist that never asks the user
- * questions is structurally the same as an "on-demand sub-agent" — the
- * split was carrying no weight. The `mode: "research"` envelope flag
- * still routes a standalone non-AC dispatch through the same architect
- * (writes `research.md` instead of `plan.md`).
- *
- * Pre-v8.62 state files with `lastSpecialist == "design"` or
- * `lastSpecialist == "ac-author"` are handled permissively by
- * `flow-state.ts` validators (string field, no hard migration) — the
- * orchestrator simply re-dispatches architect on the next `/cc`.
+ * Plan-stage discovery roster — a single on-demand `architect` sub-agent (no
+ * mid-plan user dialogue). A `mode: "research"` envelope routes a standalone
+ * non-AC dispatch through the same architect (writes `research.md`).
  */
 export const DISCOVERY_SPECIALISTS = ["architect"] as const;
 export type DiscoverySpecialistId = (typeof DISCOVERY_SPECIALISTS)[number];
 
 /**
- * v8.62: specialist count drops 9 → 7. Removed: `design` (absorbed into
- * `architect`) and `security-reviewer` (absorbed into `reviewer`'s
- * `security` axis). Renamed: `ac-author` → `architect`; `slice-builder`
- * → `builder`. The order in this array traces the canonical pipeline
- * (triage → plan → build → qa → review → critic → ship).
- *
- * v8.75: specialist count grows 7 → 8 with the addition of `plan-design`,
- * a pre-implementation design-coherence pass.
- *
- * v8.77: specialist count grows 8 → 9 with the addition of `investigator`,
- * a read-only diagnostic specialist that runs on bug-shaped tasks
- * (triage.taskShape == "debug") BEFORE the architect.
- *
- * v8.82: specialist count grows 9 → 10 with the addition of `plan-devex`,
- * a pre-implementation developer-experience pass.
- *
- * **v8.104: specialist count drops 10 → 8.** The three pre-build specialists
- * (`plan-critic`, `plan-design`, `plan-devex`) shared the same scaffold
- * (§1 pre-commit / §2 N-dim rubric / §3 AI-slop / §4 findings ledger /
- * §5 verdict) and collapse into a single **`plan-critic` specialist with
- * a `rubricMode` envelope** that fans out across three modes:
- *
- * - `rubricMode: "generic"` (default) — current plan-critic behaviour
- *   (adversarial structural pass: goal coverage / granularity / dependency
- *   accuracy / parallelism feasibility / risk catalog + decision integrity
- *   + bets and exclusions audits). Writes `flows/<slug>/plan-critic.md`.
- * - `rubricMode: "design"` — walks the same seven design dimensions the
- *   reviewer's `design-quality` axis applies post-build (rubric lives in
- *   `src/content/design-quality-rubric.ts` — single source of truth).
- *   Appends `PD-N` findings to plan.md's `## Plan-design findings`
- *   section.
- * - `rubricMode: "devex"` — walks the same six DevEx dimensions
- *   (`src/content/devex-quality-rubric.ts` — single source of truth).
- *   Appends `DX-N` findings to plan.md's `## Plan-devex findings` section.
- *
- * Surviving roster (8): `triage`, `investigator`, `architect`, `builder`,
- * `plan-critic`, `qa-runner`, `reviewer`, `critic`. The orchestrator may
- * dispatch `plan-critic` up to **three times per slug** (once per mode
- * whose gate fires), sequential never parallel. The rubrics still live
- * in shared TS consts; the merge consolidates dispatch surface, not the
- * rubric content. `PD-N` and `DX-N` finding-id shapes are preserved
- * verbatim so flow-state and reviewer cross-references continue to work.
- *
- * Background on the joiners that remain:
- * - `critic` (v8.42) — on-demand post-impl sub-agent at the critic stage
- *   between `review` and `ship`. Gap analysis + adversarial lenses.
- * - `plan-critic` (separate from `critic`; v8.104 merged surface) — the
- *   pre-implementation pass. One specialist, three rubric modes.
- * - `investigator` (v8.77) — read-only diagnostic before architect on
- *   bug-shaped flows.
+ * Canonical specialist roster, ordered along the pipeline. `plan-critic` is one
+ * specialist exposing three rubric scaffolds (`generic`/`design`/`devex`),
+ * dispatched once per slug with the active `rubrics` set for one merged verdict
+ * (`PD-N`/`DX-N` finding ids preserved). `investigator` runs read-only on debug
+ * flows before the architect; `critic` is the post-impl pass before ship.
  */
 export const SPECIALISTS = [
   "triage",
@@ -117,19 +38,11 @@ export const SPECIALISTS = [
 export type SpecialistId = (typeof SPECIALISTS)[number];
 
 /**
- * v8.104: `rubricMode` envelope field on every plan-critic dispatch.
- * Selects which of the three rubric scaffolds the plan-critic walks on
- * this dispatch — `generic` for the structural plan-shape audit
- * (default; pre-v8.104 plan-critic behaviour), `design` for the
- * seven-dimension design-quality rubric (former v8.75 plan-design
- * specialist body, now a plan-critic mode), or `devex` for the
- * six-dimension DevEx rubric (former v8.82 plan-devex specialist body,
- * now a plan-critic mode).
- *
- * The orchestrator stamps exactly one value per dispatch; multiple
- * modes for the same slug are handled by sequential re-dispatches
- * (NEVER parallel — the rubric mode is per-envelope, not per-prompt).
- * Absent / pre-v8.104 envelopes default to `"generic"`.
+ * The three plan-critic rubric scaffolds: `generic` (structural plan audit,
+ * default), `design` (seven-dimension design-quality), `devex` (six-dimension
+ * DevEx). The orchestrator dispatches plan-critic once with the active subset;
+ * it walks them in one pass and returns one worst-of merged verdict. Absent or
+ * empty defaults to `["generic"]`.
  */
 export const PLAN_CRITIC_RUBRIC_MODES = ["generic", "design", "devex"] as const;
 export type PlanCriticRubricMode = (typeof PLAN_CRITIC_RUBRIC_MODES)[number];
@@ -137,43 +50,14 @@ export type PlanCriticRubricMode = (typeof PLAN_CRITIC_RUBRIC_MODES)[number];
 export const DEFAULT_PLAN_CRITIC_RUBRIC_MODE: PlanCriticRubricMode = "generic";
 
 /**
- * v8.77: task shape dimension on `TriageDecision`. Distinguishes the
- * three canonical task shapes the triage sub-agent classifies into:
+ * Task shape the triage sub-agent classifies into:
+ * - `build` (default) — add/change/refactor production code; normal pipeline.
+ * - `debug` — investigate a regression on existing code; routes through the
+ *   investigator BEFORE the architect, whose recommendation then drives routing.
+ * - `research` — reserved sentinel for `/cc research` (triage never emits it).
  *
- * - `build` (default; pre-v8.77 behaviour) — the user wants to add /
- *   change / refactor / extend production code. Triage routes through
- *   the existing pipeline (plan → build → qa? → review → critic →
- *   ship). All existing specialists fire under their existing gates.
- * - `debug` (v8.77) — the user is investigating a regression, error,
- *   crash, broken behaviour, or unexpected symptom on EXISTING shipped
- *   code. Triage routes through the new investigator specialist BEFORE
- *   architect; the investigator's `next-step recommendation` then drives
- *   routing (direct-fix → builder; needs-plan → architect; more-
- *   investigation → re-investigator; not-a-bug → user reframe).
- *   Detection: bug-shape keywords (`regression` / `error` / `broken` /
- *   `failing` / `wrong` / `incorrect` / `slow` / `crash` / `bug` /
- *   `fix`) + repo-anchored evidence (file:line ref, commit SHA, log
- *   excerpt, stack trace) BOTH present — single keyword alone without
- *   repo-anchored evidence stays `build`.
- * - `research` (v8.77; record-keeping only) — the user is exploring
- *   BEFORE committing to a build. The `/cc research <topic>` entry
- *   point bypasses triage (the orchestrator's Detect-hop research-mode
- *   fork stamps the sentinel triage block), so triage itself never
- *   emits `research` on a standard `/cc <task>` dispatch. The value is
- *   reserved on the TaskShape enum so downstream readers can branch on
- *   the shape verbatim from the sentinel block.
- *
- * `taskShape` is **orthogonal** to {@link RoutingClass} (`trivial` /
- * `small-medium` / `large-risky`) — a `debug` task can be any
- * complexity tier; a `build` task can be any complexity tier. The two
- * fields combine on dispatch: triage's complexity field still drives
- * `ceremonyMode` + `path` selection; `taskShape == "debug"` only
- * inserts the investigator hop BEFORE the existing plan stage.
- *
- * Pre-v8.77 state files lack this field; readers MUST default to
- * `"build"` on absent (the historical single-shape behaviour). Immutable
- * for the flow's lifetime — to change shape, the user invokes
- * `/cc-cancel` and starts a fresh `/cc`.
+ * Orthogonal to {@link RoutingClass} (only inserts the investigator hop).
+ * Readers default to `"build"` on absent; immutable for the flow's lifetime.
  */
 export const TASK_SHAPES = ["build", "debug", "research"] as const;
 export type TaskShape = (typeof TASK_SHAPES)[number];
@@ -181,35 +65,13 @@ export type TaskShape = (typeof TASK_SHAPES)[number];
 export const DEFAULT_TASK_SHAPE: TaskShape = "build";
 
 /**
- * v8.77: next-step recommendation the investigator emits in its slim
- * summary. Drives the orchestrator's post-investigator routing:
- *
- * - `direct-fix` — the root cause is trivial (typo / null-guard /
- *   off-by-one / obvious fix on a named file:line). Skip architect and
- *   dispatch builder directly with `priorInvestigation` on the envelope
- *   so the builder reads `investigation.md` as a plan substitute,
- *   writes a `## Fix scope` block, and commits with a
- *   `fix(<scope>): ...` prefix.
- * - `needs-plan` — the root cause is non-trivial (architectural
- *   smell, cross-cutting concern, design decision implied by the fix,
- *   multiple affected files / surfaces). Dispatch architect with
- *   `priorInvestigation` on the envelope so the architect's Frame
- *   becomes "given root cause X from investigation, frame the fix at
- *   design level" and the rest of the strict plan workflow continues
- *   normally.
- * - `more-investigation` — the three hypothesis lanes converged on
- *   "insufficient evidence" / all returned `Confidence: low`. Re-
- *   dispatch the investigator with the cited probe (the synthesis's
- *   `Next step recommendation` carries the probe verbatim). Cap: 2
- *   investigator dispatches per slug; the second dispatch with
- *   `more-investigation` again triggers stop-and-report.
- * - `not-a-bug` — the investigation concluded the reported symptom is
- *   expected behaviour (working-as-designed, user misread the docs,
- *   environment / config issue not in the project's scope, third-party
- *   library quirk). Orchestrator surfaces the reframe to the user
- *   (verbatim from `investigation.md > ## Next step recommendation`)
- *   and ends the turn; user re-invokes `/cc` with a clarified task if
- *   they disagree with the reframe.
+ * Next-step recommendation the investigator emits; drives post-investigator
+ * routing:
+ * - `direct-fix` — trivial root cause; skip architect, dispatch builder.
+ * - `needs-plan` — non-trivial; dispatch architect with `priorInvestigation`.
+ * - `more-investigation` — insufficient evidence; re-dispatch with the cited
+ *   probe (cap: 2 dispatches per slug).
+ * - `not-a-bug` — symptom is expected; surface the reframe and end the turn.
  */
 export const INVESTIGATOR_NEXT_STEPS = [
   "direct-fix",
@@ -220,31 +82,11 @@ export const INVESTIGATOR_NEXT_STEPS = [
 export type InvestigatorNextStep = (typeof INVESTIGATOR_NEXT_STEPS)[number];
 
 /**
- * v8.77: identifiers for the three parallel hypothesis lanes the
- * investigator dispatches on every bug-shaped slug. Each lane runs
- * independently (read-only on the repo + the project's verification
- * commands) and returns a structured findings block (hypothesis
- * statement, evidence collected, confidence 0-10, recommended next
- * probe). The orchestrator collects all three before composing the
- * synthesis pass.
- *
- * - `cause-code` — code-path / regression-bisect / dependency-analysis
- *   lane. Walks the touched files, runs `git log` / `git bisect` when
- *   the symptom is "it worked before", inspects dependencies. Most-
- *   common-cause lane on regression-style bugs.
- * - `cause-config` — config / env / feature-flag / version-mismatch
- *   lane. Walks `.env` / config files / feature-flag manifests / lock
- *   files / runtime version markers. Most-common-cause lane on
- *   "works locally but not in prod" / "works on my machine" bugs.
- * - `cause-measurement` — observation-bias / instrumentation-gap /
- *   test-flakiness lane. Walks the test runner output, instrumentation
- *   coverage, error reporting wiring. Most-common-cause lane on
- *   "intermittent failure" / "test passes locally, fails in CI" bugs.
- *
- * The three lanes are NOT in {@link SPECIALISTS} because they are
- * structurally sub-dispatches of the investigator specialist — the
- * investigator owns the lane fan-out + synthesis. Downstream code
- * branches on `investigator` slim-summary fields, not on lane ids.
+ * The three parallel hypothesis lanes the investigator runs on every bug-shaped
+ * slug (each read-only, returning a findings block the orchestrator synthesises):
+ * `cause-code` (code-path/regression/dependency), `cause-config`
+ * (config/env/flag/version), `cause-measurement` (instrumentation/flakiness).
+ * Not in {@link SPECIALISTS} — they are sub-dispatches of the investigator.
  */
 export const INVESTIGATOR_LANES = [
   "cause-code",
@@ -254,51 +96,22 @@ export const INVESTIGATOR_LANES = [
 export type InvestigatorLaneId = (typeof INVESTIGATOR_LANES)[number];
 
 /**
- * v8.81: builder dispatch envelope — orchestrator-side persistence of
- * fields the orchestrator stamps onto the builder envelope and mirrors
- * to `flow-state.json > builderEnvelope` for cross-dispatch readers
- * (resume on `/cc`, reviewer audit, compound-learning extraction).
- *
- * Currently scoped to the v8.81 defense-in-depth flag — the only
- * envelope field that travels from investigator (read-only) to builder
- * (write) and back into state-as-history. The interface is left open
- * for future fields with the same shape; new fields MUST be optional
- * (pre-v8.81 state files lack the whole object).
- *
- * `defenseInDepth` mirrors the investigator's slim-summary `Defense-in-
- * depth: <yes|no>` line (set ONLY when Phase 4's gate fired — see
- * `investigator.ts`). When `"yes"`, the builder reads
- * `investigation.md > ## Defense-in-depth (4 layers)` and implements
- * every named (non-n/a) layer as part of the root-cause fix commit
- * (NOT as a follow-up commit). When `"no"` (or absent — back-compat
- * with pre-v8.81 state files), the builder ships the root-cause fix
- * alone.
+ * Builder dispatch envelope, mirrored to `flow-state.json > builderEnvelope`
+ * for cross-dispatch readers. New fields MUST be optional (older state files
+ * lack the whole object). `defenseInDepth` mirrors the investigator's
+ * slim-summary line; `"yes"` makes the builder implement every named layer as
+ * part of the root-cause fix, `"no"`/absent ships the fix alone.
  */
 export interface BuilderEnvelope {
   defenseInDepth?: "yes" | "no";
 }
 
 /**
- * Specialist ids that no longer exist as standalone roster entries. Kept
- * as a type-level reminder for permissive validators that accept old
- * `lastSpecialist` strings on read without migrating. Do not add new
- * entries.
- *
- * - `design` / `ac-author`: absorbed into {@link DISCOVERY_SPECIALISTS}'s
- *   `architect` (v8.62).
- * - `slice-builder`: renamed to `builder` (v8.62; AC-as-unit-of-work
- *   semantics unchanged).
- * - `security-reviewer`: absorbed into `reviewer`'s `security` axis
- *   (v8.62; full threat-model + sensitive-change protocol moved to
- *   the reviewer prompt).
- * - `brainstormer`: removed v8.14, kept here for the same back-compat
- *   reason.
- * - `plan-design` / `plan-devex` (v8.104): absorbed into `plan-critic`
- *   as `rubricMode: "design"` and `rubricMode: "devex"`. Pre-v8.104
- *   state files where `lastSpecialist == "plan-design"` or
- *   `lastSpecialist == "plan-devex"` validate on read; the orchestrator
- *   re-dispatches `plan-critic` with the matching rubricMode on the
- *   next `/cc`.
+ * Specialist ids no longer in the roster, kept so permissive validators accept
+ * old `lastSpecialist` strings on read without migrating (`design`/`ac-author`
+ * → `architect`; `slice-builder` → `builder`; `security-reviewer` → reviewer
+ * `security` axis; `plan-design`/`plan-devex` → plan-critic rubric modes;
+ * `brainstormer` retired). Do not add new entries.
  */
 export const LEGACY_SPECIALIST_IDS = [
   "design",
@@ -312,113 +125,27 @@ export const LEGACY_SPECIALIST_IDS = [
 export type LegacySpecialistId = (typeof LEGACY_SPECIALIST_IDS)[number];
 
 /**
- * @deprecated v8.62 — use {@link LEGACY_SPECIALIST_IDS}. Kept as a
- * re-export so pre-v8.62 import sites continue to type-check.
- *
- * Note: the second entry historically named the v8.14 retired
- * "architect" id, which is a NAME COLLISION with the v8.62 current
- * `architect` specialist (different concept). New code MUST NOT use
- * this constant; consult {@link LEGACY_SPECIALIST_IDS} instead, which
- * names the post-v8.62 retired ids (`design`, `ac-author`, `slice-builder`,
- * `security-reviewer`, `brainstormer`) and leaves the current
- * `architect` out of the legacy list.
- */
-export const LEGACY_DISCOVERY_SPECIALISTS = ["brainstormer"] as const;
-export type LegacyDiscoverySpecialistId = (typeof LEGACY_DISCOVERY_SPECIALISTS)[number];
-
-/**
- * v8.28: `planner` specialist renamed to `ac-author`. v8.62: `ac-author`
- * renamed to `architect` (absorbing `design`'s Phase 0/2-6 work).
- * The original `"planner"` token is kept here as a canonical legacy id
- * for permissive validators that may still encounter it in very old
- * `flow-state.json` files.
- *
- * Permissive read path: `lastSpecialist` is a string field; the
- * validator does not enforce membership in `SPECIALISTS`, so old values
- * (`planner`, `ac-author`, `design`, `slice-builder`, `security-reviewer`)
- * round-trip on read without rewrites. The orchestrator re-dispatches
- * the current specialist set on the next `/cc`.
- *
- * Shipped flow artifacts under `flows/shipped/<slug>/` keep their
- * historical text untouched.
- */
-export const LEGACY_PLANNER_ID = "planner" as const;
-export type LegacyPlannerId = typeof LEGACY_PLANNER_ID;
-
-/**
- * Lightweight read-only research helpers, dispatched by the `architect`
- * (mostly during Frame / Decisions / Pre-mortem on strict mode) BEFORE
- * the architect writes its artifact. They exist to gather context
- * (live repo signals; prior cclaw lessons) so the architect does not
- * have to crawl the codebase or knowledge log itself.
- *
- * Research helpers are not in {@link SpecialistId} on purpose:
- *
- * - they never become \`lastSpecialist\` (no checkpoint between them);
- * - they are not a stage in any \`triage.path\`;
- * - they cannot be dispatched by the orchestrator directly — only by a
- *   specialist who needs their output.
+ * Read-only research helpers the `architect` dispatches before writing its
+ * artifact (live repo signals; prior cclaw lessons). Not in {@link SpecialistId}:
+ * they never become `lastSpecialist`, are not a stage, and can only be
+ * dispatched by a specialist that needs their output.
  */
 export const RESEARCH_AGENT_IDS = ["repo-research", "learnings-research"] as const;
 export type ResearchAgentId = (typeof RESEARCH_AGENT_IDS)[number];
 
 /**
- * Research-only sub-agents dispatched by the research orchestrator
- * (the main-context flow that powers `/cc research <topic>`). The lenses
- * run in parallel after the open-ended discovery dialogue completes; each
- * one returns a structured per-lens findings block that the orchestrator
- * folds into the final `research.md`.
- *
- * Lenses are **NOT** in {@link SPECIALISTS} on purpose:
- *
- * - they never become `lastSpecialist` (no checkpoint between them — the
- *   orchestrator either waits for ALL five to return or proceeds with
- *   partial findings on timeout);
- * - they are not a stage in any `triage.path` (research mode bypasses
- *   triage entirely; the orchestrator stamps sentinel values);
- * - they cannot be dispatched by any of the seven flow specialists —
- *   only by the research orchestrator in the main-context research
- *   slice.
- *
- * Each lens has its own contract file under
- * `.cclaw/lib/research-lenses/<lens-id>.md`. Lenses are independent: no
- * lens cites another lens, no lens chains into another lens. The
- * orchestrator owns the cross-lens synthesis pass that writes the final
- * `## Synthesis` section of `research.md`.
- *
- * The six lenses cover the orthogonal dimensions reference projects
- * (gstack `plan-*-review` quintet; obra-superpowers brainstorming →
- * subagent-driven-development chain; compound continuous-notebook +
- * adversarial-reviewer; everyinc-compound `ce-design-lens-reviewer`)
- * settled on:
- *
- * - `research-engineer` — technical feasibility, stack fit,
- *   implementation paths, rough effort.
- * - `research-product` — user value, who benefits, alternatives,
- *   market context.
- * - `research-architecture` — fit with existing system, surface area,
- *   coupling, scalability.
- * - `research-history` — prior attempts via `.cclaw/knowledge.jsonl` +
- *   git log; lessons learned + outcome signals.
- * - `research-skeptic` — adversarial pass: failure modes, edge cases,
- *   abuse cases, hidden costs.
- * - `research-design` (v8.76) — UI / UX / positioning / affordances
- *   lens for topics that touch design surfaces. Walks the same
- *   seven-dimension design-quality rubric (shared with the v8.75
- *   plan-design specialist and the v8.70 reviewer's design-quality
- *   axis) at the research framing stage — surfaces dimensions
- *   implicated, existing patterns to study, anti-patterns to avoid
- *   (including canonical AI-slop signals), and open design questions.
- *   Dispatched on `standard+` depth when the topic signals UI / UX /
- *   design / frontend / positioning / affordances; force-toggleable
- *   via `/cc research --lens=design` / `--lens=-design`.
- *
- * Each lens may dispatch the existing `repo-research` helper for
- * codebase-specific context (engineer + architecture lenses do so by
- * default on brownfield projects); web search via MCP is optional
- * for engineer / product / architecture / skeptic / design lenses
- * (design lens is first-class on web search). The history lens is
- * memory-only (reads `.cclaw/knowledge.jsonl` directly).
+ * Research-only sub-agents the research orchestrator (`/cc research <topic>`)
+ * runs in parallel; each returns a per-lens findings block folded into
+ * `research.md`. Lenses are independent and NOT in {@link SPECIALISTS} (never
+ * `lastSpecialist`, not a stage, only the research orchestrator dispatches them);
+ * each has a contract under `.cclaw/lib/research-lenses/<lens-id>.md`.
+ * - `research-engineer` — technical feasibility, stack fit, effort.
+ * - `research-product` — user value, alternatives, market.
+ * - `research-architecture` — fit with existing system, coupling, scale.
+ * - `research-history` — prior attempts + lessons (`knowledge.jsonl` + git log).
+ * - `research-skeptic` — adversarial: failure modes, edge/abuse cases, costs.
+ * - `research-design` — UI/UX/positioning lens, on `standard+` depth when the
+ *   topic signals design surfaces (force-toggle via `/cc research --lens=design`).
  */
 export const RESEARCH_LENSES = [
   "research-engineer",
@@ -433,58 +160,28 @@ export type ResearchLensId = (typeof RESEARCH_LENSES)[number];
 export type InstallableAgentId = SpecialistId | ResearchAgentId | ResearchLensId;
 
 /**
- * verdict the critic returns in its slim summary. Drives Hop 4.5
- * routing: `pass` → continue to Hop 5 ship; `iterate` → continue to
- * ship with the iterate-severity gaps carried over to `ship.md > Risks
- * carried over`; `block-ship` → orchestrator pauses and surfaces the
- * block-ship picker (`fix and re-review` / `accept-and-ship`).
+ * Critic slim-summary verdict driving Hop 4.5 routing: `pass` → ship; `iterate`
+ * → ship with gaps carried to `ship.md`; `block-ship` → pause for the
+ * block-ship picker.
  */
 export type CriticVerdict = "pass" | "iterate" | "block-ship";
 
 /**
- * escalation level stamped in `critic.md > frontmatter >
- * escalation_level`. `none` = pure gap mode; `light` = one adversarial
- * technique enabled (soft mode with exactly one trigger firing);
- * `full` = all four adversarial techniques plus the §5 devil's-advocate
- * sweep (strict mode with any trigger firing).
+ * Critic escalation level in `critic.md` frontmatter: `none` = pure gap mode;
+ * `light` = one adversarial technique (soft, one trigger); `full` = all
+ * techniques + the §5 devil's-advocate sweep (strict, any trigger).
  */
 export type CriticEscalation = "none" | "light" | "full";
 
 /**
- * Status the builder specialist emits at every slice boundary (strict
- * mode) and at end-of-feature (soft mode). Drives the orchestrator's
- * always-auto chain decision when the builder slim summary returns —
- * each status has a deterministic handler in
- * `.cclaw/lib/runbooks/always-auto-failure-handling.md`:
+ * Status the builder emits at each slice boundary (strict) / end-of-feature
+ * (soft); each has a handler in `always-auto-failure-handling.md`:
+ * - `DONE` — proceed to next slice / qa / review.
+ * - `DONE_WITH_CONCERNS` — completed; concerns appended to `build.md`.
+ * - `NEEDS_CONTEXT` — cannot proceed without missing info; stop and surface it.
+ * - `BLOCKED` — unresolvable obstacle; stop and surface blocker + resolution.
  *
- * - `DONE` — proceed to the next slice (strict) or to qa/review (soft).
- *   The slice cleared both spec-compliance and code-quality reviews
- *   (strict mode per-slice gates) with no open concerns. This is the
- *   common path; no orchestrator surface action.
- * - `DONE_WITH_CONCERNS` — work completed but the builder flagged
- *   forward-looking risks the reviewer should see. Orchestrator appends
- *   the concerns to `build.md > ## Concerns` and proceeds; the reviewer
- *   reads the section as additional finding seeds.
- * - `NEEDS_CONTEXT` — the builder cannot proceed without information
- *   that wasn't in the dispatch envelope (missing file, unclear
- *   requirement, unknown convention). Orchestrator stops, surfaces the
- *   specific context need verbatim to the user, and awaits `/cc`
- *   continue (with the new context provided in the next prompt) or
- *   `/cc-cancel`.
- * - `BLOCKED` — the builder hit an unresolvable obstacle (per-slice
- *   review failed twice, posture mismatch, dependency missing,
- *   architectural concern). Orchestrator stops, surfaces the blocker
- *   plus the builder's recommended resolution (provide more context /
- *   break the slice smaller / escalate to architect), and awaits `/cc`
- *   continue or `/cc-cancel`.
- *
- * The slim summary's `Notes:` line carries the human-readable detail
- * for `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED`; orchestrator
- * surfaces it verbatim in the stop-and-report status block.
- *
- * Pre-v8.68 builder slim summaries lack the status line — back-compat
- * readers default to `DONE` on absent (matches the existing always-auto
- * chain behaviour).
+ * The slim-summary `Notes:` line carries the detail; readers default to `DONE`.
  */
 export const BUILDER_STATUSES = [
   "DONE",
@@ -495,84 +192,34 @@ export const BUILDER_STATUSES = [
 export type BuilderStatus = (typeof BUILDER_STATUSES)[number];
 
 /**
- * verdict the qa-runner specialist returns in its slim summary.
- * Drives the qa stage routing (between `build` and `review` on the tight
- * gate {triage.surfaces includes "ui" or "web" AND ceremonyMode != "inline"}):
- *
- * - `pass` — every UI AC has evidence (Playwright test result / browser
- *   MCP screenshot / manual-steps confirmation); proceed to review.
- * - `iterate` — at least one UI AC failed verification; bounce back to
- *   builder with qa findings as additional context, max 1 iteration
- *   enforced by `qaIteration` (cap=1).
- * - `blocked` — browser tooling unavailable AND manual steps required;
- *   surface user picker (`proceed-without-qa-evidence` /
- *   `pause-for-manual-qa` / `skip-qa`). Distinct from `iterate`: blocked
- *   means qa could not run at all, not that it ran and failed.
- *
- * Distinct from {@link CriticVerdict} and {@link PlanCriticVerdict}: qa
- * runs at a different stage (between build + review), against UI
- * surfaces only, with its own evidence-tier rubric.
+ * qa-runner verdict at the qa stage (gate: surfaces includes `"ui"`/`"web"` AND
+ * `ceremonyMode != "inline"`): `pass` → review; `iterate` → bounce to builder
+ * (cap 1 via `qaIteration`); `blocked` → qa could not run, surface picker.
+ * Distinct from {@link CriticVerdict} / {@link PlanCriticVerdict}.
  */
 export type QaVerdict = "pass" | "iterate" | "blocked";
 
 /**
- * evidence tier captured by the qa-runner in `qa.md` frontmatter
- * and mirrored to `flow-state.json > qaEvidenceTier`. Records which
- * verification path the specialist took for the bulk of the UI ACs:
- *
- * - `playwright` — committed Playwright test that runs in CI;
- *   machine-verifiable evidence. Preferred when the project already
- *   ships Playwright or an equivalent e2e harness.
- * - `browser-mcp` — exploratory verification via a browser MCP
- *   (cursor-ide-browser, chrome-devtools, browser-use, etc.) with
- *   captured screenshots / observations. Reviewable but not re-runnable
- *   in CI without rerunning the MCP session.
- * - `manual` — last resort. qa-runner emits a `## Manual QA steps`
- *   block in qa.md and asks the user to confirm. The verdict is
- *   `blocked` until the user confirms.
- *
- * Drives the reviewer's `qa-evidence` axis cross-check: for any
- * AC with surface in {`ui`, `web`}, the reviewer expects `qa.md` with a
- * matching evidence row.
+ * Evidence tier the qa-runner records in `qa.md` (mirrored to `qaEvidenceTier`):
+ * `playwright` (CI-runnable test, strongest), `browser-mcp` (reviewable, not
+ * re-runnable), `manual` (last resort; verdict stays `blocked` until the user
+ * confirms). Drives the reviewer's `qa-evidence` axis cross-check.
  */
 export type QaEvidenceTier = "playwright" | "browser-mcp" | "manual";
 
 /**
- * runtime surfaces a task may touch. Populated by the
- * orchestrator at triage (Hop 2) from the task description and the
- * touched-files signal, stamped under `triage.surfaces`. Drives the
- * qa-runner gate (qa-runner dispatches only when `surfaces`
- * includes `"ui"` or `"web"` AND `ceremonyMode != "inline"`).
- *
- * Multiple values per slug are expected — a /cc that builds an HTTP
- * endpoint + a Vue component touches both `"api"` and `"ui"`. The
- * orchestrator emits the union of detected surfaces, not a single
- * primary classification.
- *
- * Backwards compat: when `surfaces` is absent or empty, the
- * orchestrator treats the slug as `["other"]` (the no-QA-gating fallback);
- * pre-v8.52 flow-state files validate unchanged.
- *
- * Surface vocabulary:
- *
+ * Runtime surfaces a task may touch, stamped under `triage.surfaces`. Drives the
+ * qa-runner gate (`ui`/`web` + non-inline). Multiple values per slug expected
+ * (the union); absent/empty is treated as `["other"]` (no QA gating).
  * - `cli` — command-line tool / bin scripts.
- * - `library` — published code consumed by other code (npm package
- *   internals, exported modules, SDK surface).
- * - `api` — HTTP / RPC / GraphQL endpoint touched (request/response
- *   shape, route handler, middleware).
- * - `ui` — visual UI surface (React/Vue/Svelte component, HTML/CSS
- *   diff, page rendering). Gates qa-runner dispatch in non-inline mode.
- * - `web` — alias for `ui` when the diff is web-specific (kept as a
- *   separate token because some authoring contexts emit "web" verbatim
- *   from the prompt; the qa-runner gate treats both as equivalent).
- * - `data` — persistence / migration / schema surface (SQL, ORM
- *   models, fixtures).
- * - `infra` — deployment / CI / runtime config (Dockerfile, GitHub
- *   Actions, Terraform).
- * - `docs` — markdown / docs-only diff with no runtime behaviour
- *   change.
- * - `other` — fallback when no canonical surface fits, and the
- *   default value the validator applies when the field is absent.
+ * - `library` — published/exported code consumed by other code.
+ * - `api` — HTTP/RPC/GraphQL endpoint.
+ * - `ui` — visual UI surface; gates qa-runner in non-inline mode.
+ * - `web` — alias for `ui`; the qa gate treats both as equivalent.
+ * - `data` — persistence/migration/schema.
+ * - `infra` — deployment/CI/runtime config.
+ * - `docs` — docs-only diff, no runtime change.
+ * - `other` — fallback, and the validator default when absent.
  */
 export const SURFACES = [
   "cli",
@@ -588,161 +235,54 @@ export const SURFACES = [
 export type Surface = (typeof SURFACES)[number];
 
 /**
- * verdict the pre-implementation plan-critic returns in its slim
- * summary. v8.104 unified plan-critic carries a `rubricMode` envelope
- * field that selects the rubric scaffold (generic / design / devex);
- * each mode emits one verdict from a fixed slice of this union:
- *
- * - **`rubricMode: "generic"`** emits one of `pass` / `revise` / `cancel`
- *   (pre-v8.104 plan-critic vocabulary; `cancel` means structural plan
- *   problem requiring re-author).
- * - **`rubricMode: "design"`** emits one of `pass` / `revise` / `block`
- *   (pre-v8.104 plan-design vocabulary; `block` means design-coherence
- *   failure that blocks ship — stop-and-report).
- * - **`rubricMode: "devex"`** emits one of `pass` / `revise` / `block`
- *   (pre-v8.104 plan-devex vocabulary; `block` means DevEx-coherence
- *   failure that blocks ship — stop-and-report).
- *
- * Drives the plan-critic step routing (between `architect` and `builder`
- * on the per-mode gates documented in the plan-critic prompt):
- *
- * - `pass` — advance to the next dispatched rubric mode (if any gated) or
- *   to builder dispatch.
- * - `revise` (iteration 0) — bounce to architect with the mode's
- *   findings prepended; architect updates plan.md; orchestrator
- *   re-dispatches plan-critic with the same `rubricMode` (iteration 1).
- * - `revise` (iteration 1) — orchestrator surfaces the user picker
- *   (cancel / accept-warnings-and-proceed / re-architect); no third
- *   plan-critic dispatch is allowed for the same mode (1 revise loop
- *   max per mode).
- * - `cancel` (generic mode only; any iteration) — structural plan
- *   problem requiring re-author; orchestrator surfaces the cancel picker
- *   immediately, no silent fallback.
- * - `block` (design / devex modes only; any iteration) — coherence
- *   failure that blocks ship; orchestrator surfaces the stop-and-report
- *   status block immediately.
- *
- * Distinct from {@link CriticVerdict} on purpose: the post-impl critic
- * has a `block-ship` verdict (build/review already ran); plan-critic has
- * `cancel` / `block` (build hasn't run yet so "block-ship" would be a
- * category error). Both enums coexist; readers branch on which
- * specialist is in flight, not on a merged verdict shape.
+ * Pre-impl plan-critic verdict — the worst-of merge across the active rubrics
+ * (`cancel` > `block` > `revise` > `pass`); `generic` mode emits
+ * `pass`/`revise`/`cancel`, `design`/`devex` modes emit `pass`/`revise`/`block`.
+ * Routing: `pass` → builder; `revise` → bounce to architect, re-dispatch once
+ * (1 loop max per mode); `cancel`/`block` → picker / stop-and-report. Distinct
+ * from {@link CriticVerdict} (post-impl, has `block-ship`).
  */
 export type PlanCriticVerdict = "pass" | "revise" | "cancel" | "block";
 
 /**
- * @deprecated v8.104 — plan-design merged into plan-critic as
- * `rubricMode: "design"`. The verdict shape (`pass` / `revise` / `block`)
- * is preserved verbatim on plan-critic design-mode dispatches; new code
- * should branch on {@link PlanCriticVerdict} narrowed by rubricMode
- * rather than importing this alias. Kept as a type alias for one
- * release so pre-v8.104 readers continue to type-check.
- */
-export type PlanDesignVerdict = "pass" | "revise" | "block";
-
-/**
- * Severity of a single `PD-N` (plan-design finding) row appended to
- * plan.md's `## Plan-design findings` section by the v8.75 plan-design
- * specialist. The ladder mirrors the reviewer's `design-quality` axis
- * severity progression with one tier capped off — there is no
- * `critical` tier at plan-time because the worst case at plan-time is
- * "the plan does not commit to the work" rather than "the rendered
- * diff is shipping broken behaviour".
- *
- * - `low` — default for any dimension grading exactly 5/10. Carries to
- *   learnings as advisory; does NOT block ship even in strict mode.
- * - `medium` — dimension grading exactly 4/10; OR any accessibility
- *   grade ≤ 5 (one-tier escalation, mirroring the reviewer's axis
- *   accessibility prior); OR the AI-slop umbrella finding in strict
- *   mode. Blocks ship in strict mode (the v8.75 block-ship-on-strict
- *   floor); surfaces but does not block in soft mode.
- * - `high` — dimension grading ≤ 3/10; OR any accessibility grade ≤ 2
- *   (legal / inclusion baseline; blocks regardless of mode). Blocks
- *   ship in strict; in soft mode the orchestrator surfaces the stop-
- *   and-report status block when ≥ 2 `high` rows accumulate.
- *
- * Validators accept the string verbatim on read; new writes MUST use
- * one of the three values. Pre-v8.75 state files cannot carry this
- * field at all (the plan-design specialist did not exist), so back-
- * compat is structural: readers simply find no `PD-N` rows.
+ * Severity of a `PD-N` plan-design finding (no `critical` tier at plan-time):
+ * `low` = dimension 5/10 (advisory); `medium` = 4/10, or accessibility ≤ 5, or
+ * strict-mode AI-slop (blocks in strict); `high` = ≤ 3/10, or accessibility ≤ 2
+ * (blocks regardless of mode; ≥ 2 `high` rows stop-and-report in soft). New
+ * writes use one of the three values.
  */
 export type PlanDesignSeverity = "low" | "medium" | "high";
 
 /**
- * @deprecated v8.104 — plan-devex merged into plan-critic as
- * `rubricMode: "devex"`. The verdict shape (`pass` / `revise` / `block`)
- * is preserved verbatim on plan-critic devex-mode dispatches; new code
- * should branch on {@link PlanCriticVerdict} narrowed by rubricMode
- * rather than importing this alias. Kept as a type alias for one
- * release so pre-v8.104 readers continue to type-check.
- */
-export type PlanDevexVerdict = "pass" | "revise" | "block";
-
-/**
- * Severity of a single `DX-N` (plan-devex finding) row appended to
- * plan.md's `## Plan-devex findings` section by the v8.82 plan-devex
- * specialist. The ladder mirrors {@link PlanDesignSeverity} with two
- * dimension-specific escalation rules baked in (getting-started one
- * tier sharper because TTHW is load-bearing for first impression;
- * upgrade-path on breaking changes caps at `high` regardless of mode
- * because the worst case is "ship a silent regression").
- *
- * - `low` — default for any dimension grading exactly 5/10. Carries to
- *   learnings as advisory; does NOT block ship even in strict mode.
- * - `medium` — dimension grading exactly 4/10; OR any getting-started
- *   grade ≤ 5 (one-tier escalation per the rubric). Blocks ship in
- *   strict mode (the v8.82 block-ship-on-strict floor); surfaces but
- *   does not block in soft mode.
- * - `high` — dimension grading ≤ 3/10; OR any upgrade-path grade ≤ 3
- *   on a breaking change (ships-a-regression baseline; blocks
- *   regardless of mode). Blocks ship in strict; in soft mode the
- *   orchestrator surfaces the stop-and-report status block when ≥ 2
- *   `high` rows accumulate.
- *
- * Validators accept the string verbatim on read; new writes MUST use
- * one of the three values. Pre-v8.82 state files cannot carry this
- * field at all (the plan-devex specialist did not exist), so back-
- * compat is structural: readers simply find no `DX-N` rows.
+ * Severity of a `DX-N` plan-devex finding; mirrors {@link PlanDesignSeverity}
+ * with two escalations (getting-started one tier sharper; upgrade-path on
+ * breaking changes caps at `high`): `low` = 5/10; `medium` = 4/10 or
+ * getting-started ≤ 5 (blocks in strict); `high` = ≤ 3/10 or upgrade-path ≤ 3
+ * on a breaking change (blocks regardless of mode). New writes use one value.
  */
 export type PlanDevexSeverity = "low" | "medium" | "high";
 
 /**
- * Reversibility classification per `D-N` decision in `plan.md > ##
- * Decisions` (architect-authored, strict mode). Borrowed from Bezos's
- * one-way/two-way door framing: the cost of getting it wrong scales
- * with whether the decision can be cheaply undone.
+ * Reversibility per `D-N` decision (Bezos one-way/two-way door framing). Only the
+ * `one-way` value is load-bearing: the One-way Door Gate scans plan.md for a
+ * `Reversibility: one-way` D-N and pauses for user confirmation; every non-one-way
+ * decision trusts the cheap-revert affordance and passes through silently. Folded
+ * to two values in v8.118 — the retired `mostly-two-way` collapsed into `two-way`
+ * (nothing branched on the distinction; old plan prose still passes the gate scan):
+ * - `one-way` — irreversible/expensive (migrations, public-API removals, schema
+ *   rewrites, destructive auth/crypto, payments).
+ * - `two-way` — reversible, cheaply or with friction (flags, shimmed internal-API
+ *   changes; also added columns, new deps, shipped UI).
  *
- * - `one-way` — irreversible (or expensive enough to be effectively
- *   so): data migrations, public-API removals, schema rewrites,
- *   destructive auth/cryptography changes, payment-side commits. Pays
- *   off slow, deliberate review BEFORE the build lands. The v8.74
- *   cross-model critic auto-fires on any `D-N` with this value.
- * - `two-way` — easily reversible: feature flags, internal-API
- *   changes behind compatibility shims, behaviour tweaks captured
- *   behind a kill switch. Optimise for speed; revert is cheap.
- * - `mostly-two-way` — reversible but with friction: schema columns
- *   added (drop is cheap, but data written under the new shape is
- *   not); new dependencies (removal is mechanical but spreads); UI
- *   surfaces shipped to users (rollback is possible but visible).
- *   The middle ground exists because the binary one-way/two-way split
- *   under-served too many real decisions.
- *
- * The architect MUST stamp one of these three values on every D-N in
- * strict mode; plan-critic §A flags a missing `Reversibility:` field
- * as a `block-ship` finding (class `decision-missing-reversibility`).
+ * The architect stamps one per D-N in strict mode; plan-critic flags a missing
+ * `Reversibility:` field as a block-ship finding.
  */
-export type Reversibility = "one-way" | "two-way" | "mostly-two-way";
+export type Reversibility = "one-way" | "two-way";
 
 /**
- * Architect-authored D-N record from `plan.md > ## Decisions` (strict
- * mode only). The markdown body is authoritative — this interface
- * exists so parsers / readers (plan-critic, critic §3.5 cross-model
- * trigger, learnings capture) can type-check the fields they consume.
- *
- * Fields mirror the D-N row template in
- * {@link "src/content/artifact-templates.ts" | PLAN_TEMPLATE}:
- * id (e.g. `D-1`), title, context, options (rendered as `A / B / C`),
- * pick, rationale, blastRadius, reversibility (v8.74), adr status.
+ * Architect-authored D-N record from `plan.md > ## Decisions` (strict mode). The
+ * markdown body is authoritative; this interface lets readers (plan-critic,
+ * the critic, learnings) type-check the fields they consume.
  */
 export interface Decision {
   id: string;
@@ -760,26 +300,18 @@ export type ArtifactStatus = "active" | "shipped";
 export type AcceptanceCriterionStatus = "pending" | "committed";
 
 /**
- * Branded id type for acceptance criteria. Used by
- * {@link SliceState.verifiesAcIds} and {@link AcceptanceCriterionState.verifiedBy}
- * back-references so the slice↔AC mapping is type-checked at writer
- * sites (slim summaries, plan-md parsers). The validator on read only
- * checks that the value is a string matching `AC-N` shape; readers
- * MUST accept `string` and downcast (legacy state files predate the
- * brand).
+ * Branded AC id (`AC-N`). Backs the slice↔AC mapping. The read validator only
+ * checks the `AC-N` shape; readers MUST accept `string` and downcast (legacy
+ * state files predate the brand).
  */
 export type AcceptanceCriterionId = `AC-${number}`;
 
 export type TddPhase = "red" | "green" | "refactor";
 
 /**
- * @deprecated v8.40+ — legacy v8.36-v8.39 record shape populated by the
- * (now-retired) commit-helper hook. The phase SHA was recorded under
- * `AcceptanceCriterionState.phases[phase]`; dropped the mechanical
- * gate and the AC↔SHA chain is no longer written. The interface stays so
- * old `flow-state.json` files (with `phases` data) still validate on
- * read; readers MUST treat the field as advisory only and prefer
- * `git log --grep="(AC-N):" --oneline` for the canonical chain view.
+ * @deprecated — legacy per-phase SHA record from the retired commit-helper hook.
+ * Kept so old `flow-state.json` files validate; treat as advisory and prefer
+ * `git log --grep="(AC-N):" --oneline` for the canonical chain.
  */
 export interface TddPhaseRecord {
   sha?: string;
@@ -788,41 +320,37 @@ export interface TddPhaseRecord {
 }
 
 /**
- * per-criterion `posture` annotation (everyinc-compound pattern).
- *
- * The architect stamps one of these six values on every AC stanza in
- * `plan.md` frontmatter. Builder reads `posture` and selects the
- * commit ceremony (which posture-driven subject-line prefix sequence to
- * write); reviewer reads `src/posture-validation.ts:POSTURE_COMMIT_PREFIXES`
- * to scope posture-specific checks (e.g. tests-as-deliverable skips the
- * strict TDD-integrity check because tests ARE the deliverable, not a
- * precondition for production code).
- *
- * The order is the canonical heuristic order from the spec:
- *   - test-first (default) is first so legacy plans pick it up;
- *   - characterization-first sits next because it is the closest
- *     cousin (still RED-first, just on existing rather than new code);
- *   - tests-as-deliverable / refactor-only / docs-only / bootstrap
- *     are the "tests are not new behaviour" branches.
+ * Per-criterion `posture` the architect stamps on every AC. Builder reads it to
+ * select the commit ceremony; reviewer reads `POSTURE_COMMIT_PREFIXES` to scope
+ * posture-specific checks. `POSTURES` is the **authored** set the architect picks
+ * from — `test-first` (default) first so legacy plans pick it up. The three
+ * {@link RETIRED_POSTURES} are no longer authored (they fold into the active three
+ * as documented special-cases) but stay parse / validate / review-valid so
+ * archived + upgraded plans keep working.
  */
-export const POSTURES = [
-  "test-first",
-  "characterization-first",
-  "tests-as-deliverable",
-  "refactor-only",
-  "docs-only",
-  "bootstrap"
-] as const;
-export type Posture = (typeof POSTURES)[number];
+export const POSTURES = ["test-first", "refactor-only", "docs-only"] as const;
+export type ActivePosture = (typeof POSTURES)[number];
 
 /**
- * Default posture for AC frontmatter that omits the field.
- *
- * Backward compatibility: plans authored before do not carry a
- * posture field; the builder treats absence as `test-first` so
- * the original RED → GREEN → REFACTOR ceremony continues to apply
- * unchanged.
+ * Retired postures (folded into the active three in v8.117), still honoured on
+ * read for back-compat:
+ *  - `characterization-first` ≡ `test-first` (the RED is a characterization test
+ *    pinning current behaviour on legacy code) — identical commit recipe.
+ *  - `tests-as-deliverable` ≡ a single `test(SL-N)` commit when the test IS the
+ *    deliverable (no production change).
+ *  - `bootstrap` ≡ `test-first` with the SL-1 green-only escape when the test
+ *    runner is being installed.
+ * Not advertised to the architect on new plans; accepted on read so shipped /
+ * upgraded plans validate and the reviewer can still check their commit chains.
  */
+export const RETIRED_POSTURES = [
+  "characterization-first",
+  "tests-as-deliverable",
+  "bootstrap"
+] as const;
+export type Posture = ActivePosture | (typeof RETIRED_POSTURES)[number];
+
+/** Default posture when AC frontmatter omits the field (RED → GREEN → REFACTOR). */
 export const DEFAULT_POSTURE: Posture = "test-first";
 
 export interface AcceptanceCriterionState {
@@ -831,80 +359,43 @@ export interface AcceptanceCriterionState {
   commit?: string;
   status: AcceptanceCriterionStatus;
   /**
-   * @deprecated v8.40+ — legacy v8.36 + v8.39 field populated by the
-   * (now-retired) commit-helper hook. v8.40+ no longer reads or writes
-   * this field; the AC↔SHA chain is reconstructed ex-post by the
-   * reviewer via `git log --grep="(AC-N):" --oneline`. The field stays
-   * on the type so old `flow-state.json` files validate on read; new
-   * flows leave it absent.
+   * @deprecated — legacy field from the retired commit-helper hook. Kept so old
+   * `flow-state.json` files validate; new flows leave it absent and reconstruct
+   * the AC↔SHA chain via `git log --grep="(AC-N):"`.
    */
   phases?: Partial<Record<TddPhase, TddPhaseRecord>>;
-  /**
-   * per-criterion posture annotation. Absent means
-   * {@link DEFAULT_POSTURE} ("test-first"). Validators reject unknown
-   * string values.
-   */
+  /** Per-criterion posture. Absent means {@link DEFAULT_POSTURE}; validators reject unknown values. */
   posture?: Posture;
   /**
-   * Back-reference from this AC to the slices that verify it. Each
-   * slice id matches the `SL-N` shape (see {@link SliceId}). The
-   * architect populates this field when authoring the `##
-   * Acceptance Criteria (verification)` table in plan.md; reviewer /
-   * plan-critic / critic read it to validate slice↔AC coverage.
-   *
-   * Optional for back-compat: pre-v8.63 state files lack this field
-   * entirely. New strict-mode flows MUST emit at least one slice id
-   * per AC (otherwise plan-critic surfaces a coverage-gap finding).
-   * Soft/inline flows leave it absent (slice tables are strict-only).
+   * Back-reference to the slices (`SL-N`) that verify this AC; read by
+   * reviewer/plan-critic/critic for coverage. Optional/back-compat: soft/inline
+   * and old state files leave it absent; new strict flows emit ≥ 1 slice per AC.
    */
   verifiedBy?: SliceId[];
 }
 
 /**
- * Branded id type for plan slices (work units). Slices are the unit
- * of work the builder TDDs against; one or more slices verify each
- * acceptance criterion. The `SL-N` shape mirrors `AC-N` so the two
- * tables in plan.md read symmetrically. Validators on read accept
- * the permissive `string` shape (no rewrite) — pre-v8.63 state
- * files lack slices entirely, so the brand only constrains new
- * writes.
+ * Branded plan-slice id (`SL-N`). Slices are the unit of work the builder TDDs
+ * against; one or more verify each AC. The read validator accepts the permissive
+ * `string` shape (the brand only constrains new writes).
  */
 export type SliceId = `SL-${number}`;
 
 /**
  * Lifecycle status for a plan slice.
- *
- * - `pending` — author wrote the slice into plan.md but builder has
- *   not started TDD on it yet.
- * - `in-progress` — builder dispatched on this slice (RED, GREEN, or
- *   REFACTOR commits may be present but the cycle isn't complete).
- * - `implemented` — slice's TDD cycle is complete and the slice's
- *   commit chain landed; AC verification hasn't run yet.
- * - `verified` — implementation landed AND every AC that lists this
- *   slice in `verifies` has a corresponding `verify(AC-N): passing`
- *   commit on top of the slice chain.
- * - `skipped` — slice was authored but the builder marked it
- *   intentionally not implemented (e.g. cancelled mid-flow, or the
- *   slice turned out to be subsumed by another). The reviewer's
- *   `plan-traceability` axis treats `skipped` as an explicit
- *   non-commit signal rather than a missing commit.
+ * - `pending` — authored, builder not started.
+ * - `in-progress` — builder dispatched; TDD cycle incomplete.
+ * - `implemented` — TDD cycle complete and commits landed; AC verify not yet run.
+ * - `verified` — implemented AND every verifying AC has a `verify(AC-N): passing` commit.
+ * - `skipped` — authored but intentionally not implemented (explicit non-commit signal).
  */
 export type SliceStatus = "pending" | "in-progress" | "implemented" | "verified" | "skipped";
 
 /**
- * A plan slice as authored by the architect in plan.md's `## Plan
- * / Slices` table. Slices are work units (HOW to build); acceptance
- * criteria (in the separate `## Acceptance Criteria` table) are
- * verification (HOW we know it works).
- *
- * The `Slice` shape is the in-memory representation parsers emit
- * from plan.md; the persisted form on `flow-state.json` is
- * {@link SliceState} (adds `status` + `commit` lifecycle fields).
- *
- * Architect's responsibility: determine `dependsOn` accurately.
- * Heuristic: slice A depends on slice B iff A's implementation
- * needs to read or write the same files / symbols / features that
- * B introduces. Empty `dependsOn` ⇒ `independent: true`.
+ * A plan slice as authored by the architect (work unit — HOW to build; ACs are
+ * verification). In-memory shape parsers emit from plan.md; the persisted form
+ * is {@link SliceState}. `dependsOn` must be accurate (A depends on B iff A
+ * reads/writes files/symbols B introduces); empty ⇒ `independent: true`.
  */
 export interface Slice {
   id: SliceId;
@@ -916,21 +407,11 @@ export interface Slice {
 }
 
 /**
- * Persisted slice state. Mirrors {@link Slice} fields and adds the
- * builder's lifecycle stamps:
- *
- * - `status` — see {@link SliceStatus}. Default is `pending` when
- *   architect writes the plan; builder transitions on dispatch.
- * - `commit` — first commit SHA (or short hash) on this slice's
- *   TDD chain. Used by the reviewer's `plan-traceability` axis to
- *   prove an implementation commit exists per slice.
- * - `verifiesAcIds` — convenience back-reference: the AC ids whose
- *   `verifiedBy` lists this slice. Optional; readers MUST tolerate
- *   absence and recompute from {@link AcceptanceCriterionState.verifiedBy}
- *   on the fly.
- *
- * Optional on {@link FlowStateV82}; pre-v8.63 state files lack the
- * slices field entirely and continue to validate on read.
+ * Persisted slice state — {@link Slice} fields plus builder lifecycle stamps:
+ * `status` (default `pending`), `commit` (first SHA on the slice's TDD chain,
+ * used by the reviewer's `plan-traceability` axis), `verifiesAcIds` (back-ref;
+ * recompute from {@link AcceptanceCriterionState.verifiedBy} if absent).
+ * Optional on {@link FlowStateV82}; old state files lack slices.
  */
 export interface SliceState {
   id: SliceId;
@@ -943,23 +424,11 @@ export interface SliceState {
   commit?: string;
   verifiesAcIds?: AcceptanceCriterionId[];
   /**
-   * Absolute path to the sibling git worktree the sub-builder
-   * worked in (when this slice landed in a parallel layer of ≥2
-   * independent slices). Stamped by the builder when
-   * {@link createSliceWorktree} returns; cleared by the orchestrator's
-   * ship / cancel cleanup hook after {@link cleanupSliceWorktree}.
-   *
-   * Optional + back-compat: pre-v8.73 strict flows ran every layer in
-   * the shared working tree, so readers MUST tolerate absent values
-   * and treat them as "this slice was implemented inline" (no
-   * worktree to clean up). Single-slice layers and soft-mode flows
-   * also leave the field absent — the worktree shape is reserved
-   * for layers of ≥2 independent slices where the parallel
-   * dispatch needs isolation.
-   *
-   * Validators on read only check that the value is a string when
-   * present; relative vs absolute is not enforced because Windows
-   * resume paths may carry either shape across drive remaps.
+   * Absolute path to the sibling git worktree a sub-builder used when this slice
+   * landed in a parallel layer of ≥ 2 independent slices. Stamped on
+   * {@link createSliceWorktree}; cleared after {@link cleanupSliceWorktree}.
+   * Optional/back-compat: absent means implemented inline (single-slice layers,
+   * soft mode, old state files). Validators only check it is a string.
    */
   worktreePath?: string;
 }
@@ -970,124 +439,39 @@ export const ROUTING_CLASSES = ["trivial", "small-medium", "large-risky"] as con
 export type RoutingClass = (typeof ROUTING_CLASSES)[number];
 
 /**
- * flow mode dimension on `TriageDecision`. Distinguishes a normal
- * `/cc <task>` flow ("task" mode, the historical default and the only
- * mode pre-v8.58) from a `/cc research <topic>` flow ("research" mode, a
- * pre-task brainstormer entry point that invokes the `architect`
- * specialist in standalone mode).
- *
- * - `task` (default; pre-v8.58 behaviour) — the user wants to build
- *   something. Triage routes through the full pipeline
- *   (plan → build → qa? → review → critic → ship). All existing
- *   specialists fire under their existing gates.
- * - `research` (v8.58; rewired to architect in v8.62) — the user wants
- *   to brainstorm/research BEFORE committing to a task. Triage is
- *   skipped (the orchestrator's Hop 1 Detect forks on the `research `
- *   prefix; v8.112 retired the equivalent flag form). Only the
- *   `architect` specialist runs,
- *   in its standalone-mode variant (architect dispatches with
- *   `mode: "research"` envelope marker → silent Bootstrap → Frame →
- *   Approaches → Decisions → Pre-mortem → Compose synthesis pass; no
- *   AC table, no Plan/Spec/Topology/Feasibility/Traceability sections).
- *   Output is `.cclaw/flows/<slug>/research.md`; no plan handoff. v8.65
- *   will rebuild this as a multi-lens dedicated research specialist.
- *
- * Pre-v8.58 state files do not carry this field; readers MUST default
+ * Flow mode on `TriageDecision`: `task` (default; full pipeline plan → build →
+ * qa? → review → critic → ship) or `research` (`/cc research <topic>`; triage is
+ * skipped via the Detect-hop `research ` prefix fork, only the standalone
+ * `architect` runs and writes `research.md`, no plan handoff). Readers default
  * to `"task"` on absent.
  */
 export const RESEARCH_MODES = ["task", "research"] as const;
 export type ResearchMode = (typeof RESEARCH_MODES)[number];
 
 /**
- * Research depth tier (v8.69). Auto-classified by the triage
- * sub-agent's `research_depth` heuristic from the topic wording at
- * the research-mode entry point. (v8.112 retired the explicit
- * depth-override flags; the heuristic is the sole selection path.)
- *
- * - `light` — 2-lens research pass for fast clarification questions
- *   ("which library does X?", "is Y still recommended?", "what does
- *   the team currently use?"). Dispatches `research-engineer` +
- *   `research-skeptic` only, then runs the synthesis self-review and
- *   finalises. Cheaper / faster turn-around for narrowly-scoped
- *   clarifications. Skips product / architecture / history lenses
- *   because the user is not exploring a new product surface.
- * - `standard` (default; pre-v8.69 behaviour) — full 5-lens pass
- *   (engineer / product / architecture / history / skeptic) for
- *   technical exploration. The orchestrator picks this when the
- *   research is about an existing surface or a feature-tier change
- *   ("evaluate Redis vs in-memory cache for the search endpoint",
- *   "should we move auth to JWT?"). Same 4-phase flow as
- *   pre-v8.69 research mode.
- * - `deep-product` — 5-lens pass + extra probes for greenfield /
- *   pivot wording ("should we build...", "what if we replace...",
- *   "evaluate switching from..."). Engineer / architecture / history
- *   lenses run unchanged; product + skeptic lenses receive folded-in
- *   `durability` (skeptic) + `thesis` (product) + `adjacent-product`
- *   (product) probes from the everyinc-compound brainstorming Phase
- *   1.2 deep-product gap lenses. The probes do NOT spawn additional
- *   lenses — they are extra prompt content the product + skeptic
- *   lenses fold into their structured findings.
- *
- * Pre-v8.69 state files do not carry this field; readers MUST default
- * to `"standard"` on absent. Immutable for the research flow's lifetime
- * (research-depth flow doesn't flip mid-run).
+ * Research depth tier, auto-classified by triage's `research_depth` heuristic:
+ * `light` (2-lens engineer+skeptic, fast clarifications), `standard` (default;
+ * full 5-lens), `deep-product` (5-lens + extra product/skeptic probes folded
+ * into existing lenses for greenfield/pivot wording). Readers default to
+ * `"standard"`; immutable for the flow's lifetime.
  */
 export const RESEARCH_DEPTHS = ["light", "standard", "deep-product"] as const;
 export type ResearchDepth = (typeof RESEARCH_DEPTHS)[number];
 
-/**
- * Default research depth used when the orchestrator's Detect-hop
- * research-mode fork sees no signal that auto-classification can
- * latch onto (e.g. legacy research-mode invocations from
- * pre-classification harnesses, or harnesses that bypass triage
- * entirely). Matches the pre-v8.69 behaviour: 5-lens standard pass.
- */
+/** Default research depth when auto-classification has no signal: 5-lens standard. */
 export const DEFAULT_RESEARCH_DEPTH: ResearchDepth = "standard";
 
 /**
- * Lifecycle state for the `/cc research <topic>` orchestrator (v8.71).
+ * Lifecycle state for the `/cc research <topic>` orchestrator, persisted on
+ * `FlowState.researchState` so a `/cc` continue resumes without re-parsing:
+ * - `discovery` — Phase 1 open-ended dialogue in flight.
+ * - `lens-dispatch` — Phase 2 parallel lenses in flight.
+ * - `synthesis` — Phase 3 synthesis + self-review in flight.
+ * - `awaiting-user-review` — `research.md` on disk; paused for revise/push-back/accept.
+ * - `revising` — targeted lens(es) re-running; returns to `awaiting-user-review`.
+ * - `accepted` — finalised (moved to `flows/shipped/<slug>/`); terminal.
  *
- * v8.65 / v8.69 ran research as a four-phase straight-line flow
- * (discovery → lens-dispatch → synthesis → finalize). v8.71 inserts
- * an explicit user-review gate between synthesis and finalize so the
- * user can audit `research.md`, request targeted revisions, or push
- * back on individual claims before the artifact ships. The state is
- * persisted on `FlowState.researchState` and tracks where the
- * research orchestrator is in its lifecycle:
- *
- * - `discovery` — Phase 1 open-ended dialogue is in flight (the
- *   orchestrator is asking follow-up questions until the user signals
- *   "ready").
- * - `lens-dispatch` — Phase 2 parallel lens dispatch is in flight
- *   (one or more of the depth-tier lens set has not yet returned).
- * - `synthesis` — Phase 3 synthesis + self-review pass is in flight
- *   (the orchestrator is composing the cross-lens distillation, the
- *   recommended-next-step section, and the four-scan self-review).
- * - `awaiting-user-review` — Phase 3 has finished and `research.md`
- *   is on disk; the orchestrator is waiting for the user to invoke
- *   one of `/cc research revise <area>` / `/cc research push-back
- *   <claim>` / `/cc research accept`. The flow is paused (no
- *   sub-agents in flight) and the `currentSlug` still points at the
- *   research slug.
- * - `revising` — The user invoked `/cc research revise <area>` or
- *   `/cc research push-back <claim>`; the orchestrator is
- *   re-dispatching the targeted lens(es), re-running the synthesis
- *   self-review, and rewriting `research.md`. After the revision
- *   lands the state transitions back to `awaiting-user-review` (the
- *   user can iterate again) until the user invokes
- *   `/cc research accept`.
- * - `accepted` — The user invoked `/cc research accept`; the
- *   orchestrator finalises (`git mv` to `flows/shipped/<slug>/`,
- *   reset `currentSlug`) and emits the handoff prompt. Terminal
- *   state — the next `/cc <task>` invocation reads the shipped slug
- *   as `priorResearch` context.
- *
- * Pre-v8.71 research-mode state files lack this field; readers MUST
- * default to `null`/absent (the pre-v8.71 four-phase flow has no
- * persisted lifecycle marker — research either ships or is
- * cancelled, never paused mid-flow). New writes stamp the field at
- * every Phase boundary so resume-via-`/cc` reads the canonical
- * lifecycle position without re-parsing artifacts.
+ * Readers default to `null`/absent (the pre-lifecycle four-phase flow).
  */
 export const RESEARCH_STATES = [
   "discovery",
@@ -1100,39 +484,14 @@ export const RESEARCH_STATES = [
 export type ResearchState = (typeof RESEARCH_STATES)[number];
 
 /**
- * One revision entry on a `/cc research <topic>` flow (v8.71).
- *
- * Every `/cc research revise <area>` and `/cc research push-back
- * <claim>` invocation appends one entry to `FlowState.revisions[]`
- * and the matching row to `research.md > ## Revision history`. The
- * entry is the persistent audit trail so a reader can reconstruct
- * the iteration arc — what was challenged, which lens(es) re-ran,
- * and what concretely changed in the synthesis or per-lens
- * sections.
- *
- * - `kind` — which sub-command triggered the revision: `revise`
- *   (broad; re-dispatches every lens whose section is named in the
- *   `area` argument), `push-back` (targeted; re-dispatches the
- *   skeptic plus the lens that authored the cited claim), or
- *   `accept` (terminal; closes out the revision history with the
- *   handoff prompt — written exactly once and only as the last
- *   entry).
- * - `at` — ISO-8601 timestamp the orchestrator stamped when it
- *   started processing the revision.
- * - `area` — the user's argument verbatim (the `<area>` for
- *   `revise`, the `<claim>` for `push-back`, or the empty string
- *   for `accept`). Preserved verbatim so the audit row mirrors what
- *   the user typed.
- * - `lensesRedispatched` — which lens ids re-ran for this
- *   revision (zero entries on `accept`; one or more entries on
- *   `revise` / `push-back`). The orchestrator computes this from
- *   the depth-tier lens set ∩ the area mapping.
- * - `change` — one-sentence description of what the revision
- *   actually changed in `research.md` (e.g. "rewrote Engineer >
- *   Implementation paths to reflect new fastify v6 release"). The
- *   orchestrator authors this from the post-revision synthesis
- *   pass; pre-revision state files where the orchestrator has not
- *   yet finished the change MUST leave the field absent.
+ * One `/cc research` revision entry, appended to `FlowState.revisions[]` and
+ * `research.md > ## Revision history` as the audit trail.
+ * - `kind` — `revise` (re-dispatch lenses named in `area`), `push-back`
+ *   (re-dispatch skeptic + the lens that authored the claim), `accept` (terminal,
+ *   written once and last).
+ * - `at` — ISO-8601 timestamp; `area` — user argument verbatim (empty for `accept`).
+ * - `lensesRedispatched` — lens ids that re-ran (none on `accept`).
+ * - `change` — one-sentence description; absent until post-revision synthesis fills it.
  */
 export interface ResearchRevision {
   kind: "revise" | "push-back" | "accept";
@@ -1143,59 +502,15 @@ export interface ResearchRevision {
 }
 
 /**
- * One candidate framing surfaced at the v8.76 Approaches Gate (research
- * mode Phase 1.5 — between the open-ended discovery dialogue and the
- * parallel lens dispatch).
- *
- * The Approaches Gate is the research-mode analogue of the
- * obra-superpowers brainstorming Phase 2-3 "2-3 approach options before
- * committing" and the addyosmani idea-refine Phase 1.3 Cluster +
- * Stress-test discipline. Without it, the lenses dispatch against a
- * single implicit framing of the topic (whatever the orchestrator
- * settled on during the dialogue distillation), and downstream
- * findings inherit that framing's blind spots. Surfacing 2-3 distinct
- * framings BEFORE the lenses fire lets the user pick the framing that
- * matches their actual question — or accept the "all" default to have
- * every lens dispatch carry every framing in its envelope.
- *
- * Each framing is a DIFFERENT framing of the same research question
- * (not 2-3 conclusions, not 2-3 implementation candidates — those are
- * scoped to the lenses themselves). Examples for the topic "add
- * caching to the search endpoint":
- *
- *   - framing A: "treat caching as an infra primitive — Redis vs
- *     in-memory vs HTTP cache; the question is which substrate";
- *   - framing B: "treat caching as a search-quality lever — what we
- *     cache, how invalidation works, when to bust; the question is
- *     correctness";
- *   - framing C: "treat caching as an organizational gate — who owns
- *     the cache, who pages when it's stale; the question is governance".
- *
- * Each framing changes which dimensions every lens emphasises. The
- * user picks one (or accepts "all" — the default; every framing flows
- * to every lens in its envelope) and the orchestrator carries the
- * selected framing(s) forward in every lens dispatch envelope as
+ * One candidate framing surfaced at the Approaches Gate (research Phase 1.5).
+ * Each is a different framing of the same question (not a conclusion); the user
+ * picks one or accepts "all", and the selection rides each lens envelope as
  * `framing: string[]`.
+ * - `id` — short stable id (e.g. `A`); readers MUST NOT assume a pattern.
+ * - `title` — 4-8 word title surfaced at the gate.
+ * - `summary` — one paragraph: what the framing makes load-bearing / de-emphasises.
  *
- * Fields:
- *
- * - `id` — short stable identifier (e.g. `A` / `B` / `C` or
- *   `infra-primitive` / `search-quality` / `governance`). The
- *   orchestrator stamps single-letter IDs when no semantic shortname
- *   is obvious; downstream readers MUST NOT assume the id matches a
- *   specific pattern.
- * - `title` — short title (4-8 words) the orchestrator surfaces to
- *   the user at the Approaches Gate.
- * - `summary` — one-paragraph description of the framing: what
- *   question this framing makes load-bearing, what gets de-emphasised
- *   if the user picks it, which downstream lens dispatches will see
- *   the biggest shape change.
- *
- * Pre-v8.76 research-mode state files lack this field; readers MUST
- * default to absent / empty. New writes stamp `approaches[]` at the
- * end of Phase 1 (immediately before the Approaches Gate fires) and
- * `selectedApproaches[]` immediately after the user picks (or accepts
- * "all").
+ * Readers default to absent/empty; stamped at the end of Phase 1.
  */
 export interface ResearchApproach {
   id: string;
@@ -1204,109 +519,32 @@ export interface ResearchApproach {
 }
 
 /**
- * Plan-traceability and TDD ceremony modes (v8.2+; reviewer-enforced
- * since v8.40; renamed `acMode` → `ceremonyMode` in to align with
- * how reference projects treat AC as one element of a plan rather than
- * the organizing concept around which the entire flow is named).
+ * Plan-traceability / TDD ceremony mode (reviewer-enforced):
+ * - `inline` — trivial; no AC table, optional tests.
+ * - `soft` — small/medium; bullet-list testable conditions (no AC IDs), one TDD
+ *   cycle per feature. Default for small/medium routing.
+ * - `strict` — large/risky/security; AC IDs with posture-driven commit prefixes
+ *   the reviewer verifies ex-post via `git log --grep="(AC-N):"`.
  *
- * - `inline`: trivial change. No AC table, no per-criterion prefixes,
- *   optional tests.
- * - `soft`: small/medium feature work. Bullet-list testable conditions in
- *   `plan.md` (no AC IDs); one TDD cycle per feature is enough.
- *   Default for small/medium routing.
- * - `strict`: large/risky / security-flagged. AC IDs with posture-driven
- *   commit-message prefixes (`red(AC-N): ...` / `green(AC-N): ...` /
- *   `refactor(AC-N): ...` / `test(AC-N): ...` / `docs(AC-N): ...`); the
- *   reviewer ex-post verifies ordering via `git log --grep="(AC-N):"`.
- *   Ship gate is the reviewer's release pass (no separate `runCompoundAndShip`
- *   pending-AC gate).
- *
- * Selected at the triage gate; user can override. Pre-v8.56 state files
- * with `triage.acMode` are hoisted to `triage.ceremonyMode` on read by
- * {@link rewriteLegacyAcMode} in `flow-state.ts`.
+ * Selected at triage (user can override). Legacy `triage.acMode` is hoisted to
+ * `ceremonyMode` on read by {@link rewriteLegacyAcMode}.
  */
 export const CEREMONY_MODES = ["inline", "soft", "strict"] as const;
 export type CeremonyMode = (typeof CEREMONY_MODES)[number];
 
 /**
- * @deprecated v8.56 — use {@link CEREMONY_MODES}. Kept as a re-export so
- * pre-v8.56 import sites continue to type-check while downstream consumers
- * (tests, plugins, etc.) update to the new name. Slated for removal once
- * one full release cycle has aged out external imports.
- */
-export const AC_MODES = CEREMONY_MODES;
-
-/**
- * @deprecated v8.56 — use {@link CeremonyMode}. Type alias preserved so
- * pre-v8.56 import sites continue to type-check.
- */
-export type AcMode = CeremonyMode;
-
-/**
- * How aggressively the orchestrator advances through the flow.
- *
- * The user-facing `step` / `auto` choice was retired in v8.61. Every
- * non-inline flow now runs `auto` end-to-end with no approval pickers at
- * the plan / review / critic gates; hard failures route through the
- * always-auto failure matrix (build → auto-fix loop capped 3; reviewer
- * critical → auto-fix loop capped 3; critic block-ship → stop
- * immediately; catastrophic → stop and report). Recovery is via `/cc`
- * (continue) or `/cc-cancel` (discard).
- *
- * - `auto` — the only writeable value on current orchestrator writes. On
- *   inline / trivial paths `triage.runMode` is `null` because there are
- *   no stages to chain.
- * - `step` — preserved in the type signature for back-compat so pre-v8.61
- *   state files (which may carry `runMode: "step"`) continue to validate
- *   on read. The orchestrator no longer branches on this value —
- *   pre-v8.61 flows that resume on current versions behave as `auto`
- *   regardless. Clean break per the v8.61 CHANGELOG; users with
- *   in-flight v8.60 flows carrying `step` should expect auto behaviour
- *   on the next `/cc`.
- *
- * Selected by the triage sub-agent (see
- * `src/content/specialist-prompts/triage.ts`). v8.112 dropped the
- * back-compat user-facing run-mode flag surface entirely; the field
- * is computed deterministically (`auto` on every non-inline path,
- * `null` on inline).
- */
-export const RUN_MODES = ["step", "auto"] as const;
-export type RunMode = (typeof RUN_MODES)[number];
-
-/**
- * Decision recorded at the triage gate that opens every new flow.
- * Persisted in flow-state.json so resumes never re-trigger triage.
- *
- * `acMode` renamed to `ceremonyMode` to align cclaw's vocabulary
- * with how reference projects treat AC as one element of a plan rather
- * than the organizing concept around which the entire flow is named.
- * Pre-v8.56 state files with `triage.acMode` are hoisted to
- * `triage.ceremonyMode` on read; see `flow-state.ts > rewriteLegacyAcMode`.
- *
- * triage shrinks to a **lightweight router**. New writes carry
- * only the canonical routing fields (complexity / ceremonyMode / path /
- * runMode / mode); the classification fields (surfaces / assumptions /
- * priorLearnings / interpretationForks / criticOverride / notes) are
- * soft-deprecated — they remain on the type as optional `@deprecated
- * v8.58` fields so pre-v8.58 state files continue to validate, but new
- * orchestrator writes leave them absent. The work each represented
- * moved to the architect (post-v8.62 unified flow). The legacy fields
- * stay on the type for one release; slated for removal in v8.63+
- * once one full release cycle has aged out any in-flight state files.
- * The qa-gate continues to read `triage.surfaces` literally; the
- * WRITER moved (from triage step to the architect's Frame/Spec write
- * step), the field itself remains the source of truth for the qa-runner
- * dispatch decision.
+ * Decision recorded at the triage gate that opens every flow; persisted so
+ * resumes never re-trigger triage. Triage is a lightweight router — new writes
+ * carry only the routing fields (complexity / ceremonyMode / path / mode). The
+ * classification fields below are soft-deprecated (kept optional so old state
+ * files validate); their work moved to the architect. The qa-gate still reads
+ * `triage.surfaces` literally — only that field's writer moved.
  */
 export interface TriageDecision {
   complexity: RoutingClass;
   /**
-   * TDD ceremony mode for the flow: `inline` (trivial; no plan, single
-   * commit), `soft` (one TDD cycle per feature, plain commits), or
-   * `strict` (per-criterion RED → GREEN → REFACTOR with posture-driven
-   * commit prefixes the reviewer verifies ex-post). Selected at triage;
-   * immutable for the flow's lifetime. rename of `acMode`; legacy
-   * field is hoisted on read for one release.
+   * TDD ceremony mode: `inline`/`soft`/`strict`. Selected at triage; immutable
+   * for the flow's lifetime. Rename of `acMode` (hoisted on read).
    */
   ceremonyMode: CeremonyMode;
   /** Stages the orchestrator promised to run, in order. Empty for trivial. */
@@ -1316,428 +554,123 @@ export interface TriageDecision {
   /** ISO timestamp when triage was recorded. */
   decidedAt: string;
   /**
-   * Did the user override the orchestrator's recommendation?
-   *
-   * @deprecated v8.44 — write-only audit telemetry has been relocated to
-   * `.cclaw/state/triage-audit.jsonl` (see `src/triage-audit.ts >
-   * appendTriageAudit`). New orchestrator prompts emit a per-decision
-   * audit line instead of stuffing the bit into the routing state. The
-   * field stays in the schema as optional so v8.0-state files
-   * still validate on read; new flows should leave it absent and let
-   * the audit log carry the signal. Slated for removal once no
-   * supported flow-state.json schema version writes it.
+   * Did the user override the recommendation?
+   * @deprecated — audit telemetry relocated to `triage-audit.jsonl`; kept
+   * optional so old state files validate.
    */
   userOverrode?: boolean;
   /**
-   * Collapsed to `"auto"` for every non-inline path and `null` for
-   * inline (the user-facing `step` / `auto` choice was retired in
-   * v8.61). The orchestrator no longer branches on this value at the
-   * plan / review / critic gates. Pre-v8.61 state files carrying
-   * `runMode: "step"` continue to validate (the type still admits both
-   * values from {@link RUN_MODES} for back-compat) but run as `auto`
-   * on the next `/cc`.
-   *
-   * Optional in TypeScript so v8.2 state files (which lack `runMode`)
-   * still validate; readers consume the field for back-compat audit
-   * trails only.
-   *
-   * On v8.14+ inline / trivial flows, `runMode` is written as `null`
-   * because there are no stages to chain.
-   */
-  runMode?: RunMode | null;
-  /**
-   * v8.58 — flow mode dimension. `"task"` (default; pre-v8.58 behaviour;
-   * full pipeline through plan → build → qa? → review → critic → ship)
-   * or `"research"` (v8.58; rewired to architect in v8.62; standalone
-   * architect specialist only, outputs `research.md`, no plan handoff).
-   * Pre-v8.58 state files lack this field; readers MUST default to
-   * `"task"` on absent. Selected by the orchestrator's Hop 1 Detect
-   * step based on the task prefix (`research `; v8.112 retired the
-   * equivalent flag form) — NOT by the triage classification heuristic. Immutable for the
-   * lifetime of the flow (research-mode flows do not flip to task-mode
-   * mid-run).
+   * Flow mode: `"task"` (default) or `"research"` (standalone architect, outputs
+   * `research.md`). Set by the Hop 1 Detect step from the task prefix, not the
+   * triage heuristic. Readers default to `"task"`; immutable for the lifetime.
    */
   mode?: ResearchMode;
   /**
-   * Pre-flight assumptions surfaced at Hop 2.5 (between triage and first
-   * dispatch). Each entry is one short sentence the orchestrator was about
-   * to silently default to (stack pick, lib version, file layout, target
-   * platform, code-style preference). The user either acknowledged or
-   * corrected these before any sub-agent ran.
-   *
-   * Optional and skipped entirely on the inline path. On soft/strict, the
-   * pre-flight skill writes 3-7 entries here; subsequent flows in the same
-   * project may seed defaults from the most recent shipped slug's
-   * `assumptions:` block.
-   *
-   * Reading rule: `null` or absent means "no pre-flight ran" (legacy state
-   * or trivial path). An empty array means "ran and the user accepted no
-   * assumptions are needed", which is rare but valid.
-   *
-   * @deprecated v8.58 — the orchestrator no longer writes this field at
-   * the triage step. The assumption-capture surface moved to the
-   * architect's Bootstrap step (v8.62 unified flow; pre-v8.62 was split
-   * across design Phase 0 / ac-author Phase 0). The architect writes
-   * the captured list to `plan.md` under `## Assumptions` rather than
-   * to `triage.assumptions`. Kept on the type as optional + deprecated
-   * so pre-v8.58 state files continue to validate; readers (specialists,
-   * resume paths) still consume the field when it is present (back-compat
-   * with a flow paused mid-plan). Slated for removal in v8.63+
-   * once one full release cycle has aged out in-flight state files.
+   * Pre-flight assumptions. Reading rule: `null`/absent = no pre-flight ran;
+   * empty array = ran with nothing to record.
+   * @deprecated — capture moved to the architect's Bootstrap step (`plan.md > ##
+   * Assumptions`); kept optional, consumed when present (mid-plan resume).
    */
   assumptions?: string[] | null;
   /**
-   * Interpretation forks recorded at Hop 2.5 (sub-step before the
-   * assumptions question). **Legacy field.** On pre-v8.14 flows the
-   * orchestrator surfaced 2-4 distinct interpretations of an ambiguous
-   * prompt and let the user pick. v8.14-v8.60 handled ambiguity inside
-   * the `design` specialist's Phase 1 (Clarify). v8.61 removed Phase 1
-   * (always-auto, no mid-plan dialogue) and v8.62 absorbed `design`
-   * into `architect`; the architect now resolves ambiguity silently
-   * using best judgment, surfacing assumptions in `plan.md` instead of
-   * asking the user. The field stays in the schema so legacy state
-   * files validate; new flows leave it `null`/absent.
-   *
-   * Each entry is the verbatim chosen-interpretation sentence (so
-   * downstream specialists see the user's framing, not the orchestrator's
-   * paraphrase). When the prompt was unambiguous and forks were not
-   * surfaced, the field is `null` or absent.
-   *
-   * @deprecated v8.58 — the orchestrator no longer writes this field.
-   * v8.61 + v8.62 closed the surface entirely (no more clarify dialogue
-   * anywhere in the pipeline). Kept on the type as optional + deprecated
-   * for one release.
+   * Legacy ambiguity-fork interpretations (verbatim chosen-interpretation
+   * sentences; `null`/absent when none). The architect now resolves ambiguity
+   * silently.
+   * @deprecated — surface closed; kept optional so legacy state validates.
    */
   interpretationForks?: string[] | null;
   /**
-   * `true` only on the zero-question fast path: trivial complexity
-   * with high confidence, where the orchestrator skipped the structured
-   * triage ask entirely and went straight to the inline edit. The
-   * one-sentence announce-and-execute path leaves an explicit audit trail
-   * in the flag (downstream tooling and `/cc-cancel` rollback flows look at
-   * this to distinguish "user accepted explicitly" from "user did not see a
-   * gate").
-   *
-   * `false` on every other path (combined-form ask answered, custom path,
-   * legacy state). Optional for backward compat.
-   *
-   * @deprecated v8.44 — write-only audit telemetry relocated to
-   * `.cclaw/state/triage-audit.jsonl` (see `src/triage-audit.ts >
-   * appendTriageAudit`). The "did we take the zero-question fast path?"
-   * signal now lives in the audit log entry's `autoExecuted` column;
-   * downstream readers do not branch on this field, so leaving it
-   * absent on new flows is safe. Field kept in schema for backward
-   * compat with v8.14-state files.
+   * `true` only on the zero-question fast path (trivial + high confidence);
+   * `false`/absent otherwise.
+   * @deprecated — signal relocated to the audit log; kept optional for back-compat.
    */
   autoExecuted?: boolean | null;
   /**
-   * prior shipped slugs whose tag/surface profile matched the
-   * current task at triage time. Populated by the orchestrator between
-   * Hop 2 (triage persistence) and Hop 2.5 (pre-flight) via
-   * `findNearKnowledge(triage.taskSummary, …)`. Read by `architect`
-   * and `reviewer` as background context (the spec calls them
-   * "what we already know nearby" / "priors when scoring findings").
-   *
-   * Persistence rule: **omit the field entirely when empty** — the
-   * orchestrator stamps `triage.priorLearnings` only when at least one
-   * hit cleared the Jaccard threshold. An absent field is the canonical
-   * "no prior learnings" signal; downstream specialists check presence,
-   * not array length.
-   *
-   * Stored as the array of raw `KnowledgeEntry` rows (slug, summary,
-   * notes, tags, touchSurface, signals, …) — `unknown[]` here because the
-   * full KnowledgeEntry shape lives in `knowledge-store.ts` and importing
-   * it would create a cycle. Validators only check that each entry is a
-   * plain object with a string `slug`; the entry's own assertions handle
-   * deeper shape checks when readers parse it.
-   *
-   * @deprecated v8.58 — the orchestrator no longer performs the Hop 2.5
-   * prior-learnings lookup. The architect dispatches `learnings-research`
-   * on demand, which reads `knowledge.jsonl` directly. Kept on the type
-   * as optional + deprecated for one release so pre-v8.58 state files
-   * (which may carry the field) continue to validate. Specialists that
-   * read this field still consume it verbatim when present (back-compat
-   * resume path); when absent on new flows the architect runs its own
-   * lookup.
+   * Prior shipped slugs whose tag/surface profile matched at triage time, stored
+   * as raw `KnowledgeEntry` rows (`unknown[]` to avoid an import cycle; validators
+   * only check each is an object with a string `slug`). Omitted when empty
+   * (presence, not length, is the signal).
+   * @deprecated — the architect now runs its own `learnings-research` lookup;
+   * kept optional, consumed verbatim when present.
    */
   priorLearnings?: unknown[] | null;
   /**
-   * `true` when the user picked `keep-iterating-anyway` at the
-   * 5-iteration review cap, which reset `reviewCounter` to 3 and bought
-   * two more review rounds. Telemetry stamp so a future "why did this
-   * flow take 7 review iterations?" audit can answer without re-reading
-   * the entire iteration log.
-   *
-   * Optional, defaults to absent / `false`. Set exactly once per flow at
-   * the moment the override picker fires; never cleared by ship.
-   * Backward compat: state files without the field validate
-   * unchanged.
-   *
-   * @deprecated v8.44 — write-only audit telemetry relocated to
-   * `.cclaw/state/triage-audit.jsonl` (see `src/triage-audit.ts >
-   * appendTriageAudit`). The "did the user buy two extra review
-   * rounds?" signal now lives in the audit log entry's
-   * `iterationOverride` column. Field kept in schema for backward
-   * compat with v8.20-state files; new orchestrator prompts
-   * append an audit line at the moment the override picker fires
-   * instead of writing here.
+   * `true` when the user picked `keep-iterating-anyway` at the 5-iteration review
+   * cap (reset `reviewCounter` to 3). Optional, defaults absent/`false`.
+   * @deprecated — signal relocated to the audit log; kept for back-compat.
    */
   iterationOverride?: boolean | null;
   /**
-   * set when Hop 1 (Detect) auto-downgraded `ceremonyMode` because the
-   * project lacks a usable VCS. Today the only value is `"no-git"`, which
-   * means the orchestrator detected the absence of `.git/` at projectRoot
-   * and forced `ceremonyMode` from `strict` to `soft` (strict requires per-criterion
-   * trace commits, which require git). The field is purely informational — it
-   * leaves an audit trail for "why is this large-risky slug running in
-   * soft mode?". Downstream readers can branch on its presence to
-   * suppress git-only affordances (parallel-build worktrees, inline-path
-   * `git commit`).
-   *
-   * Optional, omitted on flows that did not downgrade. `null` is also
-   * accepted for forward-compat callers that explicitly clear the field.
-   * Pre-v8.23 flows without the field validate unchanged.
-   *
-   * Reserved values: `"no-git"`. Future Hop 1 health checks may add
-   * additional reasons (e.g. `"detached-head"`); validators only check
-   * type (`string | null | absent`), not membership in a fixed enum, so
-   * a new reason can be introduced without a schema bump.
+   * Set when Hop 1 auto-downgraded `ceremonyMode` for lack of a usable VCS; only
+   * value today is `"no-git"` (forced `strict` → `soft`). Informational audit
+   * trail; readers may branch on presence to suppress git-only affordances.
+   * Optional/`null` when no downgrade; validators check type only, so new reasons
+   * need no schema bump.
    */
   downgradeReason?: string | null;
   /**
-   * set by the orchestrator when the user picks
-   * `[2] accept-and-ship` at the Hop 4.5 block-ship picker (see
-   * `.cclaw/lib/runbooks/critic-steps.md > Verdict handling`). The
-   * critic returned `block-ship` and the user chose to ship anyway. The
-   * field is a pure audit-trail boolean — downstream readers do not
-   * branch on it; it just records that a critic block was overridden
-   * for this slug so a future "why did this slug ship with critic
-   * blocks open?" audit can answer without re-reading review.md /
-   * critic.md.
-   *
-   * Optional, omitted on the common path (critic `pass` / `iterate` or
-   * user accepted the picker's `[1] fix and re-review` arm). Stamped
-   * exactly once per slug, at the moment the picker fires; never
-   * cleared by ship. Strict in shape — `true` is the only meaningful
-   * value, so the validator rejects `null` to keep the audit trail
-   * unambiguous (absent = no override; `true` = override). Pre-v8.43
-   * flows without the field validate unchanged.
-   *
-   * @deprecated v8.58 — relocated to the v8.44 audit-log telemetry
-   * surface (`.cclaw/state/triage-audit.jsonl`) so the triage object
-   * stays a pure routing decision. The orchestrator no longer writes
-   * this field; the audit-log entry captures the override signal
-   * instead (mirroring the relocation of `userOverrode` /
-   * `autoExecuted` / `iterationOverride`). Kept on the type as
-   * optional + deprecated for one release.
+   * `true` when the user picked `accept-and-ship` at the Hop 4.5 block-ship
+   * picker (critic block overridden). Audit-only; stamped once, never cleared;
+   * the validator rejects `null` (absent = no override).
+   * @deprecated — relocated to the audit-log telemetry surface; kept optional.
    */
   criticOverride?: boolean;
   /**
-   * free-text per-decision notes attached to the triage. The
-   * critic uses this to record skip rationale (e.g. the
-   * `docs-only-trivial` exemption skip reason cited in
-   * `.cclaw/lib/agents/critic.md > Skip conditions`). Originally
-   * referenced in prose as `triageNotes` in the critic prompt;
-   * lifts it into the canonical `triage.notes` slot on the
-   * `TriageDecision` so the field has a declared home and a typed
-   * validator entry.
-   *
-   * Optional, omitted on flows with nothing to record. Validators
-   * accept only `string` when present; `null` is rejected to keep the
-   * "absent = no note" semantics unambiguous. Pre-v8.43 flows without
-   * the field validate unchanged.
-   *
-   * @deprecated v8.58 — the orchestrator's lightweight router no
-   * longer writes narrative notes at triage. Critic skip rationale
-   * continues to land in `.cclaw/state/triage-audit.jsonl` via the
-   * audit-log surface; specialists capture narrative context
-   * in their own artifacts (`plan.md`, `research.md`). Kept on the
-   * type as optional + deprecated for one release; readers (resume
-   * paths, critic) still consume the field verbatim when present.
+   * Free-text per-decision triage notes (e.g. critic skip rationale). Optional;
+   * validators accept only `string` when present (`null` rejected).
+   * @deprecated — the lightweight router no longer writes notes; kept optional,
+   * consumed verbatim when present.
    */
   notes?: string;
   /**
-   * surfaces this slug touches. Drives the qa-runner
-   * gate: qa dispatches only when `surfaces` includes `"ui"` or
-   * `"web"` AND `ceremonyMode != "inline"`. See {@link Surface} for
-   * the vocabulary.
-   *
-   * Multiple values per slug are expected — a /cc that builds an HTTP
-   * endpoint plus a Vue component emits `["api", "ui"]`. The writer
-   * emits the union of detected surfaces, not a single primary
-   * classification.
-   *
-   * the **writer** of this field moved from the triage step
-   * (orchestrator Hop 2, pre-v8.58) to the architect (post-v8.62
-   * unified flow; pre-v8.62 was split across design Phase 2 / ac-author
-   * Phase 1):
-   *   - **strict / soft path**: architect writes the surfaces list to
-   *     `flow-state.json` via a `patchFlowState` call after authoring
-   *     `## Frame` + `## Spec`.
-   *   - **inline path**: not written; downstream readers fall back to
-   *     a permissive default (no surface-specific routing fires).
-   * The field itself is NOT deprecated — the qa-runner gate
-   * reads it literally and `surfaces` remains the canonical signal
-   * for visual-review opt-in. Only the WRITER moved.
-   *
-   * Backwards compat: when absent or empty, the orchestrator and the
-   * qa gate treat the slug as `["other"]` (no QA gating). Pre-v8.52
-   * state files without this field validate unchanged.
+   * Surfaces this slug touches; drives the qa-runner gate (`ui`/`web` +
+   * non-inline). See {@link Surface}. Multiple values per slug expected (the
+   * union). NOT deprecated — the canonical visual-review signal; only its writer
+   * moved (triage → architect Frame/Spec). Absent/empty → `["other"]` (no gating).
    */
   surfaces?: Surface[];
   /**
-   * Ambiguity score (v8.67) the triage sub-agent computes from the raw
-   * task input. Integer in `[0, 100]`; higher = more ambiguous. Drives
-   * the architect's Clarify-phase entry gate: when
-   * `ambiguityScore >= config.clarify.ambiguity_threshold` (default 60)
-   * AND `ceremonyMode != "inline"`, the architect runs a Clarify phase
-   * BEFORE writing `plan.md` (one question per turn, max 5, until the
-   * user signals "go" / "ready" / "proceed" or ambiguity resolves).
-   *
-   * Heuristic sources the triage prompt names verbatim:
-   * - vague verbs without targets ("improve", "make better", "fix
-   *   bugs"),
-   * - missing acceptance criteria (no concrete pass/fail signal in the
-   *   prompt),
-   * - multiple plausible interpretations (the same task wording could
-   *   land 2+ different implementations),
-   * - no concrete file/function names in the prompt.
-   *
-   * Optional + back-compat: pre-v8.67 state files lack this field and
-   * the architect treats absence as `0` (no clarify). Triage writers
-   * MUST clamp values outside `[0, 100]` to the nearest bound rather
-   * than throwing.
+   * Ambiguity score the triage sub-agent computes from the raw task; integer
+   * `[0, 100]`, higher = more ambiguous. Gates the architect's Clarify phase
+   * (`>= clarify.ambiguity_threshold`, default 60, AND non-inline). Readers treat
+   * absent as `0`; writers clamp out-of-range values to the nearest bound.
    */
   ambiguityScore?: number;
   /**
-   * Research depth tier (v8.69). Set ONLY on research-mode flows
-   * (`triage.mode == "research"`); absent on `task` mode. The
-   * orchestrator's research-mode fork stamps this field at the same
-   * time it stamps the sentinel triage block, deriving the depth tier
-   * from the topic wording via the triage sub-agent's
-   * `research_depth` auto-classification (the standard `/cc <task>`
-   * triage gate is bypassed in research mode, so the
-   * auto-classification runs as part of the research-mode fork's
-   * Detect step rather than at the triage hop). v8.112 retired the
-   * explicit depth-override flags; the auto-classification is the
-   * sole selection path. See {@link ResearchDepth} for tier semantics.
-   *
-   * Pre-v8.69 research-mode state files lack this field; readers MUST
-   * default to {@link DEFAULT_RESEARCH_DEPTH} (`"standard"`) on absent
-   * so resumes of in-flight research flows behave identically to
-   * pre-v8.69. Task-mode flows leave this field absent unconditionally
-   * — the research depth has no meaning outside `/cc research`.
-   *
-   * Immutable for the flow's lifetime (research depth does not flip
-   * mid-run; `/cc-cancel` + a fresh `/cc research` is the only way to
-   * change tier).
+   * Research depth tier — set ONLY on research-mode flows (absent on `task`),
+   * derived from the topic wording. See {@link ResearchDepth}. Readers default to
+   * {@link DEFAULT_RESEARCH_DEPTH} on absent; immutable for the lifetime.
    */
   research_depth?: ResearchDepth;
   /**
-   * v8.77 — task shape dimension. `"build"` (default; pre-v8.77 behaviour;
-   * the user wants to add / change / refactor / extend code), `"debug"`
-   * (the user is investigating a regression / error / broken behaviour
-   * on EXISTING shipped code — triggers the investigator hop BEFORE
-   * architect), or `"research"` (reserved sentinel for `/cc research`
-   * flows; triage itself never emits this value on a standard `/cc
-   * <task>` dispatch — the research-mode fork bypasses triage entirely).
-   *
-   * **Orthogonal to {@link RoutingClass}.** A `debug` task can be
-   * trivial / small-medium / large-risky; complexity drives
-   * `ceremonyMode` + `path`, while `taskShape` only inserts the
-   * investigator hop ahead of architect. The two fields combine on
-   * dispatch.
-   *
-   * **Detection** (triage sub-agent): bug-shape keywords (`regression`
-   * / `error` / `broken` / `failing` / `wrong` / `incorrect` / `slow`
-   * / `crash` / `bug` / `fix` / `hotfix`) PLUS repo-anchored evidence
-   * (file:line ref, commit SHA, log excerpt, stack trace) BOTH present
-   * → `debug`. Single keyword alone without anchored evidence stays
-   * `build` (refactor / "fix the README" / aspirational "make it
-   * better" prompts are NOT bug-shaped). Existing complexity heuristic
-   * is unchanged — taskShape is computed independently.
-   *
-   * Pre-v8.77 state files lack this field; readers MUST default to
-   * {@link DEFAULT_TASK_SHAPE} (`"build"`) on absent. Immutable for
-   * the flow's lifetime — to change the shape, the user invokes
-   * `/cc-cancel` and starts a fresh `/cc` with a clearer prompt.
+   * Task shape: `"build"` (default), `"debug"` (investigator hop before
+   * architect), or `"research"` (reserved sentinel; triage never emits it).
+   * Orthogonal to {@link RoutingClass}. Detection: bug-shape keywords AND
+   * repo-anchored evidence both present → `debug`. Readers default to
+   * {@link DEFAULT_TASK_SHAPE}; immutable for the lifetime.
    */
   taskShape?: TaskShape;
   /**
-   * v8.82 — developer-experience surface flag (back-compat: pre-v8.82
-   * state files lack this field). Set by the triage sub-agent's
-   * "Devex surface detection" step at Hop 2; persisted by the
-   * orchestrator into `triage.devexSurface` so the start-command's
-   * plan-devex dispatch can stamp `walkPlanDevex: true` on the
-   * envelope without re-scanning the prompt at plan-stage time.
-   *
-   * Set `true` when the raw task text matches any of:
-   * - explicit SDK / API / CLI / library / public-interface keywords
-   *   (SDK, API, endpoint, route, CLI, command, bin, library,
-   *   package, module, export, public interface, breaking change,
-   *   migration, codemod, error message, error code, telemetry,
-   *   analytics event);
-   * - explicit method / signature vocabulary (method, function,
-   *   class, interface, type signature, generic, parameter, return
-   *   type, async, callback, promise, stream);
-   * - file-pattern hints (.d.ts, openapi, swagger, .proto files,
-   *   index.ts exports, bin/ scripts, cli.ts, api/ routes,
-   *   packages/.../src/index.ts, .pyi);
-   * - harness hints (SDK rewrite, CLI redesign, library refactor,
-   *   endpoint rename, npm publish, pypi release, crates release).
-   *
-   * Set `false` when the task touches only UI / data / infra / docs /
-   * config without developer-facing API surface. The flag is purely
-   * informational at triage — it gates the plan-devex specialist
-   * dispatch at the plan stage.
-   *
-   * Optional + back-compat: pre-v8.82 state files lack this field and
-   * the plan-devex gate treats absence as `false` (the historical
-   * pre-v8.82 behaviour where plan-devex did not exist). Immutable
-   * for the flow's lifetime.
+   * Developer-experience surface flag set by triage's devex-detection step and
+   * read by the plan-devex dispatch gate. `true` when the task touches
+   * SDK/API/CLI/library/public-interface surface; `false` for UI/data/infra/docs
+   * only. Readers default to `false` on absent; immutable for the lifetime.
    */
   devexSurface?: boolean;
+  /**
+   * Design surface flag set by triage's design-detection step and read by the
+   * plan-critic `design` rubric gate + the qa-runner visual gate. `true` when the
+   * task touches UI/design/frontend/UX surface; `false` otherwise. Readers default
+   * to `false` on absent; immutable for the lifetime. Mirror of {@link devexSurface}.
+   */
+  designSurface?: boolean;
 }
 
 /**
- * Per-dimension ambiguity dimensions the Clarify protocol scores
- * after every user answer. The four dimensions are orthogonal axes of
- * "is the task understood well enough to author plan.md without silent
- * defaults?":
- *
- * - `goal` — primary objective clarity. Can the architect state the
- *   one-sentence goal of the task without qualifiers? Are the key
- *   nouns + verbs unambiguous? Highest weight in the ambiguity formula
- *   (0.4) because a wrong goal makes every downstream specialist
- *   build the wrong thing.
- * - `constraints` — boundary clarity. Are the limitations, non-goals,
- *   compatibility requirements, and out-of-scope cuts clear? Second
- *   weight (0.3) — a wrong constraint surfaces at plan-critic / qa
- *   time but not before any code is written.
- * - `criteria` — success criteria / verification clarity. Could the
- *   architect write a test or AC that proves the task shipped? Are
- *   the pass/fail signals concrete? Equal weight to constraints (0.3)
- *   because cclaw's AC-driven verification depends on criteria being
- *   pinned at plan-time.
- * - `context` — repo / existing-system clarity (brownfield). Does the
- *   architect understand the surrounding code well enough to modify it
- *   safely? Weight is 0.0 in the ambiguity formula — `context` is
- *   *informational*, not gating. Even on greenfield projects context
- *   may be unclear; we persist it in the round's `clarifyRounds[]` audit
- *   entry so the orchestrator can target it on later rounds, but the
- *   math-gated exit threshold does not block on it. v8.105 removed the
- *   user-visible per-round table render; the dimension's value is now
- *   carried purely in flow-state for audit / compound learnings. Reference: deep-interview's brownfield context
- *   dimension folded into the same vocabulary so cclaw stays
- *   single-shape across project types.
- *
- * Reference: oh-my-claudecode/skills/deep-interview/SKILL.md
- * (mathematical scoring of {goal,constraints,criteria,context}) +
- * everyinc-compound/plugins/compound-engineering/skills/ce-brainstorm
- * Phase 1.2 gap lenses (specificity/evidence/counterfactual/attachment;
- * already in cclaw's triage ambiguity-score signals — the four
- * dimensions are the same lenses re-projected onto the per-round
- * scoring surface).
+ * Ambiguity dimensions the Clarify protocol scores after each user answer:
+ * `goal` (primary-objective clarity; weight 0.4), `constraints` (boundary/
+ * non-goal; 0.3), `criteria` (success/verification; 0.3), `context` (repo/
+ * existing-system; 0.0 — informational, not gating; persisted for audit).
  */
 export const CLARIFY_DIMENSIONS = [
   "goal",
@@ -1748,17 +681,9 @@ export const CLARIFY_DIMENSIONS = [
 export type ClarifyDimension = (typeof CLARIFY_DIMENSIONS)[number];
 
 /**
- * One per-dimension score the architect / research orchestrator
- * computes after every Clarify answer (v8.78 iterative-clarify
- * protocol). `score` is a float in `[0.0,
- * 1.0]` where 1.0 = "this dimension is fully clear; no further question
- * needed" and 0.0 = "still wide open". `rationale` is a one-sentence
- * explanation of why the score landed where it did (what gap remains
- * or what answer pinned it).
- *
- * Validators clamp `score` to `[0.0, 1.0]` on write rather than
- * throwing; out-of-range scores are a writer bug, not a flow-state
- * corruption.
+ * One per-dimension Clarify score. `score` is a float in `[0.0, 1.0]` (1.0 =
+ * fully clear, 0.0 = wide open); `rationale` is a one-sentence explanation.
+ * Validators clamp `score` to range on write.
  */
 export interface ClarifyDimensionScore {
   dimension: ClarifyDimension;
@@ -1767,37 +692,14 @@ export interface ClarifyDimensionScore {
 }
 
 /**
- * One round of iterative Clarify dialogue (v8.78). Each round records the
- * per-dimension scores after the user's answer to that round's
- * question, the resulting ambiguity scalar (per the formula
- * `1 - (goal*0.4 + constraints*0.3 + criteria*0.3 + context*0.0)`),
- * the dimension the orchestrator targeted with the NEXT question
- * (the weakest dimension on the post-answer scores), and the question
- * the orchestrator asked.
- *
- * The round array is the persistent audit trail for the Clarify
- * dialogue. v8.78 mirrored the rounds verbatim under a user-visible
- * per-round score table rendered in chat; v8.105 dropped the
- * user-visible render (only the question reaches the user). The
- * scores still persist here for audit / compound learnings / later
- * "why did we ask question N?" inspection — the cclaw round array is
- * the canonical record of the dialogue math. Append-only (rounds are
- * never mutated after the orchestrator advances).
- *
- * - `round` — 1-indexed round number.
- * - `dimensionScores` — array of 4 entries, one per
- *   {@link CLARIFY_DIMENSIONS} value, in canonical order.
- * - `ambiguity` — scalar in `[0.0, 1.0]`; lower = clearer. Math-gated
- *   exit fires when `ambiguity < 0.25`.
- * - `targetedDimension` — the dimension the next question targets
- *   (weakest dimension after this round's answer). On the final
- *   round (math-gated exit, round cap, or user "ready" signal) the
- *   field still names the weakest dimension; downstream readers
- *   ignore it on terminal rounds.
- * - `question` — the question the orchestrator actually asked this
- *   round (verbatim, post-template-fill). On round 1 this is the
- *   opening question; on subsequent rounds it is the question
- *   targeting the prior round's `targetedDimension`.
+ * One round of iterative Clarify dialogue; the array is the append-only audit
+ * trail (rounds never mutated). Only the question reaches the user; scores
+ * persist for audit.
+ * - `round` — 1-indexed.
+ * - `dimensionScores` — one entry per {@link CLARIFY_DIMENSIONS} value, in order.
+ * - `ambiguity` — scalar `[0.0, 1.0]` (lower = clearer); math-gated exit fires < 0.25.
+ * - `targetedDimension` — dimension the next question targets (ignored on terminal rounds).
+ * - `question` — the question actually asked this round, verbatim.
  */
 export interface ClarifyRoundState {
   round: number;
@@ -1808,50 +710,27 @@ export interface ClarifyRoundState {
 }
 
 /**
- * Default ambiguity threshold for the math-gated Clarify exit (v8.78).
- * `ambiguity < EXIT_THRESHOLD` ends the dialogue (in addition to the
- * existing "user signals ready" / "round cap reached" exits). 0.25
- * matches the deep-interview reference's "clarity threshold" framing
- * and corresponds to a weighted-score sum > 0.75 across the gating
- * dimensions (goal + constraints + criteria).
+ * Math-gated Clarify exit threshold: `ambiguity < 0.25` ends the dialogue (in
+ * addition to "user ready" / round-cap exits), i.e. a weighted-score sum > 0.75
+ * across the gating dimensions.
  */
 export const CLARIFY_EXIT_AMBIGUITY_THRESHOLD = 0.25;
 
 /**
- * Round caps for the iterative Clarify dialogue (v8.78). The architect
- * Phase −1 cap stays at 5 (v8.67 contract); research-mode Phase 1's
- * cap is higher (8) because research discovery has more axes to pin
- * (research is exploratory by definition, so the budget allows
- * deeper questioning). Both surfaces share the same math-gated exit
- * threshold ({@link CLARIFY_EXIT_AMBIGUITY_THRESHOLD}).
+ * Round caps for iterative Clarify: architect Phase −1 caps at 5; research mode
+ * Phase 1 at 8 (more axes to pin). Both share
+ * {@link CLARIFY_EXIT_AMBIGUITY_THRESHOLD}.
  */
 export const CLARIFY_ARCHITECT_ROUND_CAP = 5;
 export const CLARIFY_RESEARCH_ROUND_CAP = 8;
 
 /**
- * Canonical `Recommended next` enum that every specialist's slim
- * summary uses. Lifted out of prose into a typed const so the
- * orchestrator + tests can refer to a single source of truth.
- *
- * Pre-v8.79 the field was free-text prose pinned by per-specialist
- * documentation (`continue` / `review-pause` / `fix-only` / `cancel` /
- * `accept-warns-and-ship` for the canonical surface; `build` / `review`
- * / `iterate` / `block-ship` etc. for specialist-specific dialects).
- * The v8.79 contract adds a new value, **`awaiting-one-way-confirmation`**,
- * that the architect emits when its plan contains at least one D-N
- * marked `Reversibility: one-way`; the orchestrator parses the value and
- * surfaces a structured pause to the user BEFORE dispatching plan-critic
- * or plan-design. The pause matches the User Sovereignty principle in
- * the ethos preamble — irreversible decisions deserve explicit
- * confirmation before build burns context.
- *
- * Existing values are preserved verbatim so v8.78 and earlier specialist
- * prompts continue to type-check. Specialists that have their own dialect
- * (critic emits `iterate` / `block-ship`; plan-critic emits `revise` /
- * `cancel`; investigator emits `direct-fix` / `needs-plan` / etc.)
- * still document their own values inline in their prompts — the canonical
- * enum is the *orchestrator's* parse target, not a hard constraint on
- * every specialist's slim summary.
+ * Canonical `Recommended next` enum the orchestrator parses from specialist slim
+ * summaries. `awaiting-one-way-confirmation` is emitted by the architect when
+ * the plan has a `Reversibility: one-way` D-N and triggers a structured user
+ * pause before plan-critic. Specialists with their own dialect (critic,
+ * plan-critic, investigator) document those inline — this enum is the
+ * orchestrator's parse target, not a hard constraint.
  */
 export const RECOMMENDED_NEXT = [
   "continue",
@@ -1864,47 +743,25 @@ export const RECOMMENDED_NEXT = [
 export type RecommendedNext = (typeof RECOMMENDED_NEXT)[number];
 
 /**
- * User choice at the One-way Door Gate — the structured pause the
- * orchestrator surfaces between architect slim-summary and plan-critic
- * dispatch when the plan contains any `Reversibility: one-way` D-N.
- *
- * - `confirm` — user accepts the irreversible commits; orchestrator
- *   proceeds to plan-critic (or directly to builder when plan-critic's
- *   strict gate is off).
- * - `edit` — user wants to revise the plan; orchestrator surfaces a
- *   stop-and-report status block asking the user to edit `plan.md`
- *   (typically to soften reversibility or split the decision) and
- *   re-invoke `/cc` once done.
- * - `cancel` — user wants to abort the flow; orchestrator routes to
- *   `/cc-cancel`.
+ * User choice at the One-way Door Gate (the pause between architect and
+ * plan-critic when the plan has a `Reversibility: one-way` D-N): `confirm`
+ * (accept and proceed), `edit` (stop-and-report asking the user to revise
+ * `plan.md`, then re-/cc), `cancel` (route to `/cc-cancel`).
  */
 export const ONE_WAY_DOOR_CHOICES = ["confirm", "edit", "cancel"] as const;
 export type OneWayDoorChoice = (typeof ONE_WAY_DOOR_CHOICES)[number];
 
 /**
- * Persisted state of the One-way Door Gate confirmation. Stamped on
- * `flow-state.json > oneWayDoorConfirmation` when the architect's slim
- * summary returns `Recommended next: awaiting-one-way-confirmation`.
- * Cleared / reset on `/cc-cancel` and by the finalize step.
+ * Persisted One-way Door Gate state on `flow-state.json > oneWayDoorConfirmation`;
+ * stamped when the architect returns `awaiting-one-way-confirmation`, cleared on
+ * `/cc-cancel`/finalize.
+ * - `decisionIds` — the `D-N` ids flagged `Reversibility: one-way`.
+ * - `userChoice` — the user's pick; absent while awaiting. The "awaiting user"
+ *   signal is `currentStage == "plan"` AND `lastSpecialist == "architect"` AND
+ *   this set with `userChoice` absent.
+ * - `confirmedAt` — ISO timestamp; telemetry.
  *
- * - `decisionIds` — the `D-N` ids the architect flagged as
- *   `Reversibility: one-way`. Mirrors the audit trail the user sees in
- *   the structured ask payload; downstream specialists may read it as
- *   "these are the decisions whose blast radius the user explicitly
- *   confirmed".
- * - `userChoice` — the user's pick at the gate (`confirm` / `edit` /
- *   `cancel`). When the gate is in flight (architect returned but the
- *   user hasn't picked yet), the field is absent — the orchestrator
- *   reads `flow-state.json > currentStage == "plan"` AND
- *   `lastSpecialist == "architect"` AND `oneWayDoorConfirmation` set
- *   AND `userChoice` absent as the canonical "awaiting user" signal.
- * - `confirmedAt` — ISO timestamp the user picked; pure telemetry.
- *
- * Optional + back-compat: pre-v8.79 state files lack the field; readers
- * MUST default to `null`/absent (the gate never fired). Immutable for
- * the flow's lifetime — re-architects after `edit` produce a fresh
- * record on the next architect dispatch (the prior record is preserved
- * in the audit trail under `plan.md > ## Decisions`).
+ * Readers default to `null`/absent; immutable for the flow's lifetime.
  */
 export interface OneWayDoorConfirmation {
   decisionIds: string[];

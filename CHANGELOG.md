@@ -1,5 +1,142 @@
 # Changelog
 
+## 8.119.0 - 2026-05-31
+
+### Changed (Phase E, safe slice — reviewer modes 4 → 2)
+
+- **The reviewer drops from four dispatch modes to two — `code` (review a diff / commit range) and `text-review` (review markdown artifacts).** The former `integration` and `release` modes were never enforcement modes — they were *ship-path contexts* that vary only *what the reviewer is pointed at* and *one emphasis bullet*. All the actual teeth (nine axes × five severities × `ceremonyMode` ship gates, the posture-aware git-log inspection, the security threat-model) fire in **every** mode and are unchanged. So `integration` (cross-slice path conflicts / double-edits / boundary tests, after `parallel-build`) and `release` (commit-chain completeness / release notes / breaking-change migration / CHANGELOG staleness, at ship) now ride on `code` as named sweeps. **Zero enforcement lost** — every mode-specific check is relocated, not dropped.
+
+### Why this is safe
+
+- No runtime TypeScript ever branched on the reviewer mode value — `agent.modes` is a documentation `string[]` rendered into the installed agent contract; there is no `ReviewerMode` union, validator, or switch anywhere in `src/`. The collapse is a content + single-test change.
+- The orchestrator's mode choice simplifies from a 4-way to a 2-way pick (diff vs prose); `integration`/`release` were already auto-selected by context (after parallel-build / at ship), so they fit naturally as sweeps on `code`.
+
+### Affected surfaces
+
+- **`reviewer.ts`** — `## Modes` (4 → 2; integration + release described as `code` sweeps), `## Mode-specific rules` (integration + release folded under `code` as sub-bullets, verbatim checks), header line.
+- **`core-agents.ts`** — `modes: ["code", "text-review"]` + description.
+- **Dispatch prose** — `start-command.ts` (stage table review/ship rows + specialist roster), `stage-playbooks.ts` (mode-selection table), `runbooks-on-demand.ts` (parallel-build diagram + ship dispatch + ship-gate matrix), `architect.ts`, `parallel-build.md`, `commit-hygiene.md`, `review-discipline.md`, `artifact-templates.ts`, `skills.ts`, `conversation-language.md` — all `mode=integration` / `mode=release` dispatch tokens now read `mode=code` (integration / release sweep).
+- **`core-agents.test.ts`** — the modes assertion now pins `["code", "text-review"]` and asserts `integration` / `release` are not standalone modes.
+
+### Scope note
+
+- Continues the safe slice of blueprint Phase E (after reversibility 3 → 2 in 8.118). `complexity → ceremonyMode` remains deliberately **not** done — it branches through the triage / plan-critic / builder gates, so collapsing it risks the gate teeth. Deferred pending an explicit call.
+
+### Verification
+
+- build + 882 tests + smoke green.
+
+## 8.118.0 - 2026-05-31
+
+### Changed (Phase E, safe slice — reversibility 3 → 2)
+
+- **The `Reversibility` field on each Decision (D-N) drops from three values to two — `one-way` / `two-way`.** The retired `mostly-two-way` ("reversible with friction") collapses into `two-way`: only `one-way` is load-bearing (the One-way Door Gate scans `plan.md` for a `Reversibility: one-way` D-N and pauses for confirmation), and nothing ever branched on the `two-way` vs `mostly-two-way` distinction — both passed the gate silently. The gate, plan-critic's Reversibility audit, and the critic's risk trigger are unchanged: **zero enforcement lost**. Old plan prose carrying `mostly-two-way` still passes the gate scan (it only matches `one-way`).
+
+### Affected surfaces
+
+- **`src/types.ts`** — `Reversibility = "one-way" | "two-way"` (was three values); JSDoc documents the fold. `Decision.reversibility` unchanged. No runtime validator / parser branches on the enum, so the change is back-compat by construction.
+- **Prompts / templates** — the architect's Reversibility rubric (the `mostly-two-way` bullet's examples folded into `two-way`), plan-critic's mandatory-field list, the `plan.md` template's D-N row + parenthetical, and the One-way Door Gate runbook prose all list two values.
+- **`v874-ethos-bundle.test.ts`** — the type assertion + plan-template / architect-prompt `mostly-two-way` checks updated to the two-value enum.
+
+### Scope note
+
+- This is the **safe slice** of blueprint Phase E. The bolder cuts — `complexity → ceremonyMode` and reviewer modes 4 → 2 — are deliberately **not** done here: `complexity` branches through the triage / plan-critic / builder gates, so collapsing it risks the review/gate teeth. Deferred pending an explicit call.
+
+### Verification
+
+- build + 882 tests + smoke green.
+
+## 8.117.0 - 2026-05-31
+
+### Changed (Phase D — builder: postures 6 → 3)
+
+- **The authored posture set drops from six to three** — `test-first` (default), `refactor-only`, `docs-only`. The three folded-away postures (`characterization-first`, `tests-as-deliverable`, `bootstrap`) are no longer authored on new plans; they ride on `test-first` as documented special-cases (`characterization-first` ≡ `test-first`; `tests-as-deliverable` ≡ a single `test(SL-N)`; `bootstrap` ≡ `test-first` with the SL-1 green-only runner-install escape). **No capability lost** — the validators and the reviewer's per-posture commit-chain recipes still accept the retired three (now exported as `RETIRED_POSTURES`), so shipped + upgraded plans keep parsing and reviewing correctly.
+
+### Affected surfaces
+
+- **`src/types.ts`** — `POSTURES` shrinks to the three authored values; new `RETIRED_POSTURES` tuple holds the folded-away three; `Posture` is `ActivePosture | <retired>` (all six stay type-valid for back-compat); `DEFAULT_POSTURE` unchanged.
+- **Validators stay tolerant** — `src/flow-state.ts` (`isPosture`) and `src/artifact-frontmatter.ts` accept `POSTURES ∪ RETIRED_POSTURES`; `src/posture-validation.ts` (`POSTURE_COMMIT_PREFIXES` / `validatePostureTouchSurface`) keeps all six recipes.
+- **Authoring surfaces → three** — the architect's verb-heuristic table, the builder's commit-shape table, and the `plan.md` template advertise only the three; the folded cases are documented inline (test-is-deliverable / runner-install escape / characterization RED).
+- **Validation surfaces keep six, tagged `(legacy)`** — reviewer, critic, qa-runner, `tdd-and-verification.md`, `commit-hygiene.md`, and `antipatterns.ts` retain the retired recipes (tagged legacy) so archived / upgraded plans still review correctly. `CANONICAL_POSTURE_LINE` (derived from `POSTURES`) now lists three.
+
+### Tests / docs
+
+- `posture.test.ts` — asserts `POSTURES` is the three authored values + `RETIRED_POSTURES` is the three retired; adds a back-compat round-trip proving retired postures still parse on read.
+- `posture-table-consistency.test.ts` — canonical line + expected tuple updated to three; the per-specialist mention check (now three) passes.
+- build + 882 tests + smoke green.
+
+## 8.116.0 - 2026-05-31
+
+### Changed (Phase D — builder: sequential build by default)
+
+- **The builder now builds slices sequentially by default; parallel worktree dispatch is opt-in via `topology: parallel-build`.** Previously the builder's "topological layer dispatch" prose said "parallel-by-default" and fanned out every ≥2-slice layer into concurrent sub-builders — which contradicted the architect, who already defaults `topology` to `inline` (and "always picks inline for ≤4 slices"). The builder now honours the architect's topology field: on `inline` (default / absent) it runs every slice inline one at a time in topological-layer order; only on `topology: parallel-build` does it spin up the worktree-per-slice parallel dispatch. No capability lost — parallel builds still run when the architect opts in; the default path is simpler.
+
+### Affected surfaces
+
+- **`src/content/specialist-prompts/builder.ts`** — the "Topological layer dispatch" section is retitled "sequential by default", its layer table reframed (`inline` → run inline one slice at a time; `parallel-build` → fan out), the "Dispatch shape" section gated behind `topology: parallel-build`, and the worktree-lifecycle note drops the "default for the strict-mode common case" framing.
+- **`src/content/start-command.ts`** — the `#### build` pointer now reads "sequential by default in topological-layer order (parallel worktree dispatch is opt-in via `topology: parallel-build`)".
+- **`src/content/specialist-prompts/architect.ts`** — unchanged; already defaulted `topology` to `inline` with `parallel-build` opt-in. The builder now matches it (the prior drift is closed).
+- **`README.md`** — the tagline notes slices build sequentially by default, fanning out to parallel worktrees only when the plan opts in.
+
+### Tests / docs
+
+- `topologicalLayers` (the pure layering utility) is unchanged and still computes the build order for both the sequential and parallel paths; `slice-topology.test.ts` / `v864-parallel-default.test.ts` pass as-is (comment refreshed to note the opt-in framing). build + 880 tests + smoke green.
+
+## 8.115.0 - 2026-05-30
+
+### Removed (review arm trim — cross-model critic retired)
+
+- **The opt-in cross-model "second opinion" critic is gone.** The critic's §3.5 two-critic gate (Critic A + Critic B run in parallel through an MCP cross-model tool, BOTH-pass ship gate, divergence → block-ship) is removed. The single adversarial critic (§1–§8, force-stance opening, `gap` / `adversarial` modes, escalation triggers) is unchanged and remains the ship gate — no teeth lost. The **One-way Door Gate** (the user-facing pause before build on `Reversibility: one-way` D-Ns) is untouched; it was previously documented as the cross-model critic's post-build counterpart and now stands alone.
+
+### Affected surfaces
+
+- **`src/content/specialist-prompts/critic.ts`** — the entire `### §3.5. Cross-model second opinion` section (trigger conditions, two-critic shape, agreement gate, non-convergence handling, graceful fallback, prompt-budget guard, trim-vs-skip tree) is deleted. The §1–§8 protocol + verdict enum (`pass` / `iterate` / `block-ship`) are unchanged; the `soft`-gate `Reversibility: one-way` / `securityFlag` risk trigger stays.
+- **`src/config.ts`** — the `CriticConfig` interface and the `critic?: CriticConfig` field (`cross_model`, `cross_model_min_context`) are removed from `CclawConfig`.
+- **`src/flow-state.ts`** — the `criticConvergenceRound` + `criticCrossModelVerdict` fields, their JSDoc, and their read-time validation are removed. `oneWayDoorConfirmation` (One-way Door Gate state) is untouched.
+- **`src/cli.ts`** — the `--critic-cross-model` flag is dropped from `--help`.
+- **`src/types.ts`** — the `Reversibility: one-way` / `Decision` JSDoc no longer reference the cross-model auto-fire; they point at the One-way Door Gate.
+- **`src/content/start-command.ts`**, **`src/content/specialist-prompts/architect.ts`**, **`src/content/artifact-templates.ts`**, **`src/content/runbooks-on-demand.ts`** — cross-model prose, the `## Cross-model second opinion` `critic.md` template section + its frontmatter slots (`cross_model_skipped_reason`, `cross_model_trim_disclosure`, `priority_drop_log`), and the `lastSpecialist` telemetry fields are scrubbed; the One-way Door Gate runbook drops its "complementary to the cross-model critic" prose.
+- **`src/content/skills/conversation-language.md`** — the stale `--critic-cross-model` flag example is replaced with `--review`.
+
+### Tests / docs
+
+- Deleted `tests/unit/v872-cross-model-critic.test.ts`, `tests/unit/v8108-cross-model-budget.test.ts`, `tests/unit/v8109-critic-template-frontmatter.test.ts` (all asserted the removed surface). `critic-specialist.test.ts`, `v874-ethos-bundle.test.ts`, `v879-one-way-door-gate.test.ts`, `v8109-readme-config-table.test.ts`, `v8112-flag-cleanup.test.ts`, `content-hygiene.test.ts` updated to drop cross-model assertions while keeping the surviving reversibility / single-critic checks.
+- `v883-token-runbooks.test.ts` + `v8103-token-diet.test.ts` — the +200 cross-model carve-out is reclaimed (additive headroom back to `0`; start-command ceiling back to the v8.103 baseline of 50,000 chars).
+- `README.md` — the `## Configuration` table + example YAML drop the `critic.cross_model` / `critic.cross_model_min_context` rows.
+
+### User-facing migration
+
+The `--critic-cross-model` flag and the `critic.cross_model` / `critic.cross_model_min_context` config knobs no longer exist; remove them from `.cclaw/config.yaml` (unknown keys are ignored, so stale configs keep working). High-stakes slugs still get the full adversarial critic and, on irreversible decisions, the One-way Door Gate pause before build.
+
+## 8.114.0 - 2026-05-30
+
+### Changed (entry-point consolidation — 5 `/cc` shapes → 3)
+
+- **`/cc patch <slug> <task>` + `/cc extend <slug> <task>` collapsed into a single `/cc <slug> <task>` refine.** A leading shipped-slug token (canonical `YYYYMMDD-<kebab>` that resolves under `.cclaw/flows/shipped/`) IS the refine signal — there is no `patch`/`extend` keyword. The orchestrator stamps `parentContext`, dispatches `triage` with the parent attached, and **triage picks the ceremony**: a trivial-shape follow-up downgrades to `inline` and lands as the old patch-mode (one `patch(<slug>):` commit + `patch-N.md` next to the parent, no new slug); anything larger keeps the inherited soft/strict ceremony and runs the full follow-up arc (`refines:` child slug + `## Extends` + plan → build → review → critic → ship). Both paths already shared `loadParentContext`; the skip-everything-vs-full-ceremony decision is now a router output, not a user keyword.
+- **`patch-N.md` preserved.** Trivial post-ship edits keep their dedicated artifact (numbered `patch-N.md` in the parent's shipped dir) so micro-edit attribution survives the consolidation — the inline path is behaviourally identical to the retired patch-mode; only the entry point changed.
+- **Triage §1.6 trivial-shape downgrade broadened.** Previously fired only when the parent shipped `strict`; now fires on a `soft` or `strict` parent (the old patch-mode worked on any shipped slug regardless of its mode). The four-AND gate (≤2 file refs, no schema words, no AC additions, single concrete verb) is unchanged; `downgradeReason` renamed `extend-mode-trivial-shape` → `refine-trivial-shape`.
+
+### Affected surfaces
+
+- **New runbook** `src/content/runbooks/refine-mode.md` — the unified Detect-hop procedure (slug detection + argument parsing, parent validation via `loadParentContext`, the two ceremony branches, the `patch-N.md` artifact + `patchMode: true` builder envelope, triage inheritance, multi-level chaining). Replaces the deleted `src/content/runbooks/patch-mode.md` and the inline `EXTEND_MODE` constant.
+- **`src/content/runbooks-on-demand.ts`** — `ON_DEMAND_RUNBOOKS` drops the `extend-mode` + `patch-mode` entries and gains one `refine-mode` entry (count 27 → 26); the `EXTEND_MODE` constant is removed; `DETECT_MATRIX` + `TRIAGE_GATE` + the `HANDOFF_GATES` post-ship hint are rewritten for the slug-token fork; the dead `findRefiningChain` reference is scrubbed.
+- **`src/content/start-command.ts`** — the two `### Detect — patch-mode fork` / `### Detect — extend-mode fork` sections collapse into one `### Detect — refine-mode fork`; invocation matrix, on-demand pointer table, triage dispatch note, trivial-sibling paragraph, always-ask + roster notes, and the critic-stage recovery hint all updated.
+- **Specialists** — `triage.ts` (§1.6 + inheritance + anti-rationalization rewritten for refine-mode; the triage-runs-in-refine path made internally consistent), `builder.ts` (Patch-mode flow docs re-pointed at `refine-mode.md`), `architect.ts` / `reviewer.ts` / `critic.ts` / `investigator.ts` / `core-agents.ts` (keyword scrub; `parentContext` / `refines` semantics preserved).
+- **`src/parent-context.ts`** — error messages + module docs reference `/cc <slug> <task>` instead of `/cc extend`; helper behaviour unchanged.
+- **`src/cli.ts > HELP_NOTES`** — the two subcommand rows collapse into one `/cc <slug> <task>` row; `--review` help re-scoped to the refine inline path.
+- **`src/install.ts`** — `extend-mode.md` + `patch-mode.md` added to `RETIRED_RUNBOOK_FILES` so the orphan cleaner removes them on upgrade.
+- **`src/content/artifact-templates.ts`**, **`src/flow-state.ts`** — `## Extends` template prose + `parentContext` JSDoc reference the refine entry point.
+
+### Tests / docs
+
+- `tests/unit/v8102-patch-mode.test.ts` rewritten for the refine-mode INLINE path; `tests/unit/v859-continuation.test.ts` rewritten for the refine-mode FULL path; `cli.test.ts`, `v8111-prompt-diet.test.ts`, `v8103-token-diet.test.ts`, `v883-token-runbooks.test.ts`, `v8109-list-shipped-slugs-order.test.ts` updated; `scripts/smoke-init.mjs` asserts the single `refine-mode.md` and that the retired keyword runbooks are gone.
+- `tests/unit/v894-docs-drift-sweep.test.ts > RUNBOOKS_CANONICAL` bumped 27 → 26 in lockstep with the README count row.
+- `README.md` — the "Use" section now lists three entry shapes; the mermaid flow, the ceremony table `inline` row, and the on-demand runbook count (27 → 26) are updated.
+
+### User-facing migration
+
+`/cc patch <slug> …` and `/cc extend <slug> …` no longer parse as keywords. Run `/cc <slug> <task>` instead (the slug is the first token); triage routes a tiny tweak to the same single-commit patch the old `/cc patch` produced, and a larger follow-up to the same full arc the old `/cc extend` produced. Re-installing cclaw mirrors `refine-mode.md` and removes the retired `extend-mode.md` / `patch-mode.md` runbooks.
+
 ## 8.113.0 - 2026-05-24
 
 ### Fixed (find-and-fix sweep — 3 bugs across 2 axes)

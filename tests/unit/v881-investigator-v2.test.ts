@@ -51,7 +51,6 @@ describe("v8.81 — investigator v2 wiring (BuilderEnvelope type + flow-state va
     const idx = START_COMMAND_BODY.indexOf("Defense-in-depth envelope propagation");
     expect(idx).toBeGreaterThan(0);
     const section = START_COMMAND_BODY.slice(idx, idx + 4000);
-    expect(section).toMatch(/pre-v8\.81/);
     expect(section).toMatch(/default(s)? to (`?no`?|absent)/i);
   });
 });

@@ -55,16 +55,13 @@ describe("install — deep content layer", () => {
     expect(body).not.toContain("Worked examples");
   });
 
-  it("ships antipatterns (A-1..A-7) and meta skill", async () => {
+  it("ships antipatterns (A-1..A-7)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
     const antipatterns = await fs.readFile(path.join(project, ".cclaw", "lib", "antipatterns.md"), "utf8");
     expect(antipatterns).toContain("A-1");
     expect(antipatterns).toContain("A-7");
     expect(antipatterns).not.toContain("## A-8");
-    const meta = await fs.readFile(path.join(project, ".cclaw", "lib", "skills", "cclaw-meta.md"), "utf8");
-    expect(meta).toContain("cclaw-meta");
-    expect(meta).toContain("trigger: always-on");
   });
 
   it("install removes pre-existing `.cclaw/lib/{examples,research,recovery}/` left over from earlier installs", async () => {
@@ -89,10 +86,10 @@ describe("install — deep content layer", () => {
     }
   });
 
-  it("ships the merged-thematic skill set (v8.16) including meta", async () => {
+  it("ships the merged-thematic skill set (v8.16 + consolidation pass survivors)", async () => {
     project = await createTempProject();
     await initCclaw({ cwd: project });
-    for (const fileName of ["plan-authoring.md", "ac-discipline.md", "refinement.md", "parallel-build.md", "review-discipline.md", "commit-hygiene.md", "tdd-and-verification.md", "api-evolution.md", "debug-and-browser.md", "cclaw-meta.md"]) {
+    for (const fileName of ["plan-authoring.md", "summary-format.md", "investigation-discipline.md", "parallel-build.md", "review-discipline.md", "commit-hygiene.md", "tdd-and-verification.md", "api-evolution.md", "debug-and-browser.md"]) {
       const stat = await fs.stat(path.join(project, ".cclaw", "lib", "skills", fileName));
       expect(stat.isFile()).toBe(true);
     }

@@ -52,7 +52,7 @@ This 5-slice cap is intentional:
    - the slice's `touchSurface` (the only paths the slice may modify),
    - the worktree path (see below).
 3. Each builder runs the full TDD cycle (RED → GREEN → REFACTOR) for every AC it owns, sequentially inside the slice, in its own working tree.
-4. After all builders return, the orchestrator invokes `reviewer` in mode `integration` (separate sub-agent if the harness supports it; inline otherwise). Integration reviewer checks path conflicts, double-edits, the AC↔commit chain across all slices, and integration tests covering the slice boundary.
+4. After all builders return, the orchestrator invokes `reviewer` in `code` mode (integration sweep; separate sub-agent if the harness supports it, inline otherwise). The integration sweep checks path conflicts, double-edits, the AC↔commit chain across all slices, and integration tests covering the slice boundary.
 5. If integration finds problems, the orchestrator dispatches `builder` in `fix-only` mode against the cited file:line refs.
 
 ## Git-worktree pattern (when harness supports sub-agent dispatch)
@@ -67,7 +67,7 @@ $ git worktree add .cclaw/worktrees/<slug>-slice-3 -b cclaw/<slug>/slice-3
 
 Each builder sub-agent runs with its worktree path as cwd. After all slices finish:
 
-1. Integration reviewer reads from each worktree's branch.
+1. The `code`-mode reviewer (integration sweep) reads from each worktree's branch.
 2. The orchestrator merges `cclaw/<slug>/slice-N` into the main branch one slice at a time (or fast-forward if the wave was clean).
 3. `git worktree remove .cclaw/worktrees/<slug>-slice-N` per slice; the cclaw branches stay until ship.
 
@@ -83,7 +83,7 @@ This degradation is not an error and does not reduce review depth.
 
 ## Hard rules
 
-- `integration` mode reviewer is mandatory after every parallel wave. No shortcut.
+- The integration sweep (`reviewer` `code` mode) is mandatory after every parallel wave. No shortcut.
 - Slice-builders never read each other's worktrees mid-flight.
 - A builder that detects a conflict with another slice stops and raises an integration finding instead of hand-merging.
 - More than 5 parallel slices is forbidden. Merge or split.

@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -32,87 +32,56 @@ import type { ClarifyRoundState } from "../../src/types.js";
 
 const PROJECT_ROOT = path.resolve(process.cwd());
 
-describe("v8.105 — anti-slop axis severity capped at consider (reviewer prompt + companion skill)", () => {
-  it("reviewer prompt's anti-slop axis row + section both name the cap-at-consider rule", () => {
-    expect(REVIEWER_PROMPT).toMatch(/v8\.105 cap-at-consider/);
-    expect(REVIEWER_PROMPT).toMatch(/Anti-slop axis \(gated;\s*default-on;\s*v8\.86;\s*v8\.105 cap-at-consider\)/);
-    expect(REVIEWER_PROMPT).toMatch(
-      /severity hard-capped at `consider` regardless of grade/i
-    );
-    expect(REVIEWER_PROMPT).toMatch(/never blocks ship in any ceremonyMode/i);
-    expect(REVIEWER_PROMPT).not.toMatch(
-      /≤2\/10 → `?required`? with one-tier escalation to `?critical`?/
-    );
+describe("v8.113 — anti-slop reviewer axis retired (the v8.105 cap-at-consider behavior is moot)", () => {
+  // v8.105 hard-capped the anti-slop axis at `consider`. v8.113 cut the
+  // advisory-only axis outright (capping it changed no ship decision, so
+  // removing it changes none either). Full retirement coverage lives in
+  // `tests/unit/v886-anti-slop-axis.test.ts`; these rows guard that the
+  // v8.105 cap surface is gone too.
+  it("reviewer prompt no longer carries the anti-slop axis row, stub, or cap-at-consider language", () => {
+    expect(REVIEWER_PROMPT).not.toMatch(/Anti-slop axis \(gated/);
+    expect(REVIEWER_PROMPT).not.toMatch(/`anti-slop`\s*\(\*\*gated\*\*/);
+    expect(REVIEWER_PROMPT).not.toMatch(/cap-at-consider/);
+    expect(REVIEWER_PROMPT).not.toMatch(/AS-N/);
   });
 
-  it("anti-slop axis-table row examples assign severity=consider on all four below-6 dimensions (no required / critical leaks)", () => {
-    const reviewerLines = REVIEWER_PROMPT.split("\n");
-    const antiSlopRow = reviewerLines.find(
-      (l) => l.includes("`anti-slop`") && l.includes("(**gated**)") && l.includes("v8.86")
-    );
-    expect(antiSlopRow, "reviewer.ts must carry an anti-slop axis-table row").toBeDefined();
-    expect(antiSlopRow!).toMatch(/speculative-flexibility: 3\/10; severity=consider/);
-    expect(antiSlopRow!).toMatch(/senior-test: 2\/10; severity=consider/);
-    expect(antiSlopRow!).toMatch(/single-use-abstraction: 4\/10; severity=consider/);
-    expect(antiSlopRow!).toMatch(/orphan-cleanup-discipline: 5\/10; severity=consider/);
-    expect(antiSlopRow!).not.toMatch(/severity=required/);
-    expect(antiSlopRow!).not.toMatch(/severity=critical/);
-  });
-
-  it("`reviewer-axis-anti-slop` companion skill caps Sub-check 5 severity at consider", async () => {
-    const skill = await fs.readFile(
-      path.join(PROJECT_ROOT, "src/content/skills/reviewer-axis-anti-slop.md"),
-      "utf8"
-    );
-    expect(skill).toMatch(/cap-at-consider/);
-    expect(skill).toMatch(/Every below-6 dimension grade maps to `severity = consider`/);
-    expect(skill).toMatch(/v8\.105 collapses the ramp to a hard cap/);
-    expect(skill).toMatch(/3-4\/10\*\*\s*—\s*severity = `consider`/);
-    expect(skill).toMatch(/0-2\/10\*\*\s*—\s*severity = `consider`/);
-    // The pre-v8.105 ramp is documented as the prior contract, but the
-    // axis must no longer return required/critical itself.
-    expect(skill).not.toMatch(/^\s*-\s+\*\*0-2\/10\*\*\s+—\s+severity = `required`/m);
-    expect(skill).not.toMatch(/^\s*-\s+\*\*3-4\/10\*\*\s+—\s+severity = `required`/m);
+  it("the `reviewer-axis-anti-slop` companion skill is deleted from disk", () => {
+    expect(
+      existsSync(
+        path.join(PROJECT_ROOT, "src/content/skills/reviewer-axis-anti-slop.md")
+      )
+    ).toBe(false);
   });
 });
 
-describe("v8.105 — assumption-coverage axis severity capped at consider", () => {
-  it("reviewer prompt's assumption-coverage axis row + section both name the cap-at-consider rule", () => {
-    expect(REVIEWER_PROMPT).toMatch(
-      /Assumption-coverage axis \(gated;\s*v8\.85;\s*v8\.105 cap-at-consider\)/
-    );
-    expect(REVIEWER_PROMPT).toMatch(
-      /severity hard-capped at `consider` regardless of high-stakes label/i
-    );
-    expect(REVIEWER_PROMPT).toMatch(/never blocks ship/i);
-    // The `validates: KA-N` payload contract must explicitly become
-    // optional (no longer required for high-stakes rows).
-    expect(REVIEWER_PROMPT).toMatch(/`?validates: KA-N`? commit-message payload is \*\*truly optional\*\*/);
+describe("v8.113 — assumption-coverage reviewer axis retired; builder `validates:` payload stays optional", () => {
+  // v8.105 hard-capped the assumption-coverage axis at `consider`. v8.113
+  // cut the advisory-only axis entirely. The assumption-VALIDATION
+  // subsystem (KA-N rows, builder `validates: KA-N` payload, ship.md
+  // `## Unvalidated assumptions`) SURVIVES — only the reviewer axis is gone.
+  it("reviewer prompt no longer declares an assumption-coverage axis row or stub", () => {
+    expect(REVIEWER_PROMPT).not.toMatch(/Assumption-coverage axis \(gated/);
+    expect(REVIEWER_PROMPT).not.toMatch(/`assumption-coverage`\s*\(\*\*gated\*\*/);
+    expect(REVIEWER_PROMPT).not.toMatch(/\bav=N\b/);
   });
 
-  it("`reviewer-axis-assumption-coverage` companion skill caps every sub-check at consider", async () => {
-    const skill = await fs.readFile(
-      path.join(PROJECT_ROOT, "src/content/skills/reviewer-axis-assumption-coverage.md"),
-      "utf8"
-    );
-    expect(skill).toMatch(/cap-at-consider/);
-    expect(skill).toMatch(
-      /every assumption-coverage finding is severity = `consider`/i
-    );
-    expect(skill).toMatch(/builder's `?validates: KA-N`? commit-message payload is \*\*truly optional\*\*/);
-    // No remaining `severity = required` on high-stakes Sub-check 1 / false-positive
-    // Sub-check 2 / missing-section Sub-check 4 prose.
-    expect(skill).not.toMatch(
-      /A KA-N row carrying the `\(high-stakes\)` label[\s\S]*severity = `required`/m
-    );
+  it("the `reviewer-axis-assumption-coverage` companion skill is deleted from disk", () => {
+    expect(
+      existsSync(
+        path.join(
+          PROJECT_ROOT,
+          "src/content/skills/reviewer-axis-assumption-coverage.md"
+        )
+      )
+    ).toBe(false);
   });
 
-  it("builder prompt drops the `required` ship-block on missing validates payloads (axis caps at consider)", () => {
+  it("builder prompt keeps the `validates:` payload truly optional (assumption-validation subsystem survives the axis cut)", () => {
     // Pre-v8.105: 'False-positive `validates:` claims are an A-1 finding
     // for the reviewer's `assumption-coverage` axis (severity=`required`).'
     // v8.105: axis caps at consider; builder's payload is truly optional.
     expect(BUILDER_PROMPT).toMatch(/The payload is \*\*truly optional\*\*/);
-    expect(BUILDER_PROMPT).toMatch(/v8\.105 — the payload is optional even for high-stakes rows/);
+    expect(BUILDER_PROMPT).toMatch(/The payload is optional even for high-stakes rows/);
     expect(BUILDER_PROMPT).not.toMatch(
       /False-positive `?validates:`? claims are an A-1 finding[^.]*severity=`required`/
     );
@@ -131,7 +100,6 @@ describe("v8.105 — architect Phase −1 Clarify table hidden (math preserved)"
 
   it("architect prompt explicitly forbids rendering the per-round score table to the user", () => {
     expect(ARCHITECT_PROMPT).toMatch(/Do NOT render the per-round score table to the user/);
-    expect(ARCHITECT_PROMPT).toMatch(/v8\.105/);
     expect(ARCHITECT_PROMPT).toMatch(/the math is silent/i);
   });
 
@@ -188,7 +156,6 @@ describe("v8.105 — research-mode runbook Phase 1 Clarify table hidden (math pr
 
   it("research-mode runbook explicitly forbids rendering the per-round score table", () => {
     expect(RESEARCH_MODE_RUNBOOK).toMatch(/Do NOT render the per-round score table to the user/);
-    expect(RESEARCH_MODE_RUNBOOK).toMatch(/v8\.105/);
   });
 
   it("research-mode runbook does NOT carry the literal user-visible per-round table render block", () => {

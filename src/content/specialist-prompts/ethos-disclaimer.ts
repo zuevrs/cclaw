@@ -1,17 +1,11 @@
 /**
- * v8.109 — shared one-line pointer to `.cclaw/lib/cclaw-ethos.md`
+ * Shared one-line pointer to `.cclaw/lib/cclaw-ethos.md`
  * (the cross-cutting cclaw principles file written by install).
  *
- * Pre-v8.109 the literal string was duplicated across six of the
- * eight specialist prompts (`triage`, `qa-runner`, `plan-critic`,
- * `critic`, `architect`, `builder`) with two prompts (`reviewer`,
- * `investigator`) missing it entirely. v8.109's honesty sweep
- * extracted the line to this shared constant so:
+ * Every specialist prompt imports this single constant so:
  *
- *  - every specialist prompt cites the same text verbatim (no
- *    drift on phrasing / principle order);
- *  - the two missing prompts can pick it up by import without
- *    re-typing;
+ *  - they all cite the same text verbatim (no drift on phrasing
+ *    / principle order);
  *  - a future change to the disclaimer (e.g. an extra principle
  *    or a renamed file path) is a one-place edit.
  *

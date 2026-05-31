@@ -24,7 +24,7 @@ For anything else, continue with this runbook.
 
 \`.cclaw/lib/templates/plan.md\` is the canonical seed. The orchestrator copies it to \`.cclaw/flows/<slug>/plan.md\` and replaces \`SLUG-PLACEHOLDER\` with the real slug.
 
-If the slug already exists (active or shipped), the orchestrator must instead read the existing artifact and let the user pick **amend / rewrite / refine shipped / resume cancelled / new**. See \`.cclaw/lib/skills/refinement.md\`.
+If the slug already exists (active or shipped), the orchestrator must instead read the existing artifact and let the user pick **amend / rewrite / refine shipped / resume cancelled / new**. See \`.cclaw/lib/skills/plan-authoring.md\` (Refinement decision tree section).
 
 ## 2. Apply pre-flight checks from reference patterns
 
@@ -34,11 +34,11 @@ If the task matches a pattern in \`.cclaw/lib/patterns/\`, open the pattern file
 
 | signal | architect ceremony |
 | --- | --- |
-| ambiguous goal, no clear "user observable" sentence | full Frame phase (architect resolves silently using best judgment; no mid-plan dialogue in v8.62 unified flow) |
+| ambiguous goal, no clear "user observable" sentence | full Frame phase (architect resolves silently using best judgment; no mid-plan dialogue in the unified flow) |
 | competing structural options or feasibility uncertainty | full Approaches + Decisions phases (strict / large-risky only) |
 | more than 5 AC, or AC that span multiple modules | the architect re-decomposes — Plan-tier rewrite, possibly splitting into multiple slugs |
 
-v8.62 unified flow runs one shape for every task: the architect is the only plan-stage specialist, and ceremony depth scales with \`ceremonyMode\` (soft = Bootstrap + Plan-tier; strict = Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose). The orchestrator does not surface "which specialist?" pickers — those existed in pre-v8.62 (\`design\` standalone, \`ac-author\` standalone, \`design → ac-author\` chain) and have been collapsed.
+The unified flow runs one shape for every task: the architect is the only plan-stage specialist, and ceremony depth scales with \`ceremonyMode\` (soft = Bootstrap + Plan-tier; strict = Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose). The orchestrator does not surface "which specialist?" pickers — those existed in earlier flows (\`design\` standalone, \`ac-author\` standalone, \`design → ac-author\` chain) and have been collapsed.
 
 ## 4. AC quality bar
 
@@ -114,7 +114,7 @@ Both research helpers run as sub-agent dispatches with their own \`.cclaw/lib/ag
 - \`## Prior lessons\` section from the learnings-research blob, **verbatim** quotes (no summary).
 - Body shape depends on ceremonyMode:
   - **soft-mode body** = a bullet list of testable conditions (3-7 items typical).
-  - **strict-mode body (v8.63+)** = **two distinct tables**: \`## Plan / Slices\` (SL-N work-units with \`Surface\`, \`dependsOn\`, \`independent\`, and posture per row) PLUS \`## Acceptance Criteria (verification)\` (AC-N verification rows with verification line, \`touchSurface\`, \`parallelSafe\`, and a \`Verifies\` column listing the slice ids this AC proves). \`## Topology\` block with \`inline\` (default) or \`parallel-build\` (only when the topology gate from §5 above fires). Archived flows (pre-v8.63) used a single \`## Acceptance Criteria\` table that conflated work-units with verification; new flows MUST author both.
+  - **strict-mode body** = **two distinct tables**: \`## Plan / Slices\` (SL-N work-units with \`Surface\`, \`dependsOn\`, \`independent\`, and posture per row) PLUS \`## Acceptance Criteria (verification)\` (AC-N verification rows with verification line, \`touchSurface\`, \`parallelSafe\`, and a \`Verifies\` column listing the slice ids this AC proves). \`## Topology\` block with \`inline\` (default) or \`parallel-build\` (only when the topology gate from §5 above fires). Archived flows used a single \`## Acceptance Criteria\` table that conflated work-units with verification; new flows MUST author both.
 
 ### Slim summary (architect → orchestrator)
 
@@ -134,31 +134,31 @@ The orchestrator reads only this; the full plan.md stays in \`flows/<slug>/plan.
 
 Open this section **only when \`triage.complexity == "large-risky"\` and the path includes \`plan\`**. For small/medium plan, see "Path: small/medium" above.
 
-The plan stage runs as a **single architect dispatch** on every complexity class (v8.62 unified flow). The architect's ceremony depth scales with \`ceremonyMode\`: on strict / large-risky the architect runs Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose silently in one dispatch and emits the full \`plan.md\` (Frame, Spec, optional NFR, Approaches, Selected Direction, Decisions, Pre-mortem, Not Doing, Open questions, Summary, Plan / Slices table (v8.63 work-units), Acceptance Criteria (verification) table (v8.63 — back-references slices via \`Verifies\`), Topology). \`currentStage\` stays \`"plan"\` for the architect; \`lastSpecialist\` patches to \`"architect"\` on dispatch return.
+The plan stage runs as a **single architect dispatch** on every complexity class (unified flow). The architect's ceremony depth scales with \`ceremonyMode\`: on strict / large-risky the architect runs Bootstrap → Frame → Approaches → Decisions → Pre-mortem → Compose silently in one dispatch and emits the full \`plan.md\` (Frame, Spec, optional NFR, Approaches, Selected Direction, Decisions, Pre-mortem, Not Doing, Open questions, Summary, Plan / Slices table (work-units), Acceptance Criteria (verification) table (back-references slices via \`Verifies\`), Topology). \`currentStage\` stays \`"plan"\` for the architect; \`lastSpecialist\` patches to \`"architect"\` on dispatch return.
 
 ### collapse context
 
-Pre-v8.14 ran a three-step \`brainstormer → architect → ac-author\` chain of one-shot sub-agents. v8.14 collapsed the first two into a multi-turn \`design\` specialist in main context. v8.61 retired all mid-plan user dialogue (always-auto). v8.62 unified flow collapsed the remaining two-specialist split (\`design\` + \`ac-author\`) into a single on-demand \`architect\` sub-agent that owns the entire plan-stage output. There is no longer a "discovery sub-phase" — the architect is the plan stage.
+The plan stage was progressively collapsed: a three-step \`brainstormer → architect → ac-author\` chain of one-shot sub-agents first became a multi-turn \`design\` specialist in main context, then all mid-plan user dialogue was retired (always-auto), and finally the remaining two-specialist split (\`design\` + \`ac-author\`) collapsed into a single on-demand \`architect\` sub-agent that owns the entire plan-stage output. There is no longer a "discovery sub-phase" — the architect is the plan stage.
 
 ### Dispatch
 
-> **Plan stage runs as a single on-demand architect dispatch.** v8.62 unified flow forbids mid-plan user dialogue; the architect resolves ambiguity silently with best judgment, records the chosen interpretation in \`plan.md > ## Plan\`, and returns its slim summary in one shot. \`triage.runMode\` controls the plan→build transition (\`auto\` chains immediately; legacy \`step\` was retired in v8.61 and v8.112 dropped the back-compat parser surface — there is no user-facing run-mode toggle).
+> **Plan stage runs as a single on-demand architect dispatch.** The unified flow forbids mid-plan user dialogue; the architect resolves ambiguity silently with best judgment, records the chosen interpretation in \`plan.md > ## Plan\`, and returns its slim summary in one shot. The plan→build transition is always-auto — the architect's slim-summary return chains immediately to build; there is no user-facing run-mode toggle.
 
 1. **Dispatch \`architect\`** as an on-demand sub-agent. Envelope inputs: triage decision (with \`assumptions\` from triage.assumptions), the user's original \`/cc <task>\` prompt, the \`.cclaw/lib/templates/plan.md\` template, the \`learnings-research\` blob, \`flows/<slug>/research-repo.md\` (when brownfield), \`.cclaw/knowledge.jsonl\` for cross-check, the parent slug's plan.md when \`triage.refines\` is set, and the strict-mode marker so the architect runs the full Frame → Compose ceremony.
    - The orchestrator picks the **posture** before dispatch: \`deep\` when any of (security-sensitive keyword, \`security_flag\` preset, irreversibility / migration / schema / breaking-change / data-loss / payment / gdpr / pci in the prompt, \`refines:\` points to a slug with \`security_flag: true\`); \`guided\` otherwise. The architect may escalate to \`deep\` mid-dispatch if Approaches surfaces irreversibility the orchestrator missed.
-   - The architect appends Frame, Spec, optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, the \`## Plan / Slices\` table (v8.63 work-units), the \`## Acceptance Criteria (verification)\` table (v8.63 — AC verification rows back-referencing slices via \`Verifies\`), optional Topology block, and Summary — architect block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files are written from the Compose phase when an ADR trigger fires. **No separate \`decisions.md\` is written; v8.14+ inlines D-N records in the Decisions section of plan.md.**
-   - On dispatch return: orchestrator patches \`lastSpecialist: "architect"\` and \`plan.md\` frontmatter (\`last_specialist: architect\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`), advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`), and chains to the next stage when \`triage.runMode == auto\`.
+   - The architect appends Frame, Spec, optional Non-functional, optional Approaches + Selected Direction, optional Decisions section (D-1 … D-N inline), optional Pre-mortem, Not Doing, optional Open questions, the \`## Plan / Slices\` table (work-units), the \`## Acceptance Criteria (verification)\` table (AC verification rows back-referencing slices via \`Verifies\`), optional Topology block, and Summary — architect block to \`flows/<slug>/plan.md\`. Optional \`docs/decisions/ADR-NNNN-<slug>.md\` files are written from the Compose phase when an ADR trigger fires. **No separate \`decisions.md\` is written; D-N records are inlined in the Decisions section of plan.md.**
+   - On dispatch return: orchestrator patches \`lastSpecialist: "architect"\` and \`plan.md\` frontmatter (\`last_specialist: architect\`, \`posture: <guided|deep>\`, \`decision_count: <N>\`), advances \`currentStage\` to the next stage in \`triage.path\` (typically \`"build"\`), and chains to the next stage (always-auto).
 
 Resume after an architect dispatch: \`flow-state.lastSpecialist == "architect"\` and \`currentStage == "plan"\` means the architect already wrote plan.md — the next \`/cc\` advances to the build dispatch (or plan-critic, when the gate fires). The user can also \`/cc <task> --skip-plan\` to drop straight into the build dispatch when the architect's plan.md already shipped in a prior session.
 
-**Legacy migration:** state files written by pre-v8.62 cclaw with \`lastSpecialist: "brainstormer"\`, \`lastSpecialist: "design"\`, \`lastSpecialist: "ac-author"\`, or \`lastSpecialist: "slice-builder"\` are read permissively (no hard migration). On strict-stage resume, the orchestrator re-dispatches the architect from scratch when \`lastSpecialist\` is any retired discovery id; downstream specialists (builder / reviewer / critic) accept the legacy ids on read but write the new ids on update. Shipped slugs with \`flows/shipped/<old-slug>/decisions.md\` keep that file untouched for historical reference.
+**Legacy migration:** state files written by earlier cclaw versions with \`lastSpecialist: "brainstormer"\`, \`lastSpecialist: "design"\`, \`lastSpecialist: "ac-author"\`, or \`lastSpecialist: "slice-builder"\` are read permissively (no hard migration). On strict-stage resume, the orchestrator re-dispatches the architect from scratch when \`lastSpecialist\` is any retired discovery id; downstream specialists (builder / reviewer / critic) accept the legacy ids on read but write the new ids on update. Shipped slugs with \`flows/shipped/<old-slug>/decisions.md\` keep that file untouched for historical reference.
 `;
 
 const BUILD_PLAYBOOK = `# Stage runbook — build (TDD cycle)
 
 **Build is a TDD cycle.** Every work unit goes through RED → GREEN → REFACTOR. There is no other build mode. The orchestrator opens this file before invoking \`builder\` or implementing inline; \`builder\` opens it on every work unit.
 
-> **v8.63 — work-units vs verification.** New strict-mode flows split work-units from verification: \`## Plan / Slices\` holds the SL-N work units (one TDD cycle each, commit prefix \`<type>(SL-N): ...\`) and \`## Acceptance Criteria (verification)\` holds the AC-N rows back-referencing slices. After all slices land, builder emits one \`verify(AC-N): passing\` commit per AC (empty diff when slice tests already cover the AC's observable behaviour; test-files-only diff when broader verification is needed). The recipe below (steps 1–6) describes the **per-work-unit TDD cycle**: substitute \`SL-N\` for v8.63 new flows, \`AC-N\` for pre-v8.63 archived flows whose plan.md has no \`## Plan / Slices\` table — same recipe, different id token. Step 6.5 (per-AC verify) only applies on v8.63+ new flows.
+> **Work-units vs verification.** New strict-mode flows split work-units from verification: \`## Plan / Slices\` holds the SL-N work units (one TDD cycle each, commit prefix \`<type>(SL-N): ...\`) and \`## Acceptance Criteria (verification)\` holds the AC-N rows back-referencing slices. After all slices land, builder emits one \`verify(AC-N): passing\` commit per AC (empty diff when slice tests already cover the AC's observable behaviour; test-files-only diff when broader verification is needed). The recipe below (steps 1–6) describes the **per-work-unit TDD cycle**: substitute \`SL-N\` for new flows, \`AC-N\` for archived flows whose plan.md has no \`## Plan / Slices\` table — same recipe, different id token. Step 6.5 (per-AC verify) only applies on new flows.
 
 ## Iron Law
 
@@ -245,9 +245,9 @@ After REFACTOR, the work-unit row in \`.cclaw/flows/<slug>/build.md\` carries:
 | --- | --- | --- | --- | --- | --- |
 | SL-N (or AC-N for archived flows) | tests/path:line, fixtures... | test name + failure excerpt | command + PASS summary | one-line shape change applied **or** "Refactor: skipped — <reason>" (default; no empty commit) | red SHA, green SHA, refactor SHA (omit when REFACTOR notes declares "Refactor: skipped") |
 
-The build is complete for this work unit only when all six columns are filled. On v8.63 new flows, write rows into a \`## Slice cycles\` section keyed off SL-N; archived flows continue to write rows into the AC-keyed section.
+The build is complete for this work unit only when all six columns are filled. On new flows, write rows into a \`## Slice cycles\` section keyed off SL-N; archived flows continue to write rows into the AC-keyed section.
 
-## 6.5. AC verification pass (v8.63+ new flows only — skip on archived single-AC-table slugs)
+## 6.5. AC verification pass (new flows only — skip on archived single-AC-table slugs)
 
 After all slices in step 6 are through REFACTOR, run the AC verification pass. For each AC in \`plan.md > ## Acceptance Criteria (verification)\`:
 
@@ -266,7 +266,7 @@ The reviewer cross-checks at handoff via \`git log --grep="verify(AC-N): passing
 
 ## 7. Repeat or hand off
 
-If more work units are pending, repeat from step 1. If all slices are through REFACTOR AND step 6.5 has emitted one verify(AC-N): passing commit per AC (v8.63+ flows only), transition to review-stage.
+If more work units are pending, repeat from step 1. If all slices are through REFACTOR AND step 6.5 has emitted one verify(AC-N): passing commit per AC (flows only), transition to review-stage.
 
 ## 8. Fix-only flow (after a review iteration)
 
@@ -311,13 +311,10 @@ The orchestrator opens this file before invoking \`reviewer\`.
 
 | mode | when |
 | --- | --- |
-| \`code\` | always, immediately after build commits land |
+| \`code\` | always, immediately after build commits land; runs the **integration sweep** after \`parallel-build\` completes, and the **release sweep** before push when the change is user-visible |
 | \`text-review\` | before ship if plan / decisions / ship-notes are non-trivial |
-| \`integration\` | after \`parallel-build\` completes |
-| \`release\` | before push when the change is user-visible |
-| \`adversarial\` | at least once for risky / security-sensitive slugs |
 
-The reviewer is a single fourteen-axis specialist (v8.62 absorbed the former \`security-reviewer\` into the \`security\` axis). When the task or diff touches sensitive surfaces, the reviewer walks the \`security\` axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) inside the same dispatch — no separate sub-agent.
+The reviewer is a single nine-axis specialist (absorbed the former \`security-reviewer\` into the \`security\` axis). When the task or diff touches sensitive surfaces, the reviewer walks the \`security\` axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) inside the same dispatch — no separate sub-agent.
 
 ## 2. Iterate
 
@@ -392,7 +389,7 @@ $ git status --porcelain
 
 Record each result in \`flows/<slug>/ship.md > Preflight checks\` (table). Set frontmatter \`preflight_passed: true\` only when every row is pass/empty. Any failure blocks ship; you do not move on until preflight is fully green.
 
-### 2a. CI smoke gate (mandatory; T1-11 — v8.13)
+### 2a. CI smoke gate (mandatory; T1-11)
 
 After local preflight passes, run a **CI-equivalent smoke pass** against the slug's diff before authoring \`ship.md\`. The principle: local preflight catches "did the test suite I last touched still run", but CI runs the **full project suite under the project's CI conditions** (Node version, linting strictness, integration suites that local skips, deterministic environment). If CI would have caught a regression that local missed, the ship gate must catch it before merge.
 
@@ -513,7 +510,7 @@ When the gate fails on **trivial** slugs (single-AC, single-module, no review it
 
 ## 8. Execute finalization
 
-Run the action implied by \`finalization_mode\` and record the result back into \`flows/<slug>/ship.md\`. **The first thing you do here is update the \`finalization_mode\` frontmatter field on \`ship.md\`** from \`null\` to the chosen enum value — frontmatter is the machine-readable source of truth, and the body's \`Selected: <mode>\` line is supplementary. Inconsistency between frontmatter and body is a v8.11-era bug; the spec now requires both reflect the same value.
+Run the action implied by \`finalization_mode\` and record the result back into \`flows/<slug>/ship.md\`. **The first thing you do here is update the \`finalization_mode\` frontmatter field on \`ship.md\`** from \`null\` to the chosen enum value — frontmatter is the machine-readable source of truth, and the body's \`Selected: <mode>\` line is supplementary. Inconsistency between frontmatter and body is a known bug; the spec now requires both reflect the same value.
 
 - **FINALIZE_MERGE_LOCAL** — merge into the base branch locally; verify clean merge; record the merged SHA.
 - **FINALIZE_OPEN_PR** — \`gh pr create\` with a structured body (summary, AC↔commit map, rollback plan). Record the PR URL.
@@ -544,7 +541,7 @@ If the orchestrator dispatches a fix-only loop or an additional review iteration
 - Victory Detector — re-evaluate against the latest review verdict.
 - Test counts ("16 tests" → "22 tests") — re-pull from the build artefact.
 
-Stale \`ship.md\` is the v8.11-era bug where the file froze at iteration 2 (16 tests) while the manifest correctly reported iteration 5 (22 tests). The fix is **idempotent re-authoring**: re-write the file from scratch every time the ship-gate runs, do not patch incrementally.
+Stale \`ship.md\` is the bug where the file froze at iteration 2 (16 tests) while the manifest correctly reported iteration 5 (22 tests). The fix is **idempotent re-authoring**: re-write the file from scratch every time the ship-gate runs, do not patch incrementally.
 
 ## 11. Common pitfalls
 

@@ -6,7 +6,6 @@ import { renderStartCommand } from "../../src/content/start-command.js";
 import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { TRIAGE_PROMPT } from "../../src/content/specialist-prompts/triage.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
-import { CRITIC_PROMPT } from "../../src/content/specialist-prompts/critic.js";
 
 /**
  * v8.112 — Flag / command-shape cleanup tripwire.
@@ -190,54 +189,19 @@ describe("v8.112 — triage heuristic IS the source of truth for ceremonyMode", 
   });
 });
 
-describe("v8.112 — writing-skills meta-skill is registered and on disk", () => {
-  it("registers `writing-skills` in AUTO_TRIGGER_SKILLS with the expected metadata", () => {
+describe("writing-skills meta-skill is demoted (maintainer doc, not an end-user skill)", () => {
+  it("`writing-skills` is no longer registered in AUTO_TRIGGER_SKILLS", () => {
     const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === "writing-skills");
-    expect(skill, "writing-skills must be registered in AUTO_TRIGGER_SKILLS").toBeDefined();
-    expect(skill?.fileName).toBe("writing-skills.md");
-    expect(skill?.stages).toEqual(["plan", "build"]);
-    expect(skill?.triggers).toEqual(
-      expect.arrayContaining([
-        "task:add-skill",
-        "before:edit src/content/skills/",
-        "before:edit src/content/skills.ts"
-      ])
-    );
+    expect(
+      skill,
+      "writing-skills must NOT be registered — it only fires for cclaw maintainers and was demoted in the consolidation pass"
+    ).toBeUndefined();
   });
 
-  it("writing-skills.md exists on disk with the required body sections", async () => {
-    const body = await readFile(path.resolve(SRC_ROOT, "content", "skills", "writing-skills.md"));
-    expect(body).toMatch(/^---\nname: writing-skills\n/u);
-    expect(body).toMatch(/^# Skill: writing-skills$/mu);
-    // RED → GREEN → REFACTOR cycle is the canonical validation contract.
-    expect(body).toMatch(/RED\s*→\s*GREEN\s*→\s*REFACTOR/u);
-    expect(body).toMatch(/^### RED/mu);
-    expect(body).toMatch(/^### GREEN/mu);
-    expect(body).toMatch(/^### REFACTOR/mu);
-    // Three-lane taxonomy must be present.
-    expect(body).toMatch(/Inline specialist prompt block/iu);
-    expect(body).toMatch(/Runbook/iu);
-    expect(body).toMatch(/Skill/iu);
-    // Frontmatter schema must be documented.
-    expect(body).toMatch(/Frontmatter schema/iu);
-    // Anti-rationalization table must be present.
-    expect(body).toMatch(/^## Anti-rationalization$/mu);
-    // Reference patterns: must cite ≥2 existing cclaw skills as good models.
-    for (const ref of ["tdd-and-verification", "anti-slop", "pre-commitment-predictions"]) {
-      expect(body).toContain(ref);
-    }
-  });
-});
-
-describe("v8.112 — critic §3.5 cross-model is a convergence loop (3-round cap)", () => {
-  it("critic prompt's cross-model section documents the convergence-loop contract", () => {
-    // Convergence-loop contract: both critics must PASS within 3 rounds; otherwise block-ship.
-    expect(CRITIC_PROMPT).toMatch(/convergence loop|convergence-loop/iu);
-    expect(CRITIC_PROMPT).toMatch(/(both|each) critic[s]? must (PASS|pass|emit pass)/iu);
-    expect(CRITIC_PROMPT).toMatch(/(max(imum)?|cap|at most|up to)\s*3\s*round[s]?/iu);
-    expect(CRITIC_PROMPT).toMatch(/fix-only/iu);
-    expect(CRITIC_PROMPT).toMatch(/cross-model convergence failed/iu);
-    // The graceful fallback for missing MCP tool stays intact (pre-v8.112 contract).
-    expect(CRITIC_PROMPT).toMatch(/Cross-model unavailable: skipped/u);
+  it("writing-skills.md is deleted from src/content/skills/", async () => {
+    await expect(
+      readFile(path.resolve(SRC_ROOT, "content", "skills", "writing-skills.md")),
+      "writing-skills.md should be deleted (demoted to a maintainer doc, not an installed end-user skill)"
+    ).rejects.toThrow();
   });
 });

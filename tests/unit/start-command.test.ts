@@ -27,7 +27,7 @@ describe("start command (/cc) markdown — stage scaffolding", () => {
     }
     expect(body).toMatch(/triage[- ]gate/i);
     expect(body).toMatch(/triage decision is \*\*immutable\*\*/i);
-    expect(body).toMatch(/userOverrode/);
+    expect(body).toMatch(/autoExecuted/);
     expect(body).toMatch(/Slim summary/i);
     expect(body).toContain("dispatch-envelope.md");
     expect(body).toMatch(/Dispatch envelope/);
@@ -38,7 +38,7 @@ describe("start command (/cc) markdown — v8.61 deterministic invocation matrix
   const body = renderStartCommand();
 
   it("BEHAVIOR — body documents the v8.61 Detect invocation matrix that replaced the r/s/n resume picker (no `[r]`, `[s]`, `[c] Cancel` tokens; the four entry-point shapes are enumerated for both active and non-active flow states) and names the three AC modes (inline/soft/strict)", () => {
-    expect(body).toMatch(/Detect — `\/cc` invocation matrix \(v8\.61\)/);
+    expect(body).toMatch(/Detect — `\/cc` invocation matrix/);
     expect(body).not.toMatch(/\[r\]/);
     expect(body).not.toMatch(/\[s\]/);
     expect(body).not.toMatch(/\[c\] Cancel/);

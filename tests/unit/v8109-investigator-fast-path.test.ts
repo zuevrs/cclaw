@@ -29,8 +29,8 @@ describe("v8.109 — investigator trivial-bug fast-path parses file refs (B.8)",
     expect(INVESTIGATOR_PROMPT).toMatch(/defense-in-depth bypass guard.*ALWAYS runs FIRST/);
   });
 
-  test("preserves the v8.108 + #311 lesson reference", () => {
-    expect(INVESTIGATOR_PROMPT).toMatch(/v8\.108 \+ #311/);
+  test("preserves the #311 lesson reference", () => {
+    expect(INVESTIGATOR_PROMPT).toMatch(/#311/);
   });
 
   test("bypass guard names recurrence ≥3 and catastrophic-if-prod signals", () => {

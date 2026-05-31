@@ -1,24 +1,22 @@
 /**
- * Single source of truth for the seven design-quality dimensions (added in the v8.75 release).
+ * Single source of truth for the seven design-quality dimensions.
  *
  * Two consumers, one rubric:
  *
  * - {@link "src/content/specialist-prompts/reviewer.ts" | REVIEWER_PROMPT} —
- *   the v8.70 gated `design-quality` axis on the post-build reviewer. The
+ *   the gated `design-quality` axis on the post-build reviewer. The
  *   reviewer walks the DIFF and grades each dimension 0-10; below-6 grades
  *   become F-N findings (severity ladder: 5→consider, ≤3→required;
  *   accessibility one tier sharper; accessibility ≤2 → critical).
  * - {@link "src/content/specialist-prompts/plan-critic.ts" | PLAN_CRITIC_PROMPT} —
- *   the pre-build `plan-critic` specialist on `rubricMode: "design"` dispatches
- *   (v8.75 added the design lens as a standalone `plan-design` specialist;
- *   v8.104 merged it into `plan-critic` as one of three rubric modes). Walks
- *   PLAN.MD (not a diff) and grades the same seven dimensions for plan-level
+ *   the pre-build `plan-critic` specialist on `rubricMode: "design"` dispatches.
+ *   Walks PLAN.MD (not a diff) and grades the same seven dimensions for plan-level
  *   design clarity; below-6 grades become PD-N findings appended to
  *   `## Plan-design findings` in plan.md. Block-ship on strict at severity ≥
  *   medium.
  *
  * Why one const, not two prompts that drift: prior cclaw versions baked the
- * rubric verbatim into reviewer.ts. v8.75 lifts the rubric into a const so
+ * rubric verbatim into reviewer.ts. Lifting the rubric into a const means
  * the seven dimensions, the "what a 10 looks like" anchors, and the AI-slop
  * cross-cut all live in one place — change the rubric here and both
  * specialists pick it up at install time.
@@ -45,7 +43,7 @@
  * - `summary` — one-line "what it covers" cell, second column of the
  *   rubric table.
  * - `anchor10` — "what a 10 looks like" reference, third column. Lifted
- *   verbatim from v8.70's reviewer.ts table; the anchor is what converts
+ *   verbatim from the reviewer.ts table; the anchor is what converts
  *   a grade from a vibe into a directional signal the builder can act on.
  */
 export interface DesignQualityDimension {
@@ -120,7 +118,7 @@ export const DESIGN_QUALITY_DIMENSIONS: readonly DesignQualityDimension[] = [
  * specialists raise an additional umbrella finding under their respective
  * design-quality surface (severity=required by default).
  *
- * Lifted verbatim from v8.70 reviewer.ts so the slop set has a single
+ * Lifted verbatim from reviewer.ts so the slop set has a single
  * source of truth across pre-build (plan-critic on `rubricMode: "design"`)
  * and post-build (reviewer) lenses; both lenses fire the same signals.
  */

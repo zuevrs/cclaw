@@ -1,7 +1,7 @@
 /**
- * Assumption-validation lite (v8.85).
+ * Assumption-validation lite.
  *
- * Closes the v8.80 loop on `plan.md > ## Key assumptions to validate`.
+ * Closes the loop on `plan.md > ## Key assumptions to validate`.
  * The architect's Phase 7.5 authors 2-5 bullets each leading with a
  * stable `KA-N` id (Key Assumption N) and pairing a bet with a
  * validation method + `unvalidated | validated | invalidated` status.
@@ -26,7 +26,7 @@
  *    as a structured array. Each row carries the KA-N id, the
  *    assumption clause, the validation method, the current status,
  *    and (when status is `validated`) the optional sha citation.
- *    Tolerant of bullets without ids (legacy pre-v8.85 plans) — those
+ *    Tolerant of bullets without ids (legacy plans) — those
  *    are returned with `id: null` so the reviewer can surface the
  *    gap without crashing.
  *
@@ -54,7 +54,7 @@
  * `id` is `null` on legacy / malformed bullets that lack the `KA-N`
  * leading bold token. The reviewer's `assumption-coverage` axis
  * surfaces those gaps as `key-assumptions-no-id` findings (see
- * plan-critic §6.5) — runtime callers tolerate the null id rather
+ * plan-critic) — runtime callers tolerate the null id rather
  * than crash.
  */
 export interface AssumptionRow {
@@ -92,7 +92,7 @@ const SECTION_HEADING = /^##\s+Key assumptions to validate\s*$/mu;
  * `verify(AC-<digits>): passing`. The builder writes one of these per
  * AC after every slice in `plan.md > ## Plan / Slices` has landed.
  * Tolerant of extra whitespace; rejects subjects with anything after
- * `passing` (e.g. `verify(AC-3): passing on staging` is NOT a v8.85
+ * `passing` (e.g. `verify(AC-3): passing on staging` is NOT a
  * verify subject and gets ignored by the validator).
  */
 const VERIFY_SUBJECT = /^verify\(AC-\d+\):\s*passing\s*$/mu;
@@ -110,9 +110,9 @@ const VALIDATES_LINE = /^[ \t]*validates:[ \t]*([^\r\n]+)$/imu;
 
 /**
  * Match a single bullet inside the `## Key assumptions to validate`
- * section. Tolerant of the v8.85 canonical shape
+ * section. Tolerant of the canonical shape
  * (`- **KA-N** — <assumption>. Validate by: <method>. Status: <s>.`)
- * AND the legacy pre-v8.85 shape (`- **<assumption>** — Validate by:
+ * AND the legacy shape (`- **<assumption>** — Validate by:
  * <method>. Status: <s>.`) where the bold token IS the assumption,
  * not a KA-N id. The capture groups expose:
  *
@@ -120,7 +120,7 @@ const VALIDATES_LINE = /^[ \t]*validates:[ \t]*([^\r\n]+)$/imu;
  *   2. rest-of-line (everything after the first em-dash separator)
  *
  * The caller then runs a second probe on the bold-token to decide
- * whether the bullet is v8.85-shaped (id captured) or legacy-shaped
+ * whether the bullet is id-shaped (id captured) or legacy-shaped
  * (assumption captured; id is null).
  */
 const BULLET = /^-[ \t]+\*\*([^*]+)\*\*[ \t]*[—-][ \t]*(.+)$/mu;
@@ -141,7 +141,7 @@ const VALIDATE_BY_CLAUSE = /\bValidate by:\s*([^.]+?)(?:\.|$)/iu;
 /**
  * Match the `(high-stakes)` label inside the assumption clause. The
  * label is optional and may appear anywhere in the assumption text;
- * v8.85 conventionally places it directly after the assumption clause
+ * conventionally placed directly after the assumption clause
  * (e.g. `search p95 stays under 200ms (high-stakes)`).
  */
 const HIGH_STAKES_LABEL = /\(high-stakes\)/iu;
@@ -198,7 +198,7 @@ export function parseValidatesPayload(commitMessage: string): string[] {
  *
  * Tolerant of:
  *
- *  - legacy pre-v8.85 bullets (bold-token is the assumption; `id`
+ *  - legacy bullets (bold-token is the assumption; `id`
  *    field is `null`),
  *  - the template placeholder bullet (`- **<assumption>** — ...`) —
  *    treated like any other bullet; the caller filters placeholders
@@ -262,7 +262,7 @@ export function parseAssumptionRows(planMd: string): AssumptionRow[] {
       status = "unvalidated";
     }
     // Pull the assumption text out of the tail when the row is
-    // v8.85-shaped (bold token = KA-N id). The assumption is the
+    // id-shaped (bold token = KA-N id). The assumption is the
     // text up to the first `Validate by:` clause; tolerant of `—`
     // or `-` separators.
     let assumption: string;
@@ -417,7 +417,7 @@ export function collectValidations(
  * Convenience: read the assumption rows in `plan.md` and return the
  * IDs of rows whose status is still `unvalidated` at the time of the
  * call. The ship template's `## Unvalidated assumptions` section is
- * populated from this list (v8.85). Legacy bullets without a KA-N
+ * populated from this list. Legacy bullets without a KA-N
  * id are NOT returned (the section keys off ids), but they are
  * surfaced separately by the reviewer's `assumption-coverage` axis
  * via the `key-assumptions-no-id` finding class.

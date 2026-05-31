@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -26,54 +26,58 @@ import {
  * to one WIRING + one BEHAVIOR + one SECTION CONTRACT test.
  */
 
+const PROJECT_ROOT = path.resolve(process.cwd());
+const SKILLS_DIR = path.join(PROJECT_ROOT, "src/content/skills");
 const ASSUMPTION_COVERAGE_SKILL_ID = "reviewer-axis-assumption-coverage";
 
-describe("v8.85 — assumption-validation wiring (skill registered + gate + GateEnvelope + buildAutoTriggerBlock filters)", () => {
-  it("WIRING — `reviewer-axis-assumption-coverage` skill is registered under stages=['review'] with a gate predicate, the gate fires on walkAssumptionCoverageAxis:true only, and buildAutoTriggerBlock filters it correctly against the other 6 reviewer-axis pointers", () => {
-    const skill = AUTO_TRIGGER_SKILLS.find((s) => s.id === ASSUMPTION_COVERAGE_SKILL_ID);
-    expect(skill, "AUTO_TRIGGER_SKILLS must register reviewer-axis-assumption-coverage").toBeDefined();
-    expect(skill!.stages).toEqual(["review"]);
-    expect(typeof skill!.gate).toBe("function");
-    expect(skill!.fileName).toBe(`${ASSUMPTION_COVERAGE_SKILL_ID}.md`);
-    expect(skill!.body.length).toBeGreaterThan(3000);
-    expect(skill!.body.startsWith("---\n")).toBe(true);
-    expect(skill!.body).toMatch(/^name:\s*reviewer-axis-assumption-coverage$/m);
-
-    const gate = skill!.gate!;
-    expect(gate({ walkAssumptionCoverageAxis: true })).toBe(true);
-    expect(gate({})).toBe(false);
-    expect(gate({ walkAssumptionCoverageAxis: false })).toBe(false);
+describe("v8.113 — assumption-coverage reviewer axis retired; validation subsystem survives", () => {
+  it("WIRING — the `reviewer-axis-assumption-coverage` skill + .md are gone and never pinned; walkAssumptionCoverageAxis + unvalidatedHighStakesKas stay valid GateEnvelope plan-state signals; the surviving gated reviewer-axis cohort is the five", () => {
+    // The advisory-only assumption-coverage reviewer axis was cut in
+    // v8.113 (it was hard-capped at `consider` and never blocked ship).
     expect(
-      gate({
-        walkQaEvidenceAxis: true,
-        walkDesignQualityAxis: true,
-        securityFlag: true,
-        planHasNonFunctional: true,
-        editDisciplineActive: true,
-        walkScopeDriftAxis: true
-      } as GateEnvelope)
+      AUTO_TRIGGER_SKILLS.find((s) => s.id === ASSUMPTION_COVERAGE_SKILL_ID),
+      "the retired assumption-coverage axis skill must be absent"
+    ).toBeUndefined();
+    expect(
+      existsSync(path.join(SKILLS_DIR, `${ASSUMPTION_COVERAGE_SKILL_ID}.md`)),
+      "reviewer-axis-assumption-coverage.md must be deleted"
     ).toBe(false);
 
-    // buildAutoTriggerBlock filtering
-    const withAssumption = buildAutoTriggerBlock("review", { walkAssumptionCoverageAxis: true });
-    expect(withAssumption).toContain(ASSUMPTION_COVERAGE_SKILL_ID);
-    expect(withAssumption).not.toContain("reviewer-axis-qa-evidence");
-    const withoutAssumption = buildAutoTriggerBlock("review", {
-      walkQaEvidenceAxis: true,
-      walkDesignQualityAxis: true,
-      securityFlag: true,
-      planHasNonFunctional: true,
-      editDisciplineActive: true,
-      walkScopeDriftAxis: true
-    });
-    expect(withoutAssumption).not.toContain(ASSUMPTION_COVERAGE_SKILL_ID);
-    expect(withoutAssumption).toContain("reviewer-axis-qa-evidence");
-    expect(withoutAssumption).toContain("reviewer-axis-design-quality");
+    expect(
+      buildAutoTriggerBlock("review", { walkAssumptionCoverageAxis: true })
+    ).not.toContain(ASSUMPTION_COVERAGE_SKILL_ID);
+    expect(buildAutoTriggerBlock("review")).not.toContain(
+      ASSUMPTION_COVERAGE_SKILL_ID
+    );
 
-    // reviewer-axis cohort grew to ≥7 with assumption-coverage in the set
-    const reviewerAxisSkills = AUTO_TRIGGER_SKILLS.filter((s) => s.id.startsWith("reviewer-axis-"));
-    expect(reviewerAxisSkills.length).toBeGreaterThanOrEqual(7);
-    expect(reviewerAxisSkills.map((s) => s.id)).toContain(ASSUMPTION_COVERAGE_SKILL_ID);
+    // The assumption-validation subsystem keeps its envelope contract:
+    // walkAssumptionCoverageAxis (plan-state) + unvalidatedHighStakesKas
+    // remain valid GateEnvelope fields, but neither pins a reviewer-axis
+    // skill anymore.
+    const env: GateEnvelope = {
+      walkAssumptionCoverageAxis: true,
+      unvalidatedHighStakesKas: ["KA-1"]
+    };
+    expect(env.walkAssumptionCoverageAxis).toBe(true);
+    expect(env.unvalidatedHighStakesKas).toEqual(["KA-1"]);
+    expect(
+      AUTO_TRIGGER_SKILLS.some(
+        (s) => s.id === ASSUMPTION_COVERAGE_SKILL_ID && s.gate && s.gate(env)
+      )
+    ).toBe(false);
+
+    const reviewerAxisSkills = AUTO_TRIGGER_SKILLS.filter((s) =>
+      s.id.startsWith("reviewer-axis-")
+    );
+    expect(reviewerAxisSkills.map((s) => s.id).sort()).toEqual(
+      [
+        "reviewer-axis-design-quality",
+        "reviewer-axis-edit-discipline",
+        "reviewer-axis-nfr-compliance",
+        "reviewer-axis-qa-evidence",
+        "reviewer-axis-security"
+      ].sort()
+    );
   });
 });
 
@@ -165,16 +169,15 @@ describe("v8.85 — assumption-validation behavior (parse + flip + collect end-t
 });
 
 describe("v8.85 — assumption-validation section contract (reviewer axis + plan/research/ship templates + architect/plan-critic/builder/start-command prompts)", () => {
-  it("SECTION CONTRACT — reviewer.ts declares the gated `assumption-coverage` axis (v8.85) with KA-N finding + companion-skill pointer + slim-summary `av=N` counter, plan + research templates carry KA-N bullets, ship template carries `## Unvalidated assumptions`, and architect Phase 7.5 + plan-critic + builder + start-command all name the `validates: KA-N` payload", async () => {
-    // v8.105 — axis-table row + dedicated stub heading both grew a
-    // `v8.105 cap-at-consider` annotation; the v8.85 anchor remains.
-    expect(REVIEWER_PROMPT).toMatch(/\|\s*`assumption-coverage`\s*\(\*\*gated\*\*\)\s*—\s*v8\.85/);
-    expect(REVIEWER_PROMPT).toMatch(/^###\s+Assumption-coverage axis \(gated;\s*v8\.85;\s*v8\.105 cap-at-consider\)/m);
-    expect(REVIEWER_PROMPT).toContain(ASSUMPTION_COVERAGE_SKILL_ID);
-    expect(REVIEWER_PROMPT).toContain(`.cclaw/lib/skills/${ASSUMPTION_COVERAGE_SKILL_ID}.md`);
-    expect(REVIEWER_PROMPT).toContain("KA-N: not validated by any commit despite high-stakes label");
-    expect(REVIEWER_PROMPT).toMatch(/validates:\s*KA-N/);
-    expect(REVIEWER_PROMPT).toMatch(/av=N/);
+  it("SECTION CONTRACT — reviewer.ts no longer declares an assumption-coverage axis (row/stub/av=N gone), but the assumption-validation subsystem survives: plan + research templates carry KA-N bullets, ship template carries `## Unvalidated assumptions`, and architect Phase 7.5 + plan-critic + builder + start-command all name the `validates: KA-N` payload", async () => {
+    // v8.113 cut the reviewer's assumption-coverage AXIS; the reviewer
+    // prompt carries no row / stub / av=N counter for it anymore. The
+    // assumption-VALIDATION subsystem (templates + builder payload + ship
+    // gate) is unchanged and asserted below.
+    expect(REVIEWER_PROMPT).not.toMatch(/Assumption-coverage axis \(gated/);
+    expect(REVIEWER_PROMPT).not.toMatch(/`assumption-coverage`\s*\(\*\*gated\*\*/);
+    expect(REVIEWER_PROMPT).not.toContain(ASSUMPTION_COVERAGE_SKILL_ID);
+    expect(REVIEWER_PROMPT).not.toMatch(/\bav=N\b/);
     expect(REVIEWER_PROMPT).not.toMatch(/Twelve-axis review/);
 
     const planEntry = ARTIFACT_TEMPLATES.find((t) => t.id === "plan")!;

@@ -45,7 +45,6 @@ describe("v8.76 — research-design-lens + approaches-gate wiring", () => {
     expect(RESEARCH_LENS_PROMPTS["research-design"].length).toBeGreaterThan(2000);
     expect(RESEARCH_LENS_TITLES["research-design"]).toBe("Research — Design lens");
     const desc = RESEARCH_LENS_DESCRIPTIONS["research-design"];
-    expect(desc).toContain("v8.76");
     expect(desc).toMatch(/seven-dimension|seven dimensions/u);
     expect(desc).toContain("--lens=design");
     expect(desc).toContain("--lens=-design");
@@ -73,7 +72,6 @@ describe("v8.76 — research-design-lens + approaches-gate wiring", () => {
         mode: "research",
         rationale: "research-mode entry point",
         decidedAt: "2026-05-17T12:00:00Z",
-        runMode: null,
         research_depth: "standard"
       },
       reviewIterations: 0,

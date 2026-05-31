@@ -1,13 +1,14 @@
 import {
   CEREMONY_MODES,
   FLOW_STAGES,
+  INVESTIGATOR_NEXT_STEPS,
   ONE_WAY_DOOR_CHOICES,
   POSTURES,
+  RETIRED_POSTURES,
   RESEARCH_LENSES,
   RESEARCH_MODES,
   RESEARCH_STATES,
   ROUTING_CLASSES,
-  RUN_MODES,
   SPECIALISTS,
   SURFACES,
   TASK_SHAPES,
@@ -18,6 +19,7 @@ import {
   type CriticEscalation,
   type CriticVerdict,
   type FlowStage,
+  type InvestigatorNextStep,
   type OneWayDoorChoice,
   type OneWayDoorConfirmation,
   type PlanCriticVerdict,
@@ -33,7 +35,6 @@ import {
   type ResearchRevision,
   type ResearchState,
   type RoutingClass,
-  type RunMode,
   type SliceId,
   type SliceState,
   type SpecialistId,
@@ -54,7 +55,11 @@ function isSliceStatus(value: unknown): value is SliceState["status"] {
 }
 
 function isPosture(value: unknown): value is Posture {
-  return typeof value === "string" && (POSTURES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    ((POSTURES as readonly string[]).includes(value) ||
+      (RETIRED_POSTURES as readonly string[]).includes(value))
+  );
 }
 
 function isCriticVerdict(value: unknown): value is CriticVerdict {
@@ -93,15 +98,14 @@ function isResearchLens(value: unknown): value is ResearchLensId {
   return typeof value === "string" && (RESEARCH_LENSES as readonly string[]).includes(value);
 }
 
-/**
- * v8.77: narrow check for the {@link TaskShape} enum. Used by
- * {@link assertTriageOrNull} to validate `triage.taskShape` on read.
- * Pre-v8.77 state files lack the field; readers default to `"build"`
- * via the optional type signature (the validator only runs when the
- * field is present).
- */
+/** Narrow check for {@link TaskShape}; validates `triage.taskShape` on read (default `"build"` when absent). */
 function isTaskShape(value: unknown): value is TaskShape {
   return typeof value === "string" && (TASK_SHAPES as readonly string[]).includes(value);
+}
+
+/** Narrow check for {@link InvestigatorNextStep}; validates `investigatorVerdict` on read. */
+function isInvestigatorNextStep(value: unknown): value is InvestigatorNextStep {
+  return typeof value === "string" && (INVESTIGATOR_NEXT_STEPS as readonly string[]).includes(value);
 }
 
 const RESEARCH_REVISION_KINDS = ["revise", "push-back", "accept"] as const;
@@ -114,18 +118,14 @@ function isClarifyDimension(value: unknown): value is ClarifyDimension {
   return typeof value === "string" && (CLARIFY_DIMENSIONS as readonly string[]).includes(value);
 }
 
-/**
- * v8.79: narrow check for the {@link OneWayDoorChoice} enum. Used by
- * {@link assertFlowStateV82} to validate
- * `oneWayDoorConfirmation.userChoice` on read.
- */
+/** Narrow check for {@link OneWayDoorChoice}; validates `oneWayDoorConfirmation.userChoice` on read. */
 function isOneWayDoorChoice(value: unknown): value is OneWayDoorChoice {
   return typeof value === "string" && (ONE_WAY_DOOR_CHOICES as readonly string[]).includes(value);
 }
 
 export const FLOW_STATE_SCHEMA_VERSION = 3;
 
-/** v8.0–schema. Auto-migrated to v3 on read. */
+/** v8.0 schema. Auto-migrated to v3 on read. */
 export const LEGACY_V8_FLOW_STATE_SCHEMA_VERSION = 2;
 
 export interface FlowStateV82 {
@@ -133,265 +133,82 @@ export interface FlowStateV82 {
   currentSlug: string | null;
   currentStage: FlowStage | null;
   ac: AcceptanceCriterionState[];
-  /**
-   * Plan slices (work units) authored by the architect in
-   * strict-mode plan.md. Distinct from {@link ac} (acceptance
-   * criteria are verification; slices are work units). The builder
-   * runs TDD per slice (commit prefix `<type>(SL-N): ...`); after
-   * all slices land, the builder writes `verify(AC-N): passing`
-   * commits to prove each AC.
-   *
-   * Optional in TypeScript: pre-v8.63 state files lack this field
-   * entirely and continue to validate on read (clean break — only
-   * new strict-mode flows starting at v8.63 emit slices). Soft/inline
-   * flows do not populate slices either; the field stays absent.
-   *
-   * Validators on read accept the legacy permissive shape: each entry
-   * MUST be an object with string `id` / `title`, an array of valid
-   * {@link Surface} tokens, a `dependsOn` array of strings, a boolean
-   * `independent`, and a {@link SliceStatus} `status`. Optional
-   * `commit` / `posture` / `verifiesAcIds` are checked only when
-   * present.
-   */
+  /** Plan slices (work units; distinct from {@link ac} verification), strict-mode only. Optional; old + soft/inline flows lack it. */
   slices?: SliceState[];
   /**
-   * Most recent specialist dispatch (audit / debugging surface; the
-   * orchestrator's stage routing reads {@link currentStage}, not this
-   * field). Typed as `SpecialistId` for new writes — the orchestrator
-   * only writes current specialist ids — but the runtime validator
-   * accepts any string for permissive reads of pre-v8.62 state files
-   * (which may carry `"design"`, `"ac-author"`, `"slice-builder"`, or
-   * `"security-reviewer"`). Callers that narrow further should use
-   * {@link isSpecialist}; callers that only need the audit trail can
-   * treat the field as `string | null`.
+   * Most recent specialist dispatch (audit only; routing reads
+   * {@link currentStage}). Validator accepts any string for permissive reads of
+   * old ids; narrow with {@link isSpecialist}.
    */
   lastSpecialist: SpecialistId | null;
   startedAt: string;
-  /**
-   * Total reviewer dispatches in this flow's lifetime. Monotonically
-   * increasing; never reset by user. Drives `review.md` Run summary,
-   * compound-stage telemetry, and `ship.md` frontmatter.
-   */
+  /** Total reviewer dispatches this flow; monotonic, never user-reset. Drives review.md / ship.md. */
   reviewIterations: number;
   securityFlag: boolean;
   buildProfile?: BuildProfile;
   /**
-   * cap-tracker that may be reset by the user. Increments on
-   * every reviewer dispatch in parallel with {@link reviewIterations}.
-   * When it reaches 5 the orchestrator does not dispatch another
-   * reviewer until the user picks an option from the review-cap picker
-   * (`cancel-and-replan` / `accept-warns-and-ship` / `keep-iterating-
-   * anyway`). The third option resets `reviewCounter` to 3 — giving two
-   * more rounds — and stamps `triage.iterationOverride: true` so the
-   * extension is auditable.
-   *
-   * Optional in TypeScript so state files (which lack the field)
-   * still validate; readers MUST default to `0` on absent. flows
-   * resumed on start at 0 even if `reviewIterations` already
-   * reflects prior dispatches — the cap is a fresh budget on resume,
-   * which is the intentionally permissive fallback.
+   * Reviewer-cap tracker the user may reset; at 5 the review-cap picker gates
+   * further dispatch (`keep-iterating-anyway` resets to 3 + stamps
+   * `triage.iterationOverride`). Optional, default `0`; resumed flows start fresh.
    */
   reviewCounter?: number;
   /**
-   * counts critic dispatches for the active flow.
-   *
-   * Hard-capped at 2 (initial dispatch + at-most-one rerun when the user
-   * picks `fix and re-review` at the block-ship picker). A third dispatch
-   * is structurally not supported and triggers the critic-cap-reached
-   * picker, mirroring the v8.20 5-iteration cap for reviewer.
-   *
-   * Optional in TypeScript so state files (which lack the field)
-   * still validate; readers MUST default to `0` on absent. Distinct from
-   * {@link reviewIterations} — critic dispatches do not increment the
-   * reviewer counter, by design (see `.cclaw/flows/v842-critic-design/
-   * design.md §9.0`).
+   * Counts critic dispatches; hard-capped at 2 (initial + one rerun on `fix and
+   * re-review`; a third triggers the critic-cap picker). Optional; default `0`.
    */
   criticIteration?: number;
   /**
-   * verdict returned by the most-recent critic dispatch.
-   *
-   * `pass`/`iterate` allow the orchestrator to advance to Hop 5 (ship);
-   * `block-ship` pauses for the user's block-ship picker. Absence means
-   * critic has not run yet (legacy pre-v8.42 state or a freshly-created
-   * flow). The flow-state reader uses absence + `currentStage: "review"`
-   * + `lastSpecialist: "reviewer"` as the pre-v8.42 migration signal.
+   * Verdict from the latest critic (`pass`/`iterate` → ship; `block-ship` →
+   * picker). Absence + `currentStage: "review"` + `lastSpecialist: "reviewer"` is
+   * the pre-critic migration signal.
    */
   criticVerdict?: CriticVerdict;
-  /**
-   * open-gap count (severity != `fyi`) from the most-recent
-   * critic dispatch. Surfaced in `ship.md > Risks carried over` for
-   * `iterate` verdicts; otherwise advisory.
-   */
+  /** Open-gap count (severity != fyi) from the latest critic; surfaced in ship.md on `iterate`, else advisory. */
   criticGapsCount?: number;
-  /**
-   * escalation level from the most-recent critic dispatch.
-   *
-   * `none` = pure gap mode; `light` = one §8 trigger fired in soft mode;
-   * `full` = `adversarial` mode (strict mode + any §8 trigger). The
-   * orchestrator stamps this for telemetry / compound-learning audit.
-   */
+  /** Escalation from the latest critic (`none`/`light`/`full`); telemetry / compound-learning audit. */
   criticEscalation?: CriticEscalation;
   /**
-   * Cross-model convergence-loop round counter (v8.112 santa-loop contract).
-   *
-   * `0` = fallback / non-applicable (cross-model MCP unavailable, or the
-   *       envelope flag was not set on this dispatch). Single-critic gate.
-   * `1` / `2` / `3` = active convergence-loop round. Incremented each time
-   *       BOTH critics dispatch in parallel. After round 3 with no
-   *       convergence, the critic emits `verdict: block-ship` with
-   *       `note: "cross-model convergence failed"` and the orchestrator
-   *       stops-and-reports; the counter is NOT incremented past 3.
-   *
-   * Optional in TypeScript so pre-v8.112 state files (which lack the
-   * field) still validate; readers MUST default to `0` on absent. The
-   * orchestrator's post-critic gate uses this field to decide whether
-   * to read Critic B's verdict alongside Critic A (round >= 1) or only
-   * Critic A (round == 0).
-   */
-  criticConvergenceRound?: number;
-  /**
-   * Verdict returned by Critic B (the cross-model second critic) on the
-   * most-recent convergence-loop round (v8.112).
-   *
-   * Same vocabulary as {@link criticVerdict} (`pass` / `iterate` /
-   * `block-ship`). Absent when the convergence loop did not run on this
-   * dispatch (`criticConvergenceRound === 0`). Persisted for
-   * compound-learning audit + the orchestrator's post-critic gate.
-   */
-  criticCrossModelVerdict?: CriticVerdict;
-  /**
-   * verdict returned by the most-recent plan-critic dispatch.
-   *
-   * `pass` — plan was approved; advance to builder.
-   * `revise` — bounce to architect for one revise loop (max).
-   * `cancel` — structural plan problem; surface cancel/re-architect picker.
-   *
-   * Absence means plan-critic has not run yet (either pre-v8.51 state,
-   * gating excluded the flow, or the dispatch hasn't fired). The
-   * orchestrator's deterministic gate (ceremonyMode=strict + complexity=
-   * large-risky + problemType!=refines + AC count>=2) is the canonical
-   * "should this slug have a verdict?" check; downstream code branches
-   * on presence + value, never on absence-as-implicit-pass.
+   * Verdict from the latest plan-critic: `pass` → builder; `revise` → one
+   * architect loop; `cancel` → picker. Absence = not run (branch on presence +
+   * value, never absence-as-pass).
    */
   planCriticVerdict?: PlanCriticVerdict | null;
-  /**
-   * counts plan-critic dispatches for the active flow.
-   *
-   * Hard-capped at 1: initial dispatch (=0 before fire / =1 after the
-   * first return), at-most-one rerun on a `revise` verdict (=1 after
-   * the second dispatch). A third dispatch is structurally not allowed
-   * — the orchestrator surfaces the user picker instead of running
-   * plan-critic for the third time.
-   *
-   * Optional in TypeScript so pre-v8.51 state files (which lack the
-   * field) still validate; readers MUST default to `0` on absent.
-   * Distinct from {@link criticIteration} — plan-critic dispatches do
-   * not increment the post-impl critic counter, by design (different
-   * stages, different verdicts).
-   */
+  /** Counts plan-critic dispatches; hard-capped at 1 (initial + one rerun on `revise`). Optional, default `0`. */
   planCriticIteration?: number;
-  /**
-   * ISO timestamp of the most-recent plan-critic dispatch.
-   *
-   * Stamped by the orchestrator immediately after the slim summary
-   * returns (alongside `planCriticVerdict` / `planCriticIteration`).
-   * Pure telemetry; downstream code does not branch on the value.
-   *
-   * Optional in TypeScript so pre-v8.51 state files (which lack the
-   * field) still validate; absent means plan-critic never ran for
-   * this slug.
-   */
+  /** ISO timestamp of the latest plan-critic dispatch; telemetry. Absent = never ran. */
   planCriticDispatchedAt?: string;
   /**
-   * verdict returned by the most-recent qa-runner dispatch.
-   *
-   * `pass` — every UI AC has evidence (Playwright / browser-MCP /
-   *   manual-confirmed); advance to review.
-   * `iterate` — at least one UI AC failed verification; bounce to
-   *   builder with qa findings as additional context, max 1
-   *   iteration enforced by {@link qaIteration}.
-   * `blocked` — browser tooling unavailable AND manual steps required;
-   *   surface user picker (`proceed-without-qa-evidence` /
-   *   `pause-for-manual-qa` / `skip-qa`).
-   *
-   * Absence means qa-runner has not run yet (either pre-v8.52 state,
-   * gating excluded the flow on non-UI surface, ceremonyMode=inline, or the
-   * dispatch hasn't fired). `null` is explicitly accepted because the
-   * orchestrator may write `null` to mark "qa ran but the slim summary
-   * forgot the verdict" recovery cases — distinguishing absent-vs-null
-   * matters for the resume picker.
+   * Verdict from the latest qa-runner: `pass` → review; `iterate` → builder (cap
+   * 1); `blocked` → picker. Absence = not run; `null` = ran-but-missing (the
+   * absent-vs-null distinction matters for resume).
    */
   qaVerdict?: QaVerdict | null;
-  /**
-   * counts qa-runner dispatches for the active flow.
-   *
-   * Hard-capped at 1: initial dispatch (=0 before fire / =1 after the
-   * first return) and at-most-one rerun on an `iterate` verdict (=1
-   * after the second dispatch). A third dispatch is structurally not
-   * allowed — the orchestrator surfaces the user picker instead of
-   * running qa for the third time.
-   *
-   * Optional in TypeScript so pre-v8.52 state files (which lack the
-   * field) still validate; readers MUST default to `0` on absent.
-   * Distinct from {@link reviewIterations} and {@link criticIteration};
-   * qa dispatches do not increment any other counter.
-   */
+  /** Counts qa-runner dispatches; hard-capped at 1 (initial + one rerun on `iterate`). Optional, default `0`. */
   qaIteration?: number;
-  /**
-   * ISO timestamp of the most-recent qa-runner dispatch.
-   *
-   * Stamped by the orchestrator immediately after the slim summary
-   * returns (alongside {@link qaVerdict} / {@link qaIteration} /
-   * {@link qaEvidenceTier}). Pure telemetry; downstream code does not
-   * branch on the value.
-   *
-   * Optional in TypeScript so pre-v8.52 state files (which lack the
-   * field) still validate; absent means qa-runner never ran for this
-   * slug.
-   */
+  /** ISO timestamp of the latest qa-runner dispatch; telemetry. Absent = never ran. */
   qaDispatchedAt?: string;
   /**
-   * evidence tier the qa-runner declared in its slim summary,
-   * mirrored from `qa.md` frontmatter. Drives the reviewer's
-   * `qa-evidence` axis: `playwright` is the strongest tier (CI-runnable
-   * test), `browser-mcp` is reviewable but session-bound, `manual` is
-   * the weakest tier (user-confirmed steps only).
-   *
-   * `null` is accepted because the orchestrator may write `null` on a
-   * `blocked` verdict where no tier was actually exercised (e.g.
-   * browser tools unavailable + manual steps queued for the user).
-   * Pre-v8.52 state files validate unchanged when absent.
+   * Evidence tier the qa-runner declared (mirrored from `qa.md`) for the
+   * reviewer's `qa-evidence` axis; `null` on a `blocked` verdict with no tier
+   * exercised.
    */
   qaEvidenceTier?: QaEvidenceTier | null;
   /**
-   * Triage decision for the active flow. Null while no flow is running.
-   * Persisted so resume never re-prompts the user.
+   * Verdict from the latest investigator (debug-branch): one of `direct-fix` /
+   * `needs-plan` / `more-investigation` / `not-a-bug`. Absence = the investigator
+   * hop did not run (non-debug flow). See {@link InvestigatorNextStep}.
    */
+  investigatorVerdict?: InvestigatorNextStep;
+  /** Counts investigator dispatches; hard-capped at 1 (initial + one `more-investigation` rerun). Optional, default `0`. */
+  investigatorIteration?: number;
+  /** ISO timestamp of the latest investigator dispatch; telemetry. Absent = never ran. */
+  investigatorDispatchedAt?: string;
+  /** Triage decision for the active flow; `null` while none running. Persisted so resume never re-prompts. */
   triage: TriageDecision | null;
   /**
-   * pointer to a prior `/cc research <topic>` flow whose
-   * `research.md` should be loaded as context by the active task
-   * flow's triage / architect. Written by the orchestrator at Hop 0
-   * (Detect) when the user accepts the optional "ready to plan?"
-   * handoff that the standalone architect (research mode) emits at
-   * the tail of a research flow; cleared automatically when the
-   * task flow ships.
-   *
-   * Shape:
-   *   - `slug`: the research flow's slug (e.g. `2026-05-15-research-foo`)
-   *     so the artifact path can be reconstructed
-   *     (`.cclaw/flows/<slug>/research.md`).
-   *   - `topic`: the research topic line, for surfacing in pickers
-   *     and prompts (e.g. "Storage strategy for shared agent memory").
-   *   - `path`: the absolute artifact path; redundant with `slug`
-   *     but cached for fast surfacing without rebuilding the path.
-   *
-   * Optional in TypeScript: pre-v8.58 state files lack the field and
-   * MUST validate unchanged; readers default to `null`/absent meaning
-   * "no prior research linked". Distinct from a research-mode flow's
-   * own state (which lives in the same `currentSlug` slot; the
-   * research-vs-task distinction is recorded via `triage.mode`, not
-   * via a separate slug field).
+   * Pointer to a prior `/cc research <topic>` flow whose `research.md` loads as
+   * task context; set at Hop 0 on the research handoff, cleared at ship. Optional;
+   * default `null`/absent.
    */
   priorResearch?: {
     slug: string;
@@ -399,246 +216,50 @@ export interface FlowStateV82 {
     path: string;
   } | null;
   /**
-   * pointer to a prior **shipped** slug whose plan/build/learnings
-   * (and optional review/critic/qa) should be loaded as context by the
-   * active task flow's architect / reviewer / critic. Stamped
-   * by the orchestrator at Hop 0 (Detect) when the user invokes
-   * `/cc extend <slug> <task>`; cleared automatically when the task
-   * flow ships.
-   *
-   * Shape:
-   *   - `slug`: the parent flow's slug (e.g. `20260514-auth-flow`), so
-   *     specialists can rebuild artifact paths if needed.
-   *   - `status`: `"shipped"` is the only valid value in v8.59. The
-   *     `/cc extend` validator rejects in-flight / cancelled / missing
-   *     parents at the entry point, so by the time this field is
-   *     stamped the parent's shipped status is guaranteed. The field
-   *     is preserved as a string union (not a literal) so v8.60+ can
-   *     widen the validator (e.g. to support in-flight parents) without
-   *     a schema bump.
-   *   - `shippedAt`: best-effort ISO timestamp from the parent's
-   *     `ship.md > frontmatter.shipped_at`. Optional because legacy
-   *     shipped slugs may have authored `ship.md` without the field.
-   *   - `artifactPaths`: pre-derived absolute paths to the parent's
-   *     shipped artifacts. `plan` is mandatory (its presence was the
-   *     validation gate at `/cc extend`); `build` / `review` / `critic`
-   *     / `learnings` / `qa` are optional because they may be absent
-   *     depending on the parent's path (e.g. an inline-mode parent
-   *     has no `review.md`). Specialists `await exists(path)` before
-   *     reading — a parent artifact that disappears between extend
-   *     and dispatch is a no-op skip, not an error.
-   *
-   * Optional in TypeScript: pre-v8.59 state files lack the field and
-   * MUST validate unchanged; readers default to `null`/absent meaning
-   * "no parent linked, this is a cold-start /cc flow". Distinct from
-   * {@link priorResearch} (the research→task handoff): the two
-   * fields are orthogonal and can coexist on a single flow (a `/cc
-   * extend <slug>` flow that also happens to follow a `/cc research`
-   * ship picks up BOTH context sources).
-   *
-   * Design rationale lives at `.cclaw/flows/v859-continuation/design.md`.
+   * Pointer to a prior **shipped** slug whose artifacts load as task context; set
+   * on a refine (`/cc <slug> <task>`), cleared at ship (`artifactPaths.plan` mandatory). Default
+   * `null`/absent; orthogonal to {@link priorResearch}.
    */
   parentContext?: ParentContext | null;
-  /**
-   * Research orchestrator lifecycle state. Set ONLY on
-   * research-mode flows (`triage.mode == "research"`); absent on
-   * `task` mode. The orchestrator's research-mode fork stamps this
-   * field at every Phase boundary so a `/cc` continue after a
-   * stop-and-report can resume the research lifecycle without
-   * re-parsing `research.md`. See {@link ResearchState} for the
-   * full state vocabulary and transitions.
-   *
-   * Pre-v8.71 research-mode state files lack this field; readers
-   * MUST default to `null`/absent for back-compat. Pre-v8.71 research
-   * flows ran the four-phase straight-line shape (discovery →
-   * lens-dispatch → synthesis → finalize) without an explicit
-   * lifecycle marker — resume on a stopped pre-v8.71 research flow
-   * is a no-op (the orchestrator restarts from Phase 1 with the
-   * dialogue summary on disk).
-   */
+  /** Research orchestrator lifecycle state (research-mode only), stamped per Phase for resume. See {@link ResearchState}. Default `null`/absent. */
   researchState?: ResearchState | null;
-  /**
-   * Append-only revision history for `/cc research` iterations
-   * (introduced in v8.71; pre-v8.71 state files lack this field and
-   * readers must treat it as an empty array for back-compat). Each
-   * entry records one revise / push-back / accept invocation; the
-   * array is the persistent audit trail mirrored verbatim under
-   * `research.md > ## Revision history`. New writes append to the
-   * array; entries are NEVER mutated or removed
-   * (the orchestrator overwrites `change` on the next post-revision
-   * synthesis pass only when the entry's prior `change` was absent).
-   *
-   * Set ONLY on research-mode flows. Pre-v8.71 state files lack
-   * this field; readers MUST default to `[]` on absent. Cap: no
-   * structural cap (the user can iterate as many times as they
-   * want; the synthesis self-review pass surfaces a "high-iteration
-   * warning" in the recommended-next-step paragraph after the 5th
-   * revision).
-   */
+  /** Append-only `/cc research` revision history mirrored in `research.md` (research-mode only, never mutated). Default `[]`; no structural cap. */
   revisions?: ResearchRevision[];
-  /**
-   * Candidate framings surfaced at the v8.76 Approaches Gate (research
-   * mode Phase 1.5 — between Phase 1 discovery dialogue and Phase 2
-   * lens dispatch). The orchestrator distils 2-3 framings from the
-   * dialogue summary, surfaces them to the user, and stamps the array
-   * here before the gate fires. See {@link ResearchApproach} for the
-   * field semantics + worked example.
-   *
-   * Set ONLY on research-mode flows. Pre-v8.76 state files lack this
-   * field; readers MUST default to absent / empty (`[]`). Pre-v8.76
-   * research flows dispatched lenses against an implicit single
-   * framing (whatever the orchestrator settled on during dialogue
-   * distillation) — the absence of this field on legacy state is the
-   * canonical "pre-Approaches-Gate" signal, not an error.
-   *
-   * Immutable for the flow's lifetime once stamped — re-framings are
-   * surfaced as `/cc research push-back` invocations on the existing
-   * v8.71 push-back machinery, NOT by mutating this array. The
-   * audit trail keeps the original framings visible.
-   */
+  /** Candidate framings stamped at the Approaches Gate (research Phase 1.5; see {@link ResearchApproach}). Research-mode only; immutable once stamped. */
   approaches?: ResearchApproach[];
-  /**
-   * Indices into {@link FlowStateV82.approaches} that the user
-   * selected at the Approaches Gate. Stamped immediately after the
-   * user's pick (or after the orchestrator stamps the default "all"
-   * selection — every framing flows to every lens). The orchestrator
-   * carries the selected framings forward in every lens dispatch
-   * envelope as `framing: string[]` (the title-or-summary strings the
-   * lenses see, not the indices).
-   *
-   * Conventions:
-   *
-   * - A non-empty array of zero-based indices into `approaches[]` (eg.
-   *   `[0, 2]` selects framings A and C from a 3-framing surface).
-   * - An array equal to `[0..approaches.length - 1]` (every index)
-   *   is the canonical "all" selection — the orchestrator stamps
-   *   this verbatim when the user says "all" or accepts the default.
-   *   Readers MUST NOT special-case empty arrays as "all"; empty is
-   *   reserved for back-compat with pre-v8.76 state files only.
-   *
-   * Set ONLY on research-mode flows. Pre-v8.76 state files lack this
-   * field; readers MUST default to absent. Immutable once stamped
-   * (re-selection is a `/cc research push-back` invocation, not a
-   * mutation of this array).
-   */
+  /** Zero-based indices into {@link FlowStateV82.approaches} the user selected; the full range = "all" (empty is back-compat only, NOT "all"). Research-mode only; immutable. */
   selectedApproaches?: number[];
   /**
-   * Slice ids whose sub-builder worktree branch failed to
-   * fast-forward merge back into the parent after the per-slice TDD
-   * cycle completed (see `src/slice-worktree.ts > mergeSliceWorktree`).
-   *
-   * The orchestrator stamps this field when {@link mergeSliceWorktree}
-   * returns `false` on any slice in a parallel layer. A non-empty
-   * array contaminates the dispatch-level builder Status to `BLOCKED`
-   * (v8.68 protocol) and triggers the stop-and-report surface in
-   * `runbooks/always-auto-failure-handling.md` with the failing
-   * slice ids verbatim. Recovery is via `/cc` continue (after the
-   * user resolves the merge by hand or accepts the partial landing)
-   * or `/cc-cancel`.
-   *
-   * Optional + back-compat: pre-v8.73 strict flows ran every layer
-   * in the shared working tree (no merge step), so readers MUST
-   * tolerate absent values and treat them as the empty array. Cleared
-   * at ship by the compound layer and at cancel by the cancel layer
-   * (alongside the per-slice worktree teardown).
+   * Slice ids whose sub-builder worktree failed to fast-forward merge; a non-empty
+   * array forces builder Status `BLOCKED` + stop-and-report. Default `[]`; cleared
+   * at ship/cancel.
    */
   slice_merge_failures?: SliceId[];
   /**
-   * Append-only per-round audit trail for the v8.78 iterative Clarify
-   * protocol. Each entry records one round of dialogue (dimension
-   * scores after the user's answer, the resulting ambiguity scalar,
-   * the next-question target dimension, and the verbatim question
-   * the orchestrator asked). The array mirrors the per-round Clarify
-   * table the architect / research orchestrator surfaces to the user.
-   *
-   * Set on BOTH architect Phase −1 Clarify (`triage.mode == "task"`)
-   * AND research-mode Phase 1 discovery dialogue (`triage.mode ==
-   * "research"`). The architect path caps at 5 rounds; the research
-   * path caps at 8 rounds. Both surfaces share the math-gated exit
-   * threshold (`ambiguity < 0.25`) via
-   * {@link CLARIFY_EXIT_AMBIGUITY_THRESHOLD}.
-   *
-   * Pre-v8.78 state files lack this field; readers MUST default to
-   * absent / empty `[]`. Pre-v8.78 architect Clarify flows + pre-v8.78
-   * research discovery dialogues did NOT score per-dimension — the
-   * field's absence is the canonical "no per-dimension scoring ran"
-   * signal, not an error.
-   *
-   * Append-only: entries are never mutated or removed after they
-   * land. The orchestrator transitions out of Clarify on the
-   * math-gated exit, the user's "ready" signal, or the round cap;
-   * the array is preserved as the audit trail for compound learning.
+   * Append-only per-round Clarify audit trail (scores, ambiguity, target,
+   * question). Architect Phase −1 (cap 5) and research Phase 1 (cap 8) share the
+   * exit `ambiguity < 0.25`. Default absent/`[]`; never mutated.
    */
   clarifyRounds?: ClarifyRoundState[];
   /**
-   * One-way Door Gate confirmation — stamped when the architect's slim
-   * summary returns `Recommended next: awaiting-one-way-confirmation`
-   * (i.e. the plan contains at least one D-N with `Reversibility:
-   * one-way`). The orchestrator surfaces a structured pause to the
-   * user with three options:
-   *
-   * - `confirm` — proceed to plan-critic (or directly to builder when
-   *   plan-critic's strict gate is off); the irreversible commits are
-   *   user-accepted.
-   * - `edit` — orchestrator surfaces a stop-and-report status block
-   *   asking the user to edit plan.md (typically to soften reversibility
-   *   or split the decision into a two-way + one-way pair) and re-invoke
-   *   `/cc` once done.
-   * - `cancel` — orchestrator routes to `/cc-cancel`.
-   *
-   * The gate matches the User Sovereignty principle in the v8.74 ethos
-   * preamble: irreversible decisions deserve explicit confirmation
-   * before build burns context. The v8.74 cross-model critic auto-fires
-   * on the same condition (any `Reversibility: one-way` D-N) but does so
-   * AFTER the build — the v8.79 gate puts the human in the loop BEFORE
-   * the build burns context.
-   *
-   * **Lite-ceremony exemption.** On `triage.ceremonyMode == "inline"`
-   * the gate is structurally skipped (the path is just `["build"]`;
-   * there is no architect dispatch, no plan.md, no D-N table to scan).
-   * The Reversibility field machinery itself stays on the type for any
-   * future strict-mode flow that resumes from inline.
-   *
-   * Optional + back-compat: pre-v8.79 state files lack the field;
-   * readers MUST default to `null`/absent (the gate never fired). When
-   * the gate is in flight (architect returned but user hasn't picked
-   * yet), the field is present with `decisionIds` populated and
-   * `userChoice` absent — the orchestrator reads that combination as
-   * the canonical "awaiting one-way confirmation" signal.
+   * One-way Door Gate confirmation — stamped on architect
+   * `awaiting-one-way-confirmation` (a `Reversibility: one-way` D-N); a
+   * `confirm`/`edit`/`cancel` pause before build, skipped on inline (`decisionIds`
+   * set + `userChoice` absent = awaiting). Default `null`/absent.
    */
   oneWayDoorConfirmation?: OneWayDoorConfirmation | null;
   /**
-   * v8.81: persisted builder dispatch envelope (cross-dispatch
-   * surface for resume / reviewer audit / compound learning). The
-   * orchestrator stamps this when it dispatches the builder on the
-   * debug-branch direct-fix path AND the investigator's slim summary
-   * carried a `Defense-in-depth: <yes|no>` line.
-   *
-   * Currently scoped to a single field (`defenseInDepth`); when the
-   * investigator emits `Defense-in-depth: yes`, the orchestrator
-   * copies that onto the builder envelope (the dispatch payload) AND
-   * persists it here as `builderEnvelope.defenseInDepth: "yes"` so a
-   * `/cc` resume or reviewer cross-check can read the same flag the
-   * builder did. `"no"` (or an absent field — back-compat with pre-
-   * v8.81 state files) reads as "ship the root-cause fix alone, no
-   * layer additions".
-   *
-   * Optional + back-compat: pre-v8.81 state files lack the field;
-   * readers MUST default to `undefined`/absent (the gate never fired).
-   * The validator accepts absent + an object whose `defenseInDepth`
-   * is `"yes"` / `"no"` / absent; any other value is a hard error.
+   * Persisted builder dispatch envelope for cross-dispatch readers (resume /
+   * reviewer audit / learning); `defenseInDepth: "yes"` = builder added the named
+   * layers, `"no"`/absent = fix shipped alone. Default absent.
    */
   builderEnvelope?: BuilderEnvelope;
 }
 
 /**
- * orchestrator-level pointer to a parent shipped slug, set when
- * the user invokes `/cc extend <slug> <task>`. See
- * {@link FlowStateV82.parentContext} for the full semantics.
- *
- * The `status` field is a string union (not a literal) so v8.60+ can
- * widen the validator without a schema bump. v8.59's validator accepts
- * `"shipped"` only.
+ * Pointer to a parent shipped slug, set on a refine (`/cc <slug> <task>`). See
+ * {@link FlowStateV82.parentContext}. `status` is a string union so the validator
+ * can widen without a schema bump (today only `"shipped"`).
  */
 export interface ParentContext {
   slug: string;
@@ -648,14 +269,9 @@ export interface ParentContext {
 }
 
 /**
- * pre-derived absolute paths to a parent's shipped artifacts.
- * `plan` is mandatory (its presence was the validation gate); every
- * other field is optional because the parent may have shipped with a
- * shorter path (e.g. inline mode has no `review.md`).
- *
- * Specialists `await exists(path)` before reading — a parent artifact
- * that disappears between `/cc extend` and the first dispatch is a
- * no-op skip, not an error.
+ * Pre-derived absolute paths to a parent's shipped artifacts. `plan` is mandatory
+ * (the refine gate); the rest are optional. Specialists `await exists(path)`
+ * before reading — a missing artifact is a no-op skip, not an error.
  */
 export interface ParentArtifactPaths {
   plan: string;
@@ -668,7 +284,7 @@ export interface ParentArtifactPaths {
 
 export type FlowState = FlowStateV82;
 
-/** @deprecated alias preserved for v8.1 import sites. Use {@link FlowStateV82}. */
+/** @deprecated alias preserved for old import sites. Use {@link FlowStateV82}. */
 export type FlowStateV8 = FlowStateV82;
 
 export class LegacyFlowStateError extends Error {
@@ -690,44 +306,17 @@ export function isCeremonyMode(value: unknown): value is CeremonyMode {
   return typeof value === "string" && (CEREMONY_MODES as readonly string[]).includes(value);
 }
 
-/**
- * @deprecated v8.56 — use {@link isCeremonyMode}. Kept as an alias so
- * pre-v8.56 import sites continue to work. Slated for removal once one
- * full release cycle has aged out external imports.
- */
+/** @deprecated — use {@link isCeremonyMode}. Alias kept for old import sites. */
 export const isAcMode = isCeremonyMode;
 
-export function isRunMode(value: unknown): value is RunMode {
-  return typeof value === "string" && (RUN_MODES as readonly string[]).includes(value);
-}
-
-/**
- * Narrow check for the (now single) discovery specialist. v8.62 collapsed
- * `design` + `ac-author` into `architect`, so this predicate now matches
- * exactly one id. Kept for backward compatibility with callers that only
- * care about discovery sub-phase routing; new state-validation paths
- * should use {@link isSpecialist}.
- */
+/** Narrow check for the (now single) discovery specialist `architect`; new state-validation paths should use {@link isSpecialist}. */
 export function isDiscoverySpecialist(value: unknown): value is "architect" {
   return value === "architect";
 }
 
 /**
- * Retired discovery / plan-phase specialist ids. Recognise the legacy
- * ids so migration paths can rewrite them to `null` (forcing the
- * orchestrator to re-dispatch `architect` from scratch) instead of
- * crashing on read.
- *
- * - `brainstormer` (v8.14): retired discovery-side specialist; pre-v8.14
- *   state files may still carry it.
- * - `design` (v8.62): retired; the Phase 0/2-6 work absorbed into
- *   `architect`. Pre-v8.62 strict-path state files may still carry it.
- * - `ac-author` (v8.62): retired; the Plan/AC/Spec authoring absorbed
- *   into `architect`. Pre-v8.62 soft- and strict-path state files may
- *   still carry it.
- *
- * NOTE: `architect` is the **current** specialist post-v8.62; it is NOT
- * a legacy id and the predicate intentionally excludes it.
+ * Recognise retired discovery ids (`brainstormer`/`design`/`ac-author`) so
+ * migration can reset them to `null` on read; the current `architect` is excluded.
  */
 export function isLegacyDiscoverySpecialist(
   value: unknown
@@ -736,15 +325,8 @@ export function isLegacyDiscoverySpecialist(
 }
 
 /**
- * v8.28 renamed the `planner` specialist to `ac-author`. v8.62 retired
- * `ac-author` (absorbed into `architect`). Recognise the legacy id on
- * read so {@link rewriteLegacyPlanner} can reset `lastSpecialist` to
- * `null` and let the orchestrator re-dispatch the current specialist
- * roster from scratch. Mirrors the v8.62 behaviour of
- * {@link rewriteLegacyDiscoverySpecialist} (also resets to `null`).
- *
- * See {@link LEGACY_PLANNER_ID} in `types.ts` for the canonical
- * single-source spelling of the old name.
+ * Recognise the legacy `planner` id so {@link rewriteLegacyPlanner} can reset
+ * `lastSpecialist` to `null`.
  */
 export function isLegacyPlanner(value: unknown): value is "planner" {
   return value === "planner";
@@ -769,15 +351,13 @@ export function createInitialFlowState(nowIso = new Date().toISOString()): FlowS
   };
 }
 
-/** @deprecated kept for source-level compatibility with v8.1 imports. */
+/** @deprecated kept for source-level compatibility with old imports. */
 export const createInitialFlowStateV8 = createInitialFlowState;
 
 /**
- * Infer a TriageDecision for a v2 (pre-8.2) state being migrated forward.
- *
- * v2 states never recorded a triage. To preserve their behaviour we map
- * them to `strict` ceremony mode (they relied on per-criterion TDD), with
- * complexity inferred from the AC count and security flag.
+ * Infer a TriageDecision for a v2 (pre-8.2) state migrating forward: v2 never
+ * recorded triage, so map to `strict` ceremony with complexity from AC count +
+ * security flag.
  */
 function inferTriageFromLegacy(state: {
   ac: AcceptanceCriterionState[];
@@ -799,8 +379,7 @@ function inferTriageFromLegacy(state: {
     path: ["plan", "build", "review", "ship"],
     rationale: "Auto-migrated from cclaw 8.0/8.1 flow-state (no triage recorded; preserved as strict).",
     decidedAt: state.startedAt,
-    userOverrode: false,
-    runMode: "auto"
+    userOverrode: false
   };
 }
 
@@ -825,9 +404,8 @@ function assertAcArray(value: unknown): asserts value is AcceptanceCriterionStat
         }
       }
     }
-    // optional back-reference to the slices that verify this AC.
-    // Permissive: pre-v8.63 state files lack this field, and even
-    // post-v8.63 soft/inline flows leave it absent.
+    // optional back-reference to the verifying slices; permissive (old + soft/
+    // inline flows lack it).
     if (ac.verifiedBy !== undefined) {
       if (!Array.isArray(ac.verifiedBy)) {
         throw new Error("flow-state.ac.verifiedBy must be an array when present");
@@ -842,10 +420,8 @@ function assertAcArray(value: unknown): asserts value is AcceptanceCriterionStat
 }
 
 /**
- * Validate `flow-state.slices` array. Permissive on read so pre-v8.63
- * state files (which lack the field entirely) continue to round-trip;
- * new strict-mode flows MUST emit slices when the architect's
- * plan.md contains a `## Plan / Slices` table.
+ * Validate `flow-state.slices`. Permissive on read so old state files round-trip;
+ * new strict flows emit slices when plan.md has a `## Plan / Slices` table.
  */
 function assertSliceArray(value: unknown): asserts value is SliceState[] {
   if (!Array.isArray(value)) throw new Error("flow-state.slices must be an array when present");
@@ -930,12 +506,7 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
   ) {
     throw new Error("triage.userOverrode must be a boolean or absent");
   }
-  if (triage.runMode !== undefined && triage.runMode !== null && !isRunMode(triage.runMode)) {
-    throw new Error(`Invalid triage.runMode: ${String(triage.runMode)}`);
-  }
-  // orchestrator stamps at Hop 1 (Detect) to record which entry point
-  // started the flow. Pre-v8.58 state files lack the field; readers
-  // default to `"task"` (the historical single-mode behaviour).
+  // mode: which entry point started the flow; old files lack it (default "task").
   if (triage.mode !== undefined && !isResearchMode(triage.mode)) {
     throw new Error(`Invalid triage.mode: ${String(triage.mode)} (expected "task" or "research" or absent)`);
   }
@@ -1010,24 +581,24 @@ function assertTriageOrNull(value: unknown): asserts value is TriageDecision | n
       }
     }
   }
-  // v8.77: orthogonal task shape. Pre-v8.77 state files lack the field;
-  // readers default to `"build"` (validator only runs when present).
+  // orthogonal task shape; old files lack it (default "build"). Validator only
+  // runs when present.
   if (triage.taskShape !== undefined && !isTaskShape(triage.taskShape)) {
     throw new Error(
       `Invalid triage.taskShape: ${String(triage.taskShape)} (expected "build" | "debug" | "research" | absent)`
     );
   }
+  if (triage.designSurface !== undefined && typeof triage.designSurface !== "boolean") {
+    throw new Error("triage.designSurface must be a boolean or absent");
+  }
+  if (triage.devexSurface !== undefined && typeof triage.devexSurface !== "boolean") {
+    throw new Error("triage.devexSurface must be a boolean or absent");
+  }
 }
 
 /**
- * Read a triage decision's pre-flight assumptions.
- *
- * Returns:
- * - `[]` when no pre-flight ran (legacy state, trivial path, or older
- *   `step`/`auto` flow-state with no assumptions field). Callers should
- *   treat this as "no captured assumptions, do not surface anything".
- * - the recorded array (possibly empty if the pre-flight ran but the user
- *   confirmed there were no assumptions to record — rare but valid).
+ * Read pre-flight assumptions: `[]` when none ran (legacy/trivial), else the
+ * recorded array (possibly empty if it ran with nothing to record).
  */
 export function assumptionsOf(triage: TriageDecision | null | undefined): readonly string[] {
   const value = triage?.assumptions;
@@ -1036,26 +607,8 @@ export function assumptionsOf(triage: TriageDecision | null | undefined): readon
 }
 
 /**
- * Read a triage decision's runMode with the documented default.
- *
- * The user-facing `step` / `auto` choice was retired in v8.61; the
- * orchestrator no longer branches on this value. Pre-v8.61 state files
- * carrying `runMode: "step"` continue to validate via the optional type
- * signature (back-compat), but the helper always returns `"auto"` so
- * any remaining call site reads a single value. Inline paths still
- * write `runMode: null`; the helper folds null / undefined / "step"
- * alike to `"auto"`.
- */
-export function runModeOf(_triage: TriageDecision | null | undefined): RunMode {
-  return "auto";
-}
-
-/**
- * Validate a flow-state object. Throws on hard schema errors.
- *
- * v8.2 (schemaVersion=3) is the current shape. v8.0–v8.1 (schemaVersion=2)
- * states are auto-migrated forward in {@link readMigratedFlowState}; this
- * assertion expects the migrated shape.
+ * Validate a flow-state object; throws on hard schema errors. Expects the current
+ * (schemaVersion=3) shape — older v2 states are migrated forward first.
  */
 export function assertFlowStateV82(value: unknown): asserts value is FlowStateV82 {
   if (typeof value !== "object" || value === null) throw new Error("flow-state must be an object");
@@ -1108,25 +661,6 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
   if (state.criticEscalation !== undefined && !isCriticEscalation(state.criticEscalation)) {
     throw new Error(`Invalid criticEscalation: ${String(state.criticEscalation)}`);
   }
-  if (state.criticConvergenceRound !== undefined) {
-    if (
-      typeof state.criticConvergenceRound !== "number" ||
-      state.criticConvergenceRound < 0 ||
-      state.criticConvergenceRound > 3
-    ) {
-      throw new Error(
-        "flow-state.criticConvergenceRound must be an integer in [0, 3] when present"
-      );
-    }
-  }
-  if (
-    state.criticCrossModelVerdict !== undefined &&
-    !isCriticVerdict(state.criticCrossModelVerdict)
-  ) {
-    throw new Error(
-      `Invalid criticCrossModelVerdict: ${String(state.criticCrossModelVerdict)}`
-    );
-  }
   if (
     state.planCriticVerdict !== undefined &&
     state.planCriticVerdict !== null &&
@@ -1174,6 +708,25 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
   ) {
     throw new Error(`Invalid qaEvidenceTier: ${String(state.qaEvidenceTier)}`);
   }
+  if (
+    state.investigatorVerdict !== undefined &&
+    !isInvestigatorNextStep(state.investigatorVerdict)
+  ) {
+    throw new Error(`Invalid investigatorVerdict: ${String(state.investigatorVerdict)}`);
+  }
+  if (state.investigatorIteration !== undefined) {
+    if (typeof state.investigatorIteration !== "number" || state.investigatorIteration < 0) {
+      throw new Error("flow-state.investigatorIteration must be a non-negative number when present");
+    }
+    if (state.investigatorIteration > 1) {
+      throw new Error(
+        `flow-state.investigatorIteration must be 0 or 1 when present (one more-investigation cap); saw ${state.investigatorIteration}`
+      );
+    }
+  }
+  if (state.investigatorDispatchedAt !== undefined && typeof state.investigatorDispatchedAt !== "string") {
+    throw new Error("flow-state.investigatorDispatchedAt must be a string or absent");
+  }
   if (typeof state.securityFlag !== "boolean") {
     throw new Error("flow-state.securityFlag must be a boolean");
   }
@@ -1181,9 +734,7 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
     throw new Error(`Invalid buildProfile: ${String(state.buildProfile)}`);
   }
   assertTriageOrNull(state.triage);
-  // explicit-cleared sentinel. When present-and-non-null it must be a
-  // plain object with three string fields. Pre-v8.58 state files lack
-  // the field entirely; readers default to `null`/absent.
+  // priorResearch: explicit-cleared sentinel; object with three string fields when present.
   if (state.priorResearch !== undefined && state.priorResearch !== null) {
     if (typeof state.priorResearch !== "object" || Array.isArray(state.priorResearch)) {
       throw new Error("flow-state.priorResearch must be an object, null, or absent");
@@ -1199,14 +750,8 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
       throw new Error("flow-state.priorResearch.path must be a non-empty string");
     }
   }
-  // explicit-cleared sentinel. When present-and-non-null it must be a
-  // plain object whose `slug` is a non-empty string, `status` is
-  // exactly `"shipped"` (only valid value; widened in v8.60+),
-  // and `artifactPaths.plan` is a non-empty string (presence of
-  // plan.md was the validation gate at `/cc extend`). Optional
-  // sibling artifact paths (build/review/critic/learnings/qa) must be
-  // strings when present. Pre-v8.59 state files lack the field
-  // entirely; readers default to `null`/absent.
+  // parentContext: explicit-cleared sentinel; non-empty `slug`, `status ===
+  // "shipped"`, non-empty `artifactPaths.plan`, sibling paths optional strings.
   if (state.parentContext !== undefined && state.parentContext !== null) {
     if (typeof state.parentContext !== "object" || Array.isArray(state.parentContext)) {
       throw new Error("flow-state.parentContext must be an object, null, or absent");
@@ -1313,9 +858,9 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
           "flow-state.selectedApproaches entries must be non-negative integers (indices into approaches[])"
         );
       }
-      // Soft validation: bounds-checked when approaches[] is present on the same state.
-      // Tolerant on mid-flight transient writes where selectedApproaches lands before
-      // approaches is fully validated. Test-only assertion enforces tight bounds.
+      // Bounds-checked only when approaches[] is present on the same state
+      // (tolerant of mid-flight transient writes; a test-only assertion enforces
+      // tight bounds).
       if (approachCount > 0 && idx >= approachCount) {
         throw new Error(
           `flow-state.selectedApproaches index ${idx} out of bounds for approaches.length=${approachCount}`
@@ -1422,12 +967,8 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
       );
     }
   }
-  // Builder dispatch envelope, persisted for cross-dispatch readers
-  // (resume on `/cc`, reviewer audit, compound learning). Optional +
-  // back-compat: pre-v8.81 state files lack the field; readers default
-  // to absent. When present, must be an object whose `defenseInDepth`
-  // is either `"yes"` / `"no"` / absent. Any other value (`"maybe"`,
-  // `true`, `1`, an array) is a hard error.
+  // builderEnvelope: optional/back-compat; when present must be an object whose
+  // `defenseInDepth` is "yes"/"no"/absent (any other value is a hard error).
   if (state.builderEnvelope !== undefined) {
     if (
       typeof state.builderEnvelope !== "object" ||
@@ -1449,18 +990,16 @@ export function assertFlowStateV82(value: unknown): asserts value is FlowStateV8
   }
 }
 
-/** @deprecated alias preserved for v8.1 import sites. Use {@link assertFlowStateV82}. */
+/** @deprecated alias preserved for old import sites. Use {@link assertFlowStateV82}. */
 export const assertFlowStateV8 = assertFlowStateV82;
 
 /** Older v7.x schema marker — used only for the hard-stop migration error. */
 export const PRE_V8_LEGACY_SCHEMA_VERSIONS = new Set([1, "1", "1.0", undefined]);
 
 /**
- * Migrate any in-memory flow-state value to the current schemaVersion.
- *
- * Returns the migrated object. The caller is expected to write it back to
- * disk before any further mutation. Throws {@link LegacyFlowStateError} if
- * the input is from a pre-v8 release (schemaVersion 1 or unset).
+ * Migrate any in-memory flow-state value to the current schemaVersion and return
+ * it. Throws {@link LegacyFlowStateError} for pre-v8 inputs (schemaVersion 1 or
+ * unset).
  */
 export function migrateFlowState(value: unknown): FlowStateV82 {
   if (typeof value !== "object" || value === null) {
@@ -1484,20 +1023,9 @@ export function migrateFlowState(value: unknown): FlowStateV82 {
 }
 
 /**
- * Rewrite legacy `lastSpecialist` strings to `null` so the orchestrator
- * re-dispatches the current specialist roster (architect / builder /
- * etc.) instead of crashing on read.
- *
- * Covered legacy ids:
- * - `brainstormer` (v8.14 retired discovery-side specialist)
- * - `design` (v8.62 retired; absorbed into `architect`)
- * - `ac-author` (v8.62 retired; absorbed into `architect`)
- *
- * Other v8.62-retired ids (`slice-builder`, `security-reviewer`) are
- * NOT rewritten here — they pass through the permissive validator as
- * plain strings (no rewrite) per the v8.62 "clean break" contract.
- * The orchestrator's stage routing reads `currentStage`, not
- * `lastSpecialist`, so the stale audit value does not break dispatch.
+ * Rewrite legacy `lastSpecialist` ids (`brainstormer`/`design`/`ac-author`) to
+ * `null` so the orchestrator re-dispatches the current roster. Other retired ids
+ * pass through the permissive validator unchanged.
  */
 function rewriteLegacyDiscoverySpecialist(
   raw: Record<string, unknown>
@@ -1509,19 +1037,8 @@ function rewriteLegacyDiscoverySpecialist(
 }
 
 /**
- * v8.28: rewrite `lastSpecialist: "planner"` so a `flow-state.json`
- * written by v8.14–cclaw resumes cleanly. Originally rewrote to
- * `"ac-author"`; v8.62 retired `ac-author` (absorbed into `architect`)
- * and the user spec calls for "no migration code — clean break", so the
- * rewrite now maps to `null` (mirroring
- * {@link rewriteLegacyDiscoverySpecialist}). The orchestrator
- * re-dispatches `architect` from scratch on the next `/cc`.
- *
- * The transformation runs on **every read** of a current-schema state
- * file. Shipped flow artifacts under `flows/shipped/<slug>/` are NOT
- * rewritten — they keep their historical text untouched.
- *
- * See {@link LEGACY_PLANNER_ID} for the canonical legacy-id spelling.
+ * Rewrite `lastSpecialist: "planner"` to `null` so an old state file resumes
+ * cleanly. Runs on every read; shipped artifacts are not rewritten.
  */
 function rewriteLegacyPlanner(
   raw: Record<string, unknown>
@@ -1533,23 +1050,9 @@ function rewriteLegacyPlanner(
 }
 
 /**
- * v8.56: rewrite `triage.acMode` to `triage.ceremonyMode` so a
- * `flow-state.json` written by pre-v8.56 cclaw resumes cleanly under the
- * renamed field. The rename is **semantics-preserving** — the contract
- * (`inline` / `soft` / `strict`) is identical, only the field name
- * changed — so the rewrite is a direct hoist. Following the same pattern
- * as {@link rewriteLegacyPlanner}, the transformation runs on **every
- * read** of a current-schema state file; the next write persists the new
- * field name. Shipped flow artifacts under `flows/shipped/<slug>/` are
- * NOT rewritten — they keep their historical text untouched.
- *
- * When BOTH `acMode` and `ceremonyMode` are present (mid-flight resume of
- * a project that already migrated), `ceremonyMode` wins and the legacy
- * `acMode` is dropped silently. This matches the planner rewrite
- * shape; cclaw never relies on conflicting fields surviving.
- *
- * Slated for removal in v8.57+ once one full release cycle has aged out
- * any in-flight state files.
+ * Rewrite `triage.acMode` to `triage.ceremonyMode` (semantics-preserving rename)
+ * so an old state file resumes cleanly. When both are present, `ceremonyMode`
+ * wins and `acMode` is dropped; shipped artifacts are not rewritten.
  */
 function rewriteLegacyAcMode(
   raw: Record<string, unknown>

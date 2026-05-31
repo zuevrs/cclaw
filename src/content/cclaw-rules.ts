@@ -2,14 +2,14 @@
  * single source of truth for the harness-embedded ambient rules
  * surface.
  *
- * Pre-v8.55 cclaw's discipline activated **only** inside `/cc`. Outside
+ * Previously, cclaw's discipline activated **only** inside `/cc`. Outside
  * `/cc`, agents ran "naked" with default harness behaviour — the Iron
  * Laws, anti-rationalization catalog, and top antipatterns did not
  * apply. The cross-reference content-footprint audit flagged this as
  * the lone gap among 11 references (every other ref ships ambient
  * rules in CLAUDE.md / AGENTS.md / `.cursor/rules/`).
  *
- * closes the gap by writing a **compact** ambient rules surface
+ * cclaw now closes the gap by writing a **compact** ambient rules surface
  * to each enabled harness's native rules location:
  *
  *   - Cursor:      `.cursor/rules/cclaw.mdc`  (MDC + `alwaysApply: true`)

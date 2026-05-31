@@ -7,8 +7,8 @@ import { SPECIALISTS } from "../../src/types.js";
 
 /**
  * v8.42 — adversarial critic specialist. Slimmed in v8.99 test-slim-down
- * A2 from 37 tests to 5 (cross-model gate, force-stance opening,
- * adversarial mode, anti-rationalization, wiring/template).
+ * A2 from 37 tests to 5; the cross-model gate was retired in v8.115, leaving
+ * force-stance opening, adversarial mode, anti-rationalization, wiring/template.
  */
 
 const FORCE_STANCE_CLAUSE =
@@ -73,18 +73,6 @@ describe("v8.42 critic — force-stance opening (adversarial posture forcing cla
     expect(stanceIdx).toBeGreaterThan(0);
     expect(framingIdx).toBeGreaterThan(0);
     expect(stanceIdx).toBeLessThan(framingIdx);
-  });
-});
-
-describe("v8.42 critic — cross-model second-opinion gate (v8.74 promoted to Reversibility:one-way)", () => {
-  it("BEHAVIOR — critic prompt declares the crossModelCritic envelope flag with v8.74 Reversibility:one-way primary trigger + keyword fallback, names the --critic-cross-model user override, declares the mandatory `Cross-model unavailable: skipped.` graceful fallback line, and rolls cross-model findings under X-F-N numbering into §7 verdict", () => {
-    expect(CRITIC_PROMPT).toMatch(/crossModelCritic/);
-    expect(CRITIC_PROMPT).toMatch(/Reversibility:\s*one-way/);
-    expect(CRITIC_PROMPT).toMatch(/keyword fallback/i);
-    expect(CRITIC_PROMPT).toMatch(/--critic-cross-model/);
-    expect(CRITIC_PROMPT).toMatch(/Cross-model unavailable: skipped/);
-    expect(CRITIC_PROMPT).toMatch(/X-F-N/);
-    expect(CRITIC_PROMPT).toMatch(/## Cross-model second opinion/);
   });
 });
 

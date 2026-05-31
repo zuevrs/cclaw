@@ -28,7 +28,6 @@ import {
 } from "./content/runbooks-on-demand.js";
 import { ANTIPATTERNS } from "./content/antipatterns.js";
 import { DECISION_PROTOCOL } from "./content/decision-protocol.js";
-import { META_SKILL } from "./content/meta-skill.js";
 import { renderStartCommand } from "./content/start-command.js";
 import { renderCancelCommand } from "./content/cancel-command.js";
 import { ensureDir, exists, removePath, writeFileSafe } from "./fs-utils.js";
@@ -230,7 +229,7 @@ export interface SyncOptions {
    * skip the orphan-skill scan that runs after the install layer
    * writes `.cclaw/lib/skills/*.md`. Default `false` (scan runs and
    * `fs.rm`s any `.md` file in that directory not in
-   * `AUTO_TRIGGER_SKILLS` ∪ {`cclaw-meta.md`}). Use only as an emergency
+   * `AUTO_TRIGGER_SKILLS`). Use only as an emergency
    * escape hatch — the scan is loud (one progress event per removed
    * file) and idempotent, so the common case is "let it run". Surfaced
    * as `cclaw <sync|upgrade|init> --skip-orphan-cleanup` on the CLI.
@@ -381,16 +380,15 @@ async function cleanupOrphans(
 
 /**
  * wrapper: orphan-clean `.cclaw/lib/skills/`. Expected set is
- * `AUTO_TRIGGER_SKILLS` ∪ {`cclaw-meta.md`}.
+ * `AUTO_TRIGGER_SKILLS`.
  */
 async function cleanupOrphanSkills(
   projectRoot: string,
   emit: (step: string, detail?: string) => void
 ): Promise<number> {
-  const expected = new Set<string>([
-    "cclaw-meta.md",
-    ...AUTO_TRIGGER_SKILLS.map((s) => s.fileName)
-  ]);
+  const expected = new Set<string>(
+    AUTO_TRIGGER_SKILLS.map((s) => s.fileName)
+  );
   return cleanupOrphans(
     projectRoot,
     path.join(LIB_ROOT, "skills"),
@@ -432,19 +430,16 @@ async function cleanupOrphanRunbooks(
   );
 }
 
-async function writeTemplates(projectRoot: string, legacyArtifacts: boolean): Promise<void> {
+async function writeTemplates(projectRoot: string): Promise<void> {
   for (const template of ARTIFACT_TEMPLATES) {
-    if (template.id === "decisions" && !legacyArtifacts) {
-      continue;
-    }
     const target = path.join(projectRoot, LIB_ROOT, "templates", template.fileName);
     await writeFileSafe(target, template.body);
   }
-  if (!legacyArtifacts) {
-    const decisionsLegacyPath = path.join(projectRoot, LIB_ROOT, "templates", "decisions.md");
-    if (await exists(decisionsLegacyPath)) {
-      await fs.rm(decisionsLegacyPath, { force: true });
-    }
+  // `decisions.md` is no longer a template — D-N rows live inline in
+  // `plan.md > ## Decisions`. Remove a stale copy from an older install.
+  const decisionsLegacyPath = path.join(projectRoot, LIB_ROOT, "templates", "decisions.md");
+  if (await exists(decisionsLegacyPath)) {
+    await fs.rm(decisionsLegacyPath, { force: true });
   }
   await writeFileSafe(
     path.join(projectRoot, LIB_ROOT, "templates", "iron-laws.md"),
@@ -481,13 +476,6 @@ async function writeDecisionProtocol(projectRoot: string): Promise<void> {
   await writeFileSafe(
     path.join(projectRoot, LIB_ROOT, "decision-protocol.md"),
     DECISION_PROTOCOL
-  );
-}
-
-async function writeMetaSkill(projectRoot: string): Promise<void> {
-  await writeFileSafe(
-    path.join(projectRoot, LIB_ROOT, "skills", "cclaw-meta.md"),
-    META_SKILL
   );
 }
 
@@ -684,7 +672,8 @@ const RETIRED_LIB_DIRS: readonly string[] = ["examples", "research", "recovery"]
  * retired on-demand runbook files. Earlier installs wrote these
  * under `.cclaw/lib/runbooks/`. merged or lifted their content
  * into surviving runbooks (handoff-gates.md, critic-steps.md, plan.md
- * "Path: small/medium" / "Path: large-risky" sections). The orphan
+ * "Path: small/medium" / "Path: large-risky" sections; extend-mode.md
+ * + patch-mode.md folded into the unified refine-mode.md). The orphan
  * cleaner removes the stale `.md` files on upgrade.
  */
 const RETIRED_RUNBOOK_FILES: readonly string[] = [
@@ -693,7 +682,9 @@ const RETIRED_RUNBOOK_FILES: readonly string[] = [
   "discovery.md",
   "plan-small-medium.md",
   "critic-stage.md",
-  "plan-critic-stage.md"
+  "plan-critic-stage.md",
+  "extend-mode.md",
+  "patch-mode.md"
 ];
 
 async function removeRetiredLibDirs(
@@ -870,8 +861,7 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
   await removeRetiredHookArtefacts(projectRoot, emit);
 
   await writeRuntimeSkills(projectRoot);
-  await writeMetaSkill(projectRoot);
-  emit("Wrote skills", `${AUTO_TRIGGER_SKILLS.length + 1} skills → .cclaw/lib/skills/`);
+  emit("Wrote skills", `${AUTO_TRIGGER_SKILLS.length} skills → .cclaw/lib/skills/`);
 
   await writeSkillsIndex(projectRoot);
   emit("Wrote skills index", `skills-index.md → .cclaw/lib/`);
@@ -891,11 +881,8 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     await cleanupOrphanSkills(projectRoot, emit);
   }
 
-  const legacyArtifacts = Boolean(config.legacyArtifacts);
-  await writeTemplates(projectRoot, legacyArtifacts);
-  const templateCount = legacyArtifacts
-    ? ARTIFACT_TEMPLATES.length + 1
-    : ARTIFACT_TEMPLATES.length; // -1 decisions.md skipped, +1 iron-laws.md added
+  await writeTemplates(projectRoot);
+  const templateCount = ARTIFACT_TEMPLATES.length + 1; // +1 iron-laws.md
   emit("Wrote templates", `${templateCount} templates → .cclaw/lib/templates/`);
 
   await writeStageRunbooks(projectRoot);
@@ -967,7 +954,7 @@ export async function syncCclaw(options: SyncOptions): Promise<SyncResult> {
     harnesses: [...harnesses],
     agents: CORE_AGENTS.length,
     researchLenses: RESEARCH_LENS_AGENTS.length,
-    skills: AUTO_TRIGGER_SKILLS.length + 1,
+    skills: AUTO_TRIGGER_SKILLS.length,
     templates: templateCount,
     runbooks: STAGE_PLAYBOOKS.length + ON_DEMAND_RUNBOOKS.length,
     patterns: REFERENCE_PATTERNS.length,

@@ -30,17 +30,11 @@ describe("v8.109 — README ## Configuration table covers every knob", () => {
       "compoundRefreshFloor",
       "captureLearningsBypass",
       "modelPreferences",
-      "clarify.ambiguity_threshold",
-      "critic.cross_model",
-      "critic.cross_model_min_context"
+      "clarify.ambiguity_threshold"
     ];
     for (const knob of required) {
       expect(section, `README Configuration table should cite ${knob}`).toContain(knob);
     }
-  });
-
-  it("cites the v8.108 cross-model budget default of 16000", () => {
-    expect(section).toMatch(/16000/u);
   });
 
   it("cites the v8.67 clarify ambiguity threshold default of 60", () => {

@@ -146,7 +146,7 @@ describe("v8.65 — start-command research-mode fork + architect divestment", ()
     expect(body).toMatch(/skip triage|bypass(es)? triage|sentinel triage|no triage/iu);
     expect(START_COMMAND_BODY).toBe(body);
 
-    expect(ARCHITECT_PROMPT).toMatch(/intra-flow `mode: "task"` is the only mode you handle post-v8\.65/u);
+    expect(ARCHITECT_PROMPT).toMatch(/intra-flow `mode: "task"` is the only mode you handle/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/Standalone research \(`triage\.mode == "research"`/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/finalises the research flow immediately/u);
     expect(ARCHITECT_PROMPT).not.toMatch(/Phase 7-research/u);

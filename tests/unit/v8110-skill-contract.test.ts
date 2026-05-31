@@ -30,8 +30,9 @@ import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
  *     anywhere except as explicit "archived-flow back-compat" framing.
  */
 
+// ac-discipline was absorbed into commit-hygiene; the AC-side contract now
+// lives in commit-hygiene's "AC discipline" section (still under contract here).
 const SKILL_IDS_UNDER_CONTRACT = [
-  "ac-discipline",
   "tdd-and-verification",
   "commit-hygiene",
   "conversation-language",
@@ -134,7 +135,6 @@ describe("v8.110 — skill-side slice/AC migration completion (tripwire)", () =>
 
   describe("`verify(AC-N): passing` shape appears in the AC-side skills", () => {
     const VERIFY_REQUIRED = [
-      "ac-discipline",
       "tdd-and-verification",
       "commit-hygiene",
     ] as const;
@@ -151,14 +151,6 @@ describe("v8.110 — skill-side slice/AC migration completion (tripwire)", () =>
   });
 
   describe("skills.ts descriptions reference the new SL / verify(AC) contract", () => {
-    it("`ac-discipline` description names the `verify(AC-N): passing` chain (and does not teach `red(AC-N):` slice work)", () => {
-      const description = loadSkillDescription("ac-discipline");
-      expect(description).toMatch(/verify\(AC-N\)/);
-      expect(description).not.toMatch(/red\(AC-N\)/);
-      expect(description).not.toMatch(/green\(AC-N\)/);
-      expect(description).not.toMatch(/refactor\(AC-N\)/);
-    });
-
     it("`commit-hygiene` description names slice-work `(SL-N)` prefixes AND the `verify(AC-N): passing` shape", () => {
       const description = loadSkillDescription("commit-hygiene");
       expect(description).toMatch(/red\(SL-N\):/);

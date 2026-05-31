@@ -1,8 +1,8 @@
-# Parallel worktree dispatch (v8.111+)
+# Parallel worktree dispatch
 
-Worked example for the v8.73 topological-layer dispatch: how the parent builder uses `createSliceWorktree` / `mergeSliceWorktree` / `cleanupSliceWorktree` against a layer of ≥2 independent slices. Lifted out of `agents/builder.md` in v8.111 to free in-prompt budget; the in-prompt anchor is 8 lines naming the three helpers + the dispatch contract.
+Worked example for the topological-layer dispatch: how the parent builder uses `createSliceWorktree` / `mergeSliceWorktree` / `cleanupSliceWorktree` against a layer of ≥2 independent slices. Lifted out of `agents/builder.md` to free in-prompt budget; the in-prompt anchor is 8 lines naming the three helpers + the dispatch contract.
 
-## Worked example — three-slice flow with one parallel layer (v8.73 worktree-isolated)
+## Worked example — three-slice flow with one parallel layer (worktree-isolated)
 
 Slice table (from `plan.md > ## Plan / Slices`):
 

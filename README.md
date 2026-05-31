@@ -2,7 +2,7 @@
 
 **A multi-stage planning + review harness for coding agents.**
 
-Drops `/cc` into Claude Code, Cursor, OpenCode, and Codex. Every task flows through `triage → plan → build → review → critic → ship`. Two reviewers run in series — a read-only walk over 14 axes, then an adversarial critic that falsifies what the reviewer cleared. Independent slices run in parallel worktrees. Sub-agents stay isolated; the orchestrator keeps the slug's history. Always-auto: no "approve this?" pickers between stages. Resume with `/cc`, discard with `/cc-cancel`.
+Drops `/cc` into Claude Code, Cursor, OpenCode, and Codex. Every task flows through `triage → plan → build → review → critic → ship`. Two reviewers run in series — a read-only walk over 9 axes, then an adversarial critic that falsifies what the reviewer cleared. Independent slices build sequentially by default, fanning out to parallel worktrees only when the plan opts in. Sub-agents stay isolated; the orchestrator keeps the slug's history. Always-auto: no "approve this?" pickers between stages. Resume with `/cc`, discard with `/cc-cancel`.
 
 ## Install
 
@@ -21,7 +21,7 @@ Supported harnesses: `claude` (`CLAUDE.md` or `.claude/`), `cursor` (`.cursor/`)
 
 ## Use
 
-Four entry shapes share the `/cc` surface:
+Three entry shapes share the `/cc` surface:
 
 ```bash
 # 1. Ship a code change end-to-end.
@@ -32,13 +32,12 @@ Four entry shapes share the `/cc` surface:
 # Dispatches up to 6 research lenses in parallel; synthesises research.md.
 /cc research storage strategy for shared agent memory
 
-# 3. Post-ship micro-edit on a shipped slug.
-# Skips triage / plan-critic / critic; single commit, parent context reused.
-/cc patch 20260514-auth-flow rename loginUser to authenticateUser
-
-# 4. Full follow-up arc on a shipped slug.
-# Parent's plan / build / learnings load as context for the new flow.
-/cc extend 20260514-auth-flow add SAML login
+# 3. Refine a shipped slug — the first token IS the slug.
+# Triage picks the ceremony: a tiny tweak lands as a single-commit patch
+# (patch-N.md next to the parent, no new slug); anything larger runs the
+# full follow-up arc with the parent's plan / build / learnings as context.
+/cc 20260514-auth-flow rename loginUser to authenticateUser
+/cc 20260514-auth-flow add SAML login
 
 # Cancel the active flow.
 /cc-cancel
@@ -54,10 +53,8 @@ Slim summaries land in chat under `## Triage`, `## Plan`, `## Build`, `## Review
 flowchart LR
  U[user] -->|"/cc &lt;task&gt;"| T[triage]
  U -->|"/cc research &lt;topic&gt;"| RES[research orchestrator]
- U -->|"/cc patch &lt;slug&gt;"| PT[load parent context]
- U -->|"/cc extend &lt;slug&gt;"| EX[load parent context]
- EX --> T
- PT --> B
+ U -->|"/cc &lt;slug&gt; &lt;task&gt;"| PT[load parent context]
+ PT --> T
  T --> AR[architect]
  AR --> PC[plan-critic gate]
  PC --> B[builder]
@@ -71,7 +68,7 @@ flowchart LR
 
 | Mode | When triage picks it | Pipeline |
 |------|---------------------|----------|
-| `inline` | trivial edits — typo, comment, one-line fix; also auto-set on `/cc patch` | one commit, no plan |
+| `inline` | trivial edits — typo, comment, one-line fix; also auto-set when triage downgrades a refine (`/cc <slug> <task>`) to a post-ship patch | one commit, no plan |
 | `soft` (default) | small / medium tasks | architect → single TDD cycle → reviewer → critic → ship |
 | `strict` | risky / multi-slice / security / migration | architect → plan-critic gate → per-slice TDD → reviewer (dual-chain) → critic → ship |
 
@@ -88,18 +85,13 @@ Triage announces its auto-pick in one line before the first specialist runs, so 
 | `compoundRefreshEvery` | `5` | Run the compound-refresh sub-step every Nth capture (T2-4 everyinc). Set to `0` to disable. |
 | `compoundRefreshFloor` | `10` | Minimum `knowledge.jsonl` entries the floor gate requires before compound-refresh fires. Belt-and-braces with `compoundRefreshEvery`. |
 | `captureLearningsBypass` | `false` | Skip the learnings hard-stop structured-ask in CI / autonomous pipelines that can't surface an interruption. |
-| `modelPreferences.<specialist>` | per-specialist (see `src/config.ts` `DEFAULT_MODEL_PREFERENCES`) | Tier hint (`fast` / `balanced` / `powerful`) passed through to the harness's model router on dispatch. |
+| `modelPreferences.<specialist>` | per-specialist | Tier hint (`fast` / `balanced` / `powerful`) passed through to the harness's model router on dispatch. |
 | `clarify.ambiguity_threshold` | `60` | `triage.ambiguityScore >= this` AND `ceremonyMode != "inline"` opens the architect's Clarify phase before Bootstrap. Integer in `[0, 100]`. |
-| `critic.cross_model` | `false` | Opt-in second adversarial critic pass via a different model through an available MCP cross-model tool (Codex / Gemini / etc.) on high-stakes slugs. |
-| `critic.cross_model_min_context` | `16000` | Minimum char budget the second-opinion model needs before the critic dispatches; below this the critic refuse-and-skip path fires (v8.108 §3.5 priority-drop). |
 
 Example:
 
 ```yaml
 harnesses: [claude, cursor]
-critic:
-  cross_model: false # opt-in second adversarial pass via a different model (MCP)
-  cross_model_min_context: 16000 # v8.108 — refuse-and-skip below this budget
 clarify:
   ambiguity_threshold: 60 # default; lower = more Clarify, higher = less
 modelPreferences:
@@ -117,9 +109,9 @@ The runtime is < 1 KLOC; behaviour lives in prompt content under `src/content/`.
 
 - [`src/content/start-command.ts`](src/content/start-command.ts) — orchestrator body (detect, dispatch, ship, compound)
 - [`src/content/specialist-prompts/`](src/content/specialist-prompts/) — 8 specialist contracts (`triage`, `investigator`, `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`)
-- [`src/content/skills/`](src/content/skills/) — 34 auto-trigger skills loaded per stage
+- [`src/content/skills/`](src/content/skills/) — 32 auto-trigger skills loaded per stage
 - [`src/content/research-lenses/`](src/content/research-lenses/) — 6 research lenses dispatched on `/cc research`
-- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 28 on-demand runbooks loaded by trigger
+- [`src/content/runbooks-on-demand.ts`](src/content/runbooks-on-demand.ts) — 26 on-demand runbooks loaded by trigger
 - [`src/content/artifact-templates.ts`](src/content/artifact-templates.ts) — plan / build / qa / review / critic / ship templates
 - [`src/content/anti-rationalizations.ts`](src/content/anti-rationalizations.ts) — cross-cutting rebuttal catalog
 - [`CHANGELOG.md`](CHANGELOG.md) — release history with every flag, gate, rubric, and version

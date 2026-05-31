@@ -8,7 +8,7 @@ import { CORE_AGENTS } from "../../src/content/core-agents.js";
 import { ON_DEMAND_RUNBOOKS } from "../../src/content/runbooks-on-demand.js";
 import { AUTO_TRIGGER_SKILLS } from "../../src/content/skills.js";
 import { renderStartCommand } from "../../src/content/start-command.js";
-import { LEGACY_DISCOVERY_SPECIALISTS, SPECIALISTS } from "../../src/types.js";
+import { LEGACY_SPECIALIST_IDS, SPECIALISTS } from "../../src/types.js";
 import {
   RETIRED_COMMAND_FILES,
   syncCclaw,
@@ -65,14 +65,12 @@ describe("v8.11 — slug naming format (YYYYMMDD-<semantic-kebab>)", () => {
 // legacy-artifacts: true).
 
 describe("v8.14/v8.62 discovery-roster migration anchor", () => {
-  it("LEGACY_DISCOVERY_SPECIALISTS keeps `brainstormer` only (v8.62 reclaimed `architect` for the live specialist; the v8.14-era retired `architect` id is unreachable from the new roster)", () => {
-    expect(LEGACY_DISCOVERY_SPECIALISTS).toEqual(["brainstormer"]);
-    for (const legacy of LEGACY_DISCOVERY_SPECIALISTS) {
-      expect(SPECIALISTS as readonly string[]).not.toContain(legacy);
-    }
+  it("legacy roster retires `brainstormer` and never shadows the live `architect` specialist (v8.62 reclaimed `architect`)", () => {
+    expect(LEGACY_SPECIALIST_IDS as readonly string[]).toContain("brainstormer");
+    expect(SPECIALISTS as readonly string[]).not.toContain("brainstormer");
     // v8.62 — `architect` is now a live SPECIALISTS member; the legacy
     // list must NOT shadow it.
-    expect(LEGACY_DISCOVERY_SPECIALISTS as readonly string[]).not.toContain("architect");
+    expect(LEGACY_SPECIALIST_IDS as readonly string[]).not.toContain("architect");
     expect(SPECIALISTS as readonly string[]).toContain("architect");
   });
 
@@ -95,8 +93,9 @@ describe("v8.14/v8.62 discovery-roster migration anchor", () => {
 // auto-trigger skills baseline; slimmed in v8.99 to dangling-ref +
 // trigger tripwires + provenance + count band).
 
+// ac-discipline was itself absorbed into commit-hygiene in the consolidation
+// pass; its provenance snippets are now asserted under commit-hygiene below.
 const MERGED_SKILL_IDS = [
-  "ac-discipline",
   "commit-hygiene",
   "tdd-and-verification",
   "api-evolution",
@@ -121,8 +120,14 @@ const DELETED_SOURCE_IDS = [
 ] as const;
 
 const PROVENANCE_SNIPPETS: Record<(typeof MERGED_SKILL_IDS)[number], string[]> = {
-  "ac-discipline": ["Three checks per AC:", "git log --grep"],
-  "commit-hygiene": ["Surgical Changes", "`git add -A` is forbidden."],
+  // commit-hygiene absorbed surgical-edit-hygiene (v8.16) AND ac-discipline
+  // (consolidation pass) — assert both lineages' load-bearing snippets.
+  "commit-hygiene": [
+    "Surgical Changes",
+    "`git add -A` is forbidden.",
+    "Three checks per AC:",
+    "git log --grep",
+  ],
   "tdd-and-verification": [
     "NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST",
     "build/typecheck/lint/test/security",
@@ -199,7 +204,6 @@ describe("v8.16 thematic skills merge", () => {
       cited.add(m[1]!);
     }
     for (const fileName of cited) {
-      if (fileName === "cclaw-meta.md") continue;
       expect(fileNames, `cited \`lib/skills/${fileName}\` must be a live AUTO_TRIGGER_SKILLS entry`).toContain(fileName);
     }
   });

@@ -62,7 +62,7 @@ describe("v8.42 — critic step dispatch surface (start-command body)", () => {
   it("BEHAVIOR — body inserts `critic` between `review` and `ship` in the canonical path, names the v8.42+ critic-step heading, references the merged critic-steps.md runbook, and includes `critic` in the lastSpecialist enum (v8.61 reframe)", () => {
     const body = renderStartCommand();
     expect(body).toMatch(/`plan`,\s*`build`,\s*`review`,\s*`critic`,\s*`ship`/);
-    expect(body).toMatch(/#### critic \(v8\.42\+, critic step\)/);
+    expect(body).toMatch(/#### critic \(critic step\)/);
     expect(body).toContain(CRITIC_STEPS_FILENAME);
     expect(START_COMMAND_BODY).toMatch(/`lastSpecialist`\s*=[\s\S]+`critic`/);
   });
@@ -77,7 +77,7 @@ describe("v8.42 — critic-steps runbook documents both verdict surfaces", () =>
     expect(runbook.body).toMatch(/fix and re-?review/i);
     expect(runbook.body).toMatch(/accept-and-ship/i);
     expect(runbook.body).toMatch(/criticIteration/);
-    expect(runbook.body).toMatch(/Pre-implementation pass \(plan-critic, v8\.51\)/);
+    expect(runbook.body).toMatch(/Pre-implementation pass \(plan-critic\)/);
     expect(runbook.body).toMatch(/triage\.complexity != "trivial"/);
   });
 });

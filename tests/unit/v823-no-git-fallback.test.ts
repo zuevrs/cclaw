@@ -32,7 +32,6 @@ describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReaso
       rationale: "Auto-downgraded from strict because no .git/ in projectRoot.",
       decidedAt: new Date().toISOString(),
       userOverrode: false,
-      runMode: "step",
       downgradeReason: "no-git",
     } as typeof state.triage;
     await writeFlowState(project, state);
@@ -52,7 +51,6 @@ describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReaso
       rationale: "Normal small-medium flow.",
       decidedAt: new Date().toISOString(),
       userOverrode: false,
-      runMode: "step",
       downgradeReason: null,
     } as typeof state.triage;
     await writeFlowState(project, state);
@@ -72,7 +70,6 @@ describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReaso
       rationale: "Pre-v8.23 flow without downgradeReason.",
       decidedAt: new Date().toISOString(),
       userOverrode: false,
-      runMode: "step",
     };
     await writeFlowState(project, state);
     const reread = await readFlowState(project);
@@ -92,7 +89,6 @@ describe("v8.23 no-git fallback — TriageDecision schema accepts downgradeReaso
       rationale: "Bad shape: downgradeReason is a number.",
       decidedAt: new Date().toISOString(),
       userOverrode: false,
-      runMode: "step",
       downgradeReason: 42,
     };
     await fs.writeFile(statePath, JSON.stringify(raw, null, 2), "utf8");

@@ -41,39 +41,13 @@ import { HARNESS_IDS, type CliContext, type HarnessId } from "./types.js";
 const TAGLINE = "harness-first flow toolkit for coding agents";
 
 /**
- * `cclaw` is TUI-first. The canonical invocation is
- * `npx cclaw-cli@latest` (no args), which opens a top-level menu with a
- * smart default highlight based on whether `.cclaw/config.yaml` exists.
- *
- * The bare subcommand surface (`cclaw init`, `cclaw sync`, …) was
- * dropped in v8.29 — those error out and point at the no-arg
- * invocation. The `--non-interactive` flag is the escape hatch for
- * CI / scripts / piped input.
- *
- * `cclaw --non-interactive sync` and `cclaw --non-interactive
- * upgrade` were collapsed into `cclaw --non-interactive install`.
- * Under the hood, all three previously called `syncCclaw()` /
- * `upgradeCclaw()` (themselves thin wrappers around the same idempotent
- * installer with orphan cleanup). The non-interactive surface now
- * matches the code path: ONE installer (`install`), the read-only
- * commands (`knowledge`, `version`, `help`), and `uninstall`.
- *
- * the TUI menu finishes the collapse: rows are now just
- * `Install` / `Uninstall` / `Quit`. `Sync` and `Upgrade` were intent
- * aliases that confused the picture (three rows, one behaviour);
- * `Install` now carries both readings via its description
- * ("first-time setup OR idempotent reapply"). `Browse knowledge` and
- * `Show version` were moved off the menu — power users invoke them as
- * `cclaw --non-interactive knowledge` / `cclaw --version`. also
- * fixes a perceptible-on-slow-terminals double-render of the 6-line
- * Unicode logo: the no-arg TUI path used to emit the banner above the
- * menu AND again inside the action dispatcher; the second emission is
- * gone (the original banner stays in scrollback while menu rows are
- * erased, so the install progress flows under the banner the operator
- * already saw).
- *
- * `--help` / `-h` / `--version` / `-v` are preserved as flags regardless
- * of mode (standard CLI convention).
+ * `cclaw` is TUI-first: bare `cclaw` (or `npx cclaw-cli@latest`) opens a
+ * top-level menu (Install / Uninstall / Quit). `--non-interactive` is the
+ * escape hatch for CI / scripts: ONE installer (`install`), the read-only
+ * commands (`knowledge`, `version`, `help`), and `uninstall`. Bare
+ * subcommands (`cclaw init`, `cclaw sync`, …) error and point at one of
+ * those two surfaces. `--help` / `-h` / `--version` / `-v` work as flags
+ * in any mode.
  */
 const HELP_USAGE = `Usage:
   cclaw                                     # open the TUI menu (interactive default)
@@ -109,32 +83,19 @@ via the /cc command, not in this CLI. There is no \`cclaw plan\`,
 /cc subcommand patterns (inside your harness, after install):
   /cc <task>                       Fresh slug — triage → plan → build → review → critic → ship.
   /cc research <topic>             Multi-lens research mode; emits research.md, no build.
-  /cc patch <slug> <task>          Post-ship micro-edit (v8.102): inline ceremony, single commit, parent context reused.
-  /cc extend <slug> <task>         Full follow-up arc on a shipped slug; parent's plan / build / learnings load as context.
+  /cc <slug> <task>                Refine a shipped slug (first token is the slug); triage picks the ceremony — a tiny tweak lands as a single-commit patch (patch-N.md next to the parent), anything larger runs the full refine with the parent's plan / build / learnings as context.
   /cc                              Resume the active flow.
   /cc-cancel                       Discard the active flow.
 
 Per-flow flags (parsed by the /cc orchestrator inside the harness,
-NOT by this CLI). v8.112 cleaned this surface to the three flags
-that toggle behaviour the triage heuristic structurally can't
-infer; everything else now flows from the heuristic + task wording:
-  --critic-cross-model                 force a cross-model convergence
-                                       loop in critic via MCP (v8.74
-                                       trigger; v8.112 convergence
-                                       contract — both critics must
-                                       PASS or up to 3 rounds run).
-                                       Graceful fallback:
-                                       \`Cross-model unavailable: skipped\`
-                                       is written when no MCP tool is
-                                       wired. Default off; opt in
-                                       project-wide via
-                                       \`critic.cross_model: true\` in
-                                       \`.cclaw/config.yaml\`.
-  --review                             /cc patch only: enable the lite
-                                       reviewer pass (correctness,
-                                       readability, edit-discipline
-                                       axes only) after the patch
-                                       commit lands.
+NOT by this CLI). The two flags below toggle behaviour the triage
+heuristic structurally can't infer; everything else now flows from
+the heuristic + task wording:
+  --review                             refine inline path only: enable
+                                       the lite reviewer pass
+                                       (correctness, readability,
+                                       edit-discipline axes only) after
+                                       the patch commit lands.
   --lens=design / --lens=-design       research mode only: force-include
                                        or force-exclude the v8.76
                                        design lens, overriding the

@@ -73,13 +73,3 @@ export const KNOWLEDGE_LOG_REL_PATH = `${RUNTIME_ROOT}/knowledge.jsonl`;
 
 export const SHIPPED_DIR_REL_PATH = `${FLOWS_ROOT}/shipped`;
 export const CANCELLED_DIR_REL_PATH = `${FLOWS_ROOT}/cancelled`;
-
-export const LIB_DIRS = [
-  "agents",
-  "skills",
-  "templates",
-  "runbooks",
-  "patterns",
-  "research",
-  "recovery"
-] as const;

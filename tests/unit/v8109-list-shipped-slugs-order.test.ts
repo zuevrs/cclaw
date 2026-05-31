@@ -10,7 +10,7 @@ import { createTempProject, removeProject } from "../helpers/temp-project.js";
  * chronological for YYYYMMDD- slugs). Pre-v8.109 the function
  * sorted ascending, surfacing the OLDEST 10 slugs in the
  * "showing 10 of N" sample inside the unknown-slug error message —
- * the opposite of what a user reaching for `/cc extend` actually
+ * the opposite of what a user reaching for `/cc <slug> <task>` actually
  * wants.
  */
 describe("v8.109 — listShippedSlugs is newest-first", () => {

@@ -5,13 +5,13 @@ trigger: gated reviewer axis. Loads only when `flows/<slug>/plan.md` contains a 
 
 # Skill: reviewer-axis-nfr-compliance
 
-Full gating rule + cross-check protocol for the reviewer's `nfr-compliance` axis. Lifted out of `reviewer.ts` in the v8.83 release — the prompt now carries only a 5-line stub pointing here.
+Full gating rule + cross-check protocol for the reviewer's `nfr-compliance` axis. Lifted out of `reviewer.ts` — the prompt now carries only a 5-line stub pointing here.
 
 The `nfr-compliance` axis fires only when `flows/<slug>/plan.md` contains a non-empty `## Non-functional` section. When the section is empty, absent, or contains only `none specified` rows across every NFR, the axis emits zero findings — the reviewer does not synthesize budgets, does not check against external defaults, and does not warn that NFRs were not authored. The gating is intentional: NFR authoring is an architect Frame-phase decision, not a reviewer responsibility, and forcing the reviewer to invent NFRs on plans that didn't author them creates false positives.
 
 ## When to use
 
-Pinned to the reviewer's dispatch envelope when `flows/<slug>/plan.md` carries a non-empty `## Non-functional` section. The orchestrator inspects the plan at dispatch time and stamps `planHasNonFunctional: true` onto the reviewer dispatch envelope (per `start-command.md > Review hop`); the envelope's flag is the runtime source of truth. The orchestrator resolves the envelope shape against `runbooks/dispatch-skills-index.md` and pastes the gate-resolved skills-pointer slice into the envelope's `Active skills (per envelope):` field — when this flag is set, the pointer is included in the slice and the reviewer sub-agent loads the body below; when it is absent, the pointer is omitted from the slice (even though the static superset in `agents/reviewer.md` still lists it). The reviewer's prompt body has a 5-line stub naming this skill; the full per-row cross-check protocol lives here. (v8.96.1 — pre-v8.96.1 this paragraph claimed the orchestrator passes the flag to `buildAutoTriggerBlock("review", env)` at dispatch time; that was tests-only fiction. The function is called at INSTALL time by the dispatch-skills-index runbook composer; the runtime dispatch carries the rendered slice, not a function call.)
+Pinned to the reviewer's dispatch envelope when `flows/<slug>/plan.md` carries a non-empty `## Non-functional` section. The orchestrator inspects the plan at dispatch time and stamps `planHasNonFunctional: true` onto the reviewer dispatch envelope (per `start-command.md > Review hop`); the envelope's flag is the runtime source of truth. The orchestrator resolves the envelope shape against `runbooks/dispatch-skills-index.md` and pastes the gate-resolved skills-pointer slice into the envelope's `Active skills (per envelope):` field — when this flag is set, the pointer is included in the slice and the reviewer sub-agent loads the body below; when it is absent, the pointer is omitted from the slice (even though the static superset in `agents/reviewer.md` still lists it). The reviewer's prompt body has a 5-line stub naming this skill; the full per-row cross-check protocol lives here. (this paragraph claimed the orchestrator passes the flag to `buildAutoTriggerBlock("review", env)` at dispatch time; that was tests-only fiction. The function is called at INSTALL time by the dispatch-skills-index runbook composer; the runtime dispatch carries the rendered slice, not a function call.)
 
 ## When NOT to apply
 
@@ -33,7 +33,7 @@ Pinned to the reviewer's dispatch envelope when `flows/<slug>/plan.md` carries a
 
 **Finding shape.** Every nfr-compliance finding carries the NFR row text verbatim in the description plus the file:line of the violation. Example: `F-7 nfr-compliance/required — src/api/search.ts:88 — NFR row "performance: p95 < 250ms on /api/search" — new ranking pass adds a synchronous embedding lookup; no benchmark commit landed and the build log shows no perf row. Recommend: run the existing benchmark harness (npm run bench:search) and either land a numbers row OR refactor to async lookup.`
 
-**Slim counter exclusion.** `nfr-compliance` is intentionally excluded from the slim-summary axes counter (`c=N tq=N r=N a=N cb=N s=N p=N ed=N qae=N dq=N`) — it is a gated axis; when it fires, name the violated NFR row inline in the `What changed` line instead.
+**Slim counter exclusion.** `nfr-compliance` is intentionally excluded from the slim-summary axes counter (`c=N r=N a=N s=N p=N ed=N qae=N dq=N`) — it is a gated axis; when it fires, name the violated NFR row inline in the `What changed` line instead.
 
 ## Common rationalizations
 

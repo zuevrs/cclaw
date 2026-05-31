@@ -3,11 +3,16 @@ import { describe, expect, it } from "vitest";
 import { topologicalLayers } from "../../src/slice-topology.js";
 
 /**
- * v8.64 — parallel-by-default for multi-slice tasks.
+ * v8.64 — topological layering for multi-slice tasks.
  *
  * Slimmed in v8.100: kept only the `topologicalLayers` behaviour tests.
  * The builder/plan-critic/reviewer prompt-greps and start-command
- * content-greps for the parallel-by-default prose were removed.
+ * content-greps for the dispatch prose were removed.
+ *
+ * v8.116 — sequential build became the default; parallel worktree dispatch
+ * is now opt-in via `topology: parallel-build`. `topologicalLayers` is
+ * unchanged — it still computes the build order for BOTH the sequential
+ * (run each slice inline) and parallel (fan out per layer) paths.
  */
 describe("v8.64 — topologicalLayers", () => {
   it("returns layers of one for a linear chain (sanity check)", () => {

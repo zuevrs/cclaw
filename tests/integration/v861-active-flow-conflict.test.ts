@@ -51,7 +51,6 @@ describe("v8.61 — active-flow conflict detection (integration prerequisites)",
       rationale: "test setup",
       decidedAt: "2026-05-15T00:00:00Z",
       userOverrode: false,
-      runMode: "auto",
       mode: "task"
     };
     await writeFlowState(project, state);

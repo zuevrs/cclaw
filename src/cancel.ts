@@ -7,7 +7,6 @@ import {
   activeArtifactPath
 } from "./artifact-paths.js";
 import { CANCELLED_DIR_REL_PATH } from "./constants.js";
-import { readConfig } from "./config.js";
 import { ensureDir, exists, removePath, writeFileSafe } from "./fs-utils.js";
 import { syncFrontmatter } from "./artifact-frontmatter.js";
 import { readFlowState, resetFlowState } from "./run-persistence.js";
@@ -87,14 +86,10 @@ export async function cancelActiveRun(
   }
 
   const cancelArtifact = `---\nslug: ${slug}\nstage: cancelled\nstatus: cancelled\ncancelled_at: ${cancelledAt}\nreason: ${JSON.stringify(reason)}\n---\n\n# ${slug} — cancelled\n\n${reason}\n\n## Artifacts\n\n${moved.map((stage) => `- ${ARTIFACT_FILE_NAMES[stage]}`).join("\n") || "_No artifacts were active at cancel time._"}\n`;
-  // default: cancellation receipt lives in `cancel.md` (the "manifest"
-  // concept is reserved for shipped slugs, and ship's manifest is now
-  // collapsed into `ship.md` frontmatter). Users on `legacyArtifacts: true`
-  // still get the file under the old `manifest.md` name for back-compat.
-  const config = await readConfig(projectRoot);
-  const legacyArtifacts = Boolean(config?.legacyArtifacts);
-  const fileName = legacyArtifacts ? "manifest.md" : "cancel.md";
-  await writeFileSafe(path.join(target, fileName), cancelArtifact);
+  // cancellation receipt lives in `cancel.md` (the "manifest" concept is
+  // reserved for shipped slugs, and ship's manifest is collapsed into
+  // `ship.md` frontmatter).
+  await writeFileSafe(path.join(target, "cancel.md"), cancelArtifact);
 
   const activeDir = activeArtifactDir(projectRoot, slug);
   if (await exists(activeDir)) {

@@ -1,7 +1,7 @@
 /**
  * Shared cross-cutting anti-rationalization catalog.
  *
- * Before v8.49, cross-cutting rationalizations (e.g. "I'll claim complete now,
+ * Previously, cross-cutting rationalizations (e.g. "I'll claim complete now,
  * the reviewer will catch any gaps", "while I'm here I'll fix the adjacent
  * thing") drifted across specialist prompts and skill `.md` files - each
  * skill carried its own phrasing of the same canonical excuse, and the
@@ -53,7 +53,7 @@ export const SHARED_ANTI_RATIONALIZATIONS: Record<
       rationalization:
         '"I just ran the tests, they should pass on this kind of change."',
       truth:
-        '"Should" is not evidence; "did" with the exit code is. Run the suite and paste the command + result line. 30 seconds saves a review iteration. See `completion-discipline.md` for the full claim-vs-evidence rule.'
+        '"Should" is not evidence; "did" with the exit code is. Run the suite and paste the command + result line. 30 seconds saves a review iteration. See `summary-format.md` (Part III — Completion discipline) for the full claim-vs-evidence rule.'
     },
     {
       rationalization: '"Looks good to me."',
@@ -109,13 +109,13 @@ export const SHARED_ANTI_RATIONALIZATIONS: Record<
     {
       rationalization: '"I read this file last week; I remember its structure."',
       truth:
-        "Last week's read is stale evidence. Re-read; the cost is 30 seconds, the cost of editing on a stale memory is one fix-only iteration. See `pre-edit-investigation.md`."
+        "Last week's read is stale evidence. Re-read; the cost is 30 seconds, the cost of editing on a stale memory is one fix-only iteration. See `investigation-discipline.md`."
     },
     {
       rationalization:
         '"The AC names the exact line I should edit; reading the rest is overhead."',
       truth:
-        "The AC says WHAT to edit; pre-edit-investigation tells you whether the WHAT is safe. The line the AC names sits inside a file whose invariants the AC author may not have known. Run Probe 1/2/3 before the edit."
+        "The AC says WHAT to edit; the pre-edit investigation gate tells you whether the WHAT is safe. The line the AC names sits inside a file whose invariants the AC author may not have known. Run Probe 1/2/3 before the edit."
     },
     {
       rationalization:
@@ -141,7 +141,7 @@ export const SHARED_ANTI_RATIONALIZATIONS: Record<
       rationalization:
         '"I\'ll skip the `verify(AC-N): passing` commit since the slice commits already touched the AC."',
       truth:
-        "The slice commits are the TDD unit; the `verify(AC-N): passing` commit is the atomic AC closure signal (v8.63). The reviewer dual-greps: `(SL-N):` for slice work, `verify(AC-N):` for AC verification. Without the verify commit the AC reads as unclosed even if every slice that contributes to it landed. Stamp one `verify(AC-N): passing` commit per AC once its contributing slices are green."
+        "The slice commits are the TDD unit; the `verify(AC-N): passing` commit is the atomic AC closure signal. The reviewer dual-greps: `(SL-N):` for slice work, `verify(AC-N):` for AC verification. Without the verify commit the AC reads as unclosed even if every slice that contributes to it landed. Stamp one `verify(AC-N): passing` commit per AC once its contributing slices are green."
     },
     {
       rationalization: '"`git add -A` is fine, I know what changed."',

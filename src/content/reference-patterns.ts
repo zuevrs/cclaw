@@ -28,10 +28,9 @@ The user asks for "login", "OAuth", "passkeys", "MFA", "SSO", "session lifetime"
 
 ## Specialists to invoke
 
-- \`design\` (Phase 4 — Decisions, Phase 5 — Pre-mortem) — always, even if the change feels additive. Record auth/secrets/wire-format decisions as inline D-N rows in \`plan.md\`.
-- \`security-reviewer\` mode=\`threat-model\` — always.
-- \`security-reviewer\` mode=\`sensitive-change\` — at code-review time on the diff.
-- \`reviewer\` mode=\`adversarial\` — at least once, looking for the case the author is biased to miss.
+- \`architect\` — record auth/secrets/wire-format decisions as inline D-N rows in \`plan.md\` (Decisions + Pre-mortem); always, even if the change feels additive.
+- \`reviewer\` (\`security\` axis) — always; with \`security_flag: true\` the reviewer walks the full threat-model + sensitive-change protocol on the diff.
+- \`critic\` — at least once, looking for the case the author is biased to miss.
 
 ## Common pitfalls
 
@@ -60,9 +59,8 @@ The user asks to "harden", "fix CVE", "rotate keys", "tighten CSP", "patch SSRF"
 
 ## Specialists to invoke
 
-- \`security-reviewer\` mode=\`threat-model\` always.
-- \`security-reviewer\` mode=\`sensitive-change\` on the diff.
-- \`reviewer\` mode=\`adversarial\` — second pair of eyes on the regression test (does it actually exercise the threat?).
+- \`reviewer\` (\`security\` axis) — always; walks the full threat-model + sensitive-change protocol on the diff.
+- \`critic\` — second pair of eyes on the regression test (does it actually exercise the threat?).
 
 ## Common pitfalls
 
@@ -80,11 +78,11 @@ export const REFERENCE_PATTERNS_INDEX = `# .cclaw/lib/patterns/
 
 Two reference patterns the orchestrator pulls from before authoring a plan when the task touches a sensitive surface. Each pattern declares its trigger keywords, the pre-flight checklist, the AC shape, the specialists to invoke, and the common pitfalls.
 
-> **v8.12 cleanup.** Earlier versions shipped 8 patterns (api-endpoint, ui-component, schema-migration, perf-fix, refactor, doc-rewrite, plus the two below). The 6 deleted patterns had **zero explicit citations** in the orchestrator / specialist contracts — they were "browse if relevant" optional reading that the spec never directed agents to consult by name. They are gone in v8.12; specialists rely on the ac-author's own pre-flight read of the touch surface instead. Users who want the deleted patterns back can opt into \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`.
+> **Pattern set cleanup.** Earlier versions shipped 8 patterns (api-endpoint, ui-component, schema-migration, perf-fix, refactor, doc-rewrite, plus the two below). The 6 deleted patterns had **zero explicit citations** in the orchestrator / specialist contracts — they were "browse if relevant" optional reading that the spec never directed agents to consult by name. They are gone now; specialists rely on the architect's own pre-flight read of the touch surface instead. Users who want the deleted patterns back can opt into \`legacy-artifacts: true\` in \`.cclaw/config.yaml\`.
 
 | pattern | triggers |
 | --- | --- |
 ${REFERENCE_PATTERNS.map((p) => `| [\`${p.fileName}\`](./${p.fileName}) | ${p.triggers.join(", ")} |`).join("\n")}
 
-When a task hits both patterns (auth + hardening), the orchestrator opens both files and merges their AC shape sections. Auth-flow is cited from \`security-reviewer.md\` Phase 2; security-hardening is cited from \`security-reviewer.md\` Phase 3.
+When a task hits both patterns (auth + hardening), the orchestrator opens both files and merges their AC shape sections. Both patterns feed the reviewer's \`security\` axis — the absorbed threat-model + sensitive-change protocol.
 `;

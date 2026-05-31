@@ -72,15 +72,15 @@ const PROJECT_ROOT = path.resolve(
 const SRC_ROOT = path.join(PROJECT_ROOT, "src");
 const SKILLS_DIR = path.join(SRC_ROOT, "content/skills");
 
+// v8.113 — the gated reviewer-axis cohort with a skill body shrank from 8
+// to 5: scope-drift folded into edit-discipline, and the advisory-only
+// anti-slop + assumption-coverage axes were cut.
 const REVIEWER_AXIS_SKILL_IDS_WITH_GATE = [
   "reviewer-axis-qa-evidence",
   "reviewer-axis-design-quality",
   "reviewer-axis-security",
   "reviewer-axis-nfr-compliance",
-  "reviewer-axis-edit-discipline",
-  "reviewer-axis-scope-drift",
-  "reviewer-axis-assumption-coverage",
-  "reviewer-axis-anti-slop"
+  "reviewer-axis-edit-discipline"
 ] as const;
 
 async function listSourceFiles(dir: string): Promise<string[]> {
@@ -194,25 +194,26 @@ describe("v8.96.1 — dispatch-skills-index runbook exists, is wired, and contai
 });
 
 describe("v8.96.1 — behaviour: gate envelope flags drive the per-envelope skills slice", () => {
-  it("AC-3 — envelope WITHOUT `walkScopeDriftAxis` omits the scope-drift pointer from the rendered slice", () => {
+  // v8.113 — scope-drift is folded into edit-discipline (no standalone
+  // skill), so the "a flag omission removes the matching pointer" gate
+  // mechanism is now exercised against a surviving surface-driven axis.
+  it("AC-3 — envelope WITHOUT `walkQaEvidenceAxis` omits the qa-evidence pointer from the rendered slice", () => {
     const envelope: GateEnvelope = {
-      walkAntiSlopAxis: true,
-      editDisciplineActive: true,
-      walkAssumptionCoverageAxis: true
-      // walkScopeDriftAxis intentionally omitted
+      editDisciplineActive: true
+      // walkQaEvidenceAxis intentionally omitted
     };
-    const entry = renderDispatchSkillsIndex("review", envelope, "no-scope-drift");
-    expect(entry.activeSkillIds).not.toContain("reviewer-axis-scope-drift");
-    expect(entry.block).not.toContain("reviewer-axis-scope-drift");
+    const entry = renderDispatchSkillsIndex("review", envelope, "no-qa-evidence");
+    expect(entry.activeSkillIds).not.toContain("reviewer-axis-qa-evidence");
+    expect(entry.block).not.toContain("reviewer-axis-qa-evidence");
   });
 
-  it("AC-3 — envelope with `walkScopeDriftAxis: false` (explicit opt-out) omits the scope-drift pointer", () => {
+  it("AC-3 — envelope with `walkQaEvidenceAxis: false` (explicit opt-out) omits the qa-evidence pointer", () => {
     const envelope: GateEnvelope = {
-      walkAntiSlopAxis: true,
-      walkScopeDriftAxis: false
+      editDisciplineActive: true,
+      walkQaEvidenceAxis: false
     };
-    const entry = renderDispatchSkillsIndex("review", envelope, "scope-drift-false");
-    expect(entry.activeSkillIds).not.toContain("reviewer-axis-scope-drift");
+    const entry = renderDispatchSkillsIndex("review", envelope, "qa-evidence-false");
+    expect(entry.activeSkillIds).not.toContain("reviewer-axis-qa-evidence");
   });
 
   it("AC-3 — envelope with EVERY gate flag set pins every gated axis (matches the static superset)", () => {
@@ -236,22 +237,10 @@ describe("v8.96.1 — behaviour: gate envelope flags drive the per-envelope skil
     }
   });
 
-  it("AC-3 — anti-slop default-on contract: omitting `walkAntiSlopAxis` keeps the pointer ON", () => {
-    const envelope: GateEnvelope = {};
-    const entry = renderDispatchSkillsIndex("review", envelope, "empty");
-    // anti-slop gate is `env.walkAntiSlopAxis !== false` — undefined opens it.
-    expect(entry.activeSkillIds).toContain("reviewer-axis-anti-slop");
-  });
-
-  it("AC-3 — explicit `walkAntiSlopAxis: false` closes the default-on anti-slop gate", () => {
-    const envelope: GateEnvelope = { walkAntiSlopAxis: false };
-    const entry = renderDispatchSkillsIndex(
-      "review",
-      envelope,
-      "anti-slop-disabled"
-    );
-    expect(entry.activeSkillIds).not.toContain("reviewer-axis-anti-slop");
-  });
+  // v8.113 — the advisory-only anti-slop axis was cut (it could never
+  // block ship). Its default-on / explicit-opt-out gate tests are
+  // retired with it; the empty-envelope filtering behaviour for the
+  // surviving gated axes is covered by AC-7 below.
 
   it("AC-3 — non-gated review-stage skills (e.g. `review-discipline`) appear regardless of envelope flags", () => {
     const empty = renderDispatchSkillsIndex("review", {}, "empty");
@@ -275,11 +264,12 @@ describe("v8.96.1 — behaviour: gate envelope flags drive the per-envelope skil
 });
 
 describe("v8.96.1 — skill-body fictional claims about runtime `buildAutoTriggerBlock` calls are scrubbed", () => {
+  // v8.113 — scope-drift + assumption-coverage skill bodies are deleted;
+  // the scrub guard now runs over the surviving gated-axis skills.
   const VICTIMS = [
-    "reviewer-axis-scope-drift.md",
     "reviewer-axis-qa-evidence.md",
     "reviewer-axis-nfr-compliance.md",
-    "reviewer-axis-assumption-coverage.md"
+    "reviewer-axis-edit-discipline.md"
   ];
 
   // The pre-v8.96.1 fictional claim shape — the orchestrator
@@ -358,16 +348,13 @@ describe("v8.96.1 — regression: every v8.83-token-axes invariant on `buildAuto
     }
   });
 
-  it("AC-7 — empty-envelope two-arg call filters every gated axis except default-on anti-slop", () => {
+  it("AC-7 — empty-envelope two-arg call filters every gated axis", () => {
     const block = buildAutoTriggerBlock("review", {});
-    // walkAntiSlopAxis is default-on (env.walkAntiSlopAxis !== false);
-    // every other gate predicate returns false on {}.
+    // v8.113 — with anti-slop's default-on gate retired, every surviving
+    // gated axis predicate returns false on the empty envelope, so the
+    // empty-envelope slice carries no gated reviewer-axis pointer.
     for (const id of REVIEWER_AXIS_SKILL_IDS_WITH_GATE) {
-      if (id === "reviewer-axis-anti-slop") {
-        expect(block).toContain(id);
-      } else {
-        expect(block).not.toContain(id);
-      }
+      expect(block).not.toContain(id);
     }
   });
 

@@ -37,8 +37,12 @@ const REPO_ROOT = path.resolve(
  * narrative ("v8.85 added the 13th axis, v8.86 bumped to 14") stays
  * intact.
  *
- * Canonical counts (current as of v8.107):
- *   - REVIEWER AXES: 14 (8 base + 6 gated post-v8.86)
+ * Canonical counts (current as of v8.113):
+ *   - REVIEWER AXES: 9 (6 base + 3 gated). v8.113 simplification folded
+ *     test-quality → correctness, complexity-budget → architecture, and
+ *     scope-drift → edit-discipline (Not-Doing sub-check), and cut the
+ *     advisory-only anti-slop + assumption-coverage axes outright
+ *     (down from the post-v8.86 peak of 14 = 8 base + 6 gated)
  *   - RESEARCH LENSES: 6 (engineer / product / architecture / history
  *     / skeptic / design — design added v8.76)
  *   - SPECIALISTS: 8 (triage / investigator / architect / builder /
@@ -46,26 +50,27 @@ const REPO_ROOT = path.resolve(
  *     v8.75 plan-design + v8.82 plan-devex into plan-critic as
  *     rubric modes "design" / "devex"; one specialist, three rubric
  *     modes dispatched via envelope fan-out)
- *   - RUNBOOKS: 28 (on-demand runbooks loaded by trigger from
+ *   - RUNBOOKS: 26 (on-demand runbooks loaded by trigger from
  *     `runbooks-on-demand.ts`; tripwire added v8.107; v8.111 diet
  *     pass added builder-self-review-gate / builder-tdd-walkthrough /
  *     parallel-worktree / clarify-protocol / plan-md-templates, lifting
- *     the count from 23 → 28)
+ *     the count from 23 → 28; later retiring adversarial-rerun → 27;
+ *     v8.114 folded extend-mode + patch-mode into one refine-mode → 26)
  *   - TRIAGE FIELD-COUNT (bimodal):
- *       sub-agent core decision surface: 5 (complexity / ceremonyMode
- *       / path / runMode / mode)
- *       orchestrator-stamped aggregate: 8 (core 5 + taskShape /
+ *       sub-agent core decision surface: 4 (complexity / ceremonyMode
+ *       / path / mode)
+ *       orchestrator-stamped aggregate: 7 (core 4 + taskShape /
  *       designSurface / devexSurface)
- *     The tripwire accepts both labels; mid-numbers (6/7/9/10-field)
+ *     The tripwire accepts both labels; mid-numbers (5/6/8/9/10-field)
  *     are flagged as stale.
  */
 
-const AXES_CANONICAL = 14;
+const AXES_CANONICAL = 9;
 const LENSES_CANONICAL = 6;
 const SPECIALISTS_CANONICAL = 8;
-const RUNBOOKS_CANONICAL = 28;
-const TRIAGE_FIELDS_CORE = 5;
-const TRIAGE_FIELDS_AGGREGATE = 8;
+const RUNBOOKS_CANONICAL = 26;
+const TRIAGE_FIELDS_CORE = 4;
+const TRIAGE_FIELDS_AGGREGATE = 7;
 
 const WORD_TO_NUMBER: Record<string, number> = {
   one: 1,
@@ -194,11 +199,12 @@ const RULES: Rule[] = [
     canonical: SPECIALISTS_CANONICAL,
     noun: "specialists"
   },
-  // Runbooks — `<N> runbook(s)` (v8.107 added — currently 28 on-demand
+  // Runbooks — `<N> runbook(s)` (v8.107 added — currently 26 on-demand
   // runbooks dispatched by `runbooks-on-demand.ts`; v8.111 lifted the
-  // count from 23 → 28). Catches stale `13 runbooks` / `16 runbooks` /
-  // `18 runbooks` / `23 runbooks` count rows accumulated across
-  // `README.md`, specialist prompts, and start-command pointer prose.
+  // count from 23 → 28, later trimmed to 27, then v8.114 folded
+  // extend-mode + patch-mode into one refine-mode → 26). Catches stale
+  // `13 runbooks` / `23 runbooks` / `27 runbooks` count rows accumulated
+  // across `README.md`, specialist prompts, and start-command pointer prose.
   {
     id: "runbooks-count",
     pattern: /\b(\d+)\s+runbooks?\b/gi,
@@ -343,7 +349,7 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
     );
 
     it(`README declares "${AXES_CANONICAL} axes" in the reviewer phrasing`, () => {
-      expect(README).toMatch(/14 axes/);
+      expect(README).toMatch(/9 axes/);
     });
 
     it(`README declares "${SPECIALISTS_CANONICAL} specialist contracts" (post-v8.107 rewrite phrasing)`, () => {
@@ -354,7 +360,7 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
     });
 
     it(`README declares the runbook count (${RUNBOOKS_CANONICAL} on-demand runbooks)`, () => {
-      expect(README).toMatch(/28 on-demand runbooks/);
+      expect(README).toMatch(/26 on-demand runbooks/);
     });
 
     it("README mentions the research-lens count (six / 6)", () => {
@@ -368,20 +374,23 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
       expect(hasSix).toBe(true);
     });
 
-    it(`reviewer.ts opens with "Fourteen-axis review"`, () => {
-      expect(REVIEWER_PROMPT).toMatch(/Fourteen-axis review/);
+    it(`reviewer.ts opens with "Nine-axis review"`, () => {
+      expect(REVIEWER_PROMPT).toMatch(/Nine-axis review/);
     });
 
-    it("reviewer.ts does NOT regress its canonical opening to a lower count", () => {
+    it("reviewer.ts does NOT regress its canonical opening to another count", () => {
+      expect(REVIEWER_PROMPT).not.toMatch(/Eight-axis review/);
+      expect(REVIEWER_PROMPT).not.toMatch(/Ten-axis review/);
       expect(REVIEWER_PROMPT).not.toMatch(/Eleven-axis review/);
       expect(REVIEWER_PROMPT).not.toMatch(/Twelve-axis review/);
       expect(REVIEWER_PROMPT).not.toMatch(/Thirteen-axis review/);
+      expect(REVIEWER_PROMPT).not.toMatch(/Fourteen-axis review/);
     });
 
-    it("investigator.ts post-mortem section cites the 14-axis reviewer surface", () => {
-      expect(INVESTIGATOR_PROMPT).toMatch(/14-axis/);
+    it("investigator.ts post-mortem section cites the 9-axis reviewer surface", () => {
+      expect(INVESTIGATOR_PROMPT).toMatch(/9-axis/);
       expect(INVESTIGATOR_PROMPT).not.toMatch(
-        /specific 11-axis finding|specific 12-axis finding|specific 13-axis finding/
+        /specific 11-axis finding|specific 12-axis finding|specific 13-axis finding|specific 14-axis finding/
       );
     });
   });
@@ -396,20 +405,22 @@ describe("v8.94 — docs-drift regex tripwire (sweep 2; Phase C G-6 fix)", () =>
       "utf8"
     );
 
-    it(`triage sub-agent contract pins "exactly five fields" as the core decision surface (count = ${TRIAGE_FIELDS_CORE})`, () => {
-      expect(TRIAGE_PROMPT).toMatch(/exactly five fields/i);
+    it(`triage sub-agent contract pins "exactly four fields" as the core decision surface (count = ${TRIAGE_FIELDS_CORE})`, () => {
+      expect(TRIAGE_PROMPT).toMatch(/exactly four fields/i);
     });
 
-    it(`orchestrator stamps the aggregated "eight-field" decision (count = ${TRIAGE_FIELDS_AGGREGATE})`, () => {
-      expect(START_COMMAND).toMatch(/eight-field/);
+    it(`orchestrator stamps the aggregated "seven-field" decision (count = ${TRIAGE_FIELDS_AGGREGATE})`, () => {
+      expect(START_COMMAND).toMatch(/seven-field/);
     });
 
-    it("no stale mid-band field-count claim (6/7/9/10-field) outside historical context in start-command.ts", () => {
+    it("no stale field-count claim (5/6/8/9/10-field) outside historical context in start-command.ts", () => {
       const STALE_FIELD_LABELS = [
+        "five-field decision",
+        "5-field decision",
         "six-field decision",
         "6-field decision",
-        "seven-field decision",
-        "7-field decision",
+        "eight-field decision",
+        "8-field decision",
         "nine-field decision",
         "9-field decision",
         "ten-field decision",

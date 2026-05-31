@@ -5,7 +5,7 @@ trigger: at the triage step (score computation) and at the architect step (Clari
 
 # Skill: ambiguity-discipline
 
-cclaw v8.67 introduces a **pre-plan clarify mode** to kill the silent-assumption failure mode. When the user's `/cc <task>` is ambiguous, the architect's pre-v8.67 behaviour was to silently pick a default and bake it into `plan.md` — the user only saw the wrong assumption after build had already started, at which point correcting it cost a full re-architect cycle. v8.67 forces the architect to surface those forks BEFORE plan.md is written, and to record every silent inference in a mandatory `## Assumptions (correct me now)` section the user reviews before build starts.
+cclaw has a **pre-plan clarify mode** to kill the silent-assumption failure mode. When the user's `/cc <task>` is ambiguous, silently picking a default and baking it into `plan.md` means the user only sees the wrong assumption after build has already started, at which point correcting it costs a full re-architect cycle. The clarify mode forces the architect to surface those forks BEFORE plan.md is written, and to record every silent inference in a mandatory `## Assumptions (correct me now)` section the user reviews before build starts.
 
 This skill codifies the discipline. It auto-triggers at the `triage` stage (the score is computed here) and at the `plan` stage (the architect reads the score and runs Clarify when the gate fires). It is **NOT** a runtime step on its own — the actual gating + dialogue lives in the triage and architect specialist contracts. Read this skill when authoring those prompts, when debugging a flow that shipped the wrong feature because an assumption was silent, or when extending the score's signal set.
 
@@ -33,7 +33,7 @@ This skill codifies the discipline. It auto-triggers at the `triage` stage (the 
 - **Maximum 5 questions across the whole Clarify phase.** If you reach 5 without ambiguity resolving, stop and proceed to Bootstrap with your best-guess assumptions surfaced verbatim in plan.md's `## Assumptions (correct me now)` section. The cap is hard.
 - **Stop early when the user signals "go" / "ready" / "proceed".** Match loosely on intent. Padding to 5 is the symmetry trap; every unnecessary question erodes the user's trust that Clarify is cheap.
 - **Stop early when ambiguity is resolved.** If after one answer every `## Assumptions (correct me now)` bullet can be filled with concrete content rather than a fork, stop asking.
-- **Every architect-silent inference goes in `## Assumptions (correct me now)`** with the `(architect inference)` tag. The ack window after plan.md is written catches anything wrong — but only if the inference is visible. Hiding it because "it's obvious" is the failure mode v8.67 was designed to kill.
+- **Every architect-silent inference goes in `## Assumptions (correct me now)`** with the `(architect inference)` tag. The ack window after plan.md is written catches anything wrong — but only if the inference is visible. Hiding it because "it's obvious" is the failure mode this discipline is designed to kill.
 - **The Clarify phase runs ONLY in the architect dispatch.** The orchestrator does not loop questions, the reviewer does not re-open Clarify, the critic does not second-guess the architect's Clarify outcomes. One dispatch, one dialogue.
 - **`ceremonyMode: inline` skips Clarify regardless of score.** Inline / trivial tasks have no plan.md and no surface for assumptions to land in; the gate is structurally absent.
 
@@ -59,7 +59,7 @@ Walk the signals in the order the triage slim summary listed them and ask the st
 
 | Excuse | Reality |
 | --- | --- |
-| "Ambiguity score is 62 — barely above threshold. I'll skip Clarify and pick a default." | The threshold IS the gate. 62 ≥ 60 opens Clarify; the architect does not second-guess the score. v8.67 was designed to kill exactly this rationalization. |
+| "Ambiguity score is 62 — barely above threshold. I'll skip Clarify and pick a default." | The threshold IS the gate. 62 ≥ 60 opens Clarify; the architect does not second-guess the score. This discipline was designed to kill exactly this rationalization. |
 | "I can guess what the user means; asking is going to feel like sluggishness." | The silent-assumption failure mode IS the slowness — re-architecting after the wrong plan ships is the most expensive cycle in cclaw's flow. One Clarify question buys hours of re-work. |
 | "Let me batch 3 questions into one turn to save round-trips." | NO. One question per turn is hard-locked (obra-superpowers brainstorming discipline). Batched questions get half-answers; one-at-a-time forces the user to think about each axis. |
 | "I'll ask 5 questions even if the first answer resolved everything." | NO. Stop early when ambiguity is resolved. Padding to 5 is the symmetry trap. |

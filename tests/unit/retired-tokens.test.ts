@@ -25,9 +25,6 @@ import { START_COMMAND_BODY } from "../../src/content/start-command.js";
  * automatically across every shipped LLM-facing surface.
  *
  * Out of scope:
- *  - META_SKILL: keeps historical context like "v8.40 retired
- *    \`commit-helper.mjs\`" deliberately (the orchestrator reads the
- *    rationale, not as an instruction to call the hook).
  *  - design.ts specialist: teaches the LLM that brainstormer/architect
  *    were merged INTO design. Their names appear as "retired" labels.
  *  - Test-bench narrative (`stage-playbooks.ts` legacy-migration prose):
@@ -37,7 +34,12 @@ import { START_COMMAND_BODY } from "../../src/content/start-command.js";
 const RETIRED_TOKENS: ReadonlyArray<{ token: string; retiredAt: string; note?: string }> = [
   { token: "commit-helper", retiredAt: "v8.40", note: "hook surface removed in v8.40" },
   { token: "commit-helper.mjs", retiredAt: "v8.40" },
-  { token: "--phase=", retiredAt: "v8.40", note: "hook CLI args removed with hook surface" }
+  { token: "--phase=", retiredAt: "v8.40", note: "hook CLI args removed with hook surface" },
+  { token: "tq=N", retiredAt: "v8.113", note: "test-quality folded into correctness; slim-counter token dropped" },
+  { token: "cb=N", retiredAt: "v8.113", note: "complexity-budget folded into architecture; slim-counter token dropped" },
+  { token: "sd=N", retiredAt: "v8.113", note: "scope-drift folded into edit-discipline; slim-counter token dropped" },
+  { token: "av=N", retiredAt: "v8.113", note: "assumption-coverage axis cut; slim-counter token dropped" },
+  { token: "as=N", retiredAt: "v8.113", note: "anti-slop axis cut; slim-counter token dropped" }
 ];
 
 const SHIPPED_SURFACES: ReadonlyArray<{ id: string; body: string }> = [
@@ -67,7 +69,16 @@ describe("retired tokens — consolidated sweep across shipped LLM-facing conten
 
   it("RETIRED_TOKENS list is the documented set (tripwire — extending requires a deliberate change)", () => {
     expect(RETIRED_TOKENS.map((t) => t.token).sort()).toEqual(
-      ["--phase=", "commit-helper", "commit-helper.mjs"].sort()
+      [
+        "--phase=",
+        "commit-helper",
+        "commit-helper.mjs",
+        "tq=N",
+        "cb=N",
+        "sd=N",
+        "av=N",
+        "as=N"
+      ].sort()
     );
   });
 });

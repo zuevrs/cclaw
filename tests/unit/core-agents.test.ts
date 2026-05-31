@@ -69,9 +69,12 @@ describe("core agents", () => {
     expect(critic!.modes).toEqual(["gap", "adversarial"]);
   });
 
-  it("reviewer exposes five modes (v8.62 — security-reviewer's threat-model / taint / secrets / supply-chain prose absorbed into the reviewer's `security` axis, not into a new mode)", () => {
+  it("reviewer exposes two modes — `code` (diff/commits) + `text-review` (markdown); integration + release sweeps fold into `code` (ship-path contexts, not standalone modes); adversarial retired into the critic", () => {
     const reviewer = SPECIALIST_AGENTS.find((agent) => agent.id === "reviewer")!;
-    expect(reviewer.modes).toEqual(["code", "text-review", "integration", "release", "adversarial"]);
+    expect(reviewer.modes).toEqual(["code", "text-review"]);
+    expect(reviewer.modes).not.toContain("adversarial");
+    expect(reviewer.modes).not.toContain("integration");
+    expect(reviewer.modes).not.toContain("release");
   });
 
   it("renders agent markdown with the agent's activation value (v8.62 — `architect` and `builder` both render as on-demand sub-agents)", () => {

@@ -151,13 +151,13 @@ B) Match existing code (useState) — keeps codebase consistent.
 → Which approach do you prefer?
 ```
 
-Do not silently adopt one. v8.62 unified flow forbids mid-plan user dialogue, so the architect picks the most-defensible option inline (citing both the codebase precedent and the doc source), records it in `plan.md` under `## Decisions` (Decisions phase D-N on strict) or in the plan body (soft / small-medium), and surfaces the conflict in the slim summary so the user sees the call without being blocked on it.
+Do not silently adopt one. cclaw's unified flow forbids mid-plan user dialogue, so the architect picks the most-defensible option inline (citing both the codebase precedent and the doc source), records it in `plan.md` under `## Decisions` (Decisions phase D-N on strict) or in the plan body (soft / small-medium), and surfaces the conflict in the slim summary so the user sees the call without being blocked on it.
 
 ### Step 4 — Cite sources inline
 
 Every framework-specific decision gets a citation. The user must be able to verify every choice without trusting the agent's memory.
 
-In **plan.md** (v8.14+; legacy `decisions.md` for pre-v8.14 shipped slugs), include a `sources:` block under the relevant AC or D-N decision. Each entry includes the cache fields from Step 2 — they make the source-driven trail reproducible offline:
+In **plan.md** (legacy `decisions.md` for older shipped slugs), include a `sources:` block under the relevant AC or D-N decision. Each entry includes the cache fields from Step 2 — they make the source-driven trail reproducible offline:
 
 ```yaml
 sources:

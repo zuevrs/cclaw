@@ -7,7 +7,7 @@ trigger: specialist:plan-critic OR specialist:critic OR specialist:qa-runner OR 
 
 Before reading the rest of the artifact set, every adversarial / verification pass writes **3-5 predictions** of what is most likely to be wrong, missing, or under-graded. Then it reads the rest and verifies each prediction against the evidence. The discipline activates **deliberate search** rather than passive evaluation: writing predictions first forces the specialist to commit to expected failure modes BEFORE the artifact's wording has a chance to anchor them.
 
-Consolidated in v8.111 across the three specialists that ran their own near-identical inline §1 / §3 / §6 blocks (post-impl critic, plan-critic, qa-runner). Each specialist now carries a one-line anchor pointing here.
+Consolidated across the three specialists that ran their own near-identical inline §1 / §3 / §6 blocks (post-impl critic, plan-critic, qa-runner). Each specialist now carries a one-line anchor pointing here.
 
 ## When to use
 
@@ -23,7 +23,7 @@ Stages: `plan` (plan-critic dispatch), `review` (post-impl critic dispatch), `qa
 
 - **Triage** — the router's job is to classify, not to enumerate failure modes. Pre-commitment predictions would slow the dispatch without surfacing actionable signal.
 - **Builder** — the builder TDDs against the AC; the RED test IS the prediction (a structured "this case should fail until I implement it"). Adding a parallel `## Pre-commitment predictions` section inside builder.ts would double-write the same discipline against a different surface.
-- **Reviewer** — the reviewer walks the fourteen-axis pass; that IS the structured walk. Pre-commitment predictions would compete with the per-axis findings table rather than augment it.
+- **Reviewer** — the reviewer walks the nine-axis pass; that IS the structured walk. Pre-commitment predictions would compete with the per-axis findings table rather than augment it.
 - **Ship synthesis / compound layer** — both are after-the-fact aggregations, not adversarial passes.
 
 ## Hard rules
@@ -75,4 +75,4 @@ Each prediction's outcome is recorded inline in the §1 / §3 / §6 block:
 
 ## Cross-references
 
-The discipline is sourced from the **OMC pattern** (`oh-my-claudecode/agents/critic.md:58-60`) — "predicting forces deliberate search rather than passive reading" — and dovetails with cclaw's existing **structured-status** discipline (every adversarial pass emits a structured verdict; pre-commitment predictions are the structured *input* into that verdict). The §7 verdict's "Predictions:" line is the canonical aggregation surface; downstream specialists (plan-critic, post-impl critic, qa-runner) read it as input to their own §1 / §3 / §6 passes.
+The discipline is sourced from the **OMC pattern** (`oh-my-claudecode/agents/critic.md:58-60`) — "predicting forces deliberate search rather than passive reading" — and dovetails with cclaw's existing **summary-format** status discipline (every adversarial pass emits a structured verdict; pre-commitment predictions are the structured *input* into that verdict). The §7 verdict's "Predictions:" line is the canonical aggregation surface; downstream specialists (plan-critic, post-impl critic, qa-runner) read it as input to their own §1 / §3 / §6 passes.
