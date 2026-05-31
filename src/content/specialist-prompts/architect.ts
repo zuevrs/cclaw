@@ -546,12 +546,9 @@ Apply this heuristic table after enumerating the slices. Read the slice verb + \
 
 | Verb / shape | Posture | Why |
 | --- | --- | --- |
-| add contract test \| integration test \| e2e test \| snapshot test \| fuzz test \| property test | \`tests-as-deliverable\` | The test IS the slice's deliverable; no separate "production code" to write first. |
 | rename \| extract \| inline \| move file \| reorganize (no observable behaviour change) | \`refactor-only\` | The slice is a pure structural change; existing tests are the safety net. |
 | document \| describe \| add ADR \| update README \| write tutorial | \`docs-only\` | Markdown / docs edits only. Reviewer flags \`docs-only\` posture with a source file in Surface as A-1. |
-| set up \| bootstrap \| install (test framework / runner / lint config) | \`bootstrap\` | The test framework does not yet exist; SL-1 commits the runner + one passing example test. |
-| add characterization test \| pin existing behaviour \| add safety net before refactor | \`characterization-first\` | Legacy code is the unit under test; RED-first pins existing behaviour. |
-| (anything else — new feature, bug fix, behaviour change) | \`test-first\` (default) | Standard RED → GREEN → REFACTOR cycle. |
+| (anything else — new feature, bug fix, behaviour change, **add tests**, **pin legacy behaviour**, **install the test runner**) | \`test-first\` (default) | Standard RED → GREEN → REFACTOR. Special cases ride on \`test-first\` rather than a dedicated posture: when the test IS the deliverable, commit a single \`test(SL-N)\` (no production change); when SL-1 installs the runner itself it may be green-only (no RED is possible yet); on untested legacy code the RED is a characterization test pinning current behaviour. |
 
 Hard rules:
 

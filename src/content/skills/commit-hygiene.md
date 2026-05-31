@@ -257,7 +257,7 @@ In `strict` mode, cclaw has one mandatory gate for slice work: every commit prod
 The reviewer's ex-post checks at handoff time (beyond the message-shape rules above):
 
 - **Slice declared in plan.md.** `SL-N` cited in a commit must exist in the active plan; an unknown SL-N is an A-N finding.
-- **Posture-appropriate sequence.** For `test-first` / `characterization-first` postures, `green(SL-N)` must follow a `red(SL-N)` in git-log order; for `refactor-only`, only `refactor(SL-N)` is expected; for `tests-as-deliverable`, only `test(SL-N)`; for `docs-only`, only `docs(SL-N)`. See `src/posture-validation.ts:POSTURE_COMMIT_PREFIXES` for the canonical mapping.
+- **Posture-appropriate sequence.** For `test-first` (and the legacy `characterization-first`), `green(SL-N)` must follow a `red(SL-N)` in git-log order; for `refactor-only`, only `refactor(SL-N)` is expected; for `docs-only`, only `docs(SL-N)`; for the legacy `tests-as-deliverable`, only `test(SL-N)`. See `src/posture-validation.ts:POSTURE_COMMIT_PREFIXES` for the canonical mapping (it retains the retired postures so archived plans still review).
 - **RED stages test files only.** `git show <red-SHA> --stat` for a `test-first` / `characterization-first` slice must list test files only; mixing in production files is an A-1 finding (severity=required, axis=correctness).
 - **Diff matches Surface.** Every file in the slice's commits must appear in the slice's `Surface` row of `plan.md`. Drive-by edits outside `Surface` are A-4 (severity `consider` → `required`).
 

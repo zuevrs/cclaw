@@ -4,6 +4,7 @@ import {
   INVESTIGATOR_NEXT_STEPS,
   ONE_WAY_DOOR_CHOICES,
   POSTURES,
+  RETIRED_POSTURES,
   RESEARCH_LENSES,
   RESEARCH_MODES,
   RESEARCH_STATES,
@@ -54,7 +55,11 @@ function isSliceStatus(value: unknown): value is SliceState["status"] {
 }
 
 function isPosture(value: unknown): value is Posture {
-  return typeof value === "string" && (POSTURES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    ((POSTURES as readonly string[]).includes(value) ||
+      (RETIRED_POSTURES as readonly string[]).includes(value))
+  );
 }
 
 function isCriticVerdict(value: unknown): value is CriticVerdict {

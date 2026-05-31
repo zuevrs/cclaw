@@ -56,7 +56,7 @@ slices:
     surface: []
     dependsOn: []
     independent: true
-    posture: test-first  # one of: test-first | characterization-first | tests-as-deliverable | refactor-only | docs-only | bootstrap
+    posture: test-first  # one of: test-first (default) | refactor-only | docs-only  (legacy, still accepted on read: characterization-first | tests-as-deliverable | bootstrap)
   - id: SL-2
     title: "Replace with the second work-unit, or delete this entry if one slice is enough."
     status: pending
@@ -215,7 +215,7 @@ Slice authoring rules (architect):
 - **\`Surface\`** lists the runtime surfaces and the files the slice is allowed to touch. The reviewer's \`edit-discipline\` axis cross-checks against this column — undeclared edits become findings.
 - **\`Depends-on\`** is the explicit dependency on other slices. Use \`—\` (or \`none\`) when the slice can land independently. The plan-critic validates the graph (no cycles, no dangling refs).
 - **\`Independent\`** is \`yes\` iff \`Depends-on\` is empty. A slice is independent iff it does NOT read or write the same files / symbols / features as another slice. When two slices touch overlapping surface, they cannot both be independent — at least one MUST list the other in \`Depends-on\`.
-- **\`Posture\`** is optional per slice; defaults to the plan-level posture, which itself defaults to \`test-first\`. One of \`test-first\` | \`characterization-first\` | \`tests-as-deliverable\` | \`refactor-only\` | \`docs-only\` | \`bootstrap\`. The builder reads this to select the commit ceremony; see \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping.
+- **\`Posture\`** is optional per slice; defaults to the plan-level posture, which itself defaults to \`test-first\`. One of \`test-first\` (default) | \`refactor-only\` | \`docs-only\` (legacy, still accepted on read: \`characterization-first\` | \`tests-as-deliverable\` | \`bootstrap\`). The builder reads this to select the commit ceremony; see \`.cclaw/lib/skills/tdd-and-verification.md\` for the posture-to-ceremony mapping.
 
 The builder runs ONE TDD cycle per slice (RED → GREEN → REFACTOR or the posture-specific shape); each commit subject is prefixed with \`<type>(SL-N): ...\`. Verification commits (\`verify(AC-N): passing\`) are emitted SEPARATELY, after all slices land, when the builder writes or updates the tests that prove each AC.
 

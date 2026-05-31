@@ -317,19 +317,33 @@ export interface TddPhaseRecord {
 /**
  * Per-criterion `posture` the architect stamps on every AC. Builder reads it to
  * select the commit ceremony; reviewer reads `POSTURE_COMMIT_PREFIXES` to scope
- * posture-specific checks (e.g. `tests-as-deliverable` skips the strict
- * TDD-integrity check). Order is the canonical heuristic order — `test-first`
- * (default) first so legacy plans pick it up.
+ * posture-specific checks. `POSTURES` is the **authored** set the architect picks
+ * from — `test-first` (default) first so legacy plans pick it up. The three
+ * {@link RETIRED_POSTURES} are no longer authored (they fold into the active three
+ * as documented special-cases) but stay parse / validate / review-valid so
+ * archived + upgraded plans keep working.
  */
-export const POSTURES = [
-  "test-first",
+export const POSTURES = ["test-first", "refactor-only", "docs-only"] as const;
+export type ActivePosture = (typeof POSTURES)[number];
+
+/**
+ * Retired postures (folded into the active three in v8.117), still honoured on
+ * read for back-compat:
+ *  - `characterization-first` ≡ `test-first` (the RED is a characterization test
+ *    pinning current behaviour on legacy code) — identical commit recipe.
+ *  - `tests-as-deliverable` ≡ a single `test(SL-N)` commit when the test IS the
+ *    deliverable (no production change).
+ *  - `bootstrap` ≡ `test-first` with the SL-1 green-only escape when the test
+ *    runner is being installed.
+ * Not advertised to the architect on new plans; accepted on read so shipped /
+ * upgraded plans validate and the reviewer can still check their commit chains.
+ */
+export const RETIRED_POSTURES = [
   "characterization-first",
   "tests-as-deliverable",
-  "refactor-only",
-  "docs-only",
   "bootstrap"
 ] as const;
-export type Posture = (typeof POSTURES)[number];
+export type Posture = ActivePosture | (typeof RETIRED_POSTURES)[number];
 
 /** Default posture when AC frontmatter omits the field (RED → GREEN → REFACTOR). */
 export const DEFAULT_POSTURE: Posture = "test-first";

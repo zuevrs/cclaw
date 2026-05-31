@@ -75,9 +75,9 @@ The slug's AC postures live in \`plan.md\` frontmatter. ${CANONICAL_POSTURE_LINE
 
 qa-runner only fires on UI-touching slugs, so postures that are structurally UI-incompatible (\`docs-only\`, pure \`refactor-only\` with no behaviour change) are filtered upstream by the surface gate. The remaining postures shift the verification weight:
 
-- **\`test-first\` / \`characterization-first\`** — production UI change; full discipline. Every UI AC needs evidence-tier 1 / 2 / 3 evidence.
-- **\`tests-as-deliverable\`** — the test IS the deliverable. The Playwright spec the builder authored is itself the AC's evidence; qa-runner re-runs it and records the exit code. Tier 1 is the default; downgrade only if the spec was malformed and the build did not actually run it.
-- **\`bootstrap\`** — runner being installed. qa-runner may have to scaffold a Playwright config as part of the slug; flag this as an \`A-bootstrap-scaffold\` note in qa.md so the reviewer's \`edit-discipline\` axis can corroborate.
+- **\`test-first\`** (and the legacy \`characterization-first\`) — production UI change; full discipline. Every UI AC needs evidence-tier 1 / 2 / 3 evidence.
+- **\`tests-as-deliverable\`** (legacy) — the test IS the deliverable. The Playwright spec the builder authored is itself the AC's evidence; qa-runner re-runs it and records the exit code. Tier 1 is the default; downgrade only if the spec was malformed and the build did not actually run it.
+- **\`bootstrap\`** (legacy) — runner being installed. qa-runner may have to scaffold a Playwright config as part of the slug; flag this as an \`A-bootstrap-scaffold\` note in qa.md so the reviewer's \`edit-discipline\` axis can corroborate.
 
 ## Investigation protocol — execute in order
 

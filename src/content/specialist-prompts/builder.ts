@@ -46,11 +46,10 @@ All commits are plain \`git commit\` in every mode. Strict mode's per-slice trac
 | posture | commits per slice | message prefixes (in order) |
 | --- | --- | --- |
 | \`test-first\` (default) | 3 | \`red(SL-N): ...\` → \`green(SL-N): ...\` → \`refactor(SL-N): ...\` (or \`refactor(SL-N) skipped: <reason>\`) |
-| \`characterization-first\` | 3 | \`red(SL-N): ...\` → \`green(SL-N): ...\` → \`refactor(SL-N): ...\` |
-| \`tests-as-deliverable\` | 1 | \`test(SL-N): ...\` |
 | \`refactor-only\` | 1 | \`refactor(SL-N): ...\` (commit body MUST include the No-behavioural-delta block) |
 | \`docs-only\` | 1 | \`docs(SL-N): ...\` (\`Surface\` must be source-file-free) |
-| \`bootstrap\` | 1 for SL-1, 3 for SL-2+ | SL-1: \`green(SL-1): ...\` (bootstrap escape, no prior RED). SL-2+: full \`red(SL-N): ...\` → \`green(SL-N): ...\` → \`refactor(SL-N): ...\` |
+
+**Test-first special cases (no dedicated posture).** Three shapes ride on \`test-first\` instead of their own row: (a) **test-is-the-deliverable** — a single \`test(SL-N): ...\` commit when the test itself is the deliverable (no production change); (b) **runner install** — SL-1 may be a single \`green(SL-1): ...\` (no prior RED) when that slice installs the test runner itself; (c) **legacy code** — the RED is a characterization test pinning current behaviour. **Legacy postures (archived / upgraded plans only):** if a slice's \`Posture\` reads \`characterization-first\` (≡ test-first), \`tests-as-deliverable\` (≡ single \`test(SL-N)\`), or \`bootstrap\` (≡ test-first with the SL-1 green-only escape), honour that recipe — but new plans no longer author them.
 
 After ALL slices land, the **AC verification pass** emits one commit per AC:
 
@@ -73,7 +72,7 @@ Each slice carries a \`Posture\` column in the \`## Plan / Slices\` table — re
 
 ${CANONICAL_POSTURE_LINE}
 
-Each posture maps to a commit-shape recipe in the "Strict mode commit shapes" table above; full per-posture ceremony detail + the reviewer's \`Surface\` cross-checks live in \`.cclaw/lib/skills/tdd-and-verification.md\`. The one non-obvious rule: \`bootstrap\` SL-1 is the sole escape from watched-RED (single \`green(SL-1): ...\`, no prior RED, because the framework does not exist yet); every other posture follows its table row.
+Each posture maps to a commit-shape recipe in the "Strict mode commit shapes" table above; full per-posture ceremony detail + the reviewer's \`Surface\` cross-checks live in \`.cclaw/lib/skills/tdd-and-verification.md\`. The one non-obvious rule: on \`test-first\`, SL-1 may be a single \`green(SL-1): ...\` (no prior RED) **only** when that slice installs the test runner itself (the framework does not exist yet, so RED is impossible) — every other slice follows its table row. (Legacy plans express this same escape as \`Posture: bootstrap\`.)
 
 The selection is mechanical — the architect already picked the posture; your job is to honour it. If a pick looks wrong (e.g. \`refactor-only\` on a slice whose verb is "add validation"), **stop and surface** in your slim summary — do not silently switch to a different posture.
 

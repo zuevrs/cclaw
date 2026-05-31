@@ -1,5 +1,24 @@
 # Changelog
 
+## 8.117.0 - 2026-05-31
+
+### Changed (Phase D — builder: postures 6 → 3)
+
+- **The authored posture set drops from six to three** — `test-first` (default), `refactor-only`, `docs-only`. The three folded-away postures (`characterization-first`, `tests-as-deliverable`, `bootstrap`) are no longer authored on new plans; they ride on `test-first` as documented special-cases (`characterization-first` ≡ `test-first`; `tests-as-deliverable` ≡ a single `test(SL-N)`; `bootstrap` ≡ `test-first` with the SL-1 green-only runner-install escape). **No capability lost** — the validators and the reviewer's per-posture commit-chain recipes still accept the retired three (now exported as `RETIRED_POSTURES`), so shipped + upgraded plans keep parsing and reviewing correctly.
+
+### Affected surfaces
+
+- **`src/types.ts`** — `POSTURES` shrinks to the three authored values; new `RETIRED_POSTURES` tuple holds the folded-away three; `Posture` is `ActivePosture | <retired>` (all six stay type-valid for back-compat); `DEFAULT_POSTURE` unchanged.
+- **Validators stay tolerant** — `src/flow-state.ts` (`isPosture`) and `src/artifact-frontmatter.ts` accept `POSTURES ∪ RETIRED_POSTURES`; `src/posture-validation.ts` (`POSTURE_COMMIT_PREFIXES` / `validatePostureTouchSurface`) keeps all six recipes.
+- **Authoring surfaces → three** — the architect's verb-heuristic table, the builder's commit-shape table, and the `plan.md` template advertise only the three; the folded cases are documented inline (test-is-deliverable / runner-install escape / characterization RED).
+- **Validation surfaces keep six, tagged `(legacy)`** — reviewer, critic, qa-runner, `tdd-and-verification.md`, `commit-hygiene.md`, and `antipatterns.ts` retain the retired recipes (tagged legacy) so archived / upgraded plans still review correctly. `CANONICAL_POSTURE_LINE` (derived from `POSTURES`) now lists three.
+
+### Tests / docs
+
+- `posture.test.ts` — asserts `POSTURES` is the three authored values + `RETIRED_POSTURES` is the three retired; adds a back-compat round-trip proving retired postures still parse on read.
+- `posture-table-consistency.test.ts` — canonical line + expected tuple updated to three; the per-specialist mention check (now three) passes.
+- build + 882 tests + smoke green.
+
 ## 8.116.0 - 2026-05-31
 
 ### Changed (Phase D — builder: sequential build by default)

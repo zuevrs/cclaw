@@ -9,10 +9,9 @@ import { POSTURES, type Posture } from "../../src/types.js";
 /**
  * v8.44 — posture-table byte-identical tripwire.
  *
- * The six posture values (`test-first`, `characterization-first`,
- * `tests-as-deliverable`, `refactor-only`, `docs-only`, `bootstrap`)
- * are referenced across four specialist prompts — each from a
- * different vantage:
+ * The three authored posture values (`test-first`, `refactor-only`,
+ * `docs-only`) are referenced across four specialist prompts — each
+ * from a different vantage (the retired three carry `(legacy)` tags):
  *
  * v8.62 unified flow updated the roster: `ac-author` → `architect`,
  * `slice-builder` → `builder`. The four prompts still describe different
@@ -29,8 +28,7 @@ import { POSTURES, type Posture } from "../../src/types.js";
  * we pin a single **canonical enumeration line** that every prompt
  * must contain verbatim:
  *
- *     Postures (v8.36): `test-first` (default) | `characterization-first` |
- *     `tests-as-deliverable` | `refactor-only` | `docs-only` | `bootstrap`.
+ *     Postures: `test-first` (default) | `refactor-only` | `docs-only`.
  *
  * If any specialist's posture vocabulary drifts (rename, reorder, drop,
  * forget to update one site after adding a value), this test fails
@@ -56,7 +54,7 @@ import { POSTURES, type Posture } from "../../src/types.js";
  * the assertion below must be updated together.
  */
 const CANONICAL_POSTURE_LINE =
-  "Postures: `test-first` (default) | `characterization-first` | `tests-as-deliverable` | `refactor-only` | `docs-only` | `bootstrap`.";
+  "Postures: `test-first` (default) | `refactor-only` | `docs-only`.";
 
 const POSTURE_SPECIALISTS: ReadonlyArray<{ id: string; body: string }> = [
   { id: "architect", body: ARCHITECT_PROMPT },
@@ -81,11 +79,8 @@ describe("v8.44 — posture-table byte-identical tripwire", () => {
   it("AC-2: the canonical line agrees with the POSTURES tuple from src/types.ts (no enumeration drift)", () => {
     const expectedPostures: ReadonlyArray<Posture> = [
       "test-first",
-      "characterization-first",
-      "tests-as-deliverable",
       "refactor-only",
-      "docs-only",
-      "bootstrap"
+      "docs-only"
     ];
     expect(
       [...POSTURES],

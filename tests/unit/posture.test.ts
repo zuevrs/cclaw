@@ -5,6 +5,7 @@ import {
 } from "../../src/artifact-frontmatter.js";
 import {
   POSTURES,
+  RETIRED_POSTURES,
   DEFAULT_POSTURE,
   type Posture
 } from "../../src/types.js";
@@ -15,14 +16,17 @@ import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
  *
  * Lightweight per-AC annotation (everyinc-compound pattern) that
  * captures WHY the AC needs a different commit cadence than the
- * default test-first cycle. The enum carries 6 values:
+ * default test-first cycle. As of v8.117 the **authored** enum
+ * (`POSTURES`) carries 3 values; 3 more (`RETIRED_POSTURES`) are no
+ * longer authored but stay read-valid so archived / upgraded plans
+ * parse and review:
  *
  *   test-first              (default — RED → GREEN → REFACTOR)
- *   characterization-first  (legacy code: pin existing behaviour first)
- *   tests-as-deliverable    (contract / integration tests; tests ARE the AC)
  *   refactor-only           (pure rename / extract / inline; no new behaviour)
  *   docs-only               (README / CHANGELOG / docs/** edits)
- *   bootstrap               (test framework setup; GREEN-only for AC-1)
+ *   characterization-first  (retired ≡ test-first: pin legacy behaviour first)
+ *   tests-as-deliverable    (retired ≡ single test(SL-N); tests ARE the AC)
+ *   bootstrap               (retired ≡ test-first w/ SL-1 GREEN-only escape)
  *
  * Posture is the **annotation**; the `is_behavior_adding` predicate is
  * the **gate**. Posture lives in `plan.md` AC frontmatter; the
@@ -35,13 +39,14 @@ import { ARTIFACT_TEMPLATES } from "../../src/content/artifact-templates.js";
 const PLAN_TEMPLATE = ARTIFACT_TEMPLATES.find((t) => t.id === "plan")!;
 
 describe("v8.36 — posture enum + types", () => {
-  it("AC-2 — POSTURES export carries exactly the six canonical values", () => {
-    expect(POSTURES).toEqual([
-      "test-first",
+  it("AC-2 — POSTURES export carries exactly the three authored values", () => {
+    expect(POSTURES).toEqual(["test-first", "refactor-only", "docs-only"]);
+  });
+
+  it("AC-2 — RETIRED_POSTURES carries the three folded-away values (read-valid for back-compat)", () => {
+    expect(RETIRED_POSTURES).toEqual([
       "characterization-first",
       "tests-as-deliverable",
-      "refactor-only",
-      "docs-only",
       "bootstrap"
     ]);
   });
@@ -155,6 +160,27 @@ body
       expect(ac0.posture).toBe(posture);
     }
   });
+
+  it("AC-2 — every retired posture value still round-trips (back-compat read)", () => {
+    for (const posture of RETIRED_POSTURES) {
+      const raw = `---
+slug: round-trip
+stage: plan
+status: active
+ac:
+  - id: AC-1
+    text: "Round-trip"
+    status: pending
+    posture: ${posture}
+---
+
+body
+`;
+      const parsed = parseArtifact(raw);
+      const ac0 = (parsed.frontmatter.ac as Array<{ posture?: Posture }>)[0];
+      expect(ac0.posture).toBe(posture);
+    }
+  });
 });
 
 describe("v8.36 — plan.md template carries the posture field", () => {
@@ -165,7 +191,7 @@ describe("v8.36 — plan.md template carries the posture field", () => {
     expect(PLAN_TEMPLATE.body).toMatch(/posture:\s*test-first/);
   });
 
-  it("AC-2 — strict-mode plan template documents the six allowed values", () => {
+  it("AC-2 — strict-mode plan template documents the three authored values", () => {
     for (const posture of POSTURES) {
       expect(
         PLAN_TEMPLATE.body,

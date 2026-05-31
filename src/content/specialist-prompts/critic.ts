@@ -61,22 +61,21 @@ ${CANONICAL_POSTURE_LINE}
 
 When a slug mixes postures, pick the **most-restrictive** value using the precedence below and stamp it into \`critic.md > frontmatter > posture_inherited\`:
 
-1. \`test-first\` / \`characterization-first\` (production code change; full critic)
-2. \`bootstrap\` (production code; runner being installed)
-3. \`tests-as-deliverable\` (test is the deliverable; focused critic on test-quality)
-4. \`refactor-only\` (no behaviour change; focused critic on parity)
-5. \`docs-only\` (no code change; minimal critic on doc accuracy)
+1. \`test-first\` (production code change; full critic) — the legacy \`characterization-first\` and \`bootstrap\` postures inherit this level
+2. \`tests-as-deliverable\` (legacy; test is the deliverable; focused critic on test-quality)
+3. \`refactor-only\` (no behaviour change; focused critic on parity)
+4. \`docs-only\` (no code change; minimal critic on doc accuracy)
 
 Per-posture critic behaviour:
 
 | posture | focus | token budget delta | escalation eligible? |
 | --- | --- | --- | --- |
 | \`test-first\` (default) | full protocol: predictions, gaps, goal-backward, adversarial scaffold available | baseline | yes — all §8 triggers |
-| \`characterization-first\` | same as \`test-first\` plus one extra prediction slot: "does the characterization RED actually exercise the code about to be refactored, or pass via a different path?" | baseline | yes |
-| \`tests-as-deliverable\` | focused on test coverage and mutation resistance: would the test fail if the implementation regressed? does it pass for the right reason or via a different code path? is the assertion specific (deep equality) or assertion-counting (\`expect(result).toBeTruthy()\`)? | reduced (7-10k; only test files in scope) | yes — only when NFR section non-empty |
+| \`characterization-first\` (legacy) | same as \`test-first\` plus one extra prediction slot: "does the characterization RED actually exercise the code about to be refactored, or pass via a different path?" | baseline | yes |
+| \`tests-as-deliverable\` (legacy) | focused on test coverage and mutation resistance: would the test fail if the implementation regressed? does it pass for the right reason or via a different code path? is the assertion specific (deep equality) or assertion-counting (\`expect(result).toBeTruthy()\`)? | reduced (7-10k; only test files in scope) | yes — only when NFR section non-empty |
 | \`refactor-only\` | parity-focused: pre-refactor suite output line-for-line == post-refactor suite output? did any snapshot move? are there behaviour-change smells (cycle prefix \`refactor\` but diff touches a public API signature)? | reduced (7-10k) | yes — only when a D-N decision touches a public API or persistence layer |
 | \`docs-only\` | accuracy + cross-link integrity: every cited \`file:line\` exists; every cited test name exists; every cited symbol still has the right spelling; every \`D-N\` referenced exists in plan.md | minimal (3-5k) | no — escalation is structurally meaningless for docs |
-| \`bootstrap\` | bootstrap-specific: AC-1 may legitimately have no RED, but verify the runner installation is captured passing in build.md and the runner version is pinned where the AC promised | baseline | yes |
+| \`bootstrap\` (legacy) | bootstrap-specific: AC-1 may legitimately have no RED, but verify the runner installation is captured passing in build.md and the runner version is pinned where the AC promised | baseline | yes |
 
 ### Skip conditions (return immediately, no \`critic.md\` written)
 
