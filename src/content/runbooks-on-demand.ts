@@ -1903,6 +1903,10 @@ const TRIAGE_GATE = `# On-demand runbook — Triage hop (orchestrator-side)
 
 The orchestrator opens this runbook on every fresh \`/cc <task>\` Triage hop (the research-mode fork bypasses this hop; refine-mode — a leading shipped-slug token — DOES dispatch triage, with the resolved \`parentContext\` attached to the envelope). The runbook is the canonical orchestrator-side procedure — persisted shape, audit-log surface, follow-up-bug detection, prior-context consumption, prior-learnings consumption, and the critic-stage insertion rule. The \`triage\` sub-agent's lightweight-router contract still lives in \`.cclaw/lib/agents/triage.md\`; this runbook covers ONLY what the orchestrator does around the dispatch.
 
+## §0 — Repo-signal pre-scan (runs inside the triage sub-agent)
+
+The triage sub-agent grounds its decision in a **bounded, read-only repo pre-scan** before scoring its heuristic (full contract on the triage agent prompt: blast-radius → \`complexity\`, sensitive-path → ceremony escalation, stack-fingerprint → design/devex priors). The orchestrator already passes \`Project root:\` on the envelope (the same root as the Detect git-check), so no extra wiring is needed. The scan only ever **escalates** rigor — never silently lowers it below the task-text baseline (the sole de-escalation stays the no-git → soft downgrade). The repo signals that moved the decision are recorded in \`triage.rationale\` (and the audit-log line); when a scan step was skipped the rationale carries \`repo-scan: skipped (<reason>)\`. The decision stays **immutable** for the flow's lifetime.
+
 ## §1 — Persisted triage shape
 
 After the triage sub-agent returns, the orchestrator stamps \`flow-state.json > triage\` with the seven-field decision plus the audit fields. The persisted shape:
