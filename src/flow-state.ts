@@ -147,19 +147,19 @@ export interface FlowStateV82 {
   securityFlag: boolean;
   buildProfile?: BuildProfile;
   /**
-   * Reviewer-cap tracker the user may reset; at 5 the review-cap picker gates
-   * further dispatch (`keep-iterating-anyway` resets to 3 + stamps
+   * Reviewer-cap tracker the user may reset; at 5 the review-cap stop-and-report
+   * gates further dispatch (resuming via `/cc` resets to 3 + stamps
    * `triage.iterationOverride`). Optional, default `0`; resumed flows start fresh.
    */
   reviewCounter?: number;
   /**
    * Counts critic dispatches; hard-capped at 2 (initial + one rerun on `fix and
-   * re-review`; a third triggers the critic-cap picker). Optional; default `0`.
+   * re-review`; a third triggers the critic-cap stop-and-report). Optional; default `0`.
    */
   criticIteration?: number;
   /**
    * Verdict from the latest critic (`pass`/`iterate` → ship; `block-ship` →
-   * picker). Absence + `currentStage: "review"` + `lastSpecialist: "reviewer"` is
+   * stop-and-report). Absence + `currentStage: "review"` + `lastSpecialist: "reviewer"` is
    * the pre-critic migration signal.
    */
   criticVerdict?: CriticVerdict;
@@ -169,7 +169,7 @@ export interface FlowStateV82 {
   criticEscalation?: CriticEscalation;
   /**
    * Verdict from the latest plan-critic: `pass` → builder; `revise` → one
-   * architect loop; `cancel` → picker. Absence = not run (branch on presence +
+   * architect loop; `cancel` → stop-and-report. Absence = not run (branch on presence +
    * value, never absence-as-pass).
    */
   planCriticVerdict?: PlanCriticVerdict | null;
@@ -179,7 +179,7 @@ export interface FlowStateV82 {
   planCriticDispatchedAt?: string;
   /**
    * Verdict from the latest qa-runner: `pass` → review; `iterate` → builder (cap
-   * 1); `blocked` → picker. Absence = not run; `null` = ran-but-missing (the
+   * 1); `blocked` → stop-and-report. Absence = not run; `null` = ran-but-missing (the
    * absent-vs-null distinction matters for resume).
    */
   qaVerdict?: QaVerdict | null;

@@ -396,7 +396,7 @@ const CAP_REACHED_RECOVERY = `# On-demand runbook — cap-reached recovery (revi
 
 Open this runbook **only when \`flow-state.json > reviewCounter\` reaches 5** without convergence. For the standard review loop, see \`.cclaw/lib/runbooks/review.md\`.
 
-## Review-cap picker
+## Review-cap (stop-and-report)
 
 Track the cap with \`flow-state.json > reviewCounter\` (introduced sibling of \`reviewIterations\`; \`reviewIterations\` continues to be the monotonic lifetime counter, \`reviewCounter\` is the cap-budget that the user can extend). Increment \`reviewCounter\` on every reviewer dispatch in parallel with \`reviewIterations\`. flows resumed on start at \`reviewCounter: 0\` even if \`reviewIterations\` already reflects prior dispatches — the cap is a fresh budget on resume.
 
@@ -895,11 +895,11 @@ The single dispatch returns ONE **merged verdict** — the worst-of across the a
 
 **After revise verdict (iter 0, bounce to architect):** \`currentStage\` stays \`"plan"\`; \`lastSpecialist\` is patched back to \`"architect"\` only after architect's revise dispatch returns its slim summary. The active rubrics' artifacts (plan-critic.md + plan.md's design / devex sections) stay on disk; architect's next dispatch reads them.
 
-**After cancel / block verdict / revise-cap picker resolution:** the user's pick drives the next state transition (\`/cc-cancel\` clears the flow; \`[re-architect]\` resets the plan stage and re-dispatches the architect with the plan-critic findings prepended to its envelope; \`[accept-warnings-and-proceed]\` advances to builder despite the \`revise\` verdict). The plan-critic fields stay verbatim as the audit trail.
+**After a cancel / block / revise-cap stop-and-report:** the user's resume drives the next state transition — \`/cc-cancel\` clears the flow; re-architect (the user edits plan.md, then \`/cc\`) resets the plan stage and re-dispatches the architect with the plan-critic findings prepended to its envelope; accept-warnings-and-proceed (\`/cc\` without a plan edit on a \`revise\`) advances to builder despite the \`revise\` verdict. The plan-critic fields stay verbatim as the audit trail.
 
 ## Post-implementation pass (critic)
 
-The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship picker resolution. The critic is the on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's nine axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
+The orchestrator opens this section **on every transition from \`review\` to \`critic\`** and at every block-ship stop-and-report resume. The critic is the on-demand adversarial specialist that runs between the reviewer's final \`clear\` and the ship gate. It walks what is *missing* (gap analysis + pre-commitment predictions + goal-backward verification + Criterion check + realist check + — in adversarial mode — assumption-violation / composition / cascade / abuse cases), rather than re-walking the reviewer's nine axes. The contract that drives the dispatch lives in \`.cclaw/lib/agents/critic.md\`; this section covers what the orchestrator does *around* the dispatch.
 
 ### critic ceremonyMode gating (Q1, no flag exposed)
 
@@ -927,9 +927,9 @@ Mapping fired-triggers count to \`criticEscalation\`:
 
 ### critic cap & rerun rules
 
-- **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — surfacing the critic-cap-reached picker (same shape as the 5-iteration reviewer cap).
-- **Block-ship picker (two options):** \`[1] fix and re-review\` re-dispatches \`builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the cap still applies), then re-runs \`critic\` (increments \`criticIteration\`). \`[2] accept-and-ship\` is the manual override: the orchestrator records the block-ship reason in \`learnings.md\` and proceeds to ship.
-- **Independence:** critic dispatches do NOT increment \`reviewIterations\`. The two counters are independent; the critic-cap-reached picker fires only on a third critic dispatch, even if the reviewer-cap is far from reached.
+- **Hard cap: 1 critic re-run per slug.** \`criticIteration\` starts at 1 on the first dispatch, increments to 2 on a rerun, and would refuse a third — stopping and reporting per the always-auto failure matrix (same shape as the 5-iteration reviewer cap; no in-chat picker).
+- **Block-ship → stop-and-report (two recovery paths, both resume via \`/cc\`):** **fix and re-review** — the user edits the diff to close the gap, then \`/cc\` re-dispatches \`builder\` in \`fix-only\` mode, re-runs \`reviewer\` (this DOES increment \`reviewIterations\` — the cap still applies), then re-runs \`critic\` (increments \`criticIteration\`). **accept-and-ship** — the user re-invokes \`/cc\` to accept the gap as-is; the orchestrator records \`criticOverride\` + the block-ship reason in \`learnings.md\` and proceeds to ship. \`/cc-cancel\` discards.
+- **Independence:** critic dispatches do NOT increment \`reviewIterations\`. The two counters are independent; the critic-cap stop-and-report fires only on a third critic dispatch, even if the reviewer-cap is far from reached.
 
 ### critic verdict handling (slim summary → orchestrator routing)
 
@@ -981,7 +981,7 @@ qa-runner runs ONLY when ALL of these hold:
 
 1. \`triage.surfaces\` includes at least one of \`"ui"\` or \`"web"\` (CLI / library / API / data / infra / docs-only slugs structurally skip qa).
 2. \`triage.ceremonyMode != "inline"\` (trivial / one-shot slugs skip qa; inline budget cannot afford a structured pass).
-3. \`qaIteration < 1\` (hard cap — a third dispatch is structurally not allowed; the orchestrator surfaces the iterate-cap-reached picker instead).
+3. \`qaIteration < 1\` (hard cap — a third dispatch is structurally not allowed; the orchestrator stops and reports per the always-auto failure matrix instead).
 
 For any other combination, qa-runner is **structurally skipped**. The orchestrator advances directly from builder's GREEN slim summary to reviewer dispatch, as today. The gate is **AND** across all three; widening any condition (e.g. running qa on \`ceremonyMode: inline\`) is a scope decision, not a within-slug runtime call.
 
@@ -1074,7 +1074,7 @@ qa-runner returns one of three verdicts. The orchestrator branches on (verdict, 
 
 **After iterate verdict (iter 0, bounce to builder fix-only):** \`currentStage\` stays \`"qa"\`; \`lastSpecialist\` is patched back to \`"builder"\` only after builder's fix-only dispatch returns its slim summary. qa.md stays on disk; builder's next dispatch reads §7 hand-off. After the fix-only builder returns GREEN, the orchestrator re-dispatches qa-runner (iteration 1) — \`qaIteration\` increments at that point.
 
-**After blocked verdict / iterate-cap picker resolution:** the user's pick drives the next state transition (\`/cc-cancel\` clears the flow; \`[re-architect]\` resets the plan stage and re-dispatches the architect with the qa.md findings prepended to its envelope; \`[accept-warnings-and-proceed-to-review]\` advances \`currentStage\` to \`"review"\` despite the open findings; \`[skip-qa]\` or \`[proceed-without-qa-evidence]\` also advances to \`"review"\` with qa.md recording the gap). The qa fields stay verbatim as the audit trail.
+**After a blocked / iterate-cap stop-and-report:** the user's resume drives the next state transition — \`/cc-cancel\` clears the flow; re-architect (the user edits plan.md, then \`/cc\`) resets the plan stage and re-dispatches the architect with the qa.md findings prepended to its envelope; accept-warnings-and-proceed-to-review (\`/cc\` after editing qa.md to accept the gap) advances \`currentStage\` to \`"review"\` despite the open findings; proceed-without-qa-evidence likewise advances to \`"review"\` with qa.md recording the gap. The qa fields stay verbatim as the audit trail.
 
 ## Reviewer cross-check (qa-evidence axis)
 

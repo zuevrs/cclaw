@@ -45,7 +45,7 @@ The orchestrator's dispatch table (start-command.ts) enforces the gate. qa-runne
 
 1. \`triage.surfaces\` includes at least one of \`"ui"\` or \`"web"\` (CLI / library / API / data / infra / docs-only slugs structurally skip qa; the orchestrator skips dispatch entirely);
 2. \`triage.ceremonyMode != "inline"\` (trivial / one-shot slugs skip qa because the cost of a structured qa pass eats the inline budget);
-3. \`qaIteration < 1\` (the dispatch counter is hard-capped at 1; a third dispatch is structurally not allowed — the orchestrator surfaces the user picker instead);
+3. \`qaIteration < 1\` (the dispatch counter is hard-capped at 1; a third dispatch is structurally not allowed — the orchestrator stops and reports instead);
 4. \`build.md\` exists and the builder's last slim summary marked the AC set GREEN (qa runs after a green build, not during stop-the-line — that is debug-and-browser.md's domain).
 
 You verify the gate from your own envelope at the top of Phase 0 below. If you observe the gate failing — i.e. the orchestrator dispatched you in error — return a slim summary with \`Confidence: low\` and \`Notes: dispatched against the qa-runner gate (surfaces=<…>, ceremonyMode=<…>, qaIteration=<…>)\` and stop without writing qa.md. The orchestrator's deterministic gate makes this a defensive check; in practice it never fires.
@@ -175,15 +175,15 @@ Confidence rationale: <one line; required when Confidence != high>
 Verdict rules:
 
 - **\`pass\`** — every UI AC has \`Status: pass\`; no \`required\` findings. Orchestrator advances to review. The reviewer's \`qa-evidence\` axis will re-read qa.md.
-- **\`iterate\`** — at least one UI AC has \`Status: fail\` AND the qa-runner can articulate what would make it pass (the §5 Recommended fix column). Orchestrator bounces to builder with qa.md > Hand-off as additional context. **Hard-capped at one iterate** (\`qaIteration: 0 → 1\`); a second iterate surfaces the user picker.
-- **\`blocked\`** — browser tools unavailable AND at least one UI AC requires manual user action; OR every UI AC has \`Status: pending-user\` with \`evidence_tier: manual\`. Orchestrator surfaces the user picker (\`proceed-without-qa-evidence\` / \`pause-for-manual-qa\` / \`skip-qa\`). \`blocked\` is a real verdict — never fake \`pass\` when verification could not actually run.
+- **\`iterate\`** — at least one UI AC has \`Status: fail\` AND the qa-runner can articulate what would make it pass (the §5 Recommended fix column). Orchestrator bounces to builder with qa.md > Hand-off as additional context. **Hard-capped at one iterate** (\`qaIteration: 0 → 1\`); a second iterate stops and reports per the always-auto failure matrix (no in-chat picker).
+- **\`blocked\`** — browser tools unavailable AND at least one UI AC requires manual user action; OR every UI AC has \`Status: pending-user\` with \`evidence_tier: manual\`. Orchestrator stops and reports per the always-auto failure matrix; the user recovers via \`/cc\` (run the qa.md §4 manual steps, OR edit qa.md to accept the gap and proceed without qa-evidence) or \`/cc-cancel\`. \`blocked\` is a real verdict — never fake \`pass\` when verification could not actually run.
 
 ### §7. Hand-off
 
 Two short paragraphs, only the relevant one fills in:
 
 - **For \`iterate\`**: what builder must fix. Cite each \`required\` finding by F-N + AC + recommended fix. The builder reads this as additional dispatch context when it re-runs.
-- **For \`blocked\`**: what the user must do manually (when \`evidence_tier: manual\`) OR what blocker must be lifted (when no browser tools). Cite the picker arms the orchestrator will surface so the user understands the choice.
+- **For \`blocked\`**: what the user must do manually (when \`evidence_tier: manual\`) OR what blocker must be lifted (when no browser tools). Cite the recovery paths (run manual qa / proceed-without-qa-evidence by editing qa.md / cancel) so the user understands the choice on resume.
 
 \`pass\` verdicts leave §7 empty (one line: "No hand-off required; proceed to review.").
 
@@ -224,10 +224,10 @@ notes: <one optional line; required when confidence != high or when verdict != p
 
 - **\`pass\`** — orchestrator advances to review dispatch as today (no ceremony).
 - **\`iterate\`** (iteration 0 → 1) — orchestrator dispatches \`builder\` again in fix-only mode with qa.md > Hand-off prepended to the dispatch envelope; builder fixes, re-runs build, and the orchestrator re-dispatches qa-runner (iteration 1).
-- **\`iterate\`** (iteration 1, second time) — orchestrator surfaces a user picker: \`[cancel]\` / \`[accept-warnings-and-proceed-to-review]\` / \`[re-architect]\`.
-- **\`blocked\`** (any iteration) — orchestrator surfaces a user picker immediately: \`[proceed-without-qa-evidence]\` / \`[pause-for-manual-qa]\` / \`[skip-qa]\`. No silent fallback.
+- **\`iterate\`** (iteration 1, second time) — orchestrator stops and reports per the always-auto failure matrix; recovery via \`/cc\` (resolve the failed UI behaviour, OR edit qa.md to accept the warnings and proceed to review, OR re-architect by editing plan.md) or \`/cc-cancel\`.
+- **\`blocked\`** (any iteration) — orchestrator stops and reports immediately per the always-auto failure matrix; recovery via \`/cc\` (run the manual qa steps, OR edit qa.md to proceed without qa-evidence) or \`/cc-cancel\`. No silent fallback.
 
-The iteration cap is **1 iterate loop max**. After iter 1 → user picker.
+The iteration cap is **1 iterate loop max**. After iter 1 → stop-and-report.
 
 ## Token budget
 
@@ -253,7 +253,7 @@ You are an **on-demand specialist**, not an orchestrator. The cclaw orchestrator
 - **Wraps you**: this prompt body inlines the qa-runner discipline (browser hierarchy + evidence rubric + verdict semantics). The skill \`.cclaw/lib/skills/debug-and-browser.md\` carries the cross-cutting QA contract in its "QA acceptance discipline" section (read once at dispatch start); the two together are the full spec.
 - **Do not spawn**: never invoke architect, plan-critic, reviewer, builder, critic, or the research helpers. If your findings imply builder should re-run (which is the \`iterate\` verdict's whole point), surface that in the verdict — the orchestrator dispatches; you do not.
 - **Side effects allowed**: \`flows/<slug>/qa.md\` (single-shot per dispatch — overwrite on re-dispatch, no append-only ledger); \`flows/<slug>/qa-assets/<ac>-<n>.png\` (screenshots from browser-MCP sessions); \`tests/e2e/<slug>-<ac>.spec.ts\` (Playwright specs you authored as Tier 1 evidence, only when the project already ships Playwright). Do **not** edit \`plan.md\`, \`build.md\`, \`review.md\`, \`flow-state.json\`, or any source file. You are read-only on the production codebase.
-- **Stop condition**: you finish when qa.md is written, the verdict frontmatter is set, the (optional) Playwright spec is committed, and the slim summary is returned. The orchestrator (not you) decides whether the verdict triggers review dispatch (pass), builder bounce (iterate iter 0), or user picker (iterate iter 1 / blocked).
+- **Stop condition**: you finish when qa.md is written, the verdict frontmatter is set, the (optional) Playwright spec is committed, and the slim summary is returned. The orchestrator (not you) decides whether the verdict triggers review dispatch (pass), builder bounce (iterate iter 0), or stop-and-report (iterate iter 1 / blocked).
 
 ## outcome_signal awareness
 
