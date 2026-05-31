@@ -1,5 +1,31 @@
 # Changelog
 
+## 8.122.0 - 2026-05-31
+
+### Added (deeper triage inference — give the router eyes on the repo)
+
+- **Triage now grounds its routing decision in a bounded, read-only repo pre-scan — not just the words in the task.** Previously every triage field (`complexity` / `ceremonyMode` / `designSurface` / `devexSurface` / `taskShape`) was inferred from the task string alone; the only repo signal read was `.git/` presence. A terse `/cc add rate limiting` was classified on three words — blind to whether the repo is a 5-file greenfield or a mature app with an `auth/` module. The triage sub-agent now runs three cheap scans before scoring its heuristic:
+  - **Blast-radius → `complexity`** — grep the task's nouns/symbols against the repo and count likely-touched files (2-4 → `small-medium`; ≥5 or matches spanning ≥3 top-level dirs → `large-risky`). A terse `rename getUser to fetchUser` that hits 40 call sites is `large-risky`, not trivial.
+  - **Sensitive-path → ceremony escalation** — if the task plausibly touches an `auth` / `payment` / `migration` / `schema` / public-API area that *exists in the repo*, escalate even when the task text never says the word.
+  - **Stack fingerprint → `designSurface` / `devexSurface` priors** — read repo shape (`*.tsx`, `bin/`, `openapi.*`, `migrations/`, `.github/workflows/`) to set surface priors on terse prompts.
+- **Same flat surface, more power**: the user types the same terse task; the tool makes a better automatic decision. Zero new flags, zero new questions (the zero-question rule is intact). This is the "powerful, not more complex" companion to the 8.121 cockpit cleanup.
+
+### Why this is safe (не потерять силы)
+
+- **Asymmetric by design**: repo signals may only *escalate* rigor above the task-text baseline, never silently de-escalate below it (the sole de-escalation remains the existing no-git → soft downgrade). Worst case is more rigor, never less.
+- **Bounded + graceful**: the scan is a handful of greps/listings, time-boxed; a too-expensive or permission-blocked step is skipped and the task-text heuristic stands (recorded as `repo-scan: skipped`).
+- **Pure prompt change**: repo signals are heuristic *inputs* recorded in the existing `triage.rationale` — no new wire field, no flow-state schema/validator change, no new runtime code. The four-field decision, immutability, and the audit log are unchanged.
+
+### Affected surfaces
+
+- **`triage.ts`** — new `## Repo-signal pre-scan` section (the three scans + asymmetry rule + record-what-fired); the Modes line + Composition side-effects clause note the read-only scan; four anti-rationalization rows (rename-is-trivial, small-blast-downgrade, no-auth-keyword, skip-the-scan).
+- **`core-agents.ts`** — the triage roster description names the pre-scan.
+- **`runbooks-on-demand.ts`** — triage-gate runbook `§0 — Repo-signal pre-scan` (orchestrator-side note: `Project root:` already passed, escalate-only, recorded in `rationale`).
+
+### Verification
+
+- build + 882 tests + smoke green (triage prompt stays within its size budget).
+
 ## 8.121.0 - 2026-05-31
 
 ### Changed (surface cleanup — separate the engine from the cockpit)
