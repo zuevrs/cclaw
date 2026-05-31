@@ -311,10 +311,8 @@ The orchestrator opens this file before invoking \`reviewer\`.
 
 | mode | when |
 | --- | --- |
-| \`code\` | always, immediately after build commits land |
+| \`code\` | always, immediately after build commits land; runs the **integration sweep** after \`parallel-build\` completes, and the **release sweep** before push when the change is user-visible |
 | \`text-review\` | before ship if plan / decisions / ship-notes are non-trivial |
-| \`integration\` | after \`parallel-build\` completes |
-| \`release\` | before push when the change is user-visible |
 
 The reviewer is a single nine-axis specialist (absorbed the former \`security-reviewer\` into the \`security\` axis). When the task or diff touches sensitive surfaces, the reviewer walks the \`security\` axis at full threat-model depth (authn / authz / secrets / supply chain / data exposure / encoding / taint) inside the same dispatch — no separate sub-agent.
 

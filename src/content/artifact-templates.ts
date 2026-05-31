@@ -1108,7 +1108,7 @@ This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > Acceptance Criteria\` with
 | --- | --- | --- | --- | --- |
 | SL-1 | _sha_ | _sha_ | _sha or skipped_ | _short description of the slice's shape (which AC(s) it contributes to, and the discovery → RED → GREEN narrative in one line)_ |
 
-This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > ## Plan / Slices\` with the final SHAs reconstructed from \`git log --grep="(SL-N):" --oneline\` for every slice in the plan. The ship-stage reviewer (\`mode=release\`) is the canonical gate: a missing or incomplete posture-driven commit sequence (either a slice RED/GREEN/REFACTOR triplet OR an AC \`verify(AC-N): passing\` stamp) is reported as an A-1 finding (severity=required, axis=correctness) and blocks ship until the builder produces the missing commits in a fix-only iteration.
+This table mirrors \`flows/SLUG-PLACEHOLDER/plan.md > ## Plan / Slices\` with the final SHAs reconstructed from \`git log --grep="(SL-N):" --oneline\` for every slice in the plan. The ship-stage reviewer (\`code\` mode, release sweep) is the canonical gate: a missing or incomplete posture-driven commit sequence (either a slice RED/GREEN/REFACTOR triplet OR an AC \`verify(AC-N): passing\` stamp) is reported as an A-1 finding (severity=required, axis=correctness) and blocks ship until the builder produces the missing commits in a fix-only iteration.
 
 ## Rollback plan (mandatory)
 

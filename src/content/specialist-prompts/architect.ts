@@ -592,7 +592,7 @@ If your topology produces more than 5 lanes that could run in parallel, **merge 
   - **lane-1** (surface: \`src/server/search/*\`) → builder #1 — owns SL-1, SL-2
   - **lane-2** (surface: \`src/client/search/Hits.tsx\`) → builder #2 — owns SL-3
   - **lane-3** (surface: \`tests/integration/search.spec.ts\`) → builder #3 — owns SL-4
-- integration reviewer: reviewer #integration after the wave
+- integration reviewer: reviewer (\`code\` mode, integration sweep) after the wave
 - worktree: each lane runs in its own \`.cclaw/worktrees/<slug>-<lane-id>\` if the harness supports it; fallback inline-sequential otherwise
 \`\`\`
 

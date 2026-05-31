@@ -1,5 +1,31 @@
 # Changelog
 
+## 8.119.0 - 2026-05-31
+
+### Changed (Phase E, safe slice — reviewer modes 4 → 2)
+
+- **The reviewer drops from four dispatch modes to two — `code` (review a diff / commit range) and `text-review` (review markdown artifacts).** The former `integration` and `release` modes were never enforcement modes — they were *ship-path contexts* that vary only *what the reviewer is pointed at* and *one emphasis bullet*. All the actual teeth (nine axes × five severities × `ceremonyMode` ship gates, the posture-aware git-log inspection, the security threat-model) fire in **every** mode and are unchanged. So `integration` (cross-slice path conflicts / double-edits / boundary tests, after `parallel-build`) and `release` (commit-chain completeness / release notes / breaking-change migration / CHANGELOG staleness, at ship) now ride on `code` as named sweeps. **Zero enforcement lost** — every mode-specific check is relocated, not dropped.
+
+### Why this is safe
+
+- No runtime TypeScript ever branched on the reviewer mode value — `agent.modes` is a documentation `string[]` rendered into the installed agent contract; there is no `ReviewerMode` union, validator, or switch anywhere in `src/`. The collapse is a content + single-test change.
+- The orchestrator's mode choice simplifies from a 4-way to a 2-way pick (diff vs prose); `integration`/`release` were already auto-selected by context (after parallel-build / at ship), so they fit naturally as sweeps on `code`.
+
+### Affected surfaces
+
+- **`reviewer.ts`** — `## Modes` (4 → 2; integration + release described as `code` sweeps), `## Mode-specific rules` (integration + release folded under `code` as sub-bullets, verbatim checks), header line.
+- **`core-agents.ts`** — `modes: ["code", "text-review"]` + description.
+- **Dispatch prose** — `start-command.ts` (stage table review/ship rows + specialist roster), `stage-playbooks.ts` (mode-selection table), `runbooks-on-demand.ts` (parallel-build diagram + ship dispatch + ship-gate matrix), `architect.ts`, `parallel-build.md`, `commit-hygiene.md`, `review-discipline.md`, `artifact-templates.ts`, `skills.ts`, `conversation-language.md` — all `mode=integration` / `mode=release` dispatch tokens now read `mode=code` (integration / release sweep).
+- **`core-agents.test.ts`** — the modes assertion now pins `["code", "text-review"]` and asserts `integration` / `release` are not standalone modes.
+
+### Scope note
+
+- Continues the safe slice of blueprint Phase E (after reversibility 3 → 2 in 8.118). `complexity → ceremonyMode` remains deliberately **not** done — it branches through the triage / plan-critic / builder gates, so collapsing it risks the gate teeth. Deferred pending an explicit call.
+
+### Verification
+
+- build + 882 tests + smoke green.
+
 ## 8.118.0 - 2026-05-31
 
 ### Changed (Phase E, safe slice — reversibility 3 → 2)

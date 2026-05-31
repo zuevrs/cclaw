@@ -46,7 +46,7 @@ Mechanical tokens stay in their original form regardless of conversation languag
 - Commands and CLI flags (`/cc`, `/cc-cancel`, `--review`).
 - Machine-readable JSON.
 - Specialist names (`triage`, `architect`, `builder`, `plan-critic`, `qa-runner`, `reviewer`, `critic`).
-- Mode names (`code`, `text-review`, `integration`, `release`, `adversarial`, `fix-only`).
+- Mode names (`code`, `text-review`, `adversarial`, `fix-only`).
 - Frontmatter keys (`slug`, `stage`, `status`, `ac`, `posture`).
 - Stage names (`plan`, `build`, `review`, `ship`).
 - TDD phase names (`red`, `green`, `refactor`).

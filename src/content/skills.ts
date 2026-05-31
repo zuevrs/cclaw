@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
  * - `build`    — builder (dispatch)
  * - `qa`       — qa-runner (on-demand; UI surfaces only)
  * - `review`   — reviewer (dispatch)
- * - `ship`     — reviewer release + compound-and-ship
+ * - `ship`     — reviewer `code` release sweep + compound-and-ship
  * - `compound` — runCompoundAndShip's knowledge write loop
  * - `always`   — relevant at every step; rendered into every stage block.
  */

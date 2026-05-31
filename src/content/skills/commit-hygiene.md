@@ -261,7 +261,7 @@ The reviewer's ex-post checks at handoff time (beyond the message-shape rules ab
 - **RED stages test files only.** `git show <red-SHA> --stat` for a `test-first` / `characterization-first` slice must list test files only; mixing in production files is an A-1 finding (severity=required, axis=correctness).
 - **Diff matches Surface.** Every file in the slice's commits must appear in the slice's `Surface` row of `plan.md`. Drive-by edits outside `Surface` are A-4 (severity `consider` → `required`).
 
-The builder appends the slice ↔ SHA row to `flows/<slug>/build.md` under `## Slice cycles` as the durable record; the row's `commits` column carries the SHA(s). The reviewer's final pass (`reviewer mode=release` at ship gate) verifies the chain is complete via `git log --grep="(SL-N):" --oneline` against the plan's Slices list.
+The builder appends the slice ↔ SHA row to `flows/<slug>/build.md` under `## Slice cycles` as the durable record; the row's `commits` column carries the SHA(s). The reviewer's final pass (`reviewer` `code` mode, release sweep at ship gate) verifies the chain is complete via `git log --grep="(SL-N):" --oneline` against the plan's Slices list.
 
 ## Slice ↔ AC mapping
 
@@ -354,7 +354,7 @@ The two chains are independent; the dual grep is what makes the audit trail reco
    - **Verify after slices.** A `verify(AC-N): passing` commit landed BEFORE every slice in its `Verifies` list landed is A-1 (severity=required).
    - **Production-code freedom.** `git show --stat <verify(AC-N) SHA>` MUST be empty OR list test files only; a production-code touch in a verify commit is A-1 (severity=critical, axis=correctness).
 5. **`build.md > ## AC verification` carries the AC↔SHA row** as the durable record: `| AC-N | Verifies (slices) | Evidence | commit |`. The Evidence cell cites the test file:test-name (or perf/integration target); the commit cell carries the verify SHA.
-6. **The reviewer's final pass (`reviewer mode=release` at ship gate)** verifies the dual chain via `git log --grep="(SL-N):" --oneline` (slice work) AND `git log --grep="verify(AC-N):" --oneline` (AC verification) against the plan's Slices + Acceptance Criteria tables.
+6. **The reviewer's final pass (`reviewer` `code` mode, release sweep at ship gate)** verifies the dual chain via `git log --grep="(SL-N):" --oneline` (slice work) AND `git log --grep="verify(AC-N):" --oneline` (AC verification) against the plan's Slices + Acceptance Criteria tables.
 
 ## Archived-flow back-compat
 

@@ -274,7 +274,7 @@ When the architect artifact declares \`topology: parallel-build\` with ≥2 slic
                           │                   │                   │
                           └───────────────────┼───────────────────┘
                                               ▼
-                                  reviewer (mode=integration)
+                              reviewer (mode=code, integration sweep)
                                   reads each branch, checks
                                   cross-slice conflicts, AC↔commit
                                   chain across the wave
@@ -305,8 +305,8 @@ Dispatch builder
 ## After every builder returns
 
 1. Patch \`flow-state.json\` with the per-slice progress.
-2. When **every** slice has reported, dispatch \`reviewer\` mode=\`integration\` (one sub-agent, reads from each branch).
-3. On clear integration review, merge slices into main one at a time. On block, dispatch \`builder\` mode=\`fix-only\` against the cited file:line refs, then re-run the integration reviewer.
+2. When **every** slice has reported, dispatch \`reviewer\` mode=\`code\` (integration sweep; one sub-agent, reads from each branch).
+3. On clear integration review, merge slices into main one at a time. On block, dispatch \`builder\` mode=\`fix-only\` against the cited file:line refs, then re-run the reviewer.
 4. Worktree cleanup happens after merge; the cclaw branches stay until ship.
 
 ## Hard rules
@@ -317,7 +317,7 @@ Dispatch builder
   - Render an explicit warning to the user in their language naming the cause (e.g., "harness does not support parallel sub-agents — falling back to sequential build, will run AC-1..AC-N one after another"), AND
   - Use the harness's structured ask to surface a single \`accept-fallback\` option (and inform the user they may invoke \`/cc-cancel\` themselves if the loss of parallelism makes the work not worth doing under sequential timing) — the orchestrator must wait for the user's explicit \`accept-fallback\` reply before dispatching the sequential builder. The parallel→sequential decision changes wall-clock substantially; the user gets to make the call.
   - Record the fallback in \`flows/<slug>/build.md\` frontmatter (\`subAgentDispatch: inline-fallback\`, \`fallback_reason: <one-line>\`, \`fallback_accepted_at: <iso>\`) so the reviewer sees it. The fallback is not an error, but it is a visible event with a recorded user-acknowledgement.
-- always-auto applies to chained stages; the integration-reviewer ask above still surfaces because a parallel→sequential fallback materially changes wall-clock budgets, and that is a user-visible decision rather than an internal verdict.
+- always-auto applies to chained stages; the integration-review ask above still surfaces because a parallel→sequential fallback materially changes wall-clock budgets, and that is a user-visible decision rather than an internal verdict.
 `;
 
 const FINALIZE = `# On-demand runbook — finalize (ship → shipped)
@@ -475,11 +475,11 @@ In parallel-build the gate runs **per slice**: a slice whose self-review fails b
 
 The ship stage dispatches a single reviewer:
 
-- \`reviewer\` mode=\`release\` — always. Includes the \`security\` axis at full threat-model depth when \`security_flag\` is true (absorbed from the former \`security-reviewer\` specialist).
+- \`reviewer\` mode=\`code\` (release sweep) — always. Includes the \`security\` axis at full threat-model depth when \`security_flag\` is true (absorbed from the former \`security-reviewer\` specialist).
 
 Inputs: \`.cclaw/flows/<slug>/plan.md\`, build.md, review.md.
 
-**Shared diff context (single parse pass).** Before the dispatch, run \`git diff --stat <plan-base>..HEAD\` and \`git diff --name-only <plan-base>..HEAD\` once in the orchestrator's context. Pass the parsed shape (touched files list, additions/deletions per file, total LOC delta) to the reviewer in the dispatch envelope under a \`Shared diff:\` block. The release-mode reviewer reads everything; its security-axis sweep prioritises files matching sensitive patterns when \`security_flag\` is true. The reviewer still independently \`git show <SHA>\` per finding to read commit-level context; only the aggregated diff shape is shared.
+**Shared diff context (single parse pass).** Before the dispatch, run \`git diff --stat <plan-base>..HEAD\` and \`git diff --name-only <plan-base>..HEAD\` once in the orchestrator's context. Pass the parsed shape (touched files list, additions/deletions per file, total LOC delta) to the reviewer in the dispatch envelope under a \`Shared diff:\` block. The release-sweep reviewer reads everything; its security-axis sweep prioritises files matching sensitive patterns when \`security_flag\` is true. The reviewer still independently \`git show <SHA>\` per finding to read commit-level context; only the aggregated diff shape is shared.
 
 Output: \`.cclaw/flows/<slug>/ship.md\` with the go/no-go decision, AC↔commit map (strict) or condition checklist (soft), release notes, and rollback plan.
 
@@ -524,7 +524,7 @@ The hint exists so post-ship "tiny tweak" tasks have a frictionless entry point.
 
 ### Ship-gate decision matrix
 
-| reviewer:release (incl. security axis) | gate |
+| reviewer:code release sweep (incl. security axis) | gate |
 | --- | --- |
 | clear | clear → ship may proceed |
 | block | block → fix-only loop |
