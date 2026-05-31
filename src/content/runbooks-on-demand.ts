@@ -2001,6 +2001,12 @@ export const ON_DEMAND_RUNBOOKS: OnDemandRunbook[] = [
     body: PARALLEL_BUILD
   },
   {
+    id: "parallel-review",
+    fileName: "parallel-review.md",
+    title: "Parallel-review fan-out (size-gated)",
+    body: readRunbook("parallel-review.md")
+  },
+  {
     id: "finalize",
     fileName: "finalize.md",
     title: "Finalize step",

@@ -1,5 +1,35 @@
 # Changelog
 
+## 8.125.0 - 2026-05-31
+
+### Added (bounded parallel-review fan-out — faster review on big diffs, invisible on small ones)
+
+- **On a large strict diff, the `code` review can fan out into ≤ 5 partition reviewers** (one per cohesive file cluster), whose findings the orchestrator merges into a single `review.md` iteration. This is the review-stage twin of `parallel-build`: same opt-in posture, same 5-partition cap, same silent fallback — so there is one parallelism mental model, not two.
+- **Strictly size-gated.** Fan-out fires only when ALL hold: `triage.ceremonyMode == "strict"`, the diff is large (≥ 12 changed files OR ≥ 400 changed lines), the files split into ≥ 2 disjoint clusters, and sub-agent dispatch + git are both available. On every smaller diff review stays a single sequential reviewer — the common path is untouched, so the user never pays N dispatches for a small change.
+- **The `security` axis is always reviewed across the whole diff**, never per-partition — a partitioned view would miss taint / authz / supply-chain issues that cross partition seams. After the merge, the orchestrator runs one mandatory integration + Five Failure Modes pass over the combined findings (the same post-wave sweep `parallel-build` requires).
+- **Deterministic merge.** Findings that cite the same `file:line` + axis are deduped; the merged decision is the **worst** of the partition decisions (`block` > `warn` > `clear`) — any single partition `block` blocks the slug.
+
+### User sees
+
+- **One cockpit clause, only when it actually fans out:** "reviewed N partitions in parallel". On the sequential default the cockpit is unchanged — no new concept appears unless the engine genuinely used it.
+
+### Why this is safe / scoped
+
+- **No flow-state schema change.** A partitioned iteration is recorded in the `review.md` header (`partitions: N (parallel)`) and counts as **one** iteration against the per-slug 5-cap — `reviewIterations` already tracks it, so resume / cancel are unchanged.
+- **Silent fallback.** No sub-agent dispatch, non-git, or partitioning failure → a single sequential reviewer over the whole diff; this is the normal path, not an error, and never reduces review depth (all nine axes, every file).
+- **Token budgets honored.** `start-command` carries only a one-line cockpit clause (49,883 / 50,000 chars); the full gate + partition + merge + fallback procedure lives in the new on-demand runbook, and the review stage playbook carries a short §1a anchor.
+
+### Affected surfaces
+
+- `src/content/runbooks/parallel-review.md` (new) — full size-gate / partition / dispatch / merge / fallback procedure; registered in `ON_DEMAND_RUNBOOKS`.
+- `src/content/stage-playbooks.ts` — review playbook §1a size-gated anchor.
+- `src/content/start-command.ts` — cockpit "reviewed N partitions in parallel" clause.
+- `tests/unit/v8125-parallel-review.test.ts` (new) — pins the gate, the 5-cap, whole-diff security, worst-of merge, mandatory sweep, one-iteration accounting, silent fallback, and the playbook/cockpit cross-references.
+
+### Verification
+
+- build + 893 tests + smoke green.
+
 ## 8.124.0 - 2026-05-31
 
 ### Changed (invisible compounding memory — the tool remembers and checks)

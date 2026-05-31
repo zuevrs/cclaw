@@ -241,6 +241,7 @@ The slim summary above is the **machine envelope** — the orchestrator reads it
 - **One next-action, in plain prose.** Translate the routing decision: auto-chaining ("moving on to review…"), a stop ("stopped — <reason>; \`/cc\` to continue, \`/cc-cancel\` to discard"), or the ship-gate ask. Only the command tokens (\`/cc\`, \`/cc-cancel\`, slug, paths) stay English.
 - **Confidence** surfaces only when not \`high\` (append "— low confidence, see below", then the stop-and-report block carries the \`Notes\` verbatim).
 - **Prior-lesson reuse** — when a reviewer / critic slim summary carries a \`Recalled-priors: <slug>\` line, append ONE clause to that cockpit line ("…reused a prior lesson from \`<slug>\`"). Contract: \`summary-format.md\`.
+- **Parallel review** — on a fanned-out iteration (review.md \`partitions: N>1\`), append "reviewed N partitions in parallel".
 - **The detail is one file away.** AC-ids, axes, SHAs, posture, and ceremony all live in \`flows/<slug>/<stage>.md\` + \`flow-state.json\`. A user who wants the full picture opens the artifact; the cockpit stays calm by default. This is the engine/cockpit split: the engine keeps every bit of its power, the user reads a flat surface.
 
 ### Stage details
