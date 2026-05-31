@@ -1,5 +1,22 @@
 # Changelog
 
+## 8.116.0 - 2026-05-31
+
+### Changed (Phase D — builder: sequential build by default)
+
+- **The builder now builds slices sequentially by default; parallel worktree dispatch is opt-in via `topology: parallel-build`.** Previously the builder's "topological layer dispatch" prose said "parallel-by-default" and fanned out every ≥2-slice layer into concurrent sub-builders — which contradicted the architect, who already defaults `topology` to `inline` (and "always picks inline for ≤4 slices"). The builder now honours the architect's topology field: on `inline` (default / absent) it runs every slice inline one at a time in topological-layer order; only on `topology: parallel-build` does it spin up the worktree-per-slice parallel dispatch. No capability lost — parallel builds still run when the architect opts in; the default path is simpler.
+
+### Affected surfaces
+
+- **`src/content/specialist-prompts/builder.ts`** — the "Topological layer dispatch" section is retitled "sequential by default", its layer table reframed (`inline` → run inline one slice at a time; `parallel-build` → fan out), the "Dispatch shape" section gated behind `topology: parallel-build`, and the worktree-lifecycle note drops the "default for the strict-mode common case" framing.
+- **`src/content/start-command.ts`** — the `#### build` pointer now reads "sequential by default in topological-layer order (parallel worktree dispatch is opt-in via `topology: parallel-build`)".
+- **`src/content/specialist-prompts/architect.ts`** — unchanged; already defaulted `topology` to `inline` with `parallel-build` opt-in. The builder now matches it (the prior drift is closed).
+- **`README.md`** — the tagline notes slices build sequentially by default, fanning out to parallel worktrees only when the plan opts in.
+
+### Tests / docs
+
+- `topologicalLayers` (the pure layering utility) is unchanged and still computes the build order for both the sequential and parallel paths; `slice-topology.test.ts` / `v864-parallel-default.test.ts` pass as-is (comment refreshed to note the opt-in framing). build + 880 tests + smoke green.
+
 ## 8.115.0 - 2026-05-30
 
 ### Removed (review arm trim — cross-model critic retired)

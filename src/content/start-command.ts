@@ -255,7 +255,7 @@ Every specialist's full gate / inputs / output / slim-summary / verdict routing 
 
 #### build
 
-\`agents/builder.md\` + \`runbooks/build.md\` (+ \`runbooks/parallel-build.md\` on \`topology: parallel-build\`). Slice-as-unit-of-work (SL-N) + per-slice TDD (RED → GREEN → REFACTOR), verify-AC commits land after all slices, parallel-by-default via topological layers, structured statuses (\`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`); build-failure routing → \`runbooks/always-auto-failure-handling.md\` (builder \`fix-only\` cap 3).
+\`agents/builder.md\` + \`runbooks/build.md\` (+ \`runbooks/parallel-build.md\` on \`topology: parallel-build\`). Slice-as-unit-of-work (SL-N) + per-slice TDD (RED → GREEN → REFACTOR), verify-AC commits land after all slices, sequential by default in topological-layer order (parallel worktree dispatch is opt-in via \`topology: parallel-build\`), structured statuses (\`DONE\` / \`DONE_WITH_CONCERNS\` / \`NEEDS_CONTEXT\` / \`BLOCKED\`); build-failure routing → \`runbooks/always-auto-failure-handling.md\` (builder \`fix-only\` cap 3).
 
 #### qa (optional UI-surface stage)
 

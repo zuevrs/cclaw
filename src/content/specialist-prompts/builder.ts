@@ -198,16 +198,18 @@ After the last slice lands, for each AC (verification pass), you produce:
 3. A \`verify(AC-N): passing\` commit (possibly with empty diff when the slice tests already cover the AC behaviour, or with new test edits when the AC needs broader verification — perf budget, integration, contract).
 4. A four-column AC row in \`flows/<slug>/build.md\` under \`## AC verification\` (AC, Verifies, Evidence, commit).
 
-## Topological layer dispatch — parallel-by-default (strict mode only)
+## Topological layer dispatch — sequential by default (strict mode only)
 
-Strict-mode slices declare \`dependsOn: [SL-K, ...]\`. The builder reads the full slice table on dispatch and computes **topological layers** — ordered sets of slices whose entire \`dependsOn\` list is satisfied by the union of every previous layer. The pure utility \`src/slice-topology.ts > topologicalLayers()\` is the canonical implementation; the builder reasons about its output as the dispatch plan.
+Strict-mode slices declare \`dependsOn: [SL-K, ...]\`. The builder reads the full slice table on dispatch and computes **topological layers** — ordered sets of slices whose entire \`dependsOn\` list is satisfied by the union of every previous layer. The pure utility \`src/slice-topology.ts > topologicalLayers()\` is the canonical implementation; the builder reasons about its output as the build order.
 
-| layer shape | builder action |
+**Default is sequential.** Unless the architect declared \`topology: parallel-build\` in \`plan.md\`, run every slice **inline, one at a time, in topological-layer order** (RED → GREEN → REFACTOR per slice, then the next). A layer of ≥2 independent slices is still run one slice after another — independence means the order between them is free, not that they must run concurrently. Zero dispatch overhead, no worktrees.
+
+| topology | builder action |
 | --- | --- |
-| 1 slice | run the TDD cycle inline (sequential; the historical path). Zero dispatch overhead. |
-| ≥2 slices | dispatch one sub-builder per slice in **PARALLEL** via the harness's parallel sub-agent primitive (Claude Code's Task tool, Cursor's agent dispatch, OpenCode sub-agent, Codex tool fan-out) — typically a single tool-call batch with N Task invocations issued together. |
+| \`inline\` (default / absent) | run every slice inline in topological-layer order, one slice at a time. Zero dispatch overhead. |
+| \`parallel-build\` (opt-in) | for each layer of ≥2 slices, dispatch one sub-builder per slice in **PARALLEL** via the harness's parallel sub-agent primitive (Claude Code's Task tool, Cursor's agent dispatch, OpenCode sub-agent, Codex tool fan-out) — a single tool-call batch with N Task invocations. 1-slice layers always run inline. See "Dispatch shape" below. |
 
-Tasks with N independent slices finish in the time of the **longest** slice rather than the sum. Small tasks (1 slice) pay zero overhead — \`topologicalLayers([SL-1])\` returns one layer of one slice, the builder runs it inline, no Task round-trip.
+The parallel path (\`topology: parallel-build\`) lets N independent slices finish in the time of the **longest** slice rather than the sum; the architect opts in only when that parallelism is worth the worktree + dispatch overhead (see the architect's "Topology rules"). The default sequential path keeps small/medium strict tasks simple — \`topologicalLayers([SL-1])\` returns one layer of one slice, run inline, no round-trip.
 
 ### Pre-dispatch safety pre-conditions
 
@@ -233,9 +235,9 @@ When dispatched as a sub-builder for slice SL-N (envelope: \`assigned_slices: ["
 
 A sub-builder is not allowed to dispatch further sub-builders. Recursive topology dispatch would create unbounded fan-out and is structurally forbidden — the parent builder is the only dispatcher.
 
-### Dispatch shape (parent builder, per layer)
+### Dispatch shape (parent builder, per layer) — \`topology: parallel-build\` only
 
-For a layer of N≥2 slices:
+This section applies **only when the architect declared \`topology: parallel-build\`**. On the default sequential path, ignore it and run slices inline one at a time. For a layer of N≥2 slices under \`parallel-build\`:
 
 1. Compute the layer via \`topologicalLayers(flowState.slices)\` and pick the next unsettled layer.
 2. **Worktree-per-independent-slice (mandatory on multi-slice layers).** For every slice in the layer, call \`createSliceWorktree(projectRoot, slug, sliceId)\` from \`src/slice-worktree.ts\` to materialise a sibling git worktree at \`../<projectName>-<slug>-<sliceId>\` on a disposable branch \`cclaw/<slug>-<sliceId>\` derived from \`HEAD\`. Stamp the returned path into \`flow-state.json > slices[].worktreePath\` so the orchestrator's ship + cancel hooks can clean up later. Each sub-builder runs **entirely inside its own worktree** — its TDD cycle, its commits, and its self_review block are local to that working tree. The shared working tree (the parent's project root) sees no slice-level commits during the layer's lifetime.
@@ -257,7 +259,7 @@ The three helpers live at \`src/slice-worktree.ts\` and are the canonical surfac
 | \`mergeSliceWorktree(parentPath, slug, sliceId)\` | returns \`true\` on clean fast-forward, \`false\` when git refused | step 6 above, once per slice in topological order |
 | \`cleanupSliceWorktree(projectRoot, slug, sliceId)\` | idempotent void | invoked by the orchestrator at slug ship (compound layer) and at \`/cc-cancel\` (cancel layer); the builder does NOT call this directly |
 
-Single-slice layers (N==1) skip worktrees entirely and run inline in the parent tree. Soft mode is unchanged (single feature-level cycle, no per-slice dispatch). The worktree shape is reserved for layers of ≥2 slices where the parallel dispatch needs isolation; this is the default for the strict-mode common case.
+Single-slice layers (N==1) skip worktrees entirely and run inline in the parent tree. Soft mode is unchanged (single feature-level cycle, no per-slice dispatch). The worktree shape is reserved for layers of ≥2 slices under \`topology: parallel-build\` where the parallel dispatch needs isolation; on the default sequential path no worktrees are created.
 
 ### Worked example (lifted to runbook)
 

@@ -2,7 +2,7 @@
 
 **A multi-stage planning + review harness for coding agents.**
 
-Drops `/cc` into Claude Code, Cursor, OpenCode, and Codex. Every task flows through `triage → plan → build → review → critic → ship`. Two reviewers run in series — a read-only walk over 9 axes, then an adversarial critic that falsifies what the reviewer cleared. Independent slices run in parallel worktrees. Sub-agents stay isolated; the orchestrator keeps the slug's history. Always-auto: no "approve this?" pickers between stages. Resume with `/cc`, discard with `/cc-cancel`.
+Drops `/cc` into Claude Code, Cursor, OpenCode, and Codex. Every task flows through `triage → plan → build → review → critic → ship`. Two reviewers run in series — a read-only walk over 9 axes, then an adversarial critic that falsifies what the reviewer cleared. Independent slices build sequentially by default, fanning out to parallel worktrees only when the plan opts in. Sub-agents stay isolated; the orchestrator keeps the slug's history. Always-auto: no "approve this?" pickers between stages. Resume with `/cc`, discard with `/cc-cancel`.
 
 ## Install
 
